@@ -1,2 +1,2 @@
 # JustRelax.jl
-Pseudo-transient accelerated iterative solver.
+Pseudo-transient accelerated iterative solvers.

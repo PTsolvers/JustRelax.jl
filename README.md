@@ -23,9 +23,19 @@ The package serves several purposes:
      - more easily switch between a psuedo-transient solver and another solver (e.g. a direct solve or a multigrid method)
 
   * It provides a natural place to describe performance benchmarks for the solver routines
-  * It encapsulates useful solvers to be encapsulated and used from non-Julia applications
+  * It defines useful solvers to be encapsulated and used from non-Julia applications
   * It provides a natural location for contributions of new solvers for use by the larger community
 
-JustRelax.jl is used in several other applications, including
+We include several miniapps, each designed to solve a well-specified benchmark problem, in order to provide
+
+  - examples of high-performance usage,
+  - bases on which to build more full-featured application codes
+  - cases for reference and performance tests
+  - JustRelax.jl's entries in "bake offs"
+  - tests and examples of interfaces with other packages applications might use, in particular
+    - CompGrids.jl
+    - PETSc.jl
+
+JustRelax.jl is used in the following applications:
 
   * TODO link to all applications using the package here (crucial for early development)

@@ -1,0 +1,14 @@
+/Manifest.toml
+
+# TODO don't like the minapps polluting the root directory,
+# but for now paralling reference code, so leave this
+/figures
+
+# Jupyter
+*.ipynb_checkpoints
+
+# OS X
+.DS_Store
+
+# Vim
+.*.sw[omp]

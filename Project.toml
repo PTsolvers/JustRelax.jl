@@ -1,0 +1,8 @@
+name = "JustRelax"
+uuid = "34418575-392d-4e26-8c6d-96b0910afa06"
+authors = ["Patrick Sanan <patrick.sanan@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+ImplicitGlobalGrid = "4d7a3746-15be-11ea-1130-334b0c4f5fa0"
+ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"

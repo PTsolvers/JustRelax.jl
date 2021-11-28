@@ -1,4 +1,5 @@
 [deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 ImplicitGlobalGrid = "4d7a3746-15be-11ea-1130-334b0c4f5fa0"
 JustRelax = "34418575-392d-4e26-8c6d-96b0910afa06"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"

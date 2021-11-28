@@ -1,4 +1,3 @@
-# TODO see if you can replace all the PS macros with ones that dpn't require the parse-time state
 # TODO if nothing better, use the dumb duplicative way to support the GPU backend, as in ParllelRandomFields.jl
 # TODO run it on a GPU machine (geocomp1 seems easiest) and confirm perf
 # TODO add a reference test that calls this
@@ -29,17 +28,21 @@ const nz_in = haskey(ENV, "NZ") ? parse(Int, ENV["NZ"]) : 64
 # Packages used for the "grid" (Stage 2)
 using ImplicitGlobalGrid  # Note that ParallelStencil is only used within the solver, hence not here
 import MPI
-using ParallelStencil  # Note that we don't need the submodule here, as it's only used in the solver
-# ParallelStencil requires immediate initialization
+@static if USE_GPU
+    using JustRelax.DiffusionNonlinearSolvers_CUDA_Float64_3D
+else
+    using JustRelax.DiffusionNonlinearSolvers_Threads_Float64_3D
+end
+
+using ParallelStencil
+# ParallelStencil forces you to use immediate initialization with known-at-parse-time
+# values passed into @init_parallel_stencil
+# FIXME: this is awkward and ruins how Julia is supposed to work. ParallelStencil should not force the user to hard code these parameters, if at all possible.
 @static if USE_GPU
     @init_parallel_stencil(CUDA, Float64, 3)
 else
     @init_parallel_stencil(Threads, Float64, 3)
 end
-
-# TODO this relies on USE_GPU, which doesn't work in general
-using JustRelax
-using JustRelax.Diffusion3DNonlinearSolvers
 
 # Packages used by the application for output
 using Plots, Printf, MAT
@@ -81,7 +84,6 @@ using Plots, Printf, MAT
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
     nx, ny, nz = nx_in, ny_in, nz_in
-    b_width = (16, 4, 4)              # boundary width for comm/comp overlap
     # Additional information about boundary conditions would logically go here
 
     # (Physical) Time domain and discretization
@@ -140,8 +142,8 @@ using Plots, Printf, MAT
     # Note that we do not attempt to define some solver-independent description
     # of the physical problem
 
-    solver = Diffusion3DNonlinearSolver(
-        nx, ny, nz, b_width,       # 1.
+    solver = DiffusionNonlinearSolver(
+        nx, ny, nz,                # 1.
         me, dims, nprocs,          # 2.
         lx, ly, lz, dx, dy, dz, dt # 3.
         # Coefficient fields from 3. could go here

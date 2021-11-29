@@ -157,7 +157,7 @@ function solve!(solver::DiffusionNonlinearSolver, H::Data.Array, first_solve = f
     b_width = (16, 4, 4)   # boundary width for comm/comp overlap
     while err>solver.tol && iter<solver.itMax
         @parallel compute_flux!(solver.qHx, solver.qHy, solver.qHz, H, solver.Vpdτ, solver.Resc, solver._dt, solver.max_lxyz, solver.max_lxyz2, solver._dx, solver._dy, solver._dz)
-        #@hide_communication solver.b_width begin # communication/computation overlap
+        #@hide_communication b_width begin # communication/computation overlap
             @parallel compute_update!(H, solver.Hold, solver.qHx, solver.qHy, solver.qHz, solver.Vpdτ, solver.Resc, solver._dt, solver.max_lxyz, solver.max_lxyz2, solver._dx, solver._dy, solver._dz, solver.size_innH_1, solver.size_innH_2, solver.size_innH_3)
             update_halo!(H)
         #end

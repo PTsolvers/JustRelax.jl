@@ -17,7 +17,7 @@
 
 const USE_GPU = haskey(ENV, "USE_GPU") ? parse(Bool, ENV["USE_GPU"]) : false
 
-const do_viz  = haskey(ENV, "DO_VIZ")  ? parse(Bool, ENV["DO_VIZ"])  : true
+const do_viz  = haskey(ENV, "DO_VIZ")  ? parse(Bool, ENV["DO_VIZ"])  : false
 const do_save = haskey(ENV, "DO_SAVE") ? parse(Bool, ENV["DO_SAVE"]) : false
 const do_save_viz = haskey(ENV, "DO_SAVE_VIZ") ? parse(Bool, ENV["DO_SAVE_VIZ"]) : false
 
@@ -45,7 +45,10 @@ else
 end
 
 # Packages used by the application for output
-using Plots, Printf, MAT
+@static if do_viz || do_save_viz
+  using Plots, MAT
+end
+using Printf
 
 # A misc. macro used for visualization
 @views inn(A) = A[2:end-1,2:end-1,2:end-1]
@@ -158,6 +161,7 @@ using Plots, Printf, MAT
     first_solve = true
     while it < nt
         if (it == 1)
+            # GC.gc()  # could include this here
             tic()
             niter = 0
         end

@@ -48,7 +48,7 @@ srun $JULIA hello.jl
 
 
 # Problem size
-export RES=512
+export RES=64  # 512 is more realistic, in the sense of trying to fill GPU memory
 export NX=$RES
 export NY=$RES
 export NZ=$RES

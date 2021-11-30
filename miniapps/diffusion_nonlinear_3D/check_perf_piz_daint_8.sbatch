@@ -48,7 +48,7 @@ JULIA="julia --check-bounds=no -O3"
 
 
 # Problem size
-export RES=256
+export RES=64 # 512 is more realistic
 export NX=$RES
 export NY=$RES
 export NZ=$RES

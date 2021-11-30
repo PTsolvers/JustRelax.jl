@@ -20,19 +20,15 @@ export JULIA_CUDA_USE_BINARYBUILDER=false
 export JULIA_DEPOT_PATH=$SCRATCH/julia_local/julia_depot
 # See https://github.com/psanan/piz_daint_julia_gpu4geo_install
 
-LOC_B=$SCRATCH/JustRelax.jl/miniapps/diffusion_nonlinear_3D
-SCRIPT_B=diff_3D_nonlin_multixpu_perf.jl
+LOC_A=.
+SCRIPT_A=diff_3D_nonlin_multixpu_perf.jl
 
-LOC_A=$SCRATCH/PseudoTransientDiffusion.jl/scripts/diff_3D
-SCRIPT_A=diff_3D_nonlin_multixpu_perf_noplots.jl
-
-# This is the one used for the weak scaling test.
-# It has even more monitoring stuff commented out, and a GC.gc() before tic()
-#SCRIPT_A=diff_3D_nonlin_multixpu_perf_mod.jl
+LOC_B=ref
+SCRIPT_B=diff_3D_nonlin_multixpu_perf_noplots.jl
 
 # This one comments out the @hide_communication, since
 # that might actually *help* for a single node
-LOC_C=$SCRATCH/PseudoTransientDiffusion.jl/scripts/diff_3D
+LOC_C=ref
 SCRIPT_C=diff_3D_nonlin_multixpu_perf_noplots_nohide.jl
 
 
@@ -55,7 +51,6 @@ export NZ=$RES
 
 
 export USE_GPU=true
-printf "See if A, B, and C perform the same!\n"
 
 printf "\n====== A (GPU) =====\n"
 srun bash -c "LD_PRELOAD=\"/usr/lib64/libcuda.so:/usr/local/cuda/lib64/libcudart.so\" $JULIA $LOC_A/$SCRIPT_A"
@@ -69,7 +64,6 @@ srun bash -c "LD_PRELOAD=\"/usr/lib64/libcuda.so:/usr/local/cuda/lib64/libcudart
 
 
 export USE_GPU=false
-printf "See if A, B, and C perform the same!\n"
 
 printf "\n====== A =====\n"
 srun  $JULIA  $LOC_A/$SCRIPT_A

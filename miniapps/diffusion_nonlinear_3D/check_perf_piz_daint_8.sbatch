@@ -23,21 +23,23 @@ export JULIA_CUDA_USE_BINARYBUILDER=false
 export JULIA_DEPOT_PATH=$SCRATCH/julia_local/julia_depot
 # See https://github.com/psanan/piz_daint_julia_gpu4geo_install
 
+# These locations are relative to this directory, so you must launch from here
+LOC_A=.
+SCRIPT_A=diff_3D_nonlin_multixpu_perf.jl
 
-LOC_A=$SCRATCH/PseudoTransientDiffusion.jl/scripts/diff_3D
-SCRIPT_A=diff_3D_nonlin_multixpu_perf_noplots.jl
-
-LOC_B=$SCRATCH/JustRelax.jl/miniapps/diffusion_nonlinear_3D
-SCRIPT_B=diff_3D_nonlin_multixpu_perf.jl
+# This one aims to simply deactivate plots
+LOC_B=ref
+SCRIPT_B=diff_3D_nonlin_multixpu_perf_noplots.jl
 
 # This one comments out the @hide_communication, since
 # that might actually *help* for a single node
-LOC_C=$SCRATCH/PseudoTransientDiffusion.jl/scripts/diff_3D
+LOC_C=ref
 SCRIPT_C=diff_3D_nonlin_multixpu_perf_noplots_nohide.jl
 
 # This is the one used for the Ludovic's weak scaling test.
 # It has even more monitoring stuff commented out, and a GC.gc() before tic()
-#SCRIPT_A=diff_3D_nonlin_multixpu_perf_mod.jl
+LOC_D=ref
+SCRIPT_D=diff_3D_nonlin_multixpu_perf_mod.jl
 
 
 JULIA="julia --check-bounds=no -O3"
@@ -48,14 +50,14 @@ JULIA="julia --check-bounds=no -O3"
 
 
 # Problem size
-export RES=64 # 512 is more realistic
+export RES=512
 export NX=$RES
 export NY=$RES
 export NZ=$RES
 
 
 export USE_GPU=true
-printf "Confirm that A, B, and C perform the same!\n"
+printf "We mostly care about A performing as well or better than B and C\n"
 
 printf "\n====== A (GPU) =====\n"
 srun bash -c "LD_PRELOAD=\"/usr/lib64/libcuda.so:/usr/local/cuda/lib64/libcudart.so\" $JULIA $LOC_A/$SCRIPT_A"
@@ -66,16 +68,24 @@ srun bash -c "LD_PRELOAD=\"/usr/lib64/libcuda.so:/usr/local/cuda/lib64/libcudart
 printf "\n====== C (GPU) =====\n"
 srun bash -c "LD_PRELOAD=\"/usr/lib64/libcuda.so:/usr/local/cuda/lib64/libcudart.so\" $JULIA $LOC_C/$SCRIPT_C"
 
+printf "\n====== D (GPU) =====\n"
+srun bash -c "LD_PRELOAD=\"/usr/lib64/libcuda.so:/usr/local/cuda/lib64/libcudart.so\" $JULIA $LOC_D/$SCRIPT_D"
 
-export USE_GPU=false
-printf "Confirm that A and B perform the same!\n"
+# To save resources, skipping slower, threaded tests
 
-printf "\n====== A =====\n"
-srun  $JULIA  $LOC_A/$SCRIPT_A
+#export USE_GPU=false
+#
+#printf "\n====== A =====\n"
+#srun  $JULIA  $LOC_A/$SCRIPT_A
+#
+#printf "\n====== B =====\n"
+#srun $JULIA $LOC_B/$SCRIPT_B
+#
+#printf "\n====== C =====\n"
+#srun $JULIA $LOC_C/$SCRIPT_C
+#
+#printf "\n====== D =====\n"
+#srun $JULIA $LOC_D/$SCRIPT_D
 
-printf "\n====== B =====\n"
-srun $JULIA $LOC_B/$SCRIPT_B
-
-# Not bothering with C here, to save resources
 
 printf "\n====== Finished =====\n"

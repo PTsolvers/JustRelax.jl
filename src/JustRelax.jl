@@ -4,7 +4,7 @@ module JustRelax
 
 using ParallelStencil
 
-# # PS.jl exports
+# PS.jl exports
 # import ParallelStencil: @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
 # export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
 
@@ -22,27 +22,25 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     gpu = model.device == :gpu ? true : false
 
     # environment variable for XPU
-    eval(
+    @eval(
         USE_GPU = haskey(ENV, "USE_GPU"    ) ? parse(Bool, ENV["USE_GPU"]    ) : $gpu
     )
 
-    eval(
-        :(:call, :using, Symbol("ParallelStencil"))
-    )
-
+    # eval(Meta.parse("using ParallelStencil"))
+    
     # call appropriate FD module
     eval(
-        :(:call, :using, Symbol("ParallelStencil.FiniteDifferences$(N)D"))
+        Meta.parse("using ParallelStencil.FiniteDifferences$(N)D")
     )
 
     # start ParallelStencil
     if model.device == :gpu 
         eval(
-            @init_parallel_stencil(CUDA, $T, $N)
+            Meta.parse("@init_parallel_stencil(CUDA, $T, $N)")
         )
     else
         eval(
-            @init_parallel_stencil(Threads, $T, $N)
+            Meta.parse("@init_parallel_stencil(Threads, $T, $N)")
         )
     end
 

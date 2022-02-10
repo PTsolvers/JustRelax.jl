@@ -138,7 +138,7 @@ make_stokes_struct!() =
             R::C
             
             function StokesArrays(geometry::Geometry{2})
-                (; ni) = geometry
+                ni = geometry.ni
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 Gdτ = @zeros(ni...)

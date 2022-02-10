@@ -10,7 +10,7 @@ end
 end
 
 @parallel function compute_P!(∇V::PTArray, P::PTArray, Vx::PTArray, Vy::PTArray, Gdτ::PTArray, r::eltype(PTArray), dx::eltype(PTArray), dy::eltype(PTArray))
-    @all(∇V)  = @d_xa(Vx)/dx + @d_ya(Vy)/dy
+    @all(∇V) = @d_xa(Vx)/dx + @d_ya(Vy)/dy
     @all(P)  = @all(P) - r*@all(Gdτ)*@all(∇V)
     return
 end

@@ -87,15 +87,17 @@ geometry, stokes, ρ = solCx(Δη, nx=255*2, ny=255*2);
 f2 = plot_solCx_error(geometry, stokes, Δη)
 
 function run_test(; Δη = 1e6, N = 9)
+    n = vcat(40, 80, (100:100:1000)) # as in https://agupubs.onlinelibrary.wiley.com/doi/pdf/10.1029/2011GC003567
+    N = length(n)
     L2_vx, L2_vy, L2_p = zeros(N), zeros(N), zeros(N)
     for i in 1:N
-        nx = ny = 32*i-1
-        geometry, stokes = solCx(Δη, nx=nx, ny=ny)
-        L2_vx[i], L2_vy[i], L2_p[i] = Li_error(geometry, stokes, order=2)
+        # nx = ny = 32*i-1
+        geometry, stokes = solCx(Δη, nx=n[i], ny=n[i])
+        L2_vx[i], L2_vy[i], L2_p[i] = Li_error(geometry, stokes, order=1)
     end
 
-    nx = @. 32*(1:N)
-    h = @. (1/nx)
+    # nx = @. 32*(1:N)
+    h = @. (1/n)
 
     f = Figure( fontsize=28) 
     ax = Axis(f[1,1], yscale = log10, xscale = log10,  yminorticksvisible = true, yminorticks = IntervalsBetween(8))

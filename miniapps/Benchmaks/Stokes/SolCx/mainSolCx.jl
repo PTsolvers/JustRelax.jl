@@ -78,35 +78,35 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
 end
 
-geometry, stokes, ρ = solCx(1e6, nx=101*2, ny=101*2);
-# plot model output
-f1 = plot_solCx(geometry, stokes, ρ,  cmap = :vik, fun = heatmap!)
+# Δη = 1e6
+geometry, stokes, ρ = solCx(Δη, nx=255*2, ny=255*2);
+# # plot model output
+# f1 = plot_solCx(geometry, stokes, ρ,  cmap = :vik, fun = heatmap!)
 
-# # # Compare pressure against analytical solution
-# f2 = plot_solCx_error(geometry, stokes)
+# # Compare pressure against analytical solution
+f2 = plot_solCx_error(geometry, stokes, Δη)
 
-# function run_test(; N = 9)
-#     N = 9
-#     L2_vx, L2_vy, L2_p = zeros(N), zeros(N), zeros(N)
-#     for i in 1:N
-#         nx = ny = 32*i-1
-#         geometry, stokes = solkz(nx=nx, ny=ny)
-#         L2_vx[i], L2_vy[i], L2_p[i] = Li_error(geometry, stokes, order=2)
-#     end
+function run_test(; Δη = 1e6, N = 9)
+    L2_vx, L2_vy, L2_p = zeros(N), zeros(N), zeros(N)
+    for i in 1:N
+        nx = ny = 32*i-1
+        geometry, stokes = solCx(Δη, nx=nx, ny=ny)
+        L2_vx[i], L2_vy[i], L2_p[i] = Li_error(geometry, stokes, order=2)
+    end
 
-#     nx = @. 32*(1:N)-1
-#     h = @. (1/nx)
+    nx = @. 32*(1:N)
+    h = @. (1/nx)
 
-#     f = Figure( fontsize=28) 
-#     ax = Axis(f[1,1], yscale = log10, xscale = log10,  yminorticksvisible = true, yminorticks = IntervalsBetween(8))
-#     lines!(ax, h, (L2_vx), linewidth=3, label = "Vx")
-#     lines!(ax, h, (L2_vy), linewidth=3, label = "Vy")
-#     lines!(ax, h, (L2_p),  linewidth=3, label = "P")
-#     axislegend(ax)
-#     ax.xlabel = "h"
-#     ax.ylabel = "L2 norm"
-#     display(f)
+    f = Figure( fontsize=28) 
+    ax = Axis(f[1,1], yscale = log10, xscale = log10,  yminorticksvisible = true, yminorticks = IntervalsBetween(8))
+    lines!(ax, h, (L2_vx), linewidth=3, label = "Vx")
+    lines!(ax, h, (L2_vy), linewidth=3, label = "Vy")
+    lines!(ax, h, (L2_p),  linewidth=3, label = "P")
+    axislegend(ax, position =:lt)
+    ax.xlabel = "h"
+    ax.ylabel = "L2 norm"
+    display(f)
 
-# end
+end
 
-# run_test(N =9)
+run_test(N = 9)

@@ -229,9 +229,9 @@ function plot_solCx(geometry::Geometry, stokes::StokesArrays, ρ; cmap = :vik, f
     f
 end
 
-function plot_solCx_error(geometry::Geometry, stokes::StokesArrays; cmap = :vik)
+function plot_solCx_error(geometry::Geometry, stokes::StokesArrays, Δη; cmap = :vik)
     
-    solc = solCx_solution(geometry)
+    solc = solCx_solution(geometry, η_right = Δη)
     
     # Plot
     f=Figure(resolution=(2200, 1800), fontsize=28)

@@ -73,7 +73,7 @@ end
 
 function pureshear_bc!(stokes::StokesArrays, geometry::Geometry, εbg)
     # unpack
-    (; Vx, Vy) = stokes.V
+    Vx, Vy = stokes.V.Vx, stokes.V.Vy
     dx, dy = geometry.di 
     lx, ly = geometry.li 
     # Velocity boundary conditions

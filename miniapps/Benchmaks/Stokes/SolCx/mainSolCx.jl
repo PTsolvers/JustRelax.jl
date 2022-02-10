@@ -70,18 +70,17 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     # Physical time loop
     t = 0.0
     while t < ttot
-        solve2!(stokes, pt_stokes, geometry, freeslip, fy, η; iterMax = 20e3, nout = 100)
+        solve!(stokes, pt_stokes, geometry, freeslip, fy, η; iterMax = 20e3, nout = 250)
         t += Δt
     end
 
-    return geometry, stokes
+    return geometry, stokes, ρ
 
 end
 
-
-geometry, stokes = solCx(1e6, nx=101*2, ny=101*2);
+geometry, stokes, ρ = solCx(1e6, nx=101*2, ny=101*2);
 # plot model output
-f1 = plot_solCx(geometry, stokes, cmap = :vik, fun = heatmap!)
+f1 = plot_solCx(geometry, stokes, ρ,  cmap = :vik, fun = heatmap!)
 
 # # # Compare pressure against analytical solution
 # f2 = plot_solCx_error(geometry, stokes)

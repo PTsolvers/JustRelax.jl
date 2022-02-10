@@ -1,7 +1,7 @@
 # ρ =  -sin(n*π*y)*cos(nx*π*x)
 # ρ =  -sigma*sin(Km*y)*cos(kn*x)
 # adapted from https://github.com/geodynamics/aspect/blob/main/benchmarks/solcx/solcx.h
-function _solcx_solution(x, z, _eta_A, _eta_B)
+function _solCx_solution(x, z, _eta_A, _eta_B)
     n, nx = 1, 1 
 
     ZA = _eta_A # left column viscosity */
@@ -2716,26 +2716,24 @@ function _solcx_solution(x, z, _eta_A, _eta_B)
 
     u4 = (t57 + t95 + t135 + t164) / (0.4e1 * t24 * t15 + 0.8e1 * t127 * t15 * t18 + 0.4e1 * t131 * t15 * t19)
 
-
     #***************************************************************************************/
     #***************************************************************************************/
-
 
     u5 = (-2 * Z * n * π * u2 - u3 * 2 * n * π) * cos(n * π * z) # pressure */
 
     u6 = (u3 * 2 * n * π + 4 * Z * n * π * u2) * cos(n * π * z) # zz stress */
-    sum5 += u5
-    sum6 += u6
+    sum5 = u5
+    sum6 = u6
 
      
     u1 *= cos(n * π * z) # x velocity */
-    sum1 += u1
+    sum1 = u1
     u2 *= sin(n * π * z) # z velocity */
-    sum2 += u2
+    sum2 = u2
     u3 *= 2 * n * π * cos(n * π * z) # xx stress */
-    sum3 += u3
+    sum3 = u3
     u4 *= 2 * n * π * sin(n * π * z) # zx stress */
-    sum4 += u4
+    sum4 = u4
 
     vx = sum1
     vz = sum2

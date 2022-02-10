@@ -1,7 +1,7 @@
 import Pkg; Pkg.activate(".")
 using ParallelStencil
 using JustRelax
-using GeoParams
+# using GeoParams
 using Printf, LinearAlgebra, GLMakie
 
 # setup ParallelStencil.jl environment

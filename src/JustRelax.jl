@@ -6,7 +6,6 @@ using ParallelStencil
 using LinearAlgebra
 using Printf
 
-
 # PS.jl exports
 # import ParallelStencil: @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
 # export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
@@ -27,8 +26,8 @@ struct Geometry{nDim}
     li::NTuple{nDim, Float64}
     max_li::Float64
     di::NTuple{nDim, Float64}
-    xci::NTuple{nDim, StepRangeLen{Float64, Base.TwicePrecision{Float64}, Base.TwicePrecision{Float64}, Int64}}
-    xvi::NTuple{nDim, StepRangeLen{Float64, Base.TwicePrecision{Float64}, Base.TwicePrecision{Float64}, Int64}}
+    xci::NTuple{nDim, StepRangeLen}
+    xvi::NTuple{nDim, StepRangeLen}
 
     function Geometry(ni::NTuple{nDim, Integer}, li::NTuple{nDim, T}) where {nDim, T}
         li isa NTuple{nDim, Float64} == false && (li = Float64.(li))
@@ -84,11 +83,11 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     make_PTstokes_struct!()
 
     eval(
-        :(include("Stokes/Stokes.jl"))
+        :(include(joinpath(pwd(),"src/Stokes/Stokes.jl")))
     )
 
     eval(
-        :(include("BoundaryConditions/BoundaryConditions.jl"))
+        :(include(joinpath(pwd(),"src/BoundaryConditions/BoundaryConditions.jl")))
     )
 
     eval(

@@ -2,7 +2,6 @@ import Pkg; Pkg.activate(".")
 using ParallelStencil
 # using ParallelStencil.FiniteDifferences2D
 using JustRelax
-using GeoParams
 using Printf, LinearAlgebra, GLMakie
 
 # setup ParallelStencil.jl environment
@@ -22,7 +21,7 @@ environment!(model)
 # 5. Analysis and output which depends on the details of the solver
 # 6. "Application" Analysis and output which does not depend on the details of the solver
 # 7. Finalization/Cleanup
-    
+   
 # include benchmark related functions
 include("SolVi.jl")
 
@@ -61,8 +60,9 @@ function solvi()
 
     # Physical time loop
     t = 0.0
+    ρ = @ones(size(η))
     while t < ttot
-        solve!(stokes, pt_stokes, geometry, freeslip, nothing, η; iterMax = 10e3)
+        solve!(stokes, pt_stokes, geometry, freeslip, ρ, η; iterMax = 10e3)
         t += Δt
     end
 

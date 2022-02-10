@@ -63,7 +63,7 @@ function solkz_solution(geometry::Geometry)
         @inbounds vxs[i], = _solkz_solution(xv_x[i], yv_x[i])
     end
     Threads.@threads for i in eachindex(xv_y)
-        @inbounds vys[i], = _solkz_solution(xv_y[i], yv_y[i])
+        @inbounds _, vys[i], = _solkz_solution(xv_y[i], yv_y[i])
     end
 
     return (vx=vxs, vy=vys, p=ps)

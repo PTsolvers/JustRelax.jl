@@ -22,7 +22,7 @@ end
     return
 end
 
-@parallel function compute_dV!(Rx::PTArray, Ry::PTArray, dVx::PTArray, dVy::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, dτ_Rho::PTArray, dx::Real, dy::Real)
+@parallel function compute_dV!(Rx::PTArray, Ry::PTArray, dVx::PTArray, dVy::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, dτ_Rho::PTArray, ρg::Nothing, dx::Real, dy::Real)
     @all(Rx)   = @d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(P)/dx
     @all(Ry)   = @d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy
     @all(dVx)  = @av_xi(dτ_Rho)*@all(Rx)

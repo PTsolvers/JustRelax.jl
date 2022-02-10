@@ -22,7 +22,7 @@ end
     return
 end
 
-@parallel function compute_dV!(Rx::PTArray, Ry::PTArray, dVx::PTArray, dVy::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, dτ_Rho::PTArray, ρg::Nothing, dx::Real, dy::Real)
+@parallel function compute_dV!(Rx::PTArray, Ry::PTArray, dVx::PTArray, dVy::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, dτ_Rho::PTArray, dx::Real, dy::Real)
     @all(Rx)   = @d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(P)/dx
     @all(Ry)   = @d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy
     @all(dVx)  = @av_xi(dτ_Rho)*@all(Rx)
@@ -71,13 +71,13 @@ function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, geometry::Geome
     # unpack
     dx, dy = geometry.di 
     lx, ly = geometry.li 
-    (; Vx, Vy) = stokes.V
+    Vx, Vy = stokes.V.Vx, stokes.V.Vy
     dVx, dVy = stokes.dV.Vx, stokes.dV.Vy
     τxx, τyy, τxy = stress(stokes)
-    (; P, ∇V) = stokes
-    (; Ry, Rx) = stokes.R
-    (; Gdτ, dτ_Rho, ϵ, Re, r, Vpdτ) = pt_stokes
-    (;freeslip_x, freeslip_y) =freeslip
+    P, ∇V = stokes.P, stokes.∇V
+    Rx, Ry = stokes.R.Rx, stokes.R.Ry
+    Gdτ, dτ_Rho, ϵ, Re, r, Vpdτ = pt_stokes.Gdτ, pt_stokes.dτ_Rho, pt_stokes.ϵ,  pt_stokes.Re,  pt_stokes.r,  pt_stokes.Vpdτ
+    freeslip_x, freeslip_y = freeslip
 
     # ~preconditioner
     ητ = deepcopy(η)

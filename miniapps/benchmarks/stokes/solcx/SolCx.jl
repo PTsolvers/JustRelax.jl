@@ -1,27 +1,16 @@
-# import Pkg; Pkg.activate(".")
-# using ParallelStencil
-# using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
-# using JustRelax
-# # using GeoParams
-# using Printf, LinearAlgebra, GLMakie
+# This main function for "Application" code is divided into 7 stages which
+# are intended to cover usage with the GPU4GEO project and potential users
+# of the software developed within it.
 
-# # setup ParallelStencil.jl environment
-# model = PS_Setup(:cpu, Float64, 2)
-# environment!(model)
-
-# # This main function for "Application" code is divided into 7 stages which
-# # are intended to cover usage with the GPU4GEO project and potential users
-# # of the software developed within it.
-
-# # 1. Quantities needed to describe "where the problem lives", in terms of (parallel) topology
-# # 2. Initialize tools which can represent this domain concretely in parallel (IGG here, could be PETSc/DM)
-# # 3. Concrete representations of data and population of values
-# #    - Includes information on embedding/coordinates
-# # 4. Tools, dependent on the data representation, to actually solve a particular physical problem (here JustRelax.jl, but could be PETSc's SNES)
-# #    - Note that here, the physical timestepping scheme is baked into this "physical problem"
-# # 5. Analysis and output which depends on the details of the solver
-# # 6. "Application" Analysis and output which does not depend on the details of the solver
-# # 7. Finalization/Cleanup
+# 1. Quantities needed to describe "where the problem lives", in terms of (parallel) topology
+# 2. Initialize tools which can represent this domain concretely in parallel (IGG here, could be PETSc/DM)
+# 3. Concrete representations of data and population of values
+#    - Includes information on embedding/coordinates
+# 4. Tools, dependent on the data representation, to actually solve a particular physical problem (here JustRelax.jl, but could be PETSc's SNES)
+#    - Note that here, the physical timestepping scheme is baked into this "physical problem"
+# 5. Analysis and output which depends on the details of the solver
+# 6. "Application" Analysis and output which does not depend on the details of the solver
+# 7. Finalization/Cleanup
 
 using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
 
@@ -150,13 +139,3 @@ function multiple_solCx(; Δη = 1e6, N = 10)
     f
 
 end
-
-# Δη = 1e6
-# geometry, stokes, ρ = solCx(Δη, nx=64, ny=64);
-# # plot model output
-# f1 = plot_solCx(geometry, stokes, ρ,  cmap = :vik, fun = heatmap!)
-
-# # Compare pressure against analytical solution
-# f2 = plot_solCx_error(geometry, stokes, Δη)
-
-# f=run_test(Δη = 1e6, N = 10) # nx = ny = 2^(6:N)-1

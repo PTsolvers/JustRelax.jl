@@ -7,6 +7,8 @@ using LinearAlgebra
 using Printf
 using CUDA
 
+include("topology/Topology.jl")
+
 # PS.jl exports
 import ParallelStencil: @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
 export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
@@ -20,29 +22,6 @@ struct PS_Setup{B,C}
     function PS_Setup(device::Symbol, precission::DataType, nDim::Integer)
         new{precission, nDim}(device)
     end
-end
-
-struct Geometry{nDim}
-    ni::NTuple{nDim, Integer}
-    li::NTuple{nDim, Float64}
-    max_li::Float64
-    di::NTuple{nDim, Float64}
-    xci::NTuple{nDim, StepRangeLen}
-    xvi::NTuple{nDim, StepRangeLen}
-
-    function Geometry(ni::NTuple{nDim, Integer}, li::NTuple{nDim, T}) where {nDim, T}
-        li isa NTuple{nDim, Float64} == false && (li = Float64.(li))
-        di = li./ni
-        new{nDim}(
-            ni,
-            li,
-            Float64(max(li...)),
-            di,
-            Tuple([di[i]/2:di[i]:(li[i]-di[i]/2) for i in 1:nDim]),
-            Tuple([0:di[i]:li[i] for i in 1:nDim])
-        )
-    end
-
 end
 
 function environment!(model::PS_Setup{T, N}) where {T, N}

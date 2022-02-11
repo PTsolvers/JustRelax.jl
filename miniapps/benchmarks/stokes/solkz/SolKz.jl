@@ -1,12 +1,12 @@
-import Pkg;Pkg.activate(".")
-using Printf, LinearAlgebra, GLMakie
-using ParallelStencil
-using JustRelax
-using ParallelStencil.FiniteDifferences2D
+# import Pkg;Pkg.activate(".")
+# using Printf, LinearAlgebra, GLMakie
+# using ParallelStencil
+# using JustRelax
+# using ParallelStencil.FiniteDifferences2D
 
-# setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2)
-environment!(model)
+# # setup ParallelStencil.jl environment
+# model = PS_Setup(:cpu, Float64, 2)
+# environment!(model)
 
 # This main function for "Application" code is divided into 7 stages which
 # are intended to cover usage with the GPU4GEO project and potential users
@@ -22,7 +22,9 @@ environment!(model)
 # 6. "Application" Analysis and output which does not depend on the details of the solver
 # 7. Finalization/Cleanup
     
-# include benchmark related functions
+using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
+
+# include benchmark related plotting and error functions
 include("vizSolKz.jl")
 
 function solKz_viscosity(xci, ni; B=log(1e6))
@@ -62,7 +64,7 @@ function solKz_density(xci, ni)
     return ρ
 end
 
-function solkz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
+function solKz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
@@ -116,14 +118,14 @@ function solkz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
 end
 
-geometry, stokes, ρ = solkz(nx=31, ny=31)
+# geometry, stokes, ρ = solkz(nx=31, ny=31)
 
-# # plot model output
-f1 = plot_solkz(geometry, ρ, stokes)
-# # Compare pressure against analytical solution
-f2 = plot_solkz_error(geometry, stokes)
+# # # plot model output
+# f1 = plot_solkz(geometry, ρ, stokes)
+# # # Compare pressure against analytical solution
+# f2 = plot_solkz_error(geometry, stokes)
 
-function run_test(; N = 10)
+function multiple_solKz(; N = 10)
     
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]  
     for i in 4:N
@@ -143,11 +145,11 @@ function run_test(; N = 10)
     lines!(ax, h, (L2_vx), linewidth=3, label = "Vx")
     lines!(ax, h, (L2_vy), linewidth=3, label = "Vy")
     lines!(ax, h, (L2_p),  linewidth=3, label = "P")
-    axislegend(ax)
+    axislegend(ax, position = :rt)
     ax.xlabel = "h"
     ax.ylabel = "L2 norm"
-    display(f)
+    f
 
 end
 
-run_test(N = 6)
+# run_test(N = 6)

@@ -81,40 +81,75 @@ function plot_solkz(geometry, ρ, stokes::StokesArrays; cmap = :vik)
     f
 end
 
-function plot_solkz_error(geometry, stokes::StokesArrays; cmap = :vik)
+function plot_solKz_error(geometry, stokes::StokesArrays; cmap = :vik)
     
     solk = solkz_solution(geometry)
     
     # Plot
     f=Figure(resolution=(3000, 1800), fontsize=28)
     
-    # Density
-    ax1= Axis(f[1, 1], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2], stokes.P, colormap=cmap)
+    # ROW 1: PRESSURE
+    # Numerical pressure
+    ax1= Axis(f[1, 1], aspect=1, title="numerical")
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2], stokes.P, colormap=cmap, colorrange = extrema(stokes.P))
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
-    Colorbar(f[1,2], h1, label="density")
+    # Colorbar(f[1,2], h1, label="Pressure")
+
+    # Analytical pressure
+    ax1= Axis(f[1, 2], aspect=1, title="analytical")
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  solk.p, colormap=cmap, colorrange = extrema(stokes.P))
+    xlims!(ax1, (0,1))
+    ylims!(ax1, (0,1))
+    Colorbar(f[1,3], h1, label="P", width = 20, tellheight=true)
 
     # Pressure
-    ax1= Axis(f[1, 3], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  log10.(err1(stokes.P, solk.p)), colormap=cmap)
+    ax1= Axis(f[1, 4], aspect=1)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  (err1(stokes.P, solk.p)), colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
-    Colorbar(f[1,4], h1, label="error P")
+    Colorbar(f[1,5], h1, label="error P")
+    # rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
 
-    # Velocity-x
-    ax1= Axis(f[2, 1], aspect=1)
-    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], log10.(err1(stokes.V.Vx, solk.vx)), colormap=cmap)
+    # ROW 2: Velocity-x
+    # Numerical
+    ax1= Axis(f[2, 1], aspect=1, title= "Numerical")
+    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], stokes.V.Vx, colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
-    Colorbar(f[2, 2], h1, label="Vx")
-   
-    # Velocity-y
-    ax1= Axis(f[2, 3], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], log10.(err1(stokes.V.Vy, solk.vy)), colormap=cmap)
+
+    ax1= Axis(f[2, 2], aspect=1)
+    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], solk.vx, colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
-    Colorbar(f[2, 4], h1, label="Vy")
+    Colorbar(f[2, 3], h1, label="Vx", width = 20, tellheight=true)
+
+    ax1= Axis(f[2, 4], aspect=1)
+    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], (err1(stokes.V.Vx, solk.vx)), colormap=cmap)
+    xlims!(ax1, (0,1))
+    ylims!(ax1, (0,1))
+    Colorbar(f[2, 5], h1, label="error Vx", width = 20, tellheight=true)
+    # rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
+
+    # ROW 3: Velocity-y
+    # Numerical
+    ax1= Axis(f[3, 1], aspect=1, title= "Numerical")
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], stokes.V.Vy, colormap=cmap)
+    xlims!(ax1, (0,1))
+    ylims!(ax1, (0,1))
+
+    ax1= Axis(f[3, 2], aspect=1)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], solk.vy, colormap=cmap)
+    xlims!(ax1, (0,1))
+    ylims!(ax1, (0,1))
+    Colorbar(f[3, 3], h1, label="Vy", width = 20, tellheight=true)
+
+    ax1= Axis(f[3, 4], aspect=1)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], (err1(stokes.V.Vy, solk.vy)), colormap=cmap)
+    xlims!(ax1, (0,1))
+    ylims!(ax1, (0,1))
+    Colorbar(f[3, 5], h1, label="error Vy", width = 20, tellheight=true)
+    # rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
 
     f
 end

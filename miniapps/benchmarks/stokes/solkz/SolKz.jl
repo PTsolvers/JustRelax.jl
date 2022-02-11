@@ -71,14 +71,14 @@ end
 
 function Li_error(geometry, stokes::StokesArrays; order = 2)
     solk = solkz_solution(geometry)
-
+    gridsize = reduce(*, geometry.di)
     Li(A, B; order = 2) = norm(A.-B, order)
     
     # L2_vx = Li(stokes.V.Vx[2:end-1,2:end-1], solk.vx[2:end-1,2:end-1], order=order)
     # L2_vy = Li(stokes.V.Vy[2:end-1,2:end-1], solk.vy[2:end-1,2:end-1], order=order)
-    L2_vx = Li(stokes.V.Vx, solk.vx, order=order)
-    L2_vy = Li(stokes.V.Vy, solk.vy, order=order)
-    L2_p = Li(stokes.P[2:end-1, 2:end-1], solk.p[2:end-1, 2:end-1], order=order)
+    L2_vx = Li(stokes.V.Vx, solk.vx, order=order)*gridsize
+    L2_vy = Li(stokes.V.Vy, solk.vy, order=order)*gridsize
+    L2_p = Li(stokes.P[2:end-1, 2:end-1], solk.p[2:end-1, 2:end-1], order=order)*gridsize
 
     return L2_vx, L2_vy, L2_p
 end

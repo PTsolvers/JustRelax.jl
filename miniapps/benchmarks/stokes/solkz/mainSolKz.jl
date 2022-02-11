@@ -76,6 +76,10 @@ function solkz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     # geometry = Geometry(ni, li) # structure containing topology information
     g = 1 # gravity
 
+    ## (Physical) Time domain and discretization
+    ttot = 1 # total simulation time
+    Δt = 1   # physical time step
+     
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
     stokes = StokesArrays(ni)
@@ -106,11 +110,11 @@ function solkz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
         t += Δt
     end
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li), stokes
+    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes
 
 end
 
-# geometry, stokes = solkz(nx=31, ny=31)
+geometry, stokes = solkz(nx=31, ny=31)
 
 # # plot model output
 f1 = plot_solkz(geometry, stokes)

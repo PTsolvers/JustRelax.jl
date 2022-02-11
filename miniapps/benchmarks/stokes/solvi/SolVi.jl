@@ -32,7 +32,7 @@ function solvi_viscosity(geometry, η0, ηi)
     dx, dy = geometry.di
     lx, ly = geometry.li
     Rad2 = [sqrt.(((ix-1)*dx +0.5*dx -0.5*lx)^2 + ((iy-1)*dy +0.5*dy -0.5*ly)^2) for ix=1:ni[1], iy=1:ni[2]]
-    η       = η0*ones(ni...)
+    η    = η0*ones(ni...)
     η[Rad2.<rc] .= ηi
     η2 = deepcopy(η)
     for ism=1:10
@@ -42,7 +42,7 @@ function solvi_viscosity(geometry, η0, ηi)
     η
 end
 
-function solvi_solution(geometry::Geometry, η0, ηi, εbg, rc)
+function solvi_solution(geometry, η0, ηi, εbg, rc)
     yv = geometry.xci[1]
     lx, ly = geometry.li
     # get analytical solution
@@ -60,7 +60,7 @@ function solvi_solution(geometry::Geometry, η0, ηi, εbg, rc)
     return Pa, vxa, vya
 end
 
-function plot_solvi(geometry::Geometry, stokes::StokesArrays, Psolvi)
+function plot_solvi(geometry, stokes::StokesArrays, Psolvi)
     f=Figure(resolution=(3000, 1800))
     ax1= Axis(f[1, 1], title="P numeric")
     h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2], stokes.P', colormap=:vik)

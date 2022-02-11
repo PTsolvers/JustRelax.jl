@@ -39,7 +39,7 @@ function solKz_density(geometry)
 
 end
 
-function solkz_solution(geometry::Geometry)
+function solkz_solution(geometry)
     # element center
     xci, yci = geometry.xci
     xc = [xc for xc in xci,  _ in yci]
@@ -69,29 +69,21 @@ function solkz_solution(geometry::Geometry)
     return (vx=vxs, vy=vys, p=ps)
 end
 
-function err2(A::AbstractArray, B::AbstractArray)
-    err = similar(A)
-    Threads.@threads for i in eachindex(err)
-        @inbounds err[i] = √(((A[i]-B[i])^2))
-    end
-    err
-end
-
-function Li_error(geometry::Geometry, stokes::StokesArrays; order = 2)
+function Li_error(geometry, stokes::StokesArrays; order = 2)
     solk = solkz_solution(geometry)
 
-    Li(A, B; order = 2) = norm(A.-B, order)/length(A)
+    Li(A, B; order = 2) = norm(A.-B, order)
     
     # L2_vx = Li(stokes.V.Vx[2:end-1,2:end-1], solk.vx[2:end-1,2:end-1], order=order)
     # L2_vy = Li(stokes.V.Vy[2:end-1,2:end-1], solk.vy[2:end-1,2:end-1], order=order)
     L2_vx = Li(stokes.V.Vx, solk.vx, order=order)
     L2_vy = Li(stokes.V.Vy, solk.vy, order=order)
-    L2_p = Li(stokes.P, solk.p, order=order)
+    L2_p = Li(stokes.P[2:end-1, 2:end-1], solk.p[2:end-1, 2:end-1], order=order)
 
     return L2_vx, L2_vy, L2_p
 end
 
-function plot_solkz(geometry::Geometry, stokes::StokesArrays; cmap = :vik)
+function plot_solkz(geometry, stokes::StokesArrays; cmap = :vik)
     f=Figure(resolution=(3000, 1800), fontsize=28)
     
     #Ddensity
@@ -126,7 +118,7 @@ function plot_solkz(geometry::Geometry, stokes::StokesArrays; cmap = :vik)
     f
 end
 
-function plot_solkz_error(geometry::Geometry, stokes::StokesArrays; cmap = :vik)
+function plot_solkz_error(geometry, stokes::StokesArrays; cmap = :vik)
     
     solk = solkz_solution(geometry)
     
@@ -142,24 +134,39 @@ function plot_solkz_error(geometry::Geometry, stokes::StokesArrays; cmap = :vik)
 
     # Pressure
     ax1= Axis(f[1, 3], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  log10.(err2(stokes.P, solk.p)), colormap=cmap)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  log10.(err1(stokes.P, solk.p)), colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     Colorbar(f[1,4], h1, label="error P")
 
     # Velocity-x
     ax1= Axis(f[2, 1], aspect=1)
-    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], log10.(err2(stokes.V.Vx, solk.vx)), colormap=cmap)
+    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], log10.(err1(stokes.V.Vx, solk.vx)), colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     Colorbar(f[2, 2], h1, label="Vx")
    
     # Velocity-y
     ax1= Axis(f[2, 3], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], log10.(err2(stokes.V.Vy, solk.vy)), colormap=cmap)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], log10.(err1(stokes.V.Vy, solk.vy)), colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     Colorbar(f[2, 4], h1, label="Vy")
 
     f
+end
+
+function err2(A::AbstractArray, B::AbstractArray)
+    err = similar(A)
+    Threads.@threads for i in eachindex(err)
+        @inbounds err[i] = √(((A[i]-B[i])^2))
+    end
+    err
+end
+function err1(A::AbstractArray, B::AbstractArray)
+    err = similar(A)
+    Threads.@threads for i in eachindex(err)
+        @inbounds err[i] = abs(A[i]-B[i])
+    end
+    err
 end

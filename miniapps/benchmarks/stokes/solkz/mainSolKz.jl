@@ -1,8 +1,7 @@
-import Pkg; Pkg.activate(".")
 using ParallelStencil
 using JustRelax
-# using GeoParams
 using Printf, LinearAlgebra, GLMakie
+using ParallelStencil.FiniteDifferences2D
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)
@@ -23,7 +22,44 @@ environment!(model)
 # 7. Finalization/Cleanup
     
 # include benchmark related functions
-include("SolKz.jl")
+# include("SolKz.jl")
+
+function solKz_viscosity(xci, ni; B=log(1e6))
+    xc, yc = xci
+    # make grid array (will be eaten by GC)
+    y = [yci for _ in xc, yci in yc]
+    η = @zeros(ni...)
+    # inner closure
+    _viscosity(y, B) = exp(B*y)
+    # outer closure
+    @parallel function viscosity(η, y, B) 
+        @all(η) =  _viscosity(@all(y), B)
+        return
+    end
+    # compute viscosity
+    @parallel viscosity(η, y, B) 
+
+    return η
+end
+
+function solKz_density(xci, ni)
+    xc, yc = xci
+    # make grid array (will be eaten by GC)
+    x = [xci for xci in xc, _ in yc]
+    y = [yci for _ in xc, yci in yc]
+    ρ = @zeros(ni...)
+    # inner closure
+    _density(x, y) = -sin(2*y)*cos(3*π*x)
+    # outer closure
+    @parallel function density(ρ, x, y) 
+        @all(ρ) = _density(@all(x), @all(y))
+        return
+    end
+    # compute viscosity
+    @parallel density(ρ, x, y)
+
+    return ρ
+end
 
 function solkz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
@@ -32,22 +68,29 @@ function solkz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     # independent of (MPI) parallelization
     ni = (nx, ny) # number of nodes in x- and y-
     li = (lx, ly)  # domain length in x- and y-
-    geometry = Geometry(ni, li) # structure containing topology information
-    g = 1
-
-    ## (Physical) Time domain and discretization
-    ttot = 1 # total simulation time
-    Δt = 1   # physical time step
+    di = @. li/ni # grid step in x- and -y
+    max_li = max(li...)
+    nDim = length(ni) # domain dimension
+    xci = Tuple([di[i]/2:di[i]:(li[i]-di[i]/2) for i in 1:nDim]) # nodes at the center of the cells
+    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
+    # geometry = Geometry(ni, li) # structure containing topology information
+    g = 1 # gravity
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(geometry)
+    stokes = StokesArrays(ni)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(geometry)
+    pt_stokes = PTStokesCoeffs(ni, di)
+
+    ## Allocate arrays needed for every Stokes problem
+    # general stokes arrays
+    stokes = StokesArrays(ni)
+    # general numerical coeffs for PT stokes
+    pt_stokes = PTStokesCoeffs(ni, di)
 
     ## Setup-specific parameters and fields
-    η = solKz_viscosity(geometry) # viscosity field
-    ρ = solKz_density(geometry)
+    η = solKz_viscosity(xci, ni) # viscosity field
+    ρ = solKz_density(xci, ni)
     fy = ρ*g
 
     ## Boundary conditions
@@ -59,31 +102,34 @@ function solkz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     # Physical time loop
     t = 0.0
     while t < ttot
-        solve!(stokes, pt_stokes, geometry, freeslip, fy, η; iterMax = 10e3)
+        solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax = 10e3)
         t += Δt
     end
 
-    return geometry, stokes
+    return (ni=ni, xci=xci, xvi=xvi, li=li), stokes
 
 end
 
 # geometry, stokes = solkz(nx=31, ny=31)
 
 # # plot model output
-# f1 = plot_solkz(geometry, stokes)
+f1 = plot_solkz(geometry, stokes)
 # # Compare pressure against analytical solution
-# f2 = plot_solkz_error(geometry, stokes)
+f2 = plot_solkz_error(geometry, stokes)
 
-function run_test(; N = 9)
-    N = 9
-    L2_vx, L2_vy, L2_p = zeros(N), zeros(N), zeros(N)
-    for i in 1:N
-        nx = ny = 32*i-1
+function run_test(; N = 10)
+    
+    L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]  
+    for i in 4:N
+        nx = ny = 2^i-1
         geometry, stokes = solkz(nx=nx, ny=ny)
-        L2_vx[i], L2_vy[i], L2_p[i] = Li_error(geometry, stokes, order=2)
+        L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, order=2)
+        push!(L2_vxi, L2_vx[i])
+        push!(L2_vyi, L2_vy[i])
+        push!(L2_pi,  L2_p[i])
     end
 
-    nx = @. 32*(1:N)-1
+    nx = @. 2^(4:N)-1
     h = @. (1/nx)
 
     f = Figure( fontsize=28) 
@@ -98,4 +144,4 @@ function run_test(; N = 9)
 
 end
 
-run_test(N =9)
+run_test(N=5)

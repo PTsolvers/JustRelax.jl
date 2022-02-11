@@ -1,8 +1,6 @@
-import Pkg; Pkg.activate(".")
 using ParallelStencil
-# using ParallelStencil.FiniteDifferences2D
-using JustRelax
 using Printf, LinearAlgebra, GLMakie
+using JustRelax
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)
@@ -22,17 +20,35 @@ environment!(model)
 # 6. "Application" Analysis and output which does not depend on the details of the solver
 # 7. Finalization/Cleanup
    
-# include benchmark related functions
-include("SolVi.jl")
+# # include benchmark related functions
+# include("SolVi.jl")
 
-function solvi()
+function solvi_viscosity(ni, di, li, rc, η0, ηi)
+    dx, dy = di
+    lx, ly = li
+    Rad2 = [sqrt.(((ix-1)*dx +0.5*dx -0.5*lx)^2 + ((iy-1)*dy +0.5*dy -0.5*ly)^2) for ix=1:ni[1], iy=1:ni[2]]
+    η    = fill(η0, ni...)
+    η[Rad2.<rc] .= ηi
+    η2 = deepcopy(η)
+    for _ in 1:10
+        @parallel smooth!(η2, η, 1.0)
+        η, η2 = η2, η
+    end
+    η
+end
+
+function solvi(; nx=256-1, ny=256-1, lx=1e1, ly=1e1, rc = 1e0)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni = (256-1, 256-1) # number of nodes in x- and y-
-    li = (10.0, 10.0)  # domain length in x- and y-
-    geometry = Geometry(ni, li) # structure containing topology information
+    ni = (nx, ny) # number of nodes in x- and y-
+    li = (lx, ly)  # domain length in x- and y-
+    di = @. li/(ni-1) # grid step in x- and -y
+    max_li = max(li...)
+    nDim = length(ni) # domain dimension
+    xci = Tuple([di[i]/2:di[i]:(li[i]-di[i]/2) for i in 1:nDim]) # nodes at the center of the cells
+    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
@@ -40,19 +56,19 @@ function solvi()
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(geometry)
+    stokes = StokesArrays(ni)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(geometry)
+    pt_stokes = PTStokesCoeffs(ni, di)
 
     ## Setup-specific parameters and fields
     η0 = 1.0  # matrix viscosity
     ηi = 1e-3 # inclusion viscosity
     εbg = 1.0 # background strain-rate
-    rc = 1.0  # clast radius
-    η = solvi_viscosity(geometry, η0, ηi) # viscosity field
+    rc = rc  # clast radius
+    η = solvi_viscosity(ni, di, li, rc, η0, ηi) # viscosity field
 
     ## Boundary conditions
-    pureshear_bc!(stokes, geometry, εbg) 
+    pureshear_bc!(stokes, di, li, εbg) 
     freeslip = (
         freeslip_x = true,
         freeslip_y = true
@@ -60,14 +76,18 @@ function solvi()
 
     # Physical time loop
     t = 0.0
-    ρ = @ones(size(η))
+    ρ = @zeros(size(stokes.P))
     while t < ttot
-        solve!(stokes, pt_stokes, geometry, freeslip, ρ, η; iterMax = 10e3)
+        solve!(stokes, pt_stokes, di, li, max_li, freeslip, ρ, η; iterMax = 10e3)
         t += Δt
     end
 
-    ## PLOTS - Compare pressure against analytical solution
-    Psolvi, = solvi_solution(geometry, η0, ηi, εbg, rc)
+    return  (ni=ni, xci=xci, xvi=xvi, li=li), stokes
+
 end
 
+geometry, stokes = solvi()
+
+## PLOTS - Compare pressure against analytical solution
+# Psolvi, = solvi_solution(geometry, η0, ηi, εbg, rc)
 

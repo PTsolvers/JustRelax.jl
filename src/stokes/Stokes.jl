@@ -44,18 +44,6 @@ end
     return
 end
 
-@parallel_indices (iy) function free_slip_x!(A::PTArray)
-    A[1  , iy] = A[2    , iy]
-    A[end, iy] = A[end-1, iy]
-    return
-end
-
-@parallel_indices (ix) function free_slip_y!(A::PTArray)
-    A[ix, 1  ] = A[ix, 2    ]
-    A[ix, end] = A[ix, end-1]
-    return
-end
-
 @parallel function smooth!(A2::PTArray, A::PTArray, fact::Real)
     @inn(A2) = @inn(A) + 1.0/4.1/fact*(@d2_xi(A) + @d2_yi(A))
     return
@@ -63,14 +51,14 @@ end
 
 stress(stokes::StokesArrays) = stress(stokes.τ)
 
-stress(τ::SymmetricTensor{Array{T, 2}}) where T = (τ.xx, τ.yy, τ.xy)
+stress(τ::SymmetricTensor{<:AbstractMatrix{T}}) where T = (τ.xx, τ.yy, τ.xy)
 
-stress(τ::SymmetricTensor{Array{T, 3}}) where T = (τ.xx, τ.yy, τ.yy, τ.xy, τ.xy, τ.yz)
+stress(τ::SymmetricTensor{<:AbstractArray{T, 3}}) where T = (τ.xx, τ.yy, τ.yy, τ.xy, τ.xy, τ.yz)
 
-function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, geometry::Geometry{2}, freeslip, ρg, η; iterMax = 10e3, nout = 500)
+function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, di::NTuple{2,T}, li::NTuple{2,T}, max_li, freeslip, ρg, η; iterMax = 10e3, nout = 500) where T
     # unpack
-    dx, dy = geometry.di 
-    lx, ly = geometry.li 
+    dx, dy = di 
+    lx, ly = li 
     Vx, Vy = stokes.V.Vx, stokes.V.Vy
     dVx, dVy = stokes.dV.Vx, stokes.dV.Vy
     τxx, τyy, τxy = stress(stokes)
@@ -83,7 +71,7 @@ function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, geometry::Geome
     ητ = deepcopy(η)
     @parallel compute_maxloc!(ητ, η)
     # PT numerical coefficients
-    @parallel compute_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, Re, r, geometry.max_li)
+    @parallel compute_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, Re, r, max_li)
     # errors
     err=2*ϵ; iter=0; err_evo1=Float64[]; err_evo2=Float64[]; err_rms = Float64[]
     

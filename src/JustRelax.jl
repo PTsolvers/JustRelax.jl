@@ -83,11 +83,11 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     make_PTstokes_struct!()
 
     eval(
-        :(include(joinpath(pwd(),"src/Stokes/Stokes.jl")))
+        :(include(joinpath(pwd(),"src/stokes/Stokes.jl")))
     )
 
     eval(
-        :(include(joinpath(pwd(),"src/BoundaryConditions/BoundaryConditions.jl")))
+        :(include(joinpath(pwd(),"src/boundaryconditions/BoundaryConditions.jl")))
     )
 
     eval(
@@ -137,12 +137,9 @@ make_stokes_struct!() =
             τ::B
             R::C
             
-            function StokesArrays(geometry::Geometry{2})
-                ni = geometry.ni
+            function StokesArrays(ni::NTuple{2, T}) where T
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
-                Gdτ = @zeros(ni...)
-                dτ_Rho = @zeros(ni...)
                 V = Velocity(
                     @zeros(ni[1]+1, ni[2]),
                     @zeros(ni[1], ni[2]+1)
@@ -181,12 +178,12 @@ make_PTstokes_struct!() =
             dτ_Rho::AbstractArray{T, nDim} 
             Gdτ::AbstractArray{T, nDim}
         
-            function PTStokesCoeffs(geometry::Geometry{nDim}; 
-                ϵ = 1e-8, Re = 5π, CFL = 0.9/√2, r=1e0) where {nDim}
+            function PTStokesCoeffs(ni::NTuple{nDim, T}, di; 
+                ϵ = 1e-8, Re = 5π, CFL = 0.9/√2, r=1e0) where {nDim, T}
             
-                Vpdτ = min(geometry.di...)*CFL
-                Gdτ = @zeros(geometry.ni...)
-                dτ_Rho = @zeros(geometry.ni...)
+                Vpdτ = min(di...)*CFL
+                Gdτ = @zeros(ni...)
+                dτ_Rho = @zeros(ni...)
         
                 new{eltype(Gdτ), nDim}(CFL,ϵ,Re,r,Vpdτ,dτ_Rho,Gdτ)
             end

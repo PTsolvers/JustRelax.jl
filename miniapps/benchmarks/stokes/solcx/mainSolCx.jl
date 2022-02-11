@@ -33,6 +33,12 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     # independent of (MPI) parallelization
     ni = (nx, ny) # number of nodes in x- and y-
     li = (lx, ly)  # domain length in x- and y-
+    di = @. li/ni # grid step in x- and -y
+    max_li = max(li...)
+    nDim = length(ni) # domain dimension
+    xci = Tuple([di[i]/2:di[i]:(li[i]-di[i]/2) for i in 1:nDim]) # nodes at the center of the cells
+    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
+    
     geometry = Geometry(ni, li) # structure containing topology information
     g = 1
 
@@ -42,9 +48,9 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(geometry)
+    stokes = StokesArrays(ni)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(geometry)
+    pt_stokes = PTStokesCoeffs(ni, di)
 
     ## Setup-specific parameters and fields
     η = solCx_viscosity(geometry, Δη = Δη) # viscosity field
@@ -70,7 +76,7 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     # Physical time loop
     t = 0.0
     while t < ttot
-        solve!(stokes, pt_stokes, geometry, freeslip, fy, η; iterMax = 20e3, nout = 250)
+        solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax = 10e3)
         t += Δt
     end
 
@@ -78,7 +84,7 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
 end
 
-# Δη = 1e6
+Δη = 1e6
 geometry, stokes, ρ = solCx(Δη, nx=255*2, ny=255*2);
 # # plot model output
 # f1 = plot_solCx(geometry, stokes, ρ,  cmap = :vik, fun = heatmap!)

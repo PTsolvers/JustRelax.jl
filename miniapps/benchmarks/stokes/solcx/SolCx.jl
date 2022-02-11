@@ -1,6 +1,6 @@
 using ParallelStencil.FiniteDifferences2D
 
-# include("solCx_solution.jl")
+include("SolCx_solution.jl")
 
 function solCx_viscosity(geometry; Δη = 1e6)
     xc, yc = geometry.xci
@@ -253,7 +253,7 @@ function plot_solCx_error(geometry::Geometry, stokes::StokesArrays, Δη; cmap =
 
     # Pressure
     ax1= Axis(f[1, 4], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  log10.(err2(stokes.P, solc.p)), colormap=cmap)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  (err1(stokes.P, solc.p)), colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     Colorbar(f[1,5], h1, label="error P")
@@ -273,7 +273,7 @@ function plot_solCx_error(geometry::Geometry, stokes::StokesArrays, Δη; cmap =
     Colorbar(f[2, 3], h1, label="Vx", width = 20, tellheight=true)
 
     ax1= Axis(f[2, 4], aspect=1)
-    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], log10.(err2(stokes.V.Vx, solc.vx)), colormap=cmap)
+    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], (err1(stokes.V.Vx, solc.vx)), colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     Colorbar(f[2, 5], h1, label="error Vx", width = 20, tellheight=true)
@@ -293,11 +293,11 @@ function plot_solCx_error(geometry::Geometry, stokes::StokesArrays, Δη; cmap =
     Colorbar(f[3, 3], h1, label="Vy", width = 20, tellheight=true)
 
     ax1= Axis(f[3, 4], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], log10.(err2(stokes.V.Vy, solc.vy)), colormap=cmap)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], (err1(stokes.V.Vy, solc.vy)), colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     Colorbar(f[3, 5], h1, label="error Vy", width = 20, tellheight=true)
-    rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
+    # rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
 
     f
 end

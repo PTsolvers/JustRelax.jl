@@ -1,28 +1,28 @@
-@parallel function compute_maxloc!(A::PTArray, B::PTArray)
+@parallel function compute_maxloc!(A::AbstractArray, B::AbstractArray)
     @inn(A) = @maxloc(B)
     return
 end
 
-@parallel function compute_iter_params!(dτ_Rho::PTArray, Gdτ::PTArray, Musτ::PTArray, Vpdτ::Real, Re::Real, r::Real, max_lxy::Real)
+@parallel function compute_iter_params!(dτ_Rho::AbstractArray, Gdτ::AbstractArray, Musτ::AbstractArray, Vpdτ::Real, Re::Real, r::Real, max_lxy::Real)
     @all(dτ_Rho) = Vpdτ*max_lxy/Re/@all(Musτ)
     @all(Gdτ)    = Vpdτ^2/@all(dτ_Rho)/(r+2.0)
     return
 end
 
-@parallel function compute_P!(∇V::PTArray, P::PTArray, Vx::PTArray, Vy::PTArray, Gdτ::PTArray, r::eltype(PTArray), dx::eltype(PTArray), dy::eltype(PTArray))
+@parallel function compute_P!(∇V::AbstractArray, P::AbstractArray, Vx::AbstractArray, Vy::AbstractArray, Gdτ::AbstractArray, r::eltype(AbstractArray), dx::eltype(AbstractArray), dy::eltype(AbstractArray))
     @all(∇V) = @d_xa(Vx)/dx + @d_ya(Vy)/dy
     @all(P)  = @all(P) - r*@all(Gdτ)*@all(∇V)
     return
 end
 
-@parallel function compute_τ!(τxx::PTArray, τyy::PTArray, τxy::PTArray, Vx::PTArray, Vy::PTArray, Mus::PTArray, Gdτ::PTArray, dx::Real, dy::Real)
+@parallel function compute_τ!(τxx::AbstractArray, τyy::AbstractArray, τxy::AbstractArray, Vx::AbstractArray, Vy::AbstractArray, Mus::AbstractArray, Gdτ::AbstractArray, dx::Real, dy::Real)
     @all(τxx) = (@all(τxx) + 2.0*@all(Gdτ)*@d_xa(Vx)/dx)/(@all(Gdτ)/@all(Mus) + 1.0)
     @all(τyy) = (@all(τyy) + 2.0*@all(Gdτ)*@d_ya(Vy)/dy)/(@all(Gdτ)/@all(Mus) + 1.0)
     @all(τxy) = (@all(τxy) + 2.0*@av(Gdτ)*(0.5*(@d_yi(Vx)/dy + @d_xi(Vy)/dx)))/(@av(Gdτ)/@av(Mus) + 1.0)
     return
 end
 
-@parallel function compute_dV!(Rx::PTArray, Ry::PTArray, dVx::PTArray, dVy::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, dτ_Rho::PTArray, ρg::Nothing, dx::Real, dy::Real)
+@parallel function compute_dV!(Rx::AbstractArray, Ry::AbstractArray, dVx::AbstractArray, dVy::AbstractArray, P::AbstractArray, τxx::AbstractArray, τyy::AbstractArray, τxy::AbstractArray, dτ_Rho::AbstractArray, ρg::Nothing, dx::Real, dy::Real)
     @all(Rx)   = @d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(P)/dx
     @all(Ry)   = @d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy
     @all(dVx)  = @av_xi(dτ_Rho)*@all(Rx)
@@ -30,7 +30,7 @@ end
     return
 end
 
-@parallel function compute_dV!(Rx::PTArray, Ry::PTArray, dVx::PTArray, dVy::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, dτ_Rho::PTArray, ρg::PTArray, dx::Real, dy::Real)
+@parallel function compute_dV!(Rx::AbstractArray, Ry::AbstractArray, dVx::AbstractArray, dVy::AbstractArray, P::AbstractArray, τxx::AbstractArray, τyy::AbstractArray, τxy::AbstractArray, dτ_Rho::AbstractArray, ρg::AbstractArray, dx::Real, dy::Real)
     @all(Rx)   = @d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(P)/dx
     @all(Ry)   = @d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy - @av_yi(ρg)
     @all(dVx)  = @av_xi(dτ_Rho)*@all(Rx)
@@ -38,13 +38,13 @@ end
     return
 end
 
-@parallel function compute_V!(Vx::PTArray, Vy::PTArray, dVx::PTArray, dVy::PTArray)
+@parallel function compute_V!(Vx::AbstractArray, Vy::AbstractArray, dVx::AbstractArray, dVy::AbstractArray)
     @inn(Vx) = @inn(Vx) + @all(dVx)
     @inn(Vy) = @inn(Vy) + @all(dVy)
     return
 end
 
-@parallel function smooth!(A2::PTArray, A::PTArray, fact::Real)
+@parallel function smooth!(A2::AbstractArray, A::AbstractArray, fact::Real)
     @inn(A2) = @inn(A) + 1.0/4.1/fact*(@d2_xi(A) + @d2_yi(A))
     return
 end

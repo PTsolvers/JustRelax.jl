@@ -81,13 +81,13 @@ function pureshear_bc!(stokes::StokesArrays, di::NTuple{2,T}, li::NTuple{2,T}, Î
     stokes.V.Vy .= PTArray(  Îµbg.*[((iy-1)*dy -0.5*ly) for ix=1:size(Vy,1), iy=1:size(Vy,2)] )
 end
 
-@parallel_indices (iy) function free_slip_x!(A::AbstractArray{Float64, 2}) 
+@parallel_indices (iy) function free_slip_x!(A::AbstractArray{eltype(PTArray), 2}) 
     A[1  , iy] = A[2    , iy]
     A[end, iy] = A[end-1, iy]
     return
 end
 
-@parallel_indices (ix) function free_slip_y!(A::AbstractArray{Float64, 2})
+@parallel_indices (ix) function free_slip_y!(A::AbstractArray{eltype(PTArray), 2})
     A[ix, 1  ] = A[ix, 2    ]
     A[ix, end] = A[ix, end-1]
     return

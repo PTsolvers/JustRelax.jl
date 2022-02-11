@@ -5,10 +5,11 @@ module JustRelax
 using ParallelStencil
 using LinearAlgebra
 using Printf
+using CUDA
 
 # PS.jl exports
-# import ParallelStencil: @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
-# export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
+import ParallelStencil: @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
+export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
 
 export PS_Setup, Geometry
 
@@ -58,23 +59,23 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     )
 
     # start ParallelStencil
-    local PTArray
+    global PTArray
     if model.device == :gpu 
         eval(
-            Meta.parse("@init_parallel_stencil(CUDA, $T, $N)")
+            :(@init_parallel_stencil(CUDA, $T, $N) )
         )
         eval(
-            :(const PTArray =  CUDA.CuArray{$T, $N})
+            :( PTArray =  CUDA.CuArray{$T, $N})
         )
     else
         eval(
-            Meta.parse("@init_parallel_stencil(Threads, $T, $N)")
+            :(@init_parallel_stencil(Threads, $T, $N) )
         )
         eval(
-            :(const PTArray = Array{$T, $N})
+            :( PTArray = Array{$T, $N})
         )
     end
-
+    
     # create array structs
     make_velocity_struct!(N) # velocity
     make_tensor_struct!(N) # (symmetric) tensors
@@ -91,7 +92,7 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     )
 
     eval(
-        :(export USE_GPU, PTArray, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, pureshear_bc!, smooth!, solve!)
+        :(export USE_GPU, Data, PTArray, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, pureshear_bc!, smooth!, solve!)
     )
 
 end

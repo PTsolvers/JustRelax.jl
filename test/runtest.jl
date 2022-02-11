@@ -1,3 +1,4 @@
+import Pkg; Pkg.activate(".")
 using ParallelStencil
 using JustRelax
 using Printf, LinearAlgebra, GLMakie

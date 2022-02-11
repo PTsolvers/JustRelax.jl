@@ -92,7 +92,7 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     )
 
     eval(
-        :(export USE_GPU, Data, PTArray, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, pureshear_bc!, smooth!, solve!)
+        :(export USE_GPU, PTArray, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, pureshear_bc!, smooth!, solve!)
     )
 
 end

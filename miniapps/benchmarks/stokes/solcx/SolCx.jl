@@ -1,29 +1,31 @@
-import Pkg; Pkg.activate(".")
-using ParallelStencil
+# import Pkg; Pkg.activate(".")
+# using ParallelStencil
+# using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
+# using JustRelax
+# # using GeoParams
+# using Printf, LinearAlgebra, GLMakie
+
+# # setup ParallelStencil.jl environment
+# model = PS_Setup(:cpu, Float64, 2)
+# environment!(model)
+
+# # This main function for "Application" code is divided into 7 stages which
+# # are intended to cover usage with the GPU4GEO project and potential users
+# # of the software developed within it.
+
+# # 1. Quantities needed to describe "where the problem lives", in terms of (parallel) topology
+# # 2. Initialize tools which can represent this domain concretely in parallel (IGG here, could be PETSc/DM)
+# # 3. Concrete representations of data and population of values
+# #    - Includes information on embedding/coordinates
+# # 4. Tools, dependent on the data representation, to actually solve a particular physical problem (here JustRelax.jl, but could be PETSc's SNES)
+# #    - Note that here, the physical timestepping scheme is baked into this "physical problem"
+# # 5. Analysis and output which depends on the details of the solver
+# # 6. "Application" Analysis and output which does not depend on the details of the solver
+# # 7. Finalization/Cleanup
+
 using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
-using JustRelax
-# using GeoParams
-using Printf, LinearAlgebra, GLMakie
 
-# setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2)
-environment!(model)
-
-# This main function for "Application" code is divided into 7 stages which
-# are intended to cover usage with the GPU4GEO project and potential users
-# of the software developed within it.
-
-# 1. Quantities needed to describe "where the problem lives", in terms of (parallel) topology
-# 2. Initialize tools which can represent this domain concretely in parallel (IGG here, could be PETSc/DM)
-# 3. Concrete representations of data and population of values
-#    - Includes information on embedding/coordinates
-# 4. Tools, dependent on the data representation, to actually solve a particular physical problem (here JustRelax.jl, but could be PETSc's SNES)
-#    - Note that here, the physical timestepping scheme is baked into this "physical problem"
-# 5. Analysis and output which depends on the details of the solver
-# 6. "Application" Analysis and output which does not depend on the details of the solver
-# 7. Finalization/Cleanup
-    
-# include benchmark related functions
+# include plotting and error related functions
 include("vizSolCx.jl")
 
 function solCx_viscosity(xci, ni; Δη = 1e6)
@@ -122,27 +124,20 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
 end
 
-Δη = 1e6
-geometry, stokes, ρ = solCx(Δη, nx=255*2, ny=255*2);
-# # plot model output
-# f1 = plot_solCx(geometry, stokes, ρ,  cmap = :vik, fun = heatmap!)
-
-# # Compare pressure against analytical solution
-f2 = plot_solCx_error(geometry, stokes, Δη)
-
-function run_test(; Δη = 1e6, N = 10)
+function multiple_solCx(; Δη = 1e6, N = 10)
+    @assert N ≥ 6
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]  
-    for i in 4:N
+    for i in 6:N
         nx = ny = 2^i-1
-        geometry, stokes, = solCx(Δη, nx=n[i], ny=n[i])
-        L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes, order=2)
+        geometry, stokes, = solCx(Δη, nx=nx, ny=ny)
+        L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes, order=1)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)
         push!(L2_p,  L2_pi)
     end
 
-    # nx = @. 32*(1:N)
-    h = @. (1/n)
+    nx = @. 2^(6:N)-1
+    h = @. (1/nx)
 
     f = Figure( fontsize=28) 
     ax = Axis(f[1,1], yscale = log10, xscale = log10,  yminorticksvisible = true, yminorticks = IntervalsBetween(8))
@@ -151,9 +146,17 @@ function run_test(; Δη = 1e6, N = 10)
     lines!(ax, h, (L2_p),  linewidth=3, label = "P")
     axislegend(ax, position =:lt)
     ax.xlabel = "h"
-    ax.ylabel = "L2 norm"
-    display(f)
+    ax.ylabel = "L1 norm"
+    f
 
 end
 
-run_test(N = 9)
+# Δη = 1e6
+# geometry, stokes, ρ = solCx(Δη, nx=64, ny=64);
+# # plot model output
+# f1 = plot_solCx(geometry, stokes, ρ,  cmap = :vik, fun = heatmap!)
+
+# # Compare pressure against analytical solution
+# f2 = plot_solCx_error(geometry, stokes, Δη)
+
+# f=run_test(Δη = 1e6, N = 10) # nx = ny = 2^(6:N)-1

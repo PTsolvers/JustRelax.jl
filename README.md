@@ -39,3 +39,27 @@ We include several miniapps, each designed to solve a well-specified benchmark p
 JustRelax.jl is used in the following applications:
 
   * TODO link to all applications using the package here (crucial for early development)
+
+## Stokes Benchmarks
+# Benchmark 1: SolCx
+$$\rho(x,y) = -\sin(\pi y)\cos(\pi x)$$
+$$\eta(x) = \begin{cases}
+  1    & 0 \leq x \leq 0.5 \\
+  10^6 & 0.5 \le x \leq 1 
+\end{cases}$$
+(add code snippet)
+(add solver convergence plot)
+
+![solcx1](solcx_error_distribution_512x512.png)
+![solcx2](solcx_mesh_error.png)
+
+
+# Benchmark 2: SolKz
+$$\rho(x,y) = -\sin(2y)\cos(3\pi x)$$
+$$\eta(y) = \exp(\ln(6)y)$$
+(add code snippet)
+(add solver convergence plot)
+![solkz1](solkz_error_distribution_512x512.png)
+![solkz2](solkz_mesh_error.png)
+
+# Benchmark 3: SolVi

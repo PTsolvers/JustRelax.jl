@@ -198,7 +198,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     solc = solCx_solution(geometry, η_right = Δη)
     
     # Plot
-    f=Figure(resolution=(2200, 1800), fontsize=28)
+    f=Figure(resolution=(1200, 1800), fontsize=20)
     
     # ROW 1: PRESSURE
     # Numerical pressure
@@ -207,6 +207,11 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     # Colorbar(f[1,2], h1, label="Pressure")
+    
+    ax1.xticks = 0:1
+    ax1.yticks = 0:1
+
+    hidexdecorations!(ax1)
 
     # Analytical pressure
     ax1= Axis(f[1, 2], aspect=1, title="analytical")
@@ -215,40 +220,74 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     ylims!(ax1, (0,1))
     Colorbar(f[1,3], h1, label="P", width = 20, tellheight=true)
 
-    # Pressure
+    ax1.xticks = 0:1
+    ax1.yticks = 0:1
+
+    hidexdecorations!(ax1)
+    hideydecorations!(ax1)
+
+    # Pressure error
     ax1= Axis(f[1, 4], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  (err1(stokes.P, solc.p)), colormap=cmap)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  log10.(err1(stokes.P, solc.p)), colormap=:batlow)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
-    Colorbar(f[1,5], h1, label="error P")
+    Colorbar(f[1,5], h1, label="log10 error P")
+
+    ax1.xticks = 0:1
+    ax1.yticks = 0:1
+
+    hidexdecorations!(ax1)
+    hideydecorations!(ax1)
+
     # rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
 
     # ROW 2: Velocity-x
     # Numerical
-    ax1= Axis(f[2, 1], aspect=1, title= "Numerical")
+    ax1= Axis(f[2, 1], aspect=1)
     h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], stokes.V.Vx, colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
+
+    ax1.xticks = 0:1
+    ax1.yticks = 0:1
+
+    hidexdecorations!(ax1)
 
     ax1= Axis(f[2, 2], aspect=1)
     h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], solc.vx, colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     Colorbar(f[2, 3], h1, label="Vx", width = 20, tellheight=true)
+    
+    ax1.xticks = 0:1
+    ax1.yticks = 0:1
+
+    hidexdecorations!(ax1)
+    hideydecorations!(ax1)
 
     ax1= Axis(f[2, 4], aspect=1)
-    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], (err1(stokes.V.Vx, solc.vx)), colormap=cmap)
+    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], log10.(err1(stokes.V.Vx, solc.vx)), colormap=:batlow)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
-    Colorbar(f[2, 5], h1, label="error Vx", width = 20, tellheight=true)
+    Colorbar(f[2, 5], h1, label="log10 error Vx", width = 20, tellheight=true)
+
+    ax1.xticks = 0:1
+    ax1.yticks = 0:1
+
+    hidexdecorations!(ax1)
+    hideydecorations!(ax1)
+
     # rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
 
     # ROW 3: Velocity-y
     # Numerical
-    ax1= Axis(f[3, 1], aspect=1, title= "Numerical")
+    ax1= Axis(f[3, 1], aspect=1)
     h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], stokes.V.Vy, colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
+
+    ax1.xticks = 0:1
+    ax1.yticks = 0:1
 
     ax1= Axis(f[3, 2], aspect=1)
     h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], solc.vy, colormap=cmap)
@@ -256,11 +295,21 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     ylims!(ax1, (0,1))
     Colorbar(f[3, 3], h1, label="Vy", width = 20, tellheight=true)
 
+    ax1.xticks = 0:1
+    ax1.yticks = 0:1
+    hideydecorations!(ax1)
+
     ax1= Axis(f[3, 4], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], (err1(stokes.V.Vy, solc.vy)), colormap=cmap)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], log10.(err1(stokes.V.Vy, solc.vy)), colormap=:batlow)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
-    Colorbar(f[3, 5], h1, label="error Vy", width = 20, tellheight=true)
+    Colorbar(f[3, 5], h1, label="log10 error Vy", width = 20, tellheight=true)
+
+    ax1.xticks = 0:1
+    ax1.yticks = 0:1
+
+    hideydecorations!(ax1)
+
     # rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
 
     f

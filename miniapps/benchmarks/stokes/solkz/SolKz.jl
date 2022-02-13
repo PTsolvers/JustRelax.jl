@@ -30,7 +30,7 @@ include("vizSolKz.jl")
 function solKz_viscosity(xci, ni; B=log(1e6))
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    y = [yci for _ in xc, yci in yc]
+    y = PTArray([yci for _ in xc, yci in yc])
     η = @zeros(ni...)
     # inner closure
     _viscosity(y, B) = exp(B*y)
@@ -48,8 +48,8 @@ end
 function solKz_density(xci, ni)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x = [xci for xci in xc, _ in yc]
-    y = [yci for _ in xc, yci in yc]
+    x = PTArray([xci for xci in xc, _ in yc])
+    y = PTArray([yci for _ in xc, yci in yc])
     ρ = @zeros(ni...)
     # inner closure
     _density(x, y) = -sin(2*y)*cos(3*π*x)
@@ -110,11 +110,11 @@ function solKz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     # Physical time loop
     t = 0.0
     while t < ttot
-        solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax = 10e3)
+        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax = 10e3)
         t += Δt
     end
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, ρ
+    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters, ρ
 
 end
 
@@ -131,7 +131,7 @@ function multiple_solKz(; N = 10)
     for i in 4:N
         nx = ny = 2^i-1
         geometry, stokes, = solkz(nx=nx, ny=ny)
-        L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, order=2)
+        L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, order=1)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)
         push!(L2_p,  L2_pi)
@@ -147,7 +147,7 @@ function multiple_solKz(; N = 10)
     lines!(ax, h, (L2_p),  linewidth=3, label = "P")
     axislegend(ax, position = :rt)
     ax.xlabel = "h"
-    ax.ylabel = "L2 norm"
+    ax.ylabel = "L1 norm"
     f
 
 end

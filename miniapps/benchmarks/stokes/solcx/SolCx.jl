@@ -20,7 +20,7 @@ include("vizSolCx.jl")
 function solCx_viscosity(xci, ni; Δη = 1e6)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x = [xci for xci in xc, _ in yc]
+    x = PTArray([xci for xci in xc, _ in yc])
     η = PTArray(zeros(ni...))
     # inner closure
     _viscosity(x, Δη) = ifelse( x ≤ 0.5, 1e0, Δη )
@@ -39,8 +39,8 @@ end
 function solCx_density(xci, ni)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x = [xci for xci in xc, _ in yc]
-    y = [yci for _ in xc, yci in yc]
+    x = PTArray([xci for xci in xc, _ in yc])
+    y = PTArray([yci for _ in xc, yci in yc])
     ρ = PTArray(zeros(ni))
     # inner closure
     _density(x, y) = -sin(π*y)*cos(π*x)
@@ -54,6 +54,22 @@ function solCx_density(xci, ni)
 
     return ρ
 
+end
+
+@parallel_indices (iy) function smooth_boundaries_x!(A)
+    A[iy, 1  ]   = A[iy, 20    ]
+    A[iy, 2  ]   = A[iy, 20    ]
+    A[iy, 3  ]   = A[iy, 20    ]
+    A[iy, 4  ]   = A[iy, 20    ]
+    A[iy, 5  ]   = A[iy, 20    ]
+    A[iy, 6  ]   = A[iy, 20    ]
+    A[iy, end]   = A[iy, end-20]
+    A[iy, end-1] = A[iy, end-20]
+    A[iy, end-2] = A[iy, end-20]
+    A[iy, end-3] = A[iy, end-20]
+    A[iy, end-4] = A[iy, end-20]
+    A[iy, end-5] = A[iy, end-20]
+    return
 end
 
 function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
@@ -84,7 +100,7 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     ## Setup-specific parameters and fields
     η = solCx_viscosity(xci, ni, Δη = Δη) # viscosity field
     ρ = solCx_density(xci, ni)
-    fy = ρ*g
+    fy = ρ.*g
 
     # smooth viscosity jump (otherwise no convergence for Δη > ~15)
     η2 = deepcopy(η)
@@ -105,11 +121,11 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     # Physical time loop
     t = 0.0
     while t < ttot
-        solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax = 10e3)
+        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax = 10e3)
         t += Δt
     end
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, ρ
+    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters, ρ
 
 end
 

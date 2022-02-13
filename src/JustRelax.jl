@@ -15,7 +15,7 @@ export @parallel, @hide_communication, @parallel_indices, @parallel_async, @sync
 
 export PS_Setup, Geometry
 
-export environment!, PS_reset!
+export environment!, ps_reset!
 struct PS_Setup{B,C}
     device::Symbol
 
@@ -37,12 +37,17 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
         Meta.parse("using ParallelStencil.FiniteDifferences$(N)D")
     )
 
+    Base.eval(@__MODULE__, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D") ) 
+
     # start ParallelStencil
     global PTArray
     if model.device == :gpu 
         eval(
             :(@init_parallel_stencil(CUDA, $T, $N) )
         )
+        Base.eval(
+            Main, Meta.parse("using CUDA") 
+        ) 
         eval(
             :( PTArray =  CUDA.CuArray{$T, $N})
         )
@@ -172,6 +177,9 @@ make_PTstokes_struct!() =
         )
 )
 
-PS_reset!() = ParallelStencil.@reset_parallel_stencil()
+function ps_reset!()
+    Base.eval(Main, ParallelStencil.@reset_parallel_stencil)
+    Base.eval(@__MODULE__, ParallelStencil.@reset_parallel_stencil)
+end
 
 end # module

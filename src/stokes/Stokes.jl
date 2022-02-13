@@ -100,4 +100,5 @@ function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, di::NTuple{2,T}
             @printf("Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n", iter, err, norm_Rx, norm_Ry, norm_∇V)
         end
     end
+    return (iter= iter, err_evo1=err_evo1, err_evo2=err_evo2)
 end

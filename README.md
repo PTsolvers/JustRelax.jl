@@ -42,6 +42,9 @@ JustRelax.jl is used in the following applications:
 
 ## Stokes Benchmarks
 # Benchmark 1: SolCx
+Reference: Duretz, Thibault, et al. "Discretization errors and free surface stabilization
+in the finite difference and marker‐in‐cell method for applied geodynamics: A numerical study.
+
 $$\rho(x,y) = -\sin(\pi y)\cos(\pi x)$$
 $$\eta(x) = \begin{cases}
   1    & 0 \leq x \leq 0.5 \\
@@ -55,11 +58,14 @@ $$\eta(x) = \begin{cases}
 
 
 # Benchmark 2: SolKz
+Reference: Duretz, Thibault, et al. "Discretization errors and free surface stabilization
+in the finite difference and marker‐in‐cell method for applied geodynamics: A numerical study.
+
 $$\rho(x,y) = -\sin(2y)\cos(3\pi x)$$
 $$\eta(y) = \exp(\ln(6)y)$$
 (add code snippet)
 (add solver convergence plot)
 ![solkz1](solkz_error_distribution_512x512.png)
-![solkz2](solkz_mesh_error.png)
+![solkz2](solkz_mesh_error_L1.png)
 
 # Benchmark 3: SolVi

@@ -151,9 +151,9 @@ function solcx_error(geometry, stokes::StokesArrays; order = 2)
     
     # L2_vx = Li(stokes.V.Vx[2:end-1,2:end-1], solk.vx[2:end-1,2:end-1], order=order)
     # L2_vy = Li(stokes.V.Vy[2:end-1,2:end-1], solk.vy[2:end-1,2:end-1], order=order)
-    L2_vx = Li(stokes.V.Vx, solk.vx, order=order)*gridsize
-    L2_vy = Li(stokes.V.Vy, solk.vy, order=order)*gridsize
-    L2_p = Li(stokes.P, solk.p, order=order)*gridsize
+    L2_vx = Li(stokes.V.Vx, PTArray(solk.vx), order=order)*gridsize
+    L2_vy = Li(stokes.V.Vy, PTArray(solk.vy), order=order)*gridsize
+    L2_p = Li(stokes.P, PTArray(solk.p), order=order)*gridsize
 
     return L2_vx, L2_vy, L2_p
 end
@@ -203,7 +203,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     # ROW 1: PRESSURE
     # Numerical pressure
     ax1= Axis(f[1, 1], aspect=1, title="numerical")
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2], stokes.P, colormap=cmap, colorrange = extrema(stokes.P))
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2], Array(stokes.P), colormap=cmap, colorrange = extrema(stokes.P))
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     # Colorbar(f[1,2], h1, label="Pressure")
@@ -228,7 +228,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
 
     # Pressure error
     ax1= Axis(f[1, 4], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  log10.(err1(stokes.P, solc.p)), colormap=:batlow)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  log10.(err1(Array(stokes.P), solc.p)), colormap=:batlow)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     Colorbar(f[1,5], h1, label="log10 error P")
@@ -244,7 +244,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     # ROW 2: Velocity-x
     # Numerical
     ax1= Axis(f[2, 1], aspect=1)
-    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], stokes.V.Vx, colormap=cmap)
+    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], Array(stokes.V.Vx), colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
 
@@ -266,7 +266,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     hideydecorations!(ax1)
 
     ax1= Axis(f[2, 4], aspect=1)
-    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], log10.(err1(stokes.V.Vx, solc.vx)), colormap=:batlow)
+    h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], log10.(err1(Array(stokes.V.Vx), solc.vx)), colormap=:batlow)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     Colorbar(f[2, 5], h1, label="log10 error Vx", width = 20, tellheight=true)
@@ -282,7 +282,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     # ROW 3: Velocity-y
     # Numerical
     ax1= Axis(f[3, 1], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], stokes.V.Vy, colormap=cmap)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], Array(stokes.V.Vy), colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
 
@@ -300,7 +300,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     hideydecorations!(ax1)
 
     ax1= Axis(f[3, 4], aspect=1)
-    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], log10.(err1(stokes.V.Vy, solc.vy)), colormap=:batlow)
+    h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], log10.(err1(Array(stokes.V.Vy), solc.vy)), colormap=:batlow)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
     Colorbar(f[3, 5], h1, label="log10 error Vy", width = 20, tellheight=true)
@@ -315,18 +315,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     f
 end
 
-function err2(A::AbstractArray, B::AbstractArray)
-    err = similar(A)
-    Threads.@threads for i in eachindex(err)
-        @inbounds err[i] = √(((A[i]-B[i])^2))
-    end
-    err
-end
+err2(A::AbstractArray, B::AbstractArray) = @.  √(((A-B)^2))
 
-function err1(A::AbstractArray, B::AbstractArray)
-    err = similar(A)
-    Threads.@threads for i in eachindex(err)
-        @inbounds err[i] = abs(A[i]-B[i])
-    end
-    err
-end
+err1(A::AbstractArray, B::AbstractArray) = @. abs(A-B)
+

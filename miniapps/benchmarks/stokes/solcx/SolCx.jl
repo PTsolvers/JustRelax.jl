@@ -120,6 +120,7 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
     # Physical time loop
     t = 0.0
+    local iters
     while t < ttot
         iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax = 10e3)
         t += Δt

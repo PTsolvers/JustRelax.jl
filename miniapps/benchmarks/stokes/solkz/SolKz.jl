@@ -109,6 +109,7 @@ function solKz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
     # Physical time loop
     t = 0.0
+    local iters
     while t < ttot
         iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax = 10e3)
         t += Δt
@@ -130,7 +131,7 @@ function multiple_solKz(; N = 10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]  
     for i in 4:N
         nx = ny = 2^i-1
-        geometry, stokes, = solkz(nx=nx, ny=ny)
+        geometry, stokes, = solKz(nx=nx, ny=ny)
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, order=1)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

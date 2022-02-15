@@ -68,11 +68,11 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     make_PTstokes_struct!()
 
     eval(
-        :(include(joinpath(pwd(),"src/stokes/Stokes.jl")))
+        :(include(joinpath(@__DIR__, "stokes", "Stokes.jl")))
     )
 
     eval(
-        :(include(joinpath(pwd(),"src/boundaryconditions/BoundaryConditions.jl")))
+        :(include(joinpath(@__DIR__, "boundaryconditions", "BoundaryConditions.jl")))
     )
 
     eval(

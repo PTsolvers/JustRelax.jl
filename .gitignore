@@ -1,8 +1,4 @@
-/Manifest.toml
-
-# TODO don't like the minapps polluting the root directory,
-# but for now paralling reference code, so leave this
-/figures
+Manifest.toml
 
 # Jupyter
 *.ipynb_checkpoints

@@ -1,27 +1,5 @@
-using ParallelStencil
-using Printf, LinearAlgebra, GLMakie
-using JustRelax
-
-# setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2)
-environment!(model)
-
-# This main function for "Application" code is divided into 7 stages which
-# are intended to cover usage with the GPU4GEO project and potential users
-# of the software developed within it.
-
-# 1. Quantities needed to describe "where the problem lives", in terms of (parallel) topology
-# 2. Initialize tools which can represent this domain concretely in parallel (IGG here, could be PETSc/DM)
-# 3. Concrete representations of data and population of values
-#    - Includes information on embedding/coordinates
-# 4. Tools, dependent on the data representation, to actually solve a particular physical problem (here JustRelax.jl, but could be PETSc's SNES)
-#    - Note that here, the physical timestepping scheme is baked into this "physical problem"
-# 5. Analysis and output which depends on the details of the solver
-# 6. "Application" Analysis and output which does not depend on the details of the solver
-# 7. Finalization/Cleanup
-   
-# # include benchmark related functions
-# include("SolVi.jl")
+# include benchmark related functions
+include("SolVi.jl")
 
 function solvi_viscosity(ni, di, li, rc, η0, ηi)
     dx, dy = di
@@ -85,9 +63,3 @@ function solvi(; nx=256-1, ny=256-1, lx=1e1, ly=1e1, rc = 1e0)
     return  (ni=ni, xci=xci, xvi=xvi, li=li), stokes
 
 end
-
-geometry, stokes = solvi()
-
-## PLOTS - Compare pressure against analytical solution
-# Psolvi, = solvi_solution(geometry, η0, ηi, εbg, rc)
-

@@ -1,27 +1,3 @@
-# import Pkg;Pkg.activate(".")
-# using Printf, LinearAlgebra, GLMakie
-# using ParallelStencil
-# using JustRelax
-# using ParallelStencil.FiniteDifferences2D
-
-# # setup ParallelStencil.jl environment
-# model = PS_Setup(:cpu, Float64, 2)
-# environment!(model)
-
-# This main function for "Application" code is divided into 7 stages which
-# are intended to cover usage with the GPU4GEO project and potential users
-# of the software developed within it.
-
-# 1. Quantities needed to describe "where the problem lives", in terms of (parallel) topology
-# 2. Initialize tools which can represent this domain concretely in parallel (IGG here, could be PETSc/DM)
-# 3. Concrete representations of data and population of values
-#    - Includes information on embedding/coordinates
-# 4. Tools, dependent on the data representation, to actually solve a particular physical problem (here JustRelax.jl, but could be PETSc's SNES)
-#    - Note that here, the physical timestepping scheme is baked into this "physical problem"
-# 5. Analysis and output which depends on the details of the solver
-# 6. "Application" Analysis and output which does not depend on the details of the solver
-# 7. Finalization/Cleanup
-    
 using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
 
 # include benchmark related plotting and error functions
@@ -119,13 +95,6 @@ function solKz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
 end
 
-# geometry, stokes, ρ = solkz(nx=31, ny=31)
-
-# # # plot model output
-# f1 = plot_solkz(geometry, ρ, stokes)
-# # # Compare pressure against analytical solution
-# f2 = plot_solkz_error(geometry, stokes)
-
 function multiple_solKz(; N = 10)
     
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]  
@@ -152,5 +121,3 @@ function multiple_solKz(; N = 10)
     f
 
 end
-
-# run_test(N = 6)

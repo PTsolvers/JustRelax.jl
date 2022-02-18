@@ -1,5 +1,3 @@
-# using ParallelStencil.FiniteDifferences2D
-
 include("SolCx_solution.jl")
 
 function solCx_solution(geometry; η_left=1,  η_right=1e6)
@@ -32,125 +30,12 @@ function solCx_solution(geometry; η_left=1,  η_right=1e6)
     return (vx=vxs, vy=vys, p=ps)
 end
 
-# innfunloc(A, i, j, f)  = f(
-#         A[i,   j],
-#         A[i-1, j],
-#         A[i+1, j],
-#         A[i, j-1],
-#         A[i, j+1],
-#     )
-
-# function compute_funloc!(A, B, f::Function)
-
-#     Threads.@threads for i in 2:size(A,1)-1
-#         for j in 2:size(A,2)-1
-#             @inbounds  A[i, j] = innfunloc(A, i, j, f)
-#         end 
-#     end
-
-#     Threads.@threads for i in 2:size(A, 2)-1
-#         @inbounds B[i, 1] = f(
-#             A[i,     1],
-#             A[i+1,   1],
-#             A[i-1,   1],
-#             A[i,   1+1],
-#         )
-#         @inbounds B[i, size(A, 2)] = f(
-#             A[i,   size(A, 2)  ],
-#             A[i+1, size(A, 2)  ],
-#             A[i-1, size(A, 2)  ],
-#             A[i,   size(A, 2)-1],
-#         )
-#     end
-
-# end
-
-# mean(args...) = sum(args)/length(args)
-# harmmean(args...) = length(args)/sum(1.0./args)
-# geometricmean(args...) = reduce(*, args)^(1/length(args))
-
-# @parallel_indices (iy) function smooth_boundaries_x!(A::PTArray)
-#     A[iy, 1  ] = A[iy, 20    ]
-#     A[iy, 2  ] = A[iy, 20    ]
-#     A[iy, 3  ] = A[iy, 20    ]
-#     A[iy, 4  ] = A[iy, 20    ]
-#     A[iy, 5  ] = A[iy, 20    ]
-#     A[iy, 6  ] = A[iy, 20    ]
-#     A[iy, end] = A[iy, end-20]
-#     A[iy, end-1] = A[iy, end-20]
-#     A[iy, end-2] = A[iy, end-20]
-#     A[iy, end-3] = A[iy, end-20]
-#     A[iy, end-4] = A[iy, end-20]
-#     A[iy, end-5] = A[iy, end-20]
-#     return
-# end
-
-# function err2(A::AbstractArray, B::AbstractArray)
-#     err = similar(A)
-#     Threads.@threads for i in eachindex(err)
-#         @inbounds err[i] = √(((A[i]-B[i])^2))
-#     end
-#     err
-# end
-
-# function solve2!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, geometry::Geometry{2}, freeslip, ρg, η; iterMax = 10e3, nout = 500)
-#     # unpack
-#     dx, dy = geometry.di 
-#     lx, ly = geometry.li 
-#     (; Vx, Vy) = stokes.V
-#     dVx, dVy = stokes.dV.Vx, stokes.dV.Vy
-#     τxx, τyy, τxy = stress(stokes)
-#     (; P, ∇V) = stokes
-#     (; Ry, Rx) = stokes.R
-#     (; Gdτ, dτ_Rho, ϵ, Re, r, Vpdτ) = pt_stokes
-#     (;freeslip_x, freeslip_y) =freeslip
-
-#     # ~preconditioner
-#     ητ = deepcopy(η)
-#     # @parallel compute_maxloc!(ητ, η)
-#     compute_funloc!(ητ, η, geometricmean)
-#     # PT numerical coefficients
-#     @parallel compute_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, Re, r, geometry.max_li)
-#     # errors
-#     err=2*ϵ; iter=0; err_evo1=Float64[]; err_evo2=Float64[]; err_rms = Float64[]
-    
-#     # solver loop
-#     # Gdτ *= 1e-1
-#     # dτ_Rho *= 1e-3
-#     while err > ϵ && iter <= iterMax
-#         if (iter==11)  global wtime0 = Base.time()  end
-#         @parallel compute_P!(∇V, P, Vx, Vy, Gdτ, r, dx, dy)
-#         @parallel compute_τ!(τxx, τyy, τxy, Vx, Vy, η, Gdτ, dx, dy)
-#         @parallel compute_dV!(Rx, Ry, dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, dx, dy)
-#         @parallel compute_V!(Vx, Vy, dVx, dVy)
-
-#         # free slip boundary conditions
-#         if (freeslip_x) @parallel (1:size(Vx,1)) free_slip_y!(Vx) end
-#         if (freeslip_y) @parallel (1:size(Vy,2)) free_slip_x!(Vy) end
-
-#         iter += 1
-#         if (iter > 1) && (iter % nout == 0)
-#             Vmin, Vmax = minimum(Vx), maximum(Vx)
-#             Pmin, Pmax = minimum(P), maximum(P)
-#             norm_Rx    = norm(Rx)/(Pmax-Pmin)*lx/sqrt(length(Rx))
-#             norm_Ry    = norm(Ry)/(Pmax-Pmin)*lx/sqrt(length(Ry))
-#             norm_∇V    = norm(∇V)/(Vmax-Vmin)*lx/sqrt(length(∇V))
-#             # norm_Rx = norm(Rx)/length(Rx); norm_Ry = norm(Ry)/length(Ry); norm_∇V = norm(∇V)/length(∇V)
-#             err = maximum([norm_Rx, norm_Ry, norm_∇V])
-#             push!(err_evo1, maximum([norm_Rx, norm_Ry, norm_∇V])); push!(err_evo2,iter)
-#             @printf("Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n", iter, err, norm_Rx, norm_Ry, norm_∇V)
-#         end
-#     end
-# end
-
 function solcx_error(geometry, stokes::StokesArrays; order = 2)
     solk = solCx_solution(geometry)
 
     gridsize = reduce(*, geometry.di)
     Li(A, B; order = 2) = norm(A.-B, order)
     
-    # L2_vx = Li(stokes.V.Vx[2:end-1,2:end-1], solk.vx[2:end-1,2:end-1], order=order)
-    # L2_vy = Li(stokes.V.Vy[2:end-1,2:end-1], solk.vy[2:end-1,2:end-1], order=order)
     L2_vx = Li(stokes.V.Vx, PTArray(solk.vx), order=order)*gridsize
     L2_vy = Li(stokes.V.Vy, PTArray(solk.vy), order=order)*gridsize
     L2_p = Li(stokes.P, PTArray(solk.p), order=order)*gridsize

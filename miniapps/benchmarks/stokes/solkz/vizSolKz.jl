@@ -38,8 +38,6 @@ function Li_error(geometry, stokes::StokesArrays; order = 2)
 
     Li(A, B; order = 2) = norm(A.-B, order)
     
-    # L2_vx = Li(stokes.V.Vx[2:end-1,2:end-1], solk.vx[2:end-1,2:end-1], order=order)
-    # L2_vy = Li(stokes.V.Vy[2:end-1,2:end-1], solk.vy[2:end-1,2:end-1], order=order)
     L2_vx = Li(stokes.V.Vx, PTArray(solk.vx), order=order)*gridsize
     L2_vy = Li(stokes.V.Vy, PTArray(solk.vy), order=order)*gridsize
     L2_p = Li(stokes.P, PTArray(solk.p), order=order)*gridsize

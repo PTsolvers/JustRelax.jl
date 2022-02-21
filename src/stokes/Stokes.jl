@@ -1,3 +1,5 @@
+## KERNELS
+
 @parallel function compute_maxloc!(A::AbstractArray, B::AbstractArray)
     @inn(A) = @maxloc(B)
     return
@@ -5,13 +7,13 @@ end
 
 @parallel function compute_iter_params!(dτ_Rho::AbstractArray, Gdτ::AbstractArray, Musτ::AbstractArray, Vpdτ::Real, Re::Real, r::Real, max_lxy::Real)
     @all(dτ_Rho) = Vpdτ*max_lxy/Re/@all(Musτ)
-    @all(Gdτ)    = Vpdτ^2/@all(dτ_Rho)/(r+2.0)
+    @all(Gdτ) = Vpdτ^2/@all(dτ_Rho)/(r+2.0)
     return
 end
 
 @parallel function compute_P!(∇V::AbstractArray, P::AbstractArray, Vx::AbstractArray, Vy::AbstractArray, Gdτ::AbstractArray, r::eltype(AbstractArray), dx::eltype(AbstractArray), dy::eltype(AbstractArray))
     @all(∇V) = @d_xa(Vx)/dx + @d_ya(Vy)/dy
-    @all(P)  = @all(P) - r*@all(Gdτ)*@all(∇V)
+    @all(P) = @all(P) - r*@all(Gdτ)*@all(∇V)
     return
 end
 
@@ -44,10 +46,19 @@ end
     return
 end
 
-@parallel function smooth!(A2::AbstractArray, A::AbstractArray, fact::Real)
-    @inn(A2) = @inn(A) + 1.0/4.1/fact*(@d2_xi(A) + @d2_yi(A))
-    return
+## BOUNDARY CONDITIONS 
+
+function pureshear_bc!(stokes::StokesArrays, di::NTuple{2, T}, li::NTuple{2, T}, εbg) where T
+    # unpack
+    Vx, Vy = stokes.V.Vx, stokes.V.Vy
+    dx, dy = di 
+    lx, ly = li 
+    # Velocity pure shear boundary conditions
+    stokes.V.Vx .= PTArray( [-εbg*((ix-1)*dx -0.5*lx) for ix=1:size(Vx,1), iy=1:size(Vx,2)] )
+    stokes.V.Vy .= PTArray( [ εbg*((iy-1)*dy -0.5*ly) for ix=1:size(Vy,1), iy=1:size(Vy,2)] )
 end
+
+## UTILS
 
 stress(stokes::StokesArrays) = stress(stokes.τ)
 
@@ -55,7 +66,39 @@ stress(τ::SymmetricTensor{<:AbstractMatrix{T}}) where T = (τ.xx, τ.yy, τ.xy)
 
 stress(τ::SymmetricTensor{<:AbstractArray{T, 3}}) where T = (τ.xx, τ.yy, τ.yy, τ.xy, τ.xy, τ.yz)
 
-function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, di::NTuple{2,T}, li::NTuple{2,T}, max_li, freeslip, ρg, η; iterMax = 10e3, nout = 500) where T
+@parallel function smooth!(A2::AbstractArray, A::AbstractArray, fact::Real)
+    @inn(A2) = @inn(A) + 1.0/4.1/fact*(@d2_xi(A) + @d2_yi(A))
+    return
+end
+
+@parallel_indices (i) function smooth_boundaries_y!(A2::AbstractArray, A::AbstractArray, fact::Real)
+    A2[1, i] = A[1, i] + 1.0/4.1/fact*(
+        (A[1, i+1] - 2*A[1, i] +A[1, i-1]) +
+        (A[3, i] - 2*A[2, i] +A[1, i]) 
+    )
+    A2[end, i] = A[end, i] + 1.0/4.1/fact*(
+        (A[end, i+1] - 2*A[end, i] +A[end, i-1]) +
+        (A[end-2, i] - 2*A[end-1, i] +A[end, i]) 
+    )
+    return
+end
+
+@parallel_indices (i) function smooth_boundaries_x!(A2::AbstractArray, A::AbstractArray, fact::Real)
+    A2[i, 1] = A[i, 1] + 1.0/4.1/fact*(
+        (A[i+1, 1] - 2*A[i, 1] +A[i-1, 1]) +
+        (A[i, 3] - 2*A[i, 2] +A[i, 1]) 
+    )
+    A2[i, end] = A[i, end] + 1.0/4.1/fact*(
+        (A[i+1, end] - 2*A[i, end] +A[i-1, end]) +
+        (A[i, end-2] - 2*A[i, end-1] +A[i, end]) 
+    )
+    return
+end
+
+## SOLVERS 
+
+function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, di::NTuple{2, T}, li::NTuple{2, T}, max_li, freeslip, ρg, η; iterMax = 10e3, nout = 500) where T
+   
     # unpack
     dx, dy = di 
     lx, ly = li 
@@ -70,8 +113,10 @@ function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, di::NTuple{2,T}
     # ~preconditioner
     ητ = deepcopy(η)
     @parallel compute_maxloc!(ητ, η)
+   
     # PT numerical coefficients
     @parallel compute_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, Re, r, max_li)
+    
     # errors
     err=2*ϵ; iter=0; err_evo1=Float64[]; err_evo2=Float64[]; err_rms = Float64[]
     
@@ -100,5 +145,6 @@ function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, di::NTuple{2,T}
             @printf("Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n", iter, err, norm_Rx, norm_Ry, norm_∇V)
         end
     end
+
     return (iter= iter, err_evo1=err_evo1, err_evo2=err_evo2)
 end

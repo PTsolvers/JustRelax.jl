@@ -75,9 +75,10 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
         :(include(joinpath(@__DIR__, "boundaryconditions", "BoundaryConditions.jl")))
     )
 
-    eval(
-        :(export USE_GPU, PTArray, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, pureshear_bc!, smooth!, solve!)
-    )
+    @eval begin
+        export USE_GPU, PTArray, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, solve!
+        export pureshear_bc!, smooth!, smooth_boundaries_x!,smooth_boundaries_y!
+    end
 
 end
 

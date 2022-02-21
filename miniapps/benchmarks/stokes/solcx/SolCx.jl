@@ -19,7 +19,6 @@ function solCx_viscosity(xci, ni; Δη = 1e6)
     @parallel viscosity(η, x) 
 
     return η
-
 end
 
 function solCx_density(xci, ni)
@@ -39,24 +38,24 @@ function solCx_density(xci, ni)
     @parallel density(ρ, x, y)
 
     return ρ
-
 end
 
-@parallel_indices (iy) function smooth_boundaries_x!(A)
-    A[iy, 1  ]   = A[iy, 20    ]
-    A[iy, 2  ]   = A[iy, 20    ]
-    A[iy, 3  ]   = A[iy, 20    ]
-    A[iy, 4  ]   = A[iy, 20    ]
-    A[iy, 5  ]   = A[iy, 20    ]
-    A[iy, 6  ]   = A[iy, 20    ]
-    A[iy, end]   = A[iy, end-20]
-    A[iy, end-1] = A[iy, end-20]
-    A[iy, end-2] = A[iy, end-20]
-    A[iy, end-3] = A[iy, end-20]
-    A[iy, end-4] = A[iy, end-20]
-    A[iy, end-5] = A[iy, end-20]
-    return
-end
+# @parallel_indices (iy) function smooth_boundaries_x!(A)
+#     A[iy, 1  ]   = A[iy, 20    ]
+#     A[iy, 2  ]   = A[iy, 20    ]
+#     A[iy, 3  ]   = A[iy, 20    ]
+#     A[iy, 4  ]   = A[iy, 20    ]
+#     A[iy, 5  ]   = A[iy, 20    ]
+#     A[iy, 6  ]   = A[iy, 20    ]
+#     A[iy, end]   = A[iy, end-20]
+#     A[iy, end-1] = A[iy, end-20]
+#     A[iy, end-2] = A[iy, end-20]
+#     A[iy, end-3] = A[iy, end-20]
+#     A[iy, end-4] = A[iy, end-20]
+#     A[iy, end-5] = A[iy, end-20]
+
+#     return
+# end
 
 function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
@@ -92,17 +91,12 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     η2 = deepcopy(η)
     for _=1:30
         @parallel smooth!(η2, η, 1.0)
+        @parallel (2:size(η,1)-1) smooth_boundaries_x!(η2, η, 1.0)
         η, η2 = η2, η
     end
 
-    # we dont need to forget to smooth also the nodes at the borders 
-    @parallel (1:size(η,1)) smooth_boundaries_x!(η)
-
     ## Boundary conditions
-    freeslip = (
-        freeslip_x = true,
-        freeslip_y = true
-    )
+    freeslip = (freeslip_x = true, freeslip_y = true)
 
     # Physical time loop
     t = 0.0
@@ -116,10 +110,9 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
 end
 
-function multiple_solCx(; Δη = 1e6, N = 10)
-    @assert N ≥ 6
+function multiple_solCx(; Δη = 1e6, nrange::UnitRange = 6:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]  
-    for i in 6:N
+    for i in nrange
         nx = ny = 2^i-1
         geometry, stokes, = solCx(Δη, nx=nx, ny=ny)
         L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes, order=1)
@@ -128,7 +121,7 @@ function multiple_solCx(; Δη = 1e6, N = 10)
         push!(L2_p,  L2_pi)
     end
 
-    nx = @. 2^(6:N)-1
+    nx = @. 2^nrange-1
     h = @. (1/nx)
 
     f = Figure( fontsize=28) 

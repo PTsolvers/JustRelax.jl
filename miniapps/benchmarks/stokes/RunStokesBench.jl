@@ -6,7 +6,7 @@ using Printf, LinearAlgebra, GLMakie
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
-# chose benchmark
+# choose benchmark
 # available options = :solvi, :solcx, :solkz
 benchmark = :solcx
 

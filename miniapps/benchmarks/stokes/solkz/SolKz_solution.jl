@@ -1,7 +1,10 @@
-# ρ =  -sin(2*y)*cos(3*π*x)
-# ρ =  -sigma*sin(Km*y)*cos(kn*x)
-function _solkz_solution(x, z)
-    B = log(1e6)/2
+#=
+Analytical solution adapted from Underworld (https://github.com/underworldcode). As stated in the Underworld repository, 
+the code is released under the  GNU LESSER GENERAL PUBLIC LICENSE (LGPL-3) license
+=#
+function _solkz_solution(x, z; Δη = 1e6)
+
+    B = log(Δη)/2
     n = 3*π
     sigma = 1
     Km = 2

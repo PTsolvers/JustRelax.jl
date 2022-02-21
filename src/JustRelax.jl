@@ -9,13 +9,13 @@ using CUDA
 
 include("topology/Topology.jl")
 
-# PS.jl exports
+# ParallelStencil.jl exports
 import ParallelStencil: @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
 export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
 
-export PS_Setup, Geometry
+# JustRelax.jl
+export PS_Setup, Geometry, environment!, ps_reset!
 
-export environment!, ps_reset!
 struct PS_Setup{B,C}
     device::Symbol
 
@@ -81,6 +81,7 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
 
 end
 
+# Constructors for Stokes-related structures
 function make_velocity_struct!(nDim::Integer)
     dims = ("x", "y", "z")
     str = Meta.parse(
@@ -111,10 +112,10 @@ function make_residual_struct!(nDim::Integer)
     eval(str)
 end
 
-make_stokes_struct!() =
-    eval(
-        Meta.parse(
-        "struct StokesArrays{A,B,C,T, nDim}
+
+function make_stokes_struct!()
+    @eval begin
+        struct StokesArrays{A, B, C, T, nDim}
             P::T
             V::A
             dV::A
@@ -144,17 +145,15 @@ make_stokes_struct!() =
                     @zeros(ni[1]-2, ni[2]-1)
                 )
 
-                new{typeof(V),typeof(τ),typeof(R),typeof(P), 2}(P, V, dV, ∇V, τ, R)
+                new{typeof(V), typeof(τ), typeof(R), typeof(P), 2}(P, V, dV, ∇V, τ, R)
             end
-        end"
-        )
-    )
-
+        end
+    end
+end
     
-make_PTstokes_struct!() =
-    eval(
-        Meta.parse(
-        "struct PTStokesCoeffs{T, nDim}
+function make_PTstokes_struct!()
+    @eval begin
+        struct PTStokesCoeffs{T, nDim}
             CFL::T
             ϵ::T # PT tolerance
             Re::T # Reynolds Number
@@ -173,9 +172,9 @@ make_PTstokes_struct!() =
                 new{eltype(Gdτ), nDim}(CFL,ϵ,Re,r,Vpdτ,dτ_Rho,Gdτ)
             end
         
-        end"
-        )
-)
+        end
+    end
+end
 
 function ps_reset!()
     Base.eval(Main, ParallelStencil.@reset_parallel_stencil)

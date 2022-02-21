@@ -40,7 +40,7 @@ function solKz_density(xci, ni)
     return ρ
 end
 
-function solKz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
+function solKz(; Δη=1e6, nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
@@ -73,15 +73,12 @@ function solKz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     pt_stokes = PTStokesCoeffs(ni, di)
 
     ## Setup-specific parameters and fields
-    η = solKz_viscosity(xci, ni) # viscosity field
+    η = solKz_viscosity(xci, ni, B=log(Δη)) # viscosity field
     ρ = solKz_density(xci, ni)
     fy = ρ*g
 
     ## Boundary conditions
-    freeslip = (
-        freeslip_x = true,
-        freeslip_y = true
-    )
+    freeslip = (freeslip_x = true, freeslip_y = true)
 
     # Physical time loop
     t = 0.0
@@ -92,22 +89,21 @@ function solKz(; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     end
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters, ρ
-
 end
 
-function multiple_solKz(; N = 10)
+function multiple_solKz(; Δη=1e-6, nrange::UnitRange = 4:10)
     
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]  
-    for i in 4:N
+    for i in nrange
         nx = ny = 2^i-1
-        geometry, stokes, = solKz(nx=nx, ny=ny)
+        geometry, stokes, = solKz(Δη=Δη, nx=nx, ny=ny)
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, order=1)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)
         push!(L2_p,  L2_pi)
     end
 
-    nx = @. 2^(4:N)-1
+    nx = @. 2^(nrange)-1
     h = @. (1/nx)
 
     f = Figure( fontsize=28) 

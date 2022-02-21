@@ -91,6 +91,6 @@ elseif benchmark == :solvi
     end
 
 else
-    throw("Benchmark not available. List of benchmarks = :solcx, :solkz, :solvi")
+    throw("Benchmark not available.")
     
 end

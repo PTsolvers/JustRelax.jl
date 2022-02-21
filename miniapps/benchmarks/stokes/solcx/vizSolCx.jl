@@ -83,7 +83,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     solc = solCx_solution(geometry, η_right = Δη)
     
     # Plot
-    f=Figure(resolution=(1200, 1800), fontsize=20)
+    f=Figure(resolution=(1200, 1000), fontsize=20)
     
     # ROW 1: PRESSURE
     # Numerical pressure
@@ -103,7 +103,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     h1=heatmap!(ax1, geometry.xci[1], geometry.xci[2],  solc.p, colormap=cmap, colorrange = extrema(stokes.P))
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
-    Colorbar(f[1,3], h1, label="P", width = 20, tellheight=true)
+    Colorbar(f[1,3], h1, label="P", width = 20, height = 300, tellheight=true)
 
     ax1.xticks = 0:1
     ax1.yticks = 0:1
@@ -124,8 +124,6 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     hidexdecorations!(ax1)
     hideydecorations!(ax1)
 
-    # rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
-
     # ROW 2: Velocity-x
     # Numerical
     ax1= Axis(f[2, 1], aspect=1)
@@ -142,7 +140,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     h1=heatmap!(ax1, geometry.xvi[1], geometry.xci[2], solc.vx, colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
-    Colorbar(f[2, 3], h1, label="Vx", width = 20, tellheight=true)
+    Colorbar(f[2, 3], h1, label="Vx", width = 20, height = 300, tellheight=true)
     
     ax1.xticks = 0:1
     ax1.yticks = 0:1
@@ -162,8 +160,6 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     hidexdecorations!(ax1)
     hideydecorations!(ax1)
 
-    # rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
-
     # ROW 3: Velocity-y
     # Numerical
     ax1= Axis(f[3, 1], aspect=1)
@@ -178,7 +174,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
     h1=heatmap!(ax1, geometry.xci[1], geometry.xvi[2], solc.vy, colormap=cmap)
     xlims!(ax1, (0,1))
     ylims!(ax1, (0,1))
-    Colorbar(f[3, 3], h1, label="Vy", width = 20, tellheight=true)
+    Colorbar(f[3, 3], h1, label="Vy", width = 20, height = 300, tellheight=true)
 
     ax1.xticks = 0:1
     ax1.yticks = 0:1
@@ -203,4 +199,3 @@ end
 err2(A::AbstractArray, B::AbstractArray) = @.  √(((A-B)^2))
 
 err1(A::AbstractArray, B::AbstractArray) = @. abs(A-B)
-

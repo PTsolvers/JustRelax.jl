@@ -40,23 +40,6 @@ function solCx_density(xci, ni)
     return ρ
 end
 
-# @parallel_indices (iy) function smooth_boundaries_x!(A)
-#     A[iy, 1  ]   = A[iy, 20    ]
-#     A[iy, 2  ]   = A[iy, 20    ]
-#     A[iy, 3  ]   = A[iy, 20    ]
-#     A[iy, 4  ]   = A[iy, 20    ]
-#     A[iy, 5  ]   = A[iy, 20    ]
-#     A[iy, 6  ]   = A[iy, 20    ]
-#     A[iy, end]   = A[iy, end-20]
-#     A[iy, end-1] = A[iy, end-20]
-#     A[iy, end-2] = A[iy, end-20]
-#     A[iy, end-3] = A[iy, end-20]
-#     A[iy, end-4] = A[iy, end-20]
-#     A[iy, end-5] = A[iy, end-20]
-
-#     return
-# end
-
 function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications

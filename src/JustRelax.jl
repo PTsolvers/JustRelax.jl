@@ -1,7 +1,5 @@
 module JustRelax
 
-# include("DiffusionNonlinearSolvers.jl")
-
 using ParallelStencil
 using LinearAlgebra
 using Printf

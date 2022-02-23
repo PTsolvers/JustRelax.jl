@@ -74,7 +74,7 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     η2 = deepcopy(η)
     for _=1:30
         @parallel smooth!(η2, η, 1.0)
-        @parallel (2:size(η,1)-1) smooth_boundaries_x!(η2, η, 1.0)
+        @parallel (1:size(η2, 1)) free_slip_y!(η2)
         η, η2 = η2, η
     end
 

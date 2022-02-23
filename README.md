@@ -1,5 +1,7 @@
 # JustRelax.jl
 
+![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)
+
 Need to solve a very large multi-physics problem on a GPU cluster? Just Relax!
 
 Pseudo-transient accelerated iterative solvers, ready for extreme-scale, multi-GPU computation.

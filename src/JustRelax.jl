@@ -1,5 +1,19 @@
 module JustRelax
 
-include("DiffusionNonlinearSolvers.jl")
+using ParallelStencil
+using LinearAlgebra
+using Printf
+using CUDA
+
+include("topology/Topology.jl")
+include("meta/MetaJustRelax.jl")
+include("meta/MetaStokes.jl")
+
+# ParallelStencil.jl exports
+import ParallelStencil: @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
+export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
+
+# JustRelax.jl
+export PS_Setup, Geometry, environment!, ps_reset!
 
 end # module

@@ -20,7 +20,7 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
         Meta.parse("using ParallelStencil.FiniteDifferences$(N)D")
     )
 
-    Base.eval(@__MODULE__, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D") ) 
+    Base.eval( @__MODULE__, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D") ) 
 
     # start ParallelStencil
     global PTArray
@@ -50,9 +50,11 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
 
     @eval begin
         include(joinpath(@__DIR__,"../stokes/Stokes.jl"))
+        include(joinpath(@__DIR__,"../stokes/Elasticity.jl"))
         include(joinpath(@__DIR__,"../boundaryconditions/BoundaryConditions.jl"))
     
         export USE_GPU, PTArray, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, smooth!, solve!
+        export AbstractStokesModel, Viscous, ViscoElastic
         export pureshear_bc!, free_slip_x!, free_slip_y!
     end
 

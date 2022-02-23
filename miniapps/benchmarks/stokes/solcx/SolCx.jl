@@ -61,7 +61,7 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni)
+    stokes = StokesArrays(ni, Viscous)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(ni, di)
 

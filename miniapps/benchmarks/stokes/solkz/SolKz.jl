@@ -65,12 +65,6 @@ function solKz(; Δη=1e6, nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(ni, di)
 
-    ## Allocate arrays needed for every Stokes problem
-    # general stokes arrays
-    stokes = StokesArrays(ni)
-    # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di)
-
     ## Setup-specific parameters and fields
     η = solKz_viscosity(xci, ni, B=log(Δη)) # viscosity field
     ρ = solKz_density(xci, ni)

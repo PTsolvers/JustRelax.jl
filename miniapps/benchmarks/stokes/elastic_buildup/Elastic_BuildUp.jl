@@ -1,3 +1,5 @@
+import Statistics: mean 
+
 # Benchmark reference:
 #   Gerya, T. V., & Yuen, D. A. (2007). Robust characteristics method for
 #   modelling multiphase visco-elasto-plastic thermo-mechanical problems.
@@ -61,6 +63,7 @@ function elastic_buildup(; nx=256-1, ny=256-1, lx=100e3, ly=100e3, endtime = 500
         end
         iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, ρ.*g, η, G, dt; iterMax = 10e3)
         t += dt
+
         push!(av_τyy,  mean(stokes.τ.yy))
         push!(sol_τyy, solution(εbg, t, G, η0))
         push!(tt, t/yr)

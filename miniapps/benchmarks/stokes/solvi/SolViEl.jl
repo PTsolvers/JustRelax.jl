@@ -15,8 +15,6 @@ function solvi_viscosity(ni, di, li, rc, η0, ηi)
     # cx, cy = lx/2, ly/2
     η = fill(η0, ni...)
 
-    # _viscosity!(η, xci, yci, rc, ηi, cx, cy)
-
     Rad2 = [sqrt.(((ix-1)*dx +0.5*dx -0.5*lx)^2 + ((iy-1)*dy +0.5*dy -0.5*ly)^2) for ix=1:ni[1], iy=1:ni[2]]
     η[Rad2.<rc] .= ηi
     η2 = deepcopy(η)
@@ -36,7 +34,7 @@ function solvi_viscosity(ni, di, li, rc, η0, ηi)
     return η
 end
 
-function solVi(; Δη = 1e-3, nx=256-1, ny=256-1, lx=1e1, ly=1e1, rc = 1e0, εbg = 1e0)
+function solViEl(; Δη = 1e-3, nx=256-1, ny=256-1, lx=1e1, ly=1e1, rc = 1e0, εbg = 1e0)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
@@ -50,19 +48,22 @@ function solVi(; Δη = 1e-3, nx=256-1, ny=256-1, lx=1e1, ly=1e1, rc = 1e0, εbg
     xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
 
     ## (Physical) Time domain and discretization
-    ttot = 1 # total simulation time
+    ttot = 5 # total simulation time
     Δt = 1   # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni, Viscous)
+    stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(ni, di)
 
     ## Setup-specific parameters and fields
-    η0 = 1.0  # matrix viscosity
+    η0 = 1e0  # matrix viscosity
     ηi = Δη # inclusion viscosity
     η = solvi_viscosity(ni, di, li, rc, η0, ηi) # viscosity field
+    ξ = 1.0         # Maxwell relaxation time
+    G = 1.0         # elastic shear modulus
+    dt = η0/(G*ξ)
 
     ## Boundary conditions
     pureshear_bc!(stokes, di, li, εbg) 
@@ -76,14 +77,14 @@ function solVi(; Δη = 1e-3, nx=256-1, ny=256-1, lx=1e1, ly=1e1, rc = 1e0, εbg
     ρ = @zeros(size(stokes.P))
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, ρ, η; iterMax = 10e3)
+        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, ρ, η, G, dt; iterMax = 10e3)
         t += Δt
     end
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters
 end
 
-function multiple_solVi(; Δη = 1e-3, lx=1e1, ly=1e1, rc = 1e0, εbg = 1e0, nrange::UnitRange = 4:8)
+function multiple_solViEl(; Δη = 1e-3, lx=1e1, ly=1e1, rc = 1e0, εbg = 1e0, nrange::UnitRange = 4:8)
     
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]  
     for i in nrange

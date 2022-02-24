@@ -52,7 +52,6 @@ function solCx(Δη; nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     nDim = length(ni) # domain dimension
     xci = Tuple([di[i]/2:di[i]:(li[i]-di[i]/2) for i in 1:nDim]) # nodes at the center of the cells
     xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
-    # geometry = Geometry(ni, li) # structure containing topology information
     g = 1
 
     ## (Physical) Time domain and discretization

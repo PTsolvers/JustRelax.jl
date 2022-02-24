@@ -8,7 +8,7 @@ environment!(model)
 
 # choose benchmark
 # available options = :solvi, :solcx, :solkz
-benchmark = :solcx
+benchmark = :solvi
 
 # model resolution (number of gridpoints)
 nx, ny = 128, 128
@@ -74,7 +74,7 @@ elseif benchmark == :solvi
     include("solvi/SolVi.jl") # need to call this again if we switch from gpu <-/-> cpu
     
     # model specific parameters
-    Δη = 1e3 # viscosity ratio between matrix and inclusion
+    Δη = 1e-3 # viscosity ratio between matrix and inclusion
     rc = 0.2 # radius of the inclusion
     εbg = 1e0 # background strain rate
     lx, ly = 2e0, 2e0 # domain siye in x and y directions
@@ -87,6 +87,51 @@ elseif benchmark == :solvi
         
     elseif runtype == :multiple
         f = multiple_solVi(; Δη=Δη, lx=lx, ly=ly, rc = rc, εbg = εbg, nrange=4:8) # nx = ny = 2^(nrange)-1
+    
+    end
+
+elseif benchmark == :solviel
+   
+    # include plotting and error related functions
+    include("solvi/SolViEl.jl") # need to call this again if we switch from gpu <-/-> cpu
+    
+    # model specific parameters
+    Δη = 1e-3 # viscosity ratio between matrix and inclusion
+    rc = 0.2 # radius of the inclusion
+    εbg = 1e0 # background strain rate
+    lx, ly = 2e0, 2e0 # domain siye in x and y directions
+    if runtype == :single
+        # run model
+        geometry, stokes, iters = solViEl(Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc = rc, εbg = εbg);
+            
+        # plot model output and error
+        f = plot_solVi_error(geometry, stokes, Δη, εbg, rc)
+        
+    elseif runtype == :multiple
+        f = multiple_solVi(; Δη=Δη, lx=lx, ly=ly, rc = rc, εbg = εbg, nrange=4:8) # nx = ny = 2^(nrange)-1
+    
+    end
+
+elseif benchmark == :elastic_buildup
+   
+    # include plotting and error related functions
+    include("solelastic/SolElastic.jl") # need to call this again if we switch from gpu <-/-> cpu
+
+    # model specific parameters
+    endtime = 500 # duration of the model in kyrs
+    η0 = 1e22 # viscosity
+    εbg = 1e-14 # background strain rate (pure shear boundary conditions)
+    G = 10e9 # shear modulus
+    lx, ly = 100e3, 100e3 # length of the domain in meters
+    if runtype == :single
+        # run model
+        geometry, stokes, av_τyy, sol_τyy, t, iters = 
+            elastic_buildup( nx=nx, ny=ny, lx=lx, ly=ly, endtime = endtime, η0 = η0, εbg = εbg, G = G)
+        # plot model output and error
+        f = plot_elasic_buildup(av_τyy, sol_τyy, t) 
+
+    elseif runtype == :multiple
+        # f = multiple_solVi(; Δη=Δη, lx=lx, ly=ly, rc = rc, εbg = εbg, nrange=4:8) # nx = ny = 2^(nrange)-1
     
     end
 

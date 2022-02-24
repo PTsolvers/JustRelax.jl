@@ -49,9 +49,9 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     make_PTstokes_struct!()
 
     @eval begin
-        include(joinpath(@__DIR__,"../stokes/Stokes.jl"))
-        include(joinpath(@__DIR__,"../stokes/Elasticity.jl"))
-        include(joinpath(@__DIR__,"../boundaryconditions/BoundaryConditions.jl"))
+        include(joinpath(@__DIR__,"stokes/Stokes.jl"))
+        include(joinpath(@__DIR__,"stokes/Elasticity.jl"))
+        include(joinpath(@__DIR__,"boundaryconditions/BoundaryConditions.jl"))
     
         export USE_GPU, PTArray, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, smooth!, solve!
         export AbstractStokesModel, Viscous, ViscoElastic

@@ -6,8 +6,8 @@ using Printf
 using CUDA
 
 include("topology/Topology.jl")
-include("meta/MetaJustRelax.jl")
-include("meta/MetaStokes.jl")
+include("MetaJustRelax.jl")
+include("stokes/MetaStokes.jl")
 
 # ParallelStencil.jl exports
 import ParallelStencil: @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand

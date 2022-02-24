@@ -115,10 +115,10 @@ elseif benchmark == :solviel
 elseif benchmark == :elastic_buildup
    
     # include plotting and error related functions
-    include("solelastic/SolElastic.jl") # need to call this again if we switch from gpu <-/-> cpu
+    include("elastic_buildup/Elastic_BuildUp.jl") # need to call this again if we switch from gpu <-/-> cpu
 
     # model specific parameters
-    endtime = 500 # duration of the model in kyrs
+    endtime = 125 # duration of the model in kyrs
     η0 = 1e22 # viscosity
     εbg = 1e-14 # background strain rate (pure shear boundary conditions)
     G = 10e9 # shear modulus
@@ -131,8 +131,8 @@ elseif benchmark == :elastic_buildup
         f = plot_elasic_buildup(av_τyy, sol_τyy, t) 
 
     elseif runtype == :multiple
-        # f = multiple_solVi(; Δη=Δη, lx=lx, ly=ly, rc = rc, εbg = εbg, nrange=4:8) # nx = ny = 2^(nrange)-1
-    
+        f = multiple_elastic_buildup(lx=lx, ly=ly, endtime = endtime, η0 = η0, εbg = εbg, G = G, nrange = 4:8)
+        
     end
 
 else

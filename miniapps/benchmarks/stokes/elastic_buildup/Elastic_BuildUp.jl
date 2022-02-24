@@ -6,6 +6,16 @@
 # Analytical solution
 solution(ε, t, G, η) = 2*ε*η*(1-exp(-G*t/η))
 
+function plot_elasic_buildup(av_τyy, sol_τyy, t)
+    f = Figure(); 
+    ax = Axis(f[1,1], xlabel="kyrs", ylabel="Stress Mpa")
+    scatter!(ax, t./1e3,  sol_τyy./1e6, label="analytic", linewidth=3)
+    lines!(ax, t./1e3,  av_τyy./1e6, label="numeric", linewidth=3, color = :black)
+    axislegend(ax)
+    ylims!(ax, 0, 220)
+    f
+end
+
 function elastic_buildup(; nx=256-1, ny=256-1, lx=100e3, ly=100e3, endtime = 500, η0 = 1e22, εbg = 1e-14, G = 10^10)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
@@ -60,12 +70,25 @@ function elastic_buildup(; nx=256-1, ny=256-1, lx=100e3, ly=100e3, endtime = 500
 
 end
 
-function plot_elasic_buildup(av_τyy, sol_τyy, t)
-    f = Figure(); 
-    ax = Axis(f[1,1], xlabel="kyrs", ylabel="Stress Mpa")
-    scatter!(ax, t./1e3,  sol_τyy./1e6, label="analytic", linewidth=3)
-    lines!(ax, t./1e3,  av_τyy./1e6, label="numeric", linewidth=3, color = :black)
-    axislegend(ax)
-    ylims!(ax, 0, 220)
+function multiple_elastic_buildup(; lx=100e3, ly=100e3, endtime = 500, η0 = 1e22, εbg = 1e-14, G = 10^10, nrange::UnitRange = 4:8)
+    
+    av_err = Float64[]  
+    for i in nrange
+        nx = ny = 2^i-1
+        geometry, stokes, av_τyy, sol_τyy, t, iters = 
+            elastic_buildup(nx=nx, ny=ny, lx=lx, ly=ly, endtime = endtime, η0 = η0, εbg = εbg, G = G)
+       
+        push!(av_err, mean(@. abs(av_τyy - sol_τyy)/sol_τyy))
+    end
+
+    nx = @. 2^nrange-1
+    h = @. (1/nx)
+
+    f = Figure(fontsize=28) 
+    ax = Axis(f[1,1], yscale = log10, xscale = log10, yminorticksvisible = true, yminorticks = IntervalsBetween(8))
+    lines!(ax, h, av_err, linewidth=3)
+    ax.xlabel = "h"
+    ax.ylabel = "error ||av_τyy - sol_τyy||/sol_τyy"
     f
+
 end

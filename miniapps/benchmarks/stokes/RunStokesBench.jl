@@ -7,8 +7,7 @@ model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 # choose benchmark
-# available options = :solvi, :solcx, :solkz
-benchmark = :solcx
+benchmark = :solvi
 
 # model resolution (number of gridpoints)
 nx, ny = 128, 128
@@ -74,7 +73,7 @@ elseif benchmark == :solvi
     include("solvi/SolVi.jl") # need to call this again if we switch from gpu <-/-> cpu
     
     # model specific parameters
-    Δη = 1e3 # viscosity ratio between matrix and inclusion
+    Δη = 1e-3 # viscosity ratio between matrix and inclusion
     rc = 0.2 # radius of the inclusion
     εbg = 1e0 # background strain rate
     lx, ly = 2e0, 2e0 # domain siye in x and y directions
@@ -88,6 +87,55 @@ elseif benchmark == :solvi
     elseif runtype == :multiple
         f = multiple_solVi(; Δη=Δη, lx=lx, ly=ly, rc = rc, εbg = εbg, nrange=4:8) # nx = ny = 2^(nrange)-1
     
+    end
+
+elseif benchmark == :solviel
+   
+    # include plotting and error related functions
+    include("solvi/SolViEl.jl") # need to call this again if we switch from gpu <-/-> cpu
+    
+    # model specific parameters
+    Δη = 1e-3 # viscosity ratio between matrix and inclusion
+    rc = 0.2 # radius of the inclusion
+    εbg = 1e0 # background strain rate
+    lx, ly = 2e0, 2e0 # domain siye in x and y directions
+    if runtype == :single
+        # run model
+        geometry, stokes, iters = solViEl(Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc = rc, εbg = εbg);
+            
+        # plot model output and error
+        f = plot_solVi_error(geometry, stokes, Δη, εbg, rc)
+        
+    elseif runtype == :multiple
+        f = multiple_solVi(; Δη=Δη, lx=lx, ly=ly, rc = rc, εbg = εbg, nrange=4:8) # nx = ny = 2^(nrange)-1
+    
+    end
+
+elseif benchmark == :elastic_buildup
+    # Benchmark reference:
+    #   Gerya, T. V., & Yuen, D. A. (2007). Robust characteristics method for
+    #   modelling multiphase visco-elasto-plastic thermo-mechanical problems.
+    #   Physics of the Earth and Planetary Interiors, 163(1-4), 83-105.
+
+    # include plotting and error related functions
+    include("elastic_buildup/Elastic_BuildUp.jl") # need to call this again if we switch from gpu <-/-> cpu
+
+    # model specific parameters
+    endtime = 125 # duration of the model in kyrs
+    η0 = 1e22 # viscosity
+    εbg = 1e-14 # background strain rate (pure shear boundary conditions)
+    G = 10e9 # shear modulus
+    lx, ly = 100e3, 100e3 # length of the domain in meters
+    if runtype == :single
+        # run model
+        geometry, stokes, av_τyy, sol_τyy, t, iters = 
+            elastic_buildup( nx=nx, ny=ny, lx=lx, ly=ly, endtime = endtime, η0 = η0, εbg = εbg, G = G)
+        # plot model output and error
+        f = plot_elastic_buildup(av_τyy, sol_τyy, t) 
+
+    elseif runtype == :multiple
+        f = multiple_elastic_buildup(lx=lx, ly=ly, endtime = endtime, η0 = η0, εbg = εbg, G = G, nrange = 4:8)
+        
     end
 
 else

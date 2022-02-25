@@ -1,5 +1,8 @@
 Manifest.toml
 
+# VSCode
+/.vscode
+
 # Jupyter
 *.ipynb_checkpoints
 

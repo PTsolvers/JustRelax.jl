@@ -53,7 +53,6 @@ function solKz(; Δη=1e6, nx=256-1, ny=256-1, lx=1e0, ly=1e0)
     nDim = length(ni) # domain dimension
     xci = Tuple([di[i]/2:di[i]:(li[i]-di[i]/2) for i in 1:nDim]) # nodes at the center of the cells
     xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
-    # geometry = Geometry(ni, li) # structure containing topology information
     g = 1 # gravity
 
     ## (Physical) Time domain and discretization
@@ -62,13 +61,7 @@ function solKz(; Δη=1e6, nx=256-1, ny=256-1, lx=1e0, ly=1e0)
      
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni)
-    # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di)
-
-    ## Allocate arrays needed for every Stokes problem
-    # general stokes arrays
-    stokes = StokesArrays(ni)
+    stokes = StokesArrays(ni, Viscous)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(ni, di)
 

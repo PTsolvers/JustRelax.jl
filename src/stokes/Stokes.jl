@@ -60,7 +60,7 @@ end
 
 ## UTILS
 
-stress(stokes::StokesArrays) = stress(stokes.τ)
+stress(stokes::StokesArrays{Viscous, A, B, C, D, 2}) where {A, B, C, D, T} = stress(stokes.τ)
 
 stress(τ::SymmetricTensor{<:AbstractMatrix{T}}) where T = (τ.xx, τ.yy, τ.xy)
 
@@ -95,10 +95,20 @@ end
     return
 end
 
-## SOLVERS 
+## VISCOUS STOKES SOLVER 
 
-function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, di::NTuple{2, T}, li::NTuple{2, T}, max_li, freeslip, ρg, η; iterMax = 10e3, nout = 500) where T
-   
+function solve!(
+    stokes::StokesArrays{Viscous, A, B, C, D, 2}, 
+    pt_stokes::PTStokesCoeffs, di::NTuple{2,T}, 
+    li::NTuple{2,T}, 
+    max_li, 
+    freeslip,
+    ρg, 
+    η; 
+    iterMax = 10e3, 
+    nout = 500
+) where {A, B, C, D, T}
+    
     # unpack
     dx, dy = di 
     lx, ly = li 
@@ -113,10 +123,8 @@ function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, di::NTuple{2, T
     # ~preconditioner
     ητ = deepcopy(η)
     @parallel compute_maxloc!(ητ, η)
-   
     # PT numerical coefficients
     @parallel compute_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, Re, r, max_li)
-    
     # errors
     err=2*ϵ; iter=0; err_evo1=Float64[]; err_evo2=Float64[]; err_rms = Float64[]
     
@@ -139,12 +147,11 @@ function solve!(stokes::StokesArrays, pt_stokes::PTStokesCoeffs, di::NTuple{2, T
             norm_Rx    = norm(Rx)/(Pmax-Pmin)*lx/sqrt(length(Rx))
             norm_Ry    = norm(Ry)/(Pmax-Pmin)*lx/sqrt(length(Ry))
             norm_∇V    = norm(∇V)/(Vmax-Vmin)*lx/sqrt(length(∇V))
-            # norm_Rx = norm(Rx)/length(Rx); norm_Ry = norm(Ry)/length(Ry); norm_∇V = norm(∇V)/length(∇V)
             err = maximum([norm_Rx, norm_Ry, norm_∇V])
             push!(err_evo1, maximum([norm_Rx, norm_Ry, norm_∇V])); push!(err_evo2,iter)
             @printf("Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n", iter, err, norm_Rx, norm_Ry, norm_∇V)
         end
     end
 
-    return (iter= iter, err_evo1=err_evo1, err_evo2=err_evo2)
+    return (iter=iter, err_evo1=err_evo1, err_evo2=err_evo2)
 end

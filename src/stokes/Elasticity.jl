@@ -84,7 +84,7 @@ function solve!(
     err=2*ϵ; iter=0; err_evo1=Float64[]; err_evo2=Float64[]; err_rms = Float64[]
     
     # solver loop
-    while err > ϵ && iter <= iterMax
+    while iter < 2 || (err > ϵ && iter <= iterMax)
         if (iter==11)  global wtime0 = Base.time()  end
         @parallel compute_P!(∇V, P, Vx, Vy, Gdτ, r, dx, dy)
         @parallel compute_τ!(τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, Gdτ, Vx, Vy, η, G, dt, dx, dy)
@@ -98,7 +98,7 @@ function solve!(
         iter += 1
         if iter % nout == 0
             @parallel compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρg, dx, dy)
-            Vmin, Vmax = minimum(Vx), maximum(Vx)
+            Vmin, Vmax = minimum(Vy), maximum(Vy)
             Pmin, Pmax = minimum(P), maximum(P)
             norm_Rx    = norm(Rx)/(Pmax-Pmin)*lx/sqrt(length(Rx))
             norm_Ry    = norm(Ry)/(Pmax-Pmin)*lx/sqrt(length(Ry))

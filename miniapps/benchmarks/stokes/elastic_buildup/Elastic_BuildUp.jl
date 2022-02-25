@@ -32,7 +32,7 @@ function elastic_buildup(; nx=256-1, ny=256-1, lx=100e3, ly=100e3, endtime = 500
     ttot = endtime*kyr # total simulation time
 
     ## Setup-specific parameters and fields
-    η = [η0*(1 + (rand()-0.5)*0.001) for _ in 1:nx, _ in 1:ny] 
+    η = fill(η0, nx, ny)
     g = 0.0 # gravity
 
     ## Allocate arrays needed for every Stokes problem

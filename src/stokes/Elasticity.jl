@@ -6,15 +6,15 @@
     return
 end
 
-@parallel function compute_dV_elastic!(dVx::PTArray, dVy::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, dτ_Rho::PTArray, dx::Real, dy::Real)
+@parallel function compute_dV_elastic!(dVx::PTArray, dVy::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, dτ_Rho::PTArray, ρg::PTArray, dx::Real, dy::Real)
     @all(dVx) = (@d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(P)/dx)*@av_xi(dτ_Rho)
-    @all(dVy) = (@d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy)*@av_yi(dτ_Rho)
+    @all(dVy) = (@d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy  - @av_yi(ρg))*@av_yi(dτ_Rho)
     return
 end
 
-@parallel function compute_Res!(Rx::PTArray, Ry::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, dx::Real, dy::Real)
+@parallel function compute_Res!(Rx::PTArray, Ry::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, ρg::PTArray, dx::Real, dy::Real)
     @all(Rx) = @d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(P)/dx
-    @all(Ry) = @d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy
+    @all(Ry) = @d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy - @av_yi(ρg)
     return
 end
 
@@ -88,7 +88,7 @@ function solve!(
         if (iter==11)  global wtime0 = Base.time()  end
         @parallel compute_P!(∇V, P, Vx, Vy, Gdτ, r, dx, dy)
         @parallel compute_τ!(τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, Gdτ, Vx, Vy, η, G, dt, dx, dy)
-        @parallel compute_dV_elastic!(dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, dx, dy)
+        @parallel compute_dV_elastic!(dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, dx, dy)
         @parallel compute_V!(Vx, Vy, dVx, dVy)
 
         # free slip boundary conditions
@@ -97,7 +97,7 @@ function solve!(
 
         iter += 1
         if iter % nout == 0
-            @parallel compute_Res!(Rx, Ry, P, τxx, τyy, τxy, dx, dy)
+            @parallel compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρg, dx, dy)
             Vmin, Vmax = minimum(Vx), maximum(Vx)
             Pmin, Pmax = minimum(P), maximum(P)
             norm_Rx    = norm(Rx)/(Pmax-Pmin)*lx/sqrt(length(Rx))

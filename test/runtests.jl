@@ -2,8 +2,9 @@ push!(LOAD_PATH, "..")
 
 function runtests()
   exename = joinpath(Sys.BINDIR, Base.julia_exename())
-  testfiles = filter(x->endswith(x, ".jl") && contains(x, "test_" ), readdir(@__DIR__, join=true))
-
+  testdir = pwd()
+  istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
+  testfiles = sort(filter(istest, vcat([joinpath.(root, files) for (root, dirs, files) in walkdir(testdir)]...)))
   nfail = 0
   printstyled("Testing package JustRelax.jl\n"; bold=true, color=:white)
 
@@ -11,7 +12,7 @@ function runtests()
     println("")
     println("Running tests from $f")
     try
-      run(`$exename -O3 --startup-file=no --check-bounds=no $f`)
+      run(`$exename -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
     catch ex
       nfail += 1
     end

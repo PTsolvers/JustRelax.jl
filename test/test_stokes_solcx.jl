@@ -21,7 +21,7 @@ function check_convergence_case1()
                    )
   println(iters)
   println(iters_expected)
-  return iters.iter ≤ iters_expected.iter && iters.err_evo1[end] ≈ iters_expected.err_evo1[end]
+  return iters.iter == iters_expected.iter && iters.err_evo1[end] ≈ iters_expected.err_evo1[end]
 end
 
 @testset begin

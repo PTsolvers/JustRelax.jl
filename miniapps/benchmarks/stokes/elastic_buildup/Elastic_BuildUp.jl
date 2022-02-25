@@ -1,14 +1,9 @@
 import Statistics: mean 
 
-# Benchmark reference:
-#   Gerya, T. V., & Yuen, D. A. (2007). Robust characteristics method for
-#   modelling multiphase visco-elasto-plastic thermo-mechanical problems.
-#   Physics of the Earth and Planetary Interiors, 163(1-4), 83-105.
-
 # Analytical solution
 solution(ε, t, G, η) = 2*ε*η*(1-exp(-G*t/η))
 
-function plot_elasic_buildup(av_τyy, sol_τyy, t)
+function plot_elastic_buildup(av_τyy, sol_τyy, t)
     f = Figure(); 
     ax = Axis(f[1,1], xlabel="kyrs", ylabel="Stress Mpa")
     scatter!(ax, t./1e3,  sol_τyy./1e6, label="analytic", linewidth=3)
@@ -25,7 +20,7 @@ function elastic_buildup(; nx=256-1, ny=256-1, lx=100e3, ly=100e3, endtime = 500
     # independent of (MPI) parallelization
     ni = (nx, ny) # number of nodes in x- and y-
     li = (lx, ly)  # domain length in x- and y-
-    di = @. li/(ni-1) # grid step in x- and -y
+    di = @. li/ni # grid step in x- and -y
     max_li = max(li...)
     nDim = length(ni) # domain dimension
     xci = Tuple([di[i]/2:di[i]:(li[i]-di[i]/2) for i in 1:nDim]) # nodes at the center of the cells

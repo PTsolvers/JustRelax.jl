@@ -7,7 +7,6 @@ model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 # choose benchmark
-# available options = :solvi, :solcx, :solkz
 benchmark = :solvi
 
 # model resolution (number of gridpoints)
@@ -113,7 +112,11 @@ elseif benchmark == :solviel
     end
 
 elseif benchmark == :elastic_buildup
-   
+    # Benchmark reference:
+    #   Gerya, T. V., & Yuen, D. A. (2007). Robust characteristics method for
+    #   modelling multiphase visco-elasto-plastic thermo-mechanical problems.
+    #   Physics of the Earth and Planetary Interiors, 163(1-4), 83-105.
+
     # include plotting and error related functions
     include("elastic_buildup/Elastic_BuildUp.jl") # need to call this again if we switch from gpu <-/-> cpu
 
@@ -128,7 +131,7 @@ elseif benchmark == :elastic_buildup
         geometry, stokes, av_τyy, sol_τyy, t, iters = 
             elastic_buildup( nx=nx, ny=ny, lx=lx, ly=ly, endtime = endtime, η0 = η0, εbg = εbg, G = G)
         # plot model output and error
-        f = plot_elasic_buildup(av_τyy, sol_τyy, t) 
+        f = plot_elastic_buildup(av_τyy, sol_τyy, t) 
 
     elseif runtype == :multiple
         f = multiple_elastic_buildup(lx=lx, ly=ly, endtime = endtime, η0 = η0, εbg = εbg, G = G, nrange = 4:8)

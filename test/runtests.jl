@@ -2,7 +2,7 @@ push!(LOAD_PATH, "..")
 
 function runtests()
   exename = joinpath(Sys.BINDIR, Base.julia_exename())
-  testfiles = filter(x->endswith(x, ".jl") && contains(x, "/test_" ), readdir(@__DIR__, join=true))
+  testfiles = filter(x->endswith(x, ".jl") && contains(x, "test_" ), readdir(@__DIR__, join=true))
 
   nfail = 0
   printstyled("Testing package JustRelax.jl\n"; bold=true, color=:white)

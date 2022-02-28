@@ -117,6 +117,7 @@ end
 function Burstedde()
     nx=ny=nz=32
     lx=ly=lz=1e0
+    
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,

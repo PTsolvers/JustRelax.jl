@@ -43,7 +43,7 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     
     # create array structs
     make_velocity_struct!(N) # velocity
-    make_tensor_struct!(N) # (symmetric) tensors
+    make_symmetrictensor_struct!(N) # (symmetric) tensors
     make_residual_struct!(N) # residuals
     make_stokes_struct!() # Arrays for Stokes solver
     make_PTstokes_struct!()
@@ -53,7 +53,7 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
         include(joinpath(@__DIR__,"stokes/Elasticity.jl"))
         include(joinpath(@__DIR__,"boundaryconditions/BoundaryConditions.jl"))
     
-        export USE_GPU, PTArray, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, smooth!, solve!
+        export USE_GPU, PTArray, Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, smooth!, solve!
         export AbstractStokesModel, Viscous, ViscoElastic
         export pureshear_bc!, free_slip_x!, free_slip_y!
     end

@@ -1,30 +1,30 @@
-## KERNELS
+## 2D KERNELS
 
-@parallel function compute_maxloc!(A::AbstractArray, B::AbstractArray)
+@parallel function compute_maxloc!(A::AbstractArray{eltype(PTArray),2}, B::AbstractArray{eltype(PTArray),2})
     @inn(A) = @maxloc(B)
     return
 end
 
-@parallel function compute_iter_params!(dτ_Rho::AbstractArray, Gdτ::AbstractArray, Musτ::AbstractArray, Vpdτ::Real, Re::Real, r::Real, max_lxy::Real)
+@parallel function compute_iter_params!(dτ_Rho::AbstractArray{eltype(PTArray),2}, Gdτ::AbstractArray{eltype(PTArray),2}, Musτ::AbstractArray{eltype(PTArray),2}, Vpdτ::Real, Re::Real, r::Real, max_lxy::Real)
     @all(dτ_Rho) = Vpdτ*max_lxy/Re/@all(Musτ)
     @all(Gdτ) = Vpdτ^2/@all(dτ_Rho)/(r+2.0)
     return
 end
 
-@parallel function compute_P!(∇V::AbstractArray, P::AbstractArray, Vx::AbstractArray, Vy::AbstractArray, Gdτ::AbstractArray, r::eltype(AbstractArray), dx::eltype(AbstractArray), dy::eltype(AbstractArray))
+@parallel function compute_P!(∇V::AbstractArray{eltype(PTArray),2}, P::AbstractArray{eltype(PTArray),2}, Vx::AbstractArray{eltype(PTArray),2}, Vy::AbstractArray{eltype(PTArray),2}, Gdτ::AbstractArray{eltype(PTArray),2}, r::eltype(AbstractArray), dx::eltype(AbstractArray), dy::eltype(AbstractArray))
     @all(∇V) = @d_xa(Vx)/dx + @d_ya(Vy)/dy
     @all(P) = @all(P) - r*@all(Gdτ)*@all(∇V)
     return
 end
 
-@parallel function compute_τ!(τxx::AbstractArray, τyy::AbstractArray, τxy::AbstractArray, Vx::AbstractArray, Vy::AbstractArray, Mus::AbstractArray, Gdτ::AbstractArray, dx::Real, dy::Real)
+@parallel function compute_τ!(τxx::AbstractArray{eltype(PTArray),2}, τyy::AbstractArray{eltype(PTArray),2}, τxy::AbstractArray{eltype(PTArray),2}, Vx::AbstractArray{eltype(PTArray),2}, Vy::AbstractArray{eltype(PTArray),2}, Mus::AbstractArray{eltype(PTArray),2}, Gdτ::AbstractArray{eltype(PTArray),2}, dx::Real, dy::Real)
     @all(τxx) = (@all(τxx) + 2.0*@all(Gdτ)*@d_xa(Vx)/dx)/(@all(Gdτ)/@all(Mus) + 1.0)
     @all(τyy) = (@all(τyy) + 2.0*@all(Gdτ)*@d_ya(Vy)/dy)/(@all(Gdτ)/@all(Mus) + 1.0)
     @all(τxy) = (@all(τxy) + 2.0*@av(Gdτ)*(0.5*(@d_yi(Vx)/dy + @d_xi(Vy)/dx)))/(@av(Gdτ)/@av(Mus) + 1.0)
     return
 end
 
-@parallel function compute_dV!(Rx::AbstractArray, Ry::AbstractArray, dVx::AbstractArray, dVy::AbstractArray, P::AbstractArray, τxx::AbstractArray, τyy::AbstractArray, τxy::AbstractArray, dτ_Rho::AbstractArray, ρg::Nothing, dx::Real, dy::Real)
+@parallel function compute_dV!(Rx::AbstractArray{eltype(PTArray),2}, Ry::AbstractArray{eltype(PTArray),2}, dVx::AbstractArray{eltype(PTArray),2}, dVy::AbstractArray{eltype(PTArray),2}, P::AbstractArray{eltype(PTArray),2}, τxx::AbstractArray{eltype(PTArray),2}, τyy::AbstractArray{eltype(PTArray),2}, τxy::AbstractArray{eltype(PTArray),2}, dτ_Rho::AbstractArray{eltype(PTArray),2}, ρg::Nothing, dx::Real, dy::Real)
     @all(Rx)   = @d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(P)/dx
     @all(Ry)   = @d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy
     @all(dVx)  = @av_xi(dτ_Rho)*@all(Rx)
@@ -32,7 +32,7 @@ end
     return
 end
 
-@parallel function compute_dV!(Rx::AbstractArray, Ry::AbstractArray, dVx::AbstractArray, dVy::AbstractArray, P::AbstractArray, τxx::AbstractArray, τyy::AbstractArray, τxy::AbstractArray, dτ_Rho::AbstractArray, ρg::AbstractArray, dx::Real, dy::Real)
+@parallel function compute_dV!(Rx::AbstractArray{eltype(PTArray),2}, Ry::AbstractArray{eltype(PTArray),2}, dVx::AbstractArray{eltype(PTArray),2}, dVy::AbstractArray{eltype(PTArray),2}, P::AbstractArray{eltype(PTArray),2}, τxx::AbstractArray{eltype(PTArray),2}, τyy::AbstractArray{eltype(PTArray),2}, τxy::AbstractArray{eltype(PTArray),2}, dτ_Rho::AbstractArray{eltype(PTArray),2}, ρg::AbstractArray{eltype(PTArray),2}, dx::Real, dy::Real)
     @all(Rx)   = @d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(P)/dx
     @all(Ry)   = @d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy - @av_yi(ρg)
     @all(dVx)  = @av_xi(dτ_Rho)*@all(Rx)
@@ -40,7 +40,7 @@ end
     return
 end
 
-@parallel function compute_V!(Vx::AbstractArray, Vy::AbstractArray, dVx::AbstractArray, dVy::AbstractArray)
+@parallel function compute_V!(Vx::AbstractArray{eltype(PTArray),2}, Vy::AbstractArray{eltype(PTArray),2}, dVx::AbstractArray{eltype(PTArray),2}, dVy::AbstractArray{eltype(PTArray),2})
     @inn(Vx) = @inn(Vx) + @all(dVx)
     @inn(Vy) = @inn(Vy) + @all(dVy)
     return
@@ -70,18 +70,18 @@ end
 
 ## UTILS
 
-stress(stokes::StokesArrays{Viscous, A, B, C, D, 2}) where {A, B, C, D, T} = stress(stokes.τ)
+stress(stokes::StokesArrays{Viscous, A, B, C, D, nDim}) where {A, B, C, D, T, nDim} = stress(stokes.τ)
 
 stress(τ::SymmetricTensor{<:AbstractMatrix{T}}) where T = (τ.xx, τ.yy, τ.xy)
 
 stress(τ::SymmetricTensor{<:AbstractArray{T, 3}}) where T = (τ.xx, τ.yy, τ.yy, τ.xy, τ.xy, τ.yz)
 
-@parallel function smooth!(A2::AbstractArray, A::AbstractArray, fact::Real)
+@parallel function smooth!(A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real)
     @inn(A2) = @inn(A) + 1.0/4.1/fact*(@d2_xi(A) + @d2_yi(A))
     return
 end
 
-@parallel_indices (i) function smooth_boundaries_y!(A2::AbstractArray, A::AbstractArray, fact::Real)
+@parallel_indices (i) function smooth_boundaries_y!(A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real)
     A2[1, i] = A[1, i] + 1.0/4.1/fact*(
         (A[1, i+1] - 2*A[1, i] +A[1, i-1]) +
         (A[3, i] - 2*A[2, i] +A[1, i]) 
@@ -93,7 +93,7 @@ end
     return
 end
 
-@parallel_indices (i) function smooth_boundaries_x!(A2::AbstractArray, A::AbstractArray, fact::Real)
+@parallel_indices (i) function smooth_boundaries_x!(A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real)
     A2[i, 1] = A[i, 1] + 1.0/4.1/fact*(
         (A[i+1, 1] - 2*A[i, 1] +A[i-1, 1]) +
         (A[i, 3] - 2*A[i, 2] +A[i, 1]) 

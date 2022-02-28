@@ -1,24 +1,24 @@
 ## 2D elasticity kernels
 
-@parallel function elastic_iter_params!(dτ_Rho::PTArray, Gdτ::PTArray, Musτ::PTArray, Vpdτ::Real, G::Real, dt::Real, Re::Real, r::Real, max_lxy::Real)
+@parallel function elastic_iter_params!(dτ_Rho::AbstractArray{eltype(PTArray),2}, Gdτ::AbstractArray{eltype(PTArray),2}, Musτ::AbstractArray{eltype(PTArray),2}, Vpdτ::Real, G::Real, dt::Real, Re::Real, r::Real, max_lxy::Real)
     @all(dτ_Rho) = Vpdτ*max_lxy/Re/(1.0/(1.0/@all(Musτ) + 1.0/(G*dt)))
     @all(Gdτ)    = Vpdτ^2/@all(dτ_Rho)/(r+2)
     return
 end
 
-@parallel function compute_dV_elastic!(dVx::PTArray, dVy::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, dτ_Rho::PTArray, ρg::PTArray, dx::Real, dy::Real)
+@parallel function compute_dV_elastic!(dVx::AbstractArray{eltype(PTArray),2}, dVy::AbstractArray{eltype(PTArray),2}, P::AbstractArray{eltype(PTArray),2}, τxx::AbstractArray{eltype(PTArray),2}, τyy::AbstractArray{eltype(PTArray),2}, τxy::AbstractArray{eltype(PTArray),2}, dτ_Rho::AbstractArray{eltype(PTArray),2}, ρg::AbstractArray{eltype(PTArray),2}, dx::Real, dy::Real)
     @all(dVx) = (@d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(P)/dx)*@av_xi(dτ_Rho)
     @all(dVy) = (@d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy  - @av_yi(ρg))*@av_yi(dτ_Rho)
     return
 end
 
-@parallel function compute_Res!(Rx::PTArray, Ry::PTArray, P::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray, ρg::PTArray, dx::Real, dy::Real)
+@parallel function compute_Res!(Rx::AbstractArray{eltype(PTArray),2}, Ry::AbstractArray{eltype(PTArray),2}, P::AbstractArray{eltype(PTArray),2}, τxx::AbstractArray{eltype(PTArray),2}, τyy::AbstractArray{eltype(PTArray),2}, τxy::AbstractArray{eltype(PTArray),2}, ρg::AbstractArray{eltype(PTArray),2}, dx::Real, dy::Real)
     @all(Rx) = @d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(P)/dx
     @all(Ry) = @d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(P)/dy - @av_yi(ρg)
     return
 end
 
-@parallel function copy_τ!(τxx_o::PTArray, τyy_o::PTArray, τxy_o::PTArray, τxx::PTArray, τyy::PTArray, τxy::PTArray)
+@parallel function copy_τ!(τxx_o::AbstractArray{eltype(PTArray),2}, τyy_o::AbstractArray{eltype(PTArray),2}, τxy_o::AbstractArray{eltype(PTArray),2}, τxx::AbstractArray{eltype(PTArray),2}, τyy::AbstractArray{eltype(PTArray),2}, τxy::AbstractArray{eltype(PTArray),2})
     @all(τxx_o) = @all(τxx)
     @all(τyy_o) = @all(τyy)
     @all(τxy_o) = @all(τxy)
@@ -36,14 +36,17 @@ macro Gr() esc(:( @all(Gdτ)/(G*dt) )) end
 
 macro av_Gr() esc(:(  @av(Gdτ)/(G*dt) )) end
 
-@parallel function compute_τ!(τxx::PTArray, τyy::PTArray, τxy::PTArray, τxx_o::PTArray, τyy_o::PTArray, τxy_o::PTArray, Gdτ::PTArray, Vx::PTArray, Vy::PTArray, Mus::PTArray, G::Real, dt::Real, dx::Real, dy::Real)
+@parallel function compute_τ!(τxx::AbstractArray{eltype(PTArray),2}, τyy::AbstractArray{eltype(PTArray),2}, τxy::AbstractArray{eltype(PTArray),2}, τxx_o::AbstractArray{eltype(PTArray),2}, τyy_o::AbstractArray{eltype(PTArray),2}, τxy_o::AbstractArray{eltype(PTArray),2}, Gdτ::AbstractArray{eltype(PTArray),2}, Vx::AbstractArray{eltype(PTArray),2}, Vy::AbstractArray{eltype(PTArray),2}, Mus::AbstractArray{eltype(PTArray),2}, G::Real, dt::Real, dx::Real, dy::Real)
     @all(τxx) = (@all(τxx) + @all(τxx_o)*   @Gr() + 2.0*@all(Gdτ)*(@d_xa(Vx)/dx))/(1.0 + @all(Gdτ)/@all(Mus) + @Gr())
     @all(τyy) = (@all(τyy) + @all(τyy_o)*   @Gr() + 2.0*@all(Gdτ)*(@d_ya(Vy)/dy))/(1.0 + @all(Gdτ)/@all(Mus) + @Gr())
     @all(τxy) = (@all(τxy) + @all(τxy_o)*@av_Gr() + 2.0*@av(Gdτ)*(0.5*(@d_yi(Vx)/dy + @d_xi(Vy)/dx)))/(1.0 + @av(Gdτ)/@av(Mus) + @av_Gr())
     return
 end
 
-stress(stokes::StokesArrays{ViscoElastic, A, B, C, D, 2}) where {A, B, C, D, T} = stress(stokes.τ), stress(stokes.τ_o)
+## 3D elasticity kernels
+
+
+stress(stokes::StokesArrays{ViscoElastic, A, B, C, D, nDim}) where {A, B, C, D, nDim} = stress(stokes.τ), stress(stokes.τ_o)
 
 ## VISCO-ELASTIC STOKES SOLVER 
 

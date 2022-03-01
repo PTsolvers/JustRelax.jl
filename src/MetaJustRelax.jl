@@ -32,7 +32,7 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
             Main, Meta.parse("using CUDA") 
         ) 
         eval(
-            :( PTArray =  CUDA.CuArray{$T, $N})
+            :(PTArray =  CUDA.CuArray{$T, $N})
         )
     else
         @eval begin
@@ -52,10 +52,11 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
         include(joinpath(@__DIR__,"stokes/Stokes.jl"))
         include(joinpath(@__DIR__,"stokes/Elasticity.jl"))
         include(joinpath(@__DIR__,"boundaryconditions/BoundaryConditions.jl"))
+        include(joinpath(@__DIR__,"Macros.jl"))
     
-        export USE_GPU, PTArray, Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, smooth!, solve!
+        export USE_GPU, PTArray, Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, smooth!, solve!, stress
         export AbstractStokesModel, Viscous, ViscoElastic
-        export pureshear_bc!, free_slip_x!, free_slip_y!
+        export pureshear_bc!, free_slip_x!, free_slip_y!, apply_free_slip!
     end
 
 end

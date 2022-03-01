@@ -14,6 +14,6 @@ import ParallelStencil: @parallel, @hide_communication, @parallel_indices, @para
 export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
 
 # JustRelax.jl
-export PS_Setup, Geometry, environment!, ps_reset!
+export PS_Setup, environment!, ps_reset!
 
 end # module

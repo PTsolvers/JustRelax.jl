@@ -7,7 +7,7 @@ model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 # choose benchmark
-benchmark = :solvi
+benchmark = :solkz
 
 # model resolution (number of gridpoints)
 nx, ny = 128, 128

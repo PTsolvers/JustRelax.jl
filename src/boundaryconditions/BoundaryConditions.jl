@@ -12,6 +12,17 @@ end
     return
 end
 
+function apply_free_slip!(freeslip:: NamedTuple{<:Any, NTuple{2,T}}, Vx, Vy) where T
+    freeslip_x, freeslip_y, freeslip_z = freeslip
+    # free slip boundary conditions
+    if freeslip_x
+        @parallel (1:size(Vy,2)) free_slip_x!(Vy)
+    end
+    if freeslip_y
+        @parallel (1:size(Vx,1)) free_slip_y!(Vx)
+    end
+end
+
 # 3D KERNELS
 
 @parallel_indices (iy, iz) function free_slip_x!(A::AbstractArray{eltype(PTArray), 3}) 
@@ -30,4 +41,21 @@ end
     A[ix, iy, 1  ] = A[ix, iy, 2    ]
     A[ix, iy, end] = A[ix, iy, end-1]
     return
+end
+
+function apply_free_slip!(freeslip:: NamedTuple{<:Any, NTuple{3,T}}, Vx, Vy, Vz) where T
+    freeslip_x, freeslip_y, freeslip_z = freeslip
+    # free slip boundary conditions
+    if freeslip_x
+        @parallel (1:size(Vy,2), 1:size(Vy,3)) free_slip_x!(Vy)
+        @parallel (1:size(Vz,2), 1:size(Vz,3)) free_slip_x!(Vz)
+    end
+    if freeslip_y
+        @parallel (1:size(Vx,1), 1:size(Vx,3)) free_slip_y!(Vx)
+        @parallel (1:size(Vz,1), 1:size(Vz,3)) free_slip_y!(Vz)
+    end
+    if freeslip_z
+        @parallel (1:size(Vx,1), 1:size(Vx,2)) free_slip_z!(Vx)
+        @parallel (1:size(Vy,1), 1:size(Vy,2)) free_slip_z!(Vy)
+    end
 end

@@ -151,7 +151,7 @@ function make_stokes_struct!()
                 new{model, typeof(V), typeof(τ), typeof(R), typeof(P), 3}(P, V, dV, ∇V, τ, nothing, R)
             end
 
-            function StokesArrays(ni::NTuple{3, T}, model::Type{Viscous}) where T
+            function StokesArrays(ni::NTuple{3, T}, model::Type{ViscoElastic}) where T
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 V = Velocity(

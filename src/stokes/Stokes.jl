@@ -1,9 +1,29 @@
-## 2D KERNELS
 
-@parallel function compute_maxloc!(A::AbstractArray{eltype(PTArray),2}, B::AbstractArray{eltype(PTArray),2})
+## UTILS
+
+stress(stokes::StokesArrays{Viscous, A, B, C, D, nDim}) where {A, B, C, D, nDim} = stress(stokes.τ)
+
+stress(τ::SymmetricTensor{<:AbstractMatrix{T}}) where T = (τ.xx, τ.yy, τ.xy)
+
+stress(τ::SymmetricTensor{<:AbstractArray{T, 3}}) where T = (τ.xx, τ.yy, τ.zz, τ.xy, τ.xz, τ.yz)
+
+@parallel function smooth!(A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real)
+    @inn(A2) = @inn(A) + 1.0/4.1/fact*(@d2_xi(A) + @d2_yi(A))
+    return
+end
+
+@parallel function smooth!(A2::AbstractArray{eltype(PTArray),3}, A::AbstractArray{eltype(PTArray),3}, fact::Real)
+    @inn(A2) = @inn(A) + 1.0/6.1/fact*(@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
+    return
+end
+
+## DIMENSION AGNOSTIC KERNELS
+@parallel function compute_maxloc!(A::PTArray, B::PTArray)
     @inn(A) = @maxloc(B)
     return
 end
+
+## 2D KERNELS
 
 @parallel function compute_iter_params!(dτ_Rho::AbstractArray{eltype(PTArray),2}, Gdτ::AbstractArray{eltype(PTArray),2}, Musτ::AbstractArray{eltype(PTArray),2}, Vpdτ::Real, Re::Real, r::Real, max_lxy::Real)
     @all(dτ_Rho) = Vpdτ*max_lxy/Re/@all(Musτ)
@@ -66,43 +86,6 @@ function pureshear_bc!(stokes::StokesArrays, di::NTuple{3, T}, li::NTuple{3, T},
     # Velocity pure shear boundary conditions
     stokes.V.Vx .= PTArray( [-εbg*((ix-1)*dx -0.5*lx) for ix=1:size(Vx,1), iy=1:size(Vx,2), iz=1:size(Vx,3) ] )
     stokes.V.Vz .= PTArray( [ εbg*((iz-1)*dz -0.5*lz) for ix=1:size(Vz,1), iy=1:size(Vz,2), iz=1:size(Vz,3) ] )
-end
-
-## UTILS
-
-stress(stokes::StokesArrays{Viscous, A, B, C, D, nDim}) where {A, B, C, D, T, nDim} = stress(stokes.τ)
-
-stress(τ::SymmetricTensor{<:AbstractMatrix{T}}) where T = (τ.xx, τ.yy, τ.xy)
-
-stress(τ::SymmetricTensor{<:AbstractArray{T, 3}}) where T = (τ.xx, τ.yy, τ.yy, τ.xy, τ.xy, τ.yz)
-
-@parallel function smooth!(A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real)
-    @inn(A2) = @inn(A) + 1.0/4.1/fact*(@d2_xi(A) + @d2_yi(A))
-    return
-end
-
-@parallel_indices (i) function smooth_boundaries_y!(A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real)
-    A2[1, i] = A[1, i] + 1.0/4.1/fact*(
-        (A[1, i+1] - 2*A[1, i] +A[1, i-1]) +
-        (A[3, i] - 2*A[2, i] +A[1, i]) 
-    )
-    A2[end, i] = A[end, i] + 1.0/4.1/fact*(
-        (A[end, i+1] - 2*A[end, i] +A[end, i-1]) +
-        (A[end-2, i] - 2*A[end-1, i] +A[end, i]) 
-    )
-    return
-end
-
-@parallel_indices (i) function smooth_boundaries_x!(A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real)
-    A2[i, 1] = A[i, 1] + 1.0/4.1/fact*(
-        (A[i+1, 1] - 2*A[i, 1] +A[i-1, 1]) +
-        (A[i, 3] - 2*A[i, 2] +A[i, 1]) 
-    )
-    A2[i, end] = A[i, end] + 1.0/4.1/fact*(
-        (A[i+1, end] - 2*A[i, end] +A[i-1, end]) +
-        (A[i, end-2] - 2*A[i, end-1] +A[i, end]) 
-    )
-    return
 end
 
 ## VISCOUS STOKES SOLVER 

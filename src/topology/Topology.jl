@@ -1,3 +1,4 @@
+export Geometry, lazy_grid
 struct Geometry{nDim}
     ni::NTuple{nDim, Integer}
     li::NTuple{nDim, Float64}
@@ -19,4 +20,15 @@ struct Geometry{nDim}
         )
     end
 
+end
+
+function lazy_grid(di, li)
+    @assert length(di) == length(li) 
+    nDim = Val(length(di))
+    # nodes at the center of the grid cells
+    xci = ntuple(i-> di[i]/2:di[i]:(li[i]-di[i]/2), nDim)
+    # nodes at the vertices of the grid cells
+    xvi = ntuple(i-> 0:di[i]:li[i], nDim)
+
+    return xci, xvi
 end

@@ -36,9 +36,6 @@ environment!(model)
 #     return
 # end
 
-macro allocate(nx, ny, nz) :(PTArray(undef, $nx, $ny, $nz)) end
-macro allocate(ni...) :(PTArray(undef, $(ni...))) end
-
 _viscosity(x::T, y::T, z::T, β::T) where T<:Real = exp(1 - β*( (1-x) + y*(1-y) + y*(1-z) ))
 
 @parallel function _viscosity!(η, x, y, z, β) 
@@ -126,26 +123,24 @@ function Burstedde()
     li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li/ni # grid step in x- and -y
     max_li = max(li...)
-    nDim = length(ni) # domain dimension
-    xci = Tuple([di[i]/2:di[i]:(li[i]-di[i]/2) for i in 1:nDim]) # nodes at the center of the cells
-    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
+    xci, xvi = lazy_grid(di, li) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
-    Δt = 1   # physical time step
+    dt = 1   # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni, Viscous)
+    stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(ni, di, Re = 6π, CFL = 0.9/√3)
 
     ## Setup-specific parameters and fields
     β = 1.0
     η = viscosity(xci, ni, β) # add reference 
-
-    ## Boundary conditions
+    G = Inf
     
+    ## Boundary conditions
     freeslip = (
         freeslip_x = true,
         freeslip_y = true,
@@ -158,8 +153,8 @@ function Burstedde()
 
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, ρ, η; iterMax = 10e3)
-        t += Δt
+        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, ρg, η, G, dt; iterMax = 10e3)
+        t += dt
     end
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters

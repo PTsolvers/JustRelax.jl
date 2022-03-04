@@ -38,9 +38,9 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol = :SymmetricTe
 
             function $(name)(ni::NTuple{2, T}) where T
                 new{$PTArray}(
-                    @zeros(ni...), # xx
+                    @zeros(ni...),            # xx
                     @zeros(ni[1]-1, ni[2]-1), # xy
-                    @zeros(ni...) # yy
+                    @zeros(ni...)             # yy
                 )
             end
             
@@ -87,7 +87,7 @@ end
 
 function make_stokes_struct!()
     @eval begin
-        struct StokesArrays{M <: AbstractStokesModel, A,B,C,T, nDim}
+        struct StokesArrays{M<:AbstractStokesModel, A,B,C,T, nDim}
             P::T
             V::A
             dV::A
@@ -145,7 +145,7 @@ function make_stokes_struct!()
                     ((ni[1]-1, ni[2]-2, ni[3]-2), (ni[1]-2, ni[2]-1, ni[3]-2), (ni[1]-1, ni[2]-1, ni[3]-1))
                 )
                 R = Residual(
-                    ((ni[1]-1, ni[2]-2, ni[3]-2), (ni[1]-1, ni[2]-1, ni[3]-1), (ni[1]-2, ni[2]-1, ni[3]-2))
+                    ((ni[1]-1, ni[2]-2, ni[3]-2), (ni[1]-2, ni[2]-1, ni[3]-2), (ni[1]-2, ni[2]-2, ni[3]-1))
                 )
 
                 new{model, typeof(V), typeof(τ), typeof(R), typeof(P), 3}(P, V, dV, ∇V, τ, nothing, R)
@@ -162,7 +162,7 @@ function make_stokes_struct!()
                     ((ni[1]-1, ni[2]-2, ni[3]-2), (ni[1]-2, ni[2]-1, ni[3]-2), (ni[1]-1, ni[2]-1, ni[3]-1))
                 )
                 R = Residual(
-                    ((ni[1]-1, ni[2]-2, ni[3]-2), (ni[1]-1, ni[2]-1, ni[3]-1), (ni[1]-2, ni[2]-1, ni[3]-2))
+                    ((ni[1]-1, ni[2]-2, ni[3]-2), (ni[1]-2, ni[2]-1, ni[3]-2), (ni[1]-2, ni[2]-2, ni[3]-1))
                 )
 
                 new{model, typeof(V), typeof(τ), typeof(R), typeof(P), 3}(P, V, dV, ∇V, τ, deepcopy(τ), R)
@@ -185,7 +185,6 @@ function make_PTstokes_struct!()
             Gdτ::AbstractArray{T, nDim}
         
             function PTStokesCoeffs(ni::NTuple{nDim, T}, di; ϵ = 1e-8, Re = 5π, CFL = 0.9/√2, r=1e0) where {nDim, T}
-            
                 Vpdτ = min(di...)*CFL
                 Gdτ = @zeros(ni...)
                 dτ_Rho = @zeros(ni...)

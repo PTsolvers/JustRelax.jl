@@ -37,7 +37,7 @@ end
     return
 end
 
-@parallel_indices (ix, iy) function free_slip_y!(A::AbstractArray{eltype(PTArray), 3})
+@parallel_indices (ix, iy) function free_slip_z!(A::AbstractArray{eltype(PTArray), 3})
     A[ix, iy, 1  ] = A[ix, iy, 2    ]
     A[ix, iy, end] = A[ix, iy, end-1]
     return

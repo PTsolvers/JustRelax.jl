@@ -1,4 +1,4 @@
-export Geometry, lazy_grid
+export Geometry, IGG, lazy_grid, init_igg
 struct Geometry{nDim}
     ni::NTuple{nDim, Integer}
     li::NTuple{nDim, Float64}
@@ -21,6 +21,18 @@ struct Geometry{nDim}
     end
 
 end
+
+struct IGG{T,M}
+    me::T
+    dims::Vector{T}
+    nprocs::T
+    coords::Vector{T}
+    comm_cart::M
+end
+
+# me, dims, nprocs, coords, comm_cart
+# = init_global_grid(nx, ny, nz) # init MPI
+
 
 function lazy_grid(di, li)
     @assert length(di) == length(li) 

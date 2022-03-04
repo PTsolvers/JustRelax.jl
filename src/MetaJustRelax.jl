@@ -11,9 +11,12 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     gpu = model.device == :gpu ? true : false
 
     # environment variable for XPU
-    @eval(
-        const USE_GPU = haskey(ENV, "USE_GPU") ? parse(Bool, ENV["USE_GPU"]) : $gpu
-    )
+    @eval begin
+        const USE_GPU = haskey(ENV, "USE_GPU") ? parse(Bool, ENV["USE_GPU"]) : $gpu 
+        if USE_GPU # select one GPU per MPI local rank (if >1 GPU per node)
+            select_device()
+        end
+    end
     
     # call appropriate FD module
     eval(
@@ -56,7 +59,7 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
     
         export USE_GPU, PTArray, Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs, smooth!, solve!, stress
         export AbstractStokesModel, Viscous, ViscoElastic
-        export pureshear_bc!, free_slip_x!, free_slip_y!, apply_free_slip!
+        export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
     end
 
 end

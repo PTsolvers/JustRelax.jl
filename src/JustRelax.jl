@@ -1,6 +1,7 @@
 module JustRelax
 
 using ParallelStencil
+using ImplicitGlobalGrid
 using LinearAlgebra
 using Printf
 using CUDA

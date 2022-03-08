@@ -34,7 +34,15 @@ module Elasticity2D
     # using ..JustRelax: solve!
     import JustRelax: stress, elastic_iter_params!, PTArray, Velocity, SymmetricTensor, solve!
     import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic
-    import JustRelax: compute_maxloc!
+    import JustRelax: compute_maxloc!, compute_P!, compute_V!
+
+    # free slip boundary conditions
+    if (freeslip_x) @parallel (1:size(Vx,1)) free_slip_y!(Vx) end
+    if (freeslip_y) @parallel (1:size(Vy,2)) free_slip_x!(Vy) end
+
+    iter += 1
+    if iter % nout == 0
+        @parallel compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρg, dx, dy)
 
     export solve!
     

@@ -56,8 +56,7 @@ function environment!(model::PS_Setup{T, N}) where {T, N}
         
         export USE_GPU, PTArray, Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs
         export AbstractStokesModel, Viscous, ViscoElastic
-        # export free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
-        export free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
+        export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
         export smooth!, stress, solve!
 
         include(joinpath(@__DIR__,"stokes/Elasticity.jl"))

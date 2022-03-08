@@ -1,28 +1,17 @@
-using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
-using ImplicitGlobalGrid
-using JustRelax
-using Printf, LinearAlgebra, CairoMakie
 
-# setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 3)
-environment!(model)
-
-function _viscosity!(η, ηi, rc, li, di)
+@parallel_indices (ix, iy, iz) function _viscosity!(η, ηi, rc, li, di)
     lx, ly, lz = li
     dx, dy, dz = di
-    Threads.@threads for iz=1:ni[3]
-        for iy=1:ni[2], ix=1:ni[1]
-            @inbounds if sqrt(((ix-1)*dx +0.5*dx -0.5*lx)^2 + ((iy-1)*dy +0.5*dy -0.5*ly)^2 + ((iz-1)*dz +0.5*dz -0.5*lz)^2) ≤ rc
-                η[ix, iy, iz] = ηi
-            end
-        end
+    if sqrt(((ix-1)*dx +0.5*dx -0.5*lx)^2 + ((iy-1)*dy +0.5*dy -0.5*ly)^2 + ((iz-1)*dz +0.5*dz -0.5*lz)^2) ≤ rc
+        η[ix, iy, iz] = ηi
     end
+    return nothing
 end
 
 function viscosity(ni, di, li, rc, η0, ηi; b_width = (16, 8, 4) )
     η = @fill(η0, ni...)
-    _viscosity!(η, ηi, rc, li, di)
+    @parallel (1:ni[1], 1:ni[2], 1:ni[3]) _viscosity!(η, ηi, rc, li, di)
     
     # smooth viscosity field
     η2 = deepcopy(η)
@@ -37,16 +26,16 @@ function viscosity(ni, di, li, rc, η0, ηi; b_width = (16, 8, 4) )
     return η
 end
 
-function SolVi3D(; Δη = 1e-3, nx=32-1, ny=32-1, nz=32-1, lx=1e1, ly=1e1, lz=1e1, rc = 1e0, εbg = 1e0)
+function solVi3D(; Δη = 1e-3, nx=32-1, ny=32-1, nz=32-1, lx=1e1, ly=1e1, lz=1e1, rc = 1e0, εbg = 1e0, init_MPI = true, finalize_MPI = false)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
     ni = (nx, ny, nz) # number of nodes in x- and y-
-    igg = IGG(
-        init_global_grid(nx, ny, nz)...
-    ) # init MPI
-    @static if USE_GPU select_device() end # select one GPU per MPI local rank (if >1 GPU per node)
+    igg = IGG(init_global_grid(nx, ny, nz, init_MPI = init_MPI)...) # init MPI
+    @static if USE_GPU # select one GPU per MPI local rank (if >1 GPU per node)
+        select_device() 
+    end
     li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li/(nx_g(), ny_g(), nz_g()) # grid step in x- and -y
     max_li = max(li...)
@@ -85,11 +74,11 @@ function SolVi3D(; Δη = 1e-3, nx=32-1, ny=32-1, nz=32-1, lx=1e1, ly=1e1, lz=1e
     t = 0.0
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, ni, di, li, max_li, freeslip, ρg, η, G, dt; iterMax = 5000, nout = 2000)
+        iters = solve!(stokes, pt_stokes, ni, di, li, max_li, freeslip, ρg, η, G, dt, igg; iterMax = 5000, nout = 2000)
         t += dt
     end
 
-    finalize_global_grid()
+    finalize_global_grid(finalize_MPI = finalize_MPI)
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters
 end

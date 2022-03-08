@@ -11,11 +11,6 @@ stress(τ::SymmetricTensor{<:AbstractArray{T, 3}}) where T = (τ.xx, τ.yy, τ.z
     return
 end
 
-@parallel function smooth!(A2::AbstractArray{eltype(PTArray),3}, A::AbstractArray{eltype(PTArray),3}, fact::Real)
-    @inn(A2) = @inn(A) + 1.0/6.1/fact*(@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
-    return
-end
-
 ## DIMENSION AGNOSTIC KERNELS
 @parallel function compute_maxloc!(A::PTArray, B::PTArray)
     @inn(A) = @maxloc(B)
@@ -75,16 +70,6 @@ function pureshear_bc!(stokes::StokesArrays, di::NTuple{2, T}, li::NTuple{2, T},
     # Velocity pure shear boundary conditions
     stokes.V.Vx .= PTArray( [-εbg*((ix-1)*dx -0.5*lx) for ix=1:size(Vx,1), iy=1:size(Vx,2)] )
     stokes.V.Vy .= PTArray( [ εbg*((iy-1)*dy -0.5*ly) for ix=1:size(Vy,1), iy=1:size(Vy,2)] )
-end
-
-function pureshear_bc!(stokes::StokesArrays, di::NTuple{3, T}, li::NTuple{3, T}, εbg) where T
-    # unpack
-    Vx, _, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
-    dx, _, dz = di 
-    lx, _, lz = li 
-    # Velocity pure shear boundary conditions
-    stokes.V.Vx .= PTArray( [-εbg*((ix-1)*dx -0.5*lx) for ix=1:size(Vx,1), iy=1:size(Vx,2), iz=1:size(Vx,3) ] )
-    stokes.V.Vz .= PTArray( [ εbg*((iz-1)*dz -0.5*lz) for ix=1:size(Vz,1), iy=1:size(Vz,2), iz=1:size(Vz,3) ] )
 end
 
 ## VISCOUS STOKES SOLVER 

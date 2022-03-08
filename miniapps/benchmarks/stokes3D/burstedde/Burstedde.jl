@@ -1,16 +1,15 @@
-using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
-using ImplicitGlobalGrid
-using JustRelax
-using Printf, LinearAlgebra, CairoMakie
 
-# setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 3)
-environment!(model)
+# benchmark reference:
+#   C. Burstedde, G. Stadler, L. Alisic, L. C. Wilcox, E. Tan, M. Gurnis, and O. Ghattas.
+#   Large-scale adaptive mantle convection simulation. Geophysical Journal International, 2013
+
+include("vizBurstedde.jl")
 
 @parallel_indices (ix, iy, iz) function _viscosity!(η, x, y, z, β) 
     η[ix, iy, iz] = exp(1 - β*( x[ix]*(1-x[ix]) + y[iy]*(1-y[iy]) + z[iz]*(1-z[iz]) ))
-    return
+
+    return nothing
 end
 
 function viscosity(xi, β)
@@ -160,20 +159,18 @@ function analytical_velocity!(stokes, xci, xvi)
 
 end
 
-function Burstedde()
-    nx=ny=nz=64
-    lx=ly=lz=1e0
-    
+function burstedde(;nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = false)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
     ni = (nx, ny, nz) # number of nodes in x- and y-
+    lx = ly = lz = 1e0
     li = (lx, ly, lz)  # domain length in x- and y-
-    igg = IGG(
-        init_global_grid(nx, ny, nz)...
-    ) # init MPI
-    @static if USE_GPU select_device() end # select one GPU per MPI local rank (if >1 GPU per node)
+    igg = IGG(init_global_grid(nx, ny, nz, init_MPI = init_MPI)...) # init MPI
+    @static if USE_GPU # select one GPU per MPI local rank (if >1 GPU per node)
+        select_device()
+    end
     li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li/(nx_g(), ny_g(), nz_g()) # grid step in x- and -y
     max_li = max(li...)
@@ -209,11 +206,11 @@ function Burstedde()
 
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, ni, di, li, max_li, freeslip, ρg, η, G, dt; iterMax = 10e3)
+        iters = solve!(stokes, pt_stokes, ni, di, li, max_li, freeslip, ρg, η, G, dt, igg; iterMax = 10e3)
         t += dt
     end
 
-    finalize_global_grid()
+    finalize_global_grid(finalize_MPI = finalize_MPI)
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters
 end

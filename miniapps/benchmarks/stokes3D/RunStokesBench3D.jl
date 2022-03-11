@@ -1,17 +1,19 @@
 using JustRelax
 using Printf, LinearAlgebra, CairoMakie
+import MPI
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 3)
 environment!(model)
 
 # choose benchmark
-benchmark = :taylorGreen
+benchmark = :solvi
 
 # model resolution (number of gridpoints)
 nx, ny, nz = 16, 16, 16
 
-init_MPI = false
+# set MPI
+init_MPI = MPI.Initialized() ? false : true
 finalize_MPI = false
 
 if benchmark == :taylorGreen
@@ -24,6 +26,8 @@ if benchmark == :taylorGreen
     
     # include benchmark
     include("taylor_green/TaylorGreen.jl")
+
+
     
     # run benchmark
     geometry, stokes, iters = taylorGreen(; 
@@ -44,6 +48,7 @@ elseif benchmark == :Burstedde
     # benchmark reference:
     #   C. Burstedde, G. Stadler, L. Alisic, L. C. Wilcox, E. Tan, M. Gurnis, and O. Ghattas.
     #   Large-scale adaptive mantle convection simulation. Geophysical Journal International, 2013
+    
     # include benchmark
     include("burstedde/Burstedde.jl")
         
@@ -87,8 +92,8 @@ elseif benchmark == :solvi
         lz = lz, 
         rc = rc, 
         εbg = εbg, 
-        init_MPI = true, 
-        finalize_MPI = false
+        init_MPI = init_MPI, 
+        finalize_MPI = finalize_MPI
     );
     
 else

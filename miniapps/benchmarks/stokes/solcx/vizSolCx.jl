@@ -75,6 +75,8 @@ function plot_solCx(geometry, stokes::StokesArrays, ρ; cmap = :vik, fun = heatm
     ylims!(ax1, (0,1))
     Colorbar(f[2, 4], h1, label="Vy")
 
+    save("SolCx.png", f)
+
     f
 end
 
@@ -191,7 +193,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap = :vik)
 
     hideydecorations!(ax1)
 
-    # rowsize!(f.layout, 1, ax1.scene.px_area[].widths[2])
+    save("SolCx_error.png", f)
 
     f
 end

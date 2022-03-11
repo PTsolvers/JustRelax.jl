@@ -114,6 +114,9 @@ function multiple_solCx(; Δη = 1e6, nrange::UnitRange = 6:10)
     axislegend(ax, position =:lt)
     ax.xlabel = "h"
     ax.ylabel = "L1 norm"
+
+    save("SolCx_error.png", f)
+
     f
 
 end

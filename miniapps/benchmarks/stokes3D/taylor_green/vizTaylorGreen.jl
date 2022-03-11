@@ -88,7 +88,9 @@ function plot(stokes::StokesArrays, geometry; cmap=:vik)
     ax = Axis(f[2,5], axis=1, title = "Vy analytical")
     h = heatmap!(ax, xvi[1], xci[2], vy[islice, :, :], colormap=cmap)
     Colorbar(f[2,6], h)
-
+    
+    save("TaylorGreen.png", f)
+    
     return f
 end
 

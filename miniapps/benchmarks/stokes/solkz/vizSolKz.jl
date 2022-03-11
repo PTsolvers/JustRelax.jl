@@ -77,6 +77,8 @@ function plot_solkz(geometry, ρ, stokes::StokesArrays; cmap = :vik)
     ylims!(ax1, (0,1))
     Colorbar(f[2, 4], h1, label="Vy")
 
+    save("SolKz.png", f)
+
     f
 end
 
@@ -192,6 +194,8 @@ function plot_solKz_error(geometry, stokes::StokesArrays; cmap = :vik)
     ax1.yticks = 0:1
 
     hideydecorations!(ax1)
+
+    save("SolKz_error.png", f)
 
     f
 end

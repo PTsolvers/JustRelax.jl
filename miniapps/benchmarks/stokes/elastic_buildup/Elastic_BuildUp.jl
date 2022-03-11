@@ -87,6 +87,9 @@ function multiple_elastic_buildup(; lx=100e3, ly=100e3, endtime = 500, η0 = 1e2
     lines!(ax, h, av_err, linewidth=3)
     ax.xlabel = "h"
     ax.ylabel = "error ||av_τyy - sol_τyy||/sol_τyy"
+
+    save("ElasticBuildUp.png", f)
+
     f
 
 end

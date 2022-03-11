@@ -11,6 +11,7 @@ end
 
 function viscosity(ni, di, li, rc, η0, ηi; b_width = (16, 8, 4) )
     η = @fill(η0, ni...)
+    
     @parallel (1:ni[1], 1:ni[2], 1:ni[3]) _viscosity!(η, ηi, rc, li, di)
     
     # smooth viscosity field

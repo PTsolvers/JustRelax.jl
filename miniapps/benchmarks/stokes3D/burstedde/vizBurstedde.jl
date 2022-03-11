@@ -87,6 +87,8 @@ function plot(stokes::StokesArrays, geometry; cmap=:vik)
     h = heatmap!(ax, xvi[1], xci[2], vy[islice, :, :], colormap=cmap)
     Colorbar(f[2,6], h)
 
+    save("Burstedde.png", f)
+
     return f
 end
 

@@ -106,6 +106,9 @@ function multiple_solVi(; Δη = 1e-3, lx=1e1, ly=1e1, rc = 1e0, εbg = 1e0, nra
     axislegend(ax, position = :lt)
     ax.xlabel = "h"
     ax.ylabel = "L2 norm"
+
+    save("SolVi_error.png", f)
+
     f
 
 end

@@ -2,6 +2,7 @@ using ParallelStencil.FiniteDifferences2D
 # Analytical solution found in:
 #     D. W. Schmid and Y. Y. Podladchikov. Analytical solutions for deformable elliptical inclusions in
 #     general shear. Geophysical Journal International, 155(1):269–288, 2003.
+
 function _solvi_solution(X, Y;
     ε = 1,
     ηm = 1,
@@ -175,6 +176,8 @@ function plot_solVi_error(geometry, stokes::StokesArrays, Δη, εbg, rc)
     Colorbar(f[3, 5], h)
 
     hideydecorations!(ax1)
+
+    save("SolVi.png", f)
     
     f
 end

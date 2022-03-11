@@ -107,6 +107,9 @@ function multiple_solKz(; Δη=1e-6, nrange::UnitRange = 4:10)
     axislegend(ax, position = :rt)
     ax.xlabel = "h"
     ax.ylabel = "L1 norm"
+
+    save("SolKz_error.png", f)
+
     f
 
 end

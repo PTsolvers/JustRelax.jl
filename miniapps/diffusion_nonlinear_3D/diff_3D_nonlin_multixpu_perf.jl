@@ -5,7 +5,6 @@
 # TODO run the tests locally and on a GPU machine
 # TODO run the tests with CI (crib from ParallelKernels perhaps)
 
-
 # This is a replication of the solver in
 # scripts/diff_3D
 # at https://github.com/PTSolvers/PseudoTransientDiffusion.jl,
@@ -17,7 +16,7 @@
 
 const USE_GPU = haskey(ENV, "USE_GPU") ? parse(Bool, ENV["USE_GPU"]) : false
 
-const do_viz  = haskey(ENV, "DO_VIZ")  ? parse(Bool, ENV["DO_VIZ"])  : false
+const do_viz = haskey(ENV, "DO_VIZ") ? parse(Bool, ENV["DO_VIZ"]) : false
 const do_save = haskey(ENV, "DO_SAVE") ? parse(Bool, ENV["DO_SAVE"]) : false
 const do_save_viz = haskey(ENV, "DO_SAVE_VIZ") ? parse(Bool, ENV["DO_SAVE_VIZ"]) : false
 
@@ -27,7 +26,7 @@ const nz_in = haskey(ENV, "NZ") ? parse(Int, ENV["NZ"]) : 64
 
 # Packages used for the "grid" (Stage 2)
 using ImplicitGlobalGrid  # Note that ParallelStencil is only used within the solver, hence not here
-import MPI
+using MPI: MPI
 @static if USE_GPU
     using JustRelax.DiffusionNonlinearSolvers_CUDA_Float64_3D
 else
@@ -46,12 +45,12 @@ end
 
 # Packages used by the application for output
 @static if do_viz || do_save_viz
-  using Plots, MAT
+    using Plots, MAT
 end
 using Printf
 
 # A misc. macro used for visualization
-@views inn(A) = A[2:end-1,2:end-1,2:end-1]
+@views inn(A) = A[2:(end - 1), 2:(end - 1), 2:(end - 1)]
 
 @views function diffusion_3D()
 
@@ -104,7 +103,6 @@ using Printf
         select_device()
     end    # select one GPU per MPI local rank (if >1 GPU per node)
 
-
     # 3. Instantiation and population of unknown and coefficient fields
 
     # We think of additional information about the coordinates (that is, the way the discrete mesh
@@ -116,8 +114,13 @@ using Printf
     # We only have one solution field for this problem. Additional solution fields
     # as well as coefficient fields would be defined here.
     H = zeros(nx, ny, nz)
-    H = Data.Array([exp(-(x_g(ix, dx, H) - 0.5 * lx + dx / 2) * (x_g(ix, dx, H) - 0.5 * lx + dx / 2) - (y_g(iy, dy, H) - 0.5 * ly + dy / 2) * (y_g(iy, dy, H) - 0.5 * ly + dy / 2) - (z_g(iz, dz, H) - 0.5 * lz + dz / 2) * (z_g(iz, dz, H) - 0.5 * lz + dz / 2)) for ix = 1:size(H, 1), iy = 1:size(H, 2), iz = 1:size(H, 3)])
-
+    H = Data.Array([
+        exp(
+            -(x_g(ix, dx, H) - 0.5 * lx + dx / 2) * (x_g(ix, dx, H) - 0.5 * lx + dx / 2) -
+            (y_g(iy, dy, H) - 0.5 * ly + dy / 2) * (y_g(iy, dy, H) - 0.5 * ly + dy / 2) -
+            (z_g(iz, dz, H) - 0.5 * lz + dz / 2) * (z_g(iz, dz, H) - 0.5 * lz + dz / 2),
+        ) for ix in 1:size(H, 1), iy in 1:size(H, 2), iz in 1:size(H, 3)
+    ])
 
     # (Pre) 5./6.
     # This is before the solve to fail earlier on OOM, but could be
@@ -136,8 +139,11 @@ using Printf
         H_v = zeros(nx_v, ny_v, nz_v) # global array for visu
         H_inn = zeros(nx - 2, ny - 2, nz - 2) # no halo local array for visu
         z_sl = Int(ceil(nz_g() / 2))     # Central z-slice
-        Xi_g, Yi_g = dx+dx/2:dx:lx-dx-dx/2, dy+dy/2:dy:ly-dy-dy/2 # inner points only
-        xc, yc, zc = LinRange(dx / 2, lx - dx / 2, nx), LinRange(dy / 2, ly - dy / 2, ny), LinRange(dz / 2, lz - dz / 2, nz)
+        Xi_g, Yi_g = (dx + dx / 2):dx:(lx - dx - dx / 2),
+        (dy + dy / 2):dy:(ly - dy - dy / 2) # inner points only
+        xc, yc, zc = LinRange(dx / 2, lx - dx / 2, nx),
+        LinRange(dy / 2, ly - dy / 2, ny),
+        LinRange(dz / 2, lz - dz / 2, nz)
     end
 
     # 4. Invoke a method to solve a particular physical problem (repeatedly)
@@ -146,9 +152,19 @@ using Printf
     # of the physical problem
 
     solver = DiffusionNonlinearSolver(
-        nx, ny, nz,                # 1.
-        me, dims, nprocs,          # 2.
-        lx, ly, lz, dx, dy, dz, dt # 3.
+        nx,
+        ny,
+        nz,                # 1.
+        me,
+        dims,
+        nprocs,          # 2.
+        lx,
+        ly,
+        lz,
+        dx,
+        dy,
+        dz,
+        dt, # 3.
         # Coefficient fields from 3. could go here
     )
 
@@ -182,10 +198,21 @@ using Printf
     t_it = t_toc / niter                                           # Execution time per iteration [s]
     T_eff = A_eff / t_it                                           # Effective memory throughput [GB/s]
     if (me == 0)
-        @printf("PERF: Time = %1.3f sec, T_eff = %1.2f GB/s (niter = %d)\n", t_toc, round(T_eff, sigdigits = 3), niter)
+        @printf(
+            "PERF: Time = %1.3f sec, T_eff = %1.2f GB/s (niter = %d)\n",
+            t_toc,
+            round(T_eff, sigdigits=3),
+            niter
+        )
     end
     if (me == 0)
-        @printf("Total time = %1.2f, time steps = %d, nx = %d, iterations tot = %d \n", round(ttot, sigdigits = 2), it, nx_g(), ittot)
+        @printf(
+            "Total time = %1.2f, time steps = %d, nx = %d, iterations tot = %d \n",
+            round(ttot, sigdigits=2),
+            it,
+            nx_g(),
+            ittot
+        )
     end
 
     # Wrap up any solver-specific information we want to include in the "application" output
@@ -203,7 +230,21 @@ using Printf
         H_inn .= inn(H)
         gather!(H_inn, H_v)
         if solver.me == 0 && do_viz
-            p = heatmap(Xi_g, Yi_g, H_v[:, :, z_sl]', dpi = 150, aspect_ratio = 1, framestyle = :box, xlims = (Xi_g[1], Xi_g[end]), ylims = (Yi_g[1], Yi_g[end]), xlabel = "lx", ylabel = "ly", c = :viridis, clims = (0, 1), title = "nonlinear diffusion (nt=$it, $solver_info_string)")
+            p = heatmap(
+                Xi_g,
+                Yi_g,
+                H_v[:, :, z_sl]';
+                dpi=150,
+                aspect_ratio=1,
+                framestyle=:box,
+                xlims=(Xi_g[1], Xi_g[end]),
+                ylims=(Yi_g[1], Yi_g[end]),
+                xlabel="lx",
+                ylabel="ly",
+                c=:viridis,
+                clims=(0, 1),
+                title="nonlinear diffusion (nt=$it, $solver_info_string)",
+            )
             display(p)
             savefig("../../figures/diff_3D_nonlin_multixpu_perf_$(nx_g()).png")
         end
@@ -212,17 +253,29 @@ using Printf
     if me == 0 && do_save
         !ispath("../../output") && mkdir("../../output")
         open("../../output/out_diff_3D_nonlin_multixpu_perf.txt", "a") do io
-            println(io, "$(nprocs) $(nx_g()) $(ny_g()) $(nz_g()) $(ittot) $(t_toc) $(A_eff) $(t_it) $(T_eff)")
+            println(
+                io,
+                "$(nprocs) $(nx_g()) $(ny_g()) $(nz_g()) $(ittot) $(t_toc) $(A_eff) $(t_it) $(T_eff)",
+            )
         end
     end
     if me == 0 && do_save_viz
         !ispath("../../out_visu") && mkdir("../../out_visu")
-        matwrite("../../out_visu/diff_3D_nonlin_multixpu_perf.mat", Dict("H_3D" => Array(H_v), "xc_3D" => Array(xc), "yc_3D" => Array(yc), "zc_3D" => Array(zc)); compress = true)
+        matwrite(
+            "../../out_visu/diff_3D_nonlin_multixpu_perf.mat",
+            Dict(
+                "H_3D" => Array(H_v),
+                "xc_3D" => Array(xc),
+                "yc_3D" => Array(yc),
+                "zc_3D" => Array(zc),
+            );
+            compress=true,
+        )
     end
 
     # 7. Finalization
     finalize_global_grid()
-    return
+    return nothing
 end
 
 diffusion_3D()

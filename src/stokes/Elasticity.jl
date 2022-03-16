@@ -702,6 +702,7 @@ function solve!(
     iterMax=10e3,
     nout=500,
     b_width=(16, 8, 4),
+    verbos = true,
 ) where {A,B,C,D,T}
 
     ## UNPACK

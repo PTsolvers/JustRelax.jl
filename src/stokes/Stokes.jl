@@ -208,7 +208,7 @@ function solve!(
         end
 
         iter += 1
-        if iter % nout == 0 %% iter > 1
+        if iter % nout == 0 && iter > 1
             cont += 1
             Vmin, Vmax = minimum(Vx), maximum(Vx)
             Pmin, Pmax = minimum(P), maximum(P)
@@ -218,7 +218,7 @@ function solve!(
             err = maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]])
             push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]]))
             push!(err_evo2, iter)
-            if (verbose || err < ϵ || iter == iterMax)
+            if (verbos || err < ϵ || iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,

@@ -102,7 +102,7 @@ function solVi3D(;
             igg;
             iterMax=5000,
             nout=2000,
-            b_width = (1, 1, 1)
+            b_width=(1, 1, 1),
         )
         t += dt
     end

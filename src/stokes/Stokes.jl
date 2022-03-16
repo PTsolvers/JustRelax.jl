@@ -2,7 +2,9 @@
 
 stress(stokes::StokesArrays{Viscous,A,B,C,D,nDim}) where {A,B,C,D,nDim} = stress(stokes.τ)
 stress(τ::SymmetricTensor{<:AbstractMatrix{T}}) where {T} = (τ.xx, τ.yy, τ.xy)
-stress(τ::SymmetricTensor{<:AbstractArray{T,3}}) where {T} = (τ.xx, τ.yy, τ.zz, τ.xy, τ.xz, τ.yz)
+function stress(τ::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+    return (τ.xx, τ.yy, τ.zz, τ.xy, τ.xz, τ.yz)
+end
 
 @parallel function smooth!(
     A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real

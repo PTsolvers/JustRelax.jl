@@ -546,9 +546,15 @@ end
 macro av_zi_dτ_Rho(ix, iy, iz)
     return esc(:((dτ_Rho[$ix + 1, $iy + 1, $iz] + dτ_Rho[$ix + 1, $iy + 1, $iz + 1]) * 0.5))
 end
-macro av_xi_ρg(ix,iy,iz)  esc(:( (fx[$ix  ,$iy+1,$iz+1] + fx[$ix+1,$iy+1,$iz+1])*0.5 )) end
-macro av_yi_ρg(ix,iy,iz)  esc(:( (fy[$ix+1,$iy  ,$iz+1] + fy[$ix+1,$iy+1,$iz+1])*0.5 )) end
-macro av_zi_ρg(ix,iy,iz)  esc(:( (fz[$ix+1,$iy+1,$iz  ] + fz[$ix+1,$iy+1,$iz+1])*0.5 )) end
+macro av_xi_ρg(ix, iy, iz)
+    return esc(:((fx[$ix, $iy + 1, $iz + 1] + fx[$ix + 1, $iy + 1, $iz + 1]) * 0.5))
+end
+macro av_yi_ρg(ix, iy, iz)
+    return esc(:((fy[$ix + 1, $iy, $iz + 1] + fy[$ix + 1, $iy + 1, $iz + 1]) * 0.5))
+end
+macro av_zi_ρg(ix, iy, iz)
+    return esc(:((fz[$ix + 1, $iy + 1, $iz] + fz[$ix + 1, $iy + 1, $iz + 1]) * 0.5))
+end
 @parallel_indices (ix, iy, iz) function compute_V!(
     Vx::AbstractArray{eltype(PTArray),3},
     Vy::AbstractArray{eltype(PTArray),3},
@@ -575,34 +581,37 @@ macro av_zi_ρg(ix,iy,iz)  esc(:( (fz[$ix+1,$iy+1,$iz  ] + fz[$ix+1,$iy+1,$iz+1]
     nz_2::Real,
 )
     if (ix ≤ nx_1) && (iy ≤ ny_2) && (iz ≤ nz_2)
-        Vx[ix+1,iy+1,iz+1] = 
-            Vx[ix+1,iy+1,iz+1] + (
-            _dx*(τxx[ix+1,iy,iz] - τxx[ix,iy,iz]) +
-            _dy*(τxy[ix,iy+1,iz] - τxy[ix,iy,iz]) +
-            _dz*(τxz[ix,iy,iz+1] - τxz[ix,iy,iz]) -
-            _dx*(P[ix+1,iy+1,iz+1] - P[ix,iy+1,iz+1]) +
-            @av_xi_ρg(ix,iy,iz)
-            )*@av_xi_dτ_Rho(ix,iy,iz)  
+        Vx[ix + 1, iy + 1, iz + 1] =
+            Vx[ix + 1, iy + 1, iz + 1] +
+            (
+                _dx * (τxx[ix + 1, iy, iz] - τxx[ix, iy, iz]) +
+                _dy * (τxy[ix, iy + 1, iz] - τxy[ix, iy, iz]) +
+                _dz * (τxz[ix, iy, iz + 1] - τxz[ix, iy, iz]) -
+                _dx * (P[ix + 1, iy + 1, iz + 1] - P[ix, iy + 1, iz + 1]) +
+                @av_xi_ρg(ix, iy, iz)
+            ) * @av_xi_dτ_Rho(ix, iy, iz)
     end
     if (ix ≤ nx_2) && (iy ≤ ny_1) && (iz ≤ nz_2)
-        Vy[ix+1,iy+1,iz+1] = 
-            Vy[ix+1,iy+1,iz+1] + (
-            _dy*(τyy[ix,iy+1,iz] - τyy[ix,iy,iz]) +
-            _dx*(τxy[ix+1,iy,iz] - τxy[ix,iy,iz]) +
-            _dz*(τyz[ix,iy,iz+1] - τyz[ix,iy,iz]) -
-            _dy*(P[ix+1,iy+1,iz+1] - P[ix+1,iy,iz+1]) +
-            @av_yi_ρg(ix,iy,iz)
-            )*@av_yi_dτ_Rho(ix,iy,iz)  
+        Vy[ix + 1, iy + 1, iz + 1] =
+            Vy[ix + 1, iy + 1, iz + 1] +
+            (
+                _dy * (τyy[ix, iy + 1, iz] - τyy[ix, iy, iz]) +
+                _dx * (τxy[ix + 1, iy, iz] - τxy[ix, iy, iz]) +
+                _dz * (τyz[ix, iy, iz + 1] - τyz[ix, iy, iz]) -
+                _dy * (P[ix + 1, iy + 1, iz + 1] - P[ix + 1, iy, iz + 1]) +
+                @av_yi_ρg(ix, iy, iz)
+            ) * @av_yi_dτ_Rho(ix, iy, iz)
     end
     if (ix ≤ nx_2) && (iy ≤ ny_2) && (iz ≤ nz_1)
-        Vz[ix+1,iy+1,iz+1] = 
-                Vz[ix+1,iy+1,iz+1] + (
-                _dz*(τzz[ix,iy,iz+1] - τzz[ix,iy,iz]) +
-                _dx*(τxz[ix+1,iy,iz] - τxz[ix,iy,iz]) +
-                _dy*(τyz[ix,iy+1,iz] - τyz[ix,iy,iz]) -
-                _dz*(P[ix+1,iy+1,iz+1] - P[ix+1,iy+1,iz]) +
-                @av_zi_ρg(ix,iy,iz)
-                )*@av_zi_dτ_Rho(ix,iy,iz)  
+        Vz[ix + 1, iy + 1, iz + 1] =
+            Vz[ix + 1, iy + 1, iz + 1] +
+            (
+                _dz * (τzz[ix, iy, iz + 1] - τzz[ix, iy, iz]) +
+                _dx * (τxz[ix + 1, iy, iz] - τxz[ix, iy, iz]) +
+                _dy * (τyz[ix, iy + 1, iz] - τyz[ix, iy, iz]) -
+                _dz * (P[ix + 1, iy + 1, iz + 1] - P[ix + 1, iy + 1, iz]) +
+                @av_zi_ρg(ix, iy, iz)
+            ) * @av_zi_dτ_Rho(ix, iy, iz)
     end
 
     return nothing
@@ -641,21 +650,24 @@ end
             _dx * (τxx[ix + 1, iy, iz] - τxx[ix, iy, iz]) +
             _dy * (τxy[ix, iy + 1, iz] - τxy[ix, iy, iz]) +
             _dz * (τxz[ix, iy, iz + 1] - τxz[ix, iy, iz]) -
-            _dx * (P[ix + 1, iy + 1, iz + 1] - P[ix, iy + 1, iz + 1]) + @av_xi_ρg(ix,iy,iz)
+            _dx * (P[ix + 1, iy + 1, iz + 1] - P[ix, iy + 1, iz + 1]) +
+            @av_xi_ρg(ix, iy, iz)
     end
     if (ix ≤ size(Ry, 1)) && (iy ≤ size(Ry, 2)) && (iz ≤ size(Ry, 3))
         Ry[ix, iy, iz] =
             _dy * (τyy[ix, iy + 1, iz] - τyy[ix, iy, iz]) +
             _dx * (τxy[ix + 1, iy, iz] - τxy[ix, iy, iz]) +
             _dz * (τyz[ix, iy, iz + 1] - τyz[ix, iy, iz]) -
-            _dy * (P[ix + 1, iy + 1, iz + 1] - P[ix + 1, iy, iz + 1]) + @av_yi_ρg(ix,iy,iz)
+            _dy * (P[ix + 1, iy + 1, iz + 1] - P[ix + 1, iy, iz + 1]) +
+            @av_yi_ρg(ix, iy, iz)
     end
     if (ix ≤ size(Rz, 1)) && (iy ≤ size(Rz, 2)) && (iz ≤ size(Rz, 3))
         Rz[ix, iy, iz] =
             _dz * (τzz[ix, iy, iz + 1] - τzz[ix, iy, iz]) +
             _dx * (τxz[ix + 1, iy, iz] - τxz[ix, iy, iz]) +
             _dy * (τyz[ix, iy + 1, iz] - τyz[ix, iy, iz]) -
-            _dz * (P[ix + 1, iy + 1, iz + 1] - P[ix + 1, iy + 1, iz]) + @av_zi_ρg(ix,iy,iz)
+            _dz * (P[ix + 1, iy + 1, iz + 1] - P[ix + 1, iy + 1, iz]) +
+            @av_zi_ρg(ix, iy, iz)
     end
 
     return nothing

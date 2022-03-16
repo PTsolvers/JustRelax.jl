@@ -216,7 +216,20 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, ni, di, li, max_li, freeslip, ρg, η, G, dt, igg; iterMax=10e3, b_width = (1,1,1)
+            stokes,
+            pt_stokes,
+            ni,
+            di,
+            li,
+            max_li,
+            freeslip,
+            ρg,
+            η,
+            G,
+            dt,
+            igg;
+            iterMax=10e3,
+            b_width=(1, 1, 1),
         )
         t += dt
     end

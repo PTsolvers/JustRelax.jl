@@ -28,7 +28,11 @@ if benchmark == :taylorGreen
 
     # run benchmark
     geometry, stokes, iters = taylorGreen(;
-        nx=nx, ny=ny, nz=nz, init_MPI=MPI.Initialized() ? false : true, finalize_MPI=finalize_MPI
+        nx=nx,
+        ny=ny,
+        nz=nz,
+        init_MPI=MPI.Initialized() ? false : true,
+        finalize_MPI=finalize_MPI,
     )
 
     # plot results
@@ -47,7 +51,11 @@ elseif benchmark == :Burstedde
 
     # run benchmark
     geometry, stokes, iters = burstedde(;
-        nx=nx, ny=ny, nz=nz, init_MPI=MPI.Initialized() ? false : true, finalize_MPI=finalize_MPI
+        nx=nx,
+        ny=ny,
+        nz=nz,
+        init_MPI=MPI.Initialized() ? false : true,
+        finalize_MPI=finalize_MPI,
     )
 
     # plot results

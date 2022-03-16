@@ -13,7 +13,7 @@ using ParallelStencil.FiniteDifferences3D
     return nothing
 end
 
-function viscosity(ni, di, li, rc, η0, ηi; b_width=(16, 8, 4))
+function viscosity(ni, di, li, rc, η0, ηi; b_width=(1, 1, 1))
     η = @fill(η0, ni...)
 
     @parallel (1:ni[1], 1:ni[2], 1:ni[3]) _viscosity!(η, ηi, rc, li, di)
@@ -102,6 +102,7 @@ function solVi3D(;
             igg;
             iterMax=5000,
             nout=2000,
+            b_width = (1, 1, 1)
         )
         t += dt
     end

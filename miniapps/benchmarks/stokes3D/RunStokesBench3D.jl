@@ -1,5 +1,5 @@
+using LinearAlgebra, CairoMakie
 using JustRelax
-using Printf, LinearAlgebra, CairoMakie
 using MPI: MPI
 
 # setup ParallelStencil.jl environment
@@ -13,7 +13,6 @@ benchmark = :solvi
 nx, ny, nz = 16, 16, 16
 
 # set MPI
-init_MPI = MPI.Initialized() ? false : true
 finalize_MPI = false
 
 if benchmark == :taylorGreen
@@ -29,7 +28,7 @@ if benchmark == :taylorGreen
 
     # run benchmark
     geometry, stokes, iters = taylorGreen(;
-        nx=nx, ny=ny, nz=nz, init_MPI=init_MPI, finalize_MPI=finalize_MPI
+        nx=nx, ny=ny, nz=nz, init_MPI=MPI.Initialized() ? false : true, finalize_MPI=finalize_MPI
     )
 
     # plot results
@@ -48,7 +47,7 @@ elseif benchmark == :Burstedde
 
     # run benchmark
     geometry, stokes, iters = burstedde(;
-        nx=nx, ny=ny, nz=nz, init_MPI=init_MPI, finalize_MPI=finalize_MPI
+        nx=nx, ny=ny, nz=nz, init_MPI=MPI.Initialized() ? false : true, finalize_MPI=finalize_MPI
     )
 
     # plot results
@@ -82,7 +81,7 @@ elseif benchmark == :solvi
         lz=lz,
         rc=rc,
         εbg=εbg,
-        init_MPI=init_MPI,
+        init_MPI=MPI.Initialized() ? false : true,
         finalize_MPI=finalize_MPI,
     )
 

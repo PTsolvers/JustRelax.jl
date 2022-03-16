@@ -10,9 +10,9 @@ include("vizTaylorGreen.jl")
 
 function body_forces(xi::NTuple{3,T}) where {T}
     xx, yy, zz = xi
-    x = [x for x in xx, y in yy, z in zz]
-    y = [y for x in xx, y in yy, z in zz]
-    z = [z for x in xx, y in yy, z in zz]
+    x = PTArray([x for x in xx, y in yy, z in zz])
+    y = PTArray([y for x in xx, y in yy, z in zz])
+    z = PTArray([z for x in xx, y in yy, z in zz])
 
     fz, fy = @zeros(size(x)...), @zeros(size(x)...)
     fx = @. -36 * π^2 * cos(2 * π * x) * sin(2 * π * y) * sin(2 * π * z)
@@ -120,7 +120,7 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, ni, di, li, max_li, freeslip, ρg, η, G, dt, igg; iterMax=10e3
+            stokes, pt_stokes, ni, di, li, max_li, freeslip, ρg, η, G, dt, igg; iterMax=10e3, b_width = (1,1,1)
         )
         t += dt
     end

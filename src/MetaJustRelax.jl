@@ -12,9 +12,6 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     # environment variable for XPU
     @eval begin
         const USE_GPU = haskey(ENV, "USE_GPU") ? parse(Bool, ENV["USE_GPU"]) : $gpu
-        if USE_GPU # select one GPU per MPI local rank (if >1 GPU per node)
-            select_device()
-        end
     end
 
     # call appropriate FD module

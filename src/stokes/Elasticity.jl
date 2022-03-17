@@ -148,7 +148,7 @@ function JustRelax.solve!(
     dt;
     iterMax=10e3,
     nout=500,
-    verbos=true,
+    verbose=true,
 ) where {A,B,C,D,T}
 
     # unpack
@@ -215,7 +215,7 @@ function JustRelax.solve!(
             err = maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]])
             push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]]))
             push!(err_evo2, iter)
-            if (verbos || err < ϵ || iter == iterMax)
+            if (verbose || err < ϵ || iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
@@ -701,8 +701,8 @@ function solve!(
     igg::IGG;
     iterMax=10e3,
     nout=500,
-    b_width=(16, 8, 4),
-    verbos = true,
+    b_width=(1, 1, 1),
+    verbose = true,
 ) where {A,B,C,D,T}
 
     ## UNPACK
@@ -848,7 +848,7 @@ function solve!(
             end
             push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont]]))
             push!(err_evo2, iter)
-            if (igg.me == 0 && (verbos || err < ϵ || iter == iterMax))
+            if (igg.me == 0 && (verbose || err < ϵ || iter == iterMax))
                 @printf(
                     "iter = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_Rz=%1.3e, norm_∇V=%1.3e] \n",
                     iter,

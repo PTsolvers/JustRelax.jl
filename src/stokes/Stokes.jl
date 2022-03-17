@@ -157,7 +157,7 @@ function solve!(
     η;
     iterMax=10e3,
     nout=500,
-    verbos = true,
+    verbose = true,
 ) where {A,B,C,D,T}
 
     # unpack
@@ -218,7 +218,7 @@ function solve!(
             err = maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]])
             push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]]))
             push!(err_evo2, iter)
-            if (verbos || err < ϵ || iter == iterMax)
+            if (verbose || err < ϵ || iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,

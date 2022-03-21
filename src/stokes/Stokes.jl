@@ -155,7 +155,7 @@ function solve!(
     η;
     iterMax=10e3,
     nout=500,
-    verbose = true,
+    verbose=true,
 ) where {A,B,C,D,T}
 
     # unpack
@@ -229,5 +229,12 @@ function solve!(
         end
     end
 
-    return (iter=iter, err_evo1=err_evo1, err_evo2=err_evo2, norm_Rx=norm_Rx, norm_Ry=norm_Ry, norm_∇V=norm_∇V)
+    return (
+        iter=iter,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_∇V=norm_∇V,
+    )
 end

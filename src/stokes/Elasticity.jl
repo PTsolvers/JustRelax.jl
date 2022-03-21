@@ -231,7 +231,14 @@ function JustRelax.solve!(
 
     update_τ_o!(stokes)
 
-    return (iter=iter, err_evo1=err_evo1, err_evo2=err_evo2, norm_Rx=norm_Rx, norm_Ry=norm_Ry, norm_∇V=norm_∇V)
+    return (
+        iter=iter,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_∇V=norm_∇V,
+    )
 end
 
 end # END OF MODULE
@@ -719,7 +726,7 @@ function solve!(
     iterMax=10e3,
     nout=500,
     b_width=(1, 1, 1),
-    verbose = true,
+    verbose=true,
 ) where {A,B,C,D,T}
 
     ## UNPACK
@@ -863,7 +870,10 @@ function solve!(
             if isnan(err)
                 error("NaN")
             end
-            push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont]]))
+            push!(
+                err_evo1,
+                maximum([norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont]]),
+            )
             push!(err_evo2, iter)
             if (igg.me == 0 && (verbose || err < ϵ || iter == iterMax))
                 @printf(
@@ -884,7 +894,17 @@ function solve!(
 
     update_τ_o!(stokes) # copy τ into τ_o
 
-    return (iter=iter, err_evo1=err_evo1, err_evo2=err_evo2, norm_Rx=norm_Rx, norm_Ry=norm_Ry, norm_Rz=norm_Rz, norm_∇V=norm_∇V, time=wtime0, av_time=av_time)
+    return (
+        iter=iter,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_Rz=norm_Rz,
+        norm_∇V=norm_∇V,
+        time=wtime0,
+        av_time=av_time,
+    )
 end
 
 end # END OF MODULE

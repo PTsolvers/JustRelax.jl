@@ -155,6 +155,7 @@ function solve!(
     η;
     iterMax=10e3,
     nout=500,
+    verbose=true,
 ) where {A,B,C,D,T}
 
     # unpack
@@ -178,9 +179,13 @@ function solve!(
     # errors
     err = 2 * ϵ
     iter = 0
+    cont = 0
     err_evo1 = Float64[]
     err_evo2 = Float64[]
     err_rms = Float64[]
+    norm_Rx = Float64[]
+    norm_Ry = Float64[]
+    norm_∇V = Float64[]
 
     # solver loop
     while err > ϵ && iter <= iterMax
@@ -201,25 +206,35 @@ function solve!(
         end
 
         iter += 1
-        if iter % nout == 0
+        if iter % nout == 0 && iter > 1
+            cont += 1
             Vmin, Vmax = minimum(Vx), maximum(Vx)
             Pmin, Pmax = minimum(P), maximum(P)
-            norm_Rx = norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx))
-            norm_Ry = norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry))
-            norm_∇V = norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V))
-            err = maximum([norm_Rx, norm_Ry, norm_∇V])
-            push!(err_evo1, maximum([norm_Rx, norm_Ry, norm_∇V]))
+            push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
+            push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
+            push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))
+            err = maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]])
+            push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]]))
             push!(err_evo2, iter)
-            @printf(
-                "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
-                iter,
-                err,
-                norm_Rx,
-                norm_Ry,
-                norm_∇V
-            )
+            if (verbose || err < ϵ || iter == iterMax)
+                @printf(
+                    "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
+                    iter,
+                    err,
+                    norm_Rx[cont],
+                    norm_Ry[cont],
+                    norm_∇V[cont]
+                )
+            end
         end
     end
 
-    return (iter=iter, err_evo1=err_evo1, err_evo2=err_evo2)
+    return (
+        iter=iter,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_∇V=norm_∇V,
+    )
 end

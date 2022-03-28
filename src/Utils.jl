@@ -26,11 +26,11 @@ function norm_mpi(A)
 end
 
 function minimum_mpi(A)
-    min_l = maximum(A)
+    min_l = minimum(A)
     return MPI.Allreduce(min_l, MPI.MIN, MPI.COMM_WORLD)
 end
 
 function maximum_mpi(A)
-    max_l = minimum(A)
+    max_l = maximum(A)
     return MPI.Allreduce(max_l, MPI.MIN, MPI.COMM_WORLD)
 end

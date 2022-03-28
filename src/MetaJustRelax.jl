@@ -42,7 +42,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     @eval begin
         include(joinpath(@__DIR__, "stokes/Stokes.jl"))
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
-        include(joinpath(@__DIR__, "Macros.jl"))
+        include(joinpath(@__DIR__, "Utils.jl"))
 
         export USE_GPU,
             PTArray, Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs

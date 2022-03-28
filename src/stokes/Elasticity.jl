@@ -860,12 +860,12 @@ function solve!(
                 1 / dy,
                 1 / dz,
             )
-            Vmin, Vmax = minimum(Vx), maximum(Vx)
-            Pmin, Pmax = minimum(P), maximum(P)
-            push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
-            push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
-            push!(norm_Rz, norm(Rz) / (Pmax - Pmin) * lx / sqrt(length(Rz)))
-            push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))
+            Vmin, Vmax = minimum_mpi(Vx), maximum_mpi(Vx)
+            Pmin, Pmax = minimum_mpi(P), maximum_mpi(P)
+            push!(norm_Rx, norm_mpi(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
+            push!(norm_Ry, norm_mpi(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
+            push!(norm_Rz, norm_mpi(Rz) / (Pmax - Pmin) * lx / sqrt(length(Rz)))
+            push!(norm_∇V, norm_mpi(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))
             err = maximum([norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont]])
             if isnan(err)
                 error("NaN")

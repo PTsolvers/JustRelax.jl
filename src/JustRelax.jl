@@ -6,6 +6,7 @@ using Reexport
 using LinearAlgebra
 using Printf
 using CUDA
+using MPI
 
 include("topology/Topology.jl")
 include("MetaJustRelax.jl")

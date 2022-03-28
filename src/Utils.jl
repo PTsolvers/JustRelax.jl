@@ -32,5 +32,5 @@ end
 
 function maximum_mpi(A)
     max_l = maximum(A)
-    return MPI.Allreduce(max_l, MPI.MIN, MPI.COMM_WORLD)
+    return MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD)
 end

@@ -90,7 +90,6 @@ function DiffusionSlab(;
 
     ## Boundary conditions
     thermal_bc = (flux_x=false, flux_y=true, flux_z=false)
-    # thermal_bc = (flux_x=false, flux_y=true, flux_z=true)
 
     ## Time loop
     t = 0.0

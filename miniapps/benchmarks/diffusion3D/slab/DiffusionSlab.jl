@@ -68,10 +68,10 @@ function DiffusionSlab(;
     phasev, = generate_phases((xvi ./ 1e3)...)
 
     ## Allocate arrays needed for every Thermal Diffusion
-    # general stokes arrays
+    # general thermal arrays
     thermal = ThermalArrays(ni)
     @parallel assign!(thermal.T, Tc)
-    # general numerical coeffs for PT stokes
+    # general numerical coeffs for PT solver
     pt_thermal = PTThermalCoeffs(di, li; Resc=6π, CFL=0.8 / √3)
 
     ## Density

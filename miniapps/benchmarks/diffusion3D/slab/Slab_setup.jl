@@ -188,18 +188,3 @@ function generate_phases(
 
     return Phases, Temp
 end
-
-function foo(
-    di::NTuple{N,T1}, li::NTuple{N,T2}; origin=ntuple(_ -> zero(T1), N)
-) where {N,T1,T2}
-    @assert length(di) == length(li)
-    nDim = Val(N)
-    # nodes at the center of the grid cells
-    xci = ntuple(
-        i -> (origin[i] + di[i] * 0.5):di[i]:(origin[i] + li[i] - di[i] * 0.5), nDim
-    )
-    # nodes at the vertices of the grid cells
-    xvi = ntuple(i -> origin[i]:di[i]:(origin[i] + li[i]), nDim)
-
-    return xci, xvi
-end

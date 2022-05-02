@@ -36,7 +36,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     make_symmetrictensor_struct!(N) # (symmetric) tensors
     make_residual_struct!(N) # residuals
     make_stokes_struct!() # Arrays for Stokes solver
-    make_PTstokes_struct!()
+    make_PTstokes_struct!() # PT Stokes coefficients
+    make_thermal_arrays!(N) # Arrays for Thermal Diffusion solver
+    make_PTthermal_struct!() # PT Thermal Diffusion coefficients
 
     # includes and exports
     @eval begin
@@ -46,15 +48,26 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         export USE_GPU,
             PTArray, Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs
+        export ThermalArrays, PTThermalCoeffs 
         export AbstractStokesModel, Viscous, ViscoElastic
         export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
-        export smooth!, stress, solve!
-
+        export smooth!, stress, solve!, assign!
+        
         include(joinpath(@__DIR__, "stokes/Elasticity.jl"))
+        include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
+
     end
 
     # conditional submodule load
-    module_names = [Symbol("Elasticity$(N)D")]
+    local module_names
+    if N == 3 # temporary patch until thermal 2D is operative
+        module_names = [
+            Symbol("Elasticity$(N)D")
+            Symbol("ThermalDiffusion$(N)D")
+        ]
+    else
+        module_names = [Symbol("Elasticity$(N)D")]
+    end
     for m in module_names
         Base.@eval begin
             @reexport import .$m

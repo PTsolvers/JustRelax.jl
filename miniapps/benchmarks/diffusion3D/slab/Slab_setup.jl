@@ -12,6 +12,10 @@ struct Grid{T} <: AbstractGrid
     end
 end
 
+## NOTE: 
+# functions below have been modified 
+# and adapted from GeophysicalModelGenerator.jl
+
 # Internal function that rotates the coordinates
 function Rot3D(x, y, z, R)
     v = @SVector [x, y, z]
@@ -140,21 +144,7 @@ function generate_phases(
     T_mantle=1350,   # in Celcius
     T_surface=0,
 )
-    # x = 0:10:1000
-    # y = 0:10:500
-    # z = -500:10:0
     grid = Grid(x, y, z)
-
-    # Trench_x_location   =  500     # trench location
-    # Length_Subduct_Slab =  200     # length of subducted slab
-    # Length_Horiz_Slab   =  500     # length of overriding plate of slab
-    # Width_Slab          =  250     # Width of slab (in case we run a 3D model)         
-
-    # SubductionAngle     =   34     # Subduction angle
-    # ThicknessCrust      =   10     
-    # ThicknessML         =   75     # Thickness of mantle lithosphere
-    # T_mantle            =   1350   # in Celcius
-    # T_surface           =   0
 
     ThicknessSlab = ThicknessCrust + ThicknessML
 
@@ -196,11 +186,6 @@ function generate_phases(
         end
     end
 
-    # # Save julia setup 
-    # vtk_grid("fields", grid.X, grid.Y, grid.Z) do vtk
-    #     vtk["Phases"] = Phases
-    #     vtk["T"] = Temp
-    # end
     return Phases, Temp
 end
 

@@ -19,6 +19,11 @@ end
     return nothing
 end
 
+@parallel function assign!(B, A)
+    @all(B) = @all(A)
+    return nothing
+end
+
 ## 2D KERNELS
 
 @parallel function compute_iter_params!(

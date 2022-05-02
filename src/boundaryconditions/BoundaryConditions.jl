@@ -1,7 +1,6 @@
 # 2D KERNELS
 
 @parallel_indices (iy) function free_slip_x!(A::AbstractArray{eltype(PTArray),2})
-    <
     A[1, iy] = A[2, iy]
     A[end, iy] = A[end - 1, iy]
     return nothing
@@ -58,5 +57,23 @@ function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{3,T}}, Vx, Vy, Vz) w
     if freeslip_z
         @parallel (1:size(Vx, 1), 1:size(Vx, 2)) free_slip_z!(Vx)
         @parallel (1:size(Vy, 1), 1:size(Vy, 2)) free_slip_z!(Vy)
+    end
+end
+
+function thermal_boundary_conditions!(bcs::NamedTuple{<:Any,NTuple{3,_T}}, T; corners=(false, false, false)) where {_T}
+    bc_x, bc_y, bc_z = bcs
+    nx, ny, nz = size(T)
+    corner_x, corner_y, corner_z = ntuple(Val(3)) do i
+        corners[i] == true ? (1,1) : (0,0)
+    end
+    # free slip boundary conditions
+    if bc_x
+        @parallel ((2-corner_y[1]):ny-1, 2:nz-(1+corner_z[2])) free_slip_x!(T)
+    end
+    if bc_y
+        @parallel ((2-corner_x[1]):nx-1, 2:nz-(1+corner_z[2])) free_slip_y!(T)
+    end
+    if bc_z
+        @parallel ((2-corner_x[1]):nx-1, 2:ny-(1+corner_y[2])) free_slip_z!(T)
     end
 end

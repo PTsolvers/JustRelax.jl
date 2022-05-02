@@ -51,12 +51,8 @@ function make_PTthermal_struct!()
             Vpdτ::T
 
             function PTThermalCoeffs(
-                di::NTuple{nDim,T},
-                li::NTuple{nDim,Any};
-                ϵ=1e-8,
-                Resc=1 / 1.2,
-                CFL=0.9 / √3,
-            ) where {nDim, T}
+                di::NTuple{nDim,T}, li::NTuple{nDim,Any}; ϵ=1e-8, Resc=1 / 1.2, CFL=0.9 / √3
+            ) where {nDim,T}
                 Vpdτ = min(di...) * CFL
                 max_lxyz = max(li...)
                 max_lxyz2 = max_lxyz^2

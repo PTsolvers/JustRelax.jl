@@ -60,20 +60,22 @@ function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{3,T}}, Vx, Vy, Vz) w
     end
 end
 
-function thermal_boundary_conditions!(bcs::NamedTuple{<:Any,NTuple{3,_T}}, T; corners=(false, false, false)) where {_T}
+function thermal_boundary_conditions!(
+    bcs::NamedTuple{<:Any,NTuple{3,_T}}, T; corners=(false, false, false)
+) where {_T}
     bc_x, bc_y, bc_z = bcs
     nx, ny, nz = size(T)
     corner_x, corner_y, corner_z = ntuple(Val(3)) do i
-        corners[i] == true ? (1,1) : (0,0)
+        corners[i] == true ? (1, 1) : (0, 0)
     end
-    # free slip boundary conditions
+    # flux boundary conditions
     if bc_x
-        @parallel ((2-corner_y[1]):ny-1, 2:nz-(1+corner_z[2])) free_slip_x!(T)
+        @parallel ((2 - corner_y[1]):(ny - 1), 2:(nz - (1 + corner_z[2]))) free_slip_x!(T)
     end
     if bc_y
-        @parallel ((2-corner_x[1]):nx-1, 2:nz-(1+corner_z[2])) free_slip_y!(T)
+        @parallel ((2 - corner_x[1]):(nx - 1), 2:(nz - (1 + corner_z[2]))) free_slip_y!(T)
     end
     if bc_z
-        @parallel ((2-corner_x[1]):nx-1, 2:ny-(1+corner_y[2])) free_slip_z!(T)
+        @parallel ((2 - corner_x[1]):(nx - 1), 2:(ny - (1 + corner_y[2]))) free_slip_z!(T)
     end
 end

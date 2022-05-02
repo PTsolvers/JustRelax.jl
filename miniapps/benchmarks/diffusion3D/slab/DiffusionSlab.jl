@@ -1,6 +1,6 @@
 ## INCLUDE SCRIPTS FOR THE MODEL SETUP
 
-include(joinpath(@__DIR__,"slab_setup.jl"))
+include(joinpath(@__DIR__, "slab_setup.jl"))
 
 ## HELPER FUNCTIONS
 
@@ -38,9 +38,9 @@ end
 
 ## MAIN FUNCTION 
 
-function DiffusionSlab(; 
-    ttot=5e6 * 3600 * 24 *365,
-    dt = 500e3 * 3600 * 24 *365,
+function DiffusionSlab(;
+    ttot=5e6 * 3600 * 24 * 365,
+    dt=500e3 * 3600 * 24 * 365,
     nx::Integer=32 - 1,
     ny::Integer=32 - 1,
     nz::Integer=32 - 1,
@@ -48,7 +48,7 @@ function DiffusionSlab(;
     ly=1000e3,
     lz=1000e3,
     b_width::NTuple{3,Integer}=(1, 1, 1),
-    init_MPI = MPI.Initialized() ? false : true,
+    init_MPI=MPI.Initialized() ? false : true,
     finalize_MPI=false,
 )
 
@@ -57,23 +57,15 @@ function DiffusionSlab(;
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
     ni = (nx, ny, nz) # number of nodes in x- and y-
-    igg = IGG(
-        init_global_grid(
-            nx,
-            ny,
-            nz;
-            init_MPI=init_MPI,
-            select_device=false,
-        )...,
-    ) # init MPI
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI, select_device=false)...) # init MPI
     li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
     max_li = max(li...)
-    xci, xvi = lazy_grid(di, li; origin=(0,0,-lz)) # nodes at the center and vertices of the cells
+    xci, xvi = lazy_grid(di, li; origin=(0, 0, -lz)) # nodes at the center and vertices of the cells
 
     # Material phase and Temperature at cell centers
-    phasec, Tc = generate_phases((xci./1e3)...)
-    phasev,  = generate_phases((xvi./1e3)...)
+    phasec, Tc = generate_phases((xci ./ 1e3)...)
+    phasev, = generate_phases((xvi ./ 1e3)...)
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general stokes arrays
@@ -85,15 +77,15 @@ function DiffusionSlab(;
     ## Density
     ρm = 2700 # mantle
     ρl = 3300 # lithosphere
-    ρmats =(ρm, ρl)
+    ρmats = (ρm, ρl)
     ρ = property2grid(phasec, ρmats; b_width=b_width, smooth_iters=0)
 
     ## Temperature
     κmats = (8e-7, 8e-7)
-    κ = property2grid(phasev, κmats; b_width=b_width, smooth_iters=0) 
+    κ = property2grid(phasev, κmats; b_width=b_width, smooth_iters=0)
     Cp = (1200, 1200)
-    _ρCpmats = @. 1/Cp/ρmats
-    _ρCp = property2grid(phasev, _ρCpmats; b_width=b_width, smooth_iters=0) 
+    _ρCpmats = @. 1 / Cp / ρmats
+    _ρCp = property2grid(phasev, _ρCpmats; b_width=b_width, smooth_iters=0)
     thermal_parameters = ThermalParameters(κ, _ρCp)
 
     ## Boundary conditions
@@ -103,19 +95,10 @@ function DiffusionSlab(;
     ## Time loop
     t = 0.0
     println("Starting solver")
-    
+
     while t < ttot
         tic()
-        solve!(
-            thermal,
-            pt_thermal,
-            thermal_parameters,
-            thermal_bc,
-            ni,
-            di,
-            igg,
-            dt
-        ) 
+        solve!(thermal, pt_thermal, thermal_parameters, thermal_bc, ni, di, igg, dt)
         t_toc = toc()
         println("Done in $(t_toc) s")
 
@@ -126,4 +109,3 @@ function DiffusionSlab(;
 
     return (ni=ni, xci=xci, xvi=xvi), thermal.T
 end
-

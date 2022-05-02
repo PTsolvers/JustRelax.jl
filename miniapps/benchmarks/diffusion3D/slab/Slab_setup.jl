@@ -6,28 +6,36 @@ struct Grid{T} <: AbstractGrid
     X::T
     Y::T
     Z::T
-    function Grid(a::T,b::T,c::T) where T
-        x,y,z = XYZGrid(a, b, c)
-        new{typeof(x)}(x,y,z)
+    function Grid(a::T, b::T, c::T) where {T}
+        x, y, z = XYZGrid(a, b, c)
+        return new{typeof(x)}(x, y, z)
     end
 end
 
 # Internal function that rotates the coordinates
 function Rot3D(x, y, z, R)
     v = @SVector [x, y, z]
-    CoordRot = R*v; 
-    x = CoordRot[1];
-    y = CoordRot[2];
-    z = CoordRot[3];
+    CoordRot = R * v
+    x = CoordRot[1]
+    y = CoordRot[2]
+    z = CoordRot[3]
     return x, y, z
 end
 
-function Rot3D!(X,Y,Z, StrikeAngle, DipAngle)
+function Rot3D!(X, Y, Z, StrikeAngle, DipAngle)
 
     # rotation matrixes
-    Ry = @SMatrix [cosd(-DipAngle) 0 sind(-DipAngle) ; 0 1 0 ; -sind(-DipAngle) 0  cosd(-DipAngle)];
-    Rz = @SMatrix [cosd(StrikeAngle) -sind(StrikeAngle) 0 ; sind(StrikeAngle) cosd(StrikeAngle) 0 ; 0 0 1]
-    R = Ry*Rz
+    Ry = @SMatrix [
+        cosd(-DipAngle) 0 sind(-DipAngle)
+        0 1 0
+        -sind(-DipAngle) 0 cosd(-DipAngle)
+    ]
+    Rz = @SMatrix [
+        cosd(StrikeAngle) -sind(StrikeAngle) 0
+        sind(StrikeAngle) cosd(StrikeAngle) 0
+        0 0 1
+    ]
+    R = Ry * Rz
 
     Threads.@threads for i in eachindex(X)
         @inbounds X[i], Y[i], Z[i] = Rot3D(X[i], Y[i], Z[i], R)
@@ -37,15 +45,15 @@ function Rot3D!(X,Y,Z, StrikeAngle, DipAngle)
 end
 
 function Compute_Phase(Phase, Temp, Z, s::LithosphericPhases)
-    (; Layers, Phases, Tlab)  = s
+    (; Layers, Phases, Tlab) = s
 
     Phase .= Phases[end]
-    Ztop  = 0
-    for i=1:length(Layers)
-        Zbot = Ztop-Layers[i]
+    Ztop = 0
+    for i in 1:length(Layers)
+        Zbot = Ztop - Layers[i]
 
         Threads.@threads for j in eachindex(Z)
-            @inbounds if (Z[j] ≥ Zbot) &&  (Z[j] ≥ Ztop)
+            @inbounds if (Z[j] ≥ Zbot) && (Z[j] ≥ Ztop)
                 Phase[j] = Phases[i]
             end
         end
@@ -65,36 +73,47 @@ function Compute_Phase(Phase, Temp, Z, s::LithosphericPhases)
     return Phase
 end
 
-
-function myAddBox!(Phase, Temp, grid::Grid;         # required input
-    xlim=Tuple{2}, ylim=nothing, zlim=Tuple{2},     # limits of the box
-    Origin=nothing, StrikeAngle=0, DipAngle=0,      # origin & dip/strike
-    phase = ConstantPhase(1),                       # Sets the phase number(s) in the box
-    T=nothing )                                     # Sets the thermal structure (various fucntions are available)
+function myAddBox!(
+    Phase,
+    Temp,
+    grid::Grid;         # required input
+    xlim=Tuple{2},
+    ylim=nothing,
+    zlim=Tuple{2},     # limits of the box
+    Origin=nothing,
+    StrikeAngle=0,
+    DipAngle=0,      # origin & dip/strike
+    phase=ConstantPhase(1),                       # Sets the phase number(s) in the box
+    T=nothing,
+)                                     # Sets the thermal structure (various fucntions are available)
 
     # Limits of block                
-    if ylim==nothing 
+    if ylim == nothing
         ylim = extrema(grid.Y)
     end
 
-    if Origin==nothing 
+    if Origin == nothing
         Origin = (xlim[1], ylim[1], zlim[2])  # upper-left corner
     end
 
     # Perform rotation of 3D coordinates:
-    Xrot = grid.X .- Origin[1];
-    Yrot = grid.Y .- Origin[2];
-    Zrot = grid.Z .- Origin[3];
+    Xrot = grid.X .- Origin[1]
+    Yrot = grid.Y .- Origin[2]
+    Zrot = grid.Z .- Origin[3]
 
-    Rot3D!(Xrot,Yrot,Zrot, StrikeAngle, DipAngle)
+    Rot3D!(Xrot, Yrot, Zrot, StrikeAngle, DipAngle)
 
     # Set phase number & thermal structure in the full domain
     ztop = zlim[2] - Origin[3]
     zbot = zlim[1] - Origin[3]
-    ind = findall(  (Xrot .>= (xlim[1] - Origin[1])) .&& (Xrot .<= (xlim[2] - Origin[1])) .&&  
-            (Yrot .>= (ylim[1] - Origin[2])) .&& (Yrot .<= (ylim[2] - Origin[2])) .&&  
-            (Zrot .>= zbot) .&& (Zrot .<= ztop)  )
-
+    ind = findall(
+        (Xrot .>= (xlim[1] - Origin[1])) .&&
+        (Xrot .<= (xlim[2] - Origin[1])) .&&
+        (Yrot .>= (ylim[1] - Origin[2])) .&&
+        (Yrot .<= (ylim[2] - Origin[2])) .&&
+        (Zrot .>= zbot) .&&
+        (Zrot .<= ztop),
+    )
 
     # Compute thermal structure accordingly. See routines below for different options
     if T != nothing
@@ -108,19 +127,19 @@ function myAddBox!(Phase, Temp, grid::Grid;         # required input
 end
 
 function generate_phases(
-    x, 
-    y, 
+    x,
+    y,
     z;
-    Trench_x_location   =  500,     # trench location
-    Length_Subduct_Slab =  200,     # length of subducted slab
-    Length_Horiz_Slab   =  500,     # length of overriding plate of slab
-    Width_Slab          =  250,     # Width of slab (in case we run a 3D model)         
-    SubductionAngle     =   34,     # Subduction angle
-    ThicknessCrust      =   10,     
-    ThicknessML         =   75,     # Thickness of mantle lithosphere
-    T_mantle            =   1350,   # in Celcius
-    T_surface           =   0
-    )
+    Trench_x_location=500,     # trench location
+    Length_Subduct_Slab=200,     # length of subducted slab
+    Length_Horiz_Slab=500,     # length of overriding plate of slab
+    Width_Slab=250,     # Width of slab (in case we run a 3D model)         
+    SubductionAngle=34,     # Subduction angle
+    ThicknessCrust=10,
+    ThicknessML=75,     # Thickness of mantle lithosphere
+    T_mantle=1350,   # in Celcius
+    T_surface=0,
+)
     # x = 0:10:1000
     # y = 0:10:500
     # z = -500:10:0
@@ -137,43 +156,38 @@ function generate_phases(
     # T_mantle            =   1350   # in Celcius
     # T_surface           =   0
 
-    ThicknessSlab = ThicknessCrust+ThicknessML
+    ThicknessSlab = ThicknessCrust + ThicknessML
 
     Phases = zeros(Int64, size(grid.X)) # Rock numbers
-    Temp = ones(size(grid.X))*T_mantle # Temperature in C
-    T=LinearTemp(0, T_mantle)
-    T1=SpreadingRateTemp(;
-        Tsurface=0, 
-        Tmantle=T_mantle, 
-        maxAge=100,
-        MORside="right"
-        )
-    T2=HalfspaceCoolingTemp(0, T_mantle, 100, 0)
+    Temp = ones(size(grid.X)) * T_mantle # Temperature in C
+    T = LinearTemp(0, T_mantle)
+    T1 = SpreadingRateTemp(; Tsurface=0, Tmantle=T_mantle, maxAge=100, MORside="right")
+    T2 = HalfspaceCoolingTemp(0, T_mantle, 100, 0)
 
     # Create horizontal part of slab with crust & mantle lithosphere
     myAddBox!(
-        Phases, 
-        Temp, 
-        grid,
-        xlim=(Trench_x_location, Trench_x_location+Length_Horiz_Slab), 
-        ylim=(0, Width_Slab), 
+        Phases,
+        Temp,
+        grid;
+        xlim=(Trench_x_location, Trench_x_location + Length_Horiz_Slab),
+        ylim=(0, Width_Slab),
         zlim=(-ThicknessSlab, 0.0),
-        phase=LithosphericPhases(Layers=[ThicknessSlab ThicknessML], Phases=[1 2 0]),
-        T=T
-    ) 
+        phase=LithosphericPhases(; Layers=[ThicknessSlab ThicknessML], Phases=[1 2 0]),
+        T=T,
+    )
 
     # Add inclined part of slab                            
     myAddBox!(
-        Phases, 
-        Temp, 
-        grid,
-        xlim=(Trench_x_location-Length_Subduct_Slab, Trench_x_location), 
-        ylim=(0, Width_Slab), 
+        Phases,
+        Temp,
+        grid;
+        xlim=(Trench_x_location - Length_Subduct_Slab, Trench_x_location),
+        ylim=(0, Width_Slab),
         zlim=(-ThicknessSlab, 0.0),
         DipAngle=-SubductionAngle,
-        Origin=(Trench_x_location,0,0),
-        phase=LithosphericPhases(Layers=[ThicknessSlab ThicknessML], Phases=[1 2 0]),
-        T=T
+        Origin=(Trench_x_location, 0, 0),
+        phase=LithosphericPhases(; Layers=[ThicknessSlab ThicknessML], Phases=[1 2 0]),
+        T=T,
     )
 
     Threads.@threads for i in eachindex(Phases)
@@ -190,14 +204,17 @@ function generate_phases(
     return Phases, Temp
 end
 
-
-function foo(di::NTuple{N, T1}, li::NTuple{N, T2}; origin=ntuple(_->zero(T1), N)) where {N,T1,T2}
+function foo(
+    di::NTuple{N,T1}, li::NTuple{N,T2}; origin=ntuple(_ -> zero(T1), N)
+) where {N,T1,T2}
     @assert length(di) == length(li)
     nDim = Val(N)
     # nodes at the center of the grid cells
-    xci = ntuple(i -> (origin[i]+ di[i] * 0.5):di[i]:(origin[i]+ li[i] - di[i] *0.5), nDim)
+    xci = ntuple(
+        i -> (origin[i] + di[i] * 0.5):di[i]:(origin[i] + li[i] - di[i] * 0.5), nDim
+    )
     # nodes at the vertices of the grid cells
-    xvi = ntuple(i -> origin[i]:di[i]:(origin[i]+li[i]), nDim)
+    xvi = ntuple(i -> origin[i]:di[i]:(origin[i] + li[i]), nDim)
 
     return xci, xvi
 end

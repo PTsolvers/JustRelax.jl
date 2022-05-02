@@ -23,23 +23,23 @@ finalize_MPI = false
 include("slab/DiffusionSlab.jl")
 
 # run model
-geometry, Temperature = DiffusionSlab(; 
-    ttot=5e6 * 3600 * 24 *365,
-    dt = 500e3 * 3600 * 24 *365,
-    nx = 64,
-    ny = 64,
-    nz = 64,
-    lx = 1000e3,
-    ly = 1000e3,
-    lz = 1000e3,
-    b_width = (1, 1, 1),
-    init_MPI = MPI.Initialized() ? false : true,
+geometry, Temperature = DiffusionSlab(;
+    ttot=5e6 * 3600 * 24 * 365,
+    dt=500e3 * 3600 * 24 * 365,
+    nx=64,
+    ny=64,
+    nz=64,
+    lx=1000e3,
+    ly=1000e3,
+    lz=1000e3,
+    b_width=(1, 1, 1),
+    init_MPI=MPI.Initialized() ? false : true,
     finalize_MPI=false,
 )
 
 # plot results
 if viz
-    heatmap(xci[1], xci[2], (thermal.T)[:,1,:], colormap=:vik)
+    heatmap(xci[1], xci[2], (thermal.T)[:, 1, :]; colormap=:vik)
 end
 
 # save Paraview file

@@ -48,14 +48,13 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         export USE_GPU,
             PTArray, Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs
-        export ThermalArrays, PTThermalCoeffs 
+        export ThermalArrays, PTThermalCoeffs
         export AbstractStokesModel, Viscous, ViscoElastic
         export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
         export smooth!, stress, solve!, assign!
-        
+
         include(joinpath(@__DIR__, "stokes/Elasticity.jl"))
         include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
-
     end
 
     # conditional submodule load

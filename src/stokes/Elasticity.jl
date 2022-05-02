@@ -9,15 +9,13 @@ end
 @parallel function elastic_iter_params!(
     dτ_Rho::AbstractArray,
     Gdτ::AbstractArray,
-    ητ::AbstractArray,
+    η::AbstractArray,
     Vpdτ::Real,
-    G::Real,
-    dt::Real,
     Re::Real,
     r::Real,
     max_li::Real,
 )
-    @all(dτ_Rho) = Vpdτ * max_li / Re / (1.0 / (1.0 / @all(ητ) + 1.0 / (G * dt)))
+    @all(dτ_Rho) = Vpdτ * max_li / Re / @all(η)
     @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + 2)
     return nothing
 end
@@ -171,7 +169,7 @@ function JustRelax.solve!(
     ητ = deepcopy(η)
     @parallel compute_maxloc!(ητ, η)
     # PT numerical coefficients
-    @parallel elastic_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, G, dt, Re, r, max_li)
+    @parallel elastic_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, Re, r, max_li)
 
     # errors
     err = 2 * ϵ
@@ -406,24 +404,6 @@ macro av_yzi_η(ix, iy, iz)
         ),
     )
 end
-macro inn_yz_Gr(ix, iy, iz)
-    return esc(:(@inn_yz_Gdτ($ix, $iy, $iz) / (G * dt)))
-end
-macro inn_xz_Gr(ix, iy, iz)
-    return esc(:(@inn_xz_Gdτ($ix, $iy, $iz) / (G * dt)))
-end
-macro inn_xy_Gr(ix, iy, iz)
-    return esc(:(@inn_xy_Gdτ($ix, $iy, $iz) / (G * dt)))
-end
-macro av_xyi_Gr(ix, iy, iz)
-    return esc(:(@av_xyi_Gdτ($ix, $iy, $iz) / (G * dt)))
-end
-macro av_xzi_Gr(ix, iy, iz)
-    return esc(:(@av_xzi_Gdτ($ix, $iy, $iz) / (G * dt)))
-end
-macro av_yzi_Gr(ix, iy, iz)
-    return esc(:(@av_yzi_Gdτ($ix, $iy, $iz) / (G * dt)))
-end
 @parallel_indices (ix, iy, iz) function compute_P_τ!(
     P::AbstractArray{eltype(PTArray),3},
     τxx::AbstractArray{eltype(PTArray),3},
@@ -466,88 +446,70 @@ end
     if (ix ≤ size(τxx, 1) && iy ≤ size(τxx, 2) && iz ≤ size(τxx, 3))
         τxx[ix, iy, iz] =
             (
-                τxx[ix, iy, iz] +
-                τxx_o[ix, iy, iz] * @inn_yz_Gr(ix, iy, iz) +
-                2.0 *
-                @inn_yz_Gdτ(ix, iy, iz) *
-                (_dx * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix, iy + 1, iz + 1]))
-            ) /
-            (1.0 + @inn_yz_Gdτ(ix, iy, iz) / @inn_yz_η(ix, iy, iz) + @inn_yz_Gr(ix, iy, iz))
+                τxx[ix, iy, iz] / @inn_yz_Gdτ(ix, iy, iz) +
+                τxx_o[ix, iy, iz] / G / dt +
+                2.0 * (_dx * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix, iy + 1, iz + 1]))
+            ) / (1.0 / @inn_yz_Gdτ(ix, iy, iz) + 1 / @inn_yz_η(ix, iy, iz))
     end
     # Compute τ_yy
     if (ix ≤ size(τyy, 1) && iy ≤ size(τyy, 2) && iz ≤ size(τyy, 3))
         τyy[ix, iy, iz] =
             (
-                τyy[ix, iy, iz] +
-                τyy_o[ix, iy, iz] * @inn_xz_Gr(ix, iy, iz) +
-                2.0 *
-                @inn_xz_Gdτ(ix, iy, iz) *
-                (_dy * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy, iz + 1]))
-            ) /
-            (1.0 + @inn_xz_Gdτ(ix, iy, iz) / @inn_xz_η(ix, iy, iz) + @inn_xz_Gr(ix, iy, iz))
+                τyy[ix, iy, iz] / @inn_xz_Gdτ(ix, iy, iz) +
+                τyy_o[ix, iy, iz] / G / dt +
+                2.0 * (_dy * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy, iz + 1]))
+            ) / (1.0 / @inn_xz_Gdτ(ix, iy, iz) + 1.0 / @inn_xz_η(ix, iy, iz))
     end
     # Compute τ_zz
     if (ix ≤ size(τzz, 1) && iy ≤ size(τzz, 2) && iz ≤ size(τzz, 3))
         τzz[ix, iy, iz] =
             (
-                τzz[ix, iy, iz] +
-                τzz_o[ix, iy, iz] * @inn_xy_Gr(ix, iy, iz) +
-                2.0 *
-                @inn_xy_Gdτ(ix, iy, iz) *
-                (_dz * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy + 1, iz]))
-            ) /
-            (1.0 + @inn_xy_Gdτ(ix, iy, iz) / @inn_xy_η(ix, iy, iz) + @inn_xy_Gr(ix, iy, iz))
+                τzz[ix, iy, iz] / @inn_xy_Gdτ(ix, iy, iz) +
+                τzz_o[ix, iy, iz] / G / dt +
+                2.0 * (_dz * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy + 1, iz]))
+            ) / (1.0 / @inn_xy_Gdτ(ix, iy, iz) + 1.0 / @inn_xy_η(ix, iy, iz))
     end
     # Compute τ_xy
     if (ix ≤ size(τxy, 1) && iy ≤ size(τxy, 2) && iz ≤ size(τxy, 3))
         τxy[ix, iy, iz] =
             (
-                τxy[ix, iy, iz] +
-                τxy_o[ix, iy, iz] * @av_xyi_Gr(ix, iy, iz) +
-                2.0 *
-                @av_xyi_Gdτ(ix, iy, iz) *
-                (
+                τxy[ix, iy, iz] / @av_xyi_Gdτ(ix, iy, iz) +
+                τxy_o[ix, iy, iz] / G / dt +
+                2.0 * (
                     0.5 * (
                         _dy * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy, iz + 1]) +
                         _dx * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix, iy + 1, iz + 1])
                     )
                 )
-            ) /
-            (1.0 + @av_xyi_Gdτ(ix, iy, iz) / @av_xyi_η(ix, iy, iz) + @av_xyi_Gr(ix, iy, iz))
+            ) / (1.0 / @av_xyi_Gdτ(ix, iy, iz) + 1.0 / @av_xyi_η(ix, iy, iz))
     end
     # Compute τ_xz
     if (ix ≤ size(τxz, 1) && iy ≤ size(τxz, 2) && iz ≤ size(τxz, 3))
         τxz[ix, iy, iz] =
             (
-                τxz[ix, iy, iz] +
-                τxz_o[ix, iy, iz] * @av_xzi_Gr(ix, iy, iz) +
-                2.0 *
-                @av_xzi_Gdτ(ix, iy, iz) *
-                (
+                τxz[ix, iy, iz] / @av_xzi_Gdτ(ix, iy, iz) +
+                τxz_o[ix, iy, iz] / G / dt +
+                2.0 * (
                     0.5 * (
                         _dz * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy + 1, iz]) +
                         _dx * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix, iy + 1, iz + 1])
                     )
                 )
-            ) /
-            (1.0 + @av_xzi_Gdτ(ix, iy, iz) / @av_xzi_η(ix, iy, iz) + @av_xzi_Gr(ix, iy, iz))
+            ) / (1.0 / @av_xzi_Gdτ(ix, iy, iz) + 1.0 / @av_xzi_η(ix, iy, iz))
     end
     # Compute τ_yz
     if (ix ≤ size(τyz, 1) && iy ≤ size(τyz, 2) && iz ≤ size(τyz, 3))
         τyz[ix, iy, iz] =
             (
-                τyz[ix, iy, iz] +
-                τyz_o[ix, iy, iz] * @av_yzi_Gr(ix, iy, iz) +
-                2.0 *
-                @av_yzi_Gdτ(ix, iy, iz) *
-                (
+                τyz[ix, iy, iz] / @av_yzi_Gdτ(ix, iy, iz) +
+                τyz_o[ix, iy, iz] / G / dt +
+                2.0 * (
                     0.5 * (
                         _dz * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy + 1, iz]) +
                         _dy * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy, iz + 1])
                     )
                 )
-            ) /
-            (1.0 + @av_yzi_Gdτ(ix, iy, iz) / @av_yzi_η(ix, iy, iz) + @av_yzi_Gr(ix, iy, iz))
+            ) / (1.0 / @av_yzi_Gdτ(ix, iy, iz) + 1.0 / @av_yzi_η(ix, iy, iz))
     end
     return nothing
 end
@@ -732,7 +694,7 @@ function solve!(
     ## UNPACK
     # geometry
     dx, dy, dz = di
-    lx, ly, lz = li
+    lx, = li
     nx, ny, nz = ni
     nx_1, nx_2, ny_1, ny_2, nz_1, nz_2 = nx - 1, nx - 2, ny - 1, ny - 2, nz - 1, nz - 2
     # phsysics
@@ -757,8 +719,9 @@ function solve!(
         @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
         update_halo!(ητ)
     end
+
     # PT numerical coefficients
-    @parallel elastic_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, G, dt, Re, r, max_li)
+    @parallel elastic_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, Re, r, max_li)
 
     # errors
     err = 2 * ϵ
@@ -774,7 +737,7 @@ function solve!(
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
-        if iter == 2 # from iter = 2 to avoid compilation time
+        if iter == 10 # from iter = 10 to avoid compilation time
             wtime0 = Base.time()
         end
 
@@ -860,15 +823,17 @@ function solve!(
                 1 / dy,
                 1 / dz,
             )
-            Vmin, Vmax = minimum_mpi(Vx), maximum_mpi(Vx)
-            Pmin, Pmax = minimum_mpi(P), maximum_mpi(P)
-            push!(norm_Rx, norm_mpi(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
-            push!(norm_Ry, norm_mpi(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
-            push!(norm_Rz, norm_mpi(Rz) / (Pmax - Pmin) * lx / sqrt(length(Rz)))
-            push!(norm_∇V, norm_mpi(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))
+            Vmin, Vmax = minimum(Vx), maximum(Vx)
+            Pmin, Pmax = minimum(P), maximum(P)
+            push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
+            push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
+            push!(norm_Rz, norm(Rz) / (Pmax - Pmin) * lx / sqrt(length(Rz)))
+            push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))
             err = maximum([norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont]])
             if isnan(err)
-                error("NaN")
+                # error("NaN")
+                println("Aborting: NaNs \n")
+                break
             end
             push!(
                 err_evo1,
@@ -890,7 +855,7 @@ function solve!(
     end
 
     wtime0 = (time() - wtime0) # solver time 
-    av_time = wtime0 / (iter - 1) # average time per iteration
+    av_time = wtime0 / (iter - 10) # average time per iteration
 
     update_τ_o!(stokes) # copy τ into τ_o
 

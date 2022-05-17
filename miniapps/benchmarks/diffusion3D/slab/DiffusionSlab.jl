@@ -1,6 +1,6 @@
 ## INCLUDE SCRIPTS FOR THE MODEL SETUP
 
-include(joinpath(@__DIR__, "slab_setup.jl"))
+include(joinpath(@__DIR__, "Slab_setup.jl"))
 
 ## HELPER FUNCTIONS
 

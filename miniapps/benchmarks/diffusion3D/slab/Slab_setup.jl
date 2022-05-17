@@ -49,7 +49,7 @@ function Rot3D!(X, Y, Z, StrikeAngle, DipAngle)
 end
 
 function Compute_Phase(Phase, Temp, Z, s::LithosphericPhases)
-    (; Layers, Phases, Tlab) = s
+    Layers, Phases, Tlab = s.Layers, s.Phases, s.Tlab
 
     Phase .= Phases[end]
     Ztop = 0

@@ -5,7 +5,7 @@ struct ThermalParameters{T}
     _ρCp::T # 1/ρ/Cp
 end
 
-## 3D ELASTICITY MODULE
+## 3D THERMAL DIFFUSION MODULE
 
 module ThermalDiffusion3D
 

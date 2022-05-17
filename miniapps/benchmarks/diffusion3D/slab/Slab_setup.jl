@@ -1,7 +1,5 @@
-using GeophysicalModelGenerator
-using StaticArrays
-
 abstract type AbstractGrid end
+
 struct Grid{T} <: AbstractGrid
     X::T
     Y::T

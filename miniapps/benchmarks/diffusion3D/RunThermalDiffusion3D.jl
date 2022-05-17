@@ -2,6 +2,8 @@ using LinearAlgebra, CairoMakie
 using JustRelax
 using MPI: MPI
 using WriteVTK
+using GeophysicalModelGenerator
+using StaticArrays
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 3)

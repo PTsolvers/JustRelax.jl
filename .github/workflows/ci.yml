@@ -36,8 +36,7 @@ jobs:
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
             ${{ runner.os }}-
-      - uses: julia-actions/julia-buildpkg@latest
       - name: Use ParallelStencil from master branch
         run: |
-          julia  -e 'using Pkg;Pkg.add(url="https://github.com/omlins/ParallelStencil.jl.git", rev="main")'
+          julia  -e 'using Pkg;Pkg.add(url="https://github.com/omlins/ParallelStencil.jl.git", rev="main");Pkg.instantiate()'
       - uses: julia-actions/julia-runtest@latest

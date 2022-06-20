@@ -12,11 +12,11 @@ end
     ητ::AbstractArray,
     Vpdτ::T,
     G::T,
-    dt::T,
+    dt::M,
     Re::T,
     r::T,
     max_li::T,
-) where {T}
+) where {T, M}
     @all(dτ_Rho) = Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (G * dt)))
     @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
     return nothing
@@ -506,11 +506,11 @@ end
     Gdτ::AbstractArray{T,3},
     r::T,
     G::T,
-    dt::T,
+    dt::M,
     _dx::T,
     _dy::T,
     _dz::T,
-) where {T}
+) where {T, M}
     # Compute pressure
     if (ix ≤ size(P, 1) && iy ≤ size(P, 2) && iz ≤ size(P, 3))
         P[ix, iy, iz] =
@@ -687,13 +687,13 @@ end
     _dx::T,
     _dy::T,
     _dz::T,
-    nx_1::T,
-    nx_2::T,
-    ny_1::T,
-    ny_2::T,
-    nz_1::T,
-    nz_2::T,
-) where {T}
+    nx_1::N,
+    nx_2::N,
+    ny_1::N,
+    ny_2::N,
+    nz_1::N,
+    nz_2::N,
+) where {T,N}
     if (ix ≤ nx_1) && (iy ≤ ny_2) && (iz ≤ nz_2)
         Vx[ix + 1, iy + 1, iz + 1] =
             Vx[ix + 1, iy + 1, iz + 1] +

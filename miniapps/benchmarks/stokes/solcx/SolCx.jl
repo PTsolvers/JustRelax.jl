@@ -71,7 +71,7 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
 
     # smooth viscosity jump (otherwise no convergence for Δη > ~15)
     η2 = deepcopy(η)
-    for _ in 1:30
+    for _ in 1:5
         @parallel smooth!(η2, η, 1.0)
         @parallel (1:size(η2, 1)) free_slip_y!(η2)
         η, η2 = η2, η
@@ -84,7 +84,7 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     t = 0.0
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax=10e3)
+        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax=100e3)
         t += Δt
     end
 

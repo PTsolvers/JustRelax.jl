@@ -15,9 +15,13 @@ function check_convergence_case1()
     nz = 16
     _, _, iters = taylorGreen(; nx=nx, ny=ny, nz=nz, init_MPI=true, finalize_MPI=true)
     iters_expected = (
-        iter=1000,
-        err_evo1=[5.6947513423598755e-6, 2.0642133108711034e-9],
-        err_evo2=[500, 1000],
+        iter=1500,
+        err_evo1=[
+            3.863567605285833e-5
+            1.4614649338896292e-8
+            6.086219718431415e-12
+        ],
+        err_evo2=[500, 1000, 1500],
     )
     return iters.iter == iters_expected.iter &&
            iters.err_evo1[end] ≈ iters_expected.err_evo1[end]

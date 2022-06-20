@@ -1,4 +1,3 @@
-using ParallelStencil
 using JustRelax
 using Printf, LinearAlgebra, CairoMakie
 

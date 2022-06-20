@@ -1,8 +1,6 @@
 push!(LOAD_PATH, "..")
 
 using Test
-using ParallelStencil
-using ImplicitGlobalGrid
 using JustRelax
 
 # setup ParallelStencil.jl environment
@@ -37,7 +35,7 @@ function check_convergence_case1()
         finalize_MPI=true,
     )
 
-    iters_expected = (iter=2000, err_evo1=[4.383390069796424e-13], err_evo2=[2000])
+    iters_expected = (iter=2000, err_evo1=[1.3474702441931404e-13], err_evo2=[2000])
     return iters.iter == iters_expected.iter &&
            iters.err_evo1[end] ≈ iters_expected.err_evo1[end]
 end

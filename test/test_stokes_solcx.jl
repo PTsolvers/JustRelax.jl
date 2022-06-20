@@ -1,9 +1,7 @@
 push!(LOAD_PATH, "..")
 
 using Test
-using ParallelStencil
 using JustRelax
-using ParallelStencil.FiniteDifferences2D
 
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
@@ -16,18 +14,16 @@ function check_convergence_case1()
     Δη = 1e6
     geometry, stokes, iters, ρ = solCx(Δη; nx=nx, ny=ny)
     iters_expected = (
-        iter=4000,
+        iter=3000,
         err_evo1=[
-            2.6882547170954827,
-            0.2473522008680851,
-            0.01130098855514106,
-            0.0004922739546726743,
-            2.139794848519281e-5,
-            9.300304245694199e-7,
-            4.0422237837643596e-8,
-            1.7568857404566392e-9,
+            0.09360331957426424,
+            0.003306891096559515,
+            0.00011424277131348146,
+            3.946913923776043e-6,
+            1.363780256933486e-7,
+            4.71254016862045e-9,
         ],
-        err_evo2=[500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0, 3500.0, 4000.0],
+        err_evo2=[500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0],
     )
     println(iters)
     println(iters_expected)

@@ -1,9 +1,7 @@
 push!(LOAD_PATH, "..")
 
 using Test
-using ParallelStencil
 using JustRelax
-using ParallelStencil.FiniteDifferences2D
 
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
@@ -17,13 +15,13 @@ function check_convergence_case1()
     iters_expected = (
         iter=3500,
         err_evo1=[
-            0.0044223308158044565,
-            4.944247108047785e-5,
-            5.9105921832100726e-6,
-            8.263947237140499e-7,
-            1.1553438985652414e-7,
-            1.6152029093324383e-8,
-            2.2580967107291683e-9,
+            0.004234955041985375,
+            4.731816473180695e-5,
+            5.595230306874109e-6,
+            7.675634065893899e-7,
+            1.0528689841488961e-7,
+            1.4441981440483245e-8,
+            1.980974468802502e-9,
         ],
         err_evo2=[500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0, 3500.0],
     )

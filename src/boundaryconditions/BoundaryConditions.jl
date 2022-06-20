@@ -14,7 +14,7 @@ end
 end
 
 function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{2,T}}, Vx, Vy) where {T}
-    freeslip_x, freeslip_y, freeslip_z = freeslip
+    freeslip_x, freeslip_y = freeslip
     # free slip boundary conditions
     if freeslip_x
         @parallel (1:size(Vy, 2)) free_slip_x!(Vy)

@@ -29,7 +29,7 @@ end
     Re::Real,
     r::Real,
     max_lxy::Real,
-) where T
+) where {T}
     @all(dτ_Rho) = Vpdτ * max_lxy / Re / @all(Musτ)
     @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + 2.0)
     return nothing
@@ -44,7 +44,7 @@ end
     r::T,
     dx::T,
     dy::T,
-) where T
+) where {T}
     @all(∇V) = @d_xa(Vx) / dx + @d_ya(Vy) / dy
     @all(P) = @all(P) - r * @all(Gdτ) * @all(∇V)
     return nothing
@@ -60,11 +60,9 @@ end
     Gdτ::AbstractArray{T,2},
     dx::T,
     dy::T,
-) where T
-    @all(τxx) =
-        (@all(τxx) + 2.0 * @all(Gdτ) * @d_xa(Vx) / dx) / (@all(Gdτ) / @all(η) + 1.0)
-    @all(τyy) =
-        (@all(τyy) + 2.0 * @all(Gdτ) * @d_ya(Vy) / dy) / (@all(Gdτ) / @all(η) + 1.0)
+) where {T}
+    @all(τxx) = (@all(τxx) + 2.0 * @all(Gdτ) * @d_xa(Vx) / dx) / (@all(Gdτ) / @all(η) + 1.0)
+    @all(τyy) = (@all(τyy) + 2.0 * @all(Gdτ) * @d_ya(Vy) / dy) / (@all(Gdτ) / @all(η) + 1.0)
     @all(τxy) =
         (@all(τxy) + 2.0 * @harm(Gdτ) * (0.5 * (@d_yi(Vx) / dy + @d_xi(Vy) / dx))) /
         (@harm(Gdτ) / @harm(η) + 1.0)
@@ -84,7 +82,7 @@ end
     ρg::Nothing,
     dx::T,
     dy::T,
-) where T
+) where {T}
     @all(Rx) = @d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx
     @all(Ry) = @d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy
     @all(dVx) = @harm_xi(dτ_Rho) * @all(Rx)
@@ -105,7 +103,7 @@ end
     ρg::AbstractArray{T,2},
     dx::T,
     dy::T,
-) where T
+) where {T}
     @all(Rx) = @d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx
     @all(Ry) = @d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy - @harm_yi(ρg)
     @all(dVx) = @harm_xi(dτ_Rho) * @all(Rx)
@@ -118,7 +116,7 @@ end
     Vy::AbstractArray{T,2},
     dVx::AbstractArray{T,2},
     dVy::AbstractArray{T,2},
-) where T
+) where {T}
     @inn(Vx) = @inn(Vx) + @all(dVx)
     @inn(Vy) = @inn(Vy) + @all(dVy)
     return nothing

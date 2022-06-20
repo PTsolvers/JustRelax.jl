@@ -16,7 +16,7 @@ end
     Re::T,
     r::T,
     max_li::T,
-) where T
+) where {T}
     @all(dτ_Rho) = Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (G * dt)))
     @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
     return nothing
@@ -53,10 +53,11 @@ export solve!
     ρg::AbstractArray{T,2},
     dx::T,
     dy::T,
-) where T
+) where {T}
     @all(dVx) = (@d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx) * @harm_xi(dτ_Rho)
     @all(dVy) =
-        (@d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy - @harm_yi(ρg)) * @harm_yi(dτ_Rho)
+        (@d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy - @harm_yi(ρg)) *
+        @harm_yi(dτ_Rho)
     return nothing
 end
 
@@ -70,7 +71,7 @@ end
     ρg::AbstractArray{T,2},
     dx::T,
     dy::T,
-) where T
+) where {T}
     @all(Rx) = @d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx
     @all(Ry) = @d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy - @harm_yi(ρg)
     return nothing
@@ -83,7 +84,7 @@ end
     τxx::AbstractArray{T,2},
     τyy::AbstractArray{T,2},
     τxy::AbstractArray{T,2},
-) where T
+) where {T}
     @all(τxx_o) = @all(τxx)
     @all(τyy_o) = @all(τyy)
     @all(τxy_o) = @all(τxy)
@@ -121,7 +122,7 @@ end
     dt::T,
     dx::T,
     dy::T,
-) where T
+) where {T}
     @all(τxx) =
         (@all(τxx) + @all(τxx_o) * @Gr() + T(2) * @all(Gdτ) * (@d_xa(Vx) / dx)) /
         (one(T) + @all(Gdτ) / @all(η) + @Gr())
@@ -192,7 +193,6 @@ function JustRelax.solve!(
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
-        
         wtime0 += @elapsed begin
             @parallel compute_P!(∇V, P, Vx, Vy, Gdτ, r, dx, dy)
             @parallel compute_τ!(
@@ -268,7 +268,7 @@ export solve!, pureshear_bc!, smooth!
 
 @parallel function JustRelax.smooth!(
     A2::AbstractArray{T,3}, A::AbstractArray{T,3}, fact::T
-) where T
+) where {T}
     @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
     return nothing
 end
@@ -286,7 +286,7 @@ end
     τxy::AbstractArray{T,3},
     τxz::AbstractArray{T,3},
     τyz::AbstractArray{T,3},
-) where T
+) where {T}
     if (ix ≤ size(τxx, 1) && iy ≤ size(τxx, 2) && iz ≤ size(τxx, 3))
         τxx_o[ix, iy, iz] = τxx[ix, iy, iz]
     end
@@ -377,11 +377,11 @@ end
 macro harm_xyi_Gdτ(ix, iy, iz)
     return esc(
         :(
-            1.0/(
-                1.0/Gdτ[$ix, $iy, $iz + 1] +
-                1.0/Gdτ[$ix + 1, $iy, $iz + 1] +
-                1.0/Gdτ[$ix, $iy + 1, $iz + 1] +
-                1.0/Gdτ[$ix + 1, $iy + 1, $iz + 1]
+            1.0 / (
+                1.0 / Gdτ[$ix, $iy, $iz + 1] +
+                1.0 / Gdτ[$ix + 1, $iy, $iz + 1] +
+                1.0 / Gdτ[$ix, $iy + 1, $iz + 1] +
+                1.0 / Gdτ[$ix + 1, $iy + 1, $iz + 1]
             ) * 4.0
         ),
     )
@@ -389,11 +389,11 @@ end
 macro harm_xzi_Gdτ(ix, iy, iz)
     return esc(
         :(
-            1.0/(
-                1.0/Gdτ[$ix, $iy + 1, $iz] +
-                1.0/Gdτ[$ix + 1, $iy + 1, $iz] +
-                1.0/Gdτ[$ix, $iy + 1, $iz + 1] +
-                1.0/Gdτ[$ix + 1, $iy + 1, $iz + 1]
+            1.0 / (
+                1.0 / Gdτ[$ix, $iy + 1, $iz] +
+                1.0 / Gdτ[$ix + 1, $iy + 1, $iz] +
+                1.0 / Gdτ[$ix, $iy + 1, $iz + 1] +
+                1.0 / Gdτ[$ix + 1, $iy + 1, $iz + 1]
             ) * 4.0
         ),
     )
@@ -401,11 +401,11 @@ end
 macro harm_yzi_Gdτ(ix, iy, iz)
     return esc(
         :(
-            1.0/(
-                1.0/Gdτ[$ix + 1, $iy, $iz] +
-                1.0/Gdτ[$ix + 1, $iy + 1, $iz] +
-                1.0/Gdτ[$ix + 1, $iy, $iz + 1] +
-                1.0/Gdτ[$ix + 1, $iy + 1, $iz + 1]
+            1.0 / (
+                1.0 / Gdτ[$ix + 1, $iy, $iz] +
+                1.0 / Gdτ[$ix + 1, $iy + 1, $iz] +
+                1.0 / Gdτ[$ix + 1, $iy, $iz + 1] +
+                1.0 / Gdτ[$ix + 1, $iy + 1, $iz + 1]
             ) * 4.0
         ),
     )
@@ -451,11 +451,11 @@ end
 macro harm_xyi_η(ix, iy, iz)
     return esc(
         :(
-            1.0/(
-                1.0/η[$ix, $iy, $iz + 1] +
-                1.0/η[$ix + 1, $iy, $iz + 1] +
-                1.0/η[$ix, $iy + 1, $iz + 1] +
-                1.0/η[$ix + 1, $iy + 1, $iz + 1]
+            1.0 / (
+                1.0 / η[$ix, $iy, $iz + 1] +
+                1.0 / η[$ix + 1, $iy, $iz + 1] +
+                1.0 / η[$ix, $iy + 1, $iz + 1] +
+                1.0 / η[$ix + 1, $iy + 1, $iz + 1]
             ) * 4.0
         ),
     )
@@ -463,11 +463,11 @@ end
 macro harm_xzi_η(ix, iy, iz)
     return esc(
         :(
-            1.0/(
-                1.0/η[$ix, $iy + 1, $iz] +
-                1.0/η[$ix + 1, $iy + 1, $iz] +
-                1.0/η[$ix, $iy + 1, $iz + 1] +
-                1.0/η[$ix + 1, $iy + 1, $iz + 1]
+            1.0 / (
+                1.0 / η[$ix, $iy + 1, $iz] +
+                1.0 / η[$ix + 1, $iy + 1, $iz] +
+                1.0 / η[$ix, $iy + 1, $iz + 1] +
+                1.0 / η[$ix + 1, $iy + 1, $iz + 1]
             ) * 4.0
         ),
     )
@@ -475,11 +475,11 @@ end
 macro harm_yzi_η(ix, iy, iz)
     return esc(
         :(
-            1.0/(
-                1.0/η[$ix + 1, $iy, $iz] +
-                1.0/η[$ix + 1, $iy + 1, $iz] +
-                1.0/η[$ix + 1, $iy, $iz + 1] +
-                1.0/η[$ix + 1, $iy + 1, $iz + 1]
+            1.0 / (
+                1.0 / η[$ix + 1, $iy, $iz] +
+                1.0 / η[$ix + 1, $iy + 1, $iz] +
+                1.0 / η[$ix + 1, $iy, $iz + 1] +
+                1.0 / η[$ix + 1, $iy + 1, $iz + 1]
             ) * 4.0
         ),
     )
@@ -510,7 +510,7 @@ end
     _dx::T,
     _dy::T,
     _dz::T,
-) where T
+) where {T}
     # Compute pressure
     if (ix ≤ size(P, 1) && iy ≤ size(P, 2) && iz ≤ size(P, 3))
         P[ix, iy, iz] =
@@ -615,22 +615,58 @@ macro av_zi_ρg(ix, iy, iz)
 end
 
 macro harm_xi_dτ_Rho(ix, iy, iz)
-    return esc(:(1.0/(1.0/dτ_Rho[$ix, $iy + 1, $iz + 1] +1.0/ dτ_Rho[$ix + 1, $iy + 1, $iz + 1]) * 2.0))
+    return esc(
+        :(
+            1.0 / (
+                1.0 / dτ_Rho[$ix, $iy + 1, $iz + 1] +
+                1.0 / dτ_Rho[$ix + 1, $iy + 1, $iz + 1]
+            ) * 2.0
+        ),
+    )
 end
 macro harm_yi_dτ_Rho(ix, iy, iz)
-    return esc(:(1.0/(1.0/dτ_Rho[$ix + 1, $iy, $iz + 1] + 1.0/dτ_Rho[$ix + 1, $iy + 1, $iz + 1]) * 2.0))
+    return esc(
+        :(
+            1.0 / (
+                1.0 / dτ_Rho[$ix + 1, $iy, $iz + 1] +
+                1.0 / dτ_Rho[$ix + 1, $iy + 1, $iz + 1]
+            ) * 2.0
+        ),
+    )
 end
 macro harm_zi_dτ_Rho(ix, iy, iz)
-    return esc(:(1.0/(1.0/dτ_Rho[$ix + 1, $iy + 1, $iz] + 1.0/dτ_Rho[$ix + 1, $iy + 1, $iz + 1]) * 2.0))
+    return esc(
+        :(
+            1.0 / (
+                1.0 / dτ_Rho[$ix + 1, $iy + 1, $iz] +
+                1.0 / dτ_Rho[$ix + 1, $iy + 1, $iz + 1]
+            ) * 2.0
+        ),
+    )
 end
 macro harm_xi_ρg(ix, iy, iz)
-    return esc(:(1.0/(1.0/fx[$ix, $iy + 1, $iz + 1] + 1.0/fx[$ix + 1, $iy + 1, $iz + 1]) * 2.0))
+    return esc(
+        :(
+            1.0 / (1.0 / fx[$ix, $iy + 1, $iz + 1] + 1.0 / fx[$ix + 1, $iy + 1, $iz + 1]) *
+            2.0
+        ),
+    )
 end
 macro harm_yi_ρg(ix, iy, iz)
-    return esc(:(1.0/(1.0/fy[$ix + 1, $iy, $iz + 1] + 1.0/fy[$ix + 1, $iy + 1, $iz + 1]) * 2.0))
+    return esc(
+        :(
+            1.0 / (1.0 / fy[$ix + 1, $iy, $iz + 1] + 1.0 / fy[$ix + 1, $iy + 1, $iz + 1]) *
+            2.0
+        ),
+    )
 end
 macro harm_zi_ρg(ix, iy, iz)
-    return esc(:(1.0/(1.0/fz[$ix + 1, $iy + 1, $iz] + 1.0/fz[$ix + 1, $iy + 1, $iz + 1]) * 2.0))
+    return esc(
+        :(
+            1.0 / (1.0 / fz[$ix + 1, $iy + 1, $iz] + 1.0 / fz[$ix + 1, $iy + 1, $iz + 1]) *
+            2.0
+        ),
+    )
 end
 
 @parallel_indices (ix, iy, iz) function compute_V!(
@@ -657,7 +693,7 @@ end
     ny_2::T,
     nz_1::T,
     nz_2::T,
-) where T
+) where {T}
     if (ix ≤ nx_1) && (iy ≤ ny_2) && (iz ≤ nz_2)
         Vx[ix + 1, iy + 1, iz + 1] =
             Vx[ix + 1, iy + 1, iz + 1] +
@@ -706,13 +742,28 @@ macro av_zi_ρg(ix, iy, iz)
 end
 
 macro harm_xi_ρg(ix, iy, iz)
-    return esc(:(1.0/(1.0/fx[$ix, $iy + 1, $iz + 1] + 1.0/fx[$ix + 1, $iy + 1, $iz + 1]) * 2.0))
+    return esc(
+        :(
+            1.0 / (1.0 / fx[$ix, $iy + 1, $iz + 1] + 1.0 / fx[$ix + 1, $iy + 1, $iz + 1]) *
+            2.0
+        ),
+    )
 end
 macro harm_yi_ρg(ix, iy, iz)
-    return esc(:(1.0/(1.0/fy[$ix + 1, $iy, $iz + 1] + 1.0/fy[$ix + 1, $iy + 1, $iz + 1]) * 2.0))
+    return esc(
+        :(
+            1.0 / (1.0 / fy[$ix + 1, $iy, $iz + 1] + 1.0 / fy[$ix + 1, $iy + 1, $iz + 1]) *
+            2.0
+        ),
+    )
 end
 macro harm_zi_ρg(ix, iy, iz)
-    return esc(:(1.0/(1.0/fz[$ix + 1, $iy + 1, $iz] + 1.0/fz[$ix + 1, $iy + 1, $iz + 1]) * 2.0))
+    return esc(
+        :(
+            1.0 / (1.0 / fz[$ix + 1, $iy + 1, $iz] + 1.0 / fz[$ix + 1, $iy + 1, $iz + 1]) *
+            2.0
+        ),
+    )
 end
 
 @parallel_indices (ix, iy, iz) function compute_Res!(
@@ -736,7 +787,7 @@ end
     _dx::T,
     _dy::T,
     _dz::T,
-) where T
+) where {T}
     if (ix ≤ size(∇V, 1)) && (iy ≤ size(∇V, 2)) && (iz ≤ size(∇V, 3))
         ∇V[ix, iy, iz] =
             _dx * (Vx[ix + 1, iy, iz] - Vx[ix, iy, iz]) +
@@ -770,8 +821,6 @@ end
 
     return nothing
 end
-
-
 
 ## BOUNDARY CONDITIONS 
 
@@ -859,17 +908,35 @@ function solve!(
     norm_∇V = Float64[]
 
     # residual lengths
-    _sqrt_len_Rx_g = 1.0 / √(((nx-2-1)*igg.dims[1]+2)*((ny-2-2)*igg.dims[2]+2)*((nz-2-2)*igg.dims[3]+2))
-    _sqrt_len_Ry_g = 1.0 / √(((nx-2-2)*igg.dims[1]+2)*((ny-2-1)*igg.dims[2]+2)*((nz-2-2)*igg.dims[3]+2))
-    _sqrt_len_Rz_g = 1.0 / √(((nx-2-2)*igg.dims[1]+2)*((ny-2-2)*igg.dims[2]+2)*((nz-2-1)*igg.dims[3]+2))
-    _sqrt_len_∇V_g = 1.0 / √(((nx-2  )*igg.dims[1]+2)*((ny-2  )*igg.dims[2]+2)*((nz-2  )*igg.dims[3]+2))
-     
+    _sqrt_len_Rx_g =
+        1.0 / √(
+            ((nx - 2 - 1) * igg.dims[1] + 2) *
+            ((ny - 2 - 2) * igg.dims[2] + 2) *
+            ((nz - 2 - 2) * igg.dims[3] + 2),
+        )
+    _sqrt_len_Ry_g =
+        1.0 / √(
+            ((nx - 2 - 2) * igg.dims[1] + 2) *
+            ((ny - 2 - 1) * igg.dims[2] + 2) *
+            ((nz - 2 - 2) * igg.dims[3] + 2),
+        )
+    _sqrt_len_Rz_g =
+        1.0 / √(
+            ((nx - 2 - 2) * igg.dims[1] + 2) *
+            ((ny - 2 - 2) * igg.dims[2] + 2) *
+            ((nz - 2 - 1) * igg.dims[3] + 2),
+        )
+    _sqrt_len_∇V_g =
+        1.0 / √(
+            ((nx - 2) * igg.dims[1] + 2) *
+            ((ny - 2) * igg.dims[2] + 2) *
+            ((nz - 2) * igg.dims[3] + 2),
+        )
+
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
-        
         wtime0 += @elapsed begin
-
             @parallel compute_P_τ!(
                 P,
                 τxx,

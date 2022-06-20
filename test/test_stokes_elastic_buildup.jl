@@ -1,9 +1,7 @@
 push!(LOAD_PATH, "..")
 
 using Test
-using ParallelStencil
 using JustRelax
-using ParallelStencil.FiniteDifferences2D
 
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)

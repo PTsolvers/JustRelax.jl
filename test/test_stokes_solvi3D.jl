@@ -1,8 +1,6 @@
 push!(LOAD_PATH, "..")
 
 using Test
-using ParallelStencil
-using ImplicitGlobalGrid
 using JustRelax
 
 # setup ParallelStencil.jl environment

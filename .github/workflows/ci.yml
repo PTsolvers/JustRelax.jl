@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.7.2'
+          - '1.6'
           #- 'nightly'
         os:
           - ubuntu-latest
@@ -37,4 +37,7 @@ jobs:
             ${{ runner.os }}-test-
             ${{ runner.os }}-
       - uses: julia-actions/julia-buildpkg@latest
+      - name: Use ParallelStencil from master branch
+        run: |
+          julia  -e 'using Pkg;Pkg.add(url="https://github.com/omlins/ParallelStencil.jl.git", rev="main")'
       - uses: julia-actions/julia-runtest@latest

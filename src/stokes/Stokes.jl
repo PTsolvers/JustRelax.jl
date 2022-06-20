@@ -22,45 +22,45 @@ end
 ## 2D KERNELS
 
 @parallel function compute_iter_params!(
-    dτ_Rho::AbstractArray{eltype(PTArray),2},
-    Gdτ::AbstractArray{eltype(PTArray),2},
-    Musτ::AbstractArray{eltype(PTArray),2},
+    dτ_Rho::AbstractArray{T,2},
+    Gdτ::AbstractArray{T,2},
+    Musτ::AbstractArray{T,2},
     Vpdτ::Real,
     Re::Real,
     r::Real,
     max_lxy::Real,
-)
+) where T
     @all(dτ_Rho) = Vpdτ * max_lxy / Re / @all(Musτ)
     @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + 2.0)
     return nothing
 end
 
 @parallel function compute_P!(
-    ∇V::AbstractArray{eltype(PTArray),2},
-    P::AbstractArray{eltype(PTArray),2},
-    Vx::AbstractArray{eltype(PTArray),2},
-    Vy::AbstractArray{eltype(PTArray),2},
-    Gdτ::AbstractArray{eltype(PTArray),2},
-    r::eltype(AbstractArray),
-    dx::eltype(AbstractArray),
-    dy::eltype(AbstractArray),
-)
+    ∇V::AbstractArray{T,2},
+    P::AbstractArray{T,2},
+    Vx::AbstractArray{T,2},
+    Vy::AbstractArray{T,2},
+    Gdτ::AbstractArray{T,2},
+    r::T,
+    dx::T,
+    dy::T,
+) where T
     @all(∇V) = @d_xa(Vx) / dx + @d_ya(Vy) / dy
     @all(P) = @all(P) - r * @all(Gdτ) * @all(∇V)
     return nothing
 end
 
 @parallel function compute_τ!(
-    τxx::AbstractArray{eltype(PTArray),2},
-    τyy::AbstractArray{eltype(PTArray),2},
-    τxy::AbstractArray{eltype(PTArray),2},
-    Vx::AbstractArray{eltype(PTArray),2},
-    Vy::AbstractArray{eltype(PTArray),2},
-    η::AbstractArray{eltype(PTArray),2},
-    Gdτ::AbstractArray{eltype(PTArray),2},
-    dx::Real,
-    dy::Real,
-)
+    τxx::AbstractArray{T,2},
+    τyy::AbstractArray{T,2},
+    τxy::AbstractArray{T,2},
+    Vx::AbstractArray{T,2},
+    Vy::AbstractArray{T,2},
+    η::AbstractArray{T,2},
+    Gdτ::AbstractArray{T,2},
+    dx::T,
+    dy::T,
+) where T
     @all(τxx) =
         (@all(τxx) + 2.0 * @all(Gdτ) * @d_xa(Vx) / dx) / (@all(Gdτ) / @all(η) + 1.0)
     @all(τyy) =
@@ -72,19 +72,19 @@ end
 end
 
 @parallel function compute_dV!(
-    Rx::AbstractArray{eltype(PTArray),2},
-    Ry::AbstractArray{eltype(PTArray),2},
-    dVx::AbstractArray{eltype(PTArray),2},
-    dVy::AbstractArray{eltype(PTArray),2},
-    P::AbstractArray{eltype(PTArray),2},
-    τxx::AbstractArray{eltype(PTArray),2},
-    τyy::AbstractArray{eltype(PTArray),2},
-    τxy::AbstractArray{eltype(PTArray),2},
-    dτ_Rho::AbstractArray{eltype(PTArray),2},
+    Rx::AbstractArray{T,2},
+    Ry::AbstractArray{T,2},
+    dVx::AbstractArray{T,2},
+    dVy::AbstractArray{T,2},
+    P::AbstractArray{T,2},
+    τxx::AbstractArray{T,2},
+    τyy::AbstractArray{T,2},
+    τxy::AbstractArray{T,2},
+    dτ_Rho::AbstractArray{T,2},
     ρg::Nothing,
-    dx::Real,
-    dy::Real,
-)
+    dx::T,
+    dy::T,
+) where T
     @all(Rx) = @d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx
     @all(Ry) = @d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy
     @all(dVx) = @harm_xi(dτ_Rho) * @all(Rx)
@@ -93,19 +93,19 @@ end
 end
 
 @parallel function compute_dV!(
-    Rx::AbstractArray{eltype(PTArray),2},
-    Ry::AbstractArray{eltype(PTArray),2},
-    dVx::AbstractArray{eltype(PTArray),2},
-    dVy::AbstractArray{eltype(PTArray),2},
-    P::AbstractArray{eltype(PTArray),2},
-    τxx::AbstractArray{eltype(PTArray),2},
-    τyy::AbstractArray{eltype(PTArray),2},
-    τxy::AbstractArray{eltype(PTArray),2},
-    dτ_Rho::AbstractArray{eltype(PTArray),2},
-    ρg::AbstractArray{eltype(PTArray),2},
-    dx::Real,
-    dy::Real,
-)
+    Rx::AbstractArray{T,2},
+    Ry::AbstractArray{T,2},
+    dVx::AbstractArray{T,2},
+    dVy::AbstractArray{T,2},
+    P::AbstractArray{T,2},
+    τxx::AbstractArray{T,2},
+    τyy::AbstractArray{T,2},
+    τxy::AbstractArray{T,2},
+    dτ_Rho::AbstractArray{T,2},
+    ρg::AbstractArray{T,2},
+    dx::T,
+    dy::T,
+) where T
     @all(Rx) = @d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx
     @all(Ry) = @d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy - @harm_yi(ρg)
     @all(dVx) = @harm_xi(dτ_Rho) * @all(Rx)
@@ -114,11 +114,11 @@ end
 end
 
 @parallel function compute_V!(
-    Vx::AbstractArray{eltype(PTArray),2},
-    Vy::AbstractArray{eltype(PTArray),2},
-    dVx::AbstractArray{eltype(PTArray),2},
-    dVy::AbstractArray{eltype(PTArray),2},
-)
+    Vx::AbstractArray{T,2},
+    Vy::AbstractArray{T,2},
+    dVx::AbstractArray{T,2},
+    dVy::AbstractArray{T,2},
+) where T
     @inn(Vx) = @inn(Vx) + @all(dVx)
     @inn(Vy) = @inn(Vy) + @all(dVy)
     return nothing

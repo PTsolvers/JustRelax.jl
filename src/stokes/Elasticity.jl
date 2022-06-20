@@ -10,15 +10,15 @@ end
     dτ_Rho::AbstractArray,
     Gdτ::AbstractArray,
     ητ::AbstractArray,
-    Vpdτ::Real,
-    G::Real,
-    dt::Real,
-    Re::Real,
-    r::Real,
-    max_li::Real,
-)
-    @all(dτ_Rho) = Vpdτ * max_li / Re / (1.0 / (1.0 / @all(ητ) + 1.0 / (G * dt)))
-    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + 2)
+    Vpdτ::T,
+    G::T,
+    dt::T,
+    Re::T,
+    r::T,
+    max_li::T,
+) where T
+    @all(dτ_Rho) = Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (G * dt)))
+    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
     return nothing
 end
 
@@ -43,17 +43,17 @@ export solve!
 ## 2D ELASTIC KERNELS
 
 @parallel function compute_dV_elastic!(
-    dVx::AbstractArray{eltype(PTArray),2},
-    dVy::AbstractArray{eltype(PTArray),2},
-    P::AbstractArray{eltype(PTArray),2},
-    τxx::AbstractArray{eltype(PTArray),2},
-    τyy::AbstractArray{eltype(PTArray),2},
-    τxy::AbstractArray{eltype(PTArray),2},
-    dτ_Rho::AbstractArray{eltype(PTArray),2},
-    ρg::AbstractArray{eltype(PTArray),2},
-    dx::Real,
-    dy::Real,
-)
+    dVx::AbstractArray{T,2},
+    dVy::AbstractArray{T,2},
+    P::AbstractArray{T,2},
+    τxx::AbstractArray{T,2},
+    τyy::AbstractArray{T,2},
+    τxy::AbstractArray{T,2},
+    dτ_Rho::AbstractArray{T,2},
+    ρg::AbstractArray{T,2},
+    dx::T,
+    dy::T,
+) where T
     @all(dVx) = (@d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx) * @harm_xi(dτ_Rho)
     @all(dVy) =
         (@d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy - @harm_yi(ρg)) * @harm_yi(dτ_Rho)
@@ -61,29 +61,29 @@ export solve!
 end
 
 @parallel function compute_Res!(
-    Rx::AbstractArray{eltype(PTArray),2},
-    Ry::AbstractArray{eltype(PTArray),2},
-    P::AbstractArray{eltype(PTArray),2},
-    τxx::AbstractArray{eltype(PTArray),2},
-    τyy::AbstractArray{eltype(PTArray),2},
-    τxy::AbstractArray{eltype(PTArray),2},
-    ρg::AbstractArray{eltype(PTArray),2},
-    dx::Real,
-    dy::Real,
-)
+    Rx::AbstractArray{T,2},
+    Ry::AbstractArray{T,2},
+    P::AbstractArray{T,2},
+    τxx::AbstractArray{T,2},
+    τyy::AbstractArray{T,2},
+    τxy::AbstractArray{T,2},
+    ρg::AbstractArray{T,2},
+    dx::T,
+    dy::T,
+) where T
     @all(Rx) = @d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx
     @all(Ry) = @d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy - @harm_yi(ρg)
     return nothing
 end
 
 @parallel function update_τ_o!(
-    τxx_o::AbstractArray{eltype(PTArray),2},
-    τyy_o::AbstractArray{eltype(PTArray),2},
-    τxy_o::AbstractArray{eltype(PTArray),2},
-    τxx::AbstractArray{eltype(PTArray),2},
-    τyy::AbstractArray{eltype(PTArray),2},
-    τxy::AbstractArray{eltype(PTArray),2},
-)
+    τxx_o::AbstractArray{T,2},
+    τyy_o::AbstractArray{T,2},
+    τxy_o::AbstractArray{T,2},
+    τxx::AbstractArray{T,2},
+    τyy::AbstractArray{T,2},
+    τxy::AbstractArray{T,2},
+) where T
     @all(τxx_o) = @all(τxx)
     @all(τyy_o) = @all(τyy)
     @all(τxy_o) = @all(τxy)
@@ -107,33 +107,33 @@ macro harm_Gr()
     return esc(:(@harm(Gdτ) / (G * dt)))
 end
 @parallel function compute_τ!(
-    τxx::AbstractArray{eltype(PTArray),2},
-    τyy::AbstractArray{eltype(PTArray),2},
-    τxy::AbstractArray{eltype(PTArray),2},
-    τxx_o::AbstractArray{eltype(PTArray),2},
-    τyy_o::AbstractArray{eltype(PTArray),2},
-    τxy_o::AbstractArray{eltype(PTArray),2},
-    Gdτ::AbstractArray{eltype(PTArray),2},
-    Vx::AbstractArray{eltype(PTArray),2},
-    Vy::AbstractArray{eltype(PTArray),2},
-    η::AbstractArray{eltype(PTArray),2},
-    G::Real,
-    dt::Real,
-    dx::Real,
-    dy::Real,
-)
+    τxx::AbstractArray{T,2},
+    τyy::AbstractArray{T,2},
+    τxy::AbstractArray{T,2},
+    τxx_o::AbstractArray{T,2},
+    τyy_o::AbstractArray{T,2},
+    τxy_o::AbstractArray{T,2},
+    Gdτ::AbstractArray{T,2},
+    Vx::AbstractArray{T,2},
+    Vy::AbstractArray{T,2},
+    η::AbstractArray{T,2},
+    G::T,
+    dt::T,
+    dx::T,
+    dy::T,
+) where T
     @all(τxx) =
-        (@all(τxx) + @all(τxx_o) * @Gr() + 2.0 * @all(Gdτ) * (@d_xa(Vx) / dx)) /
-        (1.0 + @all(Gdτ) / @all(η) + @Gr())
+        (@all(τxx) + @all(τxx_o) * @Gr() + T(2) * @all(Gdτ) * (@d_xa(Vx) / dx)) /
+        (one(T) + @all(Gdτ) / @all(η) + @Gr())
     @all(τyy) =
-        (@all(τyy) + @all(τyy_o) * @Gr() + 2.0 * @all(Gdτ) * (@d_ya(Vy) / dy)) /
-        (1.0 + @all(Gdτ) / @all(η) + @Gr())
+        (@all(τyy) + @all(τyy_o) * @Gr() + T(2) * @all(Gdτ) * (@d_ya(Vy) / dy)) /
+        (one(T) + @all(Gdτ) / @all(η) + @Gr())
     @all(τxy) =
         (
             @all(τxy) +
             @all(τxy_o) * @harm_Gr() +
-            2.0 * @harm(Gdτ) * (0.5 * (@d_yi(Vx) / dy + @d_xi(Vy) / dx))
-        ) / (1.0 + @harm(Gdτ) / @harm(η) + @harm_Gr())
+            T(2) * @harm(Gdτ) * (0.5 * (@d_yi(Vx) / dy + @d_xi(Vy) / dx))
+        ) / (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr())
     return nothing
 end
 
@@ -175,9 +175,9 @@ function JustRelax.solve!(
     # PT numerical coefficients
     @parallel elastic_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, G, dt, Re, r, max_li)
 
-    _sqrt_leng_Rx = 1.0 / sqrt(length(Rx))
-    _sqrt_leng_Ry = 1.0 / sqrt(length(Ry))
-    _sqrt_leng_∇V = 1.0 / sqrt(length(∇V))
+    _sqrt_leng_Rx = one(T) / sqrt(length(Rx))
+    _sqrt_leng_Ry = one(T) / sqrt(length(Ry))
+    _sqrt_leng_∇V = one(T) / sqrt(length(∇V))
 
     # errors
     err = 2 * ϵ
@@ -267,26 +267,26 @@ import JustRelax: compute_maxloc!
 export solve!, pureshear_bc!, smooth!
 
 @parallel function JustRelax.smooth!(
-    A2::AbstractArray{eltype(PTArray),3}, A::AbstractArray{eltype(PTArray),3}, fact::Real
-)
-    @inn(A2) = @inn(A) + 1.0 / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
+    A2::AbstractArray{T,3}, A::AbstractArray{T,3}, fact::T
+) where T
+    @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
     return nothing
 end
 
 @parallel_indices (ix, iy, iz) function update_τ_o!(
-    τxx_o::AbstractArray{eltype(PTArray),3},
-    τyy_o::AbstractArray{eltype(PTArray),3},
-    τzz_o::AbstractArray{eltype(PTArray),3},
-    τxy_o::AbstractArray{eltype(PTArray),3},
-    τxz_o::AbstractArray{eltype(PTArray),3},
-    τyz_o::AbstractArray{eltype(PTArray),3},
-    τxx::AbstractArray{eltype(PTArray),3},
-    τyy::AbstractArray{eltype(PTArray),3},
-    τzz::AbstractArray{eltype(PTArray),3},
-    τxy::AbstractArray{eltype(PTArray),3},
-    τxz::AbstractArray{eltype(PTArray),3},
-    τyz::AbstractArray{eltype(PTArray),3},
-)
+    τxx_o::AbstractArray{T,3},
+    τyy_o::AbstractArray{T,3},
+    τzz_o::AbstractArray{T,3},
+    τxy_o::AbstractArray{T,3},
+    τxz_o::AbstractArray{T,3},
+    τyz_o::AbstractArray{T,3},
+    τxx::AbstractArray{T,3},
+    τyy::AbstractArray{T,3},
+    τzz::AbstractArray{T,3},
+    τxy::AbstractArray{T,3},
+    τxz::AbstractArray{T,3},
+    τyz::AbstractArray{T,3},
+) where T
     if (ix ≤ size(τxx, 1) && iy ≤ size(τxx, 2) && iz ≤ size(τxx, 3))
         τxx_o[ix, iy, iz] = τxx[ix, iy, iz]
     end
@@ -486,31 +486,31 @@ macro harm_yzi_η(ix, iy, iz)
 end
 
 @parallel_indices (ix, iy, iz) function compute_P_τ!(
-    P::AbstractArray{eltype(PTArray),3},
-    τxx::AbstractArray{eltype(PTArray),3},
-    τyy::AbstractArray{eltype(PTArray),3},
-    τzz::AbstractArray{eltype(PTArray),3},
-    τxy::AbstractArray{eltype(PTArray),3},
-    τxz::AbstractArray{eltype(PTArray),3},
-    τyz::AbstractArray{eltype(PTArray),3},
-    τxx_o::AbstractArray{eltype(PTArray),3},
-    τyy_o::AbstractArray{eltype(PTArray),3},
-    τzz_o::AbstractArray{eltype(PTArray),3},
-    τxy_o::AbstractArray{eltype(PTArray),3},
-    τxz_o::AbstractArray{eltype(PTArray),3},
-    τyz_o::AbstractArray{eltype(PTArray),3},
-    Vx::AbstractArray{eltype(PTArray),3},
-    Vy::AbstractArray{eltype(PTArray),3},
-    Vz::AbstractArray{eltype(PTArray),3},
-    η::AbstractArray{eltype(PTArray),3},
-    Gdτ::AbstractArray{eltype(PTArray),3},
-    r::Real,
-    G::Real,
-    dt::Real,
-    _dx::Real,
-    _dy::Real,
-    _dz::Real,
-)
+    P::AbstractArray{T,3},
+    τxx::AbstractArray{T,3},
+    τyy::AbstractArray{T,3},
+    τzz::AbstractArray{T,3},
+    τxy::AbstractArray{T,3},
+    τxz::AbstractArray{T,3},
+    τyz::AbstractArray{T,3},
+    τxx_o::AbstractArray{T,3},
+    τyy_o::AbstractArray{T,3},
+    τzz_o::AbstractArray{T,3},
+    τxy_o::AbstractArray{T,3},
+    τxz_o::AbstractArray{T,3},
+    τyz_o::AbstractArray{T,3},
+    Vx::AbstractArray{T,3},
+    Vy::AbstractArray{T,3},
+    Vz::AbstractArray{T,3},
+    η::AbstractArray{T,3},
+    Gdτ::AbstractArray{T,3},
+    r::T,
+    G::T,
+    dt::T,
+    _dx::T,
+    _dy::T,
+    _dz::T,
+) where T
     # Compute pressure
     if (ix ≤ size(P, 1) && iy ≤ size(P, 2) && iz ≤ size(P, 3))
         P[ix, iy, iz] =
@@ -529,8 +529,8 @@ end
             (
                 τxx[ix, iy, iz] / @inn_yz_Gdτ(ix, iy, iz) +
                 τxx_o[ix, iy, iz] / G / dt +
-                2.0 * (_dx * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix, iy + 1, iz + 1]))
-            ) / (1.0 / @inn_yz_Gdτ(ix, iy, iz) + 1 / @inn_yz_η(ix, iy, iz))
+                T(2) * (_dx * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix, iy + 1, iz + 1]))
+            ) / (one(T) / @inn_yz_Gdτ(ix, iy, iz) + one(T) / @inn_yz_η(ix, iy, iz))
     end
     # Compute τ_yy
     if (ix ≤ size(τyy, 1) && iy ≤ size(τyy, 2) && iz ≤ size(τyy, 3))
@@ -538,8 +538,8 @@ end
             (
                 τyy[ix, iy, iz] / @inn_xz_Gdτ(ix, iy, iz) +
                 τyy_o[ix, iy, iz] / G / dt +
-                2.0 * (_dy * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy, iz + 1]))
-            ) / (1.0 / @inn_xz_Gdτ(ix, iy, iz) + 1.0 / @inn_xz_η(ix, iy, iz))
+                T(2) * (_dy * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy, iz + 1]))
+            ) / (one(T) / @inn_xz_Gdτ(ix, iy, iz) + one(T) / @inn_xz_η(ix, iy, iz))
     end
     # Compute τ_zz
     if (ix ≤ size(τzz, 1) && iy ≤ size(τzz, 2) && iz ≤ size(τzz, 3))
@@ -547,8 +547,8 @@ end
             (
                 τzz[ix, iy, iz] / @inn_xy_Gdτ(ix, iy, iz) +
                 τzz_o[ix, iy, iz] / G / dt +
-                2.0 * (_dz * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy + 1, iz]))
-            ) / (1.0 / @inn_xy_Gdτ(ix, iy, iz) + 1.0 / @inn_xy_η(ix, iy, iz))
+                T(2) * (_dz * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy + 1, iz]))
+            ) / (one(T) / @inn_xy_Gdτ(ix, iy, iz) + one(T) / @inn_xy_η(ix, iy, iz))
     end
     # Compute τ_xy
     if (ix ≤ size(τxy, 1) && iy ≤ size(τxy, 2) && iz ≤ size(τxy, 3))
@@ -556,13 +556,13 @@ end
             (
                 τxy[ix, iy, iz] / @harm_xyi_Gdτ(ix, iy, iz) +
                 τxy_o[ix, iy, iz] / G / dt +
-                2.0 * (
+                T(2) * (
                     0.5 * (
                         _dy * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy, iz + 1]) +
                         _dx * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix, iy + 1, iz + 1])
                     )
                 )
-            ) / (1.0 / @harm_xyi_Gdτ(ix, iy, iz) + 1.0 / @harm_xyi_η(ix, iy, iz))
+            ) / (one(T) / @harm_xyi_Gdτ(ix, iy, iz) + one(T) / @harm_xyi_η(ix, iy, iz))
     end
     # Compute τ_xz
     if (ix ≤ size(τxz, 1) && iy ≤ size(τxz, 2) && iz ≤ size(τxz, 3))
@@ -570,13 +570,13 @@ end
             (
                 τxz[ix, iy, iz] / @harm_xzi_Gdτ(ix, iy, iz) +
                 τxz_o[ix, iy, iz] / G / dt +
-                2.0 * (
+                T(2) * (
                     0.5 * (
                         _dz * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy + 1, iz]) +
                         _dx * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix, iy + 1, iz + 1])
                     )
                 )
-            ) / (1.0 / @harm_xzi_Gdτ(ix, iy, iz) + 1.0 / @harm_xzi_η(ix, iy, iz))
+            ) / (one(T) / @harm_xzi_Gdτ(ix, iy, iz) + one(T) / @harm_xzi_η(ix, iy, iz))
     end
     # Compute τ_yz
     if (ix ≤ size(τyz, 1) && iy ≤ size(τyz, 2) && iz ≤ size(τyz, 3))
@@ -584,13 +584,13 @@ end
             (
                 τyz[ix, iy, iz] / @harm_yzi_Gdτ(ix, iy, iz) +
                 τyz_o[ix, iy, iz] / G / dt +
-                2.0 * (
+                T(2) * (
                     0.5 * (
                         _dz * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy + 1, iz]) +
                         _dy * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy, iz + 1])
                     )
                 )
-            ) / (1.0 / @harm_yzi_Gdτ(ix, iy, iz) + 1.0 / @harm_yzi_η(ix, iy, iz))
+            ) / (one(T) / @harm_yzi_Gdτ(ix, iy, iz) + one(T) / @harm_yzi_η(ix, iy, iz))
     end
     return nothing
 end
@@ -634,30 +634,30 @@ macro harm_zi_ρg(ix, iy, iz)
 end
 
 @parallel_indices (ix, iy, iz) function compute_V!(
-    Vx::AbstractArray{eltype(PTArray),3},
-    Vy::AbstractArray{eltype(PTArray),3},
-    Vz::AbstractArray{eltype(PTArray),3},
-    P::AbstractArray{eltype(PTArray),3},
-    fx::AbstractArray{eltype(PTArray),3},
-    fy::AbstractArray{eltype(PTArray),3},
-    fz::AbstractArray{eltype(PTArray),3},
-    τxx::AbstractArray{eltype(PTArray),3},
-    τyy::AbstractArray{eltype(PTArray),3},
-    τzz::AbstractArray{eltype(PTArray),3},
-    τxy::AbstractArray{eltype(PTArray),3},
-    τxz::AbstractArray{eltype(PTArray),3},
-    τyz::AbstractArray{eltype(PTArray),3},
-    dτ_Rho::AbstractArray{eltype(PTArray),3},
-    _dx::Real,
-    _dy::Real,
-    _dz::Real,
-    nx_1::Real,
-    nx_2::Real,
-    ny_1::Real,
-    ny_2::Real,
-    nz_1::Real,
-    nz_2::Real,
-)
+    Vx::AbstractArray{T,3},
+    Vy::AbstractArray{T,3},
+    Vz::AbstractArray{T,3},
+    P::AbstractArray{T,3},
+    fx::AbstractArray{T,3},
+    fy::AbstractArray{T,3},
+    fz::AbstractArray{T,3},
+    τxx::AbstractArray{T,3},
+    τyy::AbstractArray{T,3},
+    τzz::AbstractArray{T,3},
+    τxy::AbstractArray{T,3},
+    τxz::AbstractArray{T,3},
+    τyz::AbstractArray{T,3},
+    dτ_Rho::AbstractArray{T,3},
+    _dx::T,
+    _dy::T,
+    _dz::T,
+    nx_1::T,
+    nx_2::T,
+    ny_1::T,
+    ny_2::T,
+    nz_1::T,
+    nz_2::T,
+) where T
     if (ix ≤ nx_1) && (iy ≤ ny_2) && (iz ≤ nz_2)
         Vx[ix + 1, iy + 1, iz + 1] =
             Vx[ix + 1, iy + 1, iz + 1] +
@@ -716,27 +716,27 @@ macro harm_zi_ρg(ix, iy, iz)
 end
 
 @parallel_indices (ix, iy, iz) function compute_Res!(
-    ∇V::AbstractArray{eltype(PTArray),3},
-    Rx::AbstractArray{eltype(PTArray),3},
-    Ry::AbstractArray{eltype(PTArray),3},
-    Rz::AbstractArray{eltype(PTArray),3},
-    fx::AbstractArray{eltype(PTArray),3},
-    fy::AbstractArray{eltype(PTArray),3},
-    fz::AbstractArray{eltype(PTArray),3},
-    Vx::AbstractArray{eltype(PTArray),3},
-    Vy::AbstractArray{eltype(PTArray),3},
-    Vz::AbstractArray{eltype(PTArray),3},
-    P::AbstractArray{eltype(PTArray),3},
-    τxx::AbstractArray{eltype(PTArray),3},
-    τyy::AbstractArray{eltype(PTArray),3},
-    τzz::AbstractArray{eltype(PTArray),3},
-    τxy::AbstractArray{eltype(PTArray),3},
-    τxz::AbstractArray{eltype(PTArray),3},
-    τyz::AbstractArray{eltype(PTArray),3},
-    _dx::Real,
-    _dy::Real,
-    _dz::Real,
-)
+    ∇V::AbstractArray{T,3},
+    Rx::AbstractArray{T,3},
+    Ry::AbstractArray{T,3},
+    Rz::AbstractArray{T,3},
+    fx::AbstractArray{T,3},
+    fy::AbstractArray{T,3},
+    fz::AbstractArray{T,3},
+    Vx::AbstractArray{T,3},
+    Vy::AbstractArray{T,3},
+    Vz::AbstractArray{T,3},
+    P::AbstractArray{T,3},
+    τxx::AbstractArray{T,3},
+    τyy::AbstractArray{T,3},
+    τzz::AbstractArray{T,3},
+    τxy::AbstractArray{T,3},
+    τxz::AbstractArray{T,3},
+    τyz::AbstractArray{T,3},
+    _dx::T,
+    _dy::T,
+    _dz::T,
+) where T
     if (ix ≤ size(∇V, 1)) && (iy ≤ size(∇V, 2)) && (iz ≤ size(∇V, 3))
         ∇V[ix, iy, iz] =
             _dx * (Vx[ix + 1, iy, iz] - Vx[ix, iy, iz]) +

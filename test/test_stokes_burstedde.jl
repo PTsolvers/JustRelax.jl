@@ -13,7 +13,7 @@ function check_convergence_case1()
     nx = 16
     ny = 16
     nz = 16
-    _, _, iters = burstedde(; nx=nx, ny=ny, nz=nz, init_MPI=false, finalize_MPI=false)
+    _, _, iters = burstedde(; nx=nx, ny=ny, nz=nz, init_MPI=true, finalize_MPI=true)
     iters_expected = (
         iter=10001,
         err_evo1=[

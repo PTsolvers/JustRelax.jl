@@ -11,6 +11,9 @@ using MPI
 include("topology/Topology.jl")
 include("MetaJustRelax.jl")
 include("stokes/MetaStokes.jl")
+include("thermal_diffusion/MetaDiffusion.jl")
+
+function solve!() end
 
 export PS_Setup, environment!, ps_reset!
 

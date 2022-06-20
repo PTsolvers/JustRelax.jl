@@ -6,21 +6,6 @@ function stress(τ::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
     return (τ.xx, τ.yy, τ.zz, τ.xy, τ.xz, τ.yz)
 end
 
-@parallel function smooth!(
-    A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real
-)
-    @inn(A2) = @inn(A) + 1.0 / 4.1 / fact * (@d2_xi(A) + @d2_yi(A))
-    return nothing
-end
-
-## DIMENSION AGNOSTIC KERNELS
-@parallel function compute_maxloc!(A::AbstractArray, B::AbstractArray)
-    @inn(A) = @maxloc(B)
-    return nothing
-end
-
-## 2D KERNELS
-
 @parallel function compute_iter_params!(
     dτ_Rho::AbstractArray{T,2},
     Gdτ::AbstractArray{T,2},
@@ -34,6 +19,39 @@ end
     @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + 2.0)
     return nothing
 end
+
+## DIMENSION AGNOSTIC KERNELS
+@parallel function compute_maxloc!(A::AbstractArray, B::AbstractArray)
+    @inn(A) = @maxloc(B)
+    return nothing
+end
+
+## 2D STOKES MODULE
+
+module Stokes2D
+
+using ParallelStencil
+using ParallelStencil.FiniteDifferences2D
+using JustRelax
+using LinearAlgebra
+using CUDA
+using Printf
+
+# using ..JustRelax: solve!
+import JustRelax: stress, compute_iter_params!, PTArray, Velocity, SymmetricTensor
+import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, Viscous
+import JustRelax: compute_maxloc!, solve!, pureshear_bc!
+
+export smooth, compute_P!, compute_V!, solve!
+
+@parallel function smooth!(
+    A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real
+)
+    @inn(A2) = @inn(A) + 1.0 / 4.1 / fact * (@d2_xi(A) + @d2_yi(A))
+    return nothing
+end
+
+## 2D KERNELS
 
 @parallel function compute_P!(
     ∇V::AbstractArray{T,2},
@@ -120,24 +138,6 @@ end
     @inn(Vx) = @inn(Vx) + @all(dVx)
     @inn(Vy) = @inn(Vy) + @all(dVy)
     return nothing
-end
-
-## BOUNDARY CONDITIONS 
-
-function pureshear_bc!(
-    stokes::StokesArrays, di::NTuple{2,T}, li::NTuple{2,T}, εbg
-) where {T}
-    # unpack
-    Vx, Vy = stokes.V.Vx, stokes.V.Vy
-    dx, dy = di
-    lx, ly = li
-    # Velocity pure shear boundary conditions
-    stokes.V.Vx .= PTArray([
-        -εbg * ((ix - 1) * dx - 0.5 * lx) for ix in 1:size(Vx, 1), iy in 1:size(Vx, 2)
-    ])
-    return stokes.V.Vy .= PTArray([
-        εbg * ((iy - 1) * dy - 0.5 * ly) for ix in 1:size(Vy, 1), iy in 1:size(Vy, 2)
-    ])
 end
 
 ## VISCOUS STOKES SOLVER 
@@ -228,4 +228,6 @@ function solve!(
         norm_Ry=norm_Ry,
         norm_∇V=norm_∇V,
     )
+end
+
 end

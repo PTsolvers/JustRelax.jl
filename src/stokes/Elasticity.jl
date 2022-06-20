@@ -16,7 +16,7 @@ end
     Re::T,
     r::T,
     max_li::T,
-) where {T, M}
+) where {T,M}
     @all(dτ_Rho) = Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (G * dt)))
     @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
     return nothing
@@ -510,7 +510,7 @@ end
     _dx::T,
     _dy::T,
     _dz::T,
-) where {T, M}
+) where {T,M}
     # Compute pressure
     if (ix ≤ size(P, 1) && iy ≤ size(P, 2) && iz ≤ size(P, 3))
         P[ix, iy, iz] =

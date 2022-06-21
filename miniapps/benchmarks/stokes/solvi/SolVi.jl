@@ -3,7 +3,7 @@ include("vizSolVi.jl")
 
 @parallel function smooth!(
     A2::AbstractArray{T,2}, A::AbstractArray{T,2}, fact::Real
-) where T
+) where {T}
     @inn(A2) = @inn(A) + 1.0 / 4.1 / fact * (@d2_xi(A) + @d2_yi(A))
     return nothing
 end

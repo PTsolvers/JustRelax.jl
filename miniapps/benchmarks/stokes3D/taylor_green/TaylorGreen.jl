@@ -89,7 +89,6 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     max_li = max(li...)
     xci, xvi = lazy_grid(di, li) # nodes at the center and vertices of the cells
 
-
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
     dt = Inf   # physical time step

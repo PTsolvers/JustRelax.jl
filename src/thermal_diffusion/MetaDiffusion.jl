@@ -13,13 +13,13 @@ function make_thermal_arrays!(ndim)
             $(flux2...)
             ResT::_T
 
-            function ThermalArrays(ni::NTuple{2,Integer})
-                nx, ny = ni
+            function ThermalArrays(ni::NTuple{1,Integer})
+                nx = ni[1]
                 T, T0, Told = @zeros(ni...), @zeros(ni...), @zeros(ni...)
                 qTx = @zeros(nx - 1)
                 qTx2 = @zeros(nx - 1)
-                ResT = @zeros((ni .- 2)...)
-                return new{typeof(T)}(T, T0, Told, qTx, qTy, qTx2, qTy2, ResT)
+                ResT = @zeros(nx - 2)
+                return new{typeof(T)}(T, T0, Told, qTx, qTx2, ResT)
             end
 
             function ThermalArrays(ni::NTuple{2,Integer})
@@ -66,7 +66,7 @@ function make_PTthermal_struct!()
                 Vpdτ = min(di...) * CFL
                 max_lxyz = max(li...)
                 max_lxyz2 = max_lxyz^2
-                Re = @. π + sqrt(π^2 + ρCp * max_lxyz2 / K / dt) # Numerical Reynolds number
+                Re = @. π + √(π * π + ρCp * max_lxyz2 / K / dt) # Numerical Reynolds number
                 θr_dτ = @. max_lxyz / Vpdτ / Re
                 dτ_ρ = @. Vpdτ * max_lxyz / K / Re
 

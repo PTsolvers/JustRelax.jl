@@ -37,12 +37,11 @@ using LinearAlgebra
 using CUDA
 using Printf
 
-# using ..JustRelax: solve!
 import JustRelax: stress, compute_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, Viscous
 import JustRelax: compute_maxloc!, solve!, pureshear_bc!
 
-export smooth, compute_P!, compute_V!, solve!
+export smooth!, compute_P!, compute_V!, solve!
 
 @parallel function smooth!(
     A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real

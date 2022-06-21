@@ -38,7 +38,7 @@ import JustRelax: stress, elastic_iter_params!, PTArray, Velocity, SymmetricTens
 import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic
 import JustRelax: compute_maxloc!, solve!
 
-import ..Stokes2D: compute_P!, compute_V!, smooth
+import ..Stokes2D: compute_P!, compute_V!, smooth!
 
 export solve!
 
@@ -901,7 +901,7 @@ function JustRelax.solve!(
     iter = 0
     cont = 0
     err_evo1 = Float64[]
-    err_evo2 = Float64[]
+    err_evo2 = Int64[]
     norm_Rx = Float64[]
     norm_Ry = Float64[]
     norm_Rz = Float64[]

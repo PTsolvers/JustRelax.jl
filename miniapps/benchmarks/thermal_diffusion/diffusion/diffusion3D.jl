@@ -1,25 +1,41 @@
-@parallel_indices (i, j) function init_T!(T, z)
-    if z[j] == maximum(z)
-        T[i, j] = 300.0
-    elseif z[j] == minimum(z)
-        T[i, j] = 3500.0
+using MPI
+
+@parallel_indices (i, j, k) function init_T!(T, z)
+    if z[k] == maximum(z)
+        T[i, j, k] = 300.0
+    elseif z[k] == minimum(z)
+        T[i, j, k] = 3500.0
     else
-        T[i, j] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
+        T[i, j, k] = z[k] * (1900.0 - 1600.0) / minimum(z) + 1600.0
     end
     return nothing
 end
 
-function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ=3.3e3, Cp=1.2e3, K=3.0)
+function diffusion_3D(;
+    nx=32,
+    ny=32,
+    nz=32,
+    lx=100e3,
+    ly=100e3,
+    lz=100e3,
+    ρ=3.3e3,
+    Cp=1.2e3,
+    K=3.0,
+    init_MPI=MPI.Initialized() ? false : true,
+    finalize_MPI=false,
+)
     kyr = 1e3 * 3600 * 24 * 365.25
     Myr = 1e6 * 3600 * 24 * 365.25
     ttot = 10 * Myr # total simulation time
     dt = 50 * kyr # physical time step
 
     # Physical domain
-    ni = (nx, ny)
-    li = (lx, ly)  # domain length in x- and y-
+    ni = (nx, ny, nz)
+    li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
-    xci, = lazy_grid(di, li; origin=(0, -ly)) # nodes at the center and vertices of the cells
+    xci, = lazy_grid(di, li; origin=(0, 0, -lz)) # nodes at the center and vertices of the cells
+
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
@@ -32,15 +48,17 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ=3.3e3, Cp=1.2e3, K=
     ρCp = @. Cp * ρ
     thermal_parameters = ThermalParameters(K, ρCp)
 
+    # Boundary conditions
     pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li)
-    thermal_bc = (flux_x=false, flux_y=false)
+    thermal_bc = (frontal=true, lateral=true)
 
-    @parallel (1:nx, 1:ny) init_T!(thermal.T, xci[2])
+    @parallel (1:nx, 1:ny, 1:nz) init_T!(thermal.T, xci[3])
     @parallel assign!(thermal.Told, thermal.T)
 
     t = 0.0
     it = 0
     nt = Int(ceil(ttot / dt))
+
     # Physical time loop
     local iters
     while it < nt
@@ -51,14 +69,17 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ=3.3e3, Cp=1.2e3, K=
             thermal_bc,
             ni,
             di,
+            igg,
             dt;
             iterMax=10e3,
             nout=1,
             verbose=false,
         )
-        it += 1
         t += dt
+        it += 1
     end
+
+    finalize_global_grid(; finalize_MPI=finalize_MPI)
 
     return (ni=ni, xci=xci, li=li, di=di), thermal, iters
 end

@@ -1,4 +1,17 @@
 export Geometry, IGG, lazy_grid, init_igg
+
+# MPI topology
+
+struct IGG{T,M}
+    me::T
+    dims::Vector{T}
+    nprocs::T
+    coords::Vector{T}
+    comm_cart::M
+end
+
+# Staggered grid
+
 struct Geometry{nDim}
     ni::NTuple{nDim,Integer}
     li::NTuple{nDim,Float64}
@@ -21,24 +34,16 @@ struct Geometry{nDim}
     end
 end
 
-struct IGG{T,M}
-    me::T
-    dims::Vector{T}
-    nprocs::T
-    coords::Vector{T}
-    comm_cart::M
-end
-
-# me, dims, nprocs, coords, comm_cart
-# = init_global_grid(nx, ny, nz) # init MPI
-
-function lazy_grid(di, li)
-    @assert length(di) == length(li)
-    nDim = Val(length(di))
+function lazy_grid(
+    di::NTuple{N,T1}, li::NTuple{N,T2}; origin=ntuple(_ -> zero(T1), Val(N))
+) where {N,T1,T2}
+    nDim = Val(N)
     # nodes at the center of the grid cells
-    xci = ntuple(i -> (di[i] / 2):di[i]:(li[i] - di[i] / 2), nDim)
+    xci = ntuple(
+        i -> (origin[i] + di[i] * 0.5):di[i]:(origin[i] + li[i] - di[i] * 0.5), nDim
+    )
     # nodes at the vertices of the grid cells
-    xvi = ntuple(i -> 0:di[i]:li[i], nDim)
+    xvi = ntuple(i -> origin[i]:di[i]:(origin[i] + li[i]), nDim)
 
     return xci, xvi
 end

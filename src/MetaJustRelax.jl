@@ -16,7 +16,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
     # call appropriate FD module
     Base.eval(@__MODULE__, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
-    eval(Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
+    Base.eval(Main, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
 
     # start ParallelStencil
     global PTArray

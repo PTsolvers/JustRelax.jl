@@ -266,12 +266,7 @@ import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
 
-export solve!, pureshear_bc!, smooth!
-
-@parallel function smooth!(A2::AbstractArray{T,3}, A::AbstractArray{T,3}, fact::T) where {T}
-    @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
-    return nothing
-end
+export solve!, pureshear_bc!
 
 @parallel_indices (ix, iy, iz) function update_τ_o!(
     τxx_o::AbstractArray{T,3},

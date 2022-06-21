@@ -1,4 +1,7 @@
-using ParallelStencil.FiniteDifferences3D
+@parallel function smooth!(A2::AbstractArray{T,3}, A::AbstractArray{T,3}, fact::T) where {T}
+    @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
+    return nothing
+end
 
 @parallel_indices (ix, iy, iz) function _viscosity!(η, ηi, rc, li, di)
     lx, ly, lz = li
@@ -22,7 +25,7 @@ function viscosity(ni, di, li, rc, η0, ηi; b_width=(1, 1, 1))
     η2 = deepcopy(η)
     for _ in 1:10
         @hide_communication b_width begin # communication/computation overlap
-            @parallel smooth!(η2, η, 1.0)
+            @parallel JustRelax.Elasticity3D.smooth!(η2, η, 1.0)
             η, η2 = η2, η
             update_halo!(η)
         end

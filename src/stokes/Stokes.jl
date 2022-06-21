@@ -41,14 +41,7 @@ import JustRelax: stress, compute_iter_params!, PTArray, Velocity, SymmetricTens
 import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, Viscous
 import JustRelax: compute_maxloc!, solve!, pureshear_bc!
 
-export smooth!, compute_P!, compute_V!, solve!
-
-@parallel function smooth!(
-    A2::AbstractArray{eltype(PTArray),2}, A::AbstractArray{eltype(PTArray),2}, fact::Real
-)
-    @inn(A2) = @inn(A) + 1.0 / 4.1 / fact * (@d2_xi(A) + @d2_yi(A))
-    return nothing
-end
+export compute_P!, compute_V!, solve!
 
 ## 2D KERNELS
 

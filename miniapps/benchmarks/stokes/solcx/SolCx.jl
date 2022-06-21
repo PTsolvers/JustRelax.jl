@@ -3,6 +3,13 @@ using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity
 # include plotting and error related functions
 include("vizSolCx.jl")
 
+@parallel function smooth!(
+    A2::AbstractArray{T,2}, A::AbstractArray{T,2}, fact::Real
+) where T
+    @inn(A2) = @inn(A) + 1.0 / 4.1 / fact * (@d2_xi(A) + @d2_yi(A))
+    return nothing
+end
+
 function solCx_viscosity(xci, ni; Δη=1e6)
     xc, yc = xci
     # make grid array (will be eaten by GC)

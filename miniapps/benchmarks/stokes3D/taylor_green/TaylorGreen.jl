@@ -1,4 +1,4 @@
-using ParallelStencil.FiniteDifferences3D
+using MPI
 
 # FVCA8 benchmark for the Stokes and Navier-Stokes
 #     equations with the TrioCFD code – benchmark session
@@ -84,11 +84,11 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     ni = (nx, ny, nz) # number of nodes in x- and y-
     lx = ly = lz = 1e0
     li = (lx, ly, lz)  # domain length in x- and y-
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
     max_li = max(li...)
     xci, xvi = lazy_grid(di, li) # nodes at the center and vertices of the cells
 
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time

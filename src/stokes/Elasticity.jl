@@ -38,7 +38,7 @@ import JustRelax: stress, elastic_iter_params!, PTArray, Velocity, SymmetricTens
 import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic
 import JustRelax: compute_maxloc!, solve!
 
-import ..Stokes2D: compute_P!, compute_V!, smooth!
+import ..Stokes2D: compute_P!, compute_V!
 
 export solve!
 

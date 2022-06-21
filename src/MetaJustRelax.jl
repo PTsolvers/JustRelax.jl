@@ -42,7 +42,6 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     make_thermal_arrays!(N) # Arrays for Thermal Diffusion solver
     make_PTthermal_struct!() # PT Thermal Diffusion coefficients
 
-
     # includes and exports
     @eval begin
         export USE_GPU, PTArray
@@ -63,16 +62,15 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
         export ThermalParameters
-
     end
 
     # conditional submodule load
     module_names = if N === 1
-        (Symbol("Diffusion$(N)D"),)
+        (Symbol("ThermalDiffusion$(N)D"),)
     elseif N === 2
-        (Symbol("Stokes$(N)D"), Symbol("Elasticity$(N)D"), Symbol("Diffusion$(N)D"))
+        (Symbol("Stokes$(N)D"), Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
     else
-        (Symbol("Stokes$(N)D"), Symbol("Elasticity$(N)D"), Symbol("Diffusion$(N)D"))
+        (Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
     end
     for m in module_names
         Base.@eval begin

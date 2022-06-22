@@ -25,7 +25,7 @@ function viscosity(ni, di, li, rc, η0, ηi; b_width=(1, 1, 1))
     η2 = deepcopy(η)
     for _ in 1:10
         @hide_communication b_width begin # communication/computation overlap
-            @parallel JustRelax.Elasticity3D.smooth!(η2, η, 1.0)
+            @parallel smooth!(η2, η, 1.0)
             η, η2 = η2, η
             update_halo!(η)
         end

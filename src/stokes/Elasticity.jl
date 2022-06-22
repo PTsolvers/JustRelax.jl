@@ -34,9 +34,11 @@ using CUDA
 using Printf
 
 # using ..JustRelax: solve!
-import JustRelax: stress, elastic_iter_params!, PTArray, Velocity, SymmetricTensor, solve!
+import JustRelax: stress, elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic
-import JustRelax: compute_maxloc!, compute_P!, compute_V!
+import JustRelax: compute_maxloc!, solve!
+
+import ..Stokes2D: compute_P!, compute_V!
 
 export solve!
 
@@ -259,19 +261,12 @@ using LinearAlgebra
 using Printf
 
 import JustRelax:
-    stress, elastic_iter_params!, PTArray, Velocity, SymmetricTensor, solve!, pureshear_bc!
+    stress, elastic_iter_params!, PTArray, Velocity, SymmetricTensor, pureshear_bc!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
-import JustRelax: compute_maxloc!
+import JustRelax: compute_maxloc!, solve!
 
-export solve!, pureshear_bc!, smooth!
-
-@parallel function JustRelax.smooth!(
-    A2::AbstractArray{T,3}, A::AbstractArray{T,3}, fact::T
-) where {T}
-    @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
-    return nothing
-end
+export solve!, pureshear_bc!
 
 @parallel_indices (ix, iy, iz) function update_τ_o!(
     τxx_o::AbstractArray{T,3},
@@ -844,7 +839,7 @@ end
 
 ## 3D VISCO-ELASTIC STOKES SOLVER 
 
-function solve!(
+function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
     pt_stokes::PTStokesCoeffs,
     ni::NTuple{3,Integer},
@@ -901,7 +896,7 @@ function solve!(
     iter = 0
     cont = 0
     err_evo1 = Float64[]
-    err_evo2 = Float64[]
+    err_evo2 = Int64[]
     norm_Rx = Float64[]
     norm_Ry = Float64[]
     norm_Rz = Float64[]

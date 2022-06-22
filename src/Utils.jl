@@ -1,8 +1,9 @@
 # MACROS
 
+## Memory allocators
+
 export @allocate, @fill
 
-# Memory allocators
 macro allocate(ni...)
     return esc(:(PTArray(undef, $(ni...))))
 end
@@ -11,7 +12,15 @@ macro fill(A, ni...)
     return esc(:(PTArray(fill(eltype(PTArray)($A), $(ni...)))))
 end
 
-# MPI REDUCTIONS 
+## Others
+export assign!
+
+@parallel function assign!(B::AbstractArray{T,N}, A::AbstractArray{T,N}) where {T,N}
+    @all(B) = @all(A)
+    return nothing
+end
+
+## MPI reductions 
 
 export mean_mpi, norm_mpi, minimum_mpi, maximum_mpi
 

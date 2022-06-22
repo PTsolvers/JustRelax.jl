@@ -1,6 +1,13 @@
 # include benchmark related functions
 include("vizSolVi.jl")
 
+@parallel function smooth!(
+    A2::AbstractArray{T,2}, A::AbstractArray{T,2}, fact::Real
+) where {T}
+    @inn(A2) = @inn(A) + 1.0 / 4.1 / fact * (@d2_xi(A) + @d2_yi(A))
+    return nothing
+end
+
 function _viscosity!(η, xci, yci, rc, ηi, cx, cy)
     for i in 1:length(xci), j in 1:length(yci)
         if rc < sqrt((xci[i] - cx)^2 + (yci[j] - cy)^2)

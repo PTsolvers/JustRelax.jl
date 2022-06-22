@@ -16,7 +16,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
     # call appropriate FD module
     Base.eval(@__MODULE__, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
-    eval(Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
+    Base.eval(Main, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
 
     # start ParallelStencil
     global PTArray
@@ -31,30 +31,47 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         end
     end
 
-    # create array structs
+    # CREATE ARRAY STRUCTS
     make_velocity_struct!(N) # velocity
     make_symmetrictensor_struct!(N) # (symmetric) tensors
+    ## Stokes
     make_residual_struct!(N) # residuals
     make_stokes_struct!() # Arrays for Stokes solver
     make_PTstokes_struct!()
+    ## thermal diffusion
+    make_thermal_arrays!(N) # Arrays for Thermal Diffusion solver
+    make_PTthermal_struct!() # PT Thermal Diffusion coefficients
 
     # includes and exports
     @eval begin
-        include(joinpath(@__DIR__, "stokes/Stokes.jl"))
+        export USE_GPU, PTArray
+        export Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs
+        export ThermalArrays, PTThermalCoeffs
+        export AbstractStokesModel, Viscous, ViscoElastic
+        export solve!
+
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
+        export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
+
+        include(joinpath(@__DIR__, "stokes/Stokes.jl"))
+        export stress
+
         include(joinpath(@__DIR__, "Utils.jl"))
 
-        export USE_GPU,
-            PTArray, Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs
-        export AbstractStokesModel, Viscous, ViscoElastic
-        export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
-        export smooth!, stress, solve!
-
         include(joinpath(@__DIR__, "stokes/Elasticity.jl"))
+
+        include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
+        export ThermalParameters
     end
 
     # conditional submodule load
-    module_names = [Symbol("Elasticity$(N)D")]
+    module_names = if N === 1
+        (Symbol("ThermalDiffusion$(N)D"),)
+    elseif N === 2
+        (Symbol("Stokes$(N)D"), Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
+    else
+        (Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
+    end
     for m in module_names
         Base.@eval begin
             @reexport import .$m
@@ -64,5 +81,6 @@ end
 
 function ps_reset!()
     Base.eval(Main, ParallelStencil.@reset_parallel_stencil)
-    return Base.eval(@__MODULE__, ParallelStencil.@reset_parallel_stencil)
+    Base.eval(@__MODULE__, ParallelStencil.@reset_parallel_stencil)
+    return nothing
 end

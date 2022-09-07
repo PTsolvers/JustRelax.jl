@@ -40,5 +40,5 @@ jobs:
             ${{ runner.os }}-test-
             ${{ runner.os }}-      
       - name: Build
-        run: julia --project=. -e 'using Pkg; Pkg.add(name="ParallelStencil", rev="main"); Pkg.instantiate()'
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
       - uses: julia-actions/julia-runtest@latest

@@ -39,4 +39,5 @@ jobs:
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
             ${{ runner.os }}-     
-      - run: julia --project=. -e 'using Pkg; Pkg.instantiate(); cd("test");include("runtests.jl")'
+      - uses: julia-actions/julia-buildpkg@latest
+      - uses: julia-actions/julia-runtest@latest

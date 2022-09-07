@@ -1,7 +1,5 @@
 push!(LOAD_PATH, "..")
 using Pkg: Pkg;
-Pkg.activate("../.");
-Pkg.add(; name="ParallelStencil", rev="main")
 
 using Test
 using JustRelax

@@ -38,6 +38,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
-            ${{ runner.os }}-
-      - uses: julia-actions/julia-buildpkg@latest
+            ${{ runner.os }}-      
+      - name: Build
+        run: julia --project=. -e 'using Pkg; pkg"add ParallelStencil#main"; Pkg.instantiate()'
       - uses: julia-actions/julia-runtest@latest

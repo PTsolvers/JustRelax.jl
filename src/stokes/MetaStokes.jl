@@ -139,7 +139,7 @@ function make_stokes_struct!()
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
-                    P, V, dV, ∇V, τ, ε,nothing, R
+                    P, V, dV, ∇V, τ, ε, nothing, R
                 )
             end
 

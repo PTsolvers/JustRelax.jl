@@ -140,7 +140,6 @@ end
     return nothing
 end
 
-
 @parallel function compute_τ!(
     τxx::AbstractArray{T,2},
     τyy::AbstractArray{T,2},
@@ -163,11 +162,8 @@ end
         (@all(τyy) + @all(τyy_o) * @Gr() + T(2) * @all(Gdτ) * @all(εyy)) /
         (one(T) + @all(Gdτ) / @all(η) + @Gr())
     @all(τxy) =
-        (
-            @all(τxy) +
-            @all(τxy_o) * @harm_Gr() +
-            T(2) * @harm(Gdτ) * @all(εxy)
-        ) / (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr())
+        (@all(τxy) + @all(τxy_o) * @harm_Gr() + T(2) * @harm(Gdτ) * @all(εxy)) /
+        (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr())
     return nothing
 end
 
@@ -232,7 +228,7 @@ function JustRelax.solve!(
             @parallel compute_strain_rate!(εxx, εyy, εxy, Vx, Vy, _dx, _dy)
             @parallel compute_P!(∇V, P, εxx, εyy, Gdτ, r)
             @parallel compute_τ!(
-                τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, Gdτ, εxx, εyy, εxy, η, G, dt,
+                τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, Gdτ, εxx, εyy, εxy, η, G, dt
             )
             @parallel compute_dV_elastic!(dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, _dx, _dy)
             @parallel compute_V!(Vx, Vy, dVx, dVy)

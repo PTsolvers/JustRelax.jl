@@ -90,11 +90,9 @@ end
     η::AbstractArray{T,2},
     Gdτ::AbstractArray{T,2},
 ) where {T}
-    @all(τxx) = (@all(τxx) + 2.0 * @all(Gdτ) *  @all(εxx)) / (@all(Gdτ) / @all(η) + 1.0)
-    @all(τyy) = (@all(τyy) + 2.0 * @all(Gdτ) *  @all(εyy)) / (@all(Gdτ) / @all(η) + 1.0)
-    @all(τxy) =
-        (@all(τxy) + 2.0 * @av(Gdτ) * @all(εxy)) /
-        (@av(Gdτ) / @harm(η) + 1.0)
+    @all(τxx) = (@all(τxx) + 2.0 * @all(Gdτ) * @all(εxx)) / (@all(Gdτ) / @all(η) + 1.0)
+    @all(τyy) = (@all(τyy) + 2.0 * @all(Gdτ) * @all(εyy)) / (@all(Gdτ) / @all(η) + 1.0)
+    @all(τxy) = (@all(τxy) + 2.0 * @av(Gdτ) * @all(εxy)) / (@av(Gdτ) / @harm(η) + 1.0)
     return nothing
 end
 
@@ -205,10 +203,10 @@ function solve!(
             @parallel compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, Gdτ)
 
             @parallel compute_dV!(Rx, Ry, dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, _dx, _dy)
-                      
+
             # @hide_cenvommunication (4,4,0) begin # communication/computation overlap
-                @parallel compute_V!(Vx, Vy, dVx, dVy)
-                # update_halo!(Vx, Vy)
+            @parallel compute_V!(Vx, Vy, dVx, dVy)
+            # update_halo!(Vx, Vy)
             # end
             # free slip boundary conditions
             apply_free_slip!(freeslip, Vx, Vy)
@@ -229,11 +227,11 @@ function solve!(
             # push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]]))
             # push!(err_evo2, iter)
 
-            norm_Rx =  norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx))
-            norm_Ry =  norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry))
-            norm_∇V =  norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V))
+            norm_Rx = norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx))
+            norm_Ry = norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry))
+            norm_∇V = norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V))
             err = maximum((norm_Rx, norm_Ry, norm_∇V))
-            
+
             if verbose && (err < ϵ) || (iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",

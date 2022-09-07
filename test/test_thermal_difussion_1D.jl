@@ -1,4 +1,5 @@
 push!(LOAD_PATH, "..")
+using Pkg; Pkg.activate("C:\\Users\\albert\\Desktop\\JustRelax.jl")
 
 using Test
 using JustRelax

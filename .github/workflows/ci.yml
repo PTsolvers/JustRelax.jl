@@ -38,6 +38,5 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
-            ${{ runner.os }}-      
-      - name: Build
-        run: julia --project=. -e 'using Pkg; Pkg.instantiate(); cd("test");include(".")'
+            ${{ runner.os }}-     
+      - run: julia --project=. -e 'using Pkg; Pkg.instantiate(); cd("test");include("runtests.jl")'

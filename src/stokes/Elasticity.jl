@@ -291,7 +291,7 @@ using LinearAlgebra
 using Printf
 
 import JustRelax:
-    stress, elastic_iter_params!, PTArray, Velocity, SymmetricTensor, pureshear_bc!
+    stress, strain, elastic_iter_params!, PTArray, Velocity, SymmetricTensor, pureshear_bc!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
@@ -617,6 +617,29 @@ end
                 )
             ) / (one(T) / @harm_yzi_Gdτ(ix, iy, iz) + one(T) / @harm_yzi_η(ix, iy, iz))
     end
+    return nothing
+end
+
+@parallel function compute_strain_rate!(
+    εxx::AbstractArray{T,3},
+    εyy::AbstractArray{T,3},
+    εzz::AbstractArray{T,3},
+    εyz::AbstractArray{T,3},
+    εxz::AbstractArray{T,3},
+    εxy::AbstractArray{T,3},
+    Vx::AbstractArray{T,3},
+    Vy::AbstractArray{T,3},
+    Vz::AbstractArray{T,3},
+    _dx::T,
+    _dy::T,
+    _dz::T,
+) where {T}
+    @all(εxx) = @d_xa(Vx) * _dx
+    @all(εyy) = @d_ya(Vy) * _dy
+    @all(εzz) = @d_ya(Vz) * _dz
+    @all(εyz) = (0.5 * (@d_zi(Vy) * _dz + @d_yi(Vz) * _dy))
+    @all(εxz) = (0.5 * (@d_zi(Vx) * _dz + @d_xi(Vz) * _dx))
+    @all(εxy) = (0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx))
     return nothing
 end
 

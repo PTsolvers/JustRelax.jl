@@ -64,9 +64,9 @@ version = "0.1.1"
 
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "80ca332f6dcb2508adba68f22f551adb2d00a624"
+git-tree-sha1 = "8a494fe0c4ae21047f28eb48ac968f0b8a6fcaa7"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.15.3"
+version = "1.15.4"
 
 [[ChangesOfVariables]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -76,9 +76,9 @@ version = "0.1.4"
 
 [[Compat]]
 deps = ["Dates", "LinearAlgebra", "UUIDs"]
-git-tree-sha1 = "924cdca592bc16f14d2f7006754a621735280b74"
+git-tree-sha1 = "5856d3031cdb1f3b2b6340dfdc66b6d9a149a374"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.1.0"
+version = "4.2.0"
 
 [[CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -86,9 +86,9 @@ uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 
 [[ConstructionBase]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "59d00b3139a9de4eb961057eabb65ac6522be954"
+git-tree-sha1 = "fb21ddd70a051d882a1686a5a550990bbe371a95"
 uuid = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
-version = "1.4.0"
+version = "1.4.1"
 
 [[Dates]]
 deps = ["Printf"]
@@ -125,15 +125,15 @@ uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
 [[GPUArrays]]
 deps = ["Adapt", "GPUArraysCore", "LLVM", "LinearAlgebra", "Printf", "Random", "Reexport", "Serialization", "Statistics"]
-git-tree-sha1 = "73145f1d724b5ee0e90098aec39a65e9697429a6"
+git-tree-sha1 = "45d7deaf05cbb44116ba785d147c518ab46352d7"
 uuid = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
-version = "8.4.2"
+version = "8.5.0"
 
 [[GPUArraysCore]]
 deps = ["Adapt"]
-git-tree-sha1 = "d88b17a38322e153c519f5a9ed8d91e9baa03d8f"
+git-tree-sha1 = "6872f5ec8fd1a38880f027a26739d42dcda6691f"
 uuid = "46192b85-c4d5-4398-a991-12ede77f4527"
-version = "0.1.1"
+version = "0.1.2"
 
 [[GPUCompiler]]
 deps = ["ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Logging", "TimerOutputs", "UUIDs"]
@@ -142,10 +142,10 @@ uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
 version = "0.16.3"
 
 [[HIP_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "ROCmCompilerSupport_jll", "ROCmDeviceLibs_jll", "ROCmOpenCLRuntime_jll", "hsa_rocr_jll"]
-git-tree-sha1 = "f8ace432529a4e373f2c9afe317b0b76d3fe06b6"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "ROCmCompilerSupport_jll", "ROCmDeviceLibs_jll", "ROCmOpenCLRuntime_jll", "hsa_rocr_jll", "hsakmt_roct_jll", "rocminfo_jll"]
+git-tree-sha1 = "3513c3fba87bc30edfd7d806a63cc54ad92368be"
 uuid = "2696aab5-0948-5276-aa9a-2a86a37016b8"
-version = "4.2.0+1"
+version = "4.2.0+2"
 
 [[ImplicitGlobalGrid]]
 deps = ["CUDA", "ExprTools", "MPI"]
@@ -251,9 +251,9 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[LogExpFunctions]]
 deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "361c2b088575b07946508f135ac556751240091c"
+git-tree-sha1 = "94d9c52ca447e23eac0c0f074effbcd38830deb5"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.17"
+version = "0.3.18"
 
 [[Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
@@ -330,7 +330,7 @@ version = "0.5.5+0"
 
 [[ParallelStencil]]
 deps = ["CUDA", "CellArrays", "MacroTools", "Random", "StaticArrays"]
-git-tree-sha1 = "9d503bbda3ca25a0a2a03407e5f2943b6e3563b0"
+git-tree-sha1 = "1f53d633e3df5e4be8beba676e1b5c6d228ce48d"
 repo-rev = "main"
 repo-url = "https://github.com/omlins/ParallelStencil.jl.git"
 uuid = "94395366-693c-11ea-3b26-d9b7aac5d958"
@@ -356,9 +356,9 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[ROCmCompilerSupport_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "ROCmDeviceLibs_jll", "hsa_rocr_jll"]
-git-tree-sha1 = "9fde5de64e9ffdb687ee694fcf49bce3cd5cfd5f"
+git-tree-sha1 = "dd5bc1a5d4f785a004c8a1955717e9a8734ed476"
 uuid = "8fbdd1d2-db62-5cd0-981e-905da1486e17"
-version = "4.2.0+0"
+version = "4.2.0+1"
 
 [[ROCmDeviceLibs_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
@@ -368,9 +368,9 @@ version = "4.2.0+1"
 
 [[ROCmOpenCLRuntime_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libglvnd_jll", "Pkg", "ROCmCompilerSupport_jll", "ROCmDeviceLibs_jll", "Xorg_libX11_jll", "Xorg_xorgproto_jll", "hsa_rocr_jll", "hsakmt_roct_jll"]
-git-tree-sha1 = "6760fbfbf0657e672cb980417ddf5c5c510ee305"
+git-tree-sha1 = "9dc096947347c84084d1b8b8152678e7f38ae13d"
 uuid = "10ae2a08-2eea-53f8-8c20-eec175020e9f"
-version = "4.2.0+1"
+version = "4.2.0+2"
 
 [[Random]]
 deps = ["SHA", "Serialization"]
@@ -407,9 +407,9 @@ uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
 [[Setfield]]
 deps = ["ConstructionBase", "Future", "MacroTools", "StaticArraysCore"]
-git-tree-sha1 = "e5364b687e552d73543cf09e583b944eaffff6c4"
+git-tree-sha1 = "e2cc6d8c88613c05e1defb55170bf5ff211fbeac"
 uuid = "efcf1570-3423-57d1-acb7-fd33fddbac46"
-version = "1.1.0"
+version = "1.1.1"
 
 [[Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
@@ -426,14 +426,14 @@ version = "2.1.7"
 
 [[StaticArrays]]
 deps = ["LinearAlgebra", "Random", "StaticArraysCore", "Statistics"]
-git-tree-sha1 = "85bc4b051546db130aeb1e8a696f1da6d4497200"
+git-tree-sha1 = "dfec37b90740e3b9aa5dc2613892a3fc155c3b42"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.5.5"
+version = "1.5.6"
 
 [[StaticArraysCore]]
-git-tree-sha1 = "5b413a57dd3cea38497d745ce088ac8592fbb5be"
+git-tree-sha1 = "ec2bd695e905a3c755b33026954b119ea17f2d22"
 uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
-version = "1.1.0"
+version = "1.3.0"
 
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -553,10 +553,10 @@ uuid = "d65627f6-89bd-53e8-8ab5-8b75ff535eee"
 version = "1.2.7+1"
 
 [[hsa_rocr_jll]]
-deps = ["Artifacts", "Elfutils_jll", "JLLWrappers", "Libdl", "NUMA_jll", "Pkg", "Zlib_jll", "hsakmt_roct_jll"]
-git-tree-sha1 = "7c4e2cfb1bcd78744d255a582ac6c045b09d4f33"
+deps = ["Artifacts", "Elfutils_jll", "JLLWrappers", "Libdl", "NUMA_jll", "Pkg", "ROCmDeviceLibs_jll", "XML2_jll", "Zlib_jll", "hsakmt_roct_jll"]
+git-tree-sha1 = "2425ea7d9b449da52e1fb4678d24eaf6a1638545"
 uuid = "dd59ff1a-a01a-568d-8b29-0669330f116a"
-version = "4.5.2+0"
+version = "4.2.0+2"
 
 [[hsakmt_roct_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "NUMA_jll", "Pkg", "libdrm_jll"]
@@ -600,6 +600,6 @@ version = "4.2.0+0"
 
 [[rocminfo_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "hsa_rocr_jll"]
-git-tree-sha1 = "a53235bdb4691d40584383f423e0adb47b18a79d"
+git-tree-sha1 = "c541d64914a089c777ca31d7b7428b12185abeb5"
 uuid = "5a766526-3cf8-5128-8c31-4f7b7ad60f0e"
-version = "4.0.0+0"
+version = "4.2.0+0"

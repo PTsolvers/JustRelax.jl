@@ -34,11 +34,11 @@ using CUDA
 using Printf
 
 # using ..JustRelax: solve!
-import JustRelax: stress, elastic_iter_params!, PTArray, Velocity, SymmetricTensor
+import JustRelax: stress, strain, elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic
 import JustRelax: compute_maxloc!, solve!
 
-import ..Stokes2D: compute_P!, compute_V!
+import ..Stokes2D: compute_P!, compute_V!, compute_strain_rate!
 
 export solve!
 
@@ -53,12 +53,12 @@ export solve!
     τxy::AbstractArray{T,2},
     dτ_Rho::AbstractArray{T,2},
     ρg::AbstractArray{T,2},
-    dx::T,
-    dy::T,
+    _dx::T,
+    _dy::T,
 ) where {T}
-    @all(dVx) = (@d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx) * @harm_xi(dτ_Rho)
+    @all(dVx) = (@d_xi(τxx) * _dx + @d_ya(τxy) * _dy - @d_xi(P) * _dx) * @harm_xi(dτ_Rho)
     @all(dVy) =
-        (@d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy - @harm_yi(ρg)) *
+        (@d_yi(τyy) * _dy + @d_xa(τxy) * _dx - @d_yi(P) * _dy - @harm_yi(ρg)) *
         @harm_yi(dτ_Rho)
     return nothing
 end
@@ -140,6 +140,37 @@ end
     return nothing
 end
 
+
+@parallel function compute_τ!(
+    τxx::AbstractArray{T,2},
+    τyy::AbstractArray{T,2},
+    τxy::AbstractArray{T,2},
+    τxx_o::AbstractArray{T,2},
+    τyy_o::AbstractArray{T,2},
+    τxy_o::AbstractArray{T,2},
+    Gdτ::AbstractArray{T,2},
+    εxx::AbstractArray{T,2},
+    εyy::AbstractArray{T,2},
+    εxy::AbstractArray{T,2},
+    η::AbstractArray{T,2},
+    G::T,
+    dt::T,
+) where {T}
+    @all(τxx) =
+        (@all(τxx) + @all(τxx_o) * @Gr() + T(2) * @all(Gdτ) * @all(εxx)) /
+        (one(T) + @all(Gdτ) / @all(η) + @Gr())
+    @all(τyy) =
+        (@all(τyy) + @all(τyy_o) * @Gr() + T(2) * @all(Gdτ) * @all(εyy)) /
+        (one(T) + @all(Gdτ) / @all(η) + @Gr())
+    @all(τxy) =
+        (
+            @all(τxy) +
+            @all(τxy_o) * @harm_Gr() +
+            T(2) * @harm(Gdτ) * @all(εxy)
+        ) / (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr())
+    return nothing
+end
+
 ## 2D VISCO-ELASTIC STOKES SOLVER 
 
 function JustRelax.solve!(
@@ -160,9 +191,11 @@ function JustRelax.solve!(
 
     # unpack
     dx, dy = di
+    _dx, _dy = inv.(di)
     lx, ly = li
     Vx, Vy = stokes.V.Vx, stokes.V.Vy
     dVx, dVy = stokes.dV.Vx, stokes.dV.Vy
+    εxx, εyy, εxy = strain(stokes)
     τ, τ_o = stress(stokes)
     τxx, τyy, τxy = τ
     τxx_o, τyy_o, τxy_o = τ_o
@@ -196,11 +229,12 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel compute_P!(∇V, P, Vx, Vy, Gdτ, r, dx, dy)
+            @parallel compute_strain_rate!(εxx, εyy, εxy, Vx, Vy, _dx, _dy)
+            @parallel compute_P!(∇V, P, εxx, εyy, Gdτ, r)
             @parallel compute_τ!(
-                τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, Gdτ, Vx, Vy, η, G, dt, dx, dy
+                τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, Gdτ, εxx, εyy, εxy, η, G, dt,
             )
-            @parallel compute_dV_elastic!(dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, dx, dy)
+            @parallel compute_dV_elastic!(dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, _dx, _dy)
             @parallel compute_V!(Vx, Vy, dVx, dVy)
 
             # free slip boundary conditions

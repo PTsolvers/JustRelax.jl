@@ -1,10 +1,9 @@
 push!(LOAD_PATH, "..")
-using Pkg: Pkg;
 
 using Test
 using JustRelax
 
-model = PS_Setup(:cpu, Float64, 2)s
+model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 include("../miniapps/benchmarks/stokes/solkz/SolKz.jl")

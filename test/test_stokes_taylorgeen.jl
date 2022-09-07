@@ -1,4 +1,5 @@
 push!(LOAD_PATH, "..")
+using Pkg: Pkg;
 
 using Test
 using JustRelax

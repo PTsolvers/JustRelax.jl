@@ -22,6 +22,23 @@ end
     return nothing
 end
 
+@parallel function elastic_iter_params!(
+    dτ_Rho::AbstractArray,
+    Gdτ::AbstractArray,
+    ητ::AbstractArray,
+    Vpdτ::T,
+    G::AbstractArray,
+    dt::M,
+    Re::T,
+    r::T,
+    max_li::T,
+) where {T,M}
+    @all(dτ_Rho) = Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (@all(G) * dt)))
+    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
+    return nothing
+end
+
+
 ## 2D ELASTICITY MODULE
 
 module Elasticity2D
@@ -100,6 +117,26 @@ function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C
     @parallel update_τ_o!(τxx_o, τyy_o, τxy_o, τxx, τyy, τxy)
 end
 
+@parallel function compute_strain_rate_ve!(
+    εxx::AbstractArray{T,2},
+    εyy::AbstractArray{T,2},
+    εxy::AbstractArray{T,2},
+    τxx_o::AbstractArray{T,2},
+    τyy_o::AbstractArray{T,2},
+    τxy_o::AbstractArray{T,2},
+    G::AbstractArray{T,2},
+    Vx::AbstractArray{T,2},
+    Vy::AbstractArray{T,2},
+    _dt::T,
+    _dx::T,
+    _dy::T,
+) where {T}
+    @all(εxx) = @d_xa(Vx) * _dx + @all(τxx_o) * 0.5 *@all(G) * _dt 
+    @all(εyy) = @d_ya(Vy) * _dy + @all(τyy_o) * 0.5 *@all(G) * _dt 
+    @all(εxy) = (0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx)) + @all(τxy_o) * 0.5 *@harm(G) * _dt 
+    return nothing
+end
+
 macro Gr()
     return esc(:(@all(Gdτ) / (G * dt)))
 end
@@ -140,6 +177,47 @@ end
     return nothing
 end
 
+macro Gr2()
+    return esc(:(@all(Gdτ) / (@all(G)  * dt)))
+end
+macro av_Gr2()
+    return esc(:(@av(Gdτ) / (@all(G) * dt)))
+end
+macro harm_Gr2()
+    return esc(:(@harm(Gdτ) / (@all(G) * dt)))
+end
+@parallel function compute_τ!(
+    τxx::AbstractArray{T,2},
+    τyy::AbstractArray{T,2},
+    τxy::AbstractArray{T,2},
+    τxx_o::AbstractArray{T,2},
+    τyy_o::AbstractArray{T,2},
+    τxy_o::AbstractArray{T,2},
+    Gdτ::AbstractArray{T,2},
+    Vx::AbstractArray{T,2},
+    Vy::AbstractArray{T,2},
+    η::AbstractArray{T,2},
+    G::AbstractArray{T,2},
+    dt::T,
+    dx::T,
+    dy::T,
+) where {T}
+    @all(τxx) =
+        (@all(τxx) + @all(τxx_o) * @Gr2() + T(2) * @all(Gdτ) * (@d_xa(Vx) / dx)) /
+        (one(T) + @all(Gdτ) / @all(η) + @Gr2())
+    @all(τyy) =
+        (@all(τyy) + @all(τyy_o) * @Gr2() + T(2) * @all(Gdτ) * (@d_ya(Vy) / dy)) /
+        (one(T) + @all(Gdτ) / @all(η) + @Gr2())
+    @all(τxy) =
+        (
+            @all(τxy) +
+            @all(τxy_o) * @harm_Gr2() +
+            T(2) * @harm(Gdτ) * (0.5 * (@d_yi(Vx) / dy + @d_xi(Vy) / dx))
+        ) / (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr2())
+    return nothing
+end
+
+
 @parallel function compute_τ!(
     τxx::AbstractArray{T,2},
     τyy::AbstractArray{T,2},
@@ -164,6 +242,33 @@ end
     @all(τxy) =
         (@all(τxy) + @all(τxy_o) * @harm_Gr() + T(2) * @harm(Gdτ) * @all(εxy)) /
         (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr())
+    return nothing
+end
+
+@parallel function compute_τ!(
+    τxx::AbstractArray{T,2},
+    τyy::AbstractArray{T,2},
+    τxy::AbstractArray{T,2},
+    τxx_o::AbstractArray{T,2},
+    τyy_o::AbstractArray{T,2},
+    τxy_o::AbstractArray{T,2},
+    Gdτ::AbstractArray{T,2},
+    εxx::AbstractArray{T,2},
+    εyy::AbstractArray{T,2},
+    εxy::AbstractArray{T,2},
+    η::AbstractArray{T,2},
+    G::AbstractArray{T,2},
+    dt::T,
+) where {T}
+    @all(τxx) =
+        (@all(τxx) + @all(τxx_o) * @Gr2() + T(2) * @all(Gdτ) * @all(εxx)) /
+        (one(T) + @all(Gdτ) / @all(η) + @Gr2())
+    @all(τyy) =
+        (@all(τyy) + @all(τyy_o) * @Gr2() + T(2) * @all(Gdτ) * @all(εyy)) /
+        (one(T) + @all(Gdτ) / @all(η) + @Gr2())
+    @all(τxy) =
+        (@all(τxy) + @all(τxy_o) * @harm_Gr2() + T(2) * @harm(Gdτ) * @all(εxy)) /
+        (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr2())
     return nothing
 end
 

@@ -124,10 +124,14 @@ end
 @parallel_indices (i, j) function stress_corrections!(
     τxx, τyy, τxy, τII, εxx, εyy, εxy, λ, ηve, Gdτ
 )
-    av(A, i, j) = (A[i - 1, j - 1] + A[i, j] + A[i - 1, j] + A[i, j - 1]) * 0.25
+    # av(A, i, j) = (A[i - 1, j - 1] + A[i, j] + A[i - 1, j] + A[i, j - 1]) * 0.25
+    av(A, i, j) = sum(@inbounds inv(A[ii,jj]) for ii in i-1:i, jj in j-1:j) * 0.25
     function harm(A, i, j)
+        # 4.0 / (
+        #     1.0 / A[i - 1, j - 1] + 1.0 / A[i, j] + 1.0 / A[i - 1, j] + 1.0 / A[i, j - 1]
+        # )
         4.0 / (
-            1.0 / A[i - 1, j - 1] + 1.0 / A[i, j] + 1.0 / A[i - 1, j] + 1.0 / A[i, j - 1]
+            sum(@inbounds inv(A[ii,jj]) for ii in i-1:i, jj in j-1:j)
         )
     end
     visc_eff(i, j) = 2.0 / (1.0 / Gdτ[i, j] + 1.0 / ηve[i, j])
@@ -139,7 +143,7 @@ end
     τyy[i, j] = update_normal_stress(τyy, εyy, i, j)
     τxy[i - 1, j - 1] +=
         2.0 / (1.0 / harm(Gdτ, i, j) + 1.0 / harm(ηve, i, j)) *
-        (εxy[i, j] - λ[i, j] * (0.5 * τxy[i, j] / harms(τII, i, j)))
+        (εxy[i, j] - λ[i, j] * (0.5 * τxy[i, j] / harm(τII, i, j)))
 
     return nothing
 end

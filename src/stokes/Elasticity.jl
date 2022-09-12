@@ -117,27 +117,6 @@ function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C
     @parallel update_τ_o!(τxx_o, τyy_o, τxy_o, τxx, τyy, τxy)
 end
 
-@parallel function compute_strain_rate_ve!(
-    εxx::AbstractArray{T,2},
-    εyy::AbstractArray{T,2},
-    εxy::AbstractArray{T,2},
-    τxx_o::AbstractArray{T,2},
-    τyy_o::AbstractArray{T,2},
-    τxy_o::AbstractArray{T,2},
-    G::AbstractArray{T,2},
-    Vx::AbstractArray{T,2},
-    Vy::AbstractArray{T,2},
-    _dt::T,
-    _dx::T,
-    _dy::T,
-) where {T}
-    @all(εxx) = @d_xa(Vx) * _dx + @all(τxx_o) * 0.5 * @all(G) * _dt
-    @all(εyy) = @d_ya(Vy) * _dy + @all(τyy_o) * 0.5 * @all(G) * _dt
-    @all(εxy) =
-        (0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx)) + @all(τxy_o) * 0.5 * @harm(G) * _dt
-    return nothing
-end
-
 macro Gr()
     return esc(:(@all(Gdτ) / (G * dt)))
 end
@@ -147,77 +126,6 @@ end
 macro harm_Gr()
     return esc(:(@harm(Gdτ) / (G * dt)))
 end
-# @parallel function compute_τ!(
-#     τxx::AbstractArray{T,2},
-#     τyy::AbstractArray{T,2},
-#     τxy::AbstractArray{T,2},
-#     τxx_o::AbstractArray{T,2},
-#     τyy_o::AbstractArray{T,2},
-#     τxy_o::AbstractArray{T,2},
-#     Gdτ::AbstractArray{T,2},
-#     Vx::AbstractArray{T,2},
-#     Vy::AbstractArray{T,2},
-#     η::AbstractArray{T,2},
-#     G::T,
-#     dt::T,
-#     dx::T,
-#     dy::T,
-# ) where {T}
-#     @all(τxx) =
-#         (@all(τxx) + @all(τxx_o) * @Gr() + T(2) * @all(Gdτ) * (@d_xa(Vx) / dx)) /
-#         (one(T) + @all(Gdτ) / @all(η) + @Gr())
-#     @all(τyy) =
-#         (@all(τyy) + @all(τyy_o) * @Gr() + T(2) * @all(Gdτ) * (@d_ya(Vy) / dy)) /
-#         (one(T) + @all(Gdτ) / @all(η) + @Gr())
-#     @all(τxy) =
-#         (
-#             @all(τxy) +
-#             @all(τxy_o) * @harm_Gr() +
-#             T(2) * @harm(Gdτ) * (0.5 * (@d_yi(Vx) / dy + @d_xi(Vy) / dx))
-#         ) / (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr())
-#     return nothing
-# end
-
-# macro Gr2()
-#     return esc(:(@all(Gdτ) / (@all(G)  * dt)))
-# end
-# macro av_Gr2()
-#     return esc(:(@av(Gdτ) / (@all(G) * dt)))
-# end
-# macro harm_Gr2()
-#     return esc(:(@harm(Gdτ) / (@all(G) * dt)))
-# end
-# @parallel function compute_τ!(
-#     τxx::AbstractArray{T,2},
-#     τyy::AbstractArray{T,2},
-#     τxy::AbstractArray{T,2},
-#     τxx_o::AbstractArray{T,2},
-#     τyy_o::AbstractArray{T,2},
-#     τxy_o::AbstractArray{T,2},
-#     Gdτ::AbstractArray{T,2},
-#     Vx::AbstractArray{T,2},
-#     Vy::AbstractArray{T,2},
-#     η::AbstractArray{T,2},
-#     G::AbstractArray{T,2},
-#     dt::T,
-#     dx::T,
-#     dy::T,
-# ) where {T}
-#     @all(τxx) =
-#         (@all(τxx) + @all(τxx_o) * @Gr2() + T(2) * @all(Gdτ) * (@d_xa(Vx) / dx)) /
-#         (one(T) + @all(Gdτ) / @all(η) + @Gr2())
-#     @all(τyy) =
-#         (@all(τyy) + @all(τyy_o) * @Gr2() + T(2) * @all(Gdτ) * (@d_ya(Vy) / dy)) /
-#         (one(T) + @all(Gdτ) / @all(η) + @Gr2())
-#     @all(τxy) =
-#         (
-#             @all(τxy) +
-#             @all(τxy_o) * @harm_Gr2() +
-#             T(2) * @harm(Gdτ) * (0.5 * (@d_yi(Vx) / dy + @d_xi(Vy) / dx))
-#         ) / (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr2())
-#     return nothing
-# end
-
 @parallel function compute_τ!(
     τxx::AbstractArray{T,2},
     τyy::AbstractArray{T,2},
@@ -245,32 +153,6 @@ end
     return nothing
 end
 
-# @parallel function compute_τ!(
-#     τxx::AbstractArray{T,2},
-#     τyy::AbstractArray{T,2},
-#     τxy::AbstractArray{T,2},
-#     τxx_o::AbstractArray{T,2},
-#     τyy_o::AbstractArray{T,2},
-#     τxy_o::AbstractArray{T,2},
-#     Gdτ::AbstractArray{T,2},
-#     εxx::AbstractArray{T,2},
-#     εyy::AbstractArray{T,2},
-#     εxy::AbstractArray{T,2},
-#     η::AbstractArray{T,2},
-#     G::AbstractArray{T,2},
-#     dt::T,
-# ) where {T}
-#     @all(τxx) =
-#         (@all(τxx) + @all(τxx_o) * @Gr2() + T(2) * @all(Gdτ) * @all(εxx)) /
-#         (one(T) + @all(Gdτ) / @all(η) + @Gr2())
-#     @all(τyy) =
-#         (@all(τyy) + @all(τyy_o) * @Gr2() + T(2) * @all(Gdτ) * @all(εyy)) /
-#         (one(T) + @all(Gdτ) / @all(η) + @Gr2())
-#     @all(τxy) =
-#         (@all(τxy) + @all(τxy_o) * @harm_Gr2() + T(2) * @harm(Gdτ) * @all(εxy)) /
-#         (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr2())
-#     return nothing
-# end
 
 ## 2D VISCO-ELASTIC STOKES SOLVER 
 
@@ -614,116 +496,6 @@ macro harm_yzi_η(ix, iy, iz)
         ),
     )
 end
-
-# @parallel_indices (ix, iy, iz) function compute_P_τ!(
-#     P::AbstractArray{T,3},
-#     τxx::AbstractArray{T,3},
-#     τyy::AbstractArray{T,3},
-#     τzz::AbstractArray{T,3},
-#     τxy::AbstractArray{T,3},
-#     τxz::AbstractArray{T,3},
-#     τyz::AbstractArray{T,3},
-#     τxx_o::AbstractArray{T,3},
-#     τyy_o::AbstractArray{T,3},
-#     τzz_o::AbstractArray{T,3},
-#     τxy_o::AbstractArray{T,3},
-#     τxz_o::AbstractArray{T,3},
-#     τyz_o::AbstractArray{T,3},
-#     Vx::AbstractArray{T,3},
-#     Vy::AbstractArray{T,3},
-#     Vz::AbstractArray{T,3},
-#     η::AbstractArray{T,3},
-#     Gdτ::AbstractArray{T,3},
-#     r::T,
-#     G::T,
-#     dt::M,
-#     _dx::T,
-#     _dy::T,
-#     _dz::T,
-# ) where {T,M}
-#     # Compute pressure
-#     if (ix ≤ size(P, 1) && iy ≤ size(P, 2) && iz ≤ size(P, 3))
-#         P[ix, iy, iz] =
-#             P[ix, iy, iz] -
-#             r *
-#             Gdτ[ix, iy, iz] *
-#             (
-#                 _dx * (Vx[ix + 1, iy, iz] - Vx[ix, iy, iz]) +
-#                 _dy * (Vy[ix, iy + 1, iz] - Vy[ix, iy, iz]) +
-#                 _dz * (Vz[ix, iy, iz + 1] - Vz[ix, iy, iz])
-#             )
-#     end
-#     # Compute τ_xx
-#     if (ix ≤ size(τxx, 1) && iy ≤ size(τxx, 2) && iz ≤ size(τxx, 3))
-#         τxx[ix, iy, iz] =
-#             (
-#                 τxx[ix, iy, iz] / @inn_yz_Gdτ(ix, iy, iz) +
-#                 τxx_o[ix, iy, iz] / G / dt +
-#                 T(2) * (_dx * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix, iy + 1, iz + 1]))
-#             ) / (one(T) / @inn_yz_Gdτ(ix, iy, iz) + one(T) / @inn_yz_η(ix, iy, iz))
-#     end
-#     # Compute τ_yy
-#     if (ix ≤ size(τyy, 1) && iy ≤ size(τyy, 2) && iz ≤ size(τyy, 3))
-#         τyy[ix, iy, iz] =
-#             (
-#                 τyy[ix, iy, iz] / @inn_xz_Gdτ(ix, iy, iz) +
-#                 τyy_o[ix, iy, iz] / G / dt +
-#                 T(2) * (_dy * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy, iz + 1]))
-#             ) / (one(T) / @inn_xz_Gdτ(ix, iy, iz) + one(T) / @inn_xz_η(ix, iy, iz))
-#     end
-#     # Compute τ_zz
-#     if (ix ≤ size(τzz, 1) && iy ≤ size(τzz, 2) && iz ≤ size(τzz, 3))
-#         τzz[ix, iy, iz] =
-#             (
-#                 τzz[ix, iy, iz] / @inn_xy_Gdτ(ix, iy, iz) +
-#                 τzz_o[ix, iy, iz] / G / dt +
-#                 T(2) * (_dz * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy + 1, iz]))
-#             ) / (one(T) / @inn_xy_Gdτ(ix, iy, iz) + one(T) / @inn_xy_η(ix, iy, iz))
-#     end
-#     # Compute τ_xy
-#     if (ix ≤ size(τxy, 1) && iy ≤ size(τxy, 2) && iz ≤ size(τxy, 3))
-#         τxy[ix, iy, iz] =
-#             (
-#                 τxy[ix, iy, iz] / @harm_xyi_Gdτ(ix, iy, iz) +
-#                 τxy_o[ix, iy, iz] / G / dt +
-#                 T(2) * (
-#                     0.5 * (
-#                         _dy * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy, iz + 1]) +
-#                         _dx * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix, iy + 1, iz + 1])
-#                     )
-#                 )
-#             ) / (one(T) / @harm_xyi_Gdτ(ix, iy, iz) + one(T) / @harm_xyi_η(ix, iy, iz))
-#     end
-#     # Compute τ_xz
-#     if (ix ≤ size(τxz, 1) && iy ≤ size(τxz, 2) && iz ≤ size(τxz, 3))
-#         τxz[ix, iy, iz] =
-#             (
-#                 τxz[ix, iy, iz] / @harm_xzi_Gdτ(ix, iy, iz) +
-#                 τxz_o[ix, iy, iz] / G / dt +
-#                 T(2) * (
-#                     0.5 * (
-#                         _dz * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy + 1, iz]) +
-#                         _dx * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix, iy + 1, iz + 1])
-#                     )
-#                 )
-#             ) / (one(T) / @harm_xzi_Gdτ(ix, iy, iz) + one(T) / @harm_xzi_η(ix, iy, iz))
-#     end
-#     # Compute τ_yz
-#     if (ix ≤ size(τyz, 1) && iy ≤ size(τyz, 2) && iz ≤ size(τyz, 3))
-#         τyz[ix, iy, iz] =
-#             (
-#                 τyz[ix, iy, iz] / @harm_yzi_Gdτ(ix, iy, iz) +
-#                 τyz_o[ix, iy, iz] / G / dt +
-#                 T(2) * (
-#                     0.5 * (
-#                         _dz * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy + 1, iz]) +
-#                         _dy * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy, iz + 1])
-#                     )
-#                 )
-#             ) / (one(T) / @harm_yzi_Gdτ(ix, iy, iz) + one(T) / @harm_yzi_η(ix, iy, iz))
-#     end
-#     return nothing
-# end
 
 @parallel_indices (ix, iy, iz) function compute_P_τ!(
     P::AbstractArray{T,3},

@@ -15,13 +15,13 @@ end
 @parallel function compute_iter_params!(
     dτ_Rho::AbstractArray{T,2},
     Gdτ::AbstractArray{T,2},
-    Musτ::AbstractArray{T,2},
+    ητ::AbstractArray{T,2},
     Vpdτ::Real,
     Re::Real,
     r::Real,
     max_lxy::Real,
 ) where {T}
-    @all(dτ_Rho) = Vpdτ * max_lxy / Re / @all(Musτ)
+    @all(dτ_Rho) = Vpdτ * max_lxy / Re / @all(ητ)
     @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + 2.0)
     return nothing
 end
@@ -61,7 +61,7 @@ export compute_P!, compute_V!, solve!
     r::T,
 ) where {T}
     @all(∇V) = @all(εxx) + @all(εyy)
-    @all(P) = @all(P) - r * @all(Gdτ) * @all(∇V)
+    @all(P) = @all(P) - r * @all(Gdτ) * (@all(εxx) + @all(εyy))
     return nothing
 end
 
@@ -76,7 +76,7 @@ end
 ) where {T}
     @all(εxx) = @d_xa(Vx) * _dx
     @all(εyy) = @d_ya(Vy) * _dy
-    @all(εxy) = (0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx))
+    @all(εxy) = 0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx)
     return nothing
 end
 
@@ -90,9 +90,9 @@ end
     η::AbstractArray{T,2},
     Gdτ::AbstractArray{T,2},
 ) where {T}
-    @all(τxx) = (@all(τxx) + 2.0 * @all(Gdτ) * @all(εxx)) / (@all(Gdτ) / @all(η) + 1.0)
-    @all(τyy) = (@all(τyy) + 2.0 * @all(Gdτ) * @all(εyy)) / (@all(Gdτ) / @all(η) + 1.0)
-    @all(τxy) = (@all(τxy) + 2.0 * @av(Gdτ) * @all(εxy)) / (@av(Gdτ) / @harm(η) + 1.0)
+    @all(τxx) = (@all(τxx) + T(2.0) * @all(Gdτ) * @all(εxx)) / (@all(Gdτ) / @all(η) + one(T))
+    @all(τyy) = (@all(τyy) + T(2.0) * @all(Gdτ) * @all(εyy)) / (@all(Gdτ) / @all(η) + one(T))
+    @all(τxy) = (@all(τxy) + T(2.0) * @harm(Gdτ) * @all(εxy)) / (@harm(Gdτ) / @harm(η) + one(T))
     return nothing
 end
 
@@ -188,58 +188,41 @@ function solve!(
     err = 2 * ϵ
     iter = 0
     cont = 0
-    # err_evo1 = Float64[]
-    # err_evo2 = Float64[]
-    # norm_Rx = Float64[]
-    # norm_Ry = Float64[]
-    # norm_∇V = Float64[]
+    err_evo1 = Float64[]
+    err_evo2 = Float64[]
+    norm_Rx = Float64[]
+    norm_Ry = Float64[]
+    norm_∇V = Float64[]
 
     # solver loop
-    wtime0 = 0.0
     while err > ϵ && iter ≤ iterMax
-        wtime0 += @elapsed begin
-            @parallel compute_strain_rate!(εxx, εyy, εxy, Vx, Vy, _dx, _dy)
-            @parallel compute_P!(∇V, P, εxx, εyy, Gdτ, r)
-            @parallel compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, Gdτ)
-
-            @parallel compute_dV!(Rx, Ry, dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, _dx, _dy)
-
-            # @hide_cenvommunication (4,4,0) begin # communication/computation overlap
-            @parallel compute_V!(Vx, Vy, dVx, dVy)
-            # update_halo!(Vx, Vy)
-            # end
-            # free slip boundary conditions
-            apply_free_slip!(freeslip, Vx, Vy)
-        end
+        @parallel compute_strain_rate!(εxx, εyy, εxy, Vx, Vy, _dx, _dy)
+        @parallel compute_P!(∇V, P, εxx, εyy, Gdτ, r)
+        @parallel compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, Gdτ)
+        @parallel compute_dV!(Rx, Ry, dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, _dx, _dy)
+        @parallel compute_V!(Vx, Vy, dVx, dVy)
+        apply_free_slip!(freeslip, Vx, Vy)
 
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
             Vmin, Vmax = minimum(Vx), maximum(Vx)
             Pmin, Pmax = minimum(P), maximum(P)
-
-            # Vmin, Vmax = minimum_mpi(Vx), maximum_mpi(Vx)
-            # Pmin, Pmax = minimum_mpi(P), maximum_mpi(P)
-            # push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
-            # push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
-            # push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))
-            # err = maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]])
-            # push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]]))
-            # push!(err_evo2, iter)
-
-            norm_Rx = norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx))
-            norm_Ry = norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry))
-            norm_∇V = norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V))
-            err = maximum((norm_Rx, norm_Ry, norm_∇V))
+            push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
+            push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
+            push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))
+            err = maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]])
+            push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]]))
+            push!(err_evo2, iter)
 
             if verbose && (err < ϵ) || (iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
                     err,
-                    norm_Rx,#[cont],
-                    norm_Ry,#[cont],
-                    norm_∇V,#[cont]
+                    norm_Rx[cont],
+                    norm_Ry[cont],
+                    norm_∇V[cont]
                 )
             end
         end
@@ -247,11 +230,11 @@ function solve!(
 
     return (
         iter=iter,
-        # err_evo1=err_evo1,
-        # err_evo2=err_evo2,
-        # norm_Rx=norm_Rx,
-        # norm_Ry=norm_Ry,
-        # norm_∇V=norm_∇V,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_∇V=norm_∇V,
     )
 end
 

@@ -615,6 +615,116 @@ macro harm_yzi_η(ix, iy, iz)
     )
 end
 
+# @parallel_indices (ix, iy, iz) function compute_P_τ!(
+#     P::AbstractArray{T,3},
+#     τxx::AbstractArray{T,3},
+#     τyy::AbstractArray{T,3},
+#     τzz::AbstractArray{T,3},
+#     τxy::AbstractArray{T,3},
+#     τxz::AbstractArray{T,3},
+#     τyz::AbstractArray{T,3},
+#     τxx_o::AbstractArray{T,3},
+#     τyy_o::AbstractArray{T,3},
+#     τzz_o::AbstractArray{T,3},
+#     τxy_o::AbstractArray{T,3},
+#     τxz_o::AbstractArray{T,3},
+#     τyz_o::AbstractArray{T,3},
+#     Vx::AbstractArray{T,3},
+#     Vy::AbstractArray{T,3},
+#     Vz::AbstractArray{T,3},
+#     η::AbstractArray{T,3},
+#     Gdτ::AbstractArray{T,3},
+#     r::T,
+#     G::T,
+#     dt::M,
+#     _dx::T,
+#     _dy::T,
+#     _dz::T,
+# ) where {T,M}
+#     # Compute pressure
+#     if (ix ≤ size(P, 1) && iy ≤ size(P, 2) && iz ≤ size(P, 3))
+#         P[ix, iy, iz] =
+#             P[ix, iy, iz] -
+#             r *
+#             Gdτ[ix, iy, iz] *
+#             (
+#                 _dx * (Vx[ix + 1, iy, iz] - Vx[ix, iy, iz]) +
+#                 _dy * (Vy[ix, iy + 1, iz] - Vy[ix, iy, iz]) +
+#                 _dz * (Vz[ix, iy, iz + 1] - Vz[ix, iy, iz])
+#             )
+#     end
+#     # Compute τ_xx
+#     if (ix ≤ size(τxx, 1) && iy ≤ size(τxx, 2) && iz ≤ size(τxx, 3))
+#         τxx[ix, iy, iz] =
+#             (
+#                 τxx[ix, iy, iz] / @inn_yz_Gdτ(ix, iy, iz) +
+#                 τxx_o[ix, iy, iz] / G / dt +
+#                 T(2) * (_dx * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix, iy + 1, iz + 1]))
+#             ) / (one(T) / @inn_yz_Gdτ(ix, iy, iz) + one(T) / @inn_yz_η(ix, iy, iz))
+#     end
+#     # Compute τ_yy
+#     if (ix ≤ size(τyy, 1) && iy ≤ size(τyy, 2) && iz ≤ size(τyy, 3))
+#         τyy[ix, iy, iz] =
+#             (
+#                 τyy[ix, iy, iz] / @inn_xz_Gdτ(ix, iy, iz) +
+#                 τyy_o[ix, iy, iz] / G / dt +
+#                 T(2) * (_dy * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy, iz + 1]))
+#             ) / (one(T) / @inn_xz_Gdτ(ix, iy, iz) + one(T) / @inn_xz_η(ix, iy, iz))
+#     end
+#     # Compute τ_zz
+#     if (ix ≤ size(τzz, 1) && iy ≤ size(τzz, 2) && iz ≤ size(τzz, 3))
+#         τzz[ix, iy, iz] =
+#             (
+#                 τzz[ix, iy, iz] / @inn_xy_Gdτ(ix, iy, iz) +
+#                 τzz_o[ix, iy, iz] / G / dt +
+#                 T(2) * (_dz * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy + 1, iz]))
+#             ) / (one(T) / @inn_xy_Gdτ(ix, iy, iz) + one(T) / @inn_xy_η(ix, iy, iz))
+#     end
+#     # Compute τ_xy
+#     if (ix ≤ size(τxy, 1) && iy ≤ size(τxy, 2) && iz ≤ size(τxy, 3))
+#         τxy[ix, iy, iz] =
+#             (
+#                 τxy[ix, iy, iz] / @harm_xyi_Gdτ(ix, iy, iz) +
+#                 τxy_o[ix, iy, iz] / G / dt +
+#                 T(2) * (
+#                     0.5 * (
+#                         _dy * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy, iz + 1]) +
+#                         _dx * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix, iy + 1, iz + 1])
+#                     )
+#                 )
+#             ) / (one(T) / @harm_xyi_Gdτ(ix, iy, iz) + one(T) / @harm_xyi_η(ix, iy, iz))
+#     end
+#     # Compute τ_xz
+#     if (ix ≤ size(τxz, 1) && iy ≤ size(τxz, 2) && iz ≤ size(τxz, 3))
+#         τxz[ix, iy, iz] =
+#             (
+#                 τxz[ix, iy, iz] / @harm_xzi_Gdτ(ix, iy, iz) +
+#                 τxz_o[ix, iy, iz] / G / dt +
+#                 T(2) * (
+#                     0.5 * (
+#                         _dz * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy + 1, iz]) +
+#                         _dx * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix, iy + 1, iz + 1])
+#                     )
+#                 )
+#             ) / (one(T) / @harm_xzi_Gdτ(ix, iy, iz) + one(T) / @harm_xzi_η(ix, iy, iz))
+#     end
+#     # Compute τ_yz
+#     if (ix ≤ size(τyz, 1) && iy ≤ size(τyz, 2) && iz ≤ size(τyz, 3))
+#         τyz[ix, iy, iz] =
+#             (
+#                 τyz[ix, iy, iz] / @harm_yzi_Gdτ(ix, iy, iz) +
+#                 τyz_o[ix, iy, iz] / G / dt +
+#                 T(2) * (
+#                     0.5 * (
+#                         _dz * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy + 1, iz]) +
+#                         _dy * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy, iz + 1])
+#                     )
+#                 )
+#             ) / (one(T) / @harm_yzi_Gdτ(ix, iy, iz) + one(T) / @harm_yzi_η(ix, iy, iz))
+#     end
+#     return nothing
+# end
+
 @parallel_indices (ix, iy, iz) function compute_P_τ!(
     P::AbstractArray{T,3},
     τxx::AbstractArray{T,3},
@@ -629,6 +739,12 @@ end
     τxy_o::AbstractArray{T,3},
     τxz_o::AbstractArray{T,3},
     τyz_o::AbstractArray{T,3},
+    εxx::AbstractArray{T,3},
+    εyy::AbstractArray{T,3},
+    εzz::AbstractArray{T,3},
+    εyz::AbstractArray{T,3},
+    εxz::AbstractArray{T,3},
+    εxy::AbstractArray{T,3},
     Vx::AbstractArray{T,3},
     Vy::AbstractArray{T,3},
     Vz::AbstractArray{T,3},
@@ -659,7 +775,7 @@ end
             (
                 τxx[ix, iy, iz] / @inn_yz_Gdτ(ix, iy, iz) +
                 τxx_o[ix, iy, iz] / G / dt +
-                T(2) * (_dx * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix, iy + 1, iz + 1]))
+                T(2) * εxx[ix, iy, iz]
             ) / (one(T) / @inn_yz_Gdτ(ix, iy, iz) + one(T) / @inn_yz_η(ix, iy, iz))
     end
     # Compute τ_yy
@@ -668,7 +784,7 @@ end
             (
                 τyy[ix, iy, iz] / @inn_xz_Gdτ(ix, iy, iz) +
                 τyy_o[ix, iy, iz] / G / dt +
-                T(2) * (_dy * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy, iz + 1]))
+                T(2) * εyy[ix, iy, iz]
             ) / (one(T) / @inn_xz_Gdτ(ix, iy, iz) + one(T) / @inn_xz_η(ix, iy, iz))
     end
     # Compute τ_zz
@@ -677,7 +793,7 @@ end
             (
                 τzz[ix, iy, iz] / @inn_xy_Gdτ(ix, iy, iz) +
                 τzz_o[ix, iy, iz] / G / dt +
-                T(2) * (_dz * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy + 1, iz]))
+                T(2) * εzz[ix, iy, iz]
             ) / (one(T) / @inn_xy_Gdτ(ix, iy, iz) + one(T) / @inn_xy_η(ix, iy, iz))
     end
     # Compute τ_xy
@@ -686,12 +802,7 @@ end
             (
                 τxy[ix, iy, iz] / @harm_xyi_Gdτ(ix, iy, iz) +
                 τxy_o[ix, iy, iz] / G / dt +
-                T(2) * (
-                    0.5 * (
-                        _dy * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy, iz + 1]) +
-                        _dx * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix, iy + 1, iz + 1])
-                    )
-                )
+                T(2) * εxy[ix, iy, iz]
             ) / (one(T) / @harm_xyi_Gdτ(ix, iy, iz) + one(T) / @harm_xyi_η(ix, iy, iz))
     end
     # Compute τ_xz
@@ -700,12 +811,7 @@ end
             (
                 τxz[ix, iy, iz] / @harm_xzi_Gdτ(ix, iy, iz) +
                 τxz_o[ix, iy, iz] / G / dt +
-                T(2) * (
-                    0.5 * (
-                        _dz * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy + 1, iz]) +
-                        _dx * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix, iy + 1, iz + 1])
-                    )
-                )
+                T(2) * εxz[ix, iy, iz]
             ) / (one(T) / @harm_xzi_Gdτ(ix, iy, iz) + one(T) / @harm_xzi_η(ix, iy, iz))
     end
     # Compute τ_yz
@@ -714,18 +820,13 @@ end
             (
                 τyz[ix, iy, iz] / @harm_yzi_Gdτ(ix, iy, iz) +
                 τyz_o[ix, iy, iz] / G / dt +
-                T(2) * (
-                    0.5 * (
-                        _dz * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy + 1, iz]) +
-                        _dy * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy, iz + 1])
-                    )
-                )
+                T(2) * εyz[ix, iy, iz]
             ) / (one(T) / @harm_yzi_Gdτ(ix, iy, iz) + one(T) / @harm_yzi_η(ix, iy, iz))
     end
     return nothing
 end
 
-@parallel function compute_strain_rate!(
+@parallel_indices (ix, iy, iz) function compute_strain_rate!(
     εxx::AbstractArray{T,3},
     εyy::AbstractArray{T,3},
     εzz::AbstractArray{T,3},
@@ -739,12 +840,43 @@ end
     _dy::T,
     _dz::T,
 ) where {T}
-    @all(εxx) = @d_xa(Vx) * _dx
-    @all(εyy) = @d_ya(Vy) * _dy
-    @all(εzz) = @d_ya(Vz) * _dz
-    @all(εyz) = (0.5 * (@d_zi(Vy) * _dz + @d_yi(Vz) * _dy))
-    @all(εxz) = (0.5 * (@d_zi(Vx) * _dz + @d_xi(Vz) * _dx))
-    @all(εxy) = (0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx))
+    # Compute ε_xx
+    if (ix ≤ size(εxx, 1) && iy ≤ size(εxx, 2) && iz ≤ size(εxx, 3))
+        εxx[ix, iy, iz] = _dx * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix, iy + 1, iz + 1])
+    end
+    # Compute ε_yy
+    if (ix ≤ size(εyy, 1) && iy ≤ size(εyy, 2) && iz ≤ size(εyy, 3))
+        εyy[ix, iy, iz] = _dy * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy, iz + 1])
+    end
+    # Compute ε_zz
+    if (ix ≤ size(εzz, 1) && iy ≤ size(εzz, 2) && iz ≤ size(εzz, 3))
+        εzz[ix, iy, iz] = _dz * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy + 1, iz])
+    end
+    # Compute ε_xy
+    if (ix ≤ size(εxy, 1) && iy ≤ size(εxy, 2) && iz ≤ size(εxy, 3))
+        εxy[ix, iy, iz] =
+            0.5 * (
+                _dy * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy, iz + 1]) +
+                _dx * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix, iy + 1, iz + 1])
+            )
+    end
+    # Compute ε_xz
+    if (ix ≤ size(εxz, 1) && iy ≤ size(εxz, 2) && iz ≤ size(εxz, 3))
+        εxz[ix, iy, iz] =
+            0.5 * (
+                _dz * (Vx[ix + 1, iy + 1, iz + 1] - Vx[ix + 1, iy + 1, iz]) +
+                _dx * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix, iy + 1, iz + 1])
+            )
+    end
+    # Compute ε_yz
+    if (ix ≤ size(εyz, 1) && iy ≤ size(εyz, 2) && iz ≤ size(εyz, 3))
+        εyz[ix, iy, iz] =
+            0.5 * (
+                _dz * (Vy[ix + 1, iy + 1, iz + 1] - Vy[ix + 1, iy + 1, iz]) +
+                _dy * (Vz[ix + 1, iy + 1, iz + 1] - Vz[ix + 1, iy, iz + 1])
+            )
+    end
+
     return nothing
 end
 
@@ -1027,6 +1159,7 @@ function JustRelax.solve!(
     fx, fy, fz = ρg # gravitational forces
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz # velocity
     P, ∇V = stokes.P, stokes.∇V  # pressure and velociity divergence
+    εxx, εyy, εzz, εxy, εxz, εyz = strain(stokes)
     τ, τ_o = stress(stokes) # stress 
     τxx, τyy, τzz, τxy, τxz, τyz = τ
     τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o = τ_o
@@ -1090,6 +1223,20 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
+            @parallel compute_strain_rate!(
+                εxx,
+                εyy,
+                εzz,
+                εyz,
+                εxz,
+                εxy,
+                Vx,
+                Vy,
+                Vz,
+                _dx,
+                _dy,
+                _dz,
+            )
             @parallel compute_P_τ!(
                 P,
                 τxx,
@@ -1104,6 +1251,12 @@ function JustRelax.solve!(
                 τxy_o,
                 τxz_o,
                 τyz_o,
+                εxx,
+                εyy,
+                εzz,
+                εyz,
+                εxz,
+                εxy,
                 Vx,
                 Vy,
                 Vz,
@@ -1116,7 +1269,6 @@ function JustRelax.solve!(
                 _dy,
                 _dz,
             )
-
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     Vx,

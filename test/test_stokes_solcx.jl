@@ -12,18 +12,10 @@ function check_convergence_case1()
     nx = 64
     ny = 64
     Δη = 1e6
-    geometry, stokes, iters, ρ = solCx(Δη; nx=nx, ny=ny)
+    geometry, stokes, iters, = solCx(Δη; nx=nx, ny=ny)
     iters_expected = (
-        iter=3000,
-        err_evo1=[
-            0.09360331957426424,
-            0.003306891096559515,
-            0.00011424277131348146,
-            3.946913923776043e-6,
-            1.363780256933486e-7,
-            4.71254016862045e-9,
-        ],
-        err_evo2=[500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0],
+        iter=26200,
+        err_evo1=[8.8280522037226e-9],
     )
     println(iters)
     println(iters_expected)

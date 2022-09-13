@@ -6,16 +6,22 @@ function stress(τ::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
     return (τ.xx, τ.yy, τ.zz, τ.xy, τ.xz, τ.yz)
 end
 
+strain(stokes::StokesArrays{T,A,B,C,D,nDim}) where {A,B,C,D,T,nDim} = strain(stokes.ε)
+strain(ε::SymmetricTensor{<:AbstractMatrix{T}}) where {T} = (ε.xx, ε.yy, ε.xy)
+function strain(ε::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+    return (ε.xx, ε.yy, ε.zz, ε.xy, ε.xz, ε.yz)
+end
+
 @parallel function compute_iter_params!(
     dτ_Rho::AbstractArray{T,2},
     Gdτ::AbstractArray{T,2},
-    Musτ::AbstractArray{T,2},
+    ητ::AbstractArray{T,2},
     Vpdτ::Real,
     Re::Real,
     r::Real,
     max_lxy::Real,
 ) where {T}
-    @all(dτ_Rho) = Vpdτ * max_lxy / Re / @all(Musτ)
+    @all(dτ_Rho) = Vpdτ * max_lxy / Re / @all(ητ)
     @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + 2.0)
     return nothing
 end
@@ -37,9 +43,10 @@ using LinearAlgebra
 using CUDA
 using Printf
 
-import JustRelax: stress, compute_iter_params!, PTArray, Velocity, SymmetricTensor
+import JustRelax: stress, strain, compute_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, Viscous
 import JustRelax: compute_maxloc!, solve!, pureshear_bc!
+# import JustRelax: second_invariant!
 
 export compute_P!, compute_V!, solve!
 
@@ -48,15 +55,28 @@ export compute_P!, compute_V!, solve!
 @parallel function compute_P!(
     ∇V::AbstractArray{T,2},
     P::AbstractArray{T,2},
-    Vx::AbstractArray{T,2},
-    Vy::AbstractArray{T,2},
+    εxx::AbstractArray{T,2},
+    εyy::AbstractArray{T,2},
     Gdτ::AbstractArray{T,2},
     r::T,
-    dx::T,
-    dy::T,
 ) where {T}
-    @all(∇V) = @d_xa(Vx) / dx + @d_ya(Vy) / dy
-    @all(P) = @all(P) - r * @all(Gdτ) * @all(∇V)
+    @all(∇V) = @all(εxx) + @all(εyy)
+    @all(P) = @all(P) - r * @all(Gdτ) * (@all(εxx) + @all(εyy))
+    return nothing
+end
+
+@parallel function compute_strain_rate!(
+    εxx::AbstractArray{T,2},
+    εyy::AbstractArray{T,2},
+    εxy::AbstractArray{T,2},
+    Vx::AbstractArray{T,2},
+    Vy::AbstractArray{T,2},
+    _dx::T,
+    _dy::T,
+) where {T}
+    @all(εxx) = @d_xa(Vx) * _dx
+    @all(εyy) = @d_ya(Vy) * _dy
+    @all(εxy) = 0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx)
     return nothing
 end
 
@@ -64,18 +84,15 @@ end
     τxx::AbstractArray{T,2},
     τyy::AbstractArray{T,2},
     τxy::AbstractArray{T,2},
-    Vx::AbstractArray{T,2},
-    Vy::AbstractArray{T,2},
+    εxx::AbstractArray{T,2},
+    εyy::AbstractArray{T,2},
+    εxy::AbstractArray{T,2},
     η::AbstractArray{T,2},
     Gdτ::AbstractArray{T,2},
-    dx::T,
-    dy::T,
 ) where {T}
-    @all(τxx) = (@all(τxx) + 2.0 * @all(Gdτ) * @d_xa(Vx) / dx) / (@all(Gdτ) / @all(η) + 1.0)
-    @all(τyy) = (@all(τyy) + 2.0 * @all(Gdτ) * @d_ya(Vy) / dy) / (@all(Gdτ) / @all(η) + 1.0)
-    @all(τxy) =
-        (@all(τxy) + 2.0 * @harm(Gdτ) * (0.5 * (@d_yi(Vx) / dy + @d_xi(Vy) / dx))) /
-        (@harm(Gdτ) / @harm(η) + 1.0)
+    @all(τxx) = (@all(τxx) + T(2.0) * @all(Gdτ) * @all(εxx)) / (@all(Gdτ) / @all(η) + one(T))
+    @all(τyy) = (@all(τyy) + T(2.0) * @all(Gdτ) * @all(εyy)) / (@all(Gdτ) / @all(η) + one(T))
+    @all(τxy) = (@all(τxy) + T(2.0) * @harm(Gdτ) * @all(εxy)) / (@harm(Gdτ) / @harm(η) + one(T))
     return nothing
 end
 
@@ -90,13 +107,13 @@ end
     τxy::AbstractArray{T,2},
     dτ_Rho::AbstractArray{T,2},
     ρg::Nothing,
-    dx::T,
-    dy::T,
+    _dx::T,
+    _dy::T,
 ) where {T}
-    @all(Rx) = @d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx
-    @all(Ry) = @d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy
-    @all(dVx) = @harm_xi(dτ_Rho) * @all(Rx)
-    @all(dVy) = @harm_yi(dτ_Rho) * @all(Ry)
+    @all(Rx) = @d_xi(τxx) * _dx + @d_ya(τxy) * _dy - @d_xi(P) * _dx
+    @all(Ry) = @d_yi(τyy) * _dy + @d_xa(τxy) * _dx - @d_yi(P) * _dy
+    @all(dVx) = @av_xi(dτ_Rho) * @all(Rx)
+    @all(dVy) = @av_yi(dτ_Rho) * @all(Ry)
     return nothing
 end
 
@@ -111,13 +128,13 @@ end
     τxy::AbstractArray{T,2},
     dτ_Rho::AbstractArray{T,2},
     ρg::AbstractArray{T,2},
-    dx::T,
-    dy::T,
+    _dx::T,
+    _dy::T,
 ) where {T}
-    @all(Rx) = @d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx
-    @all(Ry) = @d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy - @harm_yi(ρg)
-    @all(dVx) = @harm_xi(dτ_Rho) * @all(Rx)
-    @all(dVy) = @harm_yi(dτ_Rho) * @all(Ry)
+    @all(Rx) = @d_xi(τxx) * _dx + @d_ya(τxy) * _dy - @d_xi(P) * _dx
+    @all(Ry) = @d_yi(τyy) * _dy + @d_xa(τxy) * _dx - @d_yi(P) * _dy - @av_yi(ρg)
+    @all(dVx) = @av_xi(dτ_Rho) * @all(Rx)
+    @all(dVy) = @av_yi(dτ_Rho) * @all(Ry)
     return nothing
 end
 
@@ -150,10 +167,12 @@ function solve!(
 
     # unpack
     dx, dy = di
+    _dx, _dy = inv.(di)
     lx, ly = li
     Vx, Vy = stokes.V.Vx, stokes.V.Vy
     dVx, dVy = stokes.dV.Vx, stokes.dV.Vy
     τxx, τyy, τxy = stress(stokes)
+    εxx, εyy, εxy = strain(stokes)
     P, ∇V = stokes.P, stokes.∇V
     Rx, Ry = stokes.R.Rx, stokes.R.Ry
     Gdτ, dτ_Rho, ϵ, Re, r, Vpdτ = pt_stokes.Gdτ,
@@ -176,17 +195,13 @@ function solve!(
     norm_∇V = Float64[]
 
     # solver loop
-    wtime0 = 0.0
-    while err > ϵ && iter <= iterMax
-        wtime0 += @elapsed begin
-            @parallel compute_P!(∇V, P, Vx, Vy, Gdτ, r, dx, dy)
-            @parallel compute_τ!(τxx, τyy, τxy, Vx, Vy, η, Gdτ, dx, dy)
-            @parallel compute_dV!(Rx, Ry, dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, dx, dy)
-            @parallel compute_V!(Vx, Vy, dVx, dVy)
-
-            # free slip boundary conditions
-            apply_free_slip!(freeslip, Vx, Vy)
-        end
+    while err > ϵ && iter ≤ iterMax
+        @parallel compute_strain_rate!(εxx, εyy, εxy, Vx, Vy, _dx, _dy)
+        @parallel compute_P!(∇V, P, εxx, εyy, Gdτ, r)
+        @parallel compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, Gdτ)
+        @parallel compute_dV!(Rx, Ry, dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, _dx, _dy)
+        @parallel compute_V!(Vx, Vy, dVx, dVy)
+        apply_free_slip!(freeslip, Vx, Vy)
 
         iter += 1
         if iter % nout == 0 && iter > 1
@@ -199,6 +214,7 @@ function solve!(
             err = maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]])
             push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]]))
             push!(err_evo2, iter)
+
             if verbose && (err < ϵ) || (iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
@@ -222,4 +238,4 @@ function solve!(
     )
 end
 
-end
+end # END OF MODULE

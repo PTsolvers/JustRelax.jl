@@ -1,6 +1,7 @@
 abstract type AbstractStokesModel end
 abstract type Viscous <: AbstractStokesModel end
 abstract type ViscoElastic <: AbstractStokesModel end
+abstract type ViscoPlastic <: AbstractStokesModel end
 
 function make_velocity_struct!(ndim::Integer; name::Symbol=:Velocity)
     dims = (:Vx, :Vy, :Vz)
@@ -23,16 +24,19 @@ end
 function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTensor)
     dims = (:x, :y, :z)
     fields = [:($(Symbol((dims[i]), (dims[j])))::T) for i in 1:nDim, j in 1:nDim if j ≥ i]
+    # push!(fields, Symbol("II")::T)
 
     @eval begin
         struct $(name){T}
             $(fields...)
+            II::T
 
             function $(name)(ni::NTuple{2,T}) where {T}
                 return new{$PTArray}(
-                    @zeros(ni...),            # xx
+                    @zeros(ni...), # xx
                     @zeros(ni[1] - 1, ni[2] - 1), # xy
-                    @zeros(ni...)             # yy
+                    @zeros(ni...), # yy
+                    @zeros(ni...) # II (second invariant)
                 )
             end
 
@@ -44,6 +48,7 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTens
                     @zeros(ni[1] - 1, ni[2] - 2, ni[3] - 1), # xz
                     @zeros(ni[1] - 2, ni[2] - 1, ni[3] - 1), # yz
                     @zeros(ni[1] - 2, ni[2] - 2, ni[3]), # zz
+                    @zeros(ni[1] - 2, ni[2] - 2, ni[3] - 2), # II (second invariant)
                 )
             end
         end
@@ -76,6 +81,7 @@ function make_stokes_struct!()
             dV::A
             ∇V::T
             τ::B
+            ε::B
             τ_o::Union{B,Nothing}
             R::C
 
@@ -86,11 +92,12 @@ function make_stokes_struct!()
                 ∇V = @zeros(ni...)
                 V = Velocity(((ni[1] + 1, ni[2]), (ni[1], ni[2] + 1)))
                 τ = SymmetricTensor(ni)
+                ε = SymmetricTensor(ni)
                 dV = Velocity(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
                 R = Residual(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
-                    P, V, dV, ∇V, τ, nothing, R
+                    P, V, dV, ∇V, τ, ε, nothing, R
                 )
             end
 
@@ -99,11 +106,12 @@ function make_stokes_struct!()
                 ∇V = @zeros(ni...)
                 V = Velocity(((ni[1] + 1, ni[2]), (ni[1], ni[2] + 1)))
                 τ = SymmetricTensor(ni)
+                ε = SymmetricTensor(ni)
                 dV = Velocity(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
                 R = Residual(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
-                    P, V, dV, ∇V, τ, deepcopy(τ), R
+                    P, V, dV, ∇V, τ, ε, deepcopy(τ), R
                 )
             end
 
@@ -118,6 +126,7 @@ function make_stokes_struct!()
                     (ni[1], ni[2], ni[3] + 1),
                 ))
                 τ = SymmetricTensor(ni)
+                ε = SymmetricTensor(ni)
                 dV = Velocity((
                     (ni[1] - 1, ni[2] - 2, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 1, ni[3] - 2),
@@ -130,7 +139,7 @@ function make_stokes_struct!()
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
-                    P, V, dV, ∇V, τ, nothing, R
+                    P, V, dV, ∇V, τ, ε, nothing, R
                 )
             end
 
@@ -143,6 +152,7 @@ function make_stokes_struct!()
                     (ni[1], ni[2], ni[3] + 1),
                 ))
                 τ = SymmetricTensor(ni)
+                ε = SymmetricTensor(ni)
                 dV = Velocity((
                     (ni[1] - 1, ni[2] - 2, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 1, ni[3] - 2),
@@ -155,7 +165,7 @@ function make_stokes_struct!()
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
-                    P, V, dV, ∇V, τ, deepcopy(τ), R
+                    P, V, dV, ∇V, τ, ε, deepcopy(τ), R
                 )
             end
         end

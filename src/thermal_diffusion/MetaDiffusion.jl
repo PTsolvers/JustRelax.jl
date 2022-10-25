@@ -7,35 +7,39 @@ function make_thermal_arrays!(ndim)
     @eval begin
         struct ThermalArrays{_T}
             T::_T
-            T0::_T
+            ΔT::_T
             Told::_T
+            dT_dt::_T
             $(flux1...)
             $(flux2...)
             ResT::_T
 
             function ThermalArrays(ni::NTuple{1,Integer})
-                nx = ni[1]
-                T, T0, Told = @zeros(ni...), @zeros(ni...), @zeros(ni...)
+                nx, = ni
+                T, ΔT, Told = @zeros(ni...), @zeros(ni...), @zeros(ni...)
+                dT_dt = @zeros(nx - 2)
                 qTx = @zeros(nx - 1)
                 qTx2 = @zeros(nx - 1)
                 ResT = @zeros(nx - 2)
-                return new{typeof(T)}(T, T0, Told, qTx, qTx2, ResT)
+                return new{typeof(T)}(T, ΔT, Told, dT_dt, qTx, qTx2, ResT)
             end
 
             function ThermalArrays(ni::NTuple{2,Integer})
                 nx, ny = ni
-                T, T0, Told = @zeros(ni...), @zeros(ni...), @zeros(ni...)
+                T, ΔT, Told = @zeros(ni...), @zeros(ni...), @zeros(ni...)
+                dT_dt = @zeros((ni .- 2))
                 qTx = @zeros(nx - 1, ny - 2)
                 qTy = @zeros(nx - 2, ny - 1)
                 qTx2 = @zeros(nx - 1, ny - 2)
                 qTy2 = @zeros(nx - 2, ny - 1)
                 ResT = @zeros((ni .- 2)...)
-                return new{typeof(T)}(T, T0, Told, qTx, qTy, qTx2, qTy2, ResT)
+                return new{typeof(T)}(T, ΔT, Told, dT_dt, qTx, qTy, qTx2, qTy2, ResT)
             end
 
             function ThermalArrays(ni::NTuple{3,Integer})
                 nx, ny, nz = ni
-                T, T0, Told = @zeros(ni...), @zeros(ni...), @zeros(ni...)
+                T, ΔT, Told = @zeros(ni...), @zeros(ni...), @zeros(ni...)
+                dT_dt = @zeros((ni .- 2))
                 qTx = @zeros(nx - 1, ny - 2, nz - 2)
                 qTy = @zeros(nx - 2, ny - 1, nz - 2)
                 qTz = @zeros(nx - 2, ny - 2, nz - 1)
@@ -43,7 +47,7 @@ function make_thermal_arrays!(ndim)
                 qTy2 = @zeros(nx - 2, ny - 1, nz - 2)
                 qTz2 = @zeros(nx - 2, ny - 2, nz - 1)
                 ResT = @zeros((ni .- 2)...)
-                return new{typeof(T)}(T, T0, Told, qTx, qTy, qTz, qTx2, qTy2, qTz2, ResT)
+                return new{typeof(T)}(T, ΔT, Told, dT_dt, qTx, qTy, qTz, qTx2, qTy2, qTz2, ResT)
             end
         end
     end

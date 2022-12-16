@@ -13,10 +13,7 @@ function check_convergence_case1()
     ny = 64
     Δη = 1e6
     geometry, stokes, iters, = solCx(Δη; nx=nx, ny=ny)
-    iters_expected = (
-        iter=26200,
-        err_evo1=[8.8280522037226e-9],
-    )
+    iters_expected = (iter=26200, err_evo1=[8.8280522037226e-9])
     println(iters)
     println(iters_expected)
     return iters.iter == iters_expected.iter &&

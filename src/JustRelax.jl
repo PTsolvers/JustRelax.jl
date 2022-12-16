@@ -7,6 +7,7 @@ using LinearAlgebra
 using Printf
 using CUDA
 using MPI
+using GeoParams
 
 include("topology/Topology.jl")
 include("MetaJustRelax.jl")

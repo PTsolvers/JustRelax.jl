@@ -9,6 +9,7 @@ macro allocate(ni...)
 end
 
 ## Others
+
 export assign!
 
 @parallel function assign!(B::AbstractArray{T,N}, A::AbstractArray{T,N}) where {T,N}

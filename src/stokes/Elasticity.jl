@@ -61,55 +61,6 @@ export solve!
 
 ## 2D ELASTIC KERNELS
 
-@parallel function compute_dV_elastic!(
-    dVx::AbstractArray{T,2},
-    dVy::AbstractArray{T,2},
-    P::AbstractArray{T,2},
-    τxx::AbstractArray{T,2},
-    τyy::AbstractArray{T,2},
-    τxy::AbstractArray{T,2},
-    dτ_Rho::AbstractArray{T,2},
-    ρg::AbstractArray{T,2},
-    _dx::T,
-    _dy::T,
-) where {T}
-    @all(dVx) = (@d_xi(τxx) * _dx + @d_ya(τxy) * _dy - @d_xi(P) * _dx) * @harm_xi(dτ_Rho)
-    @all(dVy) =
-        (@d_yi(τyy) * _dy + @d_xa(τxy) * _dx - @d_yi(P) * _dy - @harm_yi(ρg)) *
-        @harm_yi(dτ_Rho)
-    return nothing
-end
-
-@parallel function compute_Res!(
-    Rx::AbstractArray{T,2},
-    Ry::AbstractArray{T,2},
-    P::AbstractArray{T,2},
-    τxx::AbstractArray{T,2},
-    τyy::AbstractArray{T,2},
-    τxy::AbstractArray{T,2},
-    ρg::AbstractArray{T,2},
-    dx::T,
-    dy::T,
-) where {T}
-    @all(Rx) = @d_xi(τxx) / dx + @d_ya(τxy) / dy - @d_xi(P) / dx
-    @all(Ry) = @d_yi(τyy) / dy + @d_xa(τxy) / dx - @d_yi(P) / dy - @harm_yi(ρg)
-    return nothing
-end
-
-@parallel function update_τ_o!(
-    τxx_o::AbstractArray{T,2},
-    τyy_o::AbstractArray{T,2},
-    τxy_o::AbstractArray{T,2},
-    τxx::AbstractArray{T,2},
-    τyy::AbstractArray{T,2},
-    τxy::AbstractArray{T,2},
-) where {T}
-    @all(τxx_o) = @all(τxx)
-    @all(τyy_o) = @all(τyy)
-    @all(τxy_o) = @all(τxy)
-    return nothing
-end
-
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
     τ, τ_o = stress(stokes)
     τxx, τyy, τxy = τ
@@ -117,42 +68,53 @@ function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C
     @parallel update_τ_o!(τxx_o, τyy_o, τxy_o, τxx, τyy, τxy)
 end
 
-macro Gr()
-    return esc(:(@all(Gdτ) / (G * dt)))
-end
-macro av_Gr()
-    return esc(:(@av(Gdτ) / (G * dt)))
-end
-macro harm_Gr()
-    return esc(:(@harm(Gdτ) / (G * dt)))
-end
-@parallel function compute_τ!(
-    τxx::AbstractArray{T,2},
-    τyy::AbstractArray{T,2},
-    τxy::AbstractArray{T,2},
-    τxx_o::AbstractArray{T,2},
-    τyy_o::AbstractArray{T,2},
-    τxy_o::AbstractArray{T,2},
-    Gdτ::AbstractArray{T,2},
-    εxx::AbstractArray{T,2},
-    εyy::AbstractArray{T,2},
-    εxy::AbstractArray{T,2},
-    η::AbstractArray{T,2},
-    G::T,
-    dt::T,
-) where {T}
-    @all(τxx) =
-        (@all(τxx) + @all(τxx_o) * @Gr() + T(2) * @all(Gdτ) * @all(εxx)) /
-        (one(T) + @all(Gdτ) / @all(η) + @Gr())
-    @all(τyy) =
-        (@all(τyy) + @all(τyy_o) * @Gr() + T(2) * @all(Gdτ) * @all(εyy)) /
-        (one(T) + @all(Gdτ) / @all(η) + @Gr())
-    @all(τxy) =
-        (@all(τxy) + @all(τxy_o) * @harm_Gr() + T(2) * @harm(Gdτ) * @all(εxy)) /
-        (one(T) + @harm(Gdτ) / @harm(η) + @harm_Gr())
+@parallel function update_τ_o!(τxx_o, τyy_o, τxy_o, τxx, τyy, τxy)
+    @all(τxx_o) = @all(τxx)
+    @all(τyy_o) = @all(τyy)
+    @all(τxy_o) = @all(τxy)
     return nothing
 end
 
+@parallel function compute_∇V!(∇V, Vx, Vy, _dx, _dy)
+    @all(∇V) = @d_xa(Vx) * _dx + @d_ya(Vy) * _dy
+    return nothing
+end
+
+@parallel function compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
+    @all(εxx) =        @d_xa(Vx) * _dx - @all(∇V) / 3.0
+    @all(εyy) =        @d_ya(Vy) * _dy - @all(∇V) / 3.0
+    @inn(εxy) = 0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx)
+    return nothing
+end
+
+@parallel function compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
+    @all(RP) = (-@all(∇V) - (@all(P) - @all(P_old)) / (@all(K) * dt))
+    @all(P)  = @all(P) + (-@all(∇V) +  @all(RP)) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 /(@all(K) * dt))
+    return nothing
+end
+
+@parallel function compute_Res!(Rx, Ry, P, τxx, τyy, τxyv, ρgx, ρgy, _dx, _dy)
+    @all(Rx) = (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @all(ρgx))
+    @all(Ry) = (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @all(ρgy))
+    return nothing
+end
+
+@parallel function compute_V!(Vx, Vy, P, τxx, τyy, τxyv, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
+    @inn_x(Vx) = @inn_x(Vx) + (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @all(ρgx)) * ηdτ / @av_xa(ητ)
+    @inn_y(Vy) = @inn_y(Vy) + (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @all(ρgy)) * ηdτ / @av_ya(ητ)
+
+    return nothing
+end
+
+@parallel function compute_τ!(
+    τxx, τyy, τxyv, τxx_o, τyy_o, τxyv_o, εxx, εyy, εxyv, η, G, θ_dτ, dt
+)
+    @all(τxx)  = @all(τxx)  + (-( @all(τxx) -  @all(τxx_o)) -  @all(τxx) + 2 * @all(η) *  @all(εxx)) * 1.0/(θ_dτ + @all(η) / (@all(G)*dt) + 1.0)
+    @all(τyy)  = @all(τyy)  + (-( @all(τyy) -  @all(τyy_o)) -  @all(τyy) + 2 * @all(η) *  @all(εyy)) * 1.0/(θ_dτ + @all(η) / (@all(G)*dt) + 1.0)
+    @inn(τxyv) = @inn(τxyv) + (-(@inn(τxyv) - @inn(τxyv_o)) - @inn(τxyv) + 2 *  @av(η) * @inn(εxyv)) * 1.0/(θ_dτ +  @av(η) /  (@av(G)*dt) + 1.0)
+
+    return nothing
+end
 
 ## 2D VISCO-ELASTIC STOKES SOLVER 
 
@@ -161,11 +123,11 @@ function JustRelax.solve!(
     pt_stokes::PTStokesCoeffs,
     di::NTuple{2,T},
     li::NTuple{2,T},
-    max_li,
     freeslip,
     ρg,
     η,
     G,
+    K,
     dt;
     iterMax=10e3,
     nout=500,
@@ -173,26 +135,25 @@ function JustRelax.solve!(
 ) where {A,B,C,D,T}
 
     # unpack
-    dx, dy = di
     _dx, _dy = inv.(di)
     lx, ly = li
     Vx, Vy = stokes.V.Vx, stokes.V.Vy
-    dVx, dVy = stokes.dV.Vx, stokes.dV.Vy
     εxx, εyy, εxy = strain(stokes)
     τ, τ_o = stress(stokes)
     τxx, τyy, τxy = τ
     τxx_o, τyy_o, τxy_o = τ_o
     P, ∇V = stokes.P, stokes.∇V
-    Rx, Ry = stokes.R.Rx, stokes.R.Ry
-    Gdτ, dτ_Rho, ϵ, Re, r, Vpdτ = pt_stokes.Gdτ,
-    pt_stokes.dτ_Rho, pt_stokes.ϵ, pt_stokes.Re, pt_stokes.r,
-    pt_stokes.Vpdτ
+    Rx, Ry, RP = stokes.R.Rx, stokes.R.Ry, stokes.R.RP
+    ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ,  pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
+
+    ρgx, ρgy = ρg
+    P_old = deepcopy(P)
 
     # ~preconditioner
     ητ = deepcopy(η)
     @parallel compute_maxloc!(ητ, η)
     # PT numerical coefficients
-    @parallel elastic_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, G, dt, Re, r, max_li)
+    # @parallel elastic_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, G, dt, Re, r, max_li)
 
     _sqrt_leng_Rx = one(T) / sqrt(length(Rx))
     _sqrt_leng_Ry = one(T) / sqrt(length(Ry))
@@ -212,40 +173,37 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel compute_strain_rate!(εxx, εyy, εxy, Vx, Vy, _dx, _dy)
-            @parallel compute_P!(∇V, P, εxx, εyy, Gdτ, r)
-            @parallel compute_τ!(
-                τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, Gdτ, εxx, εyy, εxy, η, G, dt
-            )
-            @parallel compute_dV_elastic!(dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, _dx, _dy)
-            @parallel compute_V!(Vx, Vy, dVx, dVy)
-
             # free slip boundary conditions
             apply_free_slip!(freeslip, Vx, Vy)
+
+            @parallel JustRelax.Elasticity2D.compute_∇V!(∇V, Vx, Vy, _dx, _dy)
+            @parallel JustRelax.Elasticity2D.compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
+            @parallel JustRelax.Elasticity2D.compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
+            @parallel JustRelax.Elasticity2D.compute_τ!(
+                τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
+            )
+            @parallel JustRelax.Elasticity2D.compute_V!(Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
+
         end
 
         iter += 1
         if iter % nout == 0 && iter > 1
-            cont += 1
-            wtime0 += @elapsed begin
-                @parallel compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρg, dx, dy)
-            end
-            Vmin, Vmax = minimum(Vy), maximum(Vy)
-            Pmin, Pmax = minimum(P), maximum(P)
-            push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx * _sqrt_leng_Rx)
-            push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx * _sqrt_leng_Ry)
-            push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx * _sqrt_leng_∇V)
-            err = maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]])
-            push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]]))
+            @parallel JustRelax.Elasticity2D.compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
+
+            push!(norm_Rx, maximum(abs.(Rx)))
+            push!(norm_Ry, maximum(abs.(Ry)))
+            push!(norm_∇V, maximum(abs.(RP)))
+            err = max(norm_Rx[end], norm_Ry[end], norm_∇V[coendnendt])
+            push!(err_evo1, err)
             push!(err_evo2, iter)
-            if verbose && (err < ϵ) || (iter == iterMax)
+            if( verbose && (err > ϵ)) || (iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
                     err,
-                    norm_Rx[cont],
-                    norm_Ry[cont],
-                    norm_∇V[cont]
+                    norm_Rx[end],
+                    norm_Ry[end],
+                    norm_∇V[end]
                 )
             end
         end
@@ -262,6 +220,113 @@ function JustRelax.solve!(
         norm_∇V=norm_∇V,
     )
 end
+
+# function JustRelax.solve!(
+#     stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
+#     pt_stokes::PTStokesCoeffs,
+#     di::NTuple{2,T},
+#     li::NTuple{2,T},
+#     max_li,
+#     freeslip,
+#     ρg,
+#     η,
+#     G,
+#     dt;
+#     iterMax=10e3,
+#     nout=500,
+#     verbose=true,
+# ) where {A,B,C,D,T}
+
+#     # unpack
+#     dx, dy = di
+#     _dx, _dy = inv.(di)
+#     lx, ly = li
+#     Vx, Vy = stokes.V.Vx, stokes.V.Vy
+#     dVx, dVy = stokes.dV.Vx, stokes.dV.Vy
+#     εxx, εyy, εxy = strain(stokes)
+#     τ, τ_o = stress(stokes)
+#     τxx, τyy, τxy = τ
+#     τxx_o, τyy_o, τxy_o = τ_o
+#     P, ∇V = stokes.P, stokes.∇V
+#     Rx, Ry = stokes.R.Rx, stokes.R.Ry
+#     Gdτ, dτ_Rho, ϵ, Re, r, Vpdτ = pt_stokes.Gdτ,
+#     pt_stokes.dτ_Rho, pt_stokes.ϵ, pt_stokes.Re, pt_stokes.r,
+#     pt_stokes.Vpdτ
+
+#     # ~preconditioner
+#     ητ = deepcopy(η)
+#     @parallel compute_maxloc!(ητ, η)
+#     # PT numerical coefficients
+#     @parallel elastic_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, G, dt, Re, r, max_li)
+
+#     _sqrt_leng_Rx = one(T) / sqrt(length(Rx))
+#     _sqrt_leng_Ry = one(T) / sqrt(length(Ry))
+#     _sqrt_leng_∇V = one(T) / sqrt(length(∇V))
+
+#     # errors
+#     err = 2 * ϵ
+#     iter = 0
+#     cont = 0
+#     err_evo1 = Float64[]
+#     err_evo2 = Float64[]
+#     norm_Rx = Float64[]
+#     norm_Ry = Float64[]
+#     norm_∇V = Float64[]
+
+#     # solver loop
+#     wtime0 = 0.0
+#     while iter < 2 || (err > ϵ && iter ≤ iterMax)
+#         wtime0 += @elapsed begin
+#             @parallel compute_strain_rate!(εxx, εyy, εxy, Vx, Vy, _dx, _dy)
+#             @parallel compute_P!(∇V, P, εxx, εyy, Gdτ, r)
+#             @parallel compute_τ!(
+#                 τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, Gdτ, εxx, εyy, εxy, η, G, dt
+#             )
+#             @parallel compute_dV_elastic!(dVx, dVy, P, τxx, τyy, τxy, dτ_Rho, ρg, _dx, _dy)
+#             @parallel compute_V!(Vx, Vy, dVx, dVy)
+
+#             # free slip boundary conditions
+#             apply_free_slip!(freeslip, Vx, Vy)
+#         end
+
+#         iter += 1
+#         if iter % nout == 0 && iter > 1
+#             cont += 1
+#             wtime0 += @elapsed begin
+#                 @parallel compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρg, dx, dy)
+#             end
+#             Vmin, Vmax = minimum(Vy), maximum(Vy)
+#             Pmin, Pmax = minimum(P), maximum(P)
+#             push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx * _sqrt_leng_Rx)
+#             push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx * _sqrt_leng_Ry)
+#             push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx * _sqrt_leng_∇V)
+#             err = maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]])
+#             push!(err_evo1, maximum([norm_Rx[cont], norm_Ry[cont], norm_∇V[cont]]))
+#             push!(err_evo2, iter)
+#             if verbose && (err < ϵ) || (iter == iterMax)
+#                 @printf(
+#                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
+#                     iter,
+#                     err,
+#                     norm_Rx[cont],
+#                     norm_Ry[cont],
+#                     norm_∇V[cont]
+#                 )
+#             end
+#         end
+#     end
+
+#     update_τ_o!(stokes)
+
+#     return (
+#         iter=iter,
+#         err_evo1=err_evo1,
+#         err_evo2=err_evo2,
+#         norm_Rx=norm_Rx,
+#         norm_Ry=norm_Ry,
+#         norm_∇V=norm_∇V,
+#     )
+# end
 
 end # END OF MODULE
 
@@ -996,18 +1061,7 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel compute_strain_rate!(
-                εxx,
-                εyy,
-                εzz,
-                εyz,
-                εxz,
-                εxy,
-                Vx,
-                Vy,
-                Vz,
-                _dx,
-                _dy,
-                _dz,
+                εxx, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, _dx, _dy, _dz
             )
             @parallel compute_P_τ!(
                 P,

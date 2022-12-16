@@ -46,7 +46,6 @@ using Printf
 import JustRelax: stress, strain, compute_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, Viscous
 import JustRelax: compute_maxloc!, solve!, pureshear_bc!
-# import JustRelax: second_invariant!
 
 export compute_P!, compute_V!, solve!
 
@@ -90,9 +89,12 @@ end
     η::AbstractArray{T,2},
     Gdτ::AbstractArray{T,2},
 ) where {T}
-    @all(τxx) = (@all(τxx) + T(2.0) * @all(Gdτ) * @all(εxx)) / (@all(Gdτ) / @all(η) + one(T))
-    @all(τyy) = (@all(τyy) + T(2.0) * @all(Gdτ) * @all(εyy)) / (@all(Gdτ) / @all(η) + one(T))
-    @all(τxy) = (@all(τxy) + T(2.0) * @harm(Gdτ) * @all(εxy)) / (@harm(Gdτ) / @harm(η) + one(T))
+    @all(τxx) =
+        (@all(τxx) + T(2.0) * @all(Gdτ) * @all(εxx)) / (@all(Gdτ) / @all(η) + one(T))
+    @all(τyy) =
+        (@all(τyy) + T(2.0) * @all(Gdτ) * @all(εyy)) / (@all(Gdτ) / @all(η) + one(T))
+    @all(τxy) =
+        (@all(τxy) + T(2.0) * @harm(Gdτ) * @all(εxy)) / (@harm(Gdτ) / @harm(η) + one(T))
     return nothing
 end
 

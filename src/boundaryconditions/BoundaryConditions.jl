@@ -21,24 +21,46 @@ function pureshear_bc!(
     return 
 end
 
-@parallel_indices (iy) function free_slip_x!(A::AbstractArray{eltype(PTArray),2})
-    A[1, iy] = A[2, iy]
-    A[end, iy] = A[end - 1, iy]
-    return nothing
-end
+# @parallel_indices (iy) function free_slip_x!(A::AbstractArray{eltype(PTArray),2})
+#     A[1, iy] = A[2, iy]
+#     A[end, iy] = A[end - 1, iy]
+#     return nothing
+# end
 
-@parallel_indices (ix) function free_slip_y!(A::AbstractArray{eltype(PTArray),2})
-    A[ix, 1] = A[ix, 2]
-    A[ix, end] = A[ix, end - 1]
+# @parallel_indices (ix) function free_slip_y!(A::AbstractArray{eltype(PTArray),2})
+#     A[ix, 1] = A[ix, 2]
+#     A[ix, end] = A[ix, end - 1]
+#     return nothing
+# end
+
+# function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{2,T}}, Vx, Vy) where {T}
+#     freeslip_x, freeslip_y = freeslip
+#     # free slip boundary conditions
+#     freeslip_x && (@parallel (1:size(Vy, 2)) free_slip_x!(Vy))
+
+#     freeslip_y && (@parallel (1:size(Vx, 1)) free_slip_y!(Vx))
+
+#     return nothing
+# end
+
+
+@inbounds @parallel_indices (i) function _apply_free_slip!(Ax, Ay, freeslip_x, freeslip_y)
+    if freeslip_y
+        Ay[1,   i] = Ay[2,       i]
+        Ay[end, i] = Ay[end - 1, i]
+    end
+
+    if freeslip_x
+        Ax[1,   i] = Ax[2,       i]
+        Ax[end, i] = Ax[end - 1, i]
+    end
     return nothing
 end
 
 function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{2,T}}, Vx, Vy) where {T}
     freeslip_x, freeslip_y = freeslip
     # free slip boundary conditions
-    freeslip_x && (@parallel (1:size(Vy, 2)) free_slip_x!(Vy))
-
-    freeslip_y && (@parallel (1:size(Vx, 1)) free_slip_y!(Vx))
+    @parallel (1:size(Vx, 1)) _apply_free_slip!(Vx, Vy', freeslip_x, freeslip_y)
 
     return nothing
 end

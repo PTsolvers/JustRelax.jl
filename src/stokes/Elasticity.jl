@@ -104,8 +104,8 @@ end
 end
 
 @parallel function compute_V!(Vx, Vy, P, τxx, τyy, τxyv, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
-    @inn_x(Vx) = @inn_x(Vx) + (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @all(ρgx)) * ηdτ / @av_xa(ητ)
-    @inn_y(Vy) = @inn_y(Vy) + (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @all(ρgy)) * ηdτ / @av_ya(ητ)
+    @inn_x(Vx) = @inn_x(Vx) + (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @all(ρgx)) * ηdτ / @harm_xa(ητ)
+    @inn_y(Vy) = @inn_y(Vy) + (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @all(ρgy)) * ηdτ / @harm_ya(ητ)
 
     return nothing
 end
@@ -116,9 +116,9 @@ end
 @parallel function compute_τ!(
     τxx, τyy, τxyv, τxx_o, τyy_o, τxyv_o, εxx, εyy, εxyv, η, θ_dτ
 )
-    @all(τxx)  = @all(τxx)  + (-( @all(τxx) -  @all(τxx_o)) -  @all(τxx) + 2 * @all(η) *  @all(εxx)) * 1.0/(θ_dτ + 1.0)
-    @all(τyy)  = @all(τyy)  + (-( @all(τyy) -  @all(τyy_o)) -  @all(τyy) + 2 * @all(η) *  @all(εyy)) * 1.0/(θ_dτ + 1.0)
-    @inn(τxyv) = @inn(τxyv) + (-(@inn(τxyv) - @inn(τxyv_o)) - @inn(τxyv) + 2 *  @av(η) * @inn(εxyv)) * 1.0/(θ_dτ + 1.0)
+    @all(τxx)  = @all(τxx)  + (-( @all(τxx) -  @all(τxx_o)) -  @all(τxx) + 2 *  @all(η) *  @all(εxx)) * 1.0/(θ_dτ + 1.0)
+    @all(τyy)  = @all(τyy)  + (-( @all(τyy) -  @all(τyy_o)) -  @all(τyy) + 2 *  @all(η) *  @all(εyy)) * 1.0/(θ_dτ + 1.0)
+    @inn(τxyv) = @inn(τxyv) + (-(@inn(τxyv) - @inn(τxyv_o)) - @inn(τxyv) + 2 * @harm(η) * @inn(εxyv)) * 1.0/(θ_dτ + 1.0)
 
     return nothing
 end
@@ -127,9 +127,9 @@ end
 @parallel function compute_τ!(
     τxx, τyy, τxyv, τxx_o, τyy_o, τxyv_o, εxx, εyy, εxyv, η, G, θ_dτ, dt
 )
-    @all(τxx)  = @all(τxx)  + (-( @all(τxx) -  @all(τxx_o)) -  @all(τxx) + 2 * @all(η) *  @all(εxx)) * 1.0/(θ_dτ + @all(η) / (@all(G)*dt) + 1.0)
-    @all(τyy)  = @all(τyy)  + (-( @all(τyy) -  @all(τyy_o)) -  @all(τyy) + 2 * @all(η) *  @all(εyy)) * 1.0/(θ_dτ + @all(η) / (@all(G)*dt) + 1.0)
-    @inn(τxyv) = @inn(τxyv) + (-(@inn(τxyv) - @inn(τxyv_o)) - @inn(τxyv) + 2 *  @av(η) * @inn(εxyv)) * 1.0/(θ_dτ +  @av(η) /  (@av(G)*dt) + 1.0)
+    @all(τxx)  = @all(τxx)  + (-( @all(τxx) -  @all(τxx_o)) -  @all(τxx) + 2 *  @all(η) *  @all(εxx)) * 1.0/(θ_dτ +  @all(η) /  (@all(G)*dt) + 1.0)
+    @all(τyy)  = @all(τyy)  + (-( @all(τyy) -  @all(τyy_o)) -  @all(τyy) + 2 *  @all(η) *  @all(εyy)) * 1.0/(θ_dτ +  @all(η) /  (@all(G)*dt) + 1.0)
+    @inn(τxyv) = @inn(τxyv) + (-(@inn(τxyv) - @inn(τxyv_o)) - @inn(τxyv) + 2 * @harm(η) * @inn(εxyv)) * 1.0/(θ_dτ + @harm(η) / (@harm(G)*dt) + 1.0)
 
     return nothing
 end
@@ -200,9 +200,6 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            # free slip boundary conditions
-            apply_free_slip!(freeslip, Vx, Vy)
-
             @parallel compute_∇V!(∇V, Vx, Vy, _dx, _dy)
             @parallel compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
             @parallel compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
@@ -211,15 +208,23 @@ function JustRelax.solve!(
             )
             @parallel compute_V!(Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
 
+            # free slip boundary conditions
+            apply_free_slip!(freeslip, Vx, Vy)
         end
 
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (1:nx-1, 1:ny-1) compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
 
-            push!(norm_Rx, maximum(abs.(Rx)))
-            push!(norm_Ry, maximum(abs.(Ry)))
-            push!(norm_∇V, maximum(abs.(RP)))
+            # push!(norm_Rx, maximum(abs.(Rx)))
+            # push!(norm_Ry, maximum(abs.(Ry)))
+            # push!(norm_∇V, maximum(abs.(RP)))
+
+            Vmin, Vmax = extrema(Vx)
+            Pmin, Pmax = extrema(P)
+            push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
+            push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
+            push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))
             err = max(norm_Rx[end], norm_Ry[end], norm_∇V[end])
             push!(err_evo1, err)
             push!(err_evo2, iter)
@@ -296,8 +301,6 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            # free slip boundary conditions
-            apply_free_slip!(freeslip, Vx, Vy)
 
             @parallel compute_∇V!(∇V, Vx, Vy, _dx, _dy)
             @parallel compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
@@ -307,6 +310,8 @@ function JustRelax.solve!(
             )
             @parallel compute_V!(Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
 
+            # free slip boundary conditions
+            apply_free_slip!(freeslip, Vx, Vy)
         end
 
         iter += 1

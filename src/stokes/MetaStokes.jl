@@ -91,11 +91,11 @@ function make_stokes_struct!()
             function StokesArrays(ni::NTuple{2,T}, model::Type{Viscous}) where {T}
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
-                V = Velocity(((ni[1] + 1, ni[2]), (ni[1], ni[2] + 1)))
+                V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1], ni[2] + 2)))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
                 dV = Velocity(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
-                R = Residual(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)), ni)
+                R = Residual(((ni[1] - 1, ni[2]), (ni[1], ni[2] - 1)), ni)
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
                     P, V, dV, ∇V, τ, ε, nothing, R
@@ -105,11 +105,11 @@ function make_stokes_struct!()
             function StokesArrays(ni::NTuple{2,T}, model::Type{ViscoElastic}) where {T}
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
-                V = Velocity(((ni[1] + 1, ni[2]), (ni[1], ni[2] + 1)))
+                V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1] + 2, ni[2] + 1)))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
                 dV = Velocity(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
-                R = Residual(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1), ni))
+                R = Residual(((ni[1] - 1, ni[2]), (ni[1], ni[2] - 1), ni))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
                     P, V, dV, ∇V, τ, ε, deepcopy(τ), R

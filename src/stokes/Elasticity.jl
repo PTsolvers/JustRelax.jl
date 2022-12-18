@@ -75,15 +75,27 @@ end
     return nothing
 end
 
+# @parallel function compute_∇V!(∇V, Vx, Vy, _dx, _dy)
+#     @all(∇V) = @d_xa(Vx) * _dx + @d_ya(Vy) * _dy
+#     return nothing
+# end
+
+# @parallel function compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
+#     @all(εxx) =        @d_xa(Vx) * _dx - @all(∇V) / 3.0
+#     @all(εyy) =        @d_ya(Vy) * _dy - @all(∇V) / 3.0
+#     @inn(εxy) = 0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx)
+#     return nothing
+# end
+
 @parallel function compute_∇V!(∇V, Vx, Vy, _dx, _dy)
-    @all(∇V) = @d_xa(Vx) * _dx + @d_ya(Vy) * _dy
+    @all(∇V) = @d_xi(Vx) * _dx + @d_yi(Vy) * _dy
     return nothing
 end
 
 @parallel function compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
-    @all(εxx) =        @d_xa(Vx) * _dx - @all(∇V) / 3.0
-    @all(εyy) =        @d_ya(Vy) * _dy - @all(∇V) / 3.0
-    @inn(εxy) = 0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx)
+    @all(εxx) =        @d_xi(Vx) * _dx - @all(∇V) / 3.0
+    @all(εyy) =        @d_yi(Vy) * _dy - @all(∇V) / 3.0
+    @all(εxy) = 0.5 * (@d_ya(Vx) * _dy + @d_xa(Vy) * _dx)
     return nothing
 end
 
@@ -103,9 +115,16 @@ end
     return nothing
 end
 
+# @parallel function compute_V!(Vx, Vy, P, τxx, τyy, τxyv, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
+#     @inn_x(Vx) = @inn_x(Vx) + (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @all(ρgx)) * ηdτ / @harm_xa(ητ)
+#     @inn_y(Vy) = @inn_y(Vy) + (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @all(ρgy)) * ηdτ / @harm_ya(ητ)
+
+#     return nothing
+# end
+
 @parallel function compute_V!(Vx, Vy, P, τxx, τyy, τxyv, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
-    @inn_x(Vx) = @inn_x(Vx) + (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @all(ρgx)) * ηdτ / @harm_xa(ητ)
-    @inn_y(Vy) = @inn_y(Vy) + (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @all(ρgy)) * ηdτ / @harm_ya(ητ)
+    @inn(Vx) = @inn(Vx) + (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @all(ρgx)) * ηdτ / @harm_xa(ητ)
+    @inn(Vy) = @inn(Vy) + (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @all(ρgy)) * ηdτ / @harm_ya(ητ)
 
     return nothing
 end
@@ -134,22 +153,29 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
+@parallel function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
+    @inn_x(Rx) = -@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxy) * _dy - @all(ρgx)
+    @inn_y(Ry) = -@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxy) * _dx - @all(ρgy)
 
-    # Again, indices i, j are captured by the closure
-    @inbounds @inline d_xa(A)  = (A[i+1, j+1] - A[i  , j+1]) * _dx 
-    @inbounds @inline d_ya(A)  = (A[i+1, j+1] - A[i+1, j  ]) * _dy
-    @inbounds @inline d_xi(A)  = (A[i+2, j+1] - A[i+1, j+1]) * _dx
-    @inbounds @inline d_yi(A)  = (A[i+1, j+2] - A[i+1, j+1]) * _dy
-    
-    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-        @inbounds Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - ρgx[i  , j+1]
-    end
-    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-        @inbounds Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - ρgy[i+1, j  ]
-    end
     return nothing
 end
+
+# @parallel_indices (i, j) function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
+
+#     # Again, indices i, j are captured by the closure
+#     @inbounds @inline d_xa(A)  = (A[i+1, j+1] - A[i  , j+1]) * _dx 
+#     @inbounds @inline d_ya(A)  = (A[i+1, j+1] - A[i+1, j  ]) * _dy
+#     @inbounds @inline d_xi(A)  = (A[i+2, j+1] - A[i+1, j+1]) * _dx
+#     @inbounds @inline d_yi(A)  = (A[i+1, j+2] - A[i+1, j+1]) * _dy
+    
+#     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
+#         @inbounds Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - ρgx[i  , j+1]
+#     end
+#     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+#         @inbounds Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - ρgy[i+1, j  ]
+#     end
+#     return nothing
+# end
 
 ## 2D VISCO-ELASTIC STOKES SOLVER 
 

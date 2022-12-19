@@ -15,23 +15,23 @@ function pureshear_bc!(
     #     εbg * ((iy - 1) * dy - 0.5 * ly) for ix in 1:size(Vy, 1), iy in 1:size(Vy, 2)
     # ])
 
-    stokes.V.Vx[:, 2:end-1] .= PTArray([ εbg * x for x in xvi[1], y in xci[2]])
-    stokes.V.Vy[2:end-1, :] .= PTArray([-εbg * y for x in xci[1], y in xvi[2]])
+    stokes.V.Vx[:, 2:(end - 1)] .= PTArray([εbg * x for x in xvi[1], y in xci[2]])
+    stokes.V.Vy[2:(end - 1), :] .= PTArray([-εbg * y for x in xci[1], y in xvi[2]])
 
-    return 
+    return nothing
 end
 
-# @parallel_indices (iy) function free_slip_x!(A::AbstractArray{eltype(PTArray),2})
-#     A[1, iy] = A[2, iy]
-#     A[end, iy] = A[end - 1, iy]
-#     return nothing
-# end
+@parallel_indices (iy) function free_slip_x!(A::AbstractArray{eltype(PTArray),2})
+    A[1, iy] = A[2, iy]
+    A[end, iy] = A[end - 1, iy]
+    return nothing
+end
 
-# @parallel_indices (ix) function free_slip_y!(A::AbstractArray{eltype(PTArray),2})
-#     A[ix, 1] = A[ix, 2]
-#     A[ix, end] = A[ix, end - 1]
-#     return nothing
-# end
+@parallel_indices (ix) function free_slip_y!(A::AbstractArray{eltype(PTArray),2})
+    A[ix, 1] = A[ix, 2]
+    A[ix, end] = A[ix, end - 1]
+    return nothing
+end
 
 # function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{2,T}}, Vx, Vy) where {T}
 #     freeslip_x, freeslip_y = freeslip
@@ -43,24 +43,23 @@ end
 #     return nothing
 # end
 
-
 @inbounds @parallel_indices (i) function _apply_free_slip!(Ax, Ay, freeslip_x, freeslip_y)
-    if freeslip_y
-        Ay[1,   i] = Ay[2,       i]
-        Ay[end, i] = Ay[end - 1, i]
+    if freeslip_x && i ≤ size(Ax, 1)
+        Ax[i, 1] = Ax[i, 2]
+        Ax[i, end] = Ax[i, end - 1]
     end
-
-    if freeslip_x
-        Ax[1,   i] = Ax[2,       i]
-        Ax[end, i] = Ax[end - 1, i]
+    if freeslip_y && i ≤ size(Ay, 2)
+        Ay[1, i] = Ay[2, i]
+        Ay[end, i] = Ay[end - 1, i]
     end
     return nothing
 end
 
 function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{2,T}}, Vx, Vy) where {T}
     freeslip_x, freeslip_y = freeslip
+    n = max(size(Vx, 1), size(Vy, 2))
     # free slip boundary conditions
-    @parallel (1:size(Vx, 1)) _apply_free_slip!(Vx, Vy', freeslip_x, freeslip_y)
+    @parallel (1:n) _apply_free_slip!(Vx, Vy, freeslip_x, freeslip_y)
 
     return nothing
 end

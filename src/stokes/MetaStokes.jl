@@ -175,6 +175,7 @@ function make_stokes_struct!()
     end
 end
 
+## OLD VERSION
 # function make_PTstokes_struct!()
 #     @eval begin
 #         struct PTStokesCoeffs{T,nDim}
@@ -199,6 +200,7 @@ end
 #     end
 # end
 
+# NEW VERSION
 function make_PTstokes_struct!()
     @eval begin
         struct PTStokesCoeffs{T}

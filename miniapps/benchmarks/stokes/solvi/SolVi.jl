@@ -31,19 +31,19 @@ function solvi_viscosity(ni, di, li, rc, η0, ηi)
         ) for ix in 1:ni[1], iy in 1:ni[2]
     ]
     η[Rad2 .< rc] .= ηi
-    η2 = deepcopy(η)
-    η3 = deepcopy(η)
-    for _ in 1:10
-        @parallel smooth!(η2, η, 1.0)
-        η, η2 = η2, η
-    end
-    η3[Rad2 .< rc] .= η[Rad2 .< rc]
-    η = deepcopy(η3)
-    η2 = deepcopy(η)
-    for _ in 1:10
-        @parallel smooth!(η2, η, 1.0)
-        η, η2 = η2, η
-    end
+    # η2 = deepcopy(η)
+    # η3 = deepcopy(η)
+    # for _ in 1:10
+    #     @parallel smooth!(η2, η, 1.0)
+    #     η, η2 = η2, η
+    # end
+    # η3[Rad2 .< rc] .= η[Rad2 .< rc]
+    # η = deepcopy(η3)
+    # η2 = deepcopy(η)
+    # for _ in 1:10
+    #     @parallel smooth!(η2, η, 1.0)
+    #     η, η2 = η2, η
+    # end
 
     return η
 end
@@ -67,7 +67,7 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni, Viscous)
+    stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(ni, di)
 
@@ -75,17 +75,21 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
     η0 = 1.0  # matrix viscosity
     ηi = Δη # inclusion viscosity
     η = solvi_viscosity(ni, di, li, rc, η0, ηi) # viscosity field
+    
+    ρg = @zeros(ni...), @zeros(ni...)
+    dt = Inf
+    G = @fill(Inf, ni...)
+    K = @fill(Inf, ni...)
 
     ## Boundary conditions
-    pureshear_bc!(stokes, di, li, εbg)
+    pureshear_bc!(stokes, xci, xvi, εbg)
     freeslip = (freeslip_x=true, freeslip_y=true)
 
     # Physical time loop
     t = 0.0
-    ρ = @zeros(size(stokes.P))
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, ρ, η; iterMax=10e3)
+        iters = solve!( stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=150e3)
         t += Δt
     end
 

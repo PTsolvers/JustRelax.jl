@@ -59,10 +59,7 @@ function elastic_buildup(;
         else
             dt = 2 * kyr
         end
-        iters = 
-        solve!(
-            stokes, pt_stokes, di, li, freeslip, ρg, η, Gc, K, dt
-        )
+        iters = solve!(stokes, pt_stokes, di, li, freeslip, ρg, η, Gc, K, dt)
         t += dt
 
         push!(av_τyy, mean(stokes.τ.yy))

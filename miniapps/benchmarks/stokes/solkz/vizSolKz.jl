@@ -38,8 +38,8 @@ function Li_error(geometry, stokes::StokesArrays; order=2)
 
     Li(A, B; order=2) = norm(A .- B, order)
 
-    L2_vx = Li(stokes.V.Vx, PTArray(solk.vx); order=order) * gridsize
-    L2_vy = Li(stokes.V.Vy, PTArray(solk.vy); order=order) * gridsize
+    L2_vx = Li(stokes.V.Vx[:, 2:end-1], PTArray(solk.vx); order=order) * gridsize
+    L2_vy = Li(stokes.V.Vy[2:end-1, :], PTArray(solk.vy); order=order) * gridsize
     L2_p = Li(stokes.P, PTArray(solk.p); order=order) * gridsize
 
     return L2_vx, L2_vy, L2_p
@@ -65,14 +65,14 @@ function plot_solkz(geometry, ρ, stokes::StokesArrays; cmap=:vik)
 
     # Velocity-x
     ax1 = Axis(f[2, 1]; aspect=1)
-    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], stokes.V.Vx; colormap=cmap)
+    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], stokes.V.Vx[:, 2:end-1]; colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[2, 2], h1; label="Vx")
 
     # Velocity-y
     ax1 = Axis(f[2, 3]; aspect=1)
-    h1 = heatmap!(ax1, geometry.xvi[2], geometry.xci[1], stokes.V.Vy; colormap=cmap)
+    h1 = heatmap!(ax1, geometry.xvi[2], geometry.xci[1], stokes.V.Vy[2:end-1, :]; colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[2, 4], h1; label="Vy")
@@ -150,7 +150,7 @@ function plot_solKz_error(geometry, stokes::StokesArrays; cmap=:vik)
     # ROW 2: Velocity-x
     # Numerical
     ax1 = Axis(f[2, 1]; aspect=1)
-    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], Array(stokes.V.Vx); colormap=cmap)
+    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], Array(stokes.V.Vx[:, 2:end-1]); colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
 
@@ -176,7 +176,7 @@ function plot_solKz_error(geometry, stokes::StokesArrays; cmap=:vik)
         ax1,
         geometry.xvi[1],
         geometry.xci[2],
-        log10.(err1(Array(stokes.V.Vx), solk.vx));
+        log10.(err1(Array(stokes.V.Vx[2:end-1, 2:end-1]), solk.vx[2:end-1, :]));
         colormap=:batlow,
     )
     xlims!(ax1, (0, 1))
@@ -192,7 +192,7 @@ function plot_solKz_error(geometry, stokes::StokesArrays; cmap=:vik)
     # ROW 3: Velocity-y
     # Numerical
     ax1 = Axis(f[3, 1]; aspect=1)
-    h1 = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], Array(stokes.V.Vy); colormap=cmap)
+    h1 = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], Array(stokes.V.Vy[2:end-1, :]); colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
 
@@ -214,7 +214,7 @@ function plot_solKz_error(geometry, stokes::StokesArrays; cmap=:vik)
         ax1,
         geometry.xci[1],
         geometry.xvi[2],
-        log10.(err1(Array(stokes.V.Vy), solk.vy));
+        log10.(err1(Array(stokes.V.Vy[2:end-1, 2:end-1]), solk.vy[:, 2:end-1]));
         colormap=:batlow,
     )
     xlims!(ax1, (0, 1))

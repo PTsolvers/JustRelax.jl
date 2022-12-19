@@ -19,7 +19,7 @@ end
 function solvi_viscosity(xci, ni, li, rc, η0, ηi)
     cx, cy = li ./ 2
     η = fill(η0, ni...)
-    Rad2 = [(x - cx) ^ 2 + (y - cy) ^ 2 for x in xci[1], y in xci[2]]
+    Rad2 = [(x - cx)^2 + (y - cy)^2 for x in xci[1], y in xci[2]]
     η[Rad2 .< rc] .= ηi
     # η2 = deepcopy(η)
     # η3 = deepcopy(η)
@@ -63,13 +63,13 @@ function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, �
     ## Setup-specific parameters and fields
     η0 = 1e0  # matrix viscosity
     ηi = 1e-1 # inclusion viscosity
-    η  = solvi_viscosity(xci, ni, li, rc, η0, ηi) # viscosity field
-    ξ  = 1.0 # Maxwell relaxation time
-    G  = 1.0 # elastic shear modulus
+    η = solvi_viscosity(xci, ni, li, rc, η0, ηi) # viscosity field
+    ξ = 1.0 # Maxwell relaxation time
+    G = 1.0 # elastic shear modulus
     # dt = η0 / (G * ξ)
     dt = 0.25
     Gc = @fill(G, ni...)
-    K  = @fill(Inf, ni...)
+    K = @fill(Inf, ni...)
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
@@ -77,18 +77,30 @@ function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, �
 
     # Physical time loop
     t = 0.0
-    ρg = (@zeros(nx-1, ny), @zeros(nx, ny-1))
+    # ρg = (@zeros(nx-1, ny), @zeros(nx, ny-1))
+    ρg = @zeros(ni...), @zeros(ni...)
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, li, freeslip, ρg, η, Gc, K, dt; nout=500, iterMax=20e3, verbose=true
+            stokes,
+            pt_stokes,
+            di,
+            freeslip,
+            ρg,
+            η,
+            Gc,
+            K,
+            dt;
+            nout=500,
+            iterMax=20e3,
+            verbose=true,
         )
         t += Δt
         heatmap(
             xci[1],
             xci[2],
-            # stokes.V.Vy;
-            stokes.ε.xy;
+            stokes.V.Vx;
+            # stokes.ε.xy;
             colormap=:batlow,
         )
     end
@@ -138,7 +150,7 @@ dVx, dVy = stokes.dV.Vx, stokes.dV.Vy
 τxx_o, τyy_o, τxy_o = τ_o
 P, ∇V = stokes.P, stokes.∇V
 Rx, Ry, RP = stokes.R.Rx, stokes.R.Ry, stokes.R.RP
-ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ,  pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
+ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
 
 ρgx, ρgy = ρg
 P_old = deepcopy(P)
@@ -173,22 +185,27 @@ while iter < 2 || (err > ϵ && iter ≤ iterMax)
         apply_free_slip!(freeslip, Vx, Vy)
         for _ in 1:1000
             @parallel JustRelax.Elasticity2D.compute_∇V!(∇V, Vx, Vy, _dx, _dy)
-            @parallel JustRelax.Elasticity2D.compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
+            @parallel JustRelax.Elasticity2D.compute_strain_rate!(
+                εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
+            )
             @parallel JustRelax.Elasticity2D.compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
             @parallel JustRelax.Elasticity2D.compute_τ!(
                 τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, Gc, θ_dτ, dt
             )
-            @parallel JustRelax.Elasticity2D.compute_V!(Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
+            @parallel JustRelax.Elasticity2D.compute_V!(
+                Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy
+            )
         end
-        heatmap(xci[1], xci[2], εxy, colormap=:batlow)
-        heatmap(xci[1], xci[2], τxx, colormap=:batlow)
-        heatmap(xci[1], xci[2], Rx, colormap=:batlow)
-
+        heatmap(xci[1], xci[2], εxy; colormap=:batlow)
+        heatmap(xci[1], xci[2], τxx; colormap=:batlow)
+        heatmap(xci[1], xci[2], Rx; colormap=:batlow)
     end
 
     iter += 1
     if iter % nout == 0 && iter > 1
-        @parallel JustRelax.Elasticity2D.compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
+        @parallel JustRelax.Elasticity2D.compute_Res!(
+            Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
+        )
 
         push!(norm_Rx, maximum(abs.(Rx)))
         push!(norm_Ry, maximum(abs.(Ry)))
@@ -197,7 +214,7 @@ while iter < 2 || (err > ϵ && iter ≤ iterMax)
         push!(err_evo1, err)
         push!(err_evo2, iter)
 
-        if( verbose && (err > ϵ)) || (iter == iterMax)
+        if (verbose && (err > ϵ)) || (iter == iterMax)
             @printf(
                 "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                 iter,
@@ -210,10 +227,10 @@ while iter < 2 || (err > ϵ && iter ≤ iterMax)
     end
 end
 
-Re=3π
-CFL=0.9 / √2
-CFL=1 / √2.1
-r=0.7
+Re = 3π
+CFL = 0.9 / √2
+CFL = 1 / √2.1
+r = 0.7
 lτ = min(li...)
 Vpdτ = min(di...) * CFL
 θ_dτ = lτ * (r + 2.0) / (Re * Vpdτ)

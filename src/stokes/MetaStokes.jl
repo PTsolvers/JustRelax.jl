@@ -68,7 +68,9 @@ function make_residual_struct!(ndim; name::Symbol=:Residual)
             end
 
             function $(name)(ni::NTuple{4,T}) where {T}
-                return new{$PTArray}(@zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...),  @zeros(ni[4]...))
+                return new{$PTArray}(
+                    @zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...), @zeros(ni[4]...)
+                )
             end
         end
     end
@@ -208,9 +210,7 @@ function make_PTstokes_struct!()
             θ_dτ::T
             ηdτ::T
 
-            function PTStokesCoeffs(
-                li, di; ϵ=1e-8, Re=3π, CFL = 1 / √2.1, r=0.7
-            )
+            function PTStokesCoeffs(li, di; ϵ=1e-8, Re=3π, CFL=1 / √2.1, r=0.7)
                 lτ = min(li...)
                 Vpdτ = min(di...) * CFL
                 θ_dτ = lτ * (r + 2.0) / (Re * Vpdτ)

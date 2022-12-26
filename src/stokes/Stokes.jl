@@ -208,8 +208,8 @@ function solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
-            Vmin, Vmax = minimum(Vx), maximum(Vx)
-            Pmin, Pmax = minimum(P), maximum(P)
+            Vmin, Vmax = extrema(Vx)
+            Pmin, Pmax = extrema(P)
             push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
             push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
             push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))

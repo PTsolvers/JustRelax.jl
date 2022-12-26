@@ -165,6 +165,7 @@ function make_stokes_struct!()
                     (ni[1] - 1, ni[2] - 2, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 1, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 2, ni[3] - 1),
+                    ni,
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(

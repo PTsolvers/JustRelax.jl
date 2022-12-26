@@ -53,12 +53,8 @@ function solVi3D(;
     # independent of (MPI) parallelization
     ni = (nx, ny, nz) # number of nodes in x- and y-
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
-    @static if USE_GPU # select one GPU per MPI local rank (if >1 GPU per node)
-        select_device()
-    end
     li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    max_li = max(li...)
     xci, xvi = lazy_grid(di, li) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
@@ -78,6 +74,8 @@ function solVi3D(;
     G = 1.0 # elastic shear modulus
     dt = η0 / (G * ξ)
     η = viscosity(ni, di, li, rc, η0, ηi)
+    Gc = @fill(G, ni...) 
+    K = @fill(Inf, ni...) 
 
     ## Boundary conditions
     pureshear_bc!(stokes, di, li, εbg)
@@ -93,19 +91,17 @@ function solVi3D(;
         iters = solve!(
             stokes,
             pt_stokes,
-            ni,
             di,
             li,
-            max_li,
             freeslip,
             ρg,
             η,
-            G,
+            K,
+            Gc,
             dt,
             igg;
             iterMax=5000,
-            nout=2000,
-            b_width=(1, 1, 1),
+            nout=100,
         )
         t += dt
     end

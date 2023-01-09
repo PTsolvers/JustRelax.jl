@@ -53,7 +53,7 @@ function solVi3D(;
     # independent of (MPI) parallelization
     ni = nx, ny, nz # number of nodes in x- and y-
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
-    li = lx, ly, lz  # domain length in x- and y-
+    li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
     xci, xvi = lazy_grid(di, li) # nodes at the center and vertices of the cells
 
@@ -75,9 +75,8 @@ function solVi3D(;
     # dt = η0 / (G * ξ)
     dt = Inf
     η = viscosity(ni, di, li, rc, η0, ηi)
-    # Gc = @fill(G, ni...)
-    Gc = @fill(Inf, ni...)
-    K = @fill(Inf, ni...)
+    Gc = @fill(G, ni...) 
+    K = @fill(Inf, ni...) 
 
     ## Boundary conditions
     pureshear_bc!(stokes, di, li, εbg)
@@ -98,13 +97,12 @@ function solVi3D(;
             freeslip,
             ρg,
             η,
-            Gc,
             K,
+            Gc,
             dt,
             igg;
             iterMax=5000,
             nout=100,
-            b_width=(4, 4, 4),
         )
         t += dt
     end

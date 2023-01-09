@@ -75,18 +75,6 @@ end
     return nothing
 end
 
-# @parallel function compute_∇V!(∇V, Vx, Vy, _dx, _dy)
-#     @all(∇V) = @d_xa(Vx) * _dx + @d_ya(Vy) * _dy
-#     return nothing
-# end
-
-# @parallel function compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
-#     @all(εxx) =        @d_xa(Vx) * _dx - @all(∇V) / 3.0
-#     @all(εyy) =        @d_ya(Vy) * _dy - @all(∇V) / 3.0
-#     @inn(εxy) = 0.5 * (@d_yi(Vx) * _dy + @d_xi(Vy) * _dx)
-#     return nothing
-# end
-
 @parallel function compute_∇V!(∇V, Vx, Vy, _dx, _dy)
     @all(∇V) = @d_xi(Vx) * _dx + @d_yi(Vy) * _dy
     return nothing
@@ -132,18 +120,9 @@ end
 
 # viscous
 @parallel function compute_τ!(τxx, τyy, τxyv, τxx_o, τyy_o, τxyv_o, εxx, εyy, εxyv, η, θ_dτ)
-    @all(τxx) =
-        @all(τxx) +
-        (- @all(τxx) + 2 * @all(η) * @all(εxx)) * 1.0 /
-        (θ_dτ + 1.0)
-    @all(τyy) =
-        @all(τyy) +
-        (- @all(τyy) + 2 * @all(η) * @all(εyy)) * 1.0 /
-        (θ_dτ + 1.0)
-    @inn(τxyv) =
-        @inn(τxyv) +
-        (- @inn(τxyv) + 2 * @harm(η) * @inn(εxyv)) * 1.0 /
-        (θ_dτ + 1.0)
+    @all(τxx) = @all(τxx) + (-@all(τxx) + 2 * @all(η) * @all(εxx)) * 1.0 / (θ_dτ + 1.0)
+    @all(τyy) = @all(τyy) + (-@all(τyy) + 2 * @all(η) * @all(εyy)) * 1.0 / (θ_dτ + 1.0)
+    @inn(τxyv) = @inn(τxyv) + (-@inn(τxyv) + 2 * @harm(η) * @inn(εxyv)) * 1.0 / (θ_dτ + 1.0)
 
     return nothing
 end
@@ -154,16 +133,22 @@ end
 )
     @all(τxx) =
         @all(τxx) +
-        (-(@all(τxx) - @all(τxx_o)) *  @all(η) / (@all(G) * dt) - @all(τxx) + 2 * @all(η) * @all(εxx)) * 1.0 /
-        (θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
+        (
+            -(@all(τxx) - @all(τxx_o)) * @all(η) / (@all(G) * dt) - @all(τxx) +
+            2 * @all(η) * @all(εxx)
+        ) * 1.0 / (θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
     @all(τyy) =
         @all(τyy) +
-        (-(@all(τyy) - @all(τyy_o)) *  @all(η) / (@all(G) * dt) - @all(τyy) + 2 * @all(η) * @all(εyy)) * 1.0 /
-        (θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
+        (
+            -(@all(τyy) - @all(τyy_o)) * @all(η) / (@all(G) * dt) - @all(τyy) +
+            2 * @all(η) * @all(εyy)
+        ) * 1.0 / (θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
     @inn(τxyv) =
         @inn(τxyv) +
-        (-(@inn(τxyv) - @inn(τxyv_o)) * @harm(η) / (@harm(G) * dt)- @inn(τxyv) + 2 * @harm(η) * @inn(εxyv)) * 1.0 /
-        (θ_dτ + @harm(η) / (@harm(G) * dt) + 1.0)
+        (
+            -(@inn(τxyv) - @inn(τxyv_o)) * @harm(η) / (@harm(G) * dt) - @inn(τxyv) +
+            2 * @harm(η) * @inn(εxyv)
+        ) * 1.0 / (θ_dτ + @harm(η) / (@harm(G) * dt) + 1.0)
 
     return nothing
 end
@@ -444,9 +429,9 @@ end
 # Probably WRONG INDICES
 @parallel_indices (i, j, k) function compute_∇V!(∇V, Vx, Vy, Vz, _dx, _dy, _dz)
     @inbounds ∇V[i, j, k] =
-        _dx * (Vx[i + 1, j    , k    ] - Vx[i, j, k]) +
-        _dy * (Vy[i    , j + 1, k    ] - Vy[i, j, k]) +
-        _dz * (Vz[i    , j    , k + 1] - Vz[i, j, k])
+        _dx * (Vx[i + 1, j, k] - Vx[i, j, k]) +
+        _dy * (Vy[i, j + 1, k] - Vy[i, j, k]) +
+        _dz * (Vz[i, j, k + 1] - Vz[i, j, k])
 
     return nothing
 end
@@ -454,10 +439,10 @@ end
 @parallel_indices (i, j, k) function compute_strain_rate!(
     ∇V, εxx, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, _dx, _dy, _dz
 )
-    @inline @inbounds next(A)      = A[i + 1, j + 1, k + 1]
-    @inline @inbounds current_x(x) = x[i    , j + 1, k + 1]
-    @inline @inbounds current_y(x) = x[i + 1, j    , k + 1]
-    @inline @inbounds current_z(x) = x[i + 1, j + 1, k    ]
+    @inline @inbounds next(A) = A[i + 1, j + 1, k + 1]
+    @inline @inbounds current_x(x) = x[i, j + 1, k + 1]
+    @inline @inbounds current_y(x) = x[i + 1, j, k + 1]
+    @inline @inbounds current_z(x) = x[i + 1, j + 1, k]
 
     # normal components are all located @ cell centers
     if all((i, j, k) .≤ size(εxx))
@@ -523,14 +508,14 @@ end
     nz_1,
     nz_2,
 )
-    @inline @inbounds next(A)      = A[i + 1, j + 1, k + 1]
-    @inline @inbounds next_x(A)    = A[i + 1, j    , k    ]
-    @inline @inbounds next_y(A)    = A[i    , j + 1, k    ]
-    @inline @inbounds next_z(A)    = A[i    , j    , k + 1]
-    @inline @inbounds current(x)   = x[i    , j    , k    ]
-    @inline @inbounds current_x(x) = x[i    , j + 1, k + 1]
-    @inline @inbounds current_y(x) = x[i + 1, j    , k + 1]
-    @inline @inbounds current_z(x) = x[i + 1, j + 1, k    ]
+    @inline @inbounds next(A) = A[i + 1, j + 1, k + 1]
+    @inline @inbounds next_x(A) = A[i + 1, j, k]
+    @inline @inbounds next_y(A) = A[i, j + 1, k]
+    @inline @inbounds next_z(A) = A[i, j, k + 1]
+    @inline @inbounds current(x) = x[i, j, k]
+    @inline @inbounds current_x(x) = x[i, j + 1, k + 1]
+    @inline @inbounds current_y(x) = x[i + 1, j, k + 1]
+    @inline @inbounds current_z(x) = x[i + 1, j + 1, k]
     @inline @inbounds function harm_xi(x)
         2.0 / (1.0 / x[i, j + 1, k + 1] + 1.0 / x[i + 1, j + 1, k + 1])
     end
@@ -620,10 +605,10 @@ end
             1.0 / x[i + 1, j + 1, k + 1]
         )
     end
-    @inline @inbounds current(x)   = x[i    , j    , k    ]
-    @inline @inbounds current_x(x) = x[i    , j + 1, k + 1]
-    @inline @inbounds current_y(x) = x[i + 1, j    , k + 1]
-    @inline @inbounds current_z(x) = x[i + 1, j + 1, k    ]
+    @inline @inbounds current(x) = x[i, j, k]
+    @inline @inbounds current_x(x) = x[i, j + 1, k + 1]
+    @inline @inbounds current_y(x) = x[i + 1, j, k + 1]
+    @inline @inbounds current_z(x) = x[i + 1, j + 1, k]
 
     # Compute τ_xx
     if all((i, j, k) .≤ size(τxx))
@@ -746,7 +731,6 @@ function JustRelax.solve!(
     η,
     K,
     G,
-    K,
     dt,
     igg::IGG;
     iterMax=10e3,
@@ -786,11 +770,6 @@ function JustRelax.solve!(
     @parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
     @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
 
-    apply_free_slip!(freeslip, Vx, Vy, Vz)
-
-    # PT numerical coefficients
-    # @parallel elastic_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, G, dt, Re, r, max_li)
-
     # errors
     err = 2 * ϵ
     iter = 0
@@ -801,32 +780,6 @@ function JustRelax.solve!(
     norm_Ry = Float64[]
     norm_Rz = Float64[]
     norm_∇V = Float64[]
-
-    # residual lengths
-    _sqrt_len_Rx_g =
-        1.0 / √(
-            ((nx - 2 - 1) * igg.dims[1] + 2) *
-            ((ny - 2 - 2) * igg.dims[2] + 2) *
-            ((nz - 2 - 2) * igg.dims[3] + 2),
-        )
-    _sqrt_len_Ry_g =
-        1.0 / √(
-            ((nx - 2 - 2) * igg.dims[1] + 2) *
-            ((ny - 2 - 1) * igg.dims[2] + 2) *
-            ((nz - 2 - 2) * igg.dims[3] + 2),
-        )
-    _sqrt_len_Rz_g =
-        1.0 / √(
-            ((nx - 2 - 2) * igg.dims[1] + 2) *
-            ((ny - 2 - 2) * igg.dims[2] + 2) *
-            ((nz - 2 - 1) * igg.dims[3] + 2),
-        )
-    _sqrt_len_∇V_g =
-        1.0 / √(
-            ((nx - 2) * igg.dims[1] + 2) *
-            ((ny - 2) * igg.dims[2] + 2) *
-            ((nz - 2) * igg.dims[3] + 2),
-        )
 
     # solver loop
     wtime0 = 0.0
@@ -941,7 +894,6 @@ function JustRelax.solve!(
     end
 
     av_time = wtime0 / (iter - 1) # average time per iteration
-
     update_τ_o!(stokes) # copy τ into τ_o
 
     return (

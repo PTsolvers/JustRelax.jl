@@ -24,7 +24,6 @@ end
 function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTensor)
     dims = (:x, :y, :z)
     fields = [:($(Symbol((dims[i]), (dims[j])))::T) for i in 1:nDim, j in 1:nDim if j ≥ i]
-    # push!(fields, Symbol("II")::T)
 
     @eval begin
         struct $(name){T}
@@ -139,7 +138,7 @@ function make_stokes_struct!()
                     (ni[1] - 1, ni[2] - 2, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 1, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 2, ni[3] - 1),
-                    ni
+                    ni,
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
@@ -177,32 +176,6 @@ function make_stokes_struct!()
     end
 end
 
-## OLD VERSION
-# function make_PTstokes_struct!()
-#     @eval begin
-#         struct PTStokesCoeffs{T,nDim}
-#             CFL::T
-#             ϵ::T # PT tolerance
-#             Re::T # Reynolds Number
-#             r::T # 
-#             Vpdτ::T
-#             dτ_Rho::AbstractArray{T,nDim}
-#             Gdτ::AbstractArray{T,nDim}
-
-#             function PTStokesCoeffs(
-#                 ni::NTuple{nDim,T}, di; ϵ=1e-8, Re=5π, CFL=0.9 / √2, r=1e0
-#             ) where {nDim,T}
-#                 Vpdτ = min(di...) * CFL
-#                 Gdτ = @zeros(ni...)
-#                 dτ_Rho = @zeros(ni...)
-
-#                 return new{eltype(Gdτ),nDim}(CFL, ϵ, Re, r, Vpdτ, dτ_Rho, Gdτ)
-#             end
-#         end
-#     end
-# end
-
-# NEW VERSION
 function make_PTstokes_struct!()
     @eval begin
         struct PTStokesCoeffs{T}
@@ -214,7 +187,14 @@ function make_PTstokes_struct!()
             θ_dτ::T
             ηdτ::T
 
-            function PTStokesCoeffs(li, di; ϵ=1e-8, Re=3π, CFL=1 / √2.1, r=0.7)
+            function PTStokesCoeffs(
+                li::NTuple{N,T},
+                di;
+                ϵ=1e-8,
+                Re=3π,
+                CFL=(N == 2 ? 0.9 / √2.1 : 0.9 / √3.1),
+                r=0.7,
+            ) where {N,T}
                 lτ = min(li...)
                 Vpdτ = min(di...) * CFL
                 θ_dτ = lτ * (r + 2.0) / (Re * Vpdτ)

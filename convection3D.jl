@@ -1,7 +1,7 @@
 using JustRelax
 # setup ParallelStencil.jl environment
-# model = PS_Setup(:gpu, Float64, 3)
-model = PS_Setup(:cpu, Float64, 3)
+model = PS_Setup(:gpu, Float64, 3)
+# model = PS_Setup(:cpu, Float64, 3)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
@@ -20,7 +20,7 @@ function compute_dt(Vx, Vy, Vz, dx, dy, dz, dt_diff)
 end
 
 @parallel function update_buoyancy!(fz, T, ρ0gα)
-    @all(fz) = -ρ0gα .* @all(T)
+    @all(fz) = ρ0gα .* @all(T)
     return nothing
 end
 
@@ -35,7 +35,19 @@ end
     return nothing
 end
 
-function thermal_convection2D(; ny=16, nx=ny*8, nz=ny*8)
+@parallel_indices (i, j, k) function init_T!(T, z, time, k, Tm, Tp, Tmin, Tmax)
+    dTdz = Tm-Tp
+    @inbounds zᵢ = z[k]
+    Tᵢ = Tp + dTdz*(1-zᵢ)
+    Ths = Tᵢ * erf((1-zᵢ)*0.5/(k*time)^0.5)
+    Tᵢ = min(Tᵢ, Ths)
+    Ths = Tmax - (Tmax - Tᵢ) * erf(zᵢ*0.5/(k*time*5)^0.5)
+    Tᵢ = max(Tᵢ, Ths);
+    @inbounds T[i, j, k] = max(Tᵢ, Tmin)
+    return 
+end
+
+function thermal_convection2D(; ar=8, ny=16, nx=ny*8, nz=ny*8)
 
     # This tests the MaterialParameters structure
     CharUnits = GEO_units(; viscosity=1e23, length=2900km, temperature=1000K)
@@ -53,7 +65,6 @@ function thermal_convection2D(; ny=16, nx=ny*8, nz=ny*8)
     )
 
     # Physical domain
-    ar = 3
     lz = 2900km
     lx = lz * ar
     ly = lz * ar
@@ -65,7 +76,7 @@ function thermal_convection2D(; ny=16, nx=ny*8, nz=ny*8)
     li = (lx_nd, ly_nd, lz_nd)               # domain length in x- and y-
     di = @. li / ni                          # grid step in x- and -y
     xci, xvi = lazy_grid(di, li; origin=Xo)  # nodes at the center and vertices of the cells
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=true, periodx=1, periody=1)...) # init MPI
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=false, periodx=1, periody=1)...) # init MPI
     ni_v = (nx-2)*igg.dims[1], (ny-2)*igg.dims[2], (nz-2)*igg.dims[3]
 
     # Physical parameters
@@ -81,7 +92,7 @@ function thermal_convection2D(; ny=16, nx=ny*8, nz=ny*8)
     α = 0.03
     Cp0 = rheology.HeatCapacity[1].cp.val
     Ra = ρ0 * g * α * ΔT * lz_nd^3 / (η0* κ)
-    Ra = 1e4
+    Ra = 1e6
     dt = dt_diff = 0.5 / 6.1 * min(di...)^3 / κ      # diffusive CFL timestep limiter
     println("\n Ra-number is $Ra")
     
@@ -102,25 +113,25 @@ function thermal_convection2D(; ny=16, nx=ny*8, nz=ny*8)
     Tm=1900/2300
     Tp=1600/2300
     Tmin, Tmax = 0.3, 1.0
-    dTdz = Tm-Tp
-    thermal.T .= PTArray([Tp + dTdz*(1-z) for x in xvi[1], y in xvi[2], z in xvi[3]])
-    Ths = thermal.T .* PTArray([erf((1-z)/2/(k*time)^0.5) for x in xvi[1], y in xvi[2], z in xvi[3]])
-    @. thermal.T = min(thermal.T,Ths);
-    time= 1e-4
-    Ths .= Tmax .-(Tmax.-thermal.T) .* PTArray([erf(z/2/(k*time*5)^0.5) for x in xvi[1], y in xvi[2], z in xvi[3]])
-    @. thermal.T = max(thermal.T, Ths);
-    @. thermal.T = max(thermal.T, Tmin);
+    @parallel init_T!(thermal.T, xvi[3], time, k, Tm, Tp, Tmin, Tmax)
+
+    # thermal.T .= PTArray([Tp + dTdz*(1-z) for x in xvi[1], y in xvi[2], z in xvi[3]])
+    # Ths = thermal.T .* PTArray([erf((1-z)/2/(k*time)^0.5) for x in xvi[1], y in xvi[2], z in xvi[3]])
+    # @. thermal.T = min(thermal.T,Ths);
+    # time= 1e-4
+    # Ths .= Tmax .-(Tmax.-thermal.T) .* PTArray([erf(z/2/(k*time*5)^0.5) for x in xvi[1], y in xvi[2], z in xvi[3]])
+    # @. thermal.T = max(thermal.T, Ths);
+    # @. thermal.T = max(thermal.T, Tmin);
 
     # GeoTherm = -(ΔT - nondimensionalize(0C, CharUnits)) / li[2]
     # thermal.T .= ΔT
     # Tmax,Tmin = nondimensionalize(1500K, CharUnits), nondimensionalize(300K, CharUnits)
 
-    
     # Elliptical temperature anomaly ---------------------
     xc, yc, zc      =   0.5*lx_nd, 0.5*ly_nd, 0.25*lz_nd
     ri              =   0.1
     Elli            =  [ ((x-xc ))^2 + ((y - yc))^2 + ((z - zc))^2 for x in xvi[1], y in xvi[2], z in xvi[3]]
-    thermal.T[Elli .< ri.^2]  .*= 1.05
+    thermal.T[Elli .< ri.^2]  .*= 1.025
     # thermal.T .*= 1 .+ rand(ni...).*0.05
     clamp!(thermal.T, Tmin, Tmax)
     @parallel assign!(thermal.Told, thermal.T)
@@ -140,20 +151,23 @@ function thermal_convection2D(; ny=16, nx=ny*8, nz=ny*8)
     G = @fill(1.0, ni...) 
     Kb = @fill(Inf, ni...) 
     fz = Ra .* thermal.T
-    ρg = (@zeros(ni...), @zeros(ni...), fz)
+    ρg = @zeros(ni...), @zeros(ni...), fz
 
     ## Boundary conditions
-    freeslip = (freeslip_x=true, freeslip_y=true, freeslip_z=true)
+    freeslip = (freeslip_x=true, freeslip_y=false, freeslip_z=false)
 
     # MPI Plotting
-    Tg = @zeros(ni_v.+1...)
-    Vzg = @zeros(ni_v[1], ni_v[2], ni_v[3]+1)
-    ηg = @zeros(ni_v...)
+    Tc = @zeros(ni)
+    Tg = zeros(ni_v...)
+    # Tg_inn = zeros(ni_v.-1...)
+    # Vzg = zeros(ni_v[1], ni_v[2], ni_v[3]+1)
+    ηg = zeros(ni_v...)
+    # ηg_inn = zeros(ni_v.-2...)
 
     # Physical time loop
     t   =  0.0
     it  =  0
-    nt  =  150
+    nt  =  350
 
     args = (;)
     local iters
@@ -182,12 +196,12 @@ function thermal_convection2D(; ny=16, nx=ny*8, nz=ny*8)
         solve!(
             thermal,
             thermal_bc,
+            stokes,
             rheology,
             args,
             di,
             dt
         )
-        scatter!(thermal.T[:], Z)
         # ------------------------------
 
         # Update buoyancy and viscosity -
@@ -199,54 +213,40 @@ function thermal_convection2D(; ny=16, nx=ny*8, nz=ny*8)
         t += dt
 
         if igg.me == 0 && it == 1 || rem(it, 10) == 0
-            gather!(thermal.T[2:end-1,2:end-1,2:end-1], Tg)
-            gather!(stokes.V.Vz[2:end-1,2:end-1,2:end-1], Vzg)
-            gather!(η[2:end-1,2:end-1,2:end-1], ηg)
-            
+            @parallel (1:nx, 1:ny, 1:nz) vertex2center!(Tc, thermal.T)
+            gather!(Array(Tc[2:end-1, 2:end-1, 2:end-1]), Tg)
+            gather!(Array(η[2:end-1, 2:end-1, 2:end-1]), ηg)
+
             fig = Figure(resolution = (900, 1200))
             ax1 = Axis(fig[1,1], aspect = ar, title = "T")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "Vy")
-            ax3 = Axis(fig[3,1], aspect = ar, title = "η")
-            h1 = GLMakie.heatmap!(ax1, xvi[1][2:end-1], xvi[2][2:end-1], Array(Tg[nx÷2,:,:]) , colormap=:batlow)
-            h2 = GLMakie.heatmap!(ax2, xvi[1][2:end-1], xvi[2][2:end-1], Array(Vzg[:,ny÷2,:]) , colormap=:batlow)
-            h3 = GLMakie.heatmap!(ax3, xvi[1][2:end-1], xvi[2][2:end-1], Array(log10.(ηg[nx÷2,:,:])) , colormap=:batlow)
+            ax2 = Axis(fig[2,1], aspect = ar, title = "η")
+            ax3 = Axis(fig[3,1], aspect = ar, title = "Vz")
+            h1 = GLMakie.heatmap!(ax1, xci[1][2:end-1], xci[2][2:end-1], (Tg[nx÷2,:,:]) , colormap=:batlow)
+            h2 = GLMakie.heatmap!(ax2, xci[1][2:end-1], xci[2][2:end-1], (log10.(ηg[nx÷2,:,:])) , colormap=:batlow)
+            h3 = GLMakie.heatmap!(ax3, xvi[1][2:end-1], xvi[2][2:end-1], Array(stokes.V.Vz[:,ny÷2,:]) , colormap=:batlow)
             Colorbar(fig[1,2], h1)
             Colorbar(fig[2,2], h2)
             Colorbar(fig[3,2], h3)
             fig
             save("figs3d/$(it).png", fig)
-
-            # fig = Figure(resolution = (900, 1200))
-            # ax1 = Axis(fig[1,1], aspect = 3, title = "T")
-            # ax2 = Axis(fig[2,1], aspect = 3, title = "Vy")
-            # ax3 = Axis(fig[3,1], aspect = 3, title = "η")
-            # h1 = GLMakie.heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[nx÷2,:,:]) , colormap=:batlow)
-            # h2 = GLMakie.heatmap!(ax2, xvi[1], xvi[2], Array(stokes.V.Vz[:,ny÷2,:]) , colormap=:batlow)
-            # h3 = GLMakie.heatmap!(ax3, xvi[1], xvi[2], Array(log10.(η[nx÷2,:,:])) , colormap=:batlow)
-            # Colorbar(fig[1,2], h1)
-            # Colorbar(fig[2,2], h2)
-            # Colorbar(fig[3,2], h3)
-            # fig
-            # save("figs3d/$(it).png", fig)
         end
 
     end
 
     finalize_global_grid(; finalize_MPI=true)
 
-    return (ni=ni, xci=xci, li=li, di=di), thermal
+    return (ni=ni, xci=xci, li=li, di=di), thermal4
 end
 
-n = 16
-nx = n*3
-ny = n*3
+ar = 3
+n = 16*2
+nx = n*ar
+ny = n*ar
 nz = n
 
-thermal_convection2D(;nx=nx, ny=ny, nz=nz);
+thermal_convection2D(;ar=ar,nx=nx, ny=ny, nz=nz);
 
-
-
-X = [x for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-Y = [y for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-Z = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-scatter(thermal.T[:], Z)
+# X = [x for x in xvi[1], y in xvi[2], z in xvi[3]][:]
+# Y = [y for x in xvi[1], y in xvi[2], z in xvi[3]][:]
+# Z = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
+# scatter(thermal.T[:], Z)

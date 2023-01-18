@@ -205,26 +205,85 @@ end
 #     return nothing
 # end
 
+# @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
+#     if (i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2))
+#         dT_dt[i, j] =
+#             -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) -
+#             (Vx[i + 1, j + 1] > 0) *
+#             Vx[i + 1, j + 1] *
+#             (T[i + 1, j + 1] - T[i, j + 1]) *
+#             _dx -
+#             (Vx[i + 2, j + 1] < 0) *
+#             Vx[i + 2, j + 1] *
+#             (T[i + 2, j + 1] - T[i + 1, j + 1]) *
+#             _dx -
+#             (Vy[i + 1, j + 1] > 0) *
+#             Vy[i + 1, j + 1] *
+#             (T[i + 1, j + 1] - T[i + 1, j]) *
+#             _dy -
+#             (Vy[i + 1, j + 2] < 0) *
+#             Vy[i + 1, j + 2] *
+#             (T[i + 1, j + 2] - T[i + 1, j + 1]) *
+#             _dy
+#     end
+#     return nothing
+# end
+
+# @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
+#     if (i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2))
+#         dT_dt[i, j] =
+#             -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) -
+#             (Vx[i + 1, j + 2] > 0) *
+#             Vx[i + 1, j + 2] *
+#             (T[i + 1, j + 1] - T[i, j + 1]) *
+#             _dx -
+#             (Vx[i + 2, j + 2] < 0) *
+#             Vx[i + 2, j + 2] *
+#             (T[i + 2, j + 1] - T[i + 1, j + 1]) *
+#             _dx -
+#             (Vy[i + 2, j + 1] > 0) *
+#             Vy[i + 2, j + 1] *
+#             (T[i + 1, j + 1] - T[i + 1, j]) *
+#             _dy -
+#             (Vy[i + 2, j + 2] < 0) *
+#             Vy[i + 2, j + 2] *
+#             (T[i + 1, j + 2] - T[i + 1, j + 1]) *
+#             _dy
+#     end
+#     return nothing
+# end
+
+# @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
+#     if (i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2))
+
+#         Vxᵢⱼ_left  = 0.25 * (Vx[i + 1, j + 1] + Vx[i + 1, j + 2] + Vx[i    , j + 1] + Vx[i    , j + 2])
+#         Vxᵢⱼ_right = 0.25 * (Vx[i + 2, j + 1] + Vx[i + 2, j + 2] + Vx[i + 1, j + 1] + Vx[i + 1, j + 2])
+
+#         Vyᵢⱼ_bot   = 0.25 * (Vy[i + 1, j + 1] + Vy[i + 2, j + 1] + Vy[i + 1, j    ] + Vy[i + 2, j    ])
+#         Vyᵢⱼ_top   = 0.25 * (Vy[i + 1, j + 2] + Vy[i + 2, j + 2] + Vy[i + 1, j + 1] + Vy[i + 2, j + 1])
+
+#         dT_dt[i, j] =
+#             -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) -
+#             (Vxᵢⱼ_left  > 0) * Vxᵢⱼ_left  * (T[i + 1, j + 1] - T[i    , j + 1]) * _dx -
+#             (Vxᵢⱼ_right < 0) * Vxᵢⱼ_right * (T[i + 2, j + 1] - T[i + 1, j + 1]) * _dx -
+#             (Vyᵢⱼ_bot   > 0) * Vyᵢⱼ_bot   * (T[i + 1, j + 1] - T[i + 1, j    ]) * _dy -
+#             (Vyᵢⱼ_top   < 0) * Vyᵢⱼ_top   * (T[i + 1, j + 2] - T[i + 1, j + 1]) * _dy
+#     end
+#     return nothing
+# end
+
 @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
     if (i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2))
+        
+        Vxᵢⱼ = 0.5 * (Vx[i + 2, j + 2] + Vx[i + 1, j + 2])
+        Vyᵢⱼ = 0.5 * (Vy[i + 2, j + 2] + Vy[i + 2, j + 1])
+
         dT_dt[i, j] =
             -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) -
-            (Vx[i + 1, j + 1] > 0) *
-            Vx[i + 1, j + 1] *
-            (T[i + 1, j + 1] - T[i, j + 1]) *
-            _dx -
-            (Vx[i + 2, j + 1] < 0) *
-            Vx[i + 2, j + 1] *
-            (T[i + 2, j + 1] - T[i + 1, j + 1]) *
-            _dx -
-            (Vy[i + 1, j + 1] > 0) *
-            Vy[i + 1, j + 1] *
-            (T[i + 1, j + 1] - T[i + 1, j]) *
-            _dy -
-            (Vy[i + 1, j + 2] < 0) *
-            Vy[i + 1, j + 2] *
-            (T[i + 1, j + 2] - T[i + 1, j + 1]) *
-            _dy
+            (Vxᵢⱼ > 0) * Vxᵢⱼ * (T[i + 1, j + 1] - T[i    , j + 1]) * _dx -
+            (Vxᵢⱼ < 0) * Vxᵢⱼ * (T[i + 2, j + 1] - T[i + 1, j + 1]) * _dx -
+            (Vyᵢⱼ > 0) * Vyᵢⱼ * (T[i + 1, j + 1] - T[i + 1, j    ]) * _dy -
+            (Vyᵢⱼ < 0) * Vyᵢⱼ * (T[i + 1, j + 2] - T[i + 1, j + 1]) * _dy
     end
     return nothing
 end

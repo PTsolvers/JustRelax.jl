@@ -226,12 +226,3 @@ while iter < 2 || (err > ϵ && iter ≤ iterMax)
         end
     end
 end
-
-Re = 3π
-CFL = 0.9 / √2
-CFL = 1 / √2.1
-r = 0.7
-lτ = min(li...)
-Vpdτ = min(di...) * CFL
-θ_dτ = lτ * (r + 2.0) / (Re * Vpdτ)
-ηdτ = Vpdτ * lτ / Re

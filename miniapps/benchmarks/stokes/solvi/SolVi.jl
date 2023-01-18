@@ -75,7 +75,7 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
     η0 = 1.0  # matrix viscosity
     ηi = Δη # inclusion viscosity
     η = solvi_viscosity(ni, di, li, rc, η0, ηi) # viscosity field
-    
+
     ρg = @zeros(ni...), @zeros(ni...)
     dt = Inf
     G = @fill(Inf, ni...)
@@ -89,7 +89,7 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
     t = 0.0
     local iters
     while t < ttot
-        iters = solve!( stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=150e3)
+        iters = solve!(stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=150e3)
         t += Δt
     end
 

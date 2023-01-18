@@ -6,10 +6,8 @@ using ParallelStencil.FiniteDifferences3D
 
 include("vizBurstedde.jl")
 
-@parallel_indices (ix, iy, iz) function _viscosity!(η, x, y, z, β)
-    η[ix, iy, iz] = exp(
-        1 - β * (x[ix] * (1 - x[ix]) + y[iy] * (1 - y[iy]) + z[iz] * (1 - z[iz]))
-    )
+@parallel_indices (i, j, k) function _viscosity!(η, x, y, z, β)
+    η[i, j, k] = exp(1 - β * (x[i] * (1 - x[i]) + y[j] * (1 - y[j]) + z[k] * (1 - z[k])))
 
     return nothing
 end
@@ -99,44 +97,41 @@ function velocity!(stokes, xci, xvi)
     _velocity_y(x, y, z) = y + x * y + y^2 + x^2 * y^2
     _velocity_z(x, y, z) = -2z - 3x * z - 3y * z - 5x^2 * y * z
 
-    @parallel_indices (ix, iy, iz) function _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-        # Vx
-        if (ix ≤ size(Vx, 1)) && (iy ≤ size(Vx, 2)) && (iz ≤ size(Vx, 3))
-            if (ix == size(Vx, 1)) ||
-                (iy == size(Vx, 2)) ||
-                (iz == size(Vx, 3)) ||
-                (ix == 1) ||
-                (iy == 1) ||
-                (iz == 1)
-                Vx[ix, iy, iz] = _velocity_x(xv[ix], yc[iy], zc[iz])
+    @parallel_indices (i, j, k) function _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+        if all((i, j, k) .≤ size(Vx))
+            if (i == size(Vx, 1)) ||
+                (j == size(Vx, 2)) ||
+                (k == size(Vx, 3)) ||
+                (i == 1) ||
+                (j == 1) ||
+                (k == 1)
+                Vx[i, j, k] = _velocity_x(xv[i], yc[j], zc[k])
             else
-                Vx[ix, iy, iz] = zero(eltype(Vx))
+                Vx[i, j, k] = zero(eltype(Vx))
             end
         end
-        # Vy
-        if (ix ≤ size(Vy, 1)) && (iy ≤ size(Vy, 2)) && (iz ≤ size(Vy, 3))
-            if (ix == size(Vy, 1)) ||
-                (iy == size(Vy, 2)) ||
-                (iz == size(Vy, 3)) ||
-                (ix == 1) ||
-                (iy == 1) ||
-                (iz == 1)
-                Vy[ix, iy, iz] = _velocity_y(xc[ix], yv[iy], zc[iz])
+        if all((i, j, k) .≤ size(Vy))
+            if (i == size(Vy, 1)) ||
+                (j == size(Vy, 2)) ||
+                (k == size(Vy, 3)) ||
+                (i == 1) ||
+                (j == 1) ||
+                (k == 1)
+                Vy[i, j, k] = _velocity_y(xc[i], yv[j], zc[k])
             else
-                Vy[ix, iy, iz] = zero(eltype(Vx))
+                Vy[i, j, k] = zero(eltype(Vx))
             end
         end
-        # Vz
-        if (ix ≤ size(Vz, 1)) && (iy ≤ size(Vz, 2)) && (iz ≤ size(Vz, 3))
-            if (ix == size(Vz, 1)) ||
-                (iy == size(Vz, 2)) ||
-                (iz == size(Vz, 3)) ||
-                (ix == 1) ||
-                (iy == 1) ||
-                (iz == 1)
-                Vz[ix, iy, iz] = _velocity_z(xc[ix], yc[iy], zv[iz])
+        if all((i, j, k) .≤ size(Vz))
+            if (i == size(Vz, 1)) ||
+                (j == size(Vz, 2)) ||
+                (k == size(Vz, 3)) ||
+                (i == 1) ||
+                (j == 1) ||
+                (k == 1)
+                Vz[i, j, k] = _velocity_z(xc[i], yc[j], zv[k])
             else
-                Vz[ix, iy, iz] = zero(eltype(Vx))
+                Vz[i, j, k] = zero(eltype(Vx))
             end
         end
 
@@ -155,15 +150,15 @@ function analytical_velocity!(stokes, xci, xvi)
     _velocity_y(x, y, z) = y + x * y + y^2 + x^2 * y^2
     _velocity_z(x, y, z) = -2z - 3x * z - 3y * z - 5x^2 * y * z
 
-    @parallel_indices (ix, iy, iz) function _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-        if (ix ≤ size(Vx, 1)) && (iy ≤ size(Vx, 2)) && (iz ≤ size(Vx, 3))
-            Vx[ix, iy, iz] = _velocity_x(xv[ix], yc[iy], zc[iz])
+    @parallel_indices (i, j, k) function _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+        if (i ≤ size(Vx, 1)) && (j ≤ size(Vx, 2)) && (k ≤ size(Vx, 3))
+            Vx[i, j, k] = _velocity_x(xv[i], yc[j], zc[k])
         end
-        if (ix ≤ size(Vy, 1)) && (iy ≤ size(Vy, 2)) && (iz ≤ size(Vy, 3))
-            Vy[ix, iy, iz] = _velocity_y(xc[ix], yv[iy], zc[iz])
+        if (i ≤ size(Vy, 1)) && (j ≤ size(Vy, 2)) && (k ≤ size(Vy, 3))
+            Vy[i, j, k] = _velocity_y(xc[i], yv[j], zc[k])
         end
-        if (ix ≤ size(Vz, 1)) && (iy ≤ size(Vz, 2)) && (iz ≤ size(Vz, 3))
-            Vz[ix, iy, iz] = _velocity_z(xc[ix], yc[iy], zv[iz])
+        if (i ≤ size(Vz, 1)) && (j ≤ size(Vz, 2)) && (k ≤ size(Vz, 3))
+            Vz[i, j, k] = _velocity_z(xc[i], yc[j], zv[k])
         end
 
         return nothing
@@ -181,12 +176,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     lx = ly = lz = 1e0
     li = (lx, ly, lz)  # domain length in x- and y-
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
-    @static if USE_GPU # select one GPU per MPI local rank (if >1 GPU per node)
-        select_device()
-    end
-    li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    max_li = max(li...)
     xci, xvi = lazy_grid(di, li) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
@@ -197,13 +187,15 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di; Re=6π, CFL=0.9 / √3)
+    pt_stokes = PTStokesCoeffs(ni, di; Re=3π, CFL=0.9 / √3)
 
     ## Setup-specific parameters and fields
     β = 10.0
     η = viscosity(xci, β) # add reference 
     ρg = body_forces(xci, η, β) # => ρ*(gx, gy, gz)
-    G = Inf
+    dt = Inf
+    G = @fill(Inf, ni...)
+    K = @fill(Inf, ni...)
 
     ## Boundary conditions
     freeslip = (freeslip_x=false, freeslip_y=false, freeslip_z=false)
@@ -218,18 +210,17 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
         iters = solve!(
             stokes,
             pt_stokes,
-            ni,
             di,
             li,
-            max_li,
             freeslip,
             ρg,
             η,
             G,
+            K,
             dt,
             igg;
             iterMax=10e3,
-            b_width=(1, 1, 1),
+            b_width=(4, 4, 4),
         )
         t += dt
     end

@@ -24,8 +24,8 @@ end
 function solKz_density(xci, ni)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x = PTArray([xci for xci in xc,   _ in yc])
-    y = PTArray([yci for   _ in xc, yci in yc])
+    x = PTArray([xci for xci in xc, _ in yc])
+    y = PTArray([yci for _ in xc, yci in yc])
     ρ = @zeros(ni...)
     # inner closure
     _density(x, y) = -sin(2 * y) * cos(3 * π * x)
@@ -80,7 +80,9 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     t = 0.0
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=150e3, nout=1e3);
+        iters = solve!(
+            stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=150e3, nout=1e3
+        )
         t += Δt
     end
 

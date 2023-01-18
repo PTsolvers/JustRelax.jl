@@ -1,30 +1,12 @@
 # From cell vertices to cell center
 
-@parallel_indices (i, j) function vertex2center!(C, V)
-
-    @inbounds C[i, j] = 0.25 * (
-        V[i  , j  ] +
-        V[i+1, j  ] +
-        V[i  , j+1] +
-        V[i+1, j+1]
-    )
-    
+@parallel function vertex2center!(center, vertex)
+    @all(center) = @av(vertex)
     return nothing
 end
 
-@parallel_indices (i, j, k) function vertex2center!(C, V)
-
-    @inbounds C[i,j,k] = 0.125 * (
-        V[i  , j  , k  ] +
-        V[i  , j  , k+1] +
-        V[i  , j+1, k  ] +
-        V[i  , j+1, k+1] +
-        V[i+1, j  , k  ] +
-        V[i+1, j  , k+1] +
-        V[i+1, j+1, k  ] +
-        V[i+1, j+1, k+1] 
-    )
-
+@parallel function center2vertex!(vertex, center)
+    @inn(vertex) = @av(center)
     return nothing
 end
 
@@ -65,6 +47,7 @@ end
     elseif j == size(Vx, 2)
         V[i, j] = Vx[i, end]
     end
+    return nothing
 end
 
 @parallel_indices (i, j) function Vy2vertex_noghost!(V, Vy)
@@ -77,6 +60,7 @@ end
     elseif i == size(Vy, 1)
         V[i, j] = Vy[end, j]
     end
+    return nothing
 end
 
 @parallel_indices (i, j) function Vx2vertex_ghost!(V, Vx)
@@ -90,6 +74,7 @@ end
 
         V[i, j] = Vx[i+1, end]
     end
+    return nothing
 end
 
 @parallel_indices (i, j) function Vy2vertex_ghost!(V, Vy)
@@ -102,6 +87,7 @@ end
     elseif i == size(Vy, 1)
         V[i, j] = Vx[end, j+1]
     end
+    return nothing
 end
 
 
@@ -135,6 +121,7 @@ function velocity2vertex(Vx, Vy, Vz, nv_x, nv_y, nv_z; ghost_nodes = false)
         Vy2vertex_ghost!(Vy, Vy_v)
         Vz2vertex_ghost!(Vz, Vz_v)
     end
+    return nothing
 end
 
 @parallel_indices (i, j, k) function Vx2vertex_noghost!(V, Vx)
@@ -156,6 +143,7 @@ end
         V[i, j, k] = Vx[end, j, k]
 
     end
+    return nothing
 end
 
 @parallel_indices (i, j, k) function Vy2vertex_noghost!(V, Vy)
@@ -196,6 +184,7 @@ end
         V[i, j, k] = Vy[i, j, k]
 
     end
+    return nothing
 end
 
 @parallel_indices (i, j, k) function Vz2vertex_noghost!(V, Vz)
@@ -215,6 +204,7 @@ end
     elseif (i,j,k) == (nx,1,1)
         V[i, j, k] = Vz[end, j, k]
     end
+    return nothing
 end
 
 
@@ -228,6 +218,7 @@ end
     # else
     #     V[i, j, k] = Vx[i, j-1, k]
     end
+    return nothing
 end
 
 @parallel_indices (i, j, k) function Vy2vertex_ghost!(V, Vy)
@@ -240,6 +231,7 @@ end
     # else
     #     V[i, j, k] = Vx[i, j-1, k]
     end
+    return nothing
 end
 
 @parallel_indices (i, j, k) function Vz2vertex_ghost!(V, Vz)
@@ -252,4 +244,5 @@ end
     # else
     #     V[i, j, k] = Vx[i, j-1, k]
     end
+    return nothing
 end

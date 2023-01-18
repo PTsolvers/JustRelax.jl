@@ -45,7 +45,8 @@ function elastic_buildup(;
     pt_stokes = PTStokesCoeffs(li, di)
 
     ## Boundary conditions
-    pureshear_bc!(stokes, di, li, εbg)
+    pureshear_bc!(stokes, xci, xvi, εbg)
+
     freeslip = (freeslip_x=true, freeslip_y=true)
 
     # Physical time loop
@@ -54,17 +55,16 @@ function elastic_buildup(;
     local iters
     av_τyy, sol_τyy, tt = Float64[], Float64[], Float64[]
     while t < ttot
-        if t < 5 * kyr
-            dt = 0.1 * kyr
-        else
-            dt = 2 * kyr
-        end
-        iters = solve!(stokes, pt_stokes, di, li, freeslip, ρg, η, Gc, K, dt)
+        # dt    = t < 5 / kyr ? 0.1 * kyr : 2.0 * kyr
+        dt    = 0.1 * kyr
+        iters = solve!(stokes, pt_stokes, di, freeslip, ρg, η, Gc, K, dt; iterMax=150e3, nout=10)
+
         t += dt
 
-        push!(av_τyy, mean(stokes.τ.yy))
+        # push!(av_τyy, mean(abs.(stokes.τ.yy)))
+        push!(av_τyy, maximum(stokes.τ.yy))
         push!(sol_τyy, solution(εbg, t, G, η0))
-        push!(tt, t / yr)
+        push!(tt, t / kyr)
     end
 
     return (ni=ni, xci=xci, xvi=xvi, li=li), stokes, av_τyy, sol_τyy, tt, iters

@@ -69,7 +69,7 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di; CFL=0.9 / √2.1)
+    pt_stokes = PTStokesCoeffs(ni, di; CFL=1 / √2.1)
 
     ## Setup-specific parameters and fields
     η = solCx_viscosity(xci, ni; Δη=Δη) # viscosity field
@@ -96,7 +96,7 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=50_000, nout=1000
+            stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=150_000, nout=1000
         )
         t += Δt
     end

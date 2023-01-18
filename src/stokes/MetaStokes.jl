@@ -1,7 +1,8 @@
 abstract type AbstractStokesModel end
 abstract type Viscous <: AbstractStokesModel end
-abstract type ViscoElastic <: AbstractStokesModel end
-abstract type ViscoPlastic <: AbstractStokesModel end
+abstract type AbstractElasticModel <: AbstractStokesModel end
+abstract type ViscoElastic <: AbstractElasticModel end
+abstract type ViscoElastoPlastic <: AbstractElasticModel end
 
 function make_velocity_struct!(ndim::Integer; name::Symbol=:Velocity)
     dims = (:Vx, :Vy, :Vz)
@@ -25,9 +26,16 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTens
     dims = (:x, :y, :z)
     fields = [:($(Symbol((dims[i]), (dims[j])))::T) for i in 1:nDim, j in 1:nDim if j ≥ i]
 
+    fields_c = if nDim == 2
+        [:($(:xy_c)::T)]
+    elseif nDim == 3
+        [:($(:yz_c)::T), :($(:xz_c)::T), :($(:xy_c)::T)]
+    end
+
     @eval begin
         struct $(name){T}
             $(fields...)
+            $(fields_c...)
             II::T
 
             function $(name)(ni::NTuple{2,T}) where {T}
@@ -35,18 +43,19 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTens
                     @zeros(ni...), # xx
                     @zeros(ni[1] + 1, ni[2] + 1), # xy
                     @zeros(ni...), # yy
+                    @zeros(ni...), # xy @ cell center
                     @zeros(ni...) # II (second invariant)
                 )
             end
 
             function $(name)(ni::NTuple{3,T}) where {T}
                 return new{$PTArray}(
-                    @zeros(ni[1], ni[2] - 2, ni[3] - 2), # xx
+                    @zeros(ni[1]    , ni[2] - 2, ni[3] - 2), # xx
                     @zeros(ni[1] - 1, ni[2] - 1, ni[3] - 2), # xy
-                    @zeros(ni[1] - 2, ni[2], ni[3] - 2), # yy
+                    @zeros(ni[1] - 2, ni[2]    , ni[3] - 2), # yy
                     @zeros(ni[1] - 1, ni[2] - 2, ni[3] - 1), # xz
                     @zeros(ni[1] - 2, ni[2] - 1, ni[3] - 1), # yz
-                    @zeros(ni[1] - 2, ni[2] - 2, ni[3]), # zz
+                    @zeros(ni[1] - 2, ni[2] - 2, ni[3]    ), # zz
                     @zeros(ni[1] - 2, ni[2] - 2, ni[3] - 2), # II (second invariant)
                 )
             end
@@ -103,7 +112,7 @@ function make_stokes_struct!()
                 )
             end
 
-            function StokesArrays(ni::NTuple{2,T}, model::Type{ViscoElastic}) where {T}
+            function StokesArrays(ni::NTuple{2,T}, model::Type{<: AbstractElasticModel}) where {T}
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1] + 2, ni[2] + 1)))
@@ -146,7 +155,7 @@ function make_stokes_struct!()
                 )
             end
 
-            function StokesArrays(ni::NTuple{3,T}, model::Type{ViscoElastic}) where {T}
+            function StokesArrays(ni::NTuple{3,T}, model::Type{<: AbstractElasticModel}) where {T}
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 V = Velocity((

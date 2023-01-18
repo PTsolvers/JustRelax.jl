@@ -49,7 +49,6 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     ni = (nx, ny) # number of nodes in x- and y-
     li = (lx, ly)  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
-    max_li = max(li...)
     nDim = length(ni) # domain dimension
     xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
     xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
@@ -61,14 +60,18 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni, Viscous)
+    stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di)
+    pt_stokes = PTStokesCoeffs(ni, di; Re=5π, CFL=1 / √2.1, r=1e0)
 
     ## Setup-specific parameters and fields
     η = solKz_viscosity(xci, ni; B=log(Δη)) # viscosity field
     ρ = solKz_density(xci, ni)
     fy = ρ * g
+    ρg = @zeros(ni...), fy
+    dt = Inf
+    G = @fill(Inf, ni...)
+    K = @fill(Inf, ni...)
 
     ## Boundary conditions
     freeslip = (freeslip_x=true, freeslip_y=true)
@@ -77,7 +80,9 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     t = 0.0
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax=10e3)
+        iters = solve!(
+            stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=150e3, nout=1e3
+        )
         t += Δt
     end
 
@@ -106,9 +111,9 @@ function multiple_solKz(; Δη=1e-6, nrange::UnitRange=4:10)
         yminorticksvisible=true,
         yminorticks=IntervalsBetween(8),
     )
-    lines!(ax, h, (L2_vx); linewidth=3, label="Vx")
-    lines!(ax, h, (L2_vy); linewidth=3, label="Vy")
-    lines!(ax, h, (L2_p); linewidth=3, label="P")
+    lines!(ax, nx, (L2_vx); linewidth=3, label="Vx")
+    lines!(ax, nx, (L2_vy); linewidth=3, label="Vy")
+    lines!(ax, nx, (L2_p); linewidth=3, label="P")
     axislegend(ax; position=:rt)
     ax.xlabel = "h"
     ax.ylabel = "L1 norm"

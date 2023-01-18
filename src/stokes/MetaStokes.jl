@@ -1,7 +1,8 @@
 abstract type AbstractStokesModel end
 abstract type Viscous <: AbstractStokesModel end
-abstract type ViscoElastic <: AbstractStokesModel end
-abstract type ViscoPlastic <: AbstractStokesModel end
+abstract type AbstractElasticModel <: AbstractStokesModel end
+abstract type ViscoElastic <: AbstractElasticModel end
+abstract type ViscoElastoPlastic <: AbstractElasticModel end
 
 function make_velocity_struct!(ndim::Integer; name::Symbol=:Velocity)
     dims = (:Vx, :Vy, :Vz)
@@ -24,30 +25,37 @@ end
 function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTensor)
     dims = (:x, :y, :z)
     fields = [:($(Symbol((dims[i]), (dims[j])))::T) for i in 1:nDim, j in 1:nDim if j ≥ i]
-    # push!(fields, Symbol("II")::T)
+
+    fields_c = if nDim == 2
+        [:($(:xy_c)::T)]
+    elseif nDim == 3
+        [:($(:yz_c)::T), :($(:xz_c)::T), :($(:xy_c)::T)]
+    end
 
     @eval begin
         struct $(name){T}
             $(fields...)
+            $(fields_c...)
             II::T
 
             function $(name)(ni::NTuple{2,T}) where {T}
                 return new{$PTArray}(
                     @zeros(ni...), # xx
-                    @zeros(ni[1] - 1, ni[2] - 1), # xy
+                    @zeros(ni[1] + 1, ni[2] + 1), # xy
                     @zeros(ni...), # yy
+                    @zeros(ni...), # xy @ cell center
                     @zeros(ni...) # II (second invariant)
                 )
             end
 
             function $(name)(ni::NTuple{3,T}) where {T}
                 return new{$PTArray}(
-                    @zeros(ni[1], ni[2] - 2, ni[3] - 2), # xx
+                    @zeros(ni[1]    , ni[2] - 2, ni[3] - 2), # xx
                     @zeros(ni[1] - 1, ni[2] - 1, ni[3] - 2), # xy
-                    @zeros(ni[1] - 2, ni[2], ni[3] - 2), # yy
+                    @zeros(ni[1] - 2, ni[2]    , ni[3] - 2), # yy
                     @zeros(ni[1] - 1, ni[2] - 2, ni[3] - 1), # xz
                     @zeros(ni[1] - 2, ni[2] - 1, ni[3] - 1), # yz
-                    @zeros(ni[1] - 2, ni[2] - 2, ni[3]), # zz
+                    @zeros(ni[1] - 2, ni[2] - 2, ni[3]    ), # zz
                     @zeros(ni[1] - 2, ni[2] - 2, ni[3] - 2), # II (second invariant)
                 )
             end
@@ -61,13 +69,16 @@ function make_residual_struct!(ndim; name::Symbol=:Residual)
     @eval begin
         struct $(name){T}
             $(fields...)
-
-            function $(name)(ni::NTuple{2,T}) where {T}
-                return new{$PTArray}(@zeros(ni[1]...), @zeros(ni[2]...))
-            end
+            RP::T
 
             function $(name)(ni::NTuple{3,T}) where {T}
                 return new{$PTArray}(@zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...))
+            end
+
+            function $(name)(ni::NTuple{4,T}) where {T}
+                return new{$PTArray}(
+                    @zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...), @zeros(ni[4]...)
+                )
             end
         end
     end
@@ -90,25 +101,25 @@ function make_stokes_struct!()
             function StokesArrays(ni::NTuple{2,T}, model::Type{Viscous}) where {T}
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
-                V = Velocity(((ni[1] + 1, ni[2]), (ni[1], ni[2] + 1)))
+                V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1], ni[2] + 2)))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
                 dV = Velocity(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
-                R = Residual(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
+                R = Residual(((ni[1] - 1, ni[2]), (ni[1], ni[2] - 1)), ni)
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
                     P, V, dV, ∇V, τ, ε, nothing, R
                 )
             end
 
-            function StokesArrays(ni::NTuple{2,T}, model::Type{ViscoElastic}) where {T}
+            function StokesArrays(ni::NTuple{2,T}, model::Type{<: AbstractElasticModel}) where {T}
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
-                V = Velocity(((ni[1] + 1, ni[2]), (ni[1], ni[2] + 1)))
+                V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1] + 2, ni[2] + 1)))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
                 dV = Velocity(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
-                R = Residual(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
+                R = Residual(((ni[1] - 1, ni[2]), (ni[1], ni[2] - 1), ni))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
                     P, V, dV, ∇V, τ, ε, deepcopy(τ), R
@@ -136,6 +147,7 @@ function make_stokes_struct!()
                     (ni[1] - 1, ni[2] - 2, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 1, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 2, ni[3] - 1),
+                    ni,
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
@@ -143,7 +155,7 @@ function make_stokes_struct!()
                 )
             end
 
-            function StokesArrays(ni::NTuple{3,T}, model::Type{ViscoElastic}) where {T}
+            function StokesArrays(ni::NTuple{3,T}, model::Type{<: AbstractElasticModel}) where {T}
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 V = Velocity((
@@ -162,6 +174,7 @@ function make_stokes_struct!()
                     (ni[1] - 1, ni[2] - 2, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 1, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 2, ni[3] - 1),
+                    ni,
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
@@ -174,23 +187,29 @@ end
 
 function make_PTstokes_struct!()
     @eval begin
-        struct PTStokesCoeffs{T,nDim}
+        struct PTStokesCoeffs{T}
             CFL::T
             ϵ::T # PT tolerance
             Re::T # Reynolds Number
             r::T # 
             Vpdτ::T
-            dτ_Rho::AbstractArray{T,nDim}
-            Gdτ::AbstractArray{T,nDim}
+            θ_dτ::T
+            ηdτ::T
 
             function PTStokesCoeffs(
-                ni::NTuple{nDim,T}, di; ϵ=1e-8, Re=5π, CFL=0.9 / √2, r=1e0
-            ) where {nDim,T}
+                li::NTuple{N,T},
+                di;
+                ϵ=1e-8,
+                Re=3π,
+                CFL=(N == 2 ? 0.9 / √2.1 : 0.9 / √3.1),
+                r=0.7,
+            ) where {N,T}
+                lτ = min(li...)
                 Vpdτ = min(di...) * CFL
-                Gdτ = @zeros(ni...)
-                dτ_Rho = @zeros(ni...)
+                θ_dτ = lτ * (r + 2.0) / (Re * Vpdτ)
+                ηdτ = Vpdτ * lτ / Re
 
-                return new{eltype(Gdτ),nDim}(CFL, ϵ, Re, r, Vpdτ, dτ_Rho, Gdτ)
+                return new{typeof(r)}(CFL, ϵ, Re, r, Vpdτ, θ_dτ, ηdτ)
             end
         end
     end

@@ -52,8 +52,8 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni = (nx, ny) # number of nodes in x- and y-
-    li = (lx, ly)  # domain length in x- and y-
+    ni = nx, ny # number of nodes in x- and y-
+    li = lx, ly  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
     max_li = max(li...)
     nDim = length(ni) # domain dimension
@@ -67,14 +67,18 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni, Viscous)
+    stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di; CFL = 1e-1 / √2)
+    pt_stokes = PTStokesCoeffs(ni, di; CFL=1 / √2.1)
 
     ## Setup-specific parameters and fields
     η = solCx_viscosity(xci, ni; Δη=Δη) # viscosity field
     ρ = solCx_density(xci, ni)
     fy = ρ .* g
+    ρg = @zeros(ni...), fy
+    dt = Inf
+    G = @fill(Inf, ni...)
+    K = @fill(Inf, ni...)
 
     # smooth viscosity jump (otherwise no convergence for Δη > ~15)
     η2 = deepcopy(η)
@@ -91,7 +95,9 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     t = 0.0
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, di, li, max_li, freeslip, fy, η; iterMax=50_000, nout=200)
+        iters = solve!(
+            stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=150_000, nout=1000
+        )
         t += Δt
     end
 

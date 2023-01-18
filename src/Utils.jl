@@ -1,14 +1,35 @@
+function compute_dt(S::StokesArrays, di, dt_diff)
+    return compute_dt(S.V, di, dt_diff)
+end
+
+function compute_dt(V::Velocity, di::NTuple{2,T}, dt_diff) where {T}
+    return compute_dt(V.Vx, V.Vy, di[1], di[2], dt_diff)
+end
+
+function compute_dt(Vx, Vy, dx, dy, dt_diff)
+    dt_adv = min(dx / maximum(abs.(Vx)), dy / maximum(abs.(Vy))) / 2.1
+    return min(dt_diff, dt_adv)
+end
+
+function compute_dt(V::Velocity, di::NTuple{3,T}, dt_diff) where {T}
+    return compute_dt(V.Vx, V.Vy, V.Vz, di[1], di[2], di[3], dt_diff)
+end
+
+function compute_dt(Vx, Vy, Vz, dx, dy, dz, dt_diff)
+    dt_adv = min(dx / maximum(abs.(Vx)), dy / maximum(abs.(Vy)), dz / maximum(abs.(Vz))) / 3.1
+    return min(dt_diff, dt_adv)
+end
+
 # MACROS
 
 ## Memory allocators
-
-export @allocate
 
 macro allocate(ni...)
     return esc(:(PTArray(undef, $(ni...))))
 end
 
-## Others
+# Others
+
 export assign!
 
 @parallel function assign!(B::AbstractArray{T,N}, A::AbstractArray{T,N}) where {T,N}
@@ -16,9 +37,9 @@ export assign!
     return nothing
 end
 
-## MPI reductions 
+# MPI reductions 
 
-export mean_mpi, norm_mpi, minimum_mpi, maximum_mpi
+# export mean_mpi, norm_mpi, minimum_mpi, maximum_mpi
 
 function mean_mpi(A)
     mean_l = mean(A)

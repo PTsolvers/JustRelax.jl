@@ -1,11 +1,10 @@
 struct ThermalParameters{T}
     κ::T # thermal diffusivity
-    
-    function ThermalParameters(K::AbstractArray, ρCp::AbstractArray)
-        κ = K./ρCp
-        new{typeof(κ)}(κ)
-    end
 
+    function ThermalParameters(K::AbstractArray, ρCp::AbstractArray)
+        κ = K ./ ρCp
+        return new{typeof(κ)}(κ)
+    end
 end
 
 @parallel function update_T!(ΔT, T, Told)
@@ -15,8 +14,14 @@ end
 
 ## GeoParams
 
-compute_diffusivity(rheology::MaterialParams, args) = compute_conductivity(rheology, args) * inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
-compute_diffusivity(rheology::MaterialParams, ρ::Number, args) = compute_conductivity(rheology, args) * inv(compute_heatcapacity(rheology, args) * ρ)
+function compute_diffusivity(rheology::MaterialParams, args)
+    return compute_conductivity(rheology, args) *
+           inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
+end
+function compute_diffusivity(rheology::MaterialParams, ρ::Number, args)
+    return compute_conductivity(rheology, args) *
+           inv(compute_heatcapacity(rheology, args) * ρ)
+end
 
 # 1D THERMAL DIFFUSION MODULE
 
@@ -165,38 +170,31 @@ using CUDA
 # using MPI
 using GeoParams
 
-import JustRelax:
-    ThermalParameters, solve!, assign!, thermal_boundary_conditions!
+import JustRelax: ThermalParameters, solve!, assign!, thermal_boundary_conditions!
 import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity
 
 export solve!
 
 ## KERNELS
 
-@parallel function compute_flux!(
-    qTx,
-    qTy,
-    T,
-    κ,
-    _dx,
-    _dy,
-)
-    @all(qTx) = - @av_xi(κ) * @d_xi(T) * _dx
-    @all(qTy) = - @av_yi(κ) * @d_yi(T) * _dy
+@parallel function compute_flux!(qTx, qTy, T, κ, _dx, _dy)
+    @all(qTx) = -@av_xi(κ) * @d_xi(T) * _dx
+    @all(qTy) = -@av_yi(κ) * @d_yi(T) * _dy
     return nothing
 end
 
-@parallel_indices (i,j) function compute_flux!(qTx, qTy, T, rheology::MaterialParams, args, _dx, _dy)
-    
-    @inline dTdxi(i,j) = (T[i+1,j+1] - T[i,j+1]) * _dx
-    @inline dTdyi(i,j) = (T[i+1,j+1] - T[i+1,j]) * _dy
+@parallel_indices (i, j) function compute_flux!(
+    qTx, qTy, T, rheology::MaterialParams, args, _dx, _dy
+)
+    @inline dTdxi(i, j) = (T[i + 1, j + 1] - T[i, j + 1]) * _dx
+    @inline dTdyi(i, j) = (T[i + 1, j + 1] - T[i + 1, j]) * _dy
 
     if i ≤ size(qTx, 1) && j ≤ size(qTx, 2)
-        qTx[i,j] = - compute_diffusivity(rheology, args) * dTdxi(i,j) 
+        qTx[i, j] = -compute_diffusivity(rheology, args) * dTdxi(i, j)
     end
 
     if i ≤ size(qTy, 1) && j ≤ size(qTy, 2)
-        qTy[i,j] = - compute_diffusivity(rheology, args) * dTdyi(i,j) 
+        qTy[i, j] = -compute_diffusivity(rheology, args) * dTdyi(i, j)
     end
 
     return nothing
@@ -207,42 +205,91 @@ end
 #     return nothing
 # end
 
-@parallel_indices (i, j) function advect_T!(
-    dT_dt,
-    qTx,
-    qTy,
-    T,
-    Vx,
-    Vy,
-    _dx,
-    _dy,
-)
+# @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
+#     if (i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2))
+#         dT_dt[i, j] =
+#             -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) -
+#             (Vx[i + 1, j + 1] > 0) *
+#             Vx[i + 1, j + 1] *
+#             (T[i + 1, j + 1] - T[i, j + 1]) *
+#             _dx -
+#             (Vx[i + 2, j + 1] < 0) *
+#             Vx[i + 2, j + 1] *
+#             (T[i + 2, j + 1] - T[i + 1, j + 1]) *
+#             _dx -
+#             (Vy[i + 1, j + 1] > 0) *
+#             Vy[i + 1, j + 1] *
+#             (T[i + 1, j + 1] - T[i + 1, j]) *
+#             _dy -
+#             (Vy[i + 1, j + 2] < 0) *
+#             Vy[i + 1, j + 2] *
+#             (T[i + 1, j + 2] - T[i + 1, j + 1]) *
+#             _dy
+#     end
+#     return nothing
+# end
+
+# @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
+#     if (i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2))
+#         dT_dt[i, j] =
+#             -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) -
+#             (Vx[i + 1, j + 2] > 0) *
+#             Vx[i + 1, j + 2] *
+#             (T[i + 1, j + 1] - T[i, j + 1]) *
+#             _dx -
+#             (Vx[i + 2, j + 2] < 0) *
+#             Vx[i + 2, j + 2] *
+#             (T[i + 2, j + 1] - T[i + 1, j + 1]) *
+#             _dx -
+#             (Vy[i + 2, j + 1] > 0) *
+#             Vy[i + 2, j + 1] *
+#             (T[i + 1, j + 1] - T[i + 1, j]) *
+#             _dy -
+#             (Vy[i + 2, j + 2] < 0) *
+#             Vy[i + 2, j + 2] *
+#             (T[i + 1, j + 2] - T[i + 1, j + 1]) *
+#             _dy
+#     end
+#     return nothing
+# end
+
+# @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
+#     if (i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2))
+
+#         Vxᵢⱼ_left  = 0.25 * (Vx[i + 1, j + 1] + Vx[i + 1, j + 2] + Vx[i    , j + 1] + Vx[i    , j + 2])
+#         Vxᵢⱼ_right = 0.25 * (Vx[i + 2, j + 1] + Vx[i + 2, j + 2] + Vx[i + 1, j + 1] + Vx[i + 1, j + 2])
+
+#         Vyᵢⱼ_bot   = 0.25 * (Vy[i + 1, j + 1] + Vy[i + 2, j + 1] + Vy[i + 1, j    ] + Vy[i + 2, j    ])
+#         Vyᵢⱼ_top   = 0.25 * (Vy[i + 1, j + 2] + Vy[i + 2, j + 2] + Vy[i + 1, j + 1] + Vy[i + 2, j + 1])
+
+#         dT_dt[i, j] =
+#             -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) -
+#             (Vxᵢⱼ_left  > 0) * Vxᵢⱼ_left  * (T[i + 1, j + 1] - T[i    , j + 1]) * _dx -
+#             (Vxᵢⱼ_right < 0) * Vxᵢⱼ_right * (T[i + 2, j + 1] - T[i + 1, j + 1]) * _dx -
+#             (Vyᵢⱼ_bot   > 0) * Vyᵢⱼ_bot   * (T[i + 1, j + 1] - T[i + 1, j    ]) * _dy -
+#             (Vyᵢⱼ_top   < 0) * Vyᵢⱼ_top   * (T[i + 1, j + 2] - T[i + 1, j + 1]) * _dy
+#     end
+#     return nothing
+# end
+
+@parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
     if (i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2))
+        
+        Vxᵢⱼ = 0.5 * (Vx[i + 2, j + 2] + Vx[i + 1, j + 2])
+        Vyᵢⱼ = 0.5 * (Vy[i + 2, j + 2] + Vy[i + 2, j + 1])
+
         dT_dt[i, j] =
-            -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) - (Vx[i + 1, j + 1] > 0) *
-            Vx[i + 1, j + 1] *
-            (T[i + 1, j + 1] - T[i, j + 1]) * _dx -
-            (Vx[i + 2, j + 1] < 0) *
-            Vx[i + 2, j + 1] *
-            (T[i + 2, j + 1] - T[i + 1, j + 1]) * _dx -
-            (Vy[i + 1, j + 1] > 0) *
-            Vy[i + 1, j + 1] *
-            (T[i + 1, j + 1] - T[i + 1, j]) * _dy -
-            (Vy[i + 1, j + 2] < 0) *
-            Vy[i + 1, j + 2] *
-            (T[i + 1, j + 2] - T[i + 1, j + 1]) * _dy
+            -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) -
+            (Vxᵢⱼ > 0) * Vxᵢⱼ * (T[i + 1, j + 1] - T[i    , j + 1]) * _dx -
+            (Vxᵢⱼ < 0) * Vxᵢⱼ * (T[i + 2, j + 1] - T[i + 1, j + 1]) * _dx -
+            (Vyᵢⱼ > 0) * Vyᵢⱼ * (T[i + 1, j + 1] - T[i + 1, j    ]) * _dy -
+            (Vyᵢⱼ < 0) * Vyᵢⱼ * (T[i + 1, j + 2] - T[i + 1, j + 1]) * _dy
     end
     return nothing
 end
 
-@parallel function advect_T!(
-    dT_dt,
-    qTx,
-    qTy,
-    _dx,
-    _dy,
-)
-    @all(dT_dt) = - (@d_xa(qTx)*_dx + @d_ya(qTy)*_dy)
+@parallel function advect_T!(dT_dt, qTx, qTy, _dx, _dy)
+    @all(dT_dt) = -(@d_xa(qTx) * _dx + @d_ya(qTy) * _dy)
     return nothing
 end
 
@@ -258,20 +305,22 @@ function JustRelax.solve!(
     thermal_parameters::ThermalParameters{<:AbstractArray{_T,2}},
     thermal_bc::NamedTuple,
     di::NTuple{2,_T},
-    dt
+    dt,
 ) where {_T,M<:AbstractArray{<:Any,2}}
 
     # Compute some constant stuff
     _dx, _dy = inv.(di)
-   
+
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.T, thermal_parameters.κ, _dx, _dy)
+    @parallel compute_flux!(
+        thermal.qTx, thermal.qTy, thermal.T, thermal_parameters.κ, _dx, _dy
+    )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _dx, _dy)
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_boundary_conditions!(thermal_bc, thermal.T)
-    
+
     @. thermal.ΔT = thermal.T - thermal.Told
-    
+
     return nothing
 end
 
@@ -282,20 +331,31 @@ function JustRelax.solve!(
     stokes,
     thermal_bc::NamedTuple,
     di::NTuple{2,_T},
-    dt
+    dt,
 ) where {_T,M<:AbstractArray{<:Any,2}}
 
     # Compute some constant stuff
     _dx, _dy = inv.(di)
-   
+
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.T, thermal_parameters.κ, _dx, _dy)
-    @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.T, stokes.V.Vx, stokes.V.Vy, _dx, _dy)
+    @parallel compute_flux!(
+        thermal.qTx, thermal.qTy, thermal.T, thermal_parameters.κ, _dx, _dy
+    )
+    @parallel advect_T!(
+        thermal.dT_dt,
+        thermal.qTx,
+        thermal.qTy,
+        thermal.T,
+        stokes.V.Vx,
+        stokes.V.Vy,
+        _dx,
+        _dy,
+    )
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_boundary_conditions!(thermal_bc, thermal.T)
-    
+
     @. thermal.ΔT = thermal.T - thermal.Told
-    
+
     return nothing
 end
 
@@ -308,7 +368,7 @@ function JustRelax.solve!(
     args::NamedTuple,
     di::NTuple{2,_T},
     dt;
-    advection = true
+    advection=true,
 ) where {_T,M<:AbstractArray{<:Any,2}}
 
     # Compute some constant stuff
@@ -317,12 +377,14 @@ function JustRelax.solve!(
 
     # solve heat diffusion
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel (1:nx-1, 1:ny-1) compute_flux!(thermal.qTx, thermal.qTy, thermal.T, rheology, args, _dx, _dy)
+    @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
+        thermal.qTx, thermal.qTy, thermal.T, rheology, args, _dx, _dy
+    )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _dx, _dy)
     @show extrema(thermal.dT_dt)
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_boundary_conditions!(thermal_bc, thermal.T)
-    
+
     @. thermal.ΔT = thermal.T - thermal.Told
 
     return nothing
@@ -337,7 +399,7 @@ function JustRelax.solve!(
     args::NamedTuple,
     di::NTuple{2,_T},
     dt;
-    advection = true
+    advection=true,
 ) where {_T,M<:AbstractArray{<:Any,2}}
 
     # Compute some constant stuff
@@ -346,11 +408,22 @@ function JustRelax.solve!(
 
     # solve heat diffusion
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel (1:nx-1, 1:ny-1) compute_flux!(thermal.qTx, thermal.qTy, thermal.T, rheology, args, _dx, _dy)
-    @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.T, stokes.V.Vx, stokes.V.Vy, _dx, _dy)
+    @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
+        thermal.qTx, thermal.qTy, thermal.T, rheology, args, _dx, _dy
+    )
+    @parallel advect_T!(
+        thermal.dT_dt,
+        thermal.qTx,
+        thermal.qTy,
+        thermal.T,
+        stokes.V.Vx,
+        stokes.V.Vy,
+        _dx,
+        _dy,
+    )
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_boundary_conditions!(thermal_bc, thermal.T)
-    
+
     @. thermal.ΔT = thermal.T - thermal.Told
 
     return nothing
@@ -372,50 +445,37 @@ using CUDA
 using GeoParams
 
 import JustRelax:
-    IGG,
-    ThermalParameters,
-    solve!,
-    assign!,
-    norm_mpi,
-    thermal_boundary_conditions!
+    IGG, ThermalParameters, solve!, assign!, norm_mpi, thermal_boundary_conditions!
 import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity
 
 export solve!
 
 ## KERNELS
 
-@parallel function compute_flux!(
-    qTx,
-    qTy,
-    qTz,
-    T,
-    κ,
-    _dx,
-    _dy,
-    _dz,
-)
-    @all(qTx) = - @av_xi(κ) * @d_xi(T) * _dx
-    @all(qTy) = - @av_yi(κ) * @d_yi(T) * _dy
-    @all(qTz) = - @av_yi(κ) * @d_zi(T) * _dz
+@parallel function compute_flux!(qTx, qTy, qTz, T, κ, _dx, _dy, _dz)
+    @all(qTx) = -@av_xi(κ) * @d_xi(T) * _dx
+    @all(qTy) = -@av_yi(κ) * @d_yi(T) * _dy
+    @all(qTz) = -@av_yi(κ) * @d_zi(T) * _dz
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_flux!(qTx, qTy, qTz, T, rheology::MaterialParams, args, _dx, _dy, _dz)
-
-    @inline dTdxi(i, j, k) = (T[i+1, j+1, k+1] - T[i, j+1, k+1]) * _dx
-    @inline dTdyi(i, j, k) = (T[i+1, j+1, k+1] - T[i+1, j, k+1]) * _dy
-    @inline dTdzi(i, j, k) = (T[i+1, j+1, k+1] - T[i+1, j+1, k]) * _dz
+@parallel_indices (i, j, k) function compute_flux!(
+    qTx, qTy, qTz, T, rheology::MaterialParams, args, _dx, _dy, _dz
+)
+    @inline dTdxi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) * _dx
+    @inline dTdyi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) * _dy
+    @inline dTdzi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) * _dz
 
     if i ≤ size(qTx, 1) && j ≤ size(qTx, 2) && k ≤ size(qTx, 3)
-        qTx[i,j,k] = - compute_diffusivity(rheology, args) * dTdxi(i,j,k)
+        qTx[i, j, k] = -compute_diffusivity(rheology, args) * dTdxi(i, j, k)
     end
 
     if i ≤ size(qTy, 1) && j ≤ size(qTy, 2) && k ≤ size(qTy, 3)
-        qTy[i,j,k] = - compute_diffusivity(rheology, args) * dTdyi(i,j,k)
+        qTy[i, j, k] = -compute_diffusivity(rheology, args) * dTdyi(i, j, k)
     end
 
     if i ≤ size(qTz, 1) && j ≤ size(qTz, 2) && k ≤ size(qTz, 3)
-        qTz[i,j,k] = - compute_diffusivity(rheology, args) * dTdzi(i,j,k)
+        qTz[i, j, k] = -compute_diffusivity(rheology, args) * dTdzi(i, j, k)
     end
 
     return nothing
@@ -427,41 +487,45 @@ end
 # end
 
 @parallel_indices (i, j, k) function advect_T!(
-    dT_dt,
-    qTx,
-    qTy,
-    qTz,
-    T,
-    Vx,
-    Vy,
-    Vz,
-    _dx,
-    _dy,
-    _dz,
+    dT_dt, qTx, qTy, qTz, T, Vx, Vy, Vz, _dx, _dy, _dz
 )
     if i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2) && k ≤ size(dT_dt, 3)
         dT_dt[i, j, k] =
-            -((qTx[i + 1, j, k] - qTx[i, j, k]) * _dx + (qTy[i, j + 1, k] - qTy[i, j, k]) * _dy + (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz) - 
-            (Vx[i + 1, j + 1, k + 1] > 0) * Vx[i + 1, j + 1, k + 1] * (T[i + 1, j + 1, k + 1] - T[i,     j + 1, k + 1]) * _dx -
-            (Vx[i + 2, j + 1, k + 1] < 0) * Vx[i + 2, j + 1, k + 1] * (T[i + 2, j + 1, k + 1] - T[i + 1, j + 1, k + 1]) * _dx -
-            (Vy[i + 1, j + 1, k + 1] > 0) * Vy[i + 1, j + 1, k + 1] * (T[i + 1, j + 1, k + 1] - T[i + 1, j    , k + 1]) * _dy -
-            (Vy[i + 1, j + 2, k + 1] < 0) * Vy[i + 1, j + 2, k + 1] * (T[i + 1, j + 2, k + 1] - T[i + 1, j + 1, k + 1]) * _dy -
-            (Vz[i + 1, j + 1, k + 1] > 0) * Vz[i + 1, j + 1, k + 1] * (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k    ]) * _dz -
-            (Vz[i + 1, j + 1, k + 2] < 0) * Vz[i + 1, j + 1, k + 2] * (T[i + 1, j + 1, k + 2] - T[i + 1, j + 1, k + 1]) * _dz
+            -(
+                (qTx[i + 1, j, k] - qTx[i, j, k]) * _dx +
+                (qTy[i, j + 1, k] - qTy[i, j, k]) * _dy +
+                (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz
+            ) -
+            (Vx[i + 1, j + 1, k + 1] > 0) *
+            Vx[i + 1, j + 1, k + 1] *
+            (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) *
+            _dx -
+            (Vx[i + 2, j + 1, k + 1] < 0) *
+            Vx[i + 2, j + 1, k + 1] *
+            (T[i + 2, j + 1, k + 1] - T[i + 1, j + 1, k + 1]) *
+            _dx -
+            (Vy[i + 1, j + 1, k + 1] > 0) *
+            Vy[i + 1, j + 1, k + 1] *
+            (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) *
+            _dy -
+            (Vy[i + 1, j + 2, k + 1] < 0) *
+            Vy[i + 1, j + 2, k + 1] *
+            (T[i + 1, j + 2, k + 1] - T[i + 1, j + 1, k + 1]) *
+            _dy -
+            (Vz[i + 1, j + 1, k + 1] > 0) *
+            Vz[i + 1, j + 1, k + 1] *
+            (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) *
+            _dz -
+            (Vz[i + 1, j + 1, k + 2] < 0) *
+            Vz[i + 1, j + 1, k + 2] *
+            (T[i + 1, j + 1, k + 2] - T[i + 1, j + 1, k + 1]) *
+            _dz
     end
     return nothing
 end
 
-@parallel function advect_T!(
-    dT_dt,
-    qTx,
-    qTy,
-    qTz,
-    _dx,
-    _dy,
-    _dz,
-)
-    @all(dT_dt) = -(@d_xa(qTx)*_dx + @d_ya(qTy)*_dy + @d_za(qTz)*_dz)
+@parallel function advect_T!(dT_dt, qTx, qTy, qTz, _dx, _dy, _dz)
+    @all(dT_dt) = -(@d_xa(qTx) * _dx + @d_ya(qTy) * _dy + @d_za(qTz) * _dz)
     return nothing
 end
 
@@ -478,23 +542,32 @@ function JustRelax.solve!(
     thermal_bc::NamedTuple,
     di::NTuple{3,_T},
     dt;
-    b_width = (4,4,4)
+    b_width=(4, 4, 4),
 ) where {_T,M<:AbstractArray{<:Any,3}}
 
     # Compute some constant stuff
     _dx, _dy = inv.(di)
-   
+
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, thermal_parameters.κ, _dx, _dy, _dz)
+    @parallel compute_flux!(
+        thermal.qTx,
+        thermal.qTy,
+        thermal.qTz,
+        thermal.T,
+        thermal_parameters.κ,
+        _dx,
+        _dy,
+        _dz,
+    )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _dx, _dy, _dz)
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         update_halo!(thermal.T)
     end
     thermal_boundary_conditions!(thermal_bc, thermal.T)
-    
+
     @. thermal.ΔT = thermal.T - thermal.Told
-    
+
     return nothing
 end
 
@@ -506,23 +579,44 @@ function JustRelax.solve!(
     stokes,
     di::NTuple{3,_T},
     dt;
-    b_width = (4,4,4)
+    b_width=(4, 4, 4),
 ) where {_T,M<:AbstractArray{<:Any,3}}
 
     # Compute some constant stuff
     _dx, _dy = inv.(di)
-   
+
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, thermal_parameters.κ, _dx, _dy, _dz)
+    @parallel compute_flux!(
+        thermal.qTx,
+        thermal.qTy,
+        thermal.qTz,
+        thermal.T,
+        thermal_parameters.κ,
+        _dx,
+        _dy,
+        _dz,
+    )
     @hide_communication b_width begin # communication/computation overlap
-        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, _dx, _dy, _dz)
+        @parallel advect_T!(
+            thermal.dT_dt,
+            thermal.qTx,
+            thermal.qTy,
+            thermal.qTz,
+            thermal.T,
+            stokes.V.Vx,
+            stokes.V.Vy,
+            stokes.V.Vz,
+            _dx,
+            _dy,
+            _dz,
+        )
         update_halo!(thermal.T)
     end
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_boundary_conditions!(thermal_bc, thermal.T)
-    
+
     @. thermal.ΔT = thermal.T - thermal.Told
-    
+
     return nothing
 end
 
@@ -535,7 +629,7 @@ function JustRelax.solve!(
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;
-    b_width = (4,4,4)
+    b_width=(4, 4, 4),
 ) where {_T,M<:AbstractArray{<:Any,3}}
 
     # Compute some constant stuff
@@ -544,14 +638,16 @@ function JustRelax.solve!(
 
     # solve heat diffusion
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel (1:nx-1, 1:ny-1, 1:nz-1) compute_flux!(thermal.qTx, thermal.qTy, thermal.qTz, thermal.T,rheology, args, _dx, _dy, _dz)
+    @parallel (1:(nx - 1), 1:(ny - 1), 1:(nz - 1)) compute_flux!(
+        thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, rheology, args, _dx, _dy, _dz
+    )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _dx, _dy, _dz)
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         update_halo!(thermal.T)
     end
     thermal_boundary_conditions!(thermal_bc, thermal.T)
-    
+
     @. thermal.ΔT = thermal.T - thermal.Told
 
     return nothing
@@ -566,7 +662,7 @@ function JustRelax.solve!(
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;
-    b_width = (4,4,4)
+    b_width=(4, 4, 4),
 ) where {_T,M<:AbstractArray{<:Any,3}}
 
     # Compute some constant stuff
@@ -575,14 +671,28 @@ function JustRelax.solve!(
 
     # solve heat diffusion
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel (1:nx-1, 1:ny-1, 1:nz-1) compute_flux!(thermal.qTx, thermal.qTy, thermal.qTz, thermal.T,rheology, args, _dx, _dy, _dz)
+    @parallel (1:(nx - 1), 1:(ny - 1), 1:(nz - 1)) compute_flux!(
+        thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, rheology, args, _dx, _dy, _dz
+    )
     @hide_communication b_width begin # communication/computation overlap
-        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, _dx, _dy, _dz)
+        @parallel advect_T!(
+            thermal.dT_dt,
+            thermal.qTx,
+            thermal.qTy,
+            thermal.qTz,
+            thermal.T,
+            stokes.V.Vx,
+            stokes.V.Vy,
+            stokes.V.Vz,
+            _dx,
+            _dy,
+            _dz,
+        )
         update_halo!(thermal.T)
     end
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_boundary_conditions!(thermal_bc, thermal.T)
-    
+
     @. thermal.ΔT = thermal.T - thermal.Told
 
     return nothing

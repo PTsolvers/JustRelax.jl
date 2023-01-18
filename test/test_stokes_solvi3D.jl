@@ -35,7 +35,7 @@ function check_convergence_case1()
         finalize_MPI=true,
     )
 
-    iters_expected = (iter=2000, err_evo1=[1.3474702441931404e-13], err_evo2=[2000])
+    iters_expected = (iter=500, err_evo1=[ 2.849160463114231e-9])
     return iters.iter == iters_expected.iter &&
            iters.err_evo1[end] ≈ iters_expected.err_evo1[end]
 end

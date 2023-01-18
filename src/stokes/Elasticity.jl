@@ -103,16 +103,25 @@ end
     return nothing
 end
 
-@parallel function compute_V!(Vx, Vy, P, τxx, τyy, τxyv, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
-    @inn(Vx) =
-        @inn(Vx) +
-        (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @av_xa(ρgx)) * ηdτ /
-        @harm_xa(ητ)
-    @inn(Vy) =
-        @inn(Vy) +
-        (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @av_ya(ρgy)) * ηdτ /
-        @harm_ya(ητ)
+@parallel_indices (i, j) function compute_V_Res!(Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, ητ, ηdτ, _dx, _dy)
 
+    # Again, indices i, j are captured by the closure
+    @inline d_xa(A)  = (A[i + 1, j] - A[i, j]) * _dx
+    @inline d_ya(A)  = (A[i, j + 1] - A[i, j]) * _dy
+    @inline d_xi(A)  = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
+    @inline d_yi(A)  = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
+    @inline av_xa(A) = (A[i + 1, j] + A[i, j]) * 0.5
+    @inline av_ya(A) = (A[i, j + 1] + A[i, j]) * 0.5
+
+    if all( (i, j) .≤ size(Rx))
+        @inbounds R = Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
+        @inbounds Vx[i+1, j+1] += R * ηdτ / av_xa(ητ)
+
+    end
+    if all( (i, j) .≤ size(Ry))
+        @inbounds R = Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
+        @inbounds Vy[i+1, j+1] += R * ηdτ / av_ya(ητ)
+    end
     return nothing
 end
 
@@ -120,9 +129,9 @@ end
 
 # viscous
 @parallel function compute_τ!(τxx, τyy, τxyv, τxx_o, τyy_o, τxyv_o, εxx, εyy, εxyv, η, θ_dτ)
-    @all(τxx) = @all(τxx) + (-@all(τxx) + 2 * @all(η) * @all(εxx)) * 1.0 / (θ_dτ + 1.0)
-    @all(τyy) = @all(τyy) + (-@all(τyy) + 2 * @all(η) * @all(εyy)) * 1.0 / (θ_dτ + 1.0)
-    @inn(τxyv) = @inn(τxyv) + (-@inn(τxyv) + 2 * @harm(η) * @inn(εxyv)) * 1.0 / (θ_dτ + 1.0)
+    @all(τxx) = @all(τxx) + (-@all(τxx) + 2.0 * @all(η) * @all(εxx)) * 1.0 / (θ_dτ + 1.0)
+    @all(τyy) = @all(τyy) + (-@all(τyy) + 2.0 * @all(η) * @all(εyy)) * 1.0 / (θ_dτ + 1.0)
+    @inn(τxyv) = @inn(τxyv) + (-@inn(τxyv) + 2.0 * @av(η) * @inn(εxyv)) * 1.0 / (θ_dτ + 1.0)
 
     return nothing
 end
@@ -146,37 +155,10 @@ end
     @inn(τxyv) =
         @inn(τxyv) +
         (
-            -(@inn(τxyv) - @inn(τxyv_o)) * @harm(η) / (@harm(G) * dt) - @inn(τxyv) +
-            2 * @harm(η) * @inn(εxyv)
-        ) * 1.0 / (θ_dτ + @harm(η) / (@harm(G) * dt) + 1.0)
+            -(@inn(τxyv) - @inn(τxyv_o)) * @av(η) / (@av(G) * dt) - @inn(τxyv) +
+            2 * @av(η) * @inn(εxyv)
+        ) * 1.0 / (θ_dτ + @av(η) / (@av(G) * dt) + 1.0)
 
-    return nothing
-end
-
-# @parallel function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
-#     @all(Rx) = -@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxy) * _dy - @av_xa(ρgx)
-#     @all(Ry) = -@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxy) * _dx - @av_ya(ρgy)
-
-#     return nothing
-# end
-
-# Faster then macros version above (by c. 40%...)
-@parallel_indices (i, j) function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
-
-    # Again, indices i, j are captured by the closure
-    @inbounds @inline d_xa(A) = (A[i + 1, j] - A[i, j]) * _dx
-    @inbounds @inline d_ya(A) = (A[i, j + 1] - A[i, j]) * _dy
-    @inbounds @inline d_xi(A) = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
-    @inbounds @inline d_yi(A) = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
-    @inbounds @inline av_xa(A) = (A[i + 1, j] + A[i, j]) * 0.5
-    @inbounds @inline av_ya(A) = (A[i, j + 1] + A[i, j]) * 0.5
-
-    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-        @inbounds Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
-    end
-    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-        @inbounds Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
-    end
     return nothing
 end
 
@@ -245,11 +227,6 @@ function JustRelax.solve!(
             @parallel (1:nx, 1:ny) compute_Res!(
                 Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
             )
-
-            # push!(norm_Rx, maximum(abs.(Rx)))
-            # push!(norm_Ry, maximum(abs.(Ry)))
-            # push!(norm_∇V, maximum(abs.(RP)))
-
             Vmin, Vmax = extrema(Vx)
             Pmin, Pmax = extrema(P)
             push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
@@ -338,7 +315,7 @@ function JustRelax.solve!(
             @parallel compute_τ!(
                 τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
             )
-            @parallel compute_V!(Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
+            @parallel (1:nx, 1:ny) compute_V_Res!(Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, ητ, ηdτ, _dx, _dy)
 
             # free slip boundary conditions
             apply_free_slip!(freeslip, Vx, Vy)
@@ -346,10 +323,6 @@ function JustRelax.solve!(
 
         iter += 1
         if iter % nout == 0 && iter > 1
-            @parallel (1:nx, 1:ny) compute_Res!(
-                Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
-            )
-
             push!(norm_Rx, maximum(abs.(Rx)))
             push!(norm_Ry, maximum(abs.(Ry)))
             push!(norm_∇V, maximum(abs.(RP)))

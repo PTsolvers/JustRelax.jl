@@ -72,15 +72,21 @@ function make_residual_struct!(ndim; name::Symbol=:Residual)
             RP::T
 
             function $(name)(ni::NTuple{3,T}) where {T}
-                return new{$PTArray}(@zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...))
+                Rx = @zeros(ni[1]...)
+                Ry = @zeros(ni[2]...)
+                RP = @zeros(ni[3]...)
+                return new{typeof(Rx)}(Rx, Ry, RP)
             end
 
             function $(name)(ni::NTuple{4,T}) where {T}
-                return new{$PTArray}(
-                    @zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...), @zeros(ni[4]...)
-                )
+                Rx = @zeros(ni[1]...)
+                Ry = @zeros(ni[2]...)
+                Rz = @zeros(ni[3]...)
+                RP = @zeros(ni[4]...)
+                return new{typeof(Rx)}(Rx, Ry, Rz, RP)
             end
         end
+
     end
 end
 

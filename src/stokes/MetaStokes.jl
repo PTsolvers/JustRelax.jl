@@ -50,12 +50,12 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTens
 
             function $(name)(ni::NTuple{3,T}) where {T}
                 return new{$PTArray}(
-                    @zeros(ni[1]    , ni[2] - 2, ni[3] - 2), # xx
+                    @zeros(ni[1], ni[2] - 2, ni[3] - 2), # xx
                     @zeros(ni[1] - 1, ni[2] - 1, ni[3] - 2), # xy
-                    @zeros(ni[1] - 2, ni[2]    , ni[3] - 2), # yy
+                    @zeros(ni[1] - 2, ni[2], ni[3] - 2), # yy
                     @zeros(ni[1] - 1, ni[2] - 2, ni[3] - 1), # xz
                     @zeros(ni[1] - 2, ni[2] - 1, ni[3] - 1), # yz
-                    @zeros(ni[1] - 2, ni[2] - 2, ni[3]    ), # zz
+                    @zeros(ni[1] - 2, ni[2] - 2, ni[3]), # zz
                     @zeros(ni[1] - 2, ni[2] - 2, ni[3] - 2), # II (second invariant)
                 )
             end
@@ -86,7 +86,6 @@ function make_residual_struct!(ndim; name::Symbol=:Residual)
                 return new{typeof(Rx)}(Rx, Ry, Rz, RP)
             end
         end
-
     end
 end
 
@@ -118,7 +117,9 @@ function make_stokes_struct!()
                 )
             end
 
-            function StokesArrays(ni::NTuple{2,T}, model::Type{<: AbstractElasticModel}) where {T}
+            function StokesArrays(
+                ni::NTuple{2,T}, model::Type{<:AbstractElasticModel}
+            ) where {T}
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1] + 2, ni[2] + 1)))
@@ -161,7 +162,9 @@ function make_stokes_struct!()
                 )
             end
 
-            function StokesArrays(ni::NTuple{3,T}, model::Type{<: AbstractElasticModel}) where {T}
+            function StokesArrays(
+                ni::NTuple{3,T}, model::Type{<:AbstractElasticModel}
+            ) where {T}
                 P = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 V = Velocity((

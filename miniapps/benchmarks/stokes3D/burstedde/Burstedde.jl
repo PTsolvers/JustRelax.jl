@@ -187,7 +187,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di; Re=3π, CFL=0.9 / √3)
+    pt_stokes = PTStokesCoeffs(li, di)
 
     ## Setup-specific parameters and fields
     β = 10.0
@@ -219,7 +219,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             K,
             dt,
             igg;
-            iterMax=10e3,
+            iterMax=20e3,
             b_width=(4, 4, 4),
         )
         t += dt

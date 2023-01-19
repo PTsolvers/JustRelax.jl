@@ -252,19 +252,10 @@ function JustRelax.solve!(
 ) where {A,B,C,D,T}
 
     # unpack
-    _dx, _dy = inv.(di)
-    Vx, Vy = stokes.V.Vx, stokes.V.Vy
-    εxx, εyy, εxy = strain(stokes)
-    τ, τ_o = stress(stokes)
-    τxx, τyy, τxy = τ
-    τxx_o, τyy_o, τxy_o = τ_o
-    P, ∇V = stokes.P, stokes.∇V
-    Rx, Ry, RP = stokes.R.Rx, stokes.R.Ry, stokes.R.RP
+    _di = inv.(di)
     ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
-    nx, ny = size(P)
-
-    ρgx, ρgy = ρg
-    P_old = deepcopy(P)
+    nx, ny = size(stokes.P)
+    P_old = deepcopy(stokes.P)
 
     # ~preconditioner
     ητ = deepcopy(η)
@@ -283,31 +274,30 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-
+            @parallel compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+            @parallel compute_strain_rate!(stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+            @parallel compute_P!(stokes.P, P_old, stokes.R.RP, stokes.∇V, η, K, dt, r, θ_dτ)
+            @parallel compute_τ!(
+                stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, η, θ_dτ
+            )
+            @parallel compute_V!(stokes.V.Vx, stokes.V.Vy, stokes.P, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ηdτ, ρg[1], ρg[2], ητ, _di...)
             # free slip boundary conditions
-            apply_free_slip!(freeslip, Vx, Vy)
-
-            @parallel compute_∇V!(∇V, Vx, Vy, _dx, _dy)
-            @parallel compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
-            @parallel compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
-            @parallel compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, θ_dτ)
-            @parallel compute_V!(Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
+            apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
         end
 
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (1:nx, 1:ny) compute_Res!(
-                Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
+                stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg[1], ρg[2], _di...
             )
-            Vmin, Vmax = extrema(Vx)
-            Pmin, Pmax = extrema(P)
-            push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
-            push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
-            push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))
-            err = max(norm_Rx[end], norm_Ry[end], norm_∇V[end])
+            errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+            push!(norm_Rx, errs[1])
+            push!(norm_Ry, errs[2])
+            push!(norm_∇V, errs[3])
+            err = maximum(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
-            if (verbose && err > ϵ) || (iter == iterMax)
+            if (verbose) || (iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,

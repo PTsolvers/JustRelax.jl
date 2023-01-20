@@ -52,6 +52,7 @@ using GeoParams, LinearAlgebra, Printf
 import JustRelax: stress, strain, elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic
 import JustRelax: compute_maxloc!, solve!
+import JustRelax: FlowBoundaryConditions, flow_bcs!
 
 import ..Stokes2D: compute_P!, compute_V!, compute_strain_rate!
 
@@ -212,7 +213,7 @@ end
     εxyv,
     η,
     η_vep,
-    P,
+    z,
     T,
     MatParam,
     dt,
@@ -225,9 +226,11 @@ end
     # # numerics
     # dτ_r                = 1.0 / (θ_dτ + 1.0) # original
     # dτ_r                = 1.0 / (θ_dτ + η[i, j] / (MatParam[1].Elasticity[1].G.val * dt) + 1.0) # original
-    dτ_r = 1.0 / (θ_dτ / η[i, j] + 1.0 / η_vep[i, j]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
+    dτ_r                = 1.0 / (θ_dτ / η[i, j] + 1 / η[i, j]) # original
+    # dτ_r = 1.0 / (θ_dτ / η[i, j] + 1.0 / η_vep[i, j]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
     # # Setup up input for GeoParams.jl
-    args = (; dt=dt, P=P[i, j], T=av(T), τII_old=0.0)
+    # args = (; dt=dt, P=P[i, j], T=av(T), τII_old=0.0)
+    args = (; dt=dt, P = 1e6*(1.0 - z[j]), T=av(T), τII_old=0.0)
     εij_p = εxx[i, j] + 1e-25, εyy[i, j] + 1e-25, gather(εxyv) .+ 1e-25
     τij_p_o = τxx_o[i, j], τyy_o[i, j], gather(τxyv_o)
     phases = (1, 1, (1, 1, 1, 1)) # for now hard-coded for a single phase
@@ -370,7 +373,7 @@ function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
     pt_stokes::PTStokesCoeffs,
     di::NTuple{2,T},
-    freeslip,
+    flow_bcs,
     ρg,
     η,
     G,
@@ -445,7 +448,8 @@ function JustRelax.solve!(
                 _di...,
             )
             # free slip boundary conditions
-            apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
+            # apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
+            flow_bcs!(flow_bcs, stokes.V.Vx, stokes.V.Vy, di)
         end
 
         iter += 1
@@ -508,7 +512,7 @@ function JustRelax.solve!(
     thermal::ThermalArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{2,T},
-    freeslip,
+    flow_bcs,
     ρg,
     η,
     η_vep,
@@ -523,9 +527,8 @@ function JustRelax.solve!(
     _di = inv.(di)
     ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
     nx, ny = size(stokes.P)
-
     P_old = deepcopy(stokes.P)
-
+    z = LinRange(di[2]*0.5, 1.0-di[2]*0.5, ny)
     # ~preconditioner
     ητ = deepcopy(η)
     @parallel compute_maxloc!(ητ, η)
@@ -578,7 +581,7 @@ function JustRelax.solve!(
                 stokes.ε.xy,
                 η,
                 η_vep,
-                stokes.P,
+                z,
                 thermal.T,
                 tupleize(MatParam), # needs to be a tuple
                 dt,
@@ -598,8 +601,9 @@ function JustRelax.solve!(
                 ητ,
                 _di...,
             )
-            # free slip boundary conditions
-            apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
+            # apply boundary conditions boundary conditions
+            # apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
+            flow_bcs!(flow_bcs, stokes.V.Vx, stokes.V.Vy, di)
         end
 
         iter += 1

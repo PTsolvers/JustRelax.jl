@@ -65,7 +65,7 @@ function solVi3D(;
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di; Re=6π, CFL=0.8 / √3)
+    pt_stokes = PTStokesCoeffs(li, di)
 
     ## Setup-specific parameters and fields
     ξ = 1.0 # Maxwell relaxation time

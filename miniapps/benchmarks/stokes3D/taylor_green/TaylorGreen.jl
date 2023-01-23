@@ -96,7 +96,7 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di; CFL=0.9 / √3)
+    pt_stokes = PTStokesCoeffs(li, di)
 
     ## Setup-specific parameters and fields
     β = 10.0

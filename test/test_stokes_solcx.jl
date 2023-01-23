@@ -13,9 +13,7 @@ function check_convergence_case1()
     ny = 64
     Δη = 1e6
     _, _, iters, = solCx(Δη; nx=nx, ny=ny);
-    iters_expected = (iter=150001, err_evo1=[3.427298333287185e-8])
-    # println(iters)
-    # println(iters_expected)
+    iters_expected = (iter=3700, err_evo1=[7.028056470126387e-9])
     return iters.iter == iters_expected.iter &&
            iters.err_evo1[end] ≈ iters_expected.err_evo1[end]
 end

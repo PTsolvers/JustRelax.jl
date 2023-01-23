@@ -592,31 +592,29 @@ end
 
     # normal components are all located @ cell centers
     if all((i, j, k) .≤ size(εxx))
+        ∇V_ijk = ∇V[i, j, k] / 3.0
         # Compute ε_xx
-        εxx[i, j, k] = _dx * (next(Vx) - current_x(Vx)) - current(∇V) / 3.0
-    end
-    if all((i, j, k) .≤ size(εyy))
+        εxx[i, j, k] = _dx * (Vx[i + 1, j + 1, k + 1] - Vx[i    , j + 1, k + 1]) - ∇V_ijk
         # Compute ε_yy
-        εyy[i, j, k] = _dy * (next(Vy) - current_y(Vy)) - current(∇V) / 3.0
-    end
-    if all((i, j, k) .≤ size(εzz))
+        εyy[i, j, k] = _dy * (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j    , k + 1]) - ∇V_ijk
         # Compute ε_zz
-        εzz[i, j, k] = _dz * (next(Vz) - current_z(Vz)) - current(∇V) / 3.0
+        εzz[i, j, k] = _dz * (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k    ]) - ∇V_ijk
     end
     # Compute ε_yz
     if all((i, j, k) .≤ size(εyz))
         εyz[i, j, k] =
-            0.5 * (_dz * (current_y(Vy) - Vy[i+1, j, k]) + _dy * (current_z(Vz) - Vz[i+1, j, k]))
+            0.5 * (_dz * (Vy[i + 1, j    , k + 1] - Vy[i + 1, j    , k    ]) + _dy * (Vz[i + 1, j + 1, k    ] - Vz[i + 1, j    , k    ]))
+ 
     end
     # Compute ε_xz
     if all((i, j, k) .≤ size(εxz))
         εxz[i, j, k] =
-            0.5 * (_dz * (current_x(Vx) - Vx[i, j+1, k]) + _dx * (current_z(Vz) - Vz[i, j+1, k]))
+            0.5 * (_dz * (Vx[i    , j + 1, k + 1] - Vx[i    , j + 1, k    ]) + _dx * (Vz[i + 1, j + 1, k    ] - Vz[i    , j + 1, k    ]))
     end
     # Compute ε_xy
     if all((i, j, k) .≤ size(εxy))
         εxy[i, j, k] =
-            0.5 * (_dy * (current_x(Vx) - Vx[i, j, k+1]) + _dx * (current_y(Vy) - Vy[i, j, k+1]))
+            0.5 * (_dy * (Vx[i    , j + 1, k + 1] - Vx[i    , j    , k + 1]) + _dx * (Vy[i + 1, j    , k + 1] - Vy[i    , j    , k + 1]))
     end
     return nothing
 end

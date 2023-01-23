@@ -1,4 +1,5 @@
 abstract type AbstractStokesModel end
+abstract type AbstractViscosity end
 abstract type Viscous <: AbstractStokesModel end
 abstract type AbstractElasticModel <: AbstractStokesModel end
 abstract type ViscoElastic <: AbstractElasticModel end
@@ -17,6 +18,23 @@ function make_velocity_struct!(ndim::Integer; name::Symbol=:Velocity)
 
             function $(name)(ni::NTuple{3,T}) where {T}
                 return new{$PTArray}(@zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...))
+            end
+        end
+    end
+end
+
+function make_viscosity_struct!()
+    @eval begin
+        struct Viscosity{T}
+            η::T # with no plasticity
+            η_vep::T # with plasticity
+            ητ::T # PT viscosity
+
+            function Viscosity(ni::NTuple{N,Int}) where {N}
+                η = @allocate(ni...)
+                η_vep = @allocate(ni...)
+                ητ = @allocate(ni...)
+                return new{typeof(η)}(η, η_vep, ητ)
             end
         end
     end

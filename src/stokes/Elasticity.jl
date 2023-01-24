@@ -721,17 +721,19 @@ end
     @inline av_y(x)   = 0.5 * (x[i, j + 1, k] + x[i, j, k])
     @inline av_z(x)   = 0.5 * (x[i, j, k + 1] + x[i, j, k])
 
-    if all((i, j, k) .< size(Vx).-2)
+    if (i < size(Vx, 1)-1) && (j < size(Vx, 2)-2) && (k < size(Vx, 3)-2)
+        # if all((i, j, k) .< size(Vx).-2)
         Rx_ijk = 
             _dx * (τxx[i + 1, j    , k    ] - τxx[i    , j    , k    ]) +
             _dy * (τxy[i + 1, j + 1, k    ] - τxy[i + 1, j    , k    ]) +
             _dz * (τxz[i + 1, j    , k + 1] - τxz[i + 1, j    , k    ]) - 
-            _dx * (  P[i + 1, j    , k    ] -   P[i    , j    , k    ]) +
+            _dx * (  P[i + 1, j    , k    ] -   P[i    , j    , k    ]) + 
             harm_x(fx)
         Vx[i + 1, j + 1, k + 1] += Rx_ijk * ηdτ / harm_x(ητ)
         Rx[i, j, k] = Rx_ijk
     end
-    if all((i, j, k) .≤ size(Vy).-2)
+    if (i < size(Vy, 1)-2) && (j < size(Vy, 2)-1) && (k < size(Vy, 3)-2)
+        # if all((i, j, k) .≤ size(Vy).-2)
         Ry_ijk = 
             _dx * (τxy[i + 1, j + 1, k    ] - τxy[i    , j + 1, k    ]) +
             _dy * (τyy[i    , j + 1, k    ] - τyy[i    , j    , k    ]) +
@@ -741,7 +743,8 @@ end
         Vy[i + 1, j + 1, k + 1] += Ry_ijk * ηdτ / harm_y(ητ)
         Ry[i, j, k] = Ry_ijk
     end
-    if all((i, j, k) .≤ size(Vz).-2)
+    if (i < size(Vz, 1)-2) && (j < size(Vz, 2)-2) && (k < size(Vz, 3)-1)
+        # if all((i, j, k) .≤ size(Vz).-2)
         Rz_ijk = 
             _dx * (τxz[i + 1, j    , k + 1] - τxz[i    , j    , k + 1]) +
             _dy * (τyz[i    , j + 1, k + 1] - τyz[i    , j    , k + 1]) +

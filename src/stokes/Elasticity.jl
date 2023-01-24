@@ -166,7 +166,7 @@ end
 @parallel function compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, θ_dτ)
     @all(τxx) = @all(τxx) + (-@all(τxx) + 2.0 * @all(η) * @all(εxx)) * 1.0 / (θ_dτ + 1.0)
     @all(τyy) = @all(τyy) + (-@all(τyy) + 2.0 * @all(η) * @all(εyy)) * 1.0 / (θ_dτ + 1.0)
-    @inn(τxy) = @inn(τxy) + (-@inn(τxy) + 2.0 * @av(η) * @inn(εxyv)) * 1.0 / (θ_dτ + 1.0)
+    @inn(τxy) = @inn(τxy) + (-@inn(τxy) + 2.0 *  @av(η) * @inn(εxy)) * 1.0 / (θ_dτ + 1.0)
 
     return nothing
 end
@@ -604,7 +604,6 @@ end
     if all((i, j, k) .≤ size(εyz))
         εyz[i, j, k] =
             0.5 * (_dz * (Vy[i + 1, j    , k + 1] - Vy[i + 1, j    , k    ]) + _dy * (Vz[i + 1, j + 1, k    ] - Vz[i + 1, j    , k    ]))
- 
     end
     # Compute ε_xz
     if all((i, j, k) .≤ size(εxz))
@@ -624,72 +623,6 @@ end
     @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (@all(K) * dt))
     return nothing
 end
-
-# TODO
-@parallel_indices (i, j, k) function compute_V!(
-    Vx,
-    Vy,
-    Vz,
-    P,
-    fx,
-    fy,
-    fz,
-    τxx,
-    τyy,
-    τzz,
-    τyz,
-    τxz,
-    τxy,
-    ητ,
-    ηdτ,
-    _dx,
-    _dy,
-    _dz,
-)
-    @inline harm_x(x) = 2.0 / (1.0 / x[i + 1, j, k] + 1.0 / x[i, j, k])
-    @inline harm_y(x) = 2.0 / (1.0 / x[i, j + 1, k] + 1.0 / x[i, j, k])
-    @inline harm_z(x) = 2.0 / (1.0 / x[i, j, k + 1] + 1.0 / x[i, j, k])
-    @inline av_x(x)   = 0.5 * (x[i + 1, j, k] + x[i, j, k])
-    @inline av_y(x)   = 0.5 * (x[i, j + 1, k] + x[i, j, k])
-    @inline av_z(x)   = 0.5 * (x[i, j, k + 1] + x[i, j, k])
-
-    if all((i, j, k) .≤ size(Vx))
-    # if (i ≤ nx_1) && (j ≤ ny_2) && (k ≤ nz_2)
-        Vx[i + 1, j + 1, k + 1] +=
-            (
-                _dx * (τxx[i + 1, j    , k    ] - τxx[i    , j + 1, k + 1]) +
-                _dy * (τxy[i + 1, j + 1, k    ] - τxy[i + 1, j    , k    ]) +
-                _dz * (τxz[i + 1, j    , k + 1] - τxz[i + 1, j    ,     k]) - 
-                _dx * (  P[i + 1, j    , k    ] -   P[i    , j    ,     k]) +
-                harm_x(fx)
-            ) * ηdτ / harm_x(ητ)
-    end
-    if all((i, j, k) .≤ size(Vy))
-    # if (i ≤ nx_2) && (j ≤ ny_1) && (k ≤ nz_2)
-        Vy[i + 1, j + 1, k + 1] +=
-            (
-                _dx * (τxy[i + 1, j + 1, k    ] - τxy[i    , j + 1, k    ]) +
-                _dy * (τyy[i    , j + 1, k    ] - τyy[i    , j    , k    ]) +
-                _dz * (τyz[i    , j + 1, k + 1] - τyz[i    , j + 1, k    ]) - 
-                _dy * (  P[i    , j + 1, k    ] -   P[i    , j    , k    ]) +
-                harm_y(fy)
-            ) * ηdτ / harm_y(ητ)
-    end
-    if all((i, j, k) .≤ size(Vz))
-        # if (i ≤ nx_2) && (j ≤ ny_2) && (k ≤ nz_1)
-        Vz[i + 1, j + 1, k + 1] +=
-            (
-                _dx * (τxz[i + 1, j    , k + 1] - τxz[i    , j    , k + 1]) +
-                _dy * (τyz[i    , j + 1, k + 1] - τyz[i    , j    , k + 1]) +
-                _dz * (τzz[i    , j    , k + 1] - τzz[i    , j    , k    ]) - 
-                _dz * (  P[i    , j    , k + 1] -   P[i    , j    , k    ]) +
-                harm_z(fz)
-            ) * ηdτ / harm_z(ητ)
-    end
-
-    return nothing
-end
-
 
 @parallel_indices (i, j, k) function compute_V!(
     Vx,
@@ -721,37 +654,37 @@ end
     @inline av_y(x)   = 0.5 * (x[i, j + 1, k] + x[i, j, k])
     @inline av_z(x)   = 0.5 * (x[i, j, k + 1] + x[i, j, k])
 
-    if (i < size(Vx, 1)-1) && (j < size(Vx, 2)-2) && (k < size(Vx, 3)-2)
-        # if all((i, j, k) .< size(Vx).-2)
+    if all( (i,j,k) .< size(Vx).-1)
+            # if (i < size(Vx, 1)-1) && (j < size(Vx, 2)-1) && (k < size(Vx, 3)-1)
         Rx_ijk = 
             _dx * (τxx[i + 1, j    , k    ] - τxx[i    , j    , k    ]) +
             _dy * (τxy[i + 1, j + 1, k    ] - τxy[i + 1, j    , k    ]) +
             _dz * (τxz[i + 1, j    , k + 1] - τxz[i + 1, j    , k    ]) - 
             _dx * (  P[i + 1, j    , k    ] -   P[i    , j    , k    ]) + 
-            harm_x(fx)
-        Vx[i + 1, j + 1, k + 1] += Rx_ijk * ηdτ / harm_x(ητ)
+            av_x(fx)
+        Vx[i + 1, j + 1, k + 1] += Rx_ijk * ηdτ / av_x(ητ)
         Rx[i, j, k] = Rx_ijk
     end
-    if (i < size(Vy, 1)-2) && (j < size(Vy, 2)-1) && (k < size(Vy, 3)-2)
-        # if all((i, j, k) .≤ size(Vy).-2)
+    if all( (i,j,k) .< size(Vy).-1)
+            # if (i < size(Vy, 1)-1) && (j < size(Vy, 2)-1) && (k < size(Vy, 3)-1)
         Ry_ijk = 
             _dx * (τxy[i + 1, j + 1, k    ] - τxy[i    , j + 1, k    ]) +
             _dy * (τyy[i    , j + 1, k    ] - τyy[i    , j    , k    ]) +
             _dz * (τyz[i    , j + 1, k + 1] - τyz[i    , j + 1, k    ]) - 
             _dy * (  P[i    , j + 1, k    ] -   P[i    , j    , k    ]) +
-            harm_y(fy)
-        Vy[i + 1, j + 1, k + 1] += Ry_ijk * ηdτ / harm_y(ητ)
+            av_y(fy)
+        Vy[i + 1, j + 1, k + 1] += Ry_ijk * ηdτ / av_y(ητ)
         Ry[i, j, k] = Ry_ijk
     end
-    if (i < size(Vz, 1)-2) && (j < size(Vz, 2)-2) && (k < size(Vz, 3)-1)
-        # if all((i, j, k) .≤ size(Vz).-2)
+    if all( (i,j,k) .< size(Vz).-1)
+            # if (i < size(Vz, 1)-1) && (j < size(Vz, 2)-1) && (k < size(Vz, 3)-1)
         Rz_ijk = 
             _dx * (τxz[i + 1, j    , k + 1] - τxz[i    , j    , k + 1]) +
             _dy * (τyz[i    , j + 1, k + 1] - τyz[i    , j    , k + 1]) +
             _dz * (τzz[i    , j    , k + 1] - τzz[i    , j    , k    ]) - 
             _dz * (  P[i    , j    , k + 1] -   P[i    , j    , k    ]) +
-            harm_z(fz)
-        Vz[i + 1, j + 1, k + 1] += Rz_ijk * ηdτ / harm_z(ητ)
+            av_z(fz)
+        Vz[i + 1, j + 1, k + 1] += Rz_ijk * ηdτ / av_z(ητ)
         Rz[i, j, k] = Rz_ijk
     end
 
@@ -810,10 +743,10 @@ end
         0.25 * (x[i-1, j-1, k] + x[i-1, j  , k] + x[i  , j-1, k] + x[i  , j  , k])
     end
     @inline function av_xz(x)
-        0.25 * (x[i  , j, k  ] + x[i-1, j, k  ] + x[i  , j, k-1] + x[i-1, j, k-1])
+        0.25 * (x[i  , j  , k] + x[i-1, j  , k] + x[i  , j, k-1] + x[i-1, j, k-1])
     end
     @inline function av_yz(x)
-        0.25 * (x[i, j  , k  ] + x[i, j-1, k  ] + x[i, j  , k-1] + x[i, j-1, k-1])
+        0.25 * (x[i  , j  , k] + x[i  , j-1, k] + x[i, j  , k-1] + x[i, j-1, k-1])
     end
     @inline current(x) = x[i, j, k]
 
@@ -979,10 +912,10 @@ function JustRelax.solve!(
         wtime0 += @elapsed begin
             @parallel (1:nx, 1:ny, 1:nz) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, _di...)
             @parallel compute_P!(stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, K, dt, pt_stokes.r, pt_stokes.θ_dτ)
-            @parallel (1:nx, 1:ny, 1:nz) compute_strain_rate!(
+            @parallel (1:nx+1, 1:ny+1, 1:nz+1) compute_strain_rate!(
                 stokes.∇V, stokes.ε.xx, stokes.ε.yy, stokes.ε.zz, stokes.ε.yz, stokes.ε.xz, stokes.ε.xy, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, _di...
             )
-            @parallel (1:nx, 1:ny, 1:nz) compute_τ!(
+            @parallel (1:nx+1, 1:ny+1, 1:nz+1) compute_τ!(
                 stokes.τ.xx,
                 stokes.τ.yy,
                 stokes.τ.zz,
@@ -1007,7 +940,7 @@ function JustRelax.solve!(
                 θ_dτ,
             )
             # @hide_communication b_width begin # communication/computation overlap
-            @parallel (1:(nx + 1), 1:(ny + 1), 1:(nz + 1)) compute_V!(
+            @parallel (1:nx + 1, 1:ny + 1, 1:nz + 1) compute_V!(
                 stokes.V.Vx,
                 stokes.V.Vy,
                 stokes.V.Vz,

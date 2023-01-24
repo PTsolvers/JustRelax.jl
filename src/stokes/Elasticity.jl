@@ -879,8 +879,7 @@ function JustRelax.solve!(
     ## UNPACK
 
     # solver related
-    Rx, Ry, Rz, RP = stokes.R.Rx, stokes.R.Ry, stokes.R.Rz, stokes.R.RP
-    ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
+    ϵ = pt_stokes.ϵ
     # geometry
     _di = @. 1 / di
     nx, ny, nz = size(stokes.P)
@@ -937,32 +936,32 @@ function JustRelax.solve!(
                 η,
                 G,
                 dt,
-                θ_dτ,
+                pt_stokes.θ_dτ,
             )
-            # @hide_communication b_width begin # communication/computation overlap
-            @parallel (1:nx + 1, 1:ny + 1, 1:nz + 1) compute_V!(
-                stokes.V.Vx,
-                stokes.V.Vy,
-                stokes.V.Vz,
-                stokes.R.Rx,
-                stokes.R.Ry,
-                stokes.R.Rz,
-                stokes.P,
-                ρg[1],
-                ρg[2],
-                ρg[3],
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.zz,
-                stokes.τ.yz,
-                stokes.τ.xz,
-                stokes.τ.xy,
-                ητ,
-                ηdτ,
-                _di...
-            )
-            #     update_halo!(Vx, Vy, Vz)
-            # end
+            @hide_communication b_width begin # communication/computation overlap
+                @parallel (1:nx + 1, 1:ny + 1, 1:nz + 1) compute_V!(
+                    stokes.V.Vx,
+                    stokes.V.Vy,
+                    stokes.V.Vz,
+                    stokes.R.Rx,
+                    stokes.R.Ry,
+                    stokes.R.Rz,
+                    stokes.P,
+                    ρg[1],
+                    ρg[2],
+                    ρg[3],
+                    stokes.τ.xx,
+                    stokes.τ.yy,
+                    stokes.τ.zz,
+                    stokes.τ.yz,
+                    stokes.τ.xz,
+                    stokes.τ.xy,
+                    ητ,
+                    pt_stokes.ηdτ,
+                    _di...
+                )
+                update_halo!( stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+            end
 
             apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
         end
@@ -984,15 +983,12 @@ function JustRelax.solve!(
             # push!(norm_Rz, norm_mpi(Rz) / (Pmax - Pmin) * lx * _sqrt_len_Rz_g)
             # push!(norm_∇V, norm_mpi(RP) / (Vmax - Vmin) * lx * _sqrt_len_∇V_g)
 
-            push!(norm_Rx, maximum(abs.(Rx)))
-            push!(norm_Ry, maximum(abs.(Ry)))
-            push!(norm_Rz, maximum(abs.(Rz)))
-            push!(norm_∇V, maximum(abs.(RP)))
-            err = maximum([norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont]])
-            push!(
-                err_evo1,
-                maximum([norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont]]),
-            )
+            push!(norm_Rx, maximum(abs.(stokes.R.Rx)))
+            push!(norm_Ry, maximum(abs.(stokes.R.Ry)))
+            push!(norm_Rz, maximum(abs.(stokes.R.Rz)))
+            push!(norm_∇V, maximum(abs.(stokes.R.RP)))
+            err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
+            push!(err_evo1, err)
             push!(err_evo2, iter)
             if igg.me == 0 && ((verbose && err > ϵ) || iter == iterMax)
                 @printf(

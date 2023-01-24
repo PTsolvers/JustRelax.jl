@@ -41,7 +41,8 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export USE_GPU, PTArray
         export Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs
         export ThermalArrays, PTThermalCoeffs
-        export AbstractStokesModel, AbstractElasticModel, Viscous, ViscoElastic, ViscoElastoPlastic
+        export AbstractStokesModel,
+            AbstractElasticModel, Viscous, ViscoElastic, ViscoElastoPlastic
         export solve!
 
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))

@@ -117,7 +117,7 @@ end
         @inn(Vy) +
         (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @av_ya(ρgy)) * ηdτ /
         @harm_ya(ητ)
-        return
+    return nothing
 end
 
 @parallel_indices (i, j) function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
@@ -138,24 +138,25 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_V_Res!(Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, ητ, ηdτ, _dx, _dy)
+@parallel_indices (i, j) function compute_V_Res!(
+    Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, ητ, ηdτ, _dx, _dy
+)
 
     # Again, indices i, j are captured by the closure
-    @inline d_xa(A)  = (A[i + 1, j] - A[i, j]) * _dx
-    @inline d_ya(A)  = (A[i, j + 1] - A[i, j]) * _dy
-    @inline d_xi(A)  = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
-    @inline d_yi(A)  = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
+    @inline d_xa(A) = (A[i + 1, j] - A[i, j]) * _dx
+    @inline d_ya(A) = (A[i, j + 1] - A[i, j]) * _dy
+    @inline d_xi(A) = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
+    @inline d_yi(A) = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
     @inline av_xa(A) = (A[i + 1, j] + A[i, j]) * 0.5
     @inline av_ya(A) = (A[i, j + 1] + A[i, j]) * 0.5
 
-    if all( (i, j) .≤ size(Rx))
+    if all((i, j) .≤ size(Rx))
         @inbounds R = Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
-        @inbounds Vx[i+1, j+1] += R * ηdτ / av_xa(ητ)
-
+        @inbounds Vx[i + 1, j + 1] += R * ηdτ / av_xa(ητ)
     end
-    if all( (i, j) .≤ size(Ry))
+    if all((i, j) .≤ size(Ry))
         @inbounds R = Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
-        @inbounds Vy[i+1, j+1] += R * ηdτ / av_ya(ητ)
+        @inbounds Vy[i + 1, j + 1] += R * ηdτ / av_ya(ητ)
     end
     return nothing
 end
@@ -166,8 +167,7 @@ end
 @parallel function compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, θ_dτ)
     @all(τxx) = @all(τxx) + (-@all(τxx) + 2.0 * @all(η) * @all(εxx)) * 1.0 / (θ_dτ + 1.0)
     @all(τyy) = @all(τyy) + (-@all(τyy) + 2.0 * @all(η) * @all(εyy)) * 1.0 / (θ_dτ + 1.0)
-    @inn(τxy) = @inn(τxy) + (-@inn(τxy) + 2.0 *  @av(η) * @inn(εxy)) * 1.0 / (θ_dτ + 1.0)
-
+    @inn(τxy) = @inn(τxy) + (-@inn(τxy) + 2.0 * @av(η) * @inn(εxy)) * 1.0 / (θ_dτ + 1.0)
     return nothing
 end
 
@@ -199,40 +199,47 @@ end
 
 # visco-elasto-plastic with GeoParams
 @parallel_indices (i, j) function compute_τ_gp!(
-    τxx, τyy, τxy, 
-    τII, 
-    τxx_o, τyy_o, τxyv_o, 
-    εxx, εyy, εxyv, 
-    η, η_vep, 
-    P, T, 
-    MatParam, 
-    dt, 
+    τxx,
+    τyy,
+    τxy,
+    τII,
+    τxx_o,
+    τyy_o,
+    τxyv_o,
+    εxx,
+    εyy,
+    εxyv,
+    η,
+    η_vep,
+    P,
+    T,
+    MatParam,
+    dt,
     θ_dτ,
 )
     # convinience closure
-    @inbounds @inline gather(A) = A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1] 
-    @inbounds @inline av(T)     = (T[i  , j] + T[i+1, j] + T[i, j+1] + T[i+1, j+1]) * 0.25
+    @inbounds @inline gather(A) = A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1]
+    @inbounds @inline av(T) = (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
 
     # # numerics
     # dτ_r                = 1.0 / (θ_dτ + 1.0) # original
     # dτ_r                = 1.0 / (θ_dτ + η[i, j] / (MatParam[1].Elasticity[1].G.val * dt) + 1.0) # original
-    dτ_r                = 1.0 / (θ_dτ / η[i, j] + 1.0 / η_vep[i, j]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
+    dτ_r = 1.0 / (θ_dτ / η[i, j] + 1.0 / η_vep[i, j]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
     # # Setup up input for GeoParams.jl
-    args                = (; dt=dt, P=P[i, j] , T=av(T), τII_old=0.0)
-    εij_p               = εxx[i, j]+1e-25, εyy[i, j]+1e-25, gather(εxyv).+1e-25
-    τij_p_o             = τxx_o[i,j], τyy_o[i,j], gather(τxyv_o)
-    phases              = (1, 1, (1,1,1,1)) # for now hard-coded for a single phase
+    args = (; dt=dt, P=P[i, j], T=av(T), τII_old=0.0)
+    εij_p = εxx[i, j] + 1e-25, εyy[i, j] + 1e-25, gather(εxyv) .+ 1e-25
+    τij_p_o = τxx_o[i, j], τyy_o[i, j], gather(τxyv_o)
+    phases = (1, 1, (1, 1, 1, 1)) # for now hard-coded for a single phase
     # update stress and effective viscosity
-    τij, τII[i, j], ηᵢ  = compute_τij(MatParam, εij_p, args, τij_p_o, phases)
+    τij, τII[i, j], ηᵢ = compute_τij(MatParam, εij_p, args, τij_p_o, phases)
     # ηᵢ                  = clamp(ηᵢ, 1e0, 1e6)
-    τxx[i, j]          += dτ_r * (-(τxx[i,j]) + τij[1] ) / ηᵢ # NOTE: from GP Tij = 2*η_vep * εij
-    τyy[i, j]          += dτ_r * (-(τyy[i,j]) + τij[2] ) / ηᵢ 
-    τxy[i, j]          += dτ_r * (-(τxy[i,j]) + τij[3] ) / ηᵢ 
-    η_vep[i, j]         = ηᵢ
-    
-    return
-end
+    τxx[i, j] += dτ_r * (-(τxx[i, j]) + τij[1]) / ηᵢ # NOTE: from GP Tij = 2*η_vep * εij
+    τyy[i, j] += dτ_r * (-(τyy[i, j]) + τij[2]) / ηᵢ
+    τxy[i, j] += dτ_r * (-(τxy[i, j]) + τij[3]) / ηᵢ
+    η_vep[i, j] = ηᵢ
 
+    return nothing
+end
 
 ## 2D VISCO-ELASTIC STOKES SOLVER 
 
@@ -373,12 +380,44 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
-            @parallel compute_strain_rate!(stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+            @parallel compute_strain_rate!(
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.xy,
+                stokes.∇V,
+                stokes.V.Vx,
+                stokes.V.Vy,
+                _di...,
+            )
             @parallel compute_P!(stokes.P, P_old, stokes.R.RP, stokes.∇V, η, K, dt, r, θ_dτ)
             @parallel compute_τ!(
-                stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, η, G, θ_dτ, dt
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                stokes.τ_o.xx,
+                stokes.τ_o.yy,
+                stokes.τ_o.xy,
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.xy,
+                η,
+                G,
+                θ_dτ,
+                dt,
             )
-            @parallel compute_V!(stokes.V.Vx, stokes.V.Vy, stokes.P, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ηdτ, ρg[1], ρg[2], ητ, _di...)
+            @parallel compute_V!(
+                stokes.V.Vx,
+                stokes.V.Vy,
+                stokes.P,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                ηdτ,
+                ρg[1],
+                ρg[2],
+                ητ,
+                _di...,
+            )
             # free slip boundary conditions
             apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
         end
@@ -386,7 +425,15 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (1:nx, 1:ny) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg[1], ρg[2], _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                stokes.P,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                ρg[1],
+                ρg[2],
+                _di...,
             )
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
@@ -472,21 +519,59 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
-            @parallel compute_P!(stokes.P, P_old, stokes.R.RP, stokes.∇V, η, MatParam.Elasticity[1].Kb.val, dt, r, θ_dτ)
-            @parallel compute_strain_rate!(stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+            @parallel compute_P!(
+                stokes.P,
+                P_old,
+                stokes.R.RP,
+                stokes.∇V,
+                η,
+                MatParam.Elasticity[1].Kb.val,
+                dt,
+                r,
+                θ_dτ,
+            )
+            @parallel compute_strain_rate!(
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.xy,
+                stokes.∇V,
+                stokes.V.Vx,
+                stokes.V.Vy,
+                _di...,
+            )
             @parallel (1:nx, 1:ny) compute_τ_gp!(
-                stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c, 
-                stokes.τ.II, 
-                stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy, 
-                stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, 
-                η, η_vep, 
-                stokes.P, thermal.T,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy_c,
+                stokes.τ.II,
+                stokes.τ_o.xx,
+                stokes.τ_o.yy,
+                stokes.τ_o.xy,
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.xy,
+                η,
+                η_vep,
+                stokes.P,
+                thermal.T,
                 tupleize(MatParam), # needs to be a tuple
-                dt, 
+                dt,
                 θ_dτ,
             )
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            @parallel compute_V!(stokes.V.Vx, stokes.V.Vy, stokes.P, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ηdτ, ρg[1], ρg[2], ητ, _di...)
+            @parallel compute_V!(
+                stokes.V.Vx,
+                stokes.V.Vy,
+                stokes.P,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                ηdτ,
+                ρg[1],
+                ρg[2],
+                ητ,
+                _di...,
+            )
             # free slip boundary conditions
             apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
         end
@@ -494,7 +579,15 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (1:nx, 1:ny) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg[1], ρg[2], _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                stokes.P,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                ρg[1],
+                ρg[2],
+                _di...,
             )
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
@@ -575,45 +668,54 @@ end
 
 @parallel_indices (i, j, k) function compute_∇V!(∇V, Vx, Vy, Vz, _dx, _dy, _dz)
     @inbounds ∇V[i, j, k] =
-        _dx * (Vx[i + 1, j + 1, k + 1] - Vx[i    , j + 1, k + 1]) +
-        _dy * (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j    , k + 1]) +
-        _dz * (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k    ])
+        _dx * (Vx[i + 1, j + 1, k + 1] - Vx[i, j + 1, k + 1]) +
+        _dy * (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j, k + 1]) +
+        _dz * (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k])
     return nothing
 end
 
 @parallel_indices (i, j, k) function compute_strain_rate!(
     ∇V, εxx, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, _dx, _dy, _dz
 )
-    @inline @inbounds next(A)      = A[i + 1, j + 1, k + 1]
-    @inline @inbounds current(x)   = x[i, j, k]
-    @inline @inbounds current_x(x) = x[i    , j + 1, k + 1]
-    @inline @inbounds current_y(x) = x[i + 1, j    , k + 1]
-    @inline @inbounds current_z(x) = x[i + 1, j + 1, k    ]
+    @inline @inbounds next(A) = A[i + 1, j + 1, k + 1]
+    @inline @inbounds current(x) = x[i, j, k]
+    @inline @inbounds current_x(x) = x[i, j + 1, k + 1]
+    @inline @inbounds current_y(x) = x[i + 1, j, k + 1]
+    @inline @inbounds current_z(x) = x[i + 1, j + 1, k]
 
     # normal components are all located @ cell centers
     if all((i, j, k) .≤ size(εxx))
         ∇V_ijk = ∇V[i, j, k] / 3.0
         # Compute ε_xx
-        εxx[i, j, k] = _dx * (Vx[i + 1, j + 1, k + 1] - Vx[i    , j + 1, k + 1]) - ∇V_ijk
+        εxx[i, j, k] = _dx * (Vx[i + 1, j + 1, k + 1] - Vx[i, j + 1, k + 1]) - ∇V_ijk
         # Compute ε_yy
-        εyy[i, j, k] = _dy * (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j    , k + 1]) - ∇V_ijk
+        εyy[i, j, k] = _dy * (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j, k + 1]) - ∇V_ijk
         # Compute ε_zz
-        εzz[i, j, k] = _dz * (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k    ]) - ∇V_ijk
+        εzz[i, j, k] = _dz * (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k]) - ∇V_ijk
     end
     # Compute ε_yz
     if all((i, j, k) .≤ size(εyz))
         εyz[i, j, k] =
-            0.5 * (_dz * (Vy[i + 1, j    , k + 1] - Vy[i + 1, j    , k    ]) + _dy * (Vz[i + 1, j + 1, k    ] - Vz[i + 1, j    , k    ]))
+            0.5 * (
+                _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
+                _dy * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
+            )
     end
     # Compute ε_xz
     if all((i, j, k) .≤ size(εxz))
         εxz[i, j, k] =
-            0.5 * (_dz * (Vx[i    , j + 1, k + 1] - Vx[i    , j + 1, k    ]) + _dx * (Vz[i + 1, j + 1, k    ] - Vz[i    , j + 1, k    ]))
+            0.5 * (
+                _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
+                _dx * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
+            )
     end
     # Compute ε_xy
     if all((i, j, k) .≤ size(εxy))
         εxy[i, j, k] =
-            0.5 * (_dy * (Vx[i    , j + 1, k + 1] - Vx[i    , j    , k + 1]) + _dx * (Vy[i + 1, j    , k + 1] - Vy[i    , j    , k + 1]))
+            0.5 * (
+                _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
+                _dx * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
+            )
     end
     return nothing
 end
@@ -650,39 +752,36 @@ end
     @inline harm_x(x) = 2.0 / (1.0 / x[i + 1, j, k] + 1.0 / x[i, j, k])
     @inline harm_y(x) = 2.0 / (1.0 / x[i, j + 1, k] + 1.0 / x[i, j, k])
     @inline harm_z(x) = 2.0 / (1.0 / x[i, j, k + 1] + 1.0 / x[i, j, k])
-    @inline av_x(x)   = 0.5 * (x[i + 1, j, k] + x[i, j, k])
-    @inline av_y(x)   = 0.5 * (x[i, j + 1, k] + x[i, j, k])
-    @inline av_z(x)   = 0.5 * (x[i, j, k + 1] + x[i, j, k])
+    @inline av_x(x) = 0.5 * (x[i + 1, j, k] + x[i, j, k])
+    @inline av_y(x) = 0.5 * (x[i, j + 1, k] + x[i, j, k])
+    @inline av_z(x) = 0.5 * (x[i, j, k + 1] + x[i, j, k])
 
-    if all( (i,j,k) .< size(Vx).-1)
-            # if (i < size(Vx, 1)-1) && (j < size(Vx, 2)-1) && (k < size(Vx, 3)-1)
-        Rx_ijk = 
-            _dx * (τxx[i + 1, j    , k    ] - τxx[i    , j    , k    ]) +
-            _dy * (τxy[i + 1, j + 1, k    ] - τxy[i + 1, j    , k    ]) +
-            _dz * (τxz[i + 1, j    , k + 1] - τxz[i + 1, j    , k    ]) - 
-            _dx * (  P[i + 1, j    , k    ] -   P[i    , j    , k    ]) + 
-            av_x(fx)
+    if all((i, j, k) .< size(Vx) .- 1)
+        # if (i < size(Vx, 1)-1) && (j < size(Vx, 2)-1) && (k < size(Vx, 3)-1)
+        Rx_ijk =
+            _dx * (τxx[i + 1, j, k] - τxx[i, j, k]) +
+            _dy * (τxy[i + 1, j + 1, k] - τxy[i + 1, j, k]) +
+            _dz * (τxz[i + 1, j, k + 1] - τxz[i + 1, j, k]) -
+            _dx * (P[i + 1, j, k] - P[i, j, k]) + av_x(fx)
         Vx[i + 1, j + 1, k + 1] += Rx_ijk * ηdτ / av_x(ητ)
         Rx[i, j, k] = Rx_ijk
     end
-    if all( (i,j,k) .< size(Vy).-1)
-            # if (i < size(Vy, 1)-1) && (j < size(Vy, 2)-1) && (k < size(Vy, 3)-1)
-        Ry_ijk = 
-            _dx * (τxy[i + 1, j + 1, k    ] - τxy[i    , j + 1, k    ]) +
-            _dy * (τyy[i    , j + 1, k    ] - τyy[i    , j    , k    ]) +
-            _dz * (τyz[i    , j + 1, k + 1] - τyz[i    , j + 1, k    ]) - 
-            _dy * (  P[i    , j + 1, k    ] -   P[i    , j    , k    ]) +
-            av_y(fy)
+    if all((i, j, k) .< size(Vy) .- 1)
+        # if (i < size(Vy, 1)-1) && (j < size(Vy, 2)-1) && (k < size(Vy, 3)-1)
+        Ry_ijk =
+            _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
+            _dy * (τyy[i, j + 1, k] - τyy[i, j, k]) +
+            _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) -
+            _dy * (P[i, j + 1, k] - P[i, j, k]) + av_y(fy)
         Vy[i + 1, j + 1, k + 1] += Ry_ijk * ηdτ / av_y(ητ)
         Ry[i, j, k] = Ry_ijk
     end
-    if all( (i,j,k) .< size(Vz).-1)
-            # if (i < size(Vz, 1)-1) && (j < size(Vz, 2)-1) && (k < size(Vz, 3)-1)
-        Rz_ijk = 
-            _dx * (τxz[i + 1, j    , k + 1] - τxz[i    , j    , k + 1]) +
-            _dy * (τyz[i    , j + 1, k + 1] - τyz[i    , j    , k + 1]) +
-            _dz * (τzz[i    , j    , k + 1] - τzz[i    , j    , k    ]) - 
-            _dz * (  P[i    , j    , k + 1] -   P[i    , j    , k    ]) +
+    if all((i, j, k) .< size(Vz) .- 1)
+        # if (i < size(Vz, 1)-1) && (j < size(Vz, 2)-1) && (k < size(Vz, 3)-1)
+        Rz_ijk =
+            _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
+            _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) +
+            _dz * (τzz[i, j, k + 1] - τzz[i, j, k]) - _dz * (P[i, j, k + 1] - P[i, j, k]) +
             av_z(fz)
         Vz[i + 1, j + 1, k + 1] += Rz_ijk * ηdτ / av_z(ητ)
         Rz[i, j, k] = Rz_ijk
@@ -717,53 +816,53 @@ end
 )
     @inline function harm_xy(x)
         4.0 / (
-            1.0 / x[i-1, j-1, k] +
-            1.0 / x[i-1, j  , k] +
-            1.0 / x[i  , j-1, k] +
-            1.0 / x[i  , j  , k]
+            1.0 / x[i - 1, j - 1, k] +
+            1.0 / x[i - 1, j, k] +
+            1.0 / x[i, j - 1, k] +
+            1.0 / x[i, j, k]
         )
     end
     @inline function harm_xz(x)
         4.0 / (
-            1.0 / x[i  , j, k  ] +
-            1.0 / x[i-1, j, k  ] +
-            1.0 / x[i  , j, k-1] +
-            1.0 / x[i-1, j, k-1]
+            1.0 / x[i, j, k] +
+            1.0 / x[i - 1, j, k] +
+            1.0 / x[i, j, k - 1] +
+            1.0 / x[i - 1, j, k - 1]
         )
     end
     @inline function harm_yz(x)
         4.0 / (
-            1.0 / x[i, j  , k  ] +
-            1.0 / x[i, j-1, k  ] +
-            1.0 / x[i, j  , k-1] +
-            1.0 / x[i, j-1, k-1]
+            1.0 / x[i, j, k] +
+            1.0 / x[i, j - 1, k] +
+            1.0 / x[i, j, k - 1] +
+            1.0 / x[i, j - 1, k - 1]
         )
     end
     @inline function av_xy(x)
-        0.25 * (x[i-1, j-1, k] + x[i-1, j  , k] + x[i  , j-1, k] + x[i  , j  , k])
+        0.25 * (x[i - 1, j - 1, k] + x[i - 1, j, k] + x[i, j - 1, k] + x[i, j, k])
     end
     @inline function av_xz(x)
-        0.25 * (x[i  , j  , k] + x[i-1, j  , k] + x[i  , j, k-1] + x[i-1, j, k-1])
+        0.25 * (x[i, j, k] + x[i - 1, j, k] + x[i, j, k - 1] + x[i - 1, j, k - 1])
     end
     @inline function av_yz(x)
-        0.25 * (x[i  , j  , k] + x[i  , j-1, k] + x[i, j  , k-1] + x[i, j-1, k-1])
+        0.25 * (x[i, j, k] + x[i, j - 1, k] + x[i, j, k - 1] + x[i, j - 1, k - 1])
     end
     @inline current(x) = x[i, j, k]
 
     if all((i, j, k) .≤ size(τxx))
-    # Compute τ_xx
+        # Compute τ_xx
         @inbounds τxx[i, j, k] +=
             (
                 -(current(τxx) - current(τxx_o)) * current(η) / (current(G) * dt) -
                 current(τxx) + 2.0 * current(η) * current(εxx)
             ) / (θ_dτ + current(η) / (current(G) * dt) + 1.0)
-    # Compute τ_yy
+        # Compute τ_yy
         @inbounds τyy[i, j, k] +=
             (
                 -(current(τyy) - current(τyy_o)) * current(η) / (current(G) * dt) -
                 current(τyy) + 2.0 * current(η) * current(εyy)
             ) / (θ_dτ + current(η) / (current(G) * dt) + 1.0)
-    # Compute τ_zz
+        # Compute τ_zz
         @inbounds τzz[i, j, k] +=
             (
                 -(current(τzz) - current(τzz_o)) * current(η) / (current(G) * dt) -
@@ -771,7 +870,7 @@ end
             ) / (θ_dτ + current(η) / (current(G) * dt) + 1.0)
     end
     # Compute τ_xy
-    if  (1 < i < size(τxy,1)) && (1 < j < size(τxy,2)) && k ≤ size(τxy, 3)
+    if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
         @inbounds τxy[i, j, k] +=
             (
                 -(current(τxy) - current(τxy_o)) * harm_xy(η) / (harm_xy(G) * dt) -
@@ -779,7 +878,7 @@ end
             ) / (θ_dτ + harm_xy(η) / (harm_xy(G) * dt) + 1.0)
     end
     # Compute τ_xz
-    if  (1 < i < size(τxz,1)) && j ≤ size(τxz,2) && (1 < k < size(τxz, 3))
+    if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
         @inbounds τxz[i, j, k] +=
             (
                 -(current(τxz) - current(τxz_o)) * harm_xz(η) / (harm_xz(G) * dt) -
@@ -787,7 +886,7 @@ end
             ) / (θ_dτ + harm_xz(η) / (harm_xz(G) * dt) + 1.0)
     end
     # Compute τ_yz
-    if  i ≤ size(τyz,1) && (1 < j < size(τyz,2)) && (1 < k < size(τyz, 3))
+    if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
         @inbounds τyz[i, j, k] +=
             (
                 -(current(τyz) - current(τyz_o)) * harm_yz(η) / (harm_yz(G) * dt) -
@@ -802,13 +901,13 @@ end
     Rx, Ry, Rz, fx, fy, fz, P, τxx, τyy, τzz, τxy, τxz, τyz, _dx, _dy, _dz
 )
     @inline @inbounds function harm_xi(x)
-        2.0 / (1.0 / x[i, j + 1, k + 1] + 1.0 / x[i + 1, j + 1, k + 1])
+        return 2.0 / (1.0 / x[i, j + 1, k + 1] + 1.0 / x[i + 1, j + 1, k + 1])
     end
     @inline @inbounds function harm_yi(x)
-        2.0 / (1.0 / x[i + 1, j, k + 1] + 1.0 / x[i + 1, j + 1, k + 1])
+        return 2.0 / (1.0 / x[i + 1, j, k + 1] + 1.0 / x[i + 1, j + 1, k + 1])
     end
     @inline @inbounds function harm_zi(x)
-        2.0 / (1.0 / x[i + 1, j + 1, k] + 1.0 / x[i + 1, j + 1, k + 1])
+        return 2.0 / (1.0 / x[i + 1, j + 1, k] + 1.0 / x[i + 1, j + 1, k + 1])
     end
 
     if all((i, j, k) .≤ size(Rx))
@@ -909,12 +1008,34 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (1:nx, 1:ny, 1:nz) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, _di...)
-            @parallel compute_P!(stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, K, dt, pt_stokes.r, pt_stokes.θ_dτ)
-            @parallel (1:nx+1, 1:ny+1, 1:nz+1) compute_strain_rate!(
-                stokes.∇V, stokes.ε.xx, stokes.ε.yy, stokes.ε.zz, stokes.ε.yz, stokes.ε.xz, stokes.ε.xy, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, _di...
+            @parallel (1:nx, 1:ny, 1:nz) compute_∇V!(
+                stokes.∇V, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, _di...
             )
-            @parallel (1:nx+1, 1:ny+1, 1:nz+1) compute_τ!(
+            @parallel compute_P!(
+                stokes.P,
+                stokes.P0,
+                stokes.R.RP,
+                stokes.∇V,
+                η,
+                K,
+                dt,
+                pt_stokes.r,
+                pt_stokes.θ_dτ,
+            )
+            @parallel (1:(nx + 1), 1:(ny + 1), 1:(nz + 1)) compute_strain_rate!(
+                stokes.∇V,
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.zz,
+                stokes.ε.yz,
+                stokes.ε.xz,
+                stokes.ε.xy,
+                stokes.V.Vx,
+                stokes.V.Vy,
+                stokes.V.Vz,
+                _di...,
+            )
+            @parallel (1:(nx + 1), 1:(ny + 1), 1:(nz + 1)) compute_τ!(
                 stokes.τ.xx,
                 stokes.τ.yy,
                 stokes.τ.zz,
@@ -939,7 +1060,7 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
             )
             @hide_communication b_width begin # communication/computation overlap
-                @parallel (1:nx + 1, 1:ny + 1, 1:nz + 1) compute_V!(
+                @parallel (1:(nx + 1), 1:(ny + 1), 1:(nz + 1)) compute_V!(
                     stokes.V.Vx,
                     stokes.V.Vy,
                     stokes.V.Vz,
@@ -958,9 +1079,9 @@ function JustRelax.solve!(
                     stokes.τ.xy,
                     ητ,
                     pt_stokes.ηdτ,
-                    _di...
+                    _di...,
                 )
-                update_halo!( stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+                update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
 
             apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
@@ -969,20 +1090,6 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
-
-            # wtime0 += @elapsed begin
-            #     @parallel (1:(nx - 1), 1:(ny - 1), 1:(nz - 1)) compute_Res!(
-            #         Rx, Ry, Rz, fx, fy, fz, P, τxx, τyy, τzz, τxy, τxz, τyz, _di...
-            #     )
-            # end
-
-            # Vmin, Vmax = minimum_mpi(Vx), maximum_mpi(Vx)
-            # Pmin, Pmax = minimum_mpi(P), maximum_mpi(P)
-            # push!(norm_Rx, norm_mpi(Rx) / (Pmax - Pmin) * lx * _sqrt_len_Rx_g)
-            # push!(norm_Ry, norm_mpi(Ry) / (Pmax - Pmin) * lx * _sqrt_len_Ry_g)
-            # push!(norm_Rz, norm_mpi(Rz) / (Pmax - Pmin) * lx * _sqrt_len_Rz_g)
-            # push!(norm_∇V, norm_mpi(RP) / (Vmax - Vmin) * lx * _sqrt_len_∇V_g)
-
             push!(norm_Rx, maximum(abs.(stokes.R.Rx)))
             push!(norm_Ry, maximum(abs.(stokes.R.Ry)))
             push!(norm_Rz, maximum(abs.(stokes.R.Rz)))

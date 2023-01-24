@@ -68,13 +68,16 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTens
 
             function $(name)(ni::NTuple{3,T}) where {T}
                 return new{$PTArray}(
-                    @zeros(ni[1], ni[2] - 2, ni[3] - 2), # xx
-                    @zeros(ni[1] - 1, ni[2] - 1, ni[3] - 2), # xy
-                    @zeros(ni[1] - 2, ni[2], ni[3] - 2), # yy
-                    @zeros(ni[1] - 1, ni[2] - 2, ni[3] - 1), # xz
-                    @zeros(ni[1] - 2, ni[2] - 1, ni[3] - 1), # yz
-                    @zeros(ni[1] - 2, ni[2] - 2, ni[3]), # zz
-                    @zeros(ni[1] - 2, ni[2] - 2, ni[3] - 2), # II (second invariant)
+                    @zeros(ni...), # xx
+                    @zeros(ni[1] + 1, ni[2] + 1, ni[3]), # xy
+                    @zeros(ni...), # yy
+                    @zeros(ni[1] + 1, ni[2], ni[3] + 1), # xz
+                    @zeros(ni[1], ni[2] + 1, ni[3] + 1), # yz
+                    @zeros(ni...), # zz
+                    @zeros(ni...), # yz @ cell center
+                    @zeros(ni...), # xz @ cell center
+                    @zeros(ni...), # xy @ cell center
+                    @zeros(ni...), # II (second invariant)
                 )
             end
         end

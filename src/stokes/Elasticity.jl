@@ -333,11 +333,12 @@ function JustRelax.solve!(
 end
 
 # visco-elastic solver
+# visco-elastic solver
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
     pt_stokes::PTStokesCoeffs,
     di::NTuple{2,T},
-    freeslip,
+    flow_bcs,
     ρg,
     η,
     G,
@@ -373,20 +374,60 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
-            @parallel compute_strain_rate!(stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+            @parallel compute_strain_rate!(
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.xy,
+                stokes.∇V,
+                stokes.V.Vx,
+                stokes.V.Vy,
+                _di...,
+            )
             @parallel compute_P!(stokes.P, P_old, stokes.R.RP, stokes.∇V, η, K, dt, r, θ_dτ)
             @parallel compute_τ!(
-                stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, η, G, θ_dτ, dt
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                stokes.τ_o.xx,
+                stokes.τ_o.yy,
+                stokes.τ_o.xy,
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.xy,
+                η,
+                G,
+                θ_dτ,
+                dt,
             )
-            @parallel compute_V!(stokes.V.Vx, stokes.V.Vy, stokes.P, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ηdτ, ρg[1], ρg[2], ητ, _di...)
+            @parallel compute_V!(
+                stokes.V.Vx,
+                stokes.V.Vy,
+                stokes.P,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                ηdτ,
+                ρg[1],
+                ρg[2],
+                ητ,
+                _di...,
+            )
             # free slip boundary conditions
-            apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
+            flow_bcs!(flow_bcs, stokes.V.Vx, stokes.V.Vy, di)
         end
 
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (1:nx, 1:ny) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg[1], ρg[2], _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                stokes.P,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                ρg[1],
+                ρg[2],
+                _di...,
             )
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
@@ -435,7 +476,7 @@ function JustRelax.solve!(
     thermal::ThermalArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{2,T},
-    freeslip,
+    flow_bcs,
     ρg,
     η,
     η_vep,
@@ -450,9 +491,8 @@ function JustRelax.solve!(
     _di = inv.(di)
     ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
     nx, ny = size(stokes.P)
-
     P_old = deepcopy(stokes.P)
-
+    z = LinRange(di[2]*0.5, 1.0-di[2]*0.5, ny)
     # ~preconditioner
     ητ = deepcopy(η)
     @parallel compute_maxloc!(ητ, η)
@@ -472,29 +512,76 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
-            @parallel compute_P!(stokes.P, P_old, stokes.R.RP, stokes.∇V, η, MatParam.Elasticity[1].Kb.val, dt, r, θ_dτ)
-            @parallel compute_strain_rate!(stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+            @parallel compute_P!(
+                stokes.P,
+                P_old,
+                stokes.R.RP,
+                stokes.∇V,
+                η,
+                MatParam.Elasticity[1].Kb.val,
+                dt,
+                r,
+                θ_dτ,
+            )
+            @parallel compute_strain_rate!(
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.xy,
+                stokes.∇V,
+                stokes.V.Vx,
+                stokes.V.Vy,
+                _di...,
+            )
             @parallel (1:nx, 1:ny) compute_τ_gp!(
-                stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c, 
-                stokes.τ.II, 
-                stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy, 
-                stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, 
-                η, η_vep, 
-                stokes.P, thermal.T,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy_c,
+                stokes.τ.II,
+                stokes.τ_o.xx,
+                stokes.τ_o.yy,
+                stokes.τ_o.xy,
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.xy,
+                η,
+                η_vep,
+                z,
+                thermal.T,
                 tupleize(MatParam), # needs to be a tuple
-                dt, 
+                dt,
                 θ_dτ,
             )
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            @parallel compute_V!(stokes.V.Vx, stokes.V.Vy, stokes.P, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ηdτ, ρg[1], ρg[2], ητ, _di...)
-            # free slip boundary conditions
-            apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
+            @parallel compute_V!(
+                stokes.V.Vx,
+                stokes.V.Vy,
+                stokes.P,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                ηdτ,
+                ρg[1],
+                ρg[2],
+                ητ,
+                _di...,
+            )
+            # apply boundary conditions boundary conditions
+            # apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
+            flow_bcs!(flow_bcs, stokes.V.Vx, stokes.V.Vy, di)
         end
 
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (1:nx, 1:ny) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg[1], ρg[2], _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                stokes.P,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                ρg[1],
+                ρg[2],
+                _di...,
             )
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])

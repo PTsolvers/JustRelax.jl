@@ -165,11 +165,10 @@ end
 # Stress calculation
 
 # viscous
-@parallel function compute_τ!(τxx, τyy, τxyv, εxx, εyy, εxyv, η, θ_dτ)
+@parallel function compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, θ_dτ)
     @all(τxx) = @all(τxx) + (-@all(τxx) + 2.0 * @all(η) * @all(εxx)) * 1.0 / (θ_dτ + 1.0)
     @all(τyy) = @all(τyy) + (-@all(τyy) + 2.0 * @all(η) * @all(εyy)) * 1.0 / (θ_dτ + 1.0)
-    @inn(τxyv) = @inn(τxyv) + (-@inn(τxyv) + 2.0 * @av(η) * @inn(εxyv)) * 1.0 / (θ_dτ + 1.0)
-
+    @inn(τxy) = @inn(τxy) + (-@inn(τxy) + 2.0 * @av(η) * @inn(εxy)) * 1.0 / (θ_dτ + 1.0)
     return nothing
 end
 

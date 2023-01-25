@@ -82,3 +82,87 @@ function upwind_derivatives(A, i, j)
 
     return dx_right, dx_left, dy_up, dy_down
 end
+
+
+#################
+
+@parallel_indices (i, j) function rotate_stress!(V, τ::NTuple{3, T}, _di, dt) where T
+    @inline rotate_stress!(V, τ, (i, j) , _di, dt)
+    return nothing
+end
+
+@parallel_indices (i, j, k) function rotate_stress!(V, τ::NTuple{6, T}, _di, dt) where T
+    @inline rotate_stress!(V, τ, (i, j, k) , _di, dt)
+    return nothing
+end
+
+function rotate_stress!(V, τ::NTuple{N, T}, idx, _di, dt) where {N, T}
+
+    ## 1) Advect stress
+    Vᵢⱼ = @inline velocity2center(V..., idx...) # averages @ cell center
+    τij_adv = @inline advect_stress(τ..., Vᵢⱼ..., idx..., _di...)
+
+    ## 2) Rotate stress
+    # average ∂Vx/∂y @ cell center
+    ∂V∂x = ∂Vi∂xi(V..., _di..., idx...)
+    # compute xy component of the vorticity tensor; normal components = 0.0
+    ω = compute_vorticity(∂V∂x)
+    # stress tensor in Voigt notation
+    τ_voigt = ntuple(Val(N)) do k
+        Base.@_inline_meta
+        @inbounds τ[k][idx...]
+    end
+    # rotate stress tensor
+    τr_voigt = GeoParams.rotate_elastic_stress2D(ω, τ_voigt, dt)
+    
+    ## 3) Update stress
+    # worth unrolling?
+    for k in 1:N
+        @inbounds τ[k][idx...] += τr_voigt[k] + τij_adv[k]
+    end
+
+    return 
+end
+
+@inline function velocity2center(Vx, Vy, i, j)
+    @inbounds Vxᵢⱼ = 0.5 * (Vx[i    , j + 1] + Vx[i + 1, j + 1]) # averages @ cell center
+    @inbounds Vyᵢⱼ = 0.5 * (Vy[i + 1, j    ] + Vy[i + 1, j + 1]) # averages @ cell center
+    return Vxᵢⱼ, Vyᵢⱼ
+end
+
+@inline function ∂Vi∂xi(Vx, Vy, _dx, _dy, i, j)
+    @inbounds ∂Vx∂y = 0.25 * _dy * (
+        Vx[i  , j+1] - Vx[i  , 1  ] + 
+        Vx[i  , j+2] - Vx[i  , j+1] + 
+        Vx[i+1, j+1] - Vx[i+1, 1  ] + 
+        Vx[i+1, j+2] - Vx[i+1, j+1]
+    )
+    # average ∂Vy/∂x @ cell center
+   @inbounds  ∂Vy∂x = 0.25 * _dx * (
+        Vy[i+1, j  ] - Vy[i  , j  ] + 
+        Vy[i+2, j  ] - Vy[i+1, j  ] + 
+        Vy[i+1, j+1] - Vy[i  , j+1] + 
+        Vy[i+2, j+1] - Vy[i+1, j+1]
+    )
+    return ∂Vx∂y, ∂Vy∂x
+end
+
+@inline compute_vorticity(∂V∂x::NTuple{2, T}) where T = 0.5 * (∂V∂x[1] - ∂V∂x[2])
+
+n = 128
+Vx = rand(n+1,n+2)
+Vy = rand(n+2,n+1)
+txx= rand(n,n)
+tyy= rand(n,n)
+txy= rand(n,n)
+V = Vx, Vy
+τ = txx, tyy, txy
+_di = rand(),rand()
+dt = 1.0
+
+
+@btime @parallel $(1:n, 1:n) rotate_stress!($V, $τ, $_di, $dt)
+@btime @parallel $(1:n, 1:n) rotate_stress($Vx, $Vy, $txx, $tyy, $txy, $(_di[1]), $(_di[2]), $dt)
+
+ProfileCanvas.@profview for i in 1:100 @parallel (1:n, 1:n) rotate_stress(Vx, Vy, txx, tyy, txy, _di[1], _di[2], dt) end
+ProfileCanvas.@profview for i in 1:100 @parallel (1:n, 1:n) rotate_stress!(V, τ, _di, dt) end

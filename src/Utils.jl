@@ -21,6 +21,15 @@ end
 
 # MACROS
 
+macro tuple(A) 
+    return quote _tuple($(esc(A))) end
+end
+
+_tuple(V::Velocity{<:AbstractArray{T, 2}}) where T = V.Vx, V.Vy
+_tuple(V::Velocity{<:AbstractArray{T, 3}}) where T = V.Vx, V.Vy, V.Vz
+_tuple(A::SymmetricTensor{<:AbstractArray{T, 2}}) where T = A.xx, A.yy, A.xy_c
+_tuple(A::SymmetricTensor{<:AbstractArray{T, 3}}) where T = A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
+
 ## Memory allocators
 
 macro allocate(ni...)
@@ -37,8 +46,6 @@ export assign!
 end
 
 # MPI reductions 
-
-# export mean_mpi, norm_mpi, minimum_mpi, maximum_mpi
 
 function mean_mpi(A)
     mean_l = mean(A)

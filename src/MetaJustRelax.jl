@@ -45,7 +45,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export solve!
 
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
-        export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
+        export pureshear_bc!, FlowBoundaryConditions, flow_bcs!
+        export TemperatureBoundaryConditions, thermal_boundary_conditions!, thermal_bcs!
+        export free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
 
         include(joinpath(@__DIR__, "stokes/Stokes.jl"))
         export stress

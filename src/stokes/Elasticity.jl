@@ -931,14 +931,8 @@ end
     @inbounds dτ_r  = 1.0 / (θ_dτ / η[i, j, k] + 1.0 / η_vep[i, j, k]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
     # Setup up input for GeoParams.jl
     @inbounds T_cell = 0.125 * (
-        T[i  , j  , k  ] +
-        T[i  , j+1, k  ] +
-        T[i+1, j  , k  ] +
-        T[i+1, j+1, k  ] +
-        T[i  , j  , k+1] +
-        T[i  , j+1, k+1] +
-        T[i+1, j  , k+1] +
-        T[i+1, j+1, k+1]
+        T[i, j, k  ] + T[i, j+1, k  ] + T[i+1, j, k  ] + T[i+1, j+1, k  ] +
+        T[i, j, k+1] + T[i, j+1, k+1] + T[i+1, j, k+1] + T[i+1, j+1, k+1]
     )
     @inbounds args  = (; dt=dt, P = 1e6 * (1 - z[k]), T=T_cell, τII_old=0.0)
     @inbounds εij_p = (
@@ -963,7 +957,7 @@ end
     @inbounds τ = ( # caching out improves a wee bit the performance
         (τxx[i, j, k]),
         (τyy[i, j, k]),
-        (τyy[i, j, k]),
+        (τzz[i, j, k]),
         (τyz[i, j, k]),
         (τxz[i, j, k]),
         (τxy[i, j, k]), 

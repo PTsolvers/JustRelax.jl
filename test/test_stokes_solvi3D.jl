@@ -31,13 +31,15 @@ function check_convergence_case1()
         lz=lz,
         rc=rc,
         εbg=εbg,
-        init_MPI=true,
-        finalize_MPI=true,
+        init_MPI=false,
+        finalize_MPI=false,
     )
 
     iters_expected = (iter=500, err_evo1=[ 7.493148324044796e-10])
-    return iters.iter == iters_expected.iter &&
+    passed = iters.iter == iters_expected.iter &&
        iters.err_evo1[end] ≈ iters_expected.err_evo1[end]
+
+    return passed
 end
 
 @testset begin

@@ -93,7 +93,6 @@ function solVi3D(;
             stokes,
             pt_stokes,
             di,
-            li,
             freeslip,
             ρg,
             η,

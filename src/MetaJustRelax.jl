@@ -53,7 +53,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export stress
 
         include(joinpath(@__DIR__, "Utils.jl"))
-        export @allocate, compute_dt, assign!
+        export @allocate, compute_dt, assign!, tupleize
 
         include(joinpath(@__DIR__, "stokes/Elasticity.jl"))
 
@@ -62,7 +62,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export ThermalParameters
 
         include(joinpath(@__DIR__, "Interpolations.jl"))
-        export vertex2center!
+        export vertex2center!, center2vertex!
     end
 
     # conditional submodule load

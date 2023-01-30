@@ -10,6 +10,13 @@ end
     return nothing
 end
 
+@parallel function center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
+    @inn(vertex_yz) = @av(center_yz)
+    @inn(vertex_xz) = @av(center_xz)
+    @inn(vertex_xy) = @av(center_xy)
+    return nothing
+end
+
 # Velocity to cell vertices
 
 ## 2D 

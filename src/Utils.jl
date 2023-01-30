@@ -19,6 +19,9 @@ end
     return min(dt_diff, dt_adv)
 end
 
+tupleize(v::MaterialParams) = (v,)
+tupleize(v::Tuple) = v
+
 # MACROS
 
 macro tuple(A) 

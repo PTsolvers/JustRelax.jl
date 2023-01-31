@@ -1,7 +1,7 @@
 using JustRelax
 # setup ParallelStencil.jl environment
-model = PS_Setup(:gpu, Float64, 3)
-# model = PS_Setup(:cpu, Float64, 3)
+# model = PS_Setup(:gpu, Float64, 3)
+model = PS_Setup(:cpu, Float64, 3)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
@@ -60,6 +60,7 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8)
     CharUnits = GEO_units(; viscosity=1e23, length=2900km, temperature=1000K)
 
     # Define a struct for a first phase
+    G0 = Inf
     rheology = SetMaterialParams(;
         Name="Rock",
         Phase=1,
@@ -72,25 +73,23 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8)
         CharDim=CharUnits,
     )
 
-     # This tests the MaterialParameters structure
-     CharUnits = GEO_units(; viscosity=1e23, length=2900km, temperature=1000K)
+    # This tests the MaterialParameters structure
+    CharUnits = GEO_units(; viscosity=1e23, length=2900km, temperature=1000K)
 
-     # Define a struct for a first phase
-     G0 = Inf
-     rheology = SetMaterialParams(;
-         Name="Rock",
-         Phase=1,
-         Density=ConstantDensity(; ρ=1),
-         HeatCapacity=ConstantHeatCapacity(; cp=1),
-         Conductivity=ConstantConductivity(; k=1),
-         CompositeRheology=CompositeRheology(
-                 SetConstantElasticity(; G=G0, ν=0.5), LinearViscous()
-             ),
-         Elasticity = SetConstantElasticity(; G=G0, ν=0.5),
-         Gravity=ConstantGravity(; g=1e6),
-     )
+    # Define a struct for a first phase
+    rheology2 = SetMaterialParams(;
+        Name="Rock",
+        Phase=1,
+        Density=ConstantDensity(; ρ=1),
+        HeatCapacity=ConstantHeatCapacity(; cp=1),
+        Conductivity=ConstantConductivity(; k=1),
+        CompositeRheology=CompositeRheology(
+                SetConstantElasticity(; G=G0, ν=0.5), LinearViscous(; η=1.0)
+            ),
+        Elasticity = SetConstantElasticity(; G=G0, ν=0.5),
+        Gravity=ConstantGravity(; g=1e6),
+    )
 
-     
     # Physical domain
     lz = 2900km
     lx = lz * ar
@@ -131,7 +130,6 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8)
     ρ = @fill(ρ0, ni...)
     ρCp = @fill(ρ0 * Cp0, ni...) 
     k = @fill(rheology.Conductivity[1].k.val, ni...)
-    thermal_parameters = ThermalParameters(k, ρCp)
     thermal_bc = (flux_x=true, flux_y=false, flux_z=false)
 
     time= 1e-4
@@ -155,9 +153,9 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8)
 
     # Elliptical temperature anomaly ---------------------
     xc, yc, zc      =   0.5*lx_nd, 0.5*ly_nd, 0.5*lz_nd
-    ri              =   0.1/2
+    ri              =   0.1
     Elli            =  [ ((x-xc ))^2 + ((y - yc))^2 + ((z - zc))^2 for x in xvi[1], y in xvi[2], z in xvi[3]]
-    thermal.T .= 1.0
+    thermal.T      .= 1.0
     thermal.T[Elli .< ri.^2]  .*= 1.025
     # thermal.T .*= 1 .+ rand(ni...).*0.05
     # clamp!(thermal.T, Tmin, Tmax)
@@ -228,10 +226,10 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8)
             ρg,
             η,
             η_vep,
-            rheology,
+            rheology2,
             dt_elasticity,
             igg;
-            iterMax=5e3,
+            iterMax=150e3,
             nout=1e3,
         )
 
@@ -299,4 +297,183 @@ nz = n
 
 # heatmap(xci[1][2:end-1], xci[2][2:end-1], Array(fz[nx÷2,:,:]) , colormap=:batlow)
 # heatmap(xci[1][2:end-1], xci[2][2:end-1], Array(η[nx÷2,:,:]) , colormap=:batlow)
-# heatmap(xvi[1][2:end-1], xvi[2][2:end-1], Array(stokes.V.Vz[:,ny÷2,:]) , colormap=:batlow)
+heatmap(xvi[1][2:end-1], xvi[2][2:end-1], Array(stokes.V.Vz[:,ny÷2,:]) , colormap=:batlow)
+heatmap(xvi[1][2:end-1], xvi[2][2:end-1], Array(stokes.τ.zz[:,ny÷2,:]) , colormap=:batlow)
+
+
+## Setup-specific parameters and fields
+# ~preconditioner
+ητ = deepcopy(η)
+@hide_communication b_width begin # communication/computation overlap
+    @parallel JustRelax.compute_maxloc!(ητ, η)
+    update_halo!(ητ)
+end
+@parallel (1:size(ητ, 2), 1:size(ητ, 3)) free_slip_x!(ητ)
+@parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
+@parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
+
+_di = inv.(di)
+pt_stokes = PTStokesCoeffs(ni, di; ϵ=1e-4,  CFL=1 / √3)
+
+stokes = StokesArrays(ni, ViscoElastic)
+η = @ones(ni...)
+η_vep = deepcopy(η)
+
+@parallel (1:nx, 1:ny, 1:nz) JustRelax.Elasticity3D.compute_∇V!(
+    stokes.∇V, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, _di...
+)
+@parallel JustRelax.Elasticity3D.compute_P!(
+    stokes.P,
+    stokes.P0,
+    stokes.R.RP,
+    stokes.∇V,
+    η,
+    Kb,
+    dt,
+    pt_stokes.r,
+    pt_stokes.θ_dτ,
+)
+@parallel (1:(nx + 1), 1:(ny + 1), 1:(nz + 1)) JustRelax.Elasticity3D.compute_strain_rate!(
+    stokes.∇V,
+    stokes.ε.xx,
+    stokes.ε.yy,
+    stokes.ε.zz,
+    stokes.ε.yz,
+    stokes.ε.xz,
+    stokes.ε.xy,
+    stokes.V.Vx,
+    stokes.V.Vy,
+    stokes.V.Vz,
+    _di...,
+)
+@parallel (1:nx, 1:ny, 1:nz) JustRelax.Elasticity3D.compute_τ_gp!(
+    stokes.τ.xx,
+    stokes.τ.yy,
+    stokes.τ.zz,
+    stokes.τ.yz_c, 
+    stokes.τ.xz_c, 
+    stokes.τ.xy_c,
+    stokes.τ.II,
+    stokes.τ_o.xx,
+    stokes.τ_o.yy,
+    stokes.τ_o.zz, 
+    stokes.τ_o.yz, 
+    stokes.τ_o.xz, 
+    stokes.τ_o.xy,
+    stokes.ε.xx,
+    stokes.ε.yy,
+    stokes.ε.zz, 
+    stokes.ε.yz,
+    stokes.ε.xz,
+    stokes.ε.xy,
+    η,
+    η_vep,
+    xci[3],
+    thermal.T,
+    tupleize(rheology2), # needs to be a tuple
+    dt,
+    pt_stokes.θ_dτ,
+)
+
+@parallel (1:nx+1, 1:ny+1, 1:nz+1) c2v!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c)
+
+@parallel (1:(nx + 1), 1:(ny + 1), 1:(nz + 1)) JustRelax.Elasticity3D.compute_V!(
+    stokes.V.Vx,
+    stokes.V.Vy,
+    stokes.V.Vz,
+    stokes.R.Rx,
+    stokes.R.Ry,
+    stokes.R.Rz,
+    stokes.P,
+    ρg[1],
+    ρg[2],
+    ρg[3],
+    stokes.τ.xx,
+    stokes.τ.yy,
+    stokes.τ.zz,
+    stokes.τ.yz,
+    stokes.τ.xz,
+    stokes.τ.xy,
+    ητ,
+    pt_stokes.ηdτ,
+    _di...,
+)
+apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+# stokes.τ.xz[:,ny÷2,:]
+
+heatmap(xvi[1][2:end-1], xvi[2][2:end-1], stokes.τ.xz[:,ny÷2,:] , colormap=:batlow)
+
+heatmap(xvi[1][2:end-1], xvi[2][2:end-1], stokes.τ.xz_c[:,ny÷2,:] , colormap=:batlow)
+
+heatmap(xvi[1][2:end-1], xvi[2][2:end-1], stokes.ε.xz[:,ny÷2,:] , colormap=:batlow)
+
+
+@inline function clamp_idx(nx, ny, nz, i, j, k)
+    i = clamp(i, 1, nx)
+    j = clamp(j, 1, ny)
+    k = clamp(k, 1, nz)
+    return i, j, k
+end
+
+@parallel_indices (i, j, k) function c2v!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
+    if all( (i,j,k) .≤ size(vertex_yz))
+        vertex_yz[i, j, k] = 0.25 * (
+            center_yz[clamp_idx(size(center_yz)..., i, j-1, k-1)...] +
+            center_yz[clamp_idx(size(center_yz)..., i, j, k-1)...] +
+            center_yz[clamp_idx(size(center_yz)..., i, j-1, k)...] +
+            center_yz[clamp_idx(size(center_yz)..., i, j, k)...]
+        )
+    end
+    if all( (i,j,k) .≤ size(vertex_xz))
+        vertex_xz[i, j, k] = 0.25 * (
+            center_xz[clamp_idx(size(center_xz)..., i-1, j, k-1)...] +
+            center_xz[clamp_idx(size(center_xz)..., i, j, k-1)...] +
+            center_xz[clamp_idx(size(center_xz)..., i-1, j, k)...] +
+            center_xz[clamp_idx(size(center_xz)..., i, j, k)...]
+        )
+    end
+    if all( (i,j,k) .≤ size(vertex_xy))
+        vertex_xy[i, j, k] = 0.25 * (
+            center_xy[clamp_idx(size(center_xy)..., i-1, j-1, k)...] +
+            center_xy[clamp_idx(size(center_xy)..., i, j-1, k)...] +
+            center_xy[clamp_idx(size(center_xy)..., i-1, j, k)...] +
+            center_xy[clamp_idx(size(center_xy)..., i, j, k)...]
+        )
+    end
+    return nothing
+end
+
+stokes.τ.xz .= 0.0
+@parallel (1:nx+1, 1:ny+1, 1:nz+1) c2v!(
+    stokes.τ.yz, 
+    stokes.τ.xz, 
+    stokes.τ.xy, 
+    stokes.τ.yz_c, 
+    stokes.τ.xz_c, 
+    stokes.τ.xy_c
+)
+a = deepcopy(stokes.τ.xz)
+
+stokes.τ.xz .= 0.0
+@parallel JustRelax.Elasticity3D.center2vertex!(
+    stokes.τ.yz, 
+    stokes.τ.xz, 
+    stokes.τ.xy, 
+    stokes.τ.yz_c, 
+    stokes.τ.xz_c, 
+    stokes.τ.xy_c
+)
+
+b = deepcopy(stokes.τ.xz)
+
+@parallel function foo!(center, vertex)
+    @all(center) = @av_xza(vertex)
+    return nothing
+end
+
+# @parallel foo!(stokes.τ.xz_c, stokes.τ.xz)
+
+heatmap(xvi[1][2:end-1], xvi[2][2:end-1], a[:,ny÷2,:] , colormap=:batlow)
+heatmap(xvi[1][2:end-1], xvi[2][2:end-1], b[:,ny÷2,:] , colormap=:batlow)
+
+stokes.τ.xz_c[:,ny÷2,:] 

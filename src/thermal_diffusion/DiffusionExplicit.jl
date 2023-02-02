@@ -172,6 +172,7 @@ using GeoParams
 
 import JustRelax: ThermalParameters, solve!, assign!, thermal_boundary_conditions!
 import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity
+# import JustRelax: TemperatureBoundaryConditions, thermal_bcs!
 
 export solve!
 
@@ -190,11 +191,11 @@ end
     @inline dTdyi(i, j) = (T[i + 1, j + 1] - T[i + 1, j]) * _dy
 
     if i ≤ size(qTx, 1) && j ≤ size(qTx, 2)
-        qTx[i, j] = -compute_diffusivity(rheology, args) * dTdxi(i, j)
+        @inbounds qTx[i, j] = -compute_diffusivity(rheology, args) * dTdxi(i, j)
     end
 
     if i ≤ size(qTy, 1) && j ≤ size(qTy, 2)
-        qTy[i, j] = -compute_diffusivity(rheology, args) * dTdyi(i, j)
+        @inbounds qTy[i, j] = -compute_diffusivity(rheology, args) * dTdyi(i, j)
     end
 
     return nothing
@@ -203,10 +204,10 @@ end
 @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
     if (i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2))
         
-        Vxᵢⱼ = 0.5 * (Vx[i + 2, j + 2] + Vx[i + 1, j + 2])
-        Vyᵢⱼ = 0.5 * (Vy[i + 2, j + 2] + Vy[i + 2, j + 1])
+        @inbounds Vxᵢⱼ = 0.5 * (Vx[i + 2, j + 2] + Vx[i + 1, j + 2])
+        @inbounds Vyᵢⱼ = 0.5 * (Vy[i + 2, j + 2] + Vy[i + 2, j + 1])
 
-        dT_dt[i, j] =
+        @inbounds dT_dt[i, j] =
             -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) -
             (Vxᵢⱼ > 0) * Vxᵢⱼ * (T[i + 1, j + 1] - T[i    , j + 1]) * _dx -
             (Vxᵢⱼ < 0) * Vxᵢⱼ * (T[i + 2, j + 1] - T[i + 1, j + 1]) * _dx -
@@ -257,11 +258,10 @@ function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_parameters::ThermalParameters{<:AbstractArray{_T,2}},
     stokes,
-    thermal_bc::NamedTuple,
+    thermal_bc::TemperatureBoundaryConditions,
     di::NTuple{2,_T},
     dt,
 ) where {_T,M<:AbstractArray{<:Any,2}}
-
     # Compute some constant stuff
     _dx, _dy = inv.(di)
 
@@ -280,7 +280,9 @@ function JustRelax.solve!(
         _dy,
     )
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_boundary_conditions!(thermal_bc, thermal.T)
+    thermal_bcs!(thermal.T, thermal_bc)
+
+    # thermal_boundary_conditions!(thermal_bc, thermal.T)
 
     @. thermal.ΔT = thermal.T - thermal.Told
 
@@ -291,7 +293,7 @@ end
 
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
-    thermal_bc::NamedTuple,
+    thermal_bc::TemperatureBoundaryConditions,
     rheology::MaterialParams,
     args::NamedTuple,
     di::NTuple{2,_T},
@@ -309,9 +311,10 @@ function JustRelax.solve!(
         thermal.qTx, thermal.qTy, thermal.T, rheology, args, _dx, _dy
     )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _dx, _dy)
-    @show extrema(thermal.dT_dt)
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_boundary_conditions!(thermal_bc, thermal.T)
+    thermal_bcs!(thermal.T, thermal_bc)
+
+    # thermal_boundary_conditions!(thermal_bc, thermal.T)
 
     @. thermal.ΔT = thermal.T - thermal.Told
 
@@ -321,13 +324,12 @@ end
 # Upwind advection
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
-    thermal_bc::NamedTuple,
+    thermal_bc::TemperatureBoundaryConditions,
     stokes,
     rheology::MaterialParams,
     args::NamedTuple,
     di::NTuple{2,_T},
-    dt;
-    advection=true,
+    dt
 ) where {_T,M<:AbstractArray{<:Any,2}}
 
     # Compute some constant stuff
@@ -350,7 +352,8 @@ function JustRelax.solve!(
         _dy,
     )
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_boundary_conditions!(thermal_bc, thermal.T)
+    thermal_bcs!(thermal.T, thermal_bc)
+    # thermal_boundary_conditions!(thermal_bc, thermal.T)
 
     @. thermal.ΔT = thermal.T - thermal.Told
 
@@ -394,16 +397,18 @@ end
     @inline dTdyi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) * _dy
     @inline dTdzi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) * _dz
 
-    if i ≤ size(qTx, 1) && j ≤ size(qTx, 2) && k ≤ size(qTx, 3)
-        qTx[i, j, k] = -compute_diffusivity(rheology, args) * dTdxi(i, j, k)
-    end
+    @inbounds begin
+        if all( (i,j,k) .≤ size(qTx) )
+            qTx[i, j, k] = -compute_diffusivity(rheology, args) * dTdxi(i, j, k)
+        end
 
-    if i ≤ size(qTy, 1) && j ≤ size(qTy, 2) && k ≤ size(qTy, 3)
-        qTy[i, j, k] = -compute_diffusivity(rheology, args) * dTdyi(i, j, k)
-    end
+        if all( (i,j,k) .≤ size(qTy) )
+            qTy[i, j, k] = -compute_diffusivity(rheology, args) * dTdyi(i, j, k)
+        end
 
-    if i ≤ size(qTz, 1) && j ≤ size(qTz, 2) && k ≤ size(qTz, 3)
-        qTz[i, j, k] = -compute_diffusivity(rheology, args) * dTdzi(i, j, k)
+        if all( (i,j,k) .≤ size(qTz) )
+            qTz[i, j, k] = -compute_diffusivity(rheology, args) * dTdzi(i, j, k)
+        end
     end
 
     return nothing
@@ -414,40 +419,82 @@ end
 #     return nothing
 # end
 
+# @parallel_indices (i, j, k) function advect_T!(
+#     dT_dt, qTx, qTy, qTz, T, Vx, Vy, Vz, _dx, _dy, _dz
+# )
+#     if i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2) && k ≤ size(dT_dt, 3)
+#         dT_dt[i, j, k] =
+#             -(
+#                 (qTx[i + 1, j, k] - qTx[i, j, k]) * _dx +
+#                 (qTy[i, j + 1, k] - qTy[i, j, k]) * _dy +
+#                 (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz
+#             ) -
+#             (Vx[i + 1, j + 1, k + 1] > 0) *
+#             Vx[i + 1, j + 1, k + 1] *
+#             (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) *
+#             _dx -
+#             (Vx[i + 2, j + 1, k + 1] < 0) *
+#             Vx[i + 2, j + 1, k + 1] *
+#             (T[i + 2, j + 1, k + 1] - T[i + 1, j + 1, k + 1]) *
+#             _dx -
+#             (Vy[i + 1, j + 1, k + 1] > 0) *
+#             Vy[i + 1, j + 1, k + 1] *
+#             (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) *
+#             _dy -
+#             (Vy[i + 1, j + 2, k + 1] < 0) *
+#             Vy[i + 1, j + 2, k + 1] *
+#             (T[i + 1, j + 2, k + 1] - T[i + 1, j + 1, k + 1]) *
+#             _dy -
+#             (Vz[i + 1, j + 1, k + 1] > 0) *
+#             Vz[i + 1, j + 1, k + 1] *
+#             (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) *
+#             _dz -
+#             (Vz[i + 1, j + 1, k + 2] < 0) *
+#             Vz[i + 1, j + 1, k + 2] *
+#             (T[i + 1, j + 1, k + 2] - T[i + 1, j + 1, k + 1]) *
+#             _dz
+#     end
+#     return nothing
+# end
+
 @parallel_indices (i, j, k) function advect_T!(
     dT_dt, qTx, qTy, qTz, T, Vx, Vy, Vz, _dx, _dy, _dz
 )
-    if i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2) && k ≤ size(dT_dt, 3)
-        dT_dt[i, j, k] =
-            -(
-                (qTx[i + 1, j, k] - qTx[i, j, k]) * _dx +
-                (qTy[i, j + 1, k] - qTy[i, j, k]) * _dy +
-                (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz
-            ) -
-            (Vx[i + 1, j + 1, k + 1] > 0) *
-            Vx[i + 1, j + 1, k + 1] *
-            (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) *
-            _dx -
-            (Vx[i + 2, j + 1, k + 1] < 0) *
-            Vx[i + 2, j + 1, k + 1] *
-            (T[i + 2, j + 1, k + 1] - T[i + 1, j + 1, k + 1]) *
-            _dx -
-            (Vy[i + 1, j + 1, k + 1] > 0) *
-            Vy[i + 1, j + 1, k + 1] *
-            (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) *
-            _dy -
-            (Vy[i + 1, j + 2, k + 1] < 0) *
-            Vy[i + 1, j + 2, k + 1] *
-            (T[i + 1, j + 2, k + 1] - T[i + 1, j + 1, k + 1]) *
-            _dy -
-            (Vz[i + 1, j + 1, k + 1] > 0) *
-            Vz[i + 1, j + 1, k + 1] *
-            (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) *
-            _dz -
-            (Vz[i + 1, j + 1, k + 2] < 0) *
-            Vz[i + 1, j + 1, k + 2] *
-            (T[i + 1, j + 1, k + 2] - T[i + 1, j + 1, k + 1]) *
-            _dz
+
+    @inbounds begin
+        Vxᵢⱼₖ = 0.25 * (
+            Vx[i + 1, j + 1, k + 1] +
+            Vx[i + 1, j + 2, k + 1] + 
+            Vx[i + 1, j + 1, k + 2] +
+            Vx[i + 1, j + 2, k + 2]
+        )
+        Vyᵢⱼₖ = 0.25 * (
+            Vy[i + 1, j + 1, k + 1] +
+            Vy[i + 2, j + 1, k + 1] + 
+            Vy[i + 1, j + 1, k + 2] + 
+            Vy[i + 2, j + 1, k + 2]
+        )
+        Vzᵢⱼₖ = 0.25 * (
+            Vz[i + 1, j + 1, k + 1] +
+            Vz[i + 2, j + 1, k + 1] + 
+            Vz[i + 1, j + 2, k + 1] + 
+            Vz[i + 2, j + 2, k + 1]
+        )
+
+        if all((i, j, k) .≤ size(dT_dt))
+            dT_dt[i, j, k] =
+                -(
+                    (qTx[i + 1, j, k] - qTx[i, j, k]) * _dx +
+                    (qTy[i, j + 1, k] - qTy[i, j, k]) * _dy +
+                    (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz
+                ) -
+                (Vxᵢⱼₖ > 0) * Vxᵢⱼₖ * (T[i + 1, j + 1, k + 1] - T[i    , j + 1, k + 1]) * _dx -
+                (Vxᵢⱼₖ < 0) * Vxᵢⱼₖ * (T[i + 2, j + 1, k + 1] - T[i + 1, j + 1, k + 1]) * _dx -
+                (Vyᵢⱼₖ > 0) * Vyᵢⱼₖ * (T[i + 1, j + 1, k + 1] - T[i + 1, j    , k + 1]) * _dy -
+                (Vyᵢⱼₖ < 0) * Vyᵢⱼₖ * (T[i + 1, j + 2, k + 1] - T[i + 1, j + 1, k + 1]) * _dy -
+                (Vzᵢⱼₖ > 0) * Vzᵢⱼₖ * (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k    ]) * _dz -
+                (Vzᵢⱼₖ < 0) * Vzᵢⱼₖ * (T[i + 1, j + 1, k + 2] - T[i + 1, j + 1, k + 1]) * _dz
+        end
     end
     return nothing
 end

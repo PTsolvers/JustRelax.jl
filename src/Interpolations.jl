@@ -11,43 +11,51 @@ end
 end
 
 # @parallel function center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
-#     @inn(vertex_yz) = @av_yz(center_yz)
-#     @inn(vertex_xz) = @av_xz(center_xz)
-#     @inn(vertex_xy) = @av_xy(center_xy)
+#     @inn_yz(vertex_yz) = @av_yzi(center_yz)
+#     @inn_xz(vertex_xz) = @av_xzi(center_xz)
+#     @inn_xy(vertex_xy) = @av_xyi(center_xy)
 #     return nothing
 # end
 
-
-@inline function clamp_idx(nx, ny, nz, i, j, k)
-    i = clamp(i, 1, nx)
-    j = clamp(j, 1, ny)
-    k = clamp(k, 1, nz)
-    return i, j, k
-end
-
 @parallel_indices (i, j, k) function center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
-    if all( (i,j,k) .≤ size(vertex_yz))
+    
+    nx, ny, nz = size(center_xz)
+    
+    @inline function clamp_idx(i, j, k)
+        i = clamp(i, 1, nx)
+        j = clamp(j, 1, ny)
+        k = clamp(k, 1, nz)
+        i, j, k
+    end
+
+    # if all( (i,j,k) .≤ size(vertex_yz))
+    if i ≤ size(vertex_yz, 1) && (1 < j < size(vertex_yz, 2)) && (1 < k < size(vertex_yz, 3))
+
         vertex_yz[i, j, k] = 0.25 * (
-            center_yz[clamp_idx(size(center_yz)..., i, j-1, k-1)...] +
-            center_yz[clamp_idx(size(center_yz)..., i, j, k-1)...] +
-            center_yz[clamp_idx(size(center_yz)..., i, j-1, k)...] +
-            center_yz[clamp_idx(size(center_yz)..., i, j, k)...]
+            center_yz[clamp_idx(i, j-1, k-1)...] +
+            center_yz[clamp_idx(i, j  , k-1)...] +
+            center_yz[clamp_idx(i, j-1, k  )...] +
+            center_yz[clamp_idx(i, j  , k  )...]
         )
     end
-    if all( (i,j,k) .≤ size(vertex_xz))
+    # if all( (i,j,k) .≤ size(vertex_xz))
+    if (1 < i < size(vertex_xz, 1)) && j ≤ size(vertex_xz, 2) && (1 < k < size(vertex_xz, 3))
+
         vertex_xz[i, j, k] = 0.25 * (
-            center_xz[clamp_idx(size(center_xz)..., i-1, j, k-1)...] +
-            center_xz[clamp_idx(size(center_xz)..., i, j, k-1)...] +
-            center_xz[clamp_idx(size(center_xz)..., i-1, j, k)...] +
-            center_xz[clamp_idx(size(center_xz)..., i, j, k)...]
+            center_xz[clamp_idx(i-1, j, k-1)...] +
+            center_xz[clamp_idx(i  , j, k-1)...] +
+            center_xz[clamp_idx(i-1, j, k  )...] +
+            center_xz[clamp_idx(i  , j, k  )...]
         )
     end
-    if all( (i,j,k) .≤ size(vertex_xy))
+    # if all( (i,j,k) .≤ size(vertex_xy))
+    if (1 < i < size(vertex_xy, 1)) && (1 < j < size(vertex_xy, 2)) && k ≤ size(vertex_xy, 3)
+
         vertex_xy[i, j, k] = 0.25 * (
-            center_xy[clamp_idx(size(center_xy)..., i-1, j-1, k)...] +
-            center_xy[clamp_idx(size(center_xy)..., i, j-1, k)...] +
-            center_xy[clamp_idx(size(center_xy)..., i-1, j, k)...] +
-            center_xy[clamp_idx(size(center_xy)..., i, j, k)...]
+            center_xy[clamp_idx(i-1, j-1, k)...] +
+            center_xy[clamp_idx(i  , j-1, k)...] +
+            center_xy[clamp_idx(i-1, j  , k)...] +
+            center_xy[clamp_idx(i  , j  , k)...]
         )
     end
     return nothing

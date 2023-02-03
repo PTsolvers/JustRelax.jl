@@ -10,54 +10,50 @@ end
     return nothing
 end
 
-# @parallel function center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
-#     @inn_yz(vertex_yz) = @av_yzi(center_yz)
-#     @inn_xz(vertex_xz) = @av_xzi(center_xz)
-#     @inn_xy(vertex_xy) = @av_xyi(center_xy)
-#     return nothing
-# end
-
 @parallel_indices (i, j, k) function center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
     
     nx, ny, nz = size(center_xz)
     
-    @inline function clamp_idx(i, j, k)
+    Base.@propagate_inbounds @inline function clamp_idx(i, j, k)
         i = clamp(i, 1, nx)
         j = clamp(j, 1, ny)
         k = clamp(k, 1, nz)
         i, j, k
     end
 
-    # if all( (i,j,k) .≤ size(vertex_yz))
-    if i ≤ size(vertex_yz, 1) && (1 < j < size(vertex_yz, 2)) && (1 < k < size(vertex_yz, 3))
-
-        vertex_yz[i, j, k] = 0.25 * (
-            center_yz[clamp_idx(i, j-1, k-1)...] +
-            center_yz[clamp_idx(i, j  , k-1)...] +
-            center_yz[clamp_idx(i, j-1, k  )...] +
-            center_yz[clamp_idx(i, j  , k  )...]
-        )
+    @inbounds begin
+        # if all( (i,j,k) .≤ size(vertex_yz))
+        if i ≤ size(vertex_yz, 1) && (1 < j < size(vertex_yz, 2)) && (1 < k < size(vertex_yz, 3))
+    
+            vertex_yz[i, j, k] = 0.25 * (
+                center_yz[clamp_idx(i, j-1, k-1)...] +
+                center_yz[clamp_idx(i, j  , k-1)...] +
+                center_yz[clamp_idx(i, j-1, k  )...] +
+                center_yz[clamp_idx(i, j  , k  )...]
+            )
+        end
+        # if all( (i,j,k) .≤ size(vertex_xz))
+        if (1 < i < size(vertex_xz, 1)) && j ≤ size(vertex_xz, 2) && (1 < k < size(vertex_xz, 3))
+    
+            vertex_xz[i, j, k] = 0.25 * (
+                center_xz[clamp_idx(i-1, j, k-1)...] +
+                center_xz[clamp_idx(i  , j, k-1)...] +
+                center_xz[clamp_idx(i-1, j, k  )...] +
+                center_xz[clamp_idx(i  , j, k  )...]
+            )
+        end
+        # if all( (i,j,k) .≤ size(vertex_xy))
+        if (1 < i < size(vertex_xy, 1)) && (1 < j < size(vertex_xy, 2)) && k ≤ size(vertex_xy, 3)
+    
+            vertex_xy[i, j, k] = 0.25 * (
+                center_xy[clamp_idx(i-1, j-1, k)...] +
+                center_xy[clamp_idx(i  , j-1, k)...] +
+                center_xy[clamp_idx(i-1, j  , k)...] +
+                center_xy[clamp_idx(i  , j  , k)...]
+            )
+        end
     end
-    # if all( (i,j,k) .≤ size(vertex_xz))
-    if (1 < i < size(vertex_xz, 1)) && j ≤ size(vertex_xz, 2) && (1 < k < size(vertex_xz, 3))
-
-        vertex_xz[i, j, k] = 0.25 * (
-            center_xz[clamp_idx(i-1, j, k-1)...] +
-            center_xz[clamp_idx(i  , j, k-1)...] +
-            center_xz[clamp_idx(i-1, j, k  )...] +
-            center_xz[clamp_idx(i  , j, k  )...]
-        )
-    end
-    # if all( (i,j,k) .≤ size(vertex_xy))
-    if (1 < i < size(vertex_xy, 1)) && (1 < j < size(vertex_xy, 2)) && k ≤ size(vertex_xy, 3)
-
-        vertex_xy[i, j, k] = 0.25 * (
-            center_xy[clamp_idx(i-1, j-1, k)...] +
-            center_xy[clamp_idx(i  , j-1, k)...] +
-            center_xy[clamp_idx(i-1, j  , k)...] +
-            center_xy[clamp_idx(i  , j  , k)...]
-        )
-    end
+    
     return nothing
 end
 
@@ -143,18 +139,37 @@ end
 
 ## 3D 
 
-function velocity2vertex(Vx, Vy, Vz, nv_x, nv_y, nv_z)
+"""
+    velocity2vertex(Vx, Vy, Vz)
+
+Interpolate the velocity field `Vx`, `Vy`, `Vz` from a staggered grid with ghost nodes 
+onto the grid vertices.
+"""
+function velocity2vertex(Vx, Vy, Vz)
+    # infer size of grid
+    nx, ny, nz = size(Vx)
+    nv_x, nv_y, nv_z = nx - 1, ny - 2, nz - 2
+    # allocate output arrays
     Vx_v = @zeros(nv_x, nv_y, nv_z)
     Vy_v = @zeros(nv_x, nv_y, nv_z)
     Vz_v = @zeros(nv_x, nv_y, nv_z)
-
+    # interpolate to cell vertices
     @parallel (1:nv_x, 1:nv_y, 1:nv_z) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
 
     return Vx_v, Vy_v, Vz_v
 end
 
-function velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz, nv_x, nv_y, nv_z)
+"""
+    velocity2vertex(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
 
+In-place interpolation of the velocity field `Vx`, `Vy`, `Vz` from a staggered grid with ghost nodes 
+onto the pre-allocated `Vx_d`, `Vy_d`, `Vz_d` 3D arrays located at the grid vertices.
+"""
+function velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
+    # infer size of grid
+    nx, ny, nz = size(Vx)
+    nv_x, nv_y, nv_z = nx - 1, ny - 2, nz - 2
+    # interpolate to cell vertices
     @parallel (1:nv_x, 1:nv_y, 1:nv_z) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
 
     return nothing 

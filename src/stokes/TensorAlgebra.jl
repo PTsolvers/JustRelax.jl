@@ -52,10 +52,8 @@ Base.@propagate_inbounds function advect_stress(τxx, τyy, τxy, Vx, Vy, i, j, 
 end
 
 function advection_term(Vx, Vy, dx_right, dx_left, dy_up, dy_down, _dx, _dy)
-    return (Vx > 0) * Vx * dx_right * _dx +
-           (Vx < 0) * Vx * dx_left  * _dx +
-           (Vy > 0) * Vy * dy_up    * _dy +
-           (Vy < 0) * Vy * dy_down  * _dy
+    return (Vx > 0 ? dx_right : dx_left) * Vx * _dx +
+           (Vy > 0 ? dy_up : dy_down) * Vy * _dy
 end
 
 function upwind_derivatives(A, i, j)
@@ -78,85 +76,84 @@ function upwind_derivatives(A, i, j)
     return dx_right, dx_left, dy_up, dy_down
 end
 
-# @generated function update_old_stress!(τ::NTuple{N, T}, τr_voigt::NTuple{N, T}, τij_adv::NTuple{N, T}, idx, dt) where {N, T}
-#     quote
-#         Base.@_inline_meta
-#         # Base.Cartesian.@nexprs $N k -> @inbounds τ[k][idx...] += muladd(τij_adv[k], dt, τr_voigt[k])
-#     end
-# end
-
+# averages @ cell center 2D
 @inline function velocity2center(Vx, Vy, i, j)
-    @inbounds Vxᵢⱼ = 0.5 * (Vx[i    , j + 1] + Vx[i + 1, j + 1]) # averages @ cell center
-    @inbounds Vyᵢⱼ = 0.5 * (Vy[i + 1, j    ] + Vy[i + 1, j + 1]) # averages @ cell center
+    @inbounds Vxᵢⱼ = 0.5 * (Vx[i    , j + 1] + Vx[i + 1, j + 1])
+    @inbounds Vyᵢⱼ = 0.5 * (Vy[i + 1, j    ] + Vy[i + 1, j + 1])
     return Vxᵢⱼ, Vyᵢⱼ
 end
 
-# TOFINISH
+# averages @ cell center 3D
 @inline function velocity2center(Vx, Vy, Vz, i, j, k)
-    @inbounds Vxᵢⱼ = 0.5 * (Vx[i    , j + 1, k] + Vx[i + 1, j + 1, k]) # averages @ cell center
-    @inbounds Vyᵢⱼ = 0.5 * (Vy[i + 1, j    , k] + Vy[i + 1, j + 1, k]) # averages @ cell center
-    @inbounds Vzᵢⱼ = 0.5 * (Vz[i + 1, j    , k] + Vz[i + 1, j + 1, k]) # averages @ cell center
+    @inbounds Vxᵢⱼ = 0.5 * (Vx[i    , j + 1, k + 1] + Vx[i + 1, j + 1, k + 1])
+    @inbounds Vyᵢⱼ = 0.5 * (Vy[i + 1, j    , k + 1] + Vy[i + 1, j + 1, k + 1])
+    @inbounds Vzᵢⱼ = 0.5 * (Vz[i + 1, j + 1, k    ] + Vz[i + 1, j + 1, k + 1])
     return Vxᵢⱼ, Vyᵢⱼ, Vzᵢⱼ
 end
 
+# 2D
 @inline function cross_derivatives(Vx, Vy, _dx, _dy, i, j)
-    # average ∂Vx/∂y @ cell center
-    @inbounds ∂Vx∂y = 0.25 * _dy * (
-        Vx[i  , j+1] - Vx[i  , 1  ] + 
-        Vx[i  , j+2] - Vx[i  , j+1] + 
-        Vx[i+1, j+1] - Vx[i+1, 1  ] + 
-        Vx[i+1, j+2] - Vx[i+1, j+1]
-    )
-    # average ∂Vy/∂x @ cell center
-    @inbounds  ∂Vy∂x = 0.25 * _dx * (
-        Vy[i+1, j  ] - Vy[i  , j  ] + 
-        Vy[i+2, j  ] - Vy[i+1, j  ] + 
-        Vy[i+1, j+1] - Vy[i  , j+1] + 
-        Vy[i+2, j+1] - Vy[i+1, j+1]
-    )
+    # average @ cell center
+    @inbounds begin
+        ∂Vx∂y = 0.25 * _dy * (
+            Vx[i  , j+1] - Vx[i  , 1  ] + 
+            Vx[i  , j+2] - Vx[i  , j+1] + 
+            Vx[i+1, j+1] - Vx[i+1, 1  ] + 
+            Vx[i+1, j+2] - Vx[i+1, j+1]
+        )
+        ∂Vy∂x = 0.25 * _dx * (
+            Vy[i+1, j  ] - Vy[i  , j  ] + 
+            Vy[i+2, j  ] - Vy[i+1, j  ] + 
+            Vy[i+1, j+1] - Vy[i  , j+1] + 
+            Vy[i+2, j+1] - Vy[i+1, j+1]
+        )
+    end 
     return ∂Vx∂y, ∂Vy∂x
 end
 
-# TOFINISH
+# TOFINISH 3D
 @inline function cross_derivatives(Vx, Vy, Vz, _dx, _dy, _dz, i, j, k)
     # cross derivatives @ cell centers
-    @inbounds ∂Vx∂y = 0.25 * _dy * (
-        Vx[i  , j+1, k] - Vx[i  , 1  , k] + 
-        Vx[i  , j+2, k] - Vx[i  , j+1, k] + 
-        Vx[i+1, j+1, k] - Vx[i+1, 1  , k] + 
-        Vx[i+1, j+2, k] - Vx[i+1, j+1, k]
-    )
-    @inbounds ∂Vx∂z = 0.25 * _dz * (
-        Vx[i  , j+1, k] - Vx[i  , 1  , k] + 
-        Vx[i  , j+2, k] - Vx[i  , j+1, k] + 
-        Vx[i+1, j+1, k] - Vx[i+1, 1  , k] + 
-        Vx[i+1, j+2, k] - Vx[i+1, j+1, k]
-    )
-    @inbounds ∂Vy∂x = 0.25 * _dx * (
-        Vy[i+1, j  , k] - Vy[i  , j  , k] + 
-        Vy[i+2, j  , k] - Vy[i+1, j  , k] + 
-        Vy[i+1, j+1, k] - Vy[i  , j+1, k] + 
-        Vy[i+2, j+1, k] - Vy[i+1, j+1, k]
-    )
-    @inbounds ∂Vy∂z = 0.25 * _dz * (
-        Vy[i+1, j  , k] - Vy[i  , j  , k] + 
-        Vy[i+2, j  , k] - Vy[i+1, j  , k] + 
-        Vy[i+1, j+1, k] - Vy[i  , j+1, k] + 
-        Vy[i+2, j+1, k] - Vy[i+1, j+1, k]
-    )
-    @inbounds  ∂Vz∂x = 0.25 * _dx * (
-        Vz[i+1, j  , k] - Vz[i  , j  , k] + 
-        Vz[i+2, j  , k] - Vz[i+1, j  , k] + 
-        Vz[i+1, j+1, k] - Vz[i  , j+1, k] + 
-        Vz[i+2, j+1, k] - Vz[i+1, j+1, k]
-    )
-    @inbounds  ∂Vz∂y = 0.25 * _dx * (
-        Vz[i+1, j  , k] - Vz[i  , j  , k] + 
-        Vz[i+2, j  , k] - Vz[i+1, j  , k] + 
-        Vz[i+1, j+1, k] - Vz[i  , j+1, k] + 
-        Vz[i+2, j+1, k] - Vz[i+1, j+1, k]
-    )
-    return ∂Vx∂y, ∂Vy∂x
+    @inbounds begin
+        ∂Vx∂y = 0.25 * _dy * (
+            Vx[i  , j+1, k] - Vx[i  , 1  , k] + 
+            Vx[i  , j+2, k] - Vx[i  , j+1, k] + 
+            Vx[i+1, j+1, k] - Vx[i+1, 1  , k] + 
+            Vx[i+1, j+2, k] - Vx[i+1, j+1, k]
+        )
+        ∂Vx∂z = 0.25 * _dz * (
+            Vx[i  , j+1, k] - Vx[i  , 1  , k] + 
+            Vx[i  , j+2, k] - Vx[i  , j+1, k] + 
+            Vx[i+1, j+1, k] - Vx[i+1, 1  , k] + 
+            Vx[i+1, j+2, k] - Vx[i+1, j+1, k]
+        )
+        ∂Vy∂x = 0.25 * _dx * (
+            Vy[i+1, j  , k] - Vy[i  , j  , k] + 
+            Vy[i+2, j  , k] - Vy[i+1, j  , k] + 
+            Vy[i+1, j+1, k] - Vy[i  , j+1, k] + 
+            Vy[i+2, j+1, k] - Vy[i+1, j+1, k]
+        )
+        ∂Vy∂z = 0.25 * _dz * (
+            Vy[i+1, j  , k] - Vy[i  , j  , k] + 
+            Vy[i+2, j  , k] - Vy[i+1, j  , k] + 
+            Vy[i+1, j+1, k] - Vy[i  , j+1, k] + 
+            Vy[i+2, j+1, k] - Vy[i+1, j+1, k]
+        )
+        ∂Vz∂x = 0.25 * _dx * (
+            Vz[i+1, j  , k] - Vz[i  , j  , k] + 
+            Vz[i+2, j  , k] - Vz[i+1, j  , k] + 
+            Vz[i+1, j+1, k] - Vz[i  , j+1, k] + 
+            Vz[i+2, j+1, k] - Vz[i+1, j+1, k]
+        )
+        ∂Vz∂y = 0.25 * _dx * (
+            Vz[i+1, j  , k] - Vz[i  , j  , k] + 
+            Vz[i+2, j  , k] - Vz[i+1, j  , k] + 
+            Vz[i+1, j+1, k] - Vz[i  , j+1, k] + 
+            Vz[i+2, j+1, k] - Vz[i+1, j+1, k]
+        )
+    end
+        
+    return ∂Vx∂y, ∂Vx∂z, ∂Vy∂x, ∂Vy∂z, ∂Vz∂x, ∂Vz∂y
 end
 
 @inline compute_vorticity(∂V∂x::NTuple{2, T}) where T = @inbounds ∂V∂x[1] - ∂V∂x[2] # 2D

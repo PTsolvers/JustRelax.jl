@@ -393,9 +393,9 @@ end
 @parallel_indices (i, j, k) function compute_flux!(
     qTx, qTy, qTz, T, rheology::MaterialParams, args, _dx, _dy, _dz
 )
-    @inline dTdxi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) * _dx
-    @inline dTdyi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) * _dy
-    @inline dTdzi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) * _dz
+    Base.@propagate_inbounds @inline dTdxi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) * _dx
+    Base.@propagate_inbounds @inline dTdyi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) * _dy
+    Base.@propagate_inbounds @inline dTdzi(i, j, k) = (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) * _dz
 
     @inbounds begin
         if all( (i,j,k) .≤ size(qTx) )
@@ -413,87 +413,49 @@ end
 
     return nothing
 end
-
-# @parallel function update_T!(T, qTx, qTy, qTz, _dx, _dy, _dz, dt)
-#     @inn(T) = @inn(T) - (@d_xa(qTx)*_dx + @d_ya(qTy)*_dy + @d_za(qTz)*_dz) * dt
-#     return nothing
-# end
-
-# @parallel_indices (i, j, k) function advect_T!(
-#     dT_dt, qTx, qTy, qTz, T, Vx, Vy, Vz, _dx, _dy, _dz
-# )
-#     if i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2) && k ≤ size(dT_dt, 3)
-#         dT_dt[i, j, k] =
-#             -(
-#                 (qTx[i + 1, j, k] - qTx[i, j, k]) * _dx +
-#                 (qTy[i, j + 1, k] - qTy[i, j, k]) * _dy +
-#                 (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz
-#             ) -
-#             (Vx[i + 1, j + 1, k + 1] > 0) *
-#             Vx[i + 1, j + 1, k + 1] *
-#             (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) *
-#             _dx -
-#             (Vx[i + 2, j + 1, k + 1] < 0) *
-#             Vx[i + 2, j + 1, k + 1] *
-#             (T[i + 2, j + 1, k + 1] - T[i + 1, j + 1, k + 1]) *
-#             _dx -
-#             (Vy[i + 1, j + 1, k + 1] > 0) *
-#             Vy[i + 1, j + 1, k + 1] *
-#             (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) *
-#             _dy -
-#             (Vy[i + 1, j + 2, k + 1] < 0) *
-#             Vy[i + 1, j + 2, k + 1] *
-#             (T[i + 1, j + 2, k + 1] - T[i + 1, j + 1, k + 1]) *
-#             _dy -
-#             (Vz[i + 1, j + 1, k + 1] > 0) *
-#             Vz[i + 1, j + 1, k + 1] *
-#             (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) *
-#             _dz -
-#             (Vz[i + 1, j + 1, k + 2] < 0) *
-#             Vz[i + 1, j + 1, k + 2] *
-#             (T[i + 1, j + 1, k + 2] - T[i + 1, j + 1, k + 1]) *
-#             _dz
-#     end
-#     return nothing
-# end
-
 @parallel_indices (i, j, k) function advect_T!(
     dT_dt, qTx, qTy, qTz, T, Vx, Vy, Vz, _dx, _dy, _dz
 )
 
-    @inbounds begin
-        Vxᵢⱼₖ = 0.25 * (
-            Vx[i + 1, j + 1, k + 1] +
-            Vx[i + 1, j + 2, k + 1] + 
-            Vx[i + 1, j + 1, k + 2] +
-            Vx[i + 1, j + 2, k + 2]
-        )
-        Vyᵢⱼₖ = 0.25 * (
-            Vy[i + 1, j + 1, k + 1] +
-            Vy[i + 2, j + 1, k + 1] + 
-            Vy[i + 1, j + 1, k + 2] + 
-            Vy[i + 2, j + 1, k + 2]
-        )
-        Vzᵢⱼₖ = 0.25 * (
-            Vz[i + 1, j + 1, k + 1] +
-            Vz[i + 2, j + 1, k + 1] + 
-            Vz[i + 1, j + 2, k + 1] + 
-            Vz[i + 2, j + 2, k + 1]
-        )
+    if all((i, j, k) .≤ size(dT_dt))
+        
+        i1, j1, k1 = i + 1, j + 1, k + 1
+        i2, j2, k2 = i + 2, j + 2, k + 2
+        
+        @inbounds begin
+            # Average velocityes at cell vertices
+            Vxᵢⱼₖ = 0.25 * (
+                Vx[i1, j1, k1] +
+                Vx[i1, j2, k1] + 
+                Vx[i1, j1, k2] +
+                Vx[i1, j2, k2]
+            )
+            Vyᵢⱼₖ = 0.25 * (
+                Vy[i1, j1, k1] +
+                Vy[i2, j1, k1] + 
+                Vy[i1, j1, k2] + 
+                Vy[i2, j1, k2]
+            )
+            Vzᵢⱼₖ = 0.25 * (
+                Vz[i1, j1, k1] +
+                Vz[i2, j1, k1] + 
+                Vz[i1, j2, k1] + 
+                Vz[i2, j2, k1]
+            )
 
-        if all((i, j, k) .≤ size(dT_dt))
+            # Cache out local temperature
+            Tᵢⱼₖ = T[i1, j1, k1] # this should be moved to shared memory
+
+            # Compute ∂T/∂t = ∇(-k∇T) - V*∇T
             dT_dt[i, j, k] =
                 -(
-                    (qTx[i + 1, j, k] - qTx[i, j, k]) * _dx +
-                    (qTy[i, j + 1, k] - qTy[i, j, k]) * _dy +
-                    (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz
+                    (qTx[i1, j , k ] - qTx[i, j, k]) * _dx +
+                    (qTy[i , j1, k ] - qTy[i, j, k]) * _dy +
+                    (qTz[i , j , k1] - qTz[i, j, k]) * _dz
                 ) -
-                (Vxᵢⱼₖ > 0) * Vxᵢⱼₖ * (T[i + 1, j + 1, k + 1] - T[i    , j + 1, k + 1]) * _dx -
-                (Vxᵢⱼₖ < 0) * Vxᵢⱼₖ * (T[i + 2, j + 1, k + 1] - T[i + 1, j + 1, k + 1]) * _dx -
-                (Vyᵢⱼₖ > 0) * Vyᵢⱼₖ * (T[i + 1, j + 1, k + 1] - T[i + 1, j    , k + 1]) * _dy -
-                (Vyᵢⱼₖ < 0) * Vyᵢⱼₖ * (T[i + 1, j + 2, k + 1] - T[i + 1, j + 1, k + 1]) * _dy -
-                (Vzᵢⱼₖ > 0) * Vzᵢⱼₖ * (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k    ]) * _dz -
-                (Vzᵢⱼₖ < 0) * Vzᵢⱼₖ * (T[i + 1, j + 1, k + 2] - T[i + 1, j + 1, k + 1]) * _dz
+                (Vxᵢⱼₖ > 0 ? Tᵢⱼₖ - T[i , j1, k1] : T[i2, j1, k1] - Tᵢⱼₖ) * Vxᵢⱼₖ * _dx -
+                (Vyᵢⱼₖ > 0 ? Tᵢⱼₖ - T[i1, j , k1] : T[i1, j2, k1] - Tᵢⱼₖ) * Vyᵢⱼₖ * _dy -
+                (Vzᵢⱼₖ > 0 ? Tᵢⱼₖ - T[i1, j1, k ] : T[i1, j1, k2] - Tᵢⱼₖ) * Vzᵢⱼₖ * _dz
         end
     end
     return nothing
@@ -504,8 +466,10 @@ end
     return nothing
 end
 
-@parallel function update_T!(T, dT_dt, dt)
-    @inn(T) = @inn(T) + @all(dT_dt) * dt
+@parallel_indices (i, j, k) function update_T!(T, dT_dt, dt)
+    if all((i, j, k) .≤ size(dT_dt))
+        @inbounds T[i + 1, j + 1, k + 1] = muladd(dT_dt[i, j, k], dt, T[i + 1, j + 1, k + 1])
+    end
     return nothing
 end
 

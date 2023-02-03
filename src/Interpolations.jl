@@ -141,159 +141,45 @@ end
     return nothing
 end
 
-
 ## 3D 
 
-function velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz; ghost_nodes = false)
-    if !ghost_nodes 
-        Vx2vertex_noghost!(Vx, Vx_v)
-        Vy2vertex_noghost!(Vy, Vy_v)
-        Vz2vertex_noghost!(Vz, Vz_v)
+function velocity2vertex(Vx, Vy, Vz, nv_x, nv_y, nv_z)
+    Vx_v = @zeros(nv_x, nv_y, nv_z)
+    Vy_v = @zeros(nv_x, nv_y, nv_z)
+    Vz_v = @zeros(nv_x, nv_y, nv_z)
 
-    else
-        Vx2vertex_ghost!(Vx, Vx_v)
-        Vy2vertex_ghost!(Vy, Vy_v)
-        Vz2vertex_ghost!(Vz, Vz_v)
-    end
+    @parallel (1:nv_x, 1:nv_y, 1:nv_z) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
+
+    return Vx_v, Vy_v, Vz_v
 end
 
-function velocity2vertex(Vx, Vy, Vz, nv_x, nv_y, nv_z; ghost_nodes = false)
-    Vx_v = @allocate(nv_x, nv_y, nv_z)
-    Vy_v = @allocate(nv_x, nv_y, nv_z)
-    Vz_v = @allocate(nv_x, nv_y, nv_z)
+function velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz, nv_x, nv_y, nv_z)
 
-    if !ghost_nodes 
-        Vx2vertex_noghost!(Vx, Vx_v)
-        Vy2vertex_noghost!(Vy, Vy_v)
-        Vz2vertex_noghost!(Vz, Vz_v)
+    @parallel (1:nv_x, 1:nv_y, 1:nv_z) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
 
-    else
-        Vx2vertex_ghost!(Vx, Vx_v)
-        Vy2vertex_ghost!(Vy, Vy_v)
-        Vz2vertex_ghost!(Vz, Vz_v)
-    end
-    return nothing
+    return nothing 
 end
 
-@parallel_indices (i, j, k) function Vx2vertex_noghost!(V, Vx)
-    nx, ny, nz = size(Vx)
-    if (1 < j < ny) && (1 < k < nz)
-        V[i, j, k] = 0.25 * (Vx[i-1, j-1, k-1] + Vx[i-1, j, k-1] + Vx[i-1, j-1, k] + Vx[i-1, j, k])
-
-    # Corners
-    elseif (i,j,k) == (1,1,1)
-        V[i, j, k] = Vx[i, j, k]
-
-    elseif (i,j,k) == (1,1,nk)
-        V[i, j, k] = Vx[i, j, end]
-
-    elseif (i,j,k) == (1,ny,1)
-        V[i, j, k] = Vx[i, end, k]
-
-    elseif (i,j,k) == (nx,1,1)
-        V[i, j, k] = Vx[end, j, k]
-
-    end
-    return nothing
-end
-
-@parallel_indices (i, j, k) function Vy2vertex_noghost!(V, Vy)
-    if (1 < i < size(Vy, 1)) && (1 < k < size(Vy, 3))
-        V[i, j, k] = 0.25 * (Vx[i-1, j-1, k-1] + Vx[i, j-1, k-1] + Vx[i-1, j-1, k] + Vx[i, j-1, k])
-
-    # Corners
-    elseif (i,j,k) == (1,1,1)
-        V[i, j, k] = Vy[i, j, k]
-
-    elseif (i,j,k) == (1,1,nk)
-        V[i, j, k] = Vy[i, j, end]
-
-    elseif (i,j,k) == (1,ny,1)
-        V[i, j, k] = Vy[i, end, k]
-
-    elseif (i,j,k) == (nx,1,1)
-        V[i, j, k] = Vy[end, j, k]
-
-
-    # Planes
-    elseif j == 1 && (1 < i < nx) && (1 < k < nz) # xz front plane
-        V[i, j, k] = Vy[i, j, k]
-
-    elseif j == ny && (1 < i < nx) && (1 < k < nz) # xz back plane
-        V[i, j, k] = Vy[i, j, k]
-
-    elseif i == 1 && (1 < j < ny) && (1 < k < nz) # yz left plane
-        V[i, j, k] = Vy[i, j, k]
-
-    elseif i == nx && (1 < j < ny) && (1 < k < nz) # yz right plane
-        V[i, j, k] = Vy[i, j, k]
-
-    elseif k == 1 && (1 < i < nx) && (1 < j < ny) # xy bottom plane
-        V[i, j, k] = Vy[i, j, k]
-
-    elseif k == nk && (1 < i < nx) && (1 < j < ny) # xy top plane
-        V[i, j, k] = Vy[i, j, k]
-
-    end
-    return nothing
-end
-
-@parallel_indices (i, j, k) function Vz2vertex_noghost!(V, Vz)
-    if (1 < i < size(Vz, 1)) && (1 < j < size(Vz, 2))
-        V[i, j, k] = 0.25 * (Vx[i-1, j-1, k-1] + Vx[i-1, j, k-1] + Vx[i, j-1, k-1] + Vx[i, j, k-1])
-
-    # Corners
-    elseif (i,j,k) == (1,1,1)
-        V[i, j, k] = Vz[i, j, k]
-
-    elseif (i,j,k) == (1,1,nk)
-        V[i, j, k] = Vz[i, j, end]
-
-    elseif (i,j,k) == (1,ny,1)
-        V[i, j, k] = Vz[i, end, k]
-
-    elseif (i,j,k) == (nx,1,1)
-        V[i, j, k] = Vz[end, j, k]
-    end
-    return nothing
-end
-
-
-@parallel_indices (i, j, k) function Vx2vertex_ghost!(V, Vx)
-    if (1 < j < size(Vx, 2)) && (1 < k < size(Vx, 3))
-        V[i, j, k] = 0.25 * (Vx[i, j-1, k-1] + Vx[i, j, k-1] + Vx[i-1, j-1, k] + Vx[i, j, k])
-
-    # elseif i == 1
-    #     V[i, j, k] = Vx[i, j, k]
-    
-    # else
-    #     V[i, j, k] = Vx[i, j-1, k]
-    end
-    return nothing
-end
-
-@parallel_indices (i, j, k) function Vy2vertex_ghost!(V, Vy)
-    if (1 < i < size(Vy, 1)) && (1 < k < size(Vy, 3))
-        V[i, j, k] = 0.25 * (Vx[i-1, j, k-1] + Vx[i, j, k-1] + Vx[i-1, j-1, k] + Vx[i, j, k])
-
-    # elseif i == 1
-    #     V[i, j, k] = Vx[i, j, k]
-    
-    # else
-    #     V[i, j, k] = Vx[i, j-1, k]
-    end
-    return nothing
-end
-
-@parallel_indices (i, j, k) function Vz2vertex_ghost!(V, Vz)
-    if (1 < i < size(Vz, 1)) && (1 < j < size(Vz, 2))
-        V[i, j, k] = 0.25 * (Vx[i-1, j-1, k] + Vx[i-1, j, k] + Vx[i, j-1, k-1] + Vx[i, j, k])
-
-    # elseif i == 1
-    #     V[i, j, k] = Vx[i, j, k]
-    
-    # else
-    #     V[i, j, k] = Vx[i, j-1, k]
+@parallel_indices (i, j, k) function _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
+    @inbounds begin
+        Vx_v[i, j, k] = 0.25 * (
+            Vx[i, j    , k    ] +
+            Vx[i, j + 1, k    ] +
+            Vx[i, j    , k + 1] +
+            Vx[i, j + 1, k + 1]
+        )
+        Vy_v[i, j, k] = 0.25 * (
+            Vy[i    , j, k    ] +
+            Vy[i + 1, j, k    ] +
+            Vy[i    , j, k + 1] +
+            Vy[i + 1, j, k + 1]
+        )
+        Vz_v[i, j, k] = 0.25 * (
+            Vz[i    , j    , k] +
+            Vz[i    , j + 1, k] +
+            Vz[i + 1, j    , k] +
+            Vz[i + 1, j + 1, k]
+        )
     end
     return nothing
 end

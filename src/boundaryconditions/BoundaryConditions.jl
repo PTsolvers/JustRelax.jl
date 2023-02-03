@@ -208,21 +208,36 @@ end
 
 # 3D KERNELS
 
-@parallel_indices (j, iz) function free_slip_x!(A::AbstractArray{T,3}) where {T}
-    A[1, j, iz] = A[2, j, iz]
-    A[end, j, iz] = A[end - 1, j, iz]
+@parallel_indices (j, k) function free_slip_x!(A::AbstractArray{T,3}) where {T}
+    A[1, j, k] = A[2, j, k]
+    A[end, j, k] = A[end - 1, j, k]
     return nothing
 end
 
-@parallel_indices (i, iz) function free_slip_y!(A::AbstractArray{T,3}) where {T}
-    A[i, 1, iz] = A[i, 2, iz]
-    A[i, end, iz] = A[i, end - 1, iz]
+@parallel_indices (i, k) function free_slip_y!(A::AbstractArray{T,3}) where {T}
+    A[i, 1, k] = A[i, 2, k]
+    A[i, end, k] = A[i, end - 1, k]
     return nothing
 end
 
 @parallel_indices (i, j) function free_slip_z!(A::AbstractArray{T,3}) where {T}
     A[i, j, 1] = A[i, j, 2]
     A[i, j, end] = A[i, j, end - 1]
+    return nothing
+end
+
+@parallel_indices (j, k) function zero_shear_stress_lateral!(A::AbstractArray{T,3}) where {T}
+    A[1, j, k] = A[end, j, k] = 0.0
+    return nothing
+end
+
+@parallel_indices (i, k) function zero_shear_stress_front!(A::AbstractArray{T,3}) where {T}
+    A[i, 1, k] = A[i, end, k] = 0.0
+    return nothing
+end
+
+@parallel_indices (i, j) function zero_shear_stress_top!(A::AbstractArray{T,3}) where {T}
+    A[i, j, 1] = A[i, j, end] = 0.0
     return nothing
 end
 

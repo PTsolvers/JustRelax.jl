@@ -53,7 +53,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export stress
 
         include(joinpath(@__DIR__, "Utils.jl"))
-        export @allocate, compute_dt, assign!, tupleize
+        export @allocate, @add, compute_dt, assign!, tupleize
 
         include(joinpath(@__DIR__, "stokes/Elasticity.jl"))
 

@@ -24,6 +24,20 @@ tupleize(v::Tuple) = v
 
 # MACROS
 
+"""
+    add(I, args...)
+
+Add `I` to the scalars in `args`    
+"""
+macro add(I, args...)
+    quote
+        Base.@_inline_meta
+		v = (; $(esc.(args)...))
+        values(v) .+ $(esc(I))
+    end
+end
+
+
 macro tuple(A) 
     return quote _tuple($(esc(A))) end
 end

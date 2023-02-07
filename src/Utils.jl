@@ -19,13 +19,24 @@ end
     return min(dt_diff, dt_adv)
 end
 
-tupleize(v::MaterialParams) = (v,)
-tupleize(v::Tuple) = v
+@inline tupleize(v::MaterialParams) = (v,)
+@inline tupleize(v::Tuple) = v
 
 # MACROS
 
 """
-    add(I, args...)
+    copy(B, A)
+
+Convinience macro to copy data from the array `A` into array `B`
+"""
+macro copy(B, A)
+    return quote
+        copyto!($(esc(B)), $(esc(A)))
+    end
+end
+
+"""
+    @add(I, args...)
 
 Add `I` to the scalars in `args`    
 """
@@ -37,7 +48,6 @@ macro add(I, args...)
     end
 end
 
-
 macro tuple(A) 
     return quote _tuple($(esc(A))) end
 end
@@ -47,6 +57,20 @@ _tuple(V::Velocity{<:AbstractArray{T, 3}}) where T = V.Vx, V.Vy, V.Vz
 _tuple(A::SymmetricTensor{<:AbstractArray{T, 2}}) where T = A.xx, A.yy, A.xy_c
 _tuple(A::SymmetricTensor{<:AbstractArray{T, 3}}) where T = A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
 
+"""
+    @idx(args...)
+
+Make a linear range from `1` to `args[i]`, with `i ∈ [1, ..., n]`
+"""
+macro idx(args...)
+    return quote
+        _idx(tuple($(esc.(args)...))...)
+    end
+end
+
+@inline Base.@pure _idx(args::Vararg{Int, N}) where N = ntuple(i->1:args[i], Val(N)) 
+@inline Base.@pure _idx(args::NTuple{N, Int}) where N = ntuple(i->1:args[i], Val(N)) 
+
 ## Memory allocators
 
 macro allocate(ni...)
@@ -54,8 +78,6 @@ macro allocate(ni...)
 end
 
 # Others
-
-export assign!
 
 @parallel function assign!(B::AbstractArray{T,N}, A::AbstractArray{T,N}) where {T,N}
     @all(B) = @all(A)

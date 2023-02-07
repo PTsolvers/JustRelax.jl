@@ -1423,9 +1423,9 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
             )
 
-            # @hide_communication b_width begin # communication/computation overlap
+            @hide_communication b_width begin # communication/computation overlap
                 # (1:(nx + 1), 1:(ny + 1), 1:(nz + 1))
-                @parallel (1:(nx + 1), 1:(ny + 1), 1:(nz + 1)) compute_V!(
+                @parallel compute_V!(
                     stokes.V.Vx,
                     stokes.V.Vy,
                     stokes.V.Vz,
@@ -1446,8 +1446,8 @@ function JustRelax.solve!(
                     pt_stokes.ηdτ,
                     _di...,
                 )
-                # update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
-            # end
+                update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+            end
 
             apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
         end

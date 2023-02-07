@@ -226,21 +226,6 @@ end
     return nothing
 end
 
-@parallel_indices (j, k) function zero_shear_stress_lateral!(A::AbstractArray{T,3}) where {T}
-    A[1, j, k] = A[end, j, k] = 0.0
-    return nothing
-end
-
-@parallel_indices (i, k) function zero_shear_stress_front!(A::AbstractArray{T,3}) where {T}
-    A[i, 1, k] = A[i, end, k] = 0.0
-    return nothing
-end
-
-@parallel_indices (i, j) function zero_shear_stress_top!(A::AbstractArray{T,3}) where {T}
-    A[i, j, 1] = A[i, j, end] = 0.0
-    return nothing
-end
-
 function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{3,T}}, Vx, Vy, Vz) where {T}
     freeslip_x, freeslip_y, freeslip_z = freeslip
     # free slip boundary conditions

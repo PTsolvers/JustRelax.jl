@@ -9,12 +9,13 @@ using CUDA
 using MPI
 using GeoParams
 
+function solve!() end
+
 include("topology/Topology.jl")
 include("MetaJustRelax.jl")
 include("stokes/MetaStokes.jl")
 include("thermal_diffusion/MetaDiffusion.jl")
-
-function solve!() end
+include("IO/DataIO.jl")
 
 export PS_Setup, environment!, ps_reset!
 

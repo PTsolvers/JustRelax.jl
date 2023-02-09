@@ -1,5 +1,3 @@
-export Geometry, IGG, lazy_grid, init_igg
-
 # MPI topology
 
 struct IGG{T,M}
@@ -15,6 +13,7 @@ end
 struct Geometry{nDim}
     ni::NTuple{nDim,Integer}
     li::NTuple{nDim,Float64}
+    origin::NTuple{nDim,Float64}
     max_li::Float64
     di::NTuple{nDim,Float64}
     xci::NTuple{nDim,StepRangeLen}

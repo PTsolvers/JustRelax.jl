@@ -63,31 +63,30 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    G0        = 1e6
-    η_reg     = 0.1
-    pl        = DruckerPrager_regularised(; C = 1e4, ϕ=0.0 , η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-    pl_depth  = DruckerPrager_regularised(; C = 1e4, ϕ=90.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-    el        = SetConstantElasticity(; G=G0, ν=0.5)                           # elastic spring
-    creep     = ArrheniusType()                                                # Arrhenius-like (T-dependant) viscosity
+    η_reg     = 1e1
+    G0        = 5e6                                                             # shear modulus
+    pl        = DruckerPrager_regularised(; C = 1e4, ϕ=90.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
+    el        = SetConstantElasticity(; G=G0, ν=0.5)                            # elastic spring
+    creep     = ArrheniusType()                                                 # Arrhenius-like (T-dependant) viscosity
     Ra        = 1e7  
     # Define rheolgy struct
-    MatParams = SetMaterialParams(;
+    rheology = SetMaterialParams(;
+            Name              = "Mantle",
+            Phase             = 1,
+            Density           = ConstantDensity(; ρ=1),
+            HeatCapacity      = ConstantHeatCapacity(; cp=1),
+            Conductivity      = ConstantConductivity(; k=1),
+            CompositeRheology = CompositeRheology(el, creep),
+            Elasticity        = SetConstantElasticity(; G=G0, ν=0.5),
+            Gravity           = ConstantGravity(; g=Ra),
+    )
+    rheology_depth    = SetMaterialParams(;
             Name              = "Mantle",
             Phase             = 1,
             Density           = ConstantDensity(; ρ=1),
             HeatCapacity      = ConstantHeatCapacity(; cp=1),
             Conductivity      = ConstantConductivity(; k=1),
             CompositeRheology = CompositeRheology(el, creep, pl),
-            Elasticity        = SetConstantElasticity(; G=G0, ν=0.5),
-            Gravity           = ConstantGravity(; g=Ra),
-    )
-    MatParams_depth = SetMaterialParams(;
-            Name              = "Mantle",
-            Phase             = 1,
-            Density           = ConstantDensity(; ρ=1),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1),
-            Conductivity      = ConstantConductivity(; k=1),
-            CompositeRheology = CompositeRheology(el, creep, pl_depth),
             Elasticity        = SetConstantElasticity(; G=G0, ν=0.5),
             Gravity           = ConstantGravity(; g=Ra),
     )
@@ -108,7 +107,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     Tmin, Tmax  = 0.12, 1.0
     @parallel init_T!(thermal.T, xvi[2], k, Tm, Tp, Tmin, Tmax)
     # Elliptical temperature anomaly 
-    xc, yc      =  0.5*lx_nd, 0.5*ly_nd  # origin of thermal anomaly
+    xc, yc      =  0.5*lx_nd, 0.15*ly_nd  # origin of thermal anomaly
     δT          = 10.0                   # thermal perturbation (in %)
     r           =  0.05                  # radius of perturbation
     elliptical_perturbation!(thermal.T, δT, xc, yc, r, xvi)
@@ -121,7 +120,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # Rheology
     η               = @ones(ni...)
     args_η          = (;T=thermal.T)
-    @parallel (@idx ni) computeViscosity!(η, MatParams.CompositeRheology[1], args_η) # init viscosity field
+    @parallel (@idx ni) computeViscosity!(η, rheology.CompositeRheology[1], args_η) # init viscosity field
     η_vep           = deepcopy(η)
     dt_elasticity   = Inf
     # Buoyancy forces
@@ -132,7 +131,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     )
     # ----------------------------------------------------
 
-    # PLOTTING -------------------------------------------
+    # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)
     # ----------------------------------------------------
@@ -144,7 +143,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     while it < nt
 
         # Update buoyancy and viscosity -
-        @parallel (@idx ni) computeViscosity!(η, MatParams.CompositeRheology[1], args_η)
+        @parallel (@idx ni) computeViscosity!(η, rheology.CompositeRheology[1], args_η)
         @parallel update_buoyancy!(ρg[2], thermal.T, -Ra)
         # ------------------------------
 
@@ -158,7 +157,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
             ρg,
             η,
             η_vep,
-            it < 3 ? MatParams : MatParams_depth,
+            it > 3 ? rheology_depth : rheology, # do a few initial time-steps without plasticity to improve convergence
             dt,
             iterMax=150e3,
             nout=1e3,
@@ -171,7 +170,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
             thermal,
             thermal_bc,
             stokes,
-            MatParams,
+            rheology,
             args_T,
             di,
             dt
@@ -182,7 +181,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         t += dt
 
         # Plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 5) == 0
             fig = Figure(resolution = (900, 1600), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vy")
@@ -190,8 +189,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
             ax4 = Axis(fig[4,1], aspect = ar, title = "η")
             h1 = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T) , colormap=:batlow)
             h2 = heatmap!(ax2, xci[1], xvi[2], Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
-            h3 = heatmap!(ax3, xci[1], xci[2], Array(stokes.τ.II) , colormap=:romaO) #, colorrange = (0.0, σy))
-            # h3 = heatmap!(ax3, xvi[1], xci[2], Array(stokes.V.Vx[:,2:end-1]), colormap=:batlow) #, colorrange = (0.0, σy))
+            h3 = heatmap!(ax3, xci[1], xci[2], Array(stokes.τ.II) , colormap=:romaO) 
             h4 = heatmap!(ax4, xci[1], xci[2], Array(log10.(η_vep)) , colormap=:batlow)
             Colorbar(fig[1,2], h1)
             Colorbar(fig[2,2], h2)
@@ -208,8 +206,8 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
 end
 
 figdir = "figs2D"
-ar     = 3 # aspect ratio
-n      = 32 
+ar     = 8 # aspect ratio
+n      = 32
 nx     = n*ar - 2
 ny     = n - 2
 

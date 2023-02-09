@@ -186,7 +186,7 @@ end
     qTx, qTy, T, rheology::MaterialParams, args, _dx, _dy
 )
 
-    i, j = @idx 1 i j # augment indices by 1
+    i1, j1 = @add 1 i j # augment indices by 1
     
     if all((i,j).≤ size(qTx))
         @inbounds qTx[i, j] = -compute_diffusivity(rheology, args) * (T[i1, j1] - T[i, j1]) * _dx
@@ -202,8 +202,8 @@ end
 @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
     if all((i,j).≤ size(dT_dt))
         
-        i1, j1 = (i, j) .+ 1 # augment indices by 1
-        i2, j2 = (i, j) .+ 2 # augment indices by 2
+        i1, j1 = @add 1 i j # augment indices by 1
+        i2, j2 = @add 2 i j # augment indices by 2
 
         @inbounds begin
             Vxᵢⱼ = 0.5 * (Vx[i2, j2] + Vx[i1, j2])

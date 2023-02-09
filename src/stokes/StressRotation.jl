@@ -36,7 +36,7 @@ Base.@propagate_inbounds function rotate_stress!(V, τ::NTuple{N, T}, idx, _di, 
     for k in 1:N    
         τ[k][idx...] += muladd(τij_adv[k], dt, τr_voigt[k])
     end
-    return 
+    return nothing
 end
 
 # 2D
@@ -53,9 +53,9 @@ end
 # 3D
 Base.@propagate_inbounds function advect_stress(τxx, τyy, τzz, τyz, τxz, τxy, Vx, Vy, Vz, i, j, k, _dx, _dy, _dz)
     τ = τxx, τyy, τzz, τyz, τxz, τxy
-    τ_adv = ntuple(Val(6)) do k
+    τ_adv = ntuple(Val(6)) do l
         Base.@_inline_meta
-        dx_right, dx_left, dy_up, dy_down = upwind_derivatives(τ[k], i, j, k)
+        dx_right, dx_left, dy_back, dy_front, dz_up, dz_down = upwind_derivatives(τ[l], i, j, k)
         advection_term(Vx, Vy, Vz, dx_right, dx_left, dy_back, dy_front, dz_up, dz_down, _dx, _dy, _dz)
     end
     return τ_adv
@@ -200,39 +200,3 @@ end
 
 Base.@propagate_inbounds @inline compute_vorticity(∂V∂x::NTuple{2, T}) where T = ∂V∂x[1] - ∂V∂x[2] # 2D
 Base.@propagate_inbounds @inline compute_vorticity(∂V∂x::NTuple{3, T}) where T = ∂V∂x[3] - ∂V∂x[2], ∂V∂x[1] - ∂V∂x[3], ∂V∂x[2] - ∂V∂x[1] # 3D
-
-# n = 128
-# Vx = rand(n+1,n+2)
-# Vy = rand(n+2,n+1)
-# txx= rand(n,n)
-# tyy= rand(n,n)
-# txy= rand(n,n)
-# V = Vx, Vy
-# τ = txx, tyy, txy
-# _di = rand(),rand()
-# dt = 1.0
-
-
-# @btime @parallel $(1:n, 1:n) rotate_stress!($V, $τ, $_di, $dt)
-# @btime @parallel $(1:n, 1:n) rotate_stress($Vx, $Vy, $txx, $tyy, $txy, $(_di[1]), $(_di[2]), $dt)
-
-# ProfileCanvas.@profview for i in 1:100 @parallel (1:n, 1:n) rotate_stress(Vx, Vy, txx, tyy, txy, _di[1], _di[2], dt) end
-# ProfileCanvas.@profview for i in 1:100 @parallel (1:n, 1:n) rotate_stress!(V, τ, _di, dt) end
-
-
-# averages @ cell center 2D
-# Base.@propagate_inbounds @inline function velocity2center(Vx, Vy, i, j)
-#     Vxᵢⱼ = 0.5 * (Vx[i    , j + 1] + Vx[i + 1, j + 1])
-#     Vyᵢⱼ = 0.5 * (Vy[i + 1, j    ] + Vy[i + 1, j + 1])
-#     return Vxᵢⱼ, Vyᵢⱼ
-# end
-
-# Base.@propagate_inbounds @inline function velocity2center2(Vx, Vy, i, j)
-#     i1, j1 = @add 1 i j
-#     Vxᵢⱼ = 0.5 * (Vx[i , j1] + Vx[i1, j1])
-#     Vyᵢⱼ = 0.5 * (Vy[i1, j ] + Vy[i1, j1])
-#     return Vxᵢⱼ, Vyᵢⱼ
-# end
-
-# @benchmark velocity2center($Vx, $Vy, 2, 2)
-# @benchmark velocity2center2($Vx, $Vy, 2, 2)

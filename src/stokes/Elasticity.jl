@@ -57,7 +57,7 @@ import ..Stokes2D: compute_P!, compute_V!, compute_strain_rate!
 
 export solve!
 
-include("TensorAlgebra.jl")
+include("StressRotation.jl")
 
 ## 2D ELASTIC KERNELS
 

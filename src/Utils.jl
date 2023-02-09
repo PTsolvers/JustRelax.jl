@@ -1,26 +1,45 @@
+@generated function unpack(a::T) where T
+    quote
+        tuple(_unpack(a, fieldnames($T))...)
+    end
+end
+_unpack(a, fields) = (getfield(a, fi) for fi in fields)
+
 @inline compute_dt(S::StokesArrays, di) = compute_dt(S.V, di, Inf)
 @inline compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(S.V, di, dt_diff)
 
-@inline function compute_dt(V::Velocity, di::NTuple{2,T}, dt_diff) where {T}
-    return compute_dt(V.Vx, V.Vy, di[1], di[2], dt_diff)
+@inline function compute_dt(V::Velocity, di, dt_diff)
+    return compute_dt(unpack(V), di, dt_diff)
 end
 
-@inline function compute_dt(V::Velocity, di::NTuple{3,T}, dt_diff) where {T}
-    return compute_dt(V.Vx, V.Vy, V.Vz, di[1], di[2], di[3], dt_diff)
-end
-
-@inline function compute_dt(Vx, Vy, dx, dy, dt_diff)
-    dt_adv = min(dx / maximum(abs.(Vx)), dy / maximum(abs.(Vy))) / 2.1
-    return min(dt_diff, dt_adv)
-end
-
-@inline function compute_dt(Vx, Vy, Vz, dx, dy, dz, dt_diff)
+@inline function compute_dt(V, di, dt_diff)
+    n = inv(length(V) + 0.1)
     dt_adv =
-        min(dx / maximum(abs.(Vx)), dy / maximum(abs.(Vy)), dz / maximum(abs.(Vz))) / 3.1
+        mapreduce((di, Vi)->dxi/maximum(size(Vi)...), max, di, V) * n
     return min(dt_diff, dt_adv)
 end
 
-@inline tupleize(v::MaterialParams) = (v,)
+# @inline function compute_dt(V::Velocity, di::NTuple{2,T}, dt_diff) where {T}
+#     return compute_dt(V.Vx, V.Vy, di[1], di[2], dt_diff)
+# end
+
+# @inline function compute_dt(V::Velocity, di::NTuple{3,T}, dt_diff) where {T}
+#     return compute_dt(V.Vx, V.Vy, V.Vz, di[1], di[2], di[3], dt_diff)
+# end
+
+# @inline function compute_dt(Vx, Vy, dx, dy, dt_diff)
+#     dt_adv = min(dx / maximum(abs.(Vx)), dy / maximum(abs.(Vy))) / 2.1
+#     return min(dt_diff, dt_adv)
+# end
+
+# @inline function compute_dt(Vx, Vy, Vz, dx, dy, dz, dt_diff)
+#     dt_adv =
+#         min(dx / maximum(abs.(Vx)), dy / maximum(abs.(Vy)), dz / maximum(abs.(Vz))) / 3.1
+#     return min(dt_diff, dt_adv)
+# end
+
+
+@inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v
 
 # MACROS

@@ -29,6 +29,16 @@ function checkpointing(dst, stokes, T, η, time)
     end
 end
 
+"""
+    function save_hdf5(dst, fname, data)
+
+Save `data` as the `fname.h5` HDF5 file in the folder `dst`
+"""
+function save_hdf5(dst, fname, data::Vararg{Any, N}) where N
+    !isdir(dst) && mkpath(dst) # creat folder in case it does not exist
+    pth_name = joinpath(dst, fname)
+    save_hdf5(pth_name, data)
+end
 
 """
     function save_hdf5(fname, data)
@@ -41,17 +51,6 @@ function save_hdf5(fname, data::Vararg{Any, N}) where N
             save_data(file, data_i)
         end
     end
-end
-
-"""
-    function save_hdf5(dst, fname, data)
-
-Save `data` as the `fname.h5` HDF5 file in the folder `dst`
-"""
-function save_hdf5(dst, fname, data::Vararg{Any, N}) where N
-    !isdir(dst) && mkpath(dst) # creat folder in case it does not exist
-    pth_name = joinpath(dst, fname)
-    save_hdf5(pth_name, data)
 end
 
 @inline save_data(file, data) = write(file, @namevar(data)...)

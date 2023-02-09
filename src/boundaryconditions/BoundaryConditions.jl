@@ -45,16 +45,17 @@ function thermal_bcs!(T, bcs::TemperatureBoundaryConditions{_T,2}) where {_T}
     return nothing
 end
 
-function flow_bcs!(bcs::FlowBoundaryConditions{T,2}, Vx, Vy, di) where {T}
-    n = max(size(Vx)..., size(Vy)...)
+function flow_bcs!(bcs::FlowBoundaryConditions, stokes, di) 
+    V = unpack(stokes.V)
+    n = mapreduce(Vi->max(size(Vi)...), max, V)
 
     # no slip boundary conditions
-    do_bc(bcs.no_slip) && (@parallel (1:n) no_slip!(Vx, Vy, bcs.no_slip, di...))
+    do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(Vx, Vy, bcs.no_slip, di...))
     # free slip boundary conditions
-    do_bc(bcs.free_slip) && (@parallel (1:n) free_slip!(Vx, Vy, bcs.free_slip))
+    do_bc(bcs.free_slip) && (@parallel (@idx n) free_slip!(Vx, Vy, bcs.free_slip))
     # periodic conditions
     do_bc(bcs.periodicity) &&
-        (@parallel (1:n) periodic_boundaries!(Vx, Vy, bcs.periodicity))
+        (@parallel (@idx n) periodic_boundaries!(Vx, Vy, bcs.periodicity))
 
     return nothing
 end

@@ -85,12 +85,22 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D")
     # Physical properties using GeoParams ----------------
     G0        = Inf
     η_reg     = 0.1
-    pl        = DruckerPrager_regularised(; C = 1e4, ϕ=0.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
+    pl        = DruckerPrager_regularised(; C = 1e4, ϕ=90.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     el        = SetConstantElasticity(; G=G0, ν=0.5)                           # elastic spring
     creep     = ArrheniusType()                                                # Arrhenius-like (T-dependant) viscosity
     Ra        = 1e7                                                            # Rayleigh number Ra = ρ0 * g * α * ΔT * lz_nd^3 / (η0* κ)
     # Define rheolgy struct
     rheology = SetMaterialParams(;
+        Name                = "Mantle", # optional
+        Phase               = 1,
+        Density             = ConstantDensity(; ρ=1.0),
+        HeatCapacity        = ConstantHeatCapacity(; cp=1.0),
+        Conductivity        = ConstantConductivity(; k=1.0),
+        CompositeRheology   = CompositeRheology(creep, el),
+        Elasticity          = el,
+        Gravity             = ConstantGravity(; g=Ra),
+    )
+    rheology_pl = SetMaterialParams(;
         Name                = "Mantle", # optional
         Phase               = 1,
         Density             = ConstantDensity(; ρ=1.0),
@@ -167,7 +177,7 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D")
             ρg,
             η,
             η_vep,
-            rheology,
+            it > 3 ? rheology_depth : rheology,
             dt_elasticity,
             igg;
             iterMax = 250e3,

@@ -1,11 +1,11 @@
 function save_vtk(fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTuple)
 
     # unpack data names and arrays
-    data_names_v  = string.(keys(data_v))
+    data_names_v = string.(keys(data_v))
     data_arrays_v = values(data_v)
-    data_names_c  = string.(keys(data_c))
+    data_names_c = string.(keys(data_c))
     data_arrays_c = values(data_c)
-    
+
     vtk_multiblock(fname) do vtm
         # First block.
         # Variables stores in cell centers
@@ -40,4 +40,3 @@ function save_vtk(fname::String, xi, data::NamedTuple)
 
     return nothing
 end
-

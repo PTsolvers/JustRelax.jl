@@ -19,18 +19,13 @@ struct Geometry{nDim}
     xci::NTuple{nDim,StepRangeLen}
     xvi::NTuple{nDim,StepRangeLen}
 
-    function Geometry(ni::NTuple{nDim,Integer}, li::NTuple{nDim,T}; origin=ntuple(_ -> 0.0, Val(nDim))) where {nDim,T}
+    function Geometry(
+        ni::NTuple{nDim,Integer}, li::NTuple{nDim,T}; origin=ntuple(_ -> 0.0, Val(nDim))
+    ) where {nDim,T}
         Li = Float64.(li)
         di = Li ./ ni
         xci, xvi = lazy_grid(di, Li; origin=origin)
-        return new{nDim}(
-            ni,
-            Li,
-            max(Li...),
-            di,
-            xci,
-            xvi,
-        )
+        return new{nDim}(ni, Li, max(Li...), di, xci, xvi)
     end
 end
 

@@ -44,19 +44,23 @@ Add `I` to the scalars in `args`
 macro add(I, args...)
     quote
         Base.@_inline_meta
-		v = (; $(esc.(args)...))
+        v = (; $(esc.(args)...))
         values(v) .+ $(esc(I))
     end
 end
 
-macro tuple(A) 
-    return quote _tuple($(esc(A))) end
+macro tuple(A)
+    return quote
+        _tuple($(esc(A)))
+    end
 end
 
-_tuple(V::Velocity{<:AbstractArray{T, 2}}) where T = V.Vx, V.Vy
-_tuple(V::Velocity{<:AbstractArray{T, 3}}) where T = V.Vx, V.Vy, V.Vz
-_tuple(A::SymmetricTensor{<:AbstractArray{T, 2}}) where T = A.xx, A.yy, A.xy_c
-_tuple(A::SymmetricTensor{<:AbstractArray{T, 3}}) where T = A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
+_tuple(V::Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
+_tuple(V::Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
+_tuple(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy_c
+function _tuple(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+    return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
+end
 
 """
     @idx(args...)
@@ -69,8 +73,8 @@ macro idx(args...)
     end
 end
 
-@inline Base.@pure _idx(args::Vararg{Int, N}) where N = ntuple(i->1:args[i], Val(N)) 
-@inline Base.@pure _idx(args::NTuple{N, Int}) where N = ntuple(i->1:args[i], Val(N)) 
+@inline Base.@pure _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
+@inline Base.@pure _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
 
 ## Memory allocators
 

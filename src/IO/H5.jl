@@ -40,6 +40,19 @@ function save_hdf5(dst, fname, data::Vararg{Any, N}) where N
     save_hdf5(pth_name, data)
 end
 
+# comm_cart, info comm_cart, MPI.Info()
+function save_hdf5(fname, dim_g, I, comm_cart, info, data::Vararg{Any, N}) where N
+    @assert HDF5.has_parallel() 
+    h5open("$(fname).h5", "w", comm_cart, info) do file
+        for data_i in data
+            name, field        = @namevar data_i
+            dset               = create_dataset(file, "/"*name, datatype(eltype(field)), dataspace(dim_g))
+            dset[I.indices...] = Array(field)
+        end
+    end
+    return
+end
+
 """
     function save_hdf5(fname, data)
 
@@ -74,39 +87,3 @@ end
 
 center_coordinates(data::Geometry{N}) where N = ntuple(i-> collect(data.xci[i]), Val(N))
 vertex_coordinates(data::Geometry{N}) where N = ntuple(i-> collect(data.xvi[i]), Val(N))
-
-
-# if do_save
-#     dim_g = (nx_g()-2, ny_g()-2, nz_g()-2)
-#     @parallel preprocess_visu!(Vn, τII, Vx, Vy, Vz, τxx, τyy, τzz, τxy, τxz, τyz)
-#     @parallel apply_mask!(Vn, τII, ϕ)
-#     out_h5 = joinpath(out_path,out_name)*".h5"
-#     I = CartesianIndices(( (coords[1]*(nx-2) + 1):(coords[1]+1)*(nx-2),
-#                            (coords[2]*(ny-2) + 1):(coords[2]+1)*(ny-2),
-#                            (coords[3]*(nz-2) + 1):(coords[3]+1)*(nz-2) ))
-#     fields = Dict("ϕ"=>inn(ϕ),"Vn"=>Vn,"τII"=>τII,"Pr"=>inn(Pt))
-#     (me==0) && print("Saving HDF5 file...")
-#     write_h5(out_h5,fields,dim_g,I,comm_cart,info) # comm_cart,MPI.Info() are varargs to exclude if using non-parallel HDF5 lib
-#     # write_h5(out_h5,fields,dim_g,I) # comm_cart,MPI.Info() are varargs to exclude if using non-parallel HDF5 lib
-#     (me==0) && println(" done")
-#     # write XDMF
-#     if me == 0
-#         print("Saving XDMF file...")
-#         write_xdmf(joinpath(out_path,out_name)*".xdmf3",out_name*".h5",fields,(xc[2],yc[2],zc[2]),(dx,dy,dz),dim_g)
-#         println(" done")
-#     end
-# end
-
-# comm_cart, MPI.Info() are varargs to exclude if using non-parallel HDF5 lib
-function write_h5(path, fields, dim_g, I, comm_cart, info)
-    if !HDF5.has_parallel() && (length(args)>0)
-        @warn("HDF5 has no parallel support.")
-    end
-    h5open(path, "w", comm_cart, info) do io
-        for (name,field) in fields
-            dset               = create_dataset(io, "/$name", datatype(eltype(field)), dataspace(dim_g))
-            dset[I.indices...] = Array(field)
-        end
-    end
-    return
-end

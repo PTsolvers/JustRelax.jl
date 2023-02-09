@@ -218,7 +218,6 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             stokes,
             pt_stokes,
             di,
-            li,
             freeslip,
             ρg,
             η,

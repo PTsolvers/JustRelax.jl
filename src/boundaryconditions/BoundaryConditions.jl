@@ -1,18 +1,32 @@
 abstract type AbstractBoundaryConditions end
 
-struct FlowBoundaryConditions{T, nD} <: AbstractBoundaryConditions
+struct TemperatureBoundaryConditions{T,nD} <: AbstractBoundaryConditions
+    no_flux::T
+    periodicity::T
+
+    function TemperatureBoundaryConditions(;
+        no_flux::T=(left=true, right=false, top=false, bot=false),
+        periodicity::T=(left=false, right=false, top=false, bot=false),
+    ) where {T}
+        @assert length(no_flux) === length(periodicity)
+        nD = length(no_flux) == 4 ? 2 : 3
+        return new{T,nD}(no_flux, periodicity)
+    end
+end
+
+struct FlowBoundaryConditions{T,nD} <: AbstractBoundaryConditions
     no_slip::T
     free_slip::T
     periodicity::T
 
-    function FlowBoundaryConditions(; 
-        no_slip::T = (left = false, right = false, top = false, bot = false), 
-        free_slip::T = (left = true, right = true, top = true, bot = true), 
-        periodicity::T = (left = false, right = false, top = false, bot = false),
-    ) where T
+    function FlowBoundaryConditions(;
+        no_slip::T=(left=false, right=false, top=false, bot=false),
+        free_slip::T=(left=true, right=true, top=true, bot=true),
+        periodicity::T=(left=false, right=false, top=false, bot=false),
+    ) where {T}
         @assert length(no_slip) === length(free_slip) === length(periodicity)
         nD = length(no_slip) == 4 ? 2 : 3
-        new{T, nD}(no_slip, free_slip, periodicity)
+        return new{T,nD}(no_slip, free_slip, periodicity)
     end
 end
 
@@ -20,8 +34,18 @@ end
 
 @inline do_bc(bc) = reduce(|, values(bc))
 
-function flow_bcs!(bcs::FlowBoundaryConditions{T, 2}, Vx, Vy, di) where T
+function thermal_bcs!(T, bcs::TemperatureBoundaryConditions{_T,2}) where {_T}
+    n = max(size(T)...)
 
+    # no flux boundary conditions
+    do_bc(bcs.no_flux) && (@parallel (1:n) free_slip!(T, bcs.no_flux))
+    # periodic conditions
+    do_bc(bcs.periodicity) && (@parallel (1:n) periodic_boundaries!(T, bcs.periodicity))
+
+    return nothing
+end
+
+function flow_bcs!(bcs::FlowBoundaryConditions{T,2}, Vx, Vy, di) where {T}
     n = max(size(Vx)..., size(Vy)...)
 
     # no slip boundary conditions
@@ -29,27 +53,28 @@ function flow_bcs!(bcs::FlowBoundaryConditions{T, 2}, Vx, Vy, di) where T
     # free slip boundary conditions
     do_bc(bcs.free_slip) && (@parallel (1:n) free_slip!(Vx, Vy, bcs.free_slip))
     # periodic conditions
-    do_bc(bcs.periodicity) && (@parallel (1:n) periodic_boundaries!(Vx, Vy, bcs.periodicity))
+    do_bc(bcs.periodicity) &&
+        (@parallel (1:n) periodic_boundaries!(Vx, Vy, bcs.periodicity))
 
     return nothing
 end
 
 @parallel_indices (i) function no_slip!(Ax, Ay, bc, dx, dy)
-    if bc.bot 
+    if bc.bot
         @inbounds (i ≤ size(Ay, 1)) && (Ay[i, 1] = 0.0)
-        @inbounds (1 < i < size(Ax, 1)) && (Ax[i, 1] = Ax[i, 2]*0.5/dx)
+        @inbounds (1 < i < size(Ax, 1)) && (Ax[i, 1] = Ax[i, 2] * 0.5 / dx)
     end
     if bc.top
         @inbounds (i ≤ size(Ay, 1)) && (Ay[i, end] = 0.0)
-        @inbounds (1 < i < size(Ax, 1)) && (Ax[i, end] = Ax[i, end - 1]*0.5/dx)
+        @inbounds (1 < i < size(Ax, 1)) && (Ax[i, end] = Ax[i, end - 1] * 0.5 / dx)
     end
     if bc.left
         @inbounds (i ≤ size(Ax, 2)) && (Ax[1, i] = 0.0)
-        @inbounds (1 < i < size(Ay, 2)) && (Ay[1, i] = Ay[2, i]*0.5/dy)
+        @inbounds (1 < i < size(Ay, 2)) && (Ay[1, i] = Ay[2, i] * 0.5 / dy)
     end
     if bc.right
         @inbounds (i ≤ size(Ax, 2)) && (Ax[end, i] = 0.0)
-        @inbounds (1 < i < size(Ay, 2)) && (Ay[end, i] = Ay[end - 1, i]*0.5/dy)
+        @inbounds (1 < i < size(Ay, 2)) && (Ay[end, i] = Ay[end - 1, i] * 0.5 / dy)
     end
     return nothing
 end
@@ -66,9 +91,21 @@ end
     return nothing
 end
 
+@parallel_indices (i) function free_slip!(T, bc)
+    if i ≤ size(T, 1)
+        @inbounds bc.bot && (T[i, 1] = T[i, 2])
+        @inbounds bc.top && (T[i, end] = T[i, end - 1])
+    end
+    if i ≤ size(T, 2)
+        @inbounds bc.left && (T[1, i] = T[2, i])
+        @inbounds bc.right && (T[end, i] = T[end - 1, i])
+    end
+    return nothing
+end
+
 @parallel_indices (i) function periodic_boundaries!(Ax, Ay, bc)
     if i ≤ size(Ax, 1)
-        @inbounds bc.bot && (Ax[i, 1] = Ax[i, end - 1] )
+        @inbounds bc.bot && (Ax[i, 1] = Ax[i, end - 1])
         @inbounds bc.top && (Ax[i, end] = Ax[i, 2])
     end
     if i ≤ size(Ay, 2)
@@ -78,6 +115,17 @@ end
     return nothing
 end
 
+@parallel_indices (i) function periodic_boundaries!(T, bc)
+    if i ≤ size(T, 1)
+        @inbounds bc.bot && (T[i, 1] = T[i, end - 1])
+        @inbounds bc.top && (T[i, end] = T[i, 2])
+    end
+    if i ≤ size(T, 2)
+        @inbounds bc.left && (T[1, i] = T[end - 1, i])
+        @inbounds bc.right && (T[end, i] = T[2, i])
+    end
+    return nothing
+end
 
 function pureshear_bc!(
     stokes::StokesArrays, xci::NTuple{2,T}, xvi::NTuple{2,T}, εbg
@@ -159,15 +207,15 @@ end
 
 # 3D KERNELS
 
-@parallel_indices (j, iz) function free_slip_x!(A::AbstractArray{T,3}) where {T}
-    A[1, j, iz] = A[2, j, iz]
-    A[end, j, iz] = A[end - 1, j, iz]
+@parallel_indices (j, k) function free_slip_x!(A::AbstractArray{T,3}) where {T}
+    A[1, j, k] = A[2, j, k]
+    A[end, j, k] = A[end - 1, j, k]
     return nothing
 end
 
-@parallel_indices (i, iz) function free_slip_y!(A::AbstractArray{T,3}) where {T}
-    A[i, 1, iz] = A[i, 2, iz]
-    A[i, end, iz] = A[i, end - 1, iz]
+@parallel_indices (i, k) function free_slip_y!(A::AbstractArray{T,3}) where {T}
+    A[i, 1, k] = A[i, 2, k]
+    A[i, end, k] = A[i, end - 1, k]
     return nothing
 end
 

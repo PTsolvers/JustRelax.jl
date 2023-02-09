@@ -1,4 +1,4 @@
-macro namevar(x) 
+macro namevar(x)
     return :($(esc(string(x))))
 end
 
@@ -16,8 +16,7 @@ function save_data(file, data_i)
     return nothing
 end
 
-function save_data(file, data::Geometry{N}) where N
-
+function save_data(file, data::Geometry{N}) where {N}
     xci = center_coordinates(data)
     xvi = vertex_coordinates(data)
 
@@ -27,11 +26,11 @@ function save_data(file, data::Geometry{N}) where N
     write(file, "Yv", xvi[2])
     if N == 3
         write(file, "Zc", xci[3])
-        write(file, "Zv", xvi[3])    
+        write(file, "Zv", xvi[3])
     end
 
     return nothing
 end
 
-center_coordinates(data::Geometry{N}) where N = ntuple(i-> collect(data.xci[i]), Val(N))
-vertex_coordinates(data::Geometry{N}) where N = ntuple(i-> collect(data.xvi[i]), Val(N))
+center_coordinates(data::Geometry{N}) where {N} = ntuple(i -> collect(data.xci[i]), Val(N))
+vertex_coordinates(data::Geometry{N}) where {N} = ntuple(i -> collect(data.xvi[i]), Val(N))

@@ -1,4 +1,3 @@
-using Pkg; Pkg.activate(".")
 using JustRelax
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)
@@ -94,7 +93,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8)
     # Stokes ---------------------------------------------
     ## Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL=1 / √2.1)
+    pt_stokes = PTStokesCoeffs(ni, di; ϵ=1e-4,  CFL=1 / √2.1)
 
     ## Setup-specific parameters and fields -------------
     # Initial geotherm 
@@ -124,7 +123,10 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8)
     ρg = @zeros(ni...), fy
 
     ## Boundary conditions
-    freeslip   = (freeslip_x=false, freeslip_y=true)
+    flow_bcs = FlowBoundaryConditions(; 
+        free_slip = (left=false, right=false, top=true, bot=true), 
+        periodicity = (left=true, right=true, top=false, bot=false)
+    )
     thermal_bc = (flux_x=true, flux_y=false)
 
     # Physical time loop
@@ -141,15 +143,16 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8)
             stokes,
             pt_stokes,
             di,
-            freeslip,
+            flow_bcs,
             ρg,
             η,
             G,
             Kb,
-            dt_elasticity,
+            dt,
             iterMax=150e3,
             nout=1e3,
         )
+
         dt = JustRelax.compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
@@ -197,10 +200,35 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8)
     return (ni=ni, xci=xci, li=li, di=di), thermal
 end
 
-ar = 3
-n  = 128*2
+ar = 8
+n  = 16
 nx = n*ar - 2
 ny = n - 2
 
-thermal_convection2D(;ar=ar,nx=nx, ny=ny);
+# thermal_convection2D(;ar=ar,nx=nx, ny=ny);
+
+# X = [x for x in xvi[1], y in xvi[2], z in xvi[3]][:]
+# Y = [y for x in xvi[1], y in xvi[2], z in xvi[3]][:]
+# Z = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
+# scatter(thermal.T[:], Z)
+
+V = @tuple stokes.V
+τ_o = @tuple stokes.τ_o
+_di = inv.(di)
+@btime @parallel $(1:nx, 1:ny) JustRelax.Elasticity2D.rotate_stress!($V, $τ_o, $_di, $dt)
+
+@parallel (1:nx, 1:ny) JustRelax.Elasticity2D.rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
+
+_tuple(V::Velocity{<:AbstractArray{T, 2}}) where T = V.Vx, V.Vy
+_tuple(V::Velocity{<:AbstractArray{T, 3}}) where T = V.Vx, V.Vy, V.Vz
+_tuple(A::SymmetricTensor{<:AbstractArray{T, 2}}) where T = A.xx, A.yy, A.xy_c
+_tuple(A::SymmetricTensor{<:AbstractArray{T, 3}}) where T = A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
+
+macro tuple(A) 
+    return quote _tuple($(esc(A))) end
+end
+
+# @code_warntype _tuple1(stokes.V)
+@btime @tuple $stokes.V
+@btime $stokes.V.Vx[$1]
 

@@ -107,7 +107,6 @@ function make_residual_struct!(ndim; name::Symbol=:Residual)
                 return new{typeof(Rx)}(Rx, Ry, Rz, RP)
             end
         end
-
     end
 end
 

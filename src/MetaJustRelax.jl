@@ -45,14 +45,16 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             AbstractElasticModel, Viscous, ViscoElastic, ViscoElastoPlastic
         export solve!
 
+        include(joinpath(@__DIR__, "Utils.jl"))
+        export @allocate, @add, @idx, @copy, compute_dt, assign!, tupleize
+
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
-        export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
+        export pureshear_bc!, FlowBoundaryConditions, flow_bcs!
+        export TemperatureBoundaryConditions, thermal_boundary_conditions!, thermal_bcs!
+        export free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
 
         include(joinpath(@__DIR__, "stokes/Stokes.jl"))
         export stress
-
-        include(joinpath(@__DIR__, "Utils.jl"))
-        export @allocate, compute_dt, assign!
 
         include(joinpath(@__DIR__, "stokes/Elasticity.jl"))
 
@@ -61,7 +63,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export ThermalParameters
 
         include(joinpath(@__DIR__, "Interpolations.jl"))
-        export vertex2center!
+        export vertex2center!, center2vertex!
     end
 
     # conditional submodule load

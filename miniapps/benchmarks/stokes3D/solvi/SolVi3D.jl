@@ -76,7 +76,7 @@ function solVi3D(;
     dt = Inf
     η = viscosity(ni, di, li, rc, η0, ηi)
     Gc = @fill(G, ni...) 
-    K = @fill(Inf, ni...) 
+    Kb = @fill(Inf, ni...) 
 
     ## Boundary conditions
     pureshear_bc!(stokes, di, li, εbg)
@@ -93,11 +93,10 @@ function solVi3D(;
             stokes,
             pt_stokes,
             di,
-            li,
             freeslip,
             ρg,
             η,
-            K,
+            Kb,
             Gc,
             dt,
             igg;

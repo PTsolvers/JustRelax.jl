@@ -240,6 +240,24 @@ end
 
 # visco-elasto-plastic with GeoParams
 @parallel_indices (i, j) function compute_τ_gp!(
+    τxx,
+    τyy,
+    τxy,
+    τII,
+    τxx_o,
+    τyy_o,
+    τxyv_o,
+    εxx,
+    εyy,
+    εxyv,
+    η,
+    η_vep,
+    z,
+    T,
+    MatParam,
+    dt,
+    θ_dτ
+)
     # convinience closure
     @inline gather(A) = A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1] 
     @inline av(T)     = (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
@@ -253,7 +271,7 @@ end
         # args                = (; dt=dt, P=P[i, j] , T=av(T), τII_old=0.0)
         εij_p               = εxx[i, j]+1e-25, εyy[i, j]+1e-25, gather(εxyv).+1e-25
         τij_p_o             = τxx_o[i,j], τyy_o[i,j], gather(τxyv_o)
-        phases                        = (1, 1, (1,1,1,1)) # for now hard-coded for a single phase
+        phases              = (1, 1, (1,1,1,1)) # for now hard-coded for a single phase
         # update stress and effective viscosity
         τij, τII[i, j], ηᵢ  = compute_τij(MatParam, εij_p, args, τij_p_o, phases)
         # ηᵢ                  = clamp(ηᵢ, 1e0, 1e6)
@@ -263,9 +281,6 @@ end
         η_vep[i, j]         = ηᵢ
     end
     
-    return
-end
-
     return nothing
 end
 

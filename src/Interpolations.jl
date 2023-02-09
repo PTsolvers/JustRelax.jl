@@ -58,8 +58,8 @@ end
 
 ## 2D 
 
-function velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes = false)
-    if !ghost_nodes 
+function velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=false)
+    if !ghost_nodes
         Vx2vertex_noghost!(Vx, Vx_v)
         Vy2vertex_noghost!(Vy, Vy_v)
     else
@@ -68,11 +68,11 @@ function velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes = false)
     end
 end
 
-function velocity2vertex(Vx, Vy, nv_x, nv_y; ghost_nodes = false)
+function velocity2vertex(Vx, Vy, nv_x, nv_y; ghost_nodes=false)
     Vx_v = @allocate(nv_x, nv_y)
     Vy_v = @allocate(nv_x, nv_y)
 
-    if !ghost_nodes 
+    if !ghost_nodes
         Vx2vertex_noghost!(Vx, Vx_v)
         Vy2vertex_noghost!(Vy, Vy_v)
     else
@@ -83,11 +83,11 @@ end
 
 @parallel_indices (i, j) function Vx2vertex_noghost!(V, Vx)
     if 1 < j < size(Vx, 2)
-        V[i, j] = 0.5 * (Vx[i, j-1] + Vx[i, j])
+        V[i, j] = 0.5 * (Vx[i, j - 1] + Vx[i, j])
 
     elseif j == 1
         V[i, j] = Vx[i, j]
-    
+
     elseif j == size(Vx, 2)
         V[i, j] = Vx[i, end]
     end
@@ -96,11 +96,11 @@ end
 
 @parallel_indices (i, j) function Vy2vertex_noghost!(V, Vy)
     if 1 < i < size(Vy, 1)
-        V[i, j] = 0.5 * (Vy[i-1, j] + Vy[i, j])
+        V[i, j] = 0.5 * (Vy[i - 1, j] + Vy[i, j])
 
     elseif i == 1
         V[i, j] = Vy[i, j]
-    
+
     elseif i == size(Vy, 1)
         V[i, j] = Vy[end, j]
     end
@@ -109,27 +109,26 @@ end
 
 @parallel_indices (i, j) function Vx2vertex_ghost!(V, Vx)
     if 1 < j < size(Vx, 2)
-        V[i, j] = 0.5 * (Vx[i+1, j-1] + Vx[i+1, j])
+        V[i, j] = 0.5 * (Vx[i + 1, j - 1] + Vx[i + 1, j])
 
     elseif i == 1
-        V[i, j] = Vx[i+1, j]
-    
-    elseif j == size(Vx, 2)
+        V[i, j] = Vx[i + 1, j]
 
-        V[i, j] = Vx[i+1, end]
+    elseif j == size(Vx, 2)
+        V[i, j] = Vx[i + 1, end]
     end
     return nothing
 end
 
 @parallel_indices (i, j) function Vy2vertex_ghost!(V, Vy)
     if 1 < i < size(Vy, 1)
-        V[i, j] = 0.5 * (Vy[i-1, j+1] + Vy[i, j+1])
+        V[i, j] = 0.5 * (Vy[i - 1, j + 1] + Vy[i, j + 1])
 
     elseif i == 1
-        V[i, j] = Vx[i, j+1]
-    
+        V[i, j] = Vx[i, j + 1]
+
     elseif i == size(Vy, 1)
-        V[i, j] = Vx[end, j+1]
+        V[i, j] = Vx[end, j + 1]
     end
     return nothing
 end
@@ -192,6 +191,7 @@ end
             Vz[i + 1, j    , k] +
             Vz[i + 1, j + 1, k]
         )
+
     end
     return nothing
 end

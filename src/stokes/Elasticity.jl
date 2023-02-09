@@ -142,24 +142,62 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_V_Res!(Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, ητ, ηdτ, _dx, _dy)
+## Compressible - GeoParams
+@parallel function compute_P!(P, P_old, RP, ∇V, η, K::Number, dt, r, θ_dτ)
+    @all(RP) = -@all(∇V) - (@all(P) - @all(P_old)) / (K * dt)
+    @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (K * dt))
+    return nothing
+end
+
+@parallel function compute_V!(Vx, Vy, P, τxx, τyy, τxyv, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
+    @inn(Vx) =
+        @inn(Vx) +
+        (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @av_xa(ρgx)) * ηdτ /
+        @harm_xa(ητ)
+    @inn(Vy) =
+        @inn(Vy) +
+        (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @av_ya(ρgy)) * ηdτ /
+        @harm_ya(ητ)
+    return nothing
+end
+
+@parallel_indices (i, j) function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
+    # Again, indices i, j are captured by the closure
+    @inbounds @inline d_xa(A) = (A[i + 1, j] - A[i, j]) * _dx
+    @inbounds @inline d_ya(A) = (A[i, j + 1] - A[i, j]) * _dy
+    @inbounds @inline d_xi(A) = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
+    @inbounds @inline d_yi(A) = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
+    @inbounds @inline av_xa(A) = (A[i + 1, j] + A[i, j]) * 0.5
+    @inbounds @inline av_ya(A) = (A[i, j + 1] + A[i, j]) * 0.5
+
+    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
+        @inbounds Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
+    end
+    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+        @inbounds Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
+    end
+    return nothing
+end
+
+@parallel_indices (i, j) function compute_V_Res!(
+    Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, ητ, ηdτ, _dx, _dy
+)
 
     # Again, indices i, j are captured by the closure
-    @inline d_xa(A)  = (A[i + 1, j] - A[i, j]) * _dx
-    @inline d_ya(A)  = (A[i, j + 1] - A[i, j]) * _dy
-    @inline d_xi(A)  = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
-    @inline d_yi(A)  = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
+    @inline d_xa(A) = (A[i + 1, j] - A[i, j]) * _dx
+    @inline d_ya(A) = (A[i, j + 1] - A[i, j]) * _dy
+    @inline d_xi(A) = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
+    @inline d_yi(A) = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
     @inline av_xa(A) = (A[i + 1, j] + A[i, j]) * 0.5
     @inline av_ya(A) = (A[i, j + 1] + A[i, j]) * 0.5
 
-    if all( (i, j) .≤ size(Rx))
+    if all((i, j) .≤ size(Rx))
         @inbounds R = Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
-        @inbounds Vx[i+1, j+1] += R * ηdτ / av_xa(ητ)
-
+        @inbounds Vx[i + 1, j + 1] += R * ηdτ / av_xa(ητ)
     end
-    if all( (i, j) .≤ size(Ry))
+    if all((i, j) .≤ size(Ry))
         @inbounds R = Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
-        @inbounds Vy[i+1, j+1] += R * ηdτ / av_ya(ητ)
+        @inbounds Vy[i + 1, j + 1] += R * ηdτ / av_ya(ητ)
     end
     return nothing
 end
@@ -167,35 +205,34 @@ end
 # Stress calculation
 
 # viscous
-@parallel function compute_τ!(τxx, τyy, τxyv, εxx, εyy, εxyv, η, θ_dτ)
+@parallel function compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, θ_dτ)
     @all(τxx) = @all(τxx) + (-@all(τxx) + 2.0 * @all(η) * @all(εxx)) * 1.0 / (θ_dτ + 1.0)
     @all(τyy) = @all(τyy) + (-@all(τyy) + 2.0 * @all(η) * @all(εyy)) * 1.0 / (θ_dτ + 1.0)
-    @inn(τxyv) = @inn(τxyv) + (-@inn(τxyv) + 2.0 * @av(η) * @inn(εxyv)) * 1.0 / (θ_dτ + 1.0)
-
+    @inn(τxy) = @inn(τxy) + (-@inn(τxy) + 2.0 * @av(η) * @inn(εxy)) * 1.0 / (θ_dτ + 1.0)
     return nothing
 end
 
 # visco-elastic
 @parallel function compute_τ!(
-    τxx, τyy, τxyv, τxx_o, τyy_o, τxyv_o, εxx, εyy, εxyv, η, G, θ_dτ, dt
+    τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
 )
     @all(τxx) =
         @all(τxx) +
         (
             -(@all(τxx) - @all(τxx_o)) * @all(η) / (@all(G) * dt) - @all(τxx) +
-            2 * @all(η) * @all(εxx)
+            2.0 * @all(η) * @all(εxx)
         ) * 1.0 / (θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
     @all(τyy) =
         @all(τyy) +
         (
             -(@all(τyy) - @all(τyy_o)) * @all(η) / (@all(G) * dt) - @all(τyy) +
-            2 * @all(η) * @all(εyy)
+            2.0 * @all(η) * @all(εyy)
         ) * 1.0 / (θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
-    @inn(τxyv) =
-        @inn(τxyv) +
+    @inn(τxy) =
+        @inn(τxy) +
         (
-            -(@inn(τxyv) - @inn(τxyv_o)) * @av(η) / (@av(G) * dt) - @inn(τxyv) +
-            2 * @av(η) * @inn(εxyv)
+            -(@inn(τxy) - @inn(τxy_o)) * @av(η) / (@av(G) * dt) - @inn(τxy) +
+            2.0 * @av(η) * @inn(εxy)
         ) * 1.0 / (θ_dτ + @av(η) / (@av(G) * dt) + 1.0)
 
     return nothing
@@ -203,17 +240,6 @@ end
 
 # visco-elasto-plastic with GeoParams
 @parallel_indices (i, j) function compute_τ_gp!(
-    τxx, τyy, τxy, 
-    τII, 
-    τxx_o, τyy_o, τxyv_o, 
-    εxx, εyy, εxyv, 
-    η, η_vep, 
-    z, 
-    T, 
-    MatParam, 
-    dt, 
-    θ_dτ,
-)
     # convinience closure
     @inline gather(A) = A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1] 
     @inline av(T)     = (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
@@ -240,6 +266,8 @@ end
     return
 end
 
+    return nothing
+end
 
 ## 2D VISCO-ELASTIC STOKES SOLVER 
 
@@ -685,7 +713,6 @@ end
 @parallel_indices (i, j, k) function compute_strain_rate!(
     ∇V, εxx, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, _dx, _dy, _dz
 )
-
     @inbounds begin
         # normal components are all located @ cell centers
         if all((i, j, k) .≤ size(εxx))
@@ -912,7 +939,6 @@ end
     return nothing
 end
 
-
 @parallel_indices (i, j, k) function compute_τ_vertex!(
     τyz,
     τxz,
@@ -1089,7 +1115,7 @@ function JustRelax.solve!(
     b_width=(4, 4, 4),
     verbose=true,
 ) where {A,B,C,D,T}
-
+4444444444444444444324    
     # solver related
     ϵ = pt_stokes.ϵ
     # geometry

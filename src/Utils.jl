@@ -15,7 +15,8 @@ end
 end
 
 @inline function compute_dt(Vx, Vy, Vz, dx, dy, dz, dt_diff)
-    dt_adv = min(dx / maximum(abs.(Vx)), dy / maximum(abs.(Vy)), dz / maximum(abs.(Vz))) / 3.1
+    dt_adv =
+        min(dx / maximum(abs.(Vx)), dy / maximum(abs.(Vy)), dz / maximum(abs.(Vz))) / 3.1
     return min(dt_diff, dt_adv)
 end
 

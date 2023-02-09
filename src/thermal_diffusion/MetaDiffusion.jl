@@ -26,13 +26,13 @@ function make_thermal_arrays!(ndim)
 
             function ThermalArrays(ni::NTuple{2,Integer})
                 nx, ny = ni
-                T, ΔT, Told = @zeros(ni.+1...), @zeros(ni.+1...), @zeros(ni.+1...)
+                T, ΔT, Told = @zeros(ni .+ 1...), @zeros(ni .+ 1...), @zeros(ni .+ 1...)
                 dT_dt = @zeros(ni .- 1)
-                qTx   = @zeros(nx    , ny - 1)
-                qTy   = @zeros(nx - 1, ny    )
-                qTx2  = @zeros(nx    , ny - 1)
-                qTy2  = @zeros(nx - 1, ny    )
-                ResT  = @zeros(ni .- 1...)
+                qTx = @zeros(nx, ny - 1)
+                qTy = @zeros(nx - 1, ny)
+                qTx2 = @zeros(nx, ny - 1)
+                qTy2 = @zeros(nx - 1, ny)
+                ResT = @zeros(ni .- 1...)
                 return new{typeof(T)}(T, ΔT, Told, dT_dt, qTx, qTy, qTx2, qTy2, ResT)
             end
 

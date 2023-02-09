@@ -1,4 +1,5 @@
 abstract type AbstractStokesModel end
+abstract type AbstractViscosity end
 abstract type Viscous <: AbstractStokesModel end
 abstract type AbstractElasticModel <: AbstractStokesModel end
 abstract type ViscoElastic <: AbstractElasticModel end
@@ -17,6 +18,23 @@ function make_velocity_struct!(ndim::Integer; name::Symbol=:Velocity)
 
             function $(name)(ni::NTuple{3,T}) where {T}
                 return new{$PTArray}(@zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...))
+            end
+        end
+    end
+end
+
+function make_viscosity_struct!()
+    @eval begin
+        struct Viscosity{T}
+            η::T # with no plasticity
+            η_vep::T # with plasticity
+            ητ::T # PT viscosity
+
+            function Viscosity(ni::NTuple{N,Int}) where {N}
+                η = @allocate(ni...)
+                η_vep = @allocate(ni...)
+                ητ = @allocate(ni...)
+                return new{typeof(η)}(η, η_vep, ητ)
             end
         end
     end
@@ -50,13 +68,16 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTens
 
             function $(name)(ni::NTuple{3,T}) where {T}
                 return new{$PTArray}(
-                    @zeros(ni[1]    , ni[2] - 2, ni[3] - 2), # xx
-                    @zeros(ni[1] - 1, ni[2] - 1, ni[3] - 2), # xy
-                    @zeros(ni[1] - 2, ni[2]    , ni[3] - 2), # yy
-                    @zeros(ni[1] - 1, ni[2] - 2, ni[3] - 1), # xz
-                    @zeros(ni[1] - 2, ni[2] - 1, ni[3] - 1), # yz
-                    @zeros(ni[1] - 2, ni[2] - 2, ni[3]    ), # zz
-                    @zeros(ni[1] - 2, ni[2] - 2, ni[3] - 2), # II (second invariant)
+                    @zeros(ni...), # xx
+                    @zeros(ni[1] + 1, ni[2] + 1, ni[3]), # xy
+                    @zeros(ni...), # yy
+                    @zeros(ni[1] + 1, ni[2], ni[3] + 1), # xz
+                    @zeros(ni[1], ni[2] + 1, ni[3] + 1), # yz
+                    @zeros(ni...), # zz
+                    @zeros(ni...), # yz @ cell center
+                    @zeros(ni...), # xz @ cell center
+                    @zeros(ni...), # xy @ cell center
+                    @zeros(ni...), # II (second invariant)
                 )
             end
         end
@@ -94,8 +115,8 @@ function make_stokes_struct!()
     @eval begin
         struct StokesArrays{M<:AbstractStokesModel,A,B,C,T,nDim}
             P::T
+            P0::T
             V::A
-            dV::A
             ∇V::T
             τ::B
             ε::B
@@ -106,29 +127,31 @@ function make_stokes_struct!()
 
             function StokesArrays(ni::NTuple{2,T}, model::Type{Viscous}) where {T}
                 P = @zeros(ni...)
+                P0 = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1], ni[2] + 2)))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
-                dV = Velocity(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
                 R = Residual(((ni[1] - 1, ni[2]), (ni[1], ni[2] - 1)), ni)
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
-                    P, V, dV, ∇V, τ, ε, nothing, R
+                    P, P0, V, ∇V, τ, ε, nothing, R
                 )
             end
 
-            function StokesArrays(ni::NTuple{2,T}, model::Type{<: AbstractElasticModel}) where {T}
+            function StokesArrays(
+                ni::NTuple{2,T}, model::Type{<:AbstractElasticModel}
+            ) where {T}
                 P = @zeros(ni...)
+                P0 = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1] + 2, ni[2] + 1)))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
-                dV = Velocity(((ni[1] - 1, ni[2] - 2), (ni[1] - 2, ni[2] - 1)))
                 R = Residual(((ni[1] - 1, ni[2]), (ni[1], ni[2] - 1), ni))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
-                    P, V, dV, ∇V, τ, ε, deepcopy(τ), R
+                    P, P0, V, ∇V, τ, ε, deepcopy(τ), R
                 )
             end
 
@@ -136,6 +159,7 @@ function make_stokes_struct!()
 
             function StokesArrays(ni::NTuple{3,T}, model::Type{Viscous}) where {T}
                 P = @zeros(ni...)
+                P0 = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 V = Velocity((
                     (ni[1] + 1, ni[2], ni[3]),
@@ -144,11 +168,6 @@ function make_stokes_struct!()
                 ))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
-                dV = Velocity((
-                    (ni[1] - 1, ni[2] - 2, ni[3] - 2),
-                    (ni[1] - 2, ni[2] - 1, ni[3] - 2),
-                    (ni[1] - 1, ni[2] - 1, ni[3] - 1),
-                ))
                 R = Residual((
                     (ni[1] - 1, ni[2] - 2, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 1, ni[3] - 2),
@@ -157,34 +176,32 @@ function make_stokes_struct!()
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
-                    P, V, dV, ∇V, τ, ε, nothing, R
+                    P, P0, V, ∇V, τ, ε, nothing, R
                 )
             end
 
-            function StokesArrays(ni::NTuple{3,T}, model::Type{<: AbstractElasticModel}) where {T}
+            function StokesArrays(
+                ni::NTuple{3,T}, model::Type{<:AbstractElasticModel}
+            ) where {T}
                 P = @zeros(ni...)
+                P0 = @zeros(ni...)
                 ∇V = @zeros(ni...)
                 V = Velocity((
-                    (ni[1] + 1, ni[2], ni[3]),
-                    (ni[1], ni[2] + 1, ni[3]),
-                    (ni[1], ni[2], ni[3] + 1),
+                    (ni[1] + 1, ni[2] + 2, ni[3] + 2),
+                    (ni[1] + 2, ni[2] + 1, ni[3] + 2),
+                    (ni[1] + 2, ni[2] + 2, ni[3] + 1),
                 ))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
-                dV = Velocity((
-                    (ni[1] - 1, ni[2] - 2, ni[3] - 2),
-                    (ni[1] - 2, ni[2] - 1, ni[3] - 2),
-                    (ni[1] - 1, ni[2] - 1, ni[3] - 1),
-                ))
                 R = Residual((
-                    (ni[1] - 1, ni[2] - 2, ni[3] - 2),
-                    (ni[1] - 2, ni[2] - 1, ni[3] - 2),
-                    (ni[1] - 2, ni[2] - 2, ni[3] - 1),
+                    (ni[1] - 1, ni[2], ni[3]),
+                    (ni[1], ni[2] - 1, ni[3]),
+                    (ni[1], ni[2], ni[3] - 1),
                     ni,
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
-                    P, V, dV, ∇V, τ, ε, deepcopy(τ), R
+                    P, P0, V, ∇V, τ, ε, deepcopy(τ), R
                 )
             end
         end

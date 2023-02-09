@@ -274,15 +274,14 @@ end
 
 @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _dx, _dy)
     if (i ≤ size(dT_dt, 1) && j ≤ size(dT_dt, 2))
-        
         Vxᵢⱼ = 0.5 * (Vx[i + 2, j + 2] + Vx[i + 1, j + 2])
         Vyᵢⱼ = 0.5 * (Vy[i + 2, j + 2] + Vy[i + 2, j + 1])
 
         dT_dt[i, j] =
             -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) -
-            (Vxᵢⱼ > 0) * Vxᵢⱼ * (T[i + 1, j + 1] - T[i    , j + 1]) * _dx -
+            (Vxᵢⱼ > 0) * Vxᵢⱼ * (T[i + 1, j + 1] - T[i, j + 1]) * _dx -
             (Vxᵢⱼ < 0) * Vxᵢⱼ * (T[i + 2, j + 1] - T[i + 1, j + 1]) * _dx -
-            (Vyᵢⱼ > 0) * Vyᵢⱼ * (T[i + 1, j + 1] - T[i + 1, j    ]) * _dy -
+            (Vyᵢⱼ > 0) * Vyᵢⱼ * (T[i + 1, j + 1] - T[i + 1, j]) * _dy -
             (Vyᵢⱼ < 0) * Vyᵢⱼ * (T[i + 1, j + 2] - T[i + 1, j + 1]) * _dy
     end
     return nothing

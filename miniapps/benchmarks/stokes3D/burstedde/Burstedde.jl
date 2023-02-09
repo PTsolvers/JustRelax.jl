@@ -90,7 +90,10 @@ end
 
 function velocity!(stokes, xci, xvi)
     xc, yc, zc = xci
-    xv, yv, zv = xvi
+    # xv, yv, zv = xvi
+    di = ntuple(i->xci[i][2]-xci[i][1], Val(3))
+    xv, yv, zv = ntuple(i-> (xci[i][1]-di[i]):di[i]:(xci[i][end]+di[i]), Val(3))
+    xc, yc, zc = ntuple(i-> 0.0:di[i]:(xci[i][end]+di[i]/2), Val(3))
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
 
     _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y
@@ -98,6 +101,7 @@ function velocity!(stokes, xci, xvi)
     _velocity_z(x, y, z) = -2z - 3x * z - 3y * z - 5x^2 * y * z
 
     @parallel_indices (i, j, k) function _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+        T = eltype(Vx)
         if all((i, j, k) .≤ size(Vx))
             if (i == size(Vx, 1)) ||
                 (j == size(Vx, 2)) ||
@@ -105,9 +109,9 @@ function velocity!(stokes, xci, xvi)
                 (i == 1) ||
                 (j == 1) ||
                 (k == 1)
-                Vx[i, j, k] = _velocity_x(xv[i], yc[j], zc[k])
+                Vx[i, j, k] = _velocity_x(xc[i], yv[j], zv[k])
             else
-                Vx[i, j, k] = zero(eltype(Vx))
+                Vx[i, j, k] = zero(T)
             end
         end
         if all((i, j, k) .≤ size(Vy))
@@ -117,9 +121,9 @@ function velocity!(stokes, xci, xvi)
                 (i == 1) ||
                 (j == 1) ||
                 (k == 1)
-                Vy[i, j, k] = _velocity_y(xc[i], yv[j], zc[k])
+                Vy[i, j, k] = _velocity_y(xv[i], yc[j], zv[k])
             else
-                Vy[i, j, k] = zero(eltype(Vx))
+                Vy[i, j, k] = zero(T)
             end
         end
         if all((i, j, k) .≤ size(Vz))
@@ -129,9 +133,9 @@ function velocity!(stokes, xci, xvi)
                 (i == 1) ||
                 (j == 1) ||
                 (k == 1)
-                Vz[i, j, k] = _velocity_z(xc[i], yc[j], zv[k])
+                Vz[i, j, k] = _velocity_z(xv[i], yv[j], zc[k])
             else
-                Vz[i, j, k] = zero(eltype(Vx))
+                Vz[i, j, k] = zero(T)
             end
         end
 
@@ -144,6 +148,9 @@ end
 function analytical_velocity!(stokes, xci, xvi)
     xc, yc, zc = xci
     xv, yv, zv = xvi
+    di = ntuple(i->xci[i][2]-xci[i][1], Val(3))
+    xv, yv, zv = ntuple(i-> (xci[i][1]-di[i]):di[i]:(xci[i][end]+di[i]), Val(3))
+    xc, yc, zc = ntuple(i-> 0.0:di[i]:(xci[i][end]+di[i]/2), Val(3))
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
 
     _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y

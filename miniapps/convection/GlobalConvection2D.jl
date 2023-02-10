@@ -1,6 +1,6 @@
 using JustRelax
 # setup ParallelStencil.jl environment
-model = PS_Setup(:gpu, Float64, 2)
+model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
@@ -97,8 +97,8 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # TEMPERATURE PROFILE --------------------------------
     thermal    = ThermalArrays(ni)
     thermal_bc = TemperatureBoundaryConditions(; 
-        no_flux     = (left = false, right = false, top = false, bot = false), 
-        periodicity = (left = true , right = true , top = false, bot = false),
+        no_flux     = (left = true, right = true, top = false, bot = false), 
+        periodicity = (left = false, right = false, top = false, bot = false),
     )
     args_T = (;)
     # initialize thermal profile - Half space cooling

@@ -12,19 +12,17 @@ using HDF5
 
 function solve!() end
 
-function solve!() end
-
 include("topology/Topology.jl")
-include("MetaJustRelax.jl")
-include("stokes/MetaStokes.jl")
-include("thermal_diffusion/MetaDiffusion.jl")
-include("IO/DataIO.jl")
+export IGG, lazy_grid, Geometry
 
 include("MetaJustRelax.jl")
+
+include("stokes/MetaStokes.jl")
 export PS_Setup, environment!, ps_reset!
 
-include("stokes/MetaStokes.jl")
-
 include("thermal_diffusion/MetaDiffusion.jl")
+
+include("IO/DataIO.jl")
+
 
 end # module

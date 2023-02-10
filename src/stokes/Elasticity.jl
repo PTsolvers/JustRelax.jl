@@ -461,7 +461,7 @@ function JustRelax.solve!(
                 _di...,
             )
             # free slip boundary conditions
-            flow_bcs!(flow_bcs, stokes.V.Vx, stokes.V.Vy, di)
+            flow_bcs!(stokes, flow_bcs, di)
         end
 
         iter += 1
@@ -620,7 +620,7 @@ function JustRelax.solve!(
             )
             # apply boundary conditions boundary conditions
             # apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
-            flow_bcs!(flow_bcs, stokes.V.Vx, stokes.V.Vy, di)
+            flow_bcs!(stokes, flow_bcs, di)
         end
 
         iter += 1
@@ -1301,7 +1301,7 @@ function JustRelax.solve!(
     thermal::ThermalArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
-    freeslip,
+    flow_bc::FlowBoundaryConditions,
     ρg,
     η,
     η_vep,
@@ -1320,7 +1320,7 @@ function JustRelax.solve!(
     ϵ = pt_stokes.ϵ
     # geometry
     _di = @. 1 / di
-    nx, ny, nz = size(stokes.P)
+    ni = nx, ny, nz = size(stokes.P)
     z = LinRange(di[3]*0.5, 1.0-di[3]*0.5, nz)
 
     # ~preconditioner
@@ -1329,9 +1329,9 @@ function JustRelax.solve!(
         @parallel compute_maxloc!(ητ, η)
         update_halo!(ητ)
     end
-    @parallel (1:size(ητ, 2), 1:size(ητ, 3)) free_slip_x!(ητ)
-    @parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
-    @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
+    @parallel (1:ny, 1:nz) free_slip_x!(ητ)
+    @parallel (1:nx, 1:nz) free_slip_y!(ητ)
+    @parallel (1:nx, 1:ny) free_slip_z!(ητ)
 
     # errors
     err = 2 * ϵ
@@ -1346,13 +1346,13 @@ function JustRelax.solve!(
 
     Kb = get_Kb(MatParam)
     G  = get_G(MatParam)
-    @parallel assign!(stokes.P0, stokes.P)
+    @copy stokes.P0 stokes.P
 
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (1:nx, 1:ny, 1:nz) compute_∇V!(
+            @parallel (@idx ni) compute_∇V!(
                 stokes.∇V, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, _di...
             )
             @parallel compute_P!(
@@ -1366,7 +1366,7 @@ function JustRelax.solve!(
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
             )
-            @parallel (1:(nx + 1), 1:(ny + 1), 1:(nz + 1)) compute_strain_rate!(
+            @parallel (@idx ni) compute_strain_rate!(
                 stokes.∇V,
                 stokes.ε.xx,
                 stokes.ε.yy,
@@ -1379,7 +1379,7 @@ function JustRelax.solve!(
                 stokes.V.Vz,
                 _di...,
             )
-            @parallel (1:nx, 1:ny, 1:nz) compute_τ_gp!(
+            @parallel (@idx ni) compute_τ_gp!(
                 stokes.τ.xx,
                 stokes.τ.yy,
                 stokes.τ.zz,
@@ -1407,48 +1407,7 @@ function JustRelax.solve!(
                 dt,
                 pt_stokes.θ_dτ,
             )
-            # @parallel center2vertex!(
-            #     stokes.τ.yz, 
-            #     stokes.τ.xz, 
-            #     stokes.τ.xy, 
-            #     stokes.τ.yz_c, 
-            #     stokes.τ.xz_c, 
-            #     stokes.τ.xy_c
-            # )
-            # ------------------------------
-            # @parallel (1:size(stokes.τ.xz,2), 1:size(stokes.τ.xz,3)) zero_shear_stress_lateral!(stokes.τ.xz)
-            # @parallel (1:size(stokes.τ.xy,2), 1:size(stokes.τ.xy,3)) zero_shear_stress_lateral!(stokes.τ.xy)
-            # @parallel (1:size(stokes.τ.xz,1), 1:size(stokes.τ.xz,2)) zero_shear_stress_front!(stokes.τ.xy)
-            # @parallel (1:size(stokes.τ.yz,1), 1:size(stokes.τ.yz,2)) zero_shear_stress_front!(stokes.τ.yz)
-            # @parallel (1:size(stokes.τ.xz,1), 1:size(stokes.τ.xz,2)) zero_shear_stress_top!(stokes.τ.xz)
-            # @parallel (1:size(stokes.τ.yz,1), 1:size(stokes.τ.yz,2)) zero_shear_stress_top!(stokes.τ.yz)
-
-            # @parallel (1:(nx + 1), 1:(ny + 1), 1:(nz + 1)) compute_τ!(
-            #     stokes.τ.xx,
-            #     stokes.τ.yy,
-            #     stokes.τ.zz,
-            #     stokes.τ.yz,
-            #     stokes.τ.xz,
-            #     stokes.τ.xy,
-            #     stokes.τ_o.xx,
-            #     stokes.τ_o.yy,
-            #     stokes.τ_o.zz,
-            #     stokes.τ_o.yz,
-            #     stokes.τ_o.xz,
-            #     stokes.τ_o.xy,
-            #     stokes.ε.xx,
-            #     stokes.ε.yy,
-            #     stokes.ε.zz,
-            #     stokes.ε.yz,
-            #     stokes.ε.xz,
-            #     stokes.ε.xy,
-            #     η,
-            #     @fill(Inf, size(stokes.P)),
-            #     dt,
-            #     pt_stokes.θ_dτ,
-            # )
-
-            @parallel (1:(nx + 1), 1:(ny + 1), 1:(nz + 1)) compute_τ_vertex!(
+            @parallel (@idx ni.+1) compute_τ_vertex!(
                 stokes.τ.yz,
                 stokes.τ.xz,
                 stokes.τ.xy,
@@ -1463,9 +1422,7 @@ function JustRelax.solve!(
                 dt,
                 pt_stokes.θ_dτ,
             )
-
             @hide_communication b_width begin # communication/computation overlap
-                # (1:(nx + 1), 1:(ny + 1), 1:(nz + 1))
                 @parallel compute_V!(
                     stokes.V.Vx,
                     stokes.V.Vy,
@@ -1489,8 +1446,8 @@ function JustRelax.solve!(
                 )
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
-
-            apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+            # apply_free_slip!(flow_bc, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+            flow_bcs!(stokes, flow_bc, di)
         end
 
         iter += 1

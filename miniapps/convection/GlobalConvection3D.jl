@@ -116,7 +116,6 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D")
 
     # TEMPERATURE PROFILE --------------------------------
     thermal     = ThermalArrays(ni) # allocate thermal arrays
-    thermal_bc  = (flux_x=true, flux_y=false, flux_z=false) # Neumann thermal boundary conditions
     args_T      = (;) # arguments for GeoParams
     # initialize thermal profile - Half space cooling
     k           = 1.0
@@ -128,6 +127,11 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D")
     δT          = 10.0                              # thermal perturbation (in %)
     r           =  0.05                             # radius of perturbation
     elliptical_perturbation!(thermal.T, δT, xc, yc, zc, r, xvi)
+    # Boundary conditions
+    thermal_bc = TemperatureBoundaryConditions(; 
+        no_flux     = (left = true, right = true, top = false, bot = false, front=true, back=true), 
+        periodicity = (left = false, right = false, top = false, bot = false, front=false, back=false),
+    )
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -144,7 +148,11 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D")
     # Buoyancy forces
     ρg              = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     # Boundary conditions
-    freeslip        = (freeslip_x=true, freeslip_y=true, freeslip_z=true)
+    flow_bc         = FlowBoundaryConditions(; 
+        free_slip   = (left=true , right=true , top=true , bot=true , front=true , back=true ),
+        no_slip     = (left=false, right=false, top=false, bot=false, front=false, back=false),
+        periodicity = (left=false, right=false, top=false, bot=false, front=false, back=false),
+    )
     # ----------------------------------------------------
 
     # PLOTTING -------------------------------------------
@@ -173,11 +181,11 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D")
             thermal,
             pt_stokes,
             di,
-            freeslip,
+            flow_bc,
             ρg,
             η,
             η_vep,
-            it > 3 ? rheology_depth : rheology,
+            it > 3 ? rheology_pl : rheology,
             dt_elasticity,
             igg;
             iterMax = 250e3,
@@ -227,7 +235,7 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D")
 
     end
 
-    finalize_global_grid(; finalize_MPI=false)
+    finalize_global_grid(; finalize_MPI=true)
 
     return (ni=ni, xci=xci, li=li, di=di), thermal
 end
@@ -239,9 +247,4 @@ nx = (n-2)*ar
 ny = (n-2)*ar
 nz = (n-2)
 
-# thermal_convection3D(; figdir=figdir, ar=ar, nx=nx, ny=ny, nz=nz);
-
-# X = [x for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-# Y = [y for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-# Z = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-# scatter(thermal.T[:], Z)
+thermal_convection3D(; figdir=figdir, ar=ar, nx=nx, ny=ny, nz=nz);

@@ -19,7 +19,7 @@ end
         i = clamp(i, 1, nx)
         j = clamp(j, 1, ny)
         k = clamp(k, 1, nz)
-        return i, j, k
+        i, j, k
     end
 
     @inbounds begin

@@ -88,19 +88,19 @@ end
     @inbounds begin
         if bc.bot
             (i ≤ size(Ay, 1)) && (Ay[i, 1] = 0.0)
-            (1 < i < size(Ax, 1)) && (Ax[i, 1] = Ax[i, 2] * 0.5 * _dx)
+            (1 < i < size(Ax, 1)) && (Ax[i, 1] = Ax[i, 2] * 0.5 * _dy)
         end
         if bc.top
             (i ≤ size(Ay, 1)) && (Ay[i, end] = 0.0)
-            (1 < i < size(Ax, 1)) && (Ax[i, end] = Ax[i, end - 1] * 0.5 * _dx)
+            (1 < i < size(Ax, 1)) && (Ax[i, end] = Ax[i, end - 1] * 0.5 * _dy)
         end
         if bc.left
             (i ≤ size(Ax, 2)) && (Ax[1, i] = 0.0)
-            (1 < i < size(Ay, 2)) && (Ay[1, i] = Ay[2, i] * 0.5 * _dy)
+            (1 < i < size(Ay, 2)) && (Ay[1, i] = Ay[2, i] * 0.5 * _dx)
         end
         if bc.right
             (i ≤ size(Ax, 2)) && (Ax[end, i] = 0.0)
-            (1 < i < size(Ay, 2)) && (Ay[end, i] = Ay[end - 1, i] * 0.5 * _dy)
+            (1 < i < size(Ay, 2)) && (Ay[end, i] = Ay[end - 1, i] * 0.5 * _dx)
         end
     end
     return nothing
@@ -261,17 +261,6 @@ function pureshear_bc!(
     stokes::StokesArrays, xci::NTuple{2,T}, xvi::NTuple{2,T}, εbg
 ) where {T}
     # unpack
-    # Vx, Vy = stokes.V.Vx, stokes.V.Vy
-    # dx, dy = di
-    # lx, ly = li
-    # Velocity pure shear boundary conditions
-    # stokes.V.Vx .= PTArray([
-    #     -εbg * ((i - 1) * dx - 0.5 * lx) for i in 1:size(Vx, 1), j in 1:size(Vx, 2)
-    # ])
-    # stokes.V.Vy .= PTArray([
-    #     εbg * ((j - 1) * dy - 0.5 * ly) for i in 1:size(Vy, 1), j in 1:size(Vy, 2)
-    # ])
-
     stokes.V.Vx[:, 2:(end - 1)] .= PTArray([εbg * x for x in xvi[1], y in xci[2]])
     stokes.V.Vy[2:(end - 1), :] .= PTArray([-εbg * y for x in xci[1], y in xvi[2]])
 
@@ -289,16 +278,6 @@ end
     A[i, end] = A[i, end - 1]
     return nothing
 end
-
-# function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{2,T}}, Vx, Vy) where {T}
-#     freeslip_x, freeslip_y = freeslip
-#     # free slip boundary conditions
-#     freeslip_x && (@parallel (1:size(Vy, 2)) free_slip_x!(Vy))
-
-#     freeslip_y && (@parallel (1:size(Vx, 1)) free_slip_y!(Vx))
-
-#     return nothing
-# end
 
 @inbounds @parallel_indices (i) function _apply_free_slip!(Ax, Ay, freeslip_x, freeslip_y)
     if freeslip_x && i ≤ size(Ax, 1)
@@ -329,14 +308,12 @@ function thermal_boundary_conditions!(
     nx, ny = size(T)
 
     insulation_x && (@parallel (1:ny) free_slip_x!(T))
-
     insulation_y && (@parallel (1:nx) free_slip_y!(T))
 
     return nothing
 end
 
 # 3D KERNELS
-
 
 @parallel_indices (j, k) function free_slip_x!(A::AbstractArray{T,3}) where {T}
     A[1, j, k] = A[2, j, k]
@@ -372,8 +349,6 @@ function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{3,T}}, Vx, Vy, Vz) w
         @parallel (1:size(Vy, 1), 1:size(Vy, 2)) free_slip_z!(Vy)
     end
 end
-
-
 
 function thermal_boundary_conditions!(
     insulation::NamedTuple, T::AbstractArray{_T,3}

@@ -30,10 +30,10 @@ function make_viscosity_struct!()
             η_vep::T # with plasticity
             ητ::T # PT viscosity
 
-            function Viscosity(ni::NTuple{N,Int}) where {N}
-                η = @allocate(ni...)
-                η_vep = @allocate(ni...)
-                ητ = @allocate(ni...)
+            function Viscosity(ni)
+                η = @zeros(ni...)
+                η_vep = @zeros(ni...)
+                ητ = @zeros(ni...)
                 return new{typeof(η)}(η, η_vep, ητ)
             end
         end

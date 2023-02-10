@@ -1,4 +1,4 @@
-# MPI topology
+# MPI struct
 
 struct IGG{T,M}
     me::T

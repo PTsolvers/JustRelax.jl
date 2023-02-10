@@ -356,7 +356,6 @@ function JustRelax.solve!(
     )
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_bcs!(thermal.T, thermal_bc)
-    # thermal_boundary_conditions!(thermal_bc, thermal.T)
 
     @. thermal.ΔT = thermal.T - thermal.Told
 
@@ -503,9 +502,7 @@ function JustRelax.solve!(
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         update_halo!(thermal.T)
     end
-    thermal_boundary_conditions!(thermal_bc, thermal.T)
-
-    @. thermal.ΔT = thermal.T - thermal.Told
+    thermal_bcs!(thermal.T, thermal_bc)
 
     return nothing
 end
@@ -551,9 +548,7 @@ function JustRelax.solve!(
         update_halo!(thermal.T)
     end
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_boundary_conditions!(thermal_bc, thermal.T)
-
-    # @. thermal.ΔT = thermal.T - thermal.Told
+    thermal_bcs!(thermal.T, thermal_bc)
 
     return nothing
 end
@@ -562,7 +557,7 @@ end
 
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
-    thermal_bc::NamedTuple,
+    thermal_bc::TemperatureBoundaryConditions,
     rheology::MaterialParams,
     args::NamedTuple,
     di::NTuple{3,_T},
@@ -589,8 +584,7 @@ function JustRelax.solve!(
         update_halo!(thermal.T)
     end
     # apply boundary conditions
-    thermal_boundary_conditions!(thermal_bc, thermal.T)
-    # compute thermal increment (used for particles advection)
+    thermal_bcs!(thermal.T, thermal_bc)
     @. thermal.ΔT = thermal.T - thermal.Told
 
     return nothing
@@ -599,14 +593,14 @@ end
 # upwind advection 
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
-    thermal_bc::NamedTuple,
+    thermal_bc::TemperatureBoundaryConditions,
     stokes,
     rheology::MaterialParams,
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;
     b_width=(4, 4, 4),
-) where {_T,M<:AbstractArray{<:Any,3}}
+) where {_T, M<:AbstractArray{<:Any,3}}
 
     # Compute some constant stuff
     _di = inv.(di)
@@ -639,7 +633,7 @@ function JustRelax.solve!(
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         update_halo!(thermal.T)
     end
-    thermal_boundary_conditions!(thermal_bc, thermal.T)
+    thermal_bcs!(thermal.T, thermal_bc)
 
     # @. thermal.ΔT = thermal.T - thermal.Told
 

@@ -1,3 +1,5 @@
+ENV["PS_PACKAGE"] = :Threads
+
 using JustRelax
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)
@@ -13,6 +15,7 @@ include("MTK/Utils.jl")
 include("MTK/Advection.jl")
 include("MTK/Dikes.jl")
 
+using JustPIC
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel function update_buoyancy!(fz, T, ρ0gα)
@@ -25,8 +28,8 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_ρg!(A, MatParam, Phases, args)
-    A[i, j] =
+@parallel_indices (i, j) function compute_ρg!(ρg, MatParam, Phases, args)
+    ρg[i, j] =
         compute_density(MatParam, Phases[i, j],  ntuple_idx(args, i, j)) *
         compute_gravity(MatParam, Phases[i, j])
     return nothing
@@ -147,6 +150,17 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     @copy  Tnew_cpu Array(thermal.T)
     # ----------------------------------------------------
 
+    # Dike intrusion
+    W_in = nondimensionalize(10km, CharUnits)
+    H_in = nondimensionalize(1km, CharUnits)                    # Width and thickness of dike
+    T_in = nondimensionalize(900C, CharUnits)                   # Intrusion temperature
+    center = @. getindex.(xvi,1) + li* 0.5
+    dike = Dike(; Center=center, W=W_in, H=H_in, DikeType=:ElasticDike, T=T_in) # "Reference" dike with given thickness,radius and T
+    # DikeTracers = StructArray{Tracer}(undef, 1)                   # Initialize tracers   
+
+    H_ran, W_ran = li .* (0.3, 0.8)                       # Size of domain in which we randomly place dikes and range of angles   
+    nTr_dike = 300
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes          = StokesArrays(ni, ViscoElastic)
@@ -177,6 +191,10 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     !isdir(figdir) && mkpath(figdir)
     # ----------------------------------------------------
 
+    parts_semilagrange = SemiLagrangianParticles(xvi)
+    Tracers = Tracer2(2) # Initialize tracers   
+    Tracers, Tnew_cpu, Vol = InjectDike(Tracers, parts_semilagrange, Tnew_cpu, xvi, dike, nTr_dike)   # Add dike, move hostrocks
+    
     # Time loop
     t, it = 0.0, 0
     nt    = 500
@@ -184,6 +202,9 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     while it < nt
 
         # Update buoyancy and viscosity -
+        @copy     thermal.Told thermal.T
+        compute_meltfraction!(ϕ, rheology, phase_c, (T=thermal.T,))
+        phase_c .= 1
         @parallel computeViscosity!(η, ϕ, S, mfac, η_f, η_s)
         @parallel (@idx ni) compute_ρg!(ρg[2], rheology, phase_c, (T=thermal.T, P=stokes.P))
         # ------------------------------
@@ -207,6 +228,36 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
         )
         dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
+
+        # Inject dike every x timesteps 
+        # if floor(time/InjectionInterval)> dike_inj       # Add new dike every X years
+        if mod(it, 2) == 0
+            #         dike_inj  =     floor(time/InjectionInterval)                                               # Keeps track on what was injected already
+            cen =
+                (maximum.(xci) .+ minimum.(xci)) .*0.5 .+
+                (rand(-0.5:1e-3:0.5), rand(-0.5:1e-3:0.5)) .* (W_ran, H_ran)         # Randomly vary center of dike 
+            if cen[end] < ustrip(nondimensionalize(-25km, CharUnits))
+                Angle_rand = rand(80.0:0.1:100.0) # Orientation: near-vertical @ depth             
+            else
+                Angle_rand = rand(-10.0:0.1:10.0) # Orientation: near-vertical @ shallower depth     
+            end
+            dike = Dike(;
+                Angle=[Angle_rand],
+                Center=cen,
+                W=W_in,
+                H=H_in,
+                DikeType=:ElasticDike,
+                T=T_in,
+            ) # "Reference" dike with given thickness,radius and T
+
+            @copy Tnew_cpu Array(thermal.T)
+            _, Tnew_cpu,  = InjectDike(Tracers, parts_semilagrange, Tnew_cpu, xvi, dike, nTr_dike)   # Add dike, move hostrocks
+            @parallel assign!(thermal.Told, Tnew_cpu)
+            @parallel assign!(thermal.T, Tnew_cpu)
+            #        InjectVol +=    Vol                                                                 # Keep track of injected volume
+            #        println("Added new dike; total injected magma volume = $(round(InjectVol/km³,digits=2)) km³; rate Q=$(round(InjectVol/(time),digits=2)) m³/s")
+            println("injected dike")
+        end
 
         # Thermal solver ---------------
         solve!(
@@ -255,28 +306,3 @@ n      = 96
 nx, ny = 96 * ar - 2, 1 * 96 - 2  # numerical grid resolutions; should be a mulitple of 32-1 for optimal GPU perf
 
 # MTK2D(; figdir=figdir, ar=ar,nx=nx, ny=ny);
-
-@parallel_indices (i, j) function foo!(P, P_old, RP, ∇V, η, rheology::NTuple{N, MaterialParams}, phase, dt, r, θ_dτ) where N
-    RP[i, j] = -∇V[i, j] - (P[i, j] - P_old[i, j]) / (get_Kb(rheology, phase[i,j]) * dt)
-    P[i, j] = P[i, j] + RP[i, j] / (1.0 / (r / θ_dτ * η[i, j]) + 1.0 / (get_Kb(rheology, phase[i,j])  * dt))
-    return nothing
-end
-
-@parallel (@idx ni) foo!(
-                stokes.P,
-                stokes.P0,
-                stokes.R.RP,
-                stokes.∇V,
-                η,
-                rheology,
-                phase_c,
-                dt,
-                r,
-                θ_dτ,
-            )
-
-get_Kb(v1)
-
-v1=rheology[1]
-v=rheology
-get_Kb(rheology, phase_c[1,1]) *dt

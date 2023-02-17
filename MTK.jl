@@ -35,6 +35,11 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function compute_melt_fraction!(ϕ, rheology, phase_c, args)
+    ϕ[i, j] = compute_meltfraction(rheology, phase_c[i, j], ntuple_idx(args, i, j))
+    return nothing
+end
+
 @parallel function computeViscosity!(η, ϕ, S, mfac, η_f, η_s)
     # We assume that η is f(ϕ), following Deubelbeiss, Kaus, Connolly (2010) EPSL 
     # factors for hexagons
@@ -67,9 +72,11 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     xci, xvi = lazy_grid(di, li; origin=origin) # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
-    # Physical properties using GeoParams ----------------
-    creep_rock = LinearViscous(; η=1e22Pa * s)
-    creep_magma = LinearViscous(; η=1e16Pa * s)
+    # Physical properties using GeoParams ---------------
+    η_rock = 1e22
+    η_magma = 1e18
+    creep_rock = LinearViscous(; η=η_rock*Pa * s)
+    creep_magma = LinearViscous(; η=η_magma*Pa * s)
     rheology = (
         SetMaterialParams(;
             Name="Rock",
@@ -77,7 +84,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             Density=PT_Density(; ρ0=3000kg / m^3, β=0.0 / Pa),
             HeatCapacity=ConstantHeatCapacity(; cp=1050J / kg / K),
             Conductivity=ConstantConductivity(; k=1.5Watt / K / m),
-            CreepLaws=LinearViscous(; η=1e22Pa * s),
+            CreepLaws=LinearViscous(; η=η_rock*Pa * s),
             CompositeRheology = CompositeRheology((creep_rock,)),
             Melting=MeltingParam_Caricchi(),
             Elasticity=ConstantElasticity(; G=Inf*Pa, Kb=Inf*Pa),
@@ -90,7 +97,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             HeatCapacity=ConstantHeatCapacity(; cp=1050J / kg / K),
             Conductivity=ConstantConductivity(; k=1.5Watt / K / m),
             CompositeRheology = CompositeRheology((creep_magma,)),
-            CreepLaws=LinearViscous(; η=1e16Pa * s),
+            CreepLaws=LinearViscous(; η=η_magma*Pa * s),
             Melting=MeltingParam_Caricchi(),
             Elasticity=ConstantElasticity(; G=Inf*Pa, Kb=Inf*Pa),
             CharDim=CharUnits,
@@ -174,7 +181,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     dt_elasticity   = Inf
 
     # to be added in GP...
-    ϕ       = @zeros(ni...) # melt fraction
+    ϕ       = similar(η) # melt fraction
     S, mfac = 1.0, -2.8 # factors for hexagons
     η_f     = rheology[2].CreepLaws[1].η.val    # melt viscosity
     η_s     = rheology[1].CreepLaws[1].η.val    # solid viscosity
@@ -198,15 +205,18 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     
     # Time loop
     t, it = 0.0, 0
-    nt    = 500
+    nt    = 50
     local iters
     while it < nt
 
         # Update buoyancy and viscosity -
         @copy thermal.Told thermal.T
-        compute_meltfraction!(ϕ, rheology, phase_c, (T=thermal.T,))
-        phase_c .= 1
+        @parallel (@idx ni) compute_melt_fraction!(ϕ, rheology, phase_c,  (T=thermal.T,))
+        fill!(phase_c, 1)
+        fill!(phase_v, 1)
         @parallel computeViscosity!(η, ϕ, S, mfac, η_f, η_s)
+        copyto!(η_vep, η)
+        @copy η_vep η
         @parallel (@idx ni) compute_ρg!(ρg[2], rheology, phase_c, (T=thermal.T, P=stokes.P))
         # ------------------------------
 
@@ -222,9 +232,9 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             η_vep,
             phase_v,
             phase_c,
-            it > 3 ? rheology_depth : rheology, # do a few initial time-steps without plasticity to improve convergence
+            rheology, # do a few initial time-steps without plasticity to improve convergence
             dt,
-            iterMax=150e3,
+            iterMax=50e3,
             nout=1e3,
         )
         dt = compute_dt(stokes, di, dt_diff)
@@ -277,7 +287,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
         t += dt
 
         # Plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 1) == 0
             fig = Figure(resolution = (900, 1600), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vy")
@@ -287,10 +297,10 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             h2 = heatmap!(ax2, xci[1], xvi[2], Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
             h3 = heatmap!(ax3, xci[1], xci[2], Array(stokes.τ.II) , colormap=:romaO) 
             h4 = heatmap!(ax4, xci[1], xci[2], Array(log10.(η)) , colormap=:batlow)
-            # Colorbar(fig[1,2], h1)
-            # Colorbar(fig[2,2], h2)
-            # Colorbar(fig[3,2], h3)
-            # Colorbar(fig[4,2], h4)
+            Colorbar(fig[1,2], h1)
+            Colorbar(fig[2,2], h2)
+            Colorbar(fig[3,2], h3)
+            Colorbar(fig[4,2], h4)
             fig
             save( joinpath(figdir, "$(it).png"), fig)
         end
@@ -306,5 +316,5 @@ ar     = 2 # aspect ratio
 n      = 96
 nx, ny = 96 * ar - 2, 1 * 96 - 2  # numerical grid resolutions; should be a mulitple of 32-1 for optimal GPU perf
 
-# MTK2D(; figdir=figdir, ar=ar,nx=nx, ny=ny);
+MTK2D(; figdir=figdir, ar=ar,nx=nx, ny=ny);
 

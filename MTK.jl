@@ -1,21 +1,27 @@
 ENV["PS_PACKAGE"] = :Threads
 
+using Pkg
+Pkg.activate("C:\\Users\\albert\\Desktop\\GeoParams.jl")
+using GeoParams
+
+Pkg.activate(".")
+
 using JustRelax
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
+using Printf, LinearAlgebra, GLMakie, SpecialFunctions
 
 using Statistics, LinearAlgebra, Parameters
 using ParallelStencil.FiniteDifferences2D
 using GeophysicalModelGenerator, StencilInterpolations, StaticArrays
+using JustPIC
 
 include("MTK/Utils.jl")
 include("MTK/Advection.jl")
 include("MTK/Dikes.jl")
 
-using JustPIC
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel function update_buoyancy!(fz, T, ρ0gα)
@@ -77,6 +83,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     η_magma = 1e18
     creep_rock = LinearViscous(; η=η_rock*Pa * s)
     creep_magma = LinearViscous(; η=η_magma*Pa * s)
+    creep = MeltViscous(;η_f=1e20*Pa*s)
     rheology = (
         SetMaterialParams(;
             Name="Rock",
@@ -85,7 +92,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             HeatCapacity=ConstantHeatCapacity(; cp=1050J / kg / K),
             Conductivity=ConstantConductivity(; k=1.5Watt / K / m),
             CreepLaws=LinearViscous(; η=η_rock*Pa * s),
-            CompositeRheology = CompositeRheology((creep_rock,)),
+            CompositeRheology = CompositeRheology((creep,)),
             Melting=MeltingParam_Caricchi(),
             Elasticity=ConstantElasticity(; G=Inf*Pa, Kb=Inf*Pa),
             CharDim=CharUnits,
@@ -96,7 +103,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             Density=PT_Density(; ρ0=3000kg / m^3, β=0.0 / Pa),
             HeatCapacity=ConstantHeatCapacity(; cp=1050J / kg / K),
             Conductivity=ConstantConductivity(; k=1.5Watt / K / m),
-            CompositeRheology = CompositeRheology((creep_magma,)),
+            CompositeRheology = CompositeRheology((creep,)),
             CreepLaws=LinearViscous(; η=η_magma*Pa * s),
             Melting=MeltingParam_Caricchi(),
             Elasticity=ConstantElasticity(; G=Inf*Pa, Kb=Inf*Pa),
@@ -185,7 +192,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     S, mfac = 1.0, -2.8 # factors for hexagons
     η_f     = rheology[2].CreepLaws[1].η.val    # melt viscosity
     η_s     = rheology[1].CreepLaws[1].η.val    # solid viscosity
-
+    args_η  = (; ϕ = ϕ) 
     # Buoyancy forces
     ρg              = @zeros(ni...), @zeros(ni...)
     # Boundary conditions
@@ -197,6 +204,8 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)
+    anim = Animation(figdir, String[])
+    # println("Animation directory: $(anim.dir)")
     # ----------------------------------------------------
 
     parts_semilagrange = SemiLagrangianParticles(xvi)
@@ -205,8 +214,9 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     
     # Time loop
     t, it = 0.0, 0
-    nt    = 50
+    nt    = 5
     local iters
+
     while it < nt
 
         # Update buoyancy and viscosity -
@@ -215,7 +225,6 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
         fill!(phase_c, 1)
         fill!(phase_v, 1)
         @parallel computeViscosity!(η, ϕ, S, mfac, η_f, η_s)
-        copyto!(η_vep, η)
         @copy η_vep η
         @parallel (@idx ni) compute_ρg!(ρg[2], rheology, phase_c, (T=thermal.T, P=stokes.P))
         # ------------------------------
@@ -232,9 +241,10 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             η_vep,
             phase_v,
             phase_c,
+            args_η, 
             rheology, # do a few initial time-steps without plasticity to improve convergence
             dt,
-            iterMax=50e3,
+            iterMax=100e3,
             nout=1e3,
         )
         dt = compute_dt(stokes, di, dt_diff)
@@ -287,22 +297,81 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
         t += dt
 
         # Plotting ---------------------
+        # if it == 1 || rem(it, 1) == 0
+        #     fig = Figure(resolution = (900, 1600), title = "t = $t")
+        #     ax1 = Axis(fig[1,1], aspect = ar, title = "T")
+        #     ax2 = Axis(fig[2,1], aspect = ar, title = "Vy")
+        #     ax3 = Axis(fig[3,1], aspect = ar, title = "τII")
+        #     ax4 = Axis(fig[4,1], aspect = ar, title = "η")        
+        #     h1 = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T) , colormap=:batlow)
+        #     h2 = heatmap!(ax2, xci[1], xvi[2], Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
+        #     h3 = heatmap!(ax3, xci[1], xci[2], Array(stokes.τ.II) , colormap=:romaO) 
+        #     h4 = heatmap!(ax4, xci[1], xci[2], Array(log10.(η)) , colormap=:batlow)
+        #     Colorbar(fig[1,2], h1)
+        #     Colorbar(fig[2,2], h2)
+        #     Colorbar(fig[3,2], h3)
+        #     Colorbar(fig[4,2], h4)
+        #     fig
+        #     save( joinpath(figdir, "$(it).png"), fig)
+        # end
+        
+        # Visualization
         if it == 1 || rem(it, 1) == 0
-            fig = Figure(resolution = (900, 1600), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = ar, title = "T")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "Vy")
-            ax3 = Axis(fig[3,1], aspect = ar, title = "τII")
-            ax4 = Axis(fig[4,1], aspect = ar, title = "η")
-            h1 = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T) , colormap=:batlow)
-            h2 = heatmap!(ax2, xci[1], xvi[2], Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
-            h3 = heatmap!(ax3, xci[1], xci[2], Array(stokes.τ.II) , colormap=:romaO) 
-            h4 = heatmap!(ax4, xci[1], xci[2], Array(log10.(η)) , colormap=:batlow)
-            Colorbar(fig[1,2], h1)
-            Colorbar(fig[2,2], h2)
-            Colorbar(fig[3,2], h3)
-            Colorbar(fig[4,2], h4)
-            fig
-            save( joinpath(figdir, "$(it).png"), fig)
+            # Vy_c = (stokes.V.Vy[:,2:end] + stokes.V.Vy[:,1:end-1])/2
+
+            x_v = ustrip.(dimensionalize(xvi[1], km, CharUnits))
+            y_v = ustrip.(dimensionalize(xvi[2], km, CharUnits))
+            x_c = ustrip.(dimensionalize(xci[1], km, CharUnits))
+            y_c = ustrip.(dimensionalize(xci[2], km, CharUnits))
+            T_d = ustrip.(dimensionalize(Array(thermal.T), C, CharUnits))
+            η_d = ustrip.(dimensionalize(Array(η), Pas, CharUnits))
+            t_Myrs = dimensionalize(t, Myrs, CharUnits)
+
+            p1 = Plots.heatmap(
+                x_v,
+                y_v,
+                T_d';
+                aspect_ratio=2,
+                xlims = extrema(x_v),
+                ylims = extrema(y_v),
+                zlims=(0, 900),
+                c=:batlow,
+                title="time=$(round(ustrip.(t_Myrs), digits=3)) Myrs",
+                titlefontsize = 20,
+                colorbar_title = "\nT [C]",
+                colorbar_titlefontsize = 12,
+            )
+
+            # p2 = Plots.heatmap(
+            #     x_c,
+            #     y_v,
+            #     (@view stokes.V.Vy[2:end-1,:])';
+            #     xlims = extrema(x_v),
+            #     ylims = extrema(y_v),
+            #     aspect_ratio=2,
+            #     c=:batlow,
+            #     xlabel="width [km]",
+            #     colorbar_title = "\n\n\nVy",
+            #     colorbar_titlefontsize = 12,
+            # )
+            p2 = Plots.heatmap(
+                x_v,
+                y_v,
+                log10.(η_d');
+                aspect_ratio=1,
+                xlims=(minimum(x_v), maximum(x_v)),
+                ylims=(minimum(y_v), maximum(y_v)),
+                c=:oleron,
+                colorbar_title="log10(η [Pas])",
+                colorbar_titlefontsize = 12,
+                xlabel="width [km]",
+            )
+
+            Plots.plot(p1, p2; layout=(2, 1), size=(1200,1200))
+
+            frame(anim)
+
+            # display( quiver!(Xp[:], Yp[:], quiver=(Vxp[:]*Vscale, Vyp[:]*Vscale), lw=0.1, c=:blue) )
         end
         # ------------------------------
 
@@ -313,8 +382,7 @@ end
 
 figdir = "figs2D"
 ar     = 2 # aspect ratio
-n      = 96
-nx, ny = 96 * ar - 2, 1 * 96 - 2  # numerical grid resolutions; should be a mulitple of 32-1 for optimal GPU perf
+n      = 128
+nx, ny = n * ar - 2, n - 2  # numerical grid resolutions; should be a mulitple of 32-1 for optimal GPU perf
 
 MTK2D(; figdir=figdir, ar=ar,nx=nx, ny=ny);
-

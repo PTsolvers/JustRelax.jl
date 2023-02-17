@@ -28,10 +28,10 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_ρg!(ρg, MatParam, Phases, args)
+@parallel_indices (i, j) function compute_ρg!(ρg, rheology, phase_c, args)
     ρg[i, j] =
-        compute_density(MatParam, Phases[i, j],  ntuple_idx(args, i, j)) *
-        compute_gravity(MatParam, Phases[i, j])
+        compute_density(rheology, phase_c[i, j], ntuple_idx(args, i, j)) *
+        compute_gravity(rheology, phase_c[i, j])
     return nothing
 end
 
@@ -68,7 +68,8 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    creep = LinearViscous(; η=1e16Pa * s)
+    creep_rock = LinearViscous(; η=1e22Pa * s)
+    creep_magma = LinearViscous(; η=1e16Pa * s)
     rheology = (
         SetMaterialParams(;
             Name="Rock",
@@ -77,7 +78,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             HeatCapacity=ConstantHeatCapacity(; cp=1050J / kg / K),
             Conductivity=ConstantConductivity(; k=1.5Watt / K / m),
             CreepLaws=LinearViscous(; η=1e22Pa * s),
-            CompositeRheology = CompositeRheology((creep,)),
+            CompositeRheology = CompositeRheology((creep_rock,)),
             Melting=MeltingParam_Caricchi(),
             Elasticity=ConstantElasticity(; G=Inf*Pa, Kb=Inf*Pa),
             CharDim=CharUnits,
@@ -88,7 +89,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             Density=PT_Density(; ρ0=3000kg / m^3, β=0.0 / Pa),
             HeatCapacity=ConstantHeatCapacity(; cp=1050J / kg / K),
             Conductivity=ConstantConductivity(; k=1.5Watt / K / m),
-            CompositeRheology = CompositeRheology((creep,)),
+            CompositeRheology = CompositeRheology((creep_magma,)),
             CreepLaws=LinearViscous(; η=1e16Pa * s),
             Melting=MeltingParam_Caricchi(),
             Elasticity=ConstantElasticity(; G=Inf*Pa, Kb=Inf*Pa),
@@ -202,7 +203,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
     while it < nt
 
         # Update buoyancy and viscosity -
-        @copy     thermal.Told thermal.T
+        @copy thermal.Told thermal.T
         compute_meltfraction!(ϕ, rheology, phase_c, (T=thermal.T,))
         phase_c .= 1
         @parallel computeViscosity!(η, ϕ, S, mfac, η_f, η_s)
@@ -235,7 +236,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             #         dike_inj  =     floor(time/InjectionInterval)                                               # Keeps track on what was injected already
             cen =
                 (maximum.(xci) .+ minimum.(xci)) .*0.5 .+
-                (rand(-0.5:1e-3:0.5), rand(-0.5:1e-3:0.5)) .* (W_ran, H_ran)         # Randomly vary center of dike 
+                (rand(-0.5:1e-3:0.5), rand(-0.5:1e-3:0.5)) .* (W_ran, H_ran) # Randomly vary center of dike 
             if cen[end] < ustrip(nondimensionalize(-25km, CharUnits))
                 Angle_rand = rand(80.0:0.1:100.0) # Orientation: near-vertical @ depth             
             else
@@ -276,7 +277,7 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
         t += dt
 
         # Plotting ---------------------
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || rem(it, 10) == 0
             fig = Figure(resolution = (900, 1600), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vy")
@@ -285,11 +286,11 @@ function MTK2D(; ar=2, ny=16, nx=ny*8, figdir="figs2D")
             h1 = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T) , colormap=:batlow)
             h2 = heatmap!(ax2, xci[1], xvi[2], Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
             h3 = heatmap!(ax3, xci[1], xci[2], Array(stokes.τ.II) , colormap=:romaO) 
-            h4 = heatmap!(ax4, xci[1], xci[2], Array(log10.(η_vep)) , colormap=:batlow)
-            Colorbar(fig[1,2], h1)
-            Colorbar(fig[2,2], h2)
-            Colorbar(fig[3,2], h3)
-            Colorbar(fig[4,2], h4)
+            h4 = heatmap!(ax4, xci[1], xci[2], Array(log10.(η)) , colormap=:batlow)
+            # Colorbar(fig[1,2], h1)
+            # Colorbar(fig[2,2], h2)
+            # Colorbar(fig[3,2], h3)
+            # Colorbar(fig[4,2], h4)
             fig
             save( joinpath(figdir, "$(it).png"), fig)
         end
@@ -306,3 +307,4 @@ n      = 96
 nx, ny = 96 * ar - 2, 1 * 96 - 2  # numerical grid resolutions; should be a mulitple of 32-1 for optimal GPU perf
 
 # MTK2D(; figdir=figdir, ar=ar,nx=nx, ny=ny);
+

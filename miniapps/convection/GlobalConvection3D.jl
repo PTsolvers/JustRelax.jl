@@ -140,9 +140,9 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D")
     pt_stokes       = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL=1 / √3)
     # Rheology
     η               = @ones(ni...)
-    v               = CompositeRheology( (ArrheniusType(),) )
-    args_η          = (;T=thermal.T)
-    @parallel (@idx ni) computeViscosity!(η, v, args_η) # init viscosity field
+    # v               = CompositeRheology( (ArrheniusType(),) )
+    args_η          = (;dt=dt, T=thermal.T)
+    @parallel (@idx ni) computeViscosity!(η, rheology.CompositeRheology[1], args_η) # init viscosity field
     η_vep           = deepcopy(η)
     dt_elasticity   = Inf
     # Buoyancy forces
@@ -241,7 +241,7 @@ function thermal_convection3D(; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D")
 end
 
 figdir="figs3D"
-ar = 1
+ar = 3
 n  = 32
 nx = (n-2)*ar
 ny = (n-2)*ar

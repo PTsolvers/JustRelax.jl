@@ -62,7 +62,6 @@ include("StressRotation.jl")
 ## 2D ELASTIC KERNELS
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
-    # τ, τ_o = stress(stokes)
     τxx, τyy, τxy, τxy_c = stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ.xy_c
     τxx_o, τyy_o, τxy_o, τxy_o_c = stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy, stokes.τ_o.xy_c
     @parallel  update_τ_o!(τxx_o, τyy_o, τxy_o, τxy_o_c, τxx, τyy, τxy, τxy_c)
@@ -318,7 +317,8 @@ end
     T,
     phase_v,
     phase_c,
-    MatParam,
+    args_η,
+    rheology,
     dt,
     θ_dτ
 )
@@ -327,17 +327,18 @@ end
     Base.@propagate_inbounds @inline av(T)     = (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
 
     @inbounds begin
+        k                   = keys(args_η)
+        v                   = getindex.(values(args_η), i, j)
         # # numerics
         # dτ_r                = 1.0 / (θ_dτ + η[i, j] / (get_G(MatParam[1]) * dt) + 1.0) # original
         dτ_r                = 1.0 / (θ_dτ / η[i, j] + 1.0 / η_vep[i, j]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
         # # Setup up input for GeoParams.jl
-        args                = (; dt=dt, P = 1e6 * (1 - z[j]) , T=av(T), τII_old=0.0)
-        # args                = (; dt=dt, P=P[i, j] , T=av(T), τII_old=0.0)
+        args                = (; zip(k, v)..., dt=dt, T=av(T), τII_old=0.0)
         εij_p               = εxx[i, j]+1e-25, εyy[i, j]+1e-25, gather(εxyv).+1e-25
         τij_p_o             = τxx_o[i,j], τyy_o[i,j], gather(τxyv_o)
         phases              = phase_c[i], phase_c[i], gather(phase_v) # for now hard-coded for a single phase
         # update stress and effective viscosity
-        τij, τII[i, j], ηᵢ  = compute_τij(MatParam, εij_p, args, τij_p_o, phases)
+        τij, τII[i, j], ηᵢ  = compute_τij(rheology, εij_p, args, τij_p_o, phases)
         τxx[i, j]          += dτ_r * (-(τxx[i,j]) + τij[1] ) / ηᵢ # NOTE: from GP Tij = 2*η_vep * εij
         τyy[i, j]          += dτ_r * (-(τyy[i,j]) + τij[2] ) / ηᵢ 
         τxy[i, j]          += dτ_r * (-(τxy[i,j]) + τij[3] ) / ηᵢ 
@@ -745,6 +746,7 @@ function JustRelax.solve!(
     η_vep,
     phase_v,
     phase_c,
+    args_η,
     MatParam::NTuple{N, MaterialParams},
     dt;
     iterMax=10e3,
@@ -790,33 +792,23 @@ function JustRelax.solve!(
                 r,
                 θ_dτ,
             )
-
-            @parallel compute_strain_rate!(
-                stokes.ε.xx,
-                stokes.ε.yy,
-                stokes.ε.xy,
-                stokes.∇V,
-                stokes.V.Vx,
-                stokes.V.Vy,
-                _di...,
+            @parallel compute_strain_rate!( 
+                @tuple(stokes.ε)..., stokes.∇V, @tuple(stokes.V)..., _di...,
             )
             @parallel (@idx ni) compute_τ_gp!(
                 stokes.τ.xx,
                 stokes.τ.yy,
                 stokes.τ.xy_c,
                 stokes.τ.II,
-                stokes.τ_o.xx,
-                stokes.τ_o.yy,
-                stokes.τ_o.xy,
-                stokes.ε.xx,
-                stokes.ε.yy,
-                stokes.ε.xy,
+                @tuple(stokes.τ_o)...,
+                @tuple(stokes.ε)...,
                 η,
                 η_vep,
                 z,
                 thermal.T,
                 phase_v,
                 phase_c,
+                args_η,
                 tupleize(MatParam), # needs to be a tuple
                 dt,
                 θ_dτ,
@@ -825,9 +817,7 @@ function JustRelax.solve!(
             @parallel compute_V!(
                 @tuple(stokes.V)...,
                 stokes.P,
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy,
+                @tuple(stokes.τ)...,
                 ηdτ,
                 ρg...,
                 ητ,
@@ -841,14 +831,10 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx,
-                stokes.R.Ry,
+                @tuple(stokes.R)...,
                 stokes.P,
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy,
-                ρg[1],
-                ρg[2],
+                @tuple(stokes.τ)...,
+                ρg...,
                 _di...,
             )
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))

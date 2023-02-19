@@ -30,6 +30,29 @@ end
 @inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v
 
+"""
+    sumt(X::Vararg{NamedTuple, N}) where N
+
+Sum the components of the `NamedTuple`s in `X`
+"""
+function sumt(X::Vararg{NamedTuple, N}) where N
+    keys1 = keys(first(X))
+    values1 = values(first(X))
+    for i in 2:length(X)
+        @assert keys1 == keys(X[i])
+        values1 = values1 .+ values(X[i]) 
+    end
+    return (; zip(keys1, values1)...)
+end
+
+import Base: +, -, *, /
+for op in (:+, :-, :*, :/)
+    @eval begin
+        ($op)(x::Number, X::NamedTuple) = (; zip(keys(X), ($op).(x, values(X)))...)
+        ($op)(X::NamedTuple, x::Number) = ($op)(x, X) 
+    end
+end
+
 # MACROS
 
 """
@@ -52,7 +75,7 @@ macro add(I, args...)
     quote
         Base.@_inline_meta
         v = (; $(esc.(args)...))
-        values(v) .+ $(esc(I))
+        return values(v) .+ $(esc(I))
     end
 end
 
@@ -64,10 +87,10 @@ end
 
 _tuple(V::Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
 _tuple(V::Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
-_tuple(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy_c
-function _tuple(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
-    return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
-end
+_tuple(R::Residual{<:AbstractArray{T,2}}) where {T} = R.Rx, R.Ry
+_tuple(R::Residual{<:AbstractArray{T,3}}) where {T} = R.Rx, R.Ry, R.Rz
+_tuple(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy
+_tuple(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T} = A.xx, A.yy, A.zz, A.yz, A.xz, A.xy
 
 """
     @idx(args...)

@@ -48,6 +48,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         include(joinpath(@__DIR__, "Utils.jl"))
         export @allocate, @add, @idx, @copy, compute_dt, assign!, tupleize
 
+        include(joinpath(@__DIR__, "GeoParams/Geoparams.jl"))
+        export compute_ρg!, compute_melt_fraction!
+
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
         export pureshear_bc!, FlowBoundaryConditions, flow_bcs!
         export TemperatureBoundaryConditions, thermal_boundary_conditions!, thermal_bcs!

@@ -1,5 +1,5 @@
 # unpacks fields of the struct x into a tuple
-@generated function unpack(x::T) where T
+@generated function unpack(x::T) where {T}
     return quote
         Base.@_inline_meta
         tuple(_unpack(x, fieldnames($T))...)
@@ -11,13 +11,6 @@ macro unpack(x)
     return quote
         unpack($(esc(x)))
     end
-end
-
-@inline compute_dt(S::StokesArrays, di) = compute_dt(S.V, di, Inf)
-@inline compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(S.V, di, dt_diff)
-
-@inline function compute_dt(V::Velocity, di, dt_diff)
-    return compute_dt(unpack(V), di, dt_diff)
 end
 
 """
@@ -34,10 +27,17 @@ where the advection time `dt_adv` step is
 """
 @inline function compute_dt(V, di, dt_diff)
     n = inv(length(V) + 0.1)
-    dt_adv =
-        mapreduce(x->x[1]/maximum(y->abs(y), x[2]), max, zip(di, V)) * n
+    dt_adv = mapreduce(x -> x[1] / maximum(y -> abs(y), x[2]), max, zip(di, V)) * n
     return min(dt_diff, dt_adv)
 end
+
+@inline compute_dt(S::StokesArrays, di) = compute_dt(S.V, di, Inf)
+@inline compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(S.V, di, dt_diff)
+
+@inline function compute_dt(V::Velocity, di, dt_diff)
+    return compute_dt(unpack(V), di, dt_diff)
+end
+
 
 @inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v

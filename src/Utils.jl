@@ -1,5 +1,5 @@
 # unpacks fields of the struct x into a tuple
-@generated function unpack(x::T) where T
+@generated function unpack(x::T) where {T}
     return quote
         Base.@_inline_meta
         tuple(_unpack(x, fieldnames($T))...)
@@ -13,6 +13,24 @@ macro unpack(x)
     end
 end
 
+"""
+    compute_dt(V, di, dt_diff)
+
+Compute time step given the velocity `V::NTuple{ndim, Array{ndim, T}}`, 
+the grid spacing `di` and the diffusive time step `dt_diff` as :
+
+    dt = min(dt_diff, dt_adv)
+
+where the advection time `dt_adv` step is  
+
+    dt_adv = max( dx_i/ maximum(abs(Vx_i)), ... , dx_ndim/ maximum(abs(Vx_ndim))) / (ndim + 0.1)
+"""
+@inline function compute_dt(V, di, dt_diff)
+    n = inv(length(V) + 0.1)
+    dt_adv = mapreduce(x -> x[1] / maximum(y -> abs(y), x[2]), max, zip(di, V)) * n
+    return min(dt_diff, dt_adv)
+end
+
 @inline compute_dt(S::StokesArrays, di) = compute_dt(S.V, di, Inf)
 @inline compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(S.V, di, dt_diff)
 
@@ -20,38 +38,9 @@ end
     return compute_dt(unpack(V), di, dt_diff)
 end
 
-@inline function compute_dt(V, di, dt_diff)
-    n = inv(length(V) + 0.1)
-    dt_adv =
-        mapreduce(x->x[1]/max(size(x[2])...), max, zip(di, V)) * n
-    return min(dt_diff, dt_adv)
-end
 
 @inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v
-
-"""
-    sumt(X::Vararg{NamedTuple, N}) where N
-
-Sum the components of the `NamedTuple`s in `X`
-"""
-function sumt(X::Vararg{NamedTuple, N}) where N
-    keys1 = keys(first(X))
-    values1 = values(first(X))
-    for i in 2:length(X)
-        @assert keys1 == keys(X[i])
-        values1 = values1 .+ values(X[i]) 
-    end
-    return (; zip(keys1, values1)...)
-end
-
-import Base: +, -, *, /
-for op in (:+, :-, :*, :/)
-    @eval begin
-        ($op)(x::Number, X::NamedTuple) = (; zip(keys(X), ($op).(x, values(X)))...)
-        ($op)(X::NamedTuple, x::Number) = ($op)(x, X) 
-    end
-end
 
 # MACROS
 
@@ -75,7 +64,7 @@ macro add(I, args...)
     quote
         Base.@_inline_meta
         v = (; $(esc.(args)...))
-        return values(v) .+ $(esc(I))
+        values(v) .+ $(esc(I))
     end
 end
 
@@ -87,10 +76,10 @@ end
 
 _tuple(V::Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
 _tuple(V::Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
-_tuple(R::Residual{<:AbstractArray{T,2}}) where {T} = R.Rx, R.Ry
-_tuple(R::Residual{<:AbstractArray{T,3}}) where {T} = R.Rx, R.Ry, R.Rz
-_tuple(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy
-_tuple(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T} = A.xx, A.yy, A.zz, A.yz, A.xz, A.xy
+_tuple(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy_c
+function _tuple(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+    return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
+end
 
 """
     @idx(args...)

@@ -1,4 +1,3 @@
-using ParallelStencil.FiniteDifferences2D
 # Analytical solution found in:
 #     D. W. Schmid and Y. Y. Podladchikov. Analytical solutions for deformable elliptical inclusions in
 #     general shear. Geophysical Journal International, 155(1):269–288, 2003.

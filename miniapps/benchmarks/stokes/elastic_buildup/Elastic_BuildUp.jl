@@ -23,49 +23,48 @@ function elastic_buildup(;
     ni = (nx, ny) # number of nodes in x- and y-
     li = (lx, ly)  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
-    max_li = max(li...)
     nDim = length(ni) # domain dimension
     xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
     xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
 
     ## (Physical) Time domain and discretization
     yr = 365.25 * 3600 * 24
-    Myr, kyr = 1e6 * yr, 1e3 * yr
+    kyr = 1e3 * yr
     ttot = endtime * kyr # total simulation time
 
     ## Setup-specific parameters and fields
     η = fill(η0, nx, ny)
     g = 0.0 # gravity
+    Gc = @fill(G, ni...)
+    K = @fill(Inf, ni...)
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di)
+    pt_stokes = PTStokesCoeffs(li, di)
 
     ## Boundary conditions
-    pureshear_bc!(stokes, di, li, εbg)
+    pureshear_bc!(stokes, xci, xvi, εbg)
+
     freeslip = (freeslip_x=true, freeslip_y=true)
 
     # Physical time loop
     t = 0.0
-    ρ = @zeros(size(stokes.P))
+    ρg = (@zeros(ni...), @ones(size(stokes.P)) .* g)
     local iters
     av_τyy, sol_τyy, tt = Float64[], Float64[], Float64[]
     while t < ttot
-        if t < 5 * kyr
-            dt = 0.1 * kyr
-        else
-            dt = 2 * kyr
-        end
-        iters = solve!(
-            stokes, pt_stokes, di, li, max_li, freeslip, ρ .* g, η, G, dt; iterMax=10e3
-        )
+        # dt    = t < 5 / kyr ? 0.1 * kyr : 2.0 * kyr
+        dt    = 0.1 * kyr
+        iters = solve!(stokes, pt_stokes, di, freeslip, ρg, η, Gc, K, dt; iterMax=150e3, nout=10)
+
         t += dt
 
-        push!(av_τyy, mean(stokes.τ.yy))
+        # push!(av_τyy, mean(abs.(stokes.τ.yy)))
+        push!(av_τyy, maximum(stokes.τ.yy))
         push!(sol_τyy, solution(εbg, t, G, η0))
-        push!(tt, t / yr)
+        push!(tt, t / kyr)
     end
 
     return (ni=ni, xci=xci, xvi=xvi, li=li), stokes, av_τyy, sol_τyy, tt, iters

@@ -84,9 +84,8 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     ni = (nx, ny, nz) # number of nodes in x- and y-
     lx = ly = lz = 1e0
     li = (lx, ly, lz)  # domain length in x- and y-
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=false)...) # init MPI
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    max_li = max(li...)
     xci, xvi = lazy_grid(di, li) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
@@ -97,13 +96,14 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(ni, di; Re=6π, CFL=0.9 / √3)
+    pt_stokes = PTStokesCoeffs(li, di)
 
     ## Setup-specific parameters and fields
     β = 10.0
     η = @ones(ni...) # add reference 
     ρg = body_forces(xci) # => ρ*(gx, gy, gz)
-    G = 1e0
+    Gc = @fill(Inf, ni...) 
+    K = @fill(Inf, ni...) 
 
     ## Boundary conditions
     freeslip = (freeslip_x=false, freeslip_y=false, freeslip_z=false)
@@ -118,18 +118,16 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
         iters = solve!(
             stokes,
             pt_stokes,
-            ni,
             di,
-            li,
-            max_li,
             freeslip,
             ρg,
             η,
-            G,
+            K,
+            Gc,
             dt,
             igg;
             iterMax=10e3,
-            b_width=(1, 1, 1),
+            b_width=(4, 4, 4),
         )
         t += dt
     end

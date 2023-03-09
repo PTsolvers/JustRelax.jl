@@ -26,28 +26,30 @@ function make_thermal_arrays!(ndim)
 
             function ThermalArrays(ni::NTuple{2,Integer})
                 nx, ny = ni
-                T, ΔT, Told = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-                dT_dt = @zeros((ni .- 2))
-                qTx = @zeros(nx - 1, ny - 2)
-                qTy = @zeros(nx - 2, ny - 1)
-                qTx2 = @zeros(nx - 1, ny - 2)
-                qTy2 = @zeros(nx - 2, ny - 1)
-                ResT = @zeros((ni .- 2)...)
+                T, ΔT, Told = @zeros(ni .+ 1...), @zeros(ni .+ 1...), @zeros(ni .+ 1...)
+                dT_dt = @zeros(ni .- 1)
+                qTx = @zeros(nx, ny - 1)
+                qTy = @zeros(nx - 1, ny)
+                qTx2 = @zeros(nx, ny - 1)
+                qTy2 = @zeros(nx - 1, ny)
+                ResT = @zeros(ni .- 1...)
                 return new{typeof(T)}(T, ΔT, Told, dT_dt, qTx, qTy, qTx2, qTy2, ResT)
             end
 
             function ThermalArrays(ni::NTuple{3,Integer})
                 nx, ny, nz = ni
-                T, ΔT, Told = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-                dT_dt = @zeros((ni .- 2))
-                qTx = @zeros(nx - 1, ny - 2, nz - 2)
-                qTy = @zeros(nx - 2, ny - 1, nz - 2)
-                qTz = @zeros(nx - 2, ny - 2, nz - 1)
-                qTx2 = @zeros(nx - 1, ny - 2, nz - 2)
-                qTy2 = @zeros(nx - 2, ny - 1, nz - 2)
-                qTz2 = @zeros(nx - 2, ny - 2, nz - 1)
-                ResT = @zeros((ni .- 2)...)
-                return new{typeof(T)}(T, ΔT, Told, dT_dt, qTx, qTy, qTz, qTx2, qTy2, qTz2, ResT)
+                T, ΔT, Told = @zeros(ni.+1...), @zeros(ni.+1...), @zeros(ni.+1...)
+                dT_dt = @zeros(ni .- 1)
+                qTx   = @zeros(nx    , ny - 1, nz - 1)
+                qTy   = @zeros(nx - 1, ny    , nz - 1)
+                qTz   = @zeros(nx - 1, ny - 1, nz    )
+                qTx2  = @zeros(nx    , ny - 1, nz - 1)
+                qTy2  = @zeros(nx - 1, ny    , nz - 1)
+                qTz2  = @zeros(nx - 1, ny - 1, nz    )
+                ResT  = @zeros((ni .- 1)...)
+                return new{typeof(T)}(
+                    T, ΔT, Told, dT_dt, qTx, qTy, qTz, qTx2, qTy2, qTz2, ResT
+                )
             end
         end
     end

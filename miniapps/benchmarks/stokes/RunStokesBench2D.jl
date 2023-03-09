@@ -1,5 +1,6 @@
-using JustRelax
-using Printf, LinearAlgebra, CairoMakie
+using Pkg; Pkg.activate(".")
+using JustRelax, Printf, LinearAlgebra
+# using CairoMakie
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)
@@ -91,7 +92,7 @@ elseif benchmark == :solviel
     include("solvi/SolViEl.jl") # need to call this again if we switch from gpu <-/-> cpu
 
     # model specific parameters
-    Δη = 1e-3 # viscosity ratio between matrix and inclusion
+    Δη = 1e1 # viscosity ratio between matrix and inclusion
     rc = 0.2 # radius of the inclusion
     εbg = 1e0 # background strain rate
     lx, ly = 2e0, 2e0 # domain siye in x and y directions

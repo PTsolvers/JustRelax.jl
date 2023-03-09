@@ -9,25 +9,19 @@ end
 function environment!(model::PS_Setup{T,N}) where {T,N}
     gpu = model.device == :gpu ? true : false
 
-    # environment variable for XPU
-    @eval begin
-        const USE_GPU = haskey(ENV, "USE_GPU") ? parse(Bool, ENV["USE_GPU"]) : $gpu
-    end
-
     # call appropriate FD module
     Base.eval(@__MODULE__, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
     Base.eval(Main, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
 
     # start ParallelStencil
-    global PTArray
     if model.device == :gpu
         eval(:(@init_parallel_stencil(CUDA, $T, $N)))
         Base.eval(Main, Meta.parse("using CUDA"))
-        eval(:(PTArray = CUDA.CuArray{$T,$N}))
+        eval(:(const PTArray = CUDA.CuArray{$T,$N}))
     else
         @eval begin
             @init_parallel_stencil(Threads, $T, $N)
-            PTArray = Array{$T,$N}
+            const PTArray = Array{$T,$N}
         end
     end
 
@@ -54,11 +48,17 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs
         export TPF_Pressure, P_Residual, TPFArrays, PTTPFCoeffs, PTTPFParams
         export ThermalArrays, PTThermalCoeffs
-        export AbstractStokesModel, Viscous, ViscoElastic, PoreEvolution
+        export AbstractStokesModel,
+            AbstractElasticModel, Viscous, ViscoElastic, ViscoElastoPlastic, PoreEvolution
         export solve!
 
+        include(joinpath(@__DIR__, "Utils.jl"))
+        export @allocate, @add, @idx, @copy, compute_dt, assign!, tupleize
+
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
-        export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!, zero_y!
+        export pureshear_bc!, FlowBoundaryConditions, flow_bcs!
+        export TemperatureBoundaryConditions, thermal_boundary_conditions!, thermal_bcs!
+        export free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!, zero_y!
 
         include(joinpath(@__DIR__, "stokes/Stokes.jl"))
         export stress
@@ -67,12 +67,13 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         include(joinpath(@__DIR__, "TwoPhaseFlow/PT.jl"))
 
-        include(joinpath(@__DIR__, "Utils.jl"))
-
         include(joinpath(@__DIR__, "stokes/Elasticity.jl"))
 
         include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
         export ThermalParameters
+
+        include(joinpath(@__DIR__, "Interpolations.jl"))
+        export vertex2center!, center2vertex!
     end
 
     # conditional submodule load

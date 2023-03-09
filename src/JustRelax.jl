@@ -7,15 +7,24 @@ using LinearAlgebra
 using Printf
 using CUDA
 using MPI
-
-include("topology/Topology.jl")
-include("MetaJustRelax.jl")
-include("stokes/MetaStokes.jl")
-include("thermal_diffusion/MetaDiffusion.jl")
-include("TwoPhaseFlow/MetaTPF.jl")
+using GeoParams
+using HDF5
 
 function solve!() end
 
+include("topology/Topology.jl")
+export IGG, lazy_grid, Geometry
+
+include("MetaJustRelax.jl")
+
+include("stokes/MetaStokes.jl")
 export PS_Setup, environment!, ps_reset!
+
+include("thermal_diffusion/MetaDiffusion.jl")
+
+include("TwoPhaseFlow/MetaTPF.jl")
+
+include("IO/DataIO.jl")
+
 
 end # module

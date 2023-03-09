@@ -37,7 +37,13 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     ## Stokes
     make_residual_struct!(N) # residuals
     make_stokes_struct!() # Arrays for Stokes solver
-    make_PTstokes_struct!()
+    make_PTstokes_struct!() # numeric parameter for stokes
+    ## Two Phase Flow
+    make_pressure_struct!() # pressure
+    make_P_residual_struct!() # residuals for pressure
+    make_TPF_struct!() # Arrays for two phase flow solver
+    make_PTTPF_struct!() # numeric parameter for two phase flow
+    make_TPF_parameter_struct!() # background and initial parameters
     ## thermal diffusion
     make_thermal_arrays!(N) # Arrays for Thermal Diffusion solver
     make_PTthermal_struct!() # PT Thermal Diffusion coefficients
@@ -46,22 +52,26 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     @eval begin
         export USE_GPU, PTArray
         export Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs
+        export TPF_Pressure, P_Residual, TPFArrays, PTTPFCoeffs, PTTPFParams
         export ThermalArrays, PTThermalCoeffs
-        export AbstractStokesModel, Viscous, ViscoElastic
+        export AbstractStokesModel, Viscous, ViscoElastic, PoreEvolution
         export solve!
 
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
-        export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
+        export pureshear_bc!, free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!, zero_y!
 
         include(joinpath(@__DIR__, "stokes/Stokes.jl"))
         export stress
+
+        include(joinpath(@__DIR__, "TwoPhaseFlow/Direct.jl"))
+
+        include(joinpath(@__DIR__, "TwoPhaseFlow/PT.jl"))
 
         include(joinpath(@__DIR__, "Utils.jl"))
 
         include(joinpath(@__DIR__, "stokes/Elasticity.jl"))
 
-        include(joinpath(@__DIR__, "thermal_diffusion/DiffusionExplicit.jl"))
-        # include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
+        include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
         export ThermalParameters
     end
 
@@ -69,7 +79,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     module_names = if N === 1
         (Symbol("ThermalDiffusion$(N)D"),)
     elseif N === 2
-        (Symbol("Stokes$(N)D"), Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
+        (Symbol("Stokes$(N)D"), Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"),Symbol("TwoPhaseFlow$(N)D"))
     else
         (Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
     end

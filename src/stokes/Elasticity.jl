@@ -778,7 +778,7 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel compute_∇V!(stokes.∇V, @tuple(stokes.V)..., _di...)
+            @parallel compute_∇V!(stokes.∇V, stokes.V.Vx,stokes.V.Vy, _di...)
             
             @parallel (@idx ni) compute_P!(
                 stokes.P,
@@ -807,7 +807,7 @@ function JustRelax.solve!(
                 z,
                 thermal.T,
                 phase_v,
-                phase_c,
+                phase_c, 
                 args_η,
                 tupleize(MatParam), # needs to be a tuple
                 dt,
@@ -815,11 +815,15 @@ function JustRelax.solve!(
             )
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             @parallel compute_V!(
-                @tuple(stokes.V)...,
+                stokes.V.Vx,
+                stokes.V.Vy,
                 stokes.P,
-                @tuple(stokes.τ)...,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
                 ηdτ,
-                ρg...,
+                ρg[1],
+                ρg[2],
                 ητ,
                 _di...,
             )
@@ -831,10 +835,15 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                @tuple(stokes.R)...,
+                stokes.R.Rx,
+                stokes.R.Ry,
+                # stokes.R.RP,
                 stokes.P,
-                @tuple(stokes.τ)...,
-                ρg...,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                ρg[1],
+                ρg[2],
                 _di...,
             )
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))

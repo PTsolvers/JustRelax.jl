@@ -137,7 +137,7 @@ end
             Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
         end
         if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-            @inbounds Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)            
+            Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)            
         end
     end
 
@@ -277,24 +277,6 @@ end
     @inline gather(A) = A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1] 
     @inline av(T)     = (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
 
-    @inline begin
-        # # numerics
-        # dτ_r                = 1.0 / (θ_dτ + η[i, j] / (get_G(MatParam[1]) * dt) + 1.0) # original
-        @inbounds dτ_r      = 1.0 / (θ_dτ / η[i, j] + 1.0 / η_vep[i, j]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
-        # # Setup up input for GeoParams.jl
-        args                = (; dt=dt, P = 1e6 * (1 - z[j]) , T=av(T), τII_old=0.0)
-        # args                = (; dt=dt, P=P[i, j] , T=av(T), τII_old=0.0)
-        εij_p               = εxx[i, j]+1e-25, εyy[i, j]+1e-25, gather(εxyv).+1e-25
-        τij_p_o             = τxx_o[i,j], τyy_o[i,j], gather(τxyv_o)
-        phases              = (1, 1, (1,1,1,1)) # for now hard-coded for a single phase
-        # update stress and effective viscosity
-        τij, τII[i, j], ηᵢ  = compute_τij(MatParam, εij_p, args, τij_p_o, phases)
-        # ηᵢ                  = clamp(ηᵢ, 1e0, 1e6)
-        τxx[i, j]          += dτ_r * (-(τxx[i,j]) + τij[1] ) / ηᵢ # NOTE: from GP Tij = 2*η_vep * εij
-        τyy[i, j]          += dτ_r * (-(τyy[i,j]) + τij[2] ) / ηᵢ 
-        τxy[i, j]          += dτ_r * (-(τxy[i,j]) + τij[3] ) / ηᵢ 
-        η_vep[i, j]         = ηᵢ
-    end
     
     return nothing
 end

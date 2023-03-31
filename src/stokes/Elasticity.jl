@@ -97,52 +97,6 @@ end
     return nothing
 end
 
-## Compressible 
-@parallel function compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
-    @all(RP) = -@all(∇V) - (@all(P) - @all(P_old)) / (@all(K) * dt)
-    @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (@all(K) * dt))
-    return nothing
-end
-
-## Compressible - GeoParams
-@parallel function compute_P!(P, P_old, RP, ∇V, η, K::Number, dt, r, θ_dτ)
-    @all(RP) = -@all(∇V) - (@all(P) - @all(P_old)) / (K * dt)
-    @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (K * dt))
-    return nothing
-end
-
-@parallel function compute_V!(Vx, Vy, P, τxx, τyy, τxyv, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
-    @inn(Vx) =
-        @inn(Vx) +
-        (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @av_xa(ρgx)) * ηdτ /
-        @harm_xa(ητ)
-    @inn(Vy) =
-        @inn(Vy) +
-        (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @av_ya(ρgy)) * ηdτ /
-        @harm_ya(ητ)
-        return
-end
-
-@parallel_indices (i, j) function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
-    # Again, indices i, j are captured by the closure
-    Base.@propagate_inbounds @inline d_xa(A) = (A[i + 1, j] - A[i, j]) * _dx
-    Base.@propagate_inbounds @inline d_ya(A) = (A[i, j + 1] - A[i, j]) * _dy
-    Base.@propagate_inbounds @inline d_xi(A) = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
-    Base.@propagate_inbounds @inline d_yi(A) = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
-    Base.@propagate_inbounds @inline av_xa(A) = (A[i + 1, j] + A[i, j]) * 0.5
-    Base.@propagate_inbounds @inline av_ya(A) = (A[i, j + 1] + A[i, j]) * 0.5
-
-    @inbounds begin
-        if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-            Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
-        end
-        if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-            @inbounds Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)            
-        end
-    end
-
-    return nothing
-end
 
 ## Compressible - GeoParams
 @parallel function compute_P!(P, P_old, RP, ∇V, η, K::Number, dt, r, θ_dτ)

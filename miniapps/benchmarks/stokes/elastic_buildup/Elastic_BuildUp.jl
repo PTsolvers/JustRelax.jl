@@ -5,16 +5,23 @@ solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 function plot_elastic_buildup(av_τyy, sol_τyy, t)
     f = Figure()
-    ax = Axis(f[1, 1]; xlabel="kyrs", ylabel="Stress Mpa")
-    scatter!(ax, t ./ 1e3, sol_τyy ./ 1e6; label="analytic", linewidth=3)
-    lines!(ax, t ./ 1e3, av_τyy ./ 1e6; label="numeric", linewidth=3, color=:black)
+    ax = Axis(f[1, 1]; xlabel = "kyrs", ylabel = "Stress Mpa")
+    scatter!(ax, t ./ 1e3, sol_τyy ./ 1e6; label = "analytic", linewidth = 3)
+    lines!(ax, t ./ 1e3, av_τyy ./ 1e6; label = "numeric", linewidth = 3, color = :black)
     axislegend(ax)
     ylims!(ax, 0, 220)
     return f
 end
 
 function elastic_buildup(;
-    nx=256 - 1, ny=256 - 1, lx=100e3, ly=100e3, endtime=500, η0=1e22, εbg=1e-14, G=10^10
+    nx = 256 - 1,
+    ny = 256 - 1,
+    lx = 100e3,
+    ly = 100e3,
+    endtime = 500,
+    η0 = 1e22,
+    εbg = 1e-14,
+    G = 10^10,
 )
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
@@ -25,7 +32,7 @@ function elastic_buildup(;
     di = @. li / ni # grid step in x- and -y
     nDim = length(ni) # domain dimension
     origin = 0.0, 0.0
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    xci, xvi = lazy_grid(di, li, ni; origin = origin) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     yr = 365.25 * 3600 * 24
@@ -42,12 +49,12 @@ function elastic_buildup(;
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes =  PTStokesCoeffs(li, di; ϵ=1e-9,  CFL=1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1e-9, CFL = 1 / √2.1)
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
-    flow_bcs = FlowBoundaryConditions(; 
-        free_slip = (left=true, right=true, top=true, bot=true),
+    flow_bcs = FlowBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true),
     )
     flow_bcs!(stokes, flow_bcs, di)
 
@@ -57,8 +64,20 @@ function elastic_buildup(;
     local iters
     av_τyy, sol_τyy, tt = Float64[], Float64[], Float64[]
     while t < ttot
-        dt    = t < 10 * kyr ? 0.05 * kyr : 1.0 * kyr
-        iters = solve!(stokes, pt_stokes, di, flow_bcs, ρg, η, Gc, K, dt; iterMax=150e3, nout=1000)
+        dt = t < 10 * kyr ? 0.05 * kyr : 1.0 * kyr
+        iters = solve!(
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            η,
+            Gc,
+            K,
+            dt;
+            iterMax = 150e3,
+            nout = 1000,
+        )
 
         @show t += dt
 
@@ -68,17 +87,30 @@ function elastic_buildup(;
         push!(tt, t / kyr)
     end
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li), stokes, av_τyy, sol_τyy, tt, iters
+    return (ni = ni, xci = xci, xvi = xvi, li = li), stokes, av_τyy, sol_τyy, tt, iters
 end
 
 function multiple_elastic_buildup(;
-    lx=100e3, ly=100e3, endtime=500, η0=1e22, εbg=1e-14, G=10^10, nrange::UnitRange=4:8
+    lx = 100e3,
+    ly = 100e3,
+    endtime = 500,
+    η0 = 1e22,
+    εbg = 1e-14,
+    G = 10^10,
+    nrange::UnitRange = 4:8,
 )
     av_err = Float64[]
     for i in nrange
         nx = ny = 2^i - 1
         geometry, stokes, av_τyy, sol_τyy, t, iters = elastic_buildup(;
-            nx=nx, ny=ny, lx=lx, ly=ly, endtime=endtime, η0=η0, εbg=εbg, G=G
+            nx = nx,
+            ny = ny,
+            lx = lx,
+            ly = ly,
+            endtime = endtime,
+            η0 = η0,
+            εbg = εbg,
+            G = G,
         )
 
         push!(av_err, mean(@. abs(av_τyy - sol_τyy) / sol_τyy))
@@ -87,15 +119,15 @@ function multiple_elastic_buildup(;
     nx = @. 2^nrange - 1
     h = @. (1 / nx)
 
-    f = Figure(; fontsize=28)
+    f = Figure(; fontsize = 28)
     ax = Axis(
         f[1, 1];
-        yscale=log10,
-        xscale=log10,
-        yminorticksvisible=true,
-        yminorticks=IntervalsBetween(8),
+        yscale = log10,
+        xscale = log10,
+        yminorticksvisible = true,
+        yminorticks = IntervalsBetween(8),
     )
-    lines!(ax, h, av_err; linewidth=3)
+    lines!(ax, h, av_err; linewidth = 3)
     ax.xlabel = "h"
     ax.ylabel = "error ||av_τyy - sol_τyy||/sol_τyy"
 

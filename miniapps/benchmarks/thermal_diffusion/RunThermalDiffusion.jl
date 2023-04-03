@@ -19,17 +19,17 @@ if dimension === 3
 
     # start model
     geometry, thermal, iters = diffusion_3D(;
-        nx=nx,
-        ny=ny,
-        nz=nz,
-        lx=L,
-        ly=L,
-        lz=L,
-        ρ=3.3e3,
-        Cp=1.2e3,
-        K=3.0,
-        init_MPI=MPI.Initialized() ? false : true,
-        finalize_MPI=false,
+        nx = nx,
+        ny = ny,
+        nz = nz,
+        lx = L,
+        ly = L,
+        lz = L,
+        ρ = 3.3e3,
+        Cp = 1.2e3,
+        K = 3.0,
+        init_MPI = MPI.Initialized() ? false : true,
+        finalize_MPI = false,
     )
 
 elseif dimension == 2
@@ -40,9 +40,8 @@ elseif dimension == 2
     nx, ny = 64, 64
 
     # start model
-    geometry, thermal, iters = diffusion_2D(;
-        nx=nx, ny=ny, lx=L, ly=L, ρ=3.3e3, Cp=1.2e3, K=3.0
-    )
+    geometry, thermal, iters =
+        diffusion_2D(; nx = nx, ny = ny, lx = L, ly = L, ρ = 3.3e3, Cp = 1.2e3, K = 3.0)
 
 elseif dimension == 1
     # include model setup
@@ -52,5 +51,6 @@ elseif dimension == 1
     nx = 256
 
     # start model
-    geometry, thermal, iters = diffusion_1D(; nx=nx, lx=L, ρ=3.3e3, Cp=1.2e3, K=3.0)
+    geometry, thermal, iters =
+        diffusion_1D(; nx = nx, lx = L, ρ = 3.3e3, Cp = 1.2e3, K = 3.0)
 end

@@ -1,4 +1,5 @@
-using Pkg; Pkg.activate(".")
+using Pkg;
+Pkg.activate(".");
 using JustRelax, Printf, LinearAlgebra
 # using CairoMakie
 
@@ -30,13 +31,13 @@ if benchmark == :solcx
     Δη = 1e6
     if runtype == :single
         # run model
-        geometry, stokes, iters, ρ = solCx(Δη; nx=nx, ny=ny)
+        geometry, stokes, iters, ρ = solCx(Δη; nx = nx, ny = ny)
 
         # plot model output and error
-        f = plot_solCx_error(geometry, stokes, Δη; cmap=:romaO)
+        f = plot_solCx_error(geometry, stokes, Δη; cmap = :romaO)
 
     elseif runtype == :multiple
-        f = multiple_solCx(; Δη=Δη, nrange=6:10) # nx = ny = 2^(nrange)-1
+        f = multiple_solCx(; Δη = Δη, nrange = 6:10) # nx = ny = 2^(nrange)-1
     end
 
 elseif benchmark == :solkz
@@ -53,13 +54,13 @@ elseif benchmark == :solkz
     Δη = 1e6
     if runtype == :single
         # run model
-        geometry, stokes, iters, = solKz(; Δη=Δη, nx=nx, ny=ny)
+        geometry, stokes, iters, = solKz(; Δη = Δη, nx = nx, ny = ny)
 
         # plot model output and error
-        f = plot_solKz_error(geometry, stokes; cmap=:romaO)
+        f = plot_solKz_error(geometry, stokes; cmap = :romaO)
 
     elseif runtype == :multiple
-        f = multiple_solKz(; Δη=Δη, nrange=4:10) # nx = ny = 2^(nrange)-1
+        f = multiple_solKz(; Δη = Δη, nrange = 4:10) # nx = ny = 2^(nrange)-1
     end
 
 elseif benchmark == :solvi
@@ -77,13 +78,14 @@ elseif benchmark == :solvi
     lx, ly = 2e0, 2e0 # domain siye in x and y directions
     if runtype == :single
         # run model
-        geometry, stokes, iters = solVi(; Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc=rc, εbg=εbg)
+        geometry, stokes, iters =
+            solVi(; Δη = Δη, nx = nx, ny = ny, lx = lx, ly = ly, rc = rc, εbg = εbg)
 
         # plot model output and error
         f = plot_solVi_error(geometry, stokes, Δη, εbg, rc)
 
     elseif runtype == :multiple
-        f = multiple_solVi(; Δη=Δη, lx=lx, ly=ly, rc=rc, εbg=εbg, nrange=4:8) # nx = ny = 2^(nrange)-1
+        f = multiple_solVi(; Δη = Δη, lx = lx, ly = ly, rc = rc, εbg = εbg, nrange = 4:8) # nx = ny = 2^(nrange)-1
     end
 
 elseif benchmark == :solviel
@@ -98,15 +100,14 @@ elseif benchmark == :solviel
     lx, ly = 2e0, 2e0 # domain siye in x and y directions
     if runtype == :single
         # run model
-        geometry, stokes, iters = solViEl(;
-            Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc=rc, εbg=εbg
-        )
+        geometry, stokes, iters =
+            solViEl(; Δη = Δη, nx = nx, ny = ny, lx = lx, ly = ly, rc = rc, εbg = εbg)
 
         # plot model output and error
         f = plot_solVi_error(geometry, stokes, Δη, εbg, rc)
 
     elseif runtype == :multiple
-        f = multiple_solVi(; Δη=Δη, lx=lx, ly=ly, rc=rc, εbg=εbg, nrange=4:8) # nx = ny = 2^(nrange)-1
+        f = multiple_solVi(; Δη = Δη, lx = lx, ly = ly, rc = rc, εbg = εbg, nrange = 4:8) # nx = ny = 2^(nrange)-1
     end
 
 elseif benchmark == :elastic_buildup
@@ -127,14 +128,27 @@ elseif benchmark == :elastic_buildup
     if runtype == :single
         # run model
         geometry, stokes, av_τyy, sol_τyy, t, iters = elastic_buildup(;
-            nx=nx, ny=ny, lx=lx, ly=ly, endtime=endtime, η0=η0, εbg=εbg, G=G
+            nx = nx,
+            ny = ny,
+            lx = lx,
+            ly = ly,
+            endtime = endtime,
+            η0 = η0,
+            εbg = εbg,
+            G = G,
         )
         # plot model output and error
         f = plot_elastic_buildup(av_τyy, sol_τyy, t)
 
     elseif runtype == :multiple
         f = multiple_elastic_buildup(;
-            lx=lx, ly=ly, endtime=endtime, η0=η0, εbg=εbg, G=G, nrange=4:8
+            lx = lx,
+            ly = ly,
+            endtime = endtime,
+            η0 = η0,
+            εbg = εbg,
+            G = G,
+            nrange = 4:8,
         )
     end
 

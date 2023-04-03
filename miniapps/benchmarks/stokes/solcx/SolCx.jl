@@ -4,13 +4,15 @@ using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity
 include("vizSolCx.jl")
 
 @parallel function smooth!(
-    A2::AbstractArray{T,2}, A::AbstractArray{T,2}, fact::Real
+    A2::AbstractArray{T,2},
+    A::AbstractArray{T,2},
+    fact::Real,
 ) where {T}
     @inn(A2) = @inn(A) + 1.0 / 4.1 / fact * (@d2_xi(A) + @d2_yi(A))
     return nothing
 end
 
-function solCx_viscosity(xci, ni; Δη=1e6)
+function solCx_viscosity(xci, ni; Δη = 1e6)
     xc, yc = xci
     # make grid array (will be eaten by GC)
     x = PTArray([xci for xci in xc, _ in yc])
@@ -47,7 +49,7 @@ function solCx_density(xci, ni)
     return ρ
 end
 
-function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
+function solCx(Δη; nx = 256 - 1, ny = 256 - 1, lx = 1e0, ly = 1e0)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
@@ -57,8 +59,8 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     di = @. li / ni # grid step in x- and -y
     max_li = max(li...)
     nDim = length(ni) # domain dimension
-    xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
-    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
+    xci = Tuple([(di[i]/2):di[i]:(li[i]-di[i]/2) for i = 1:nDim]) # nodes at the center of the cells
+    xvi = Tuple([0:di[i]:li[i] for i = 1:nDim]) # nodes at the vertices of the cells
     g = 1
 
     ## (Physical) Time domain and discretization
@@ -69,10 +71,10 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; CFL = 1 / √2.1)
 
     ## Setup-specific parameters and fields
-    η = solCx_viscosity(xci, ni; Δη=Δη) # viscosity field
+    η = solCx_viscosity(xci, ni; Δη = Δη) # viscosity field
     ρ = solCx_density(xci, ni)
     fy = ρ .* g
     ρg = @zeros(ni...), fy
@@ -82,35 +84,45 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
 
     # smooth viscosity jump (otherwise no convergence for Δη > ~15)
     η2 = deepcopy(η)
-    for _ in 1:5
+    for _ = 1:5
         @parallel smooth!(η2, η, 1.0)
         @parallel (1:size(η2, 1)) free_slip_y!(η2)
         η, η2 = η2, η
     end
 
     ## Boundary conditions
-    flow_bcs = FlowBoundaryConditions(; 
-        free_slip = (left=true, right=true, top=true, bot=true),
+    flow_bcs = FlowBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true),
     )
     # Physical time loop
     t = 0.0
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt; iterMax=150_000, nout=100
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            η,
+            G,
+            K,
+            dt;
+            iterMax = 150_000,
+            nout = 100,
         )
         t += Δt
     end
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters, ρ
+    return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), stokes, iters, ρ
 end
 
-function multiple_solCx(; Δη=1e6, nrange::UnitRange=6:10)
+function multiple_solCx(; Δη = 1e6, nrange::UnitRange = 6:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solCx(Δη; nx=nx, ny=ny)
-        L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes; order=1)
+        geometry, stokes, = solCx(Δη; nx = nx, ny = ny)
+        L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes; order = 1)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)
         push!(L2_p, L2_pi)
@@ -119,18 +131,18 @@ function multiple_solCx(; Δη=1e6, nrange::UnitRange=6:10)
     nx = @. 2^nrange - 1
     h = @. (1 / nx)
 
-    f = Figure(; fontsize=28)
+    f = Figure(; fontsize = 28)
     ax = Axis(
         f[1, 1];
-        yscale=log10,
-        xscale=log10,
-        yminorticksvisible=true,
-        yminorticks=IntervalsBetween(8),
+        yscale = log10,
+        xscale = log10,
+        yminorticksvisible = true,
+        yminorticks = IntervalsBetween(8),
     )
-    lines!(ax, h, (L2_vx); linewidth=3, label="Vx")
-    lines!(ax, h, (L2_vy); linewidth=3, label="Vy")
-    lines!(ax, h, (L2_p); linewidth=3, label="P")
-    axislegend(ax; position=:lt)
+    lines!(ax, h, (L2_vx); linewidth = 3, label = "Vx")
+    lines!(ax, h, (L2_vy); linewidth = 3, label = "Vy")
+    lines!(ax, h, (L2_p); linewidth = 3, label = "P")
+    axislegend(ax; position = :lt)
     ax.xlabel = "h"
     ax.ylabel = "L1 norm"
 

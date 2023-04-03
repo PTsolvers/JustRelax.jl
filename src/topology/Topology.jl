@@ -20,17 +20,22 @@ struct Geometry{nDim}
     xvi::NTuple{nDim,StepRangeLen}
 
     function Geometry(
-        ni::NTuple{nDim,Integer}, li::NTuple{nDim,T}; origin=ntuple(_ -> 0.0, Val(nDim))
+        ni::NTuple{nDim,Integer},
+        li::NTuple{nDim,T};
+        origin = ntuple(_ -> 0.0, Val(nDim)),
     ) where {nDim,T}
         Li = Float64.(li)
         di = Li ./ ni
-        xci, xvi = lazy_grid(di, Li; origin=origin)
+        xci, xvi = lazy_grid(di, Li; origin = origin)
         return new{nDim}(ni, Li, max(Li...), di, xci, xvi)
     end
 end
 
 function lazy_grid(
-    di::NTuple{N,T1}, li::NTuple{N,T2}, ni; origin=ntuple(_ -> zero(T1), Val(N))
+    di::NTuple{N,T1},
+    li::NTuple{N,T2},
+    ni;
+    origin = ntuple(_ -> zero(T1), Val(N)),
 ) where {N,T1,T2}
     # nodes at the center of the grid cells
     xci = ntuple(Val(N)) do i
@@ -43,7 +48,7 @@ function lazy_grid(
     xvi = ntuple(Val(N)) do i
         Base.@_inline_meta
         # @inbounds origin[i]:di[i]:(origin[i] + li[i])
-        @inbounds LinRange(origin[i], origin[i] + li[i], ni[i]+1)
+        @inbounds LinRange(origin[i], origin[i] + li[i], ni[i] + 1)
     end
 
     return xci, xvi

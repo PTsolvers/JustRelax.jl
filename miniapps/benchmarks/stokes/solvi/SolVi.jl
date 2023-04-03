@@ -31,9 +31,9 @@ function solvi_viscosity(ni, di, li, rc, η0, ηi)
         ) for ix in 1:ni[1], iy in 1:ni[2]
     ]
     η[Rad2 .< rc] .= ηi
-    # η2 = deepcopy(η)
+    η2 = deepcopy(η)
     # η3 = deepcopy(η)
-    # for _ in 1:10
+    # for _ in 1:2
     #     @parallel smooth!(η2, η, 1.0)
     #     η, η2 = η2, η
     # end
@@ -69,7 +69,7 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di)
+    pt_stokes =  PTStokesCoeffs(li, di; ϵ=1e-5,  CFL=0.27 / √2.1)
 
     ## Setup-specific parameters and fields
     η0 = 1.0  # matrix viscosity
@@ -86,12 +86,13 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
     flow_bcs = FlowBoundaryConditions(; 
         free_slip = (left=true, right=true, top=true, bot=true),
     )
+    flow_bcs!(stokes, flow_bcs, di)
 
     # Physical time loop
     t = 0.0
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt; iterMax=150e3)
+        iters = solve!(stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt; iterMax=150e3, nout=1e3)
         t += Δt
     end
 

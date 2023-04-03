@@ -413,6 +413,7 @@ function JustRelax.solve!(
     ητ = deepcopy(η)
     @parallel compute_maxloc!(ητ, η)
     apply_free_slip!((freeslip_x=true, freeslip_y=true), ητ, ητ)
+    flow_bcs!(stokes, flow_bcs, di)
 
     # errors
     err = 2 * ϵ
@@ -505,7 +506,7 @@ function JustRelax.solve!(
 
     if -Inf < dt < Inf 
         update_τ_o!(stokes)
-        @parallel (1:nx, 1:ny) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
+        # @parallel (1:nx, 1:ny) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
     end
 
     return (
@@ -625,7 +626,6 @@ function JustRelax.solve!(
                 _di...,
             )
             # apply boundary conditions boundary conditions
-            # apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
             flow_bcs!(stokes, flow_bcs, di)
         end
 

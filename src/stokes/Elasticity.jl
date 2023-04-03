@@ -97,6 +97,13 @@ end
     return nothing
 end
 
+## Compressible 
+@parallel function compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
+    @all(RP) = -@all(∇V) - (@all(P) - @all(P_old)) / (@all(K) * dt)
+    @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (@all(K) * dt))
+    return nothing
+end
+
 ## Compressible - GeoParams
 @parallel function compute_P!(P, P_old, RP, ∇V, η, K::Number, dt, r, θ_dτ)
     @all(RP) = -@all(∇V) - (@all(P) - @all(P_old)) / (K * dt)

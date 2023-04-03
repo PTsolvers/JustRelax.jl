@@ -80,7 +80,11 @@ function solVi3D(;
 
     ## Boundary conditions
     pureshear_bc!(stokes, di, li, εbg)
-    freeslip = (freeslip_x=true, freeslip_y=true, freeslip_z=true)
+    flow_bcs = FlowBoundaryConditions(; 
+        free_slip = (left=false, right=false, top=false, bot=false, back=false, front=false),
+        no_slip = (left=false, right=false, top=false, bot=false, back=false, front=false),
+        periodicity = (left=false, right=false, top=false, bot=false, back=false, front=false),
+    )
 
     ## Body forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
@@ -93,7 +97,7 @@ function solVi3D(;
             stokes,
             pt_stokes,
             di,
-            freeslip,
+            flow_bcs,
             ρg,
             η,
             Kb,

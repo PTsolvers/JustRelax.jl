@@ -205,7 +205,11 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     K = @fill(Inf, ni...)
 
     ## Boundary conditions
-    freeslip = (freeslip_x=false, freeslip_y=false, freeslip_z=false)
+    flow_bcs = FlowBoundaryConditions(; 
+        free_slip = (left=false, right=false, top=false, bot=false, back=false, front=false),
+        no_slip = (left=false, right=false, top=false, bot=false, back=false, front=false),
+        periodicity = (left=false, right=false, top=false, bot=false, back=false, front=false),
+    )
     # impose analytical velociity at the boundaries of the domain
     velocity!(stokes, xci, xvi)
 
@@ -218,7 +222,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             stokes,
             pt_stokes,
             di,
-            freeslip,
+            flow_bcs,
             ρg,
             η,
             G,

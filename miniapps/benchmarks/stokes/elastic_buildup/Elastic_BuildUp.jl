@@ -24,8 +24,8 @@ function elastic_buildup(;
     li = (lx, ly)  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
     nDim = length(ni) # domain dimension
-    xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
-    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
+    origin = 0.0, 0.0
+    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     yr = 365.25 * 3600 * 24
@@ -42,28 +42,28 @@ function elastic_buildup(;
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di)
+    pt_stokes =  PTStokesCoeffs(li, di; ϵ=1e-9,  CFL=1 / √2.1)
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
     flow_bcs = FlowBoundaryConditions(; 
         free_slip = (left=true, right=true, top=true, bot=true),
     )
+    flow_bcs!(stokes, flow_bcs, di)
 
     # Physical time loop
     t = 0.0
-    ρg = (@zeros(ni...), @ones(size(stokes.P)) .* g)
+    ρg = @zeros(ni...), @ones(size(stokes.P)) .* g
     local iters
     av_τyy, sol_τyy, tt = Float64[], Float64[], Float64[]
     while t < ttot
-        # dt    = t < 5 / kyr ? 0.1 * kyr : 2.0 * kyr
-        dt    = 0.1 * kyr
-        iters = solve!(stokes, pt_stokes, di, flow_bcs, ρg, η, Gc, K, dt; iterMax=150e3, nout=10)
+        dt    = t < 10 * kyr ? 0.05 * kyr : 1.0 * kyr
+        iters = solve!(stokes, pt_stokes, di, flow_bcs, ρg, η, Gc, K, dt; iterMax=150e3, nout=1000)
 
-        t += dt
+        @show t += dt
 
-        # push!(av_τyy, mean(abs.(stokes.τ.yy)))
-        push!(av_τyy, maximum(stokes.τ.yy))
+        push!(av_τyy, maximum(abs.(stokes.τ.yy)))
+        # push!(av_τyy, maximum(stokes.τ.yy))
         push!(sol_τyy, solution(εbg, t, G, η0))
         push!(tt, t / kyr)
     end

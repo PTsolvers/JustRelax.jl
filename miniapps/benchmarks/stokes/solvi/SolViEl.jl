@@ -73,7 +73,9 @@ function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, �
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
-    freeslip = (freeslip_x=true, freeslip_y=true)
+    flow_bcs = FlowBoundaryConditions(; 
+        free_slip = (left=true, right=true, top=true, bot=true),
+    )
 
     # Physical time loop
     t = 0.0
@@ -85,7 +87,7 @@ function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, �
             stokes,
             pt_stokes,
             di,
-            freeslip,
+            flow_bcs,
             ρg,
             η,
             Gc,

@@ -83,13 +83,15 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
-    freeslip = (freeslip_x=true, freeslip_y=true)
+    flow_bcs = FlowBoundaryConditions(; 
+        free_slip = (left=true, right=true, top=true, bot=true),
+    )
 
     # Physical time loop
     t = 0.0
     local iters
     while t < ttot
-        iters = solve!(stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=150e3)
+        iters = solve!(stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt; iterMax=150e3)
         t += Δt
     end
 

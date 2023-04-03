@@ -74,14 +74,16 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     K = @fill(Inf, ni...)
 
     ## Boundary conditions
-    freeslip = (freeslip_x=true, freeslip_y=true)
+    flow_bcs = FlowBoundaryConditions(; 
+        free_slip = (left=true, right=true, top=true, bot=true),
+    )
 
     # Physical time loop
     t = 0.0
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, freeslip, ρg, η, G, K, dt; iterMax=150e3, nout=1e3
+            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt; iterMax=150e3, nout=1e3
         )
         t += Δt
     end

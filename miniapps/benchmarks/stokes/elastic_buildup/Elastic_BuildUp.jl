@@ -46,8 +46,9 @@ function elastic_buildup(;
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
-
-    freeslip = (freeslip_x=true, freeslip_y=true)
+    flow_bcs = FlowBoundaryConditions(; 
+        free_slip = (left=true, right=true, top=true, bot=true),
+    )
 
     # Physical time loop
     t = 0.0
@@ -57,7 +58,7 @@ function elastic_buildup(;
     while t < ttot
         # dt    = t < 5 / kyr ? 0.1 * kyr : 2.0 * kyr
         dt    = 0.1 * kyr
-        iters = solve!(stokes, pt_stokes, di, freeslip, ρg, η, Gc, K, dt; iterMax=150e3, nout=10)
+        iters = solve!(stokes, pt_stokes, di, flow_bcs, ρg, η, Gc, K, dt; iterMax=150e3, nout=10)
 
         t += dt
 

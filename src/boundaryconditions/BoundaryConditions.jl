@@ -260,7 +260,6 @@ end
 function pureshear_bc!(
     stokes::StokesArrays, xci::NTuple{2,T}, xvi::NTuple{2,T}, εbg
 ) where {T}
-    # unpack
     stokes.V.Vx[:, 2:(end - 1)] .= PTArray([εbg * x for x in xvi[1], y in xci[2]])
     stokes.V.Vy[2:(end - 1), :] .= PTArray([-εbg * y for x in xci[1], y in xvi[2]])
 

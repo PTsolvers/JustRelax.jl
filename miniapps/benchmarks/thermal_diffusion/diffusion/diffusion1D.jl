@@ -19,7 +19,7 @@ function diffusion_1D(; nx=128, lx=100e3, ρ=3.3e3, Cp=1.2e3, K=3.0)
     ni = (nx,)
     li = (lx,)  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni, origin=(-lx,)) # nodes at the center and vertices of the cells
+    xci, xvi = lazy_grid(di, li, ni; origin=(-lx,)) # nodes at the center and vertices of the cells
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays

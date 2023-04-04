@@ -185,7 +185,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     origin = zero(nx), zero(ny), zero(nz)
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni, origin=origin) # nodes at the center and vertices of the cells
+    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total siηlation time
@@ -209,7 +209,9 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     flow_bcs = FlowBoundaryConditions(;
         free_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
         no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
-        periodicity=(left=false, right=false, top=false, bot=false, back=false, front=false),
+        periodicity=(
+            left=false, right=false, top=false, bot=false, back=false, front=false
+        ),
     )
     # impose analytical velociity at the boundaries of the domain
     velocity!(stokes, xci, xvi)

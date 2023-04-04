@@ -57,7 +57,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
     ni = nx, ny                           # number of cells
     li = lx_nd, ly_nd                     # domain length in x- and y-
     di = @. li / ni                       # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni, origin=origin) # nodes at the center and vertices of the cells
+    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------

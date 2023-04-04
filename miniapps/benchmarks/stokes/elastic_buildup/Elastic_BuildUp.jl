@@ -25,7 +25,7 @@ function elastic_buildup(;
     di = @. li / ni # grid step in x- and -y
     nDim = length(ni) # domain dimension
     origin = 0.0, 0.0
-    xci, xvi = lazy_grid(di, li, ni, origin=origin) # nodes at the center and vertices of the cells
+    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     yr = 365.25 * 3600 * 24

@@ -1262,7 +1262,7 @@ function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
-    freeslip,
+    flow_bcs,
     ρg,
     η,
     K,
@@ -1382,7 +1382,7 @@ function JustRelax.solve!(
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
 
-            apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+            flow_bcs!(stokes, flow_bcs, di)
         end
 
         iter += 1
@@ -1444,7 +1444,7 @@ function JustRelax.solve!(
     thermal::ThermalArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
-    flow_bc::FlowBoundaryConditions,
+    flow_bcs::FlowBoundaryConditions,
     ρg,
     η,
     η_vep,
@@ -1590,7 +1590,7 @@ function JustRelax.solve!(
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
             # apply_free_slip!(flow_bc, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
-            flow_bcs!(stokes, flow_bc, di)
+            flow_bcs!(stokes, flow_bcs, di)
         end
 
         iter += 1

@@ -182,9 +182,10 @@ function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = 
     ni = (nx, ny, nz) # number of nodes in x- and y-
     lx = ly = lz = 1e0
     li = (lx, ly, lz)  # domain length in x- and y-
+    origin = zero(nx),zero(ny),zero(nz)
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI)...) # init MPI
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li) # nodes at the center and vertices of the cells
+    xci, xvi = lazy_grid(di, li, ni, origin=origin) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total siηlation time

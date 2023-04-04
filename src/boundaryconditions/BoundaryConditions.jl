@@ -66,8 +66,7 @@ end
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes` 
 """
-function flow_bcs!(stokes, bcs::FlowBoundaryConditions, di)
-    V = @unpack stokes.V
+function flow_bcs!(bcs::FlowBoundaryConditions, di, V...)
     n = bc_index(V)
     _di = inv.(di)
 
@@ -79,6 +78,12 @@ function flow_bcs!(stokes, bcs::FlowBoundaryConditions, di)
     do_bc(bcs.periodicity) &&
         (@parallel (@idx n) periodic_boundaries!(V..., bcs.periodicity))
 
+    return nothing
+end
+
+function flow_bcs!(stokes, bcs::FlowBoundaryConditions, di)
+    V = @unpack stokes.V
+    flow_bcs!(bcs, di, V...)
     return nothing
 end
 

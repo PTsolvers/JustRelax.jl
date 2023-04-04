@@ -400,37 +400,40 @@ end
     nx, ny, nz = size(args.P)
 
     @inbounds begin
-        if all( (i,j,k) .≤ size(qTx) )
-            Tx = (T[i1, j1, k1] + T[i , j1, k1]) * 0.5
+        if all((i, j, k) .≤ size(qTx))
+            Tx = (T[i1, j1, k1] + T[i, j1, k1]) * 0.5
             Pvertex = 0.0
             for jj in 0:1, kk in 0:1
-                Pvertex += args.P[i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)]  
+                Pvertex += args.P[i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)]
             end
-            argsx = (; T = Tx, P=Pvertex)
+            argsx = (; T=Tx, P=Pvertex)
 
-            qTx[i, j, k] = -compute_diffusivity(rheology, argsx) * (T[i1, j1, k1] - T[i , j1, k1]) * _dx
+            qTx[i, j, k] =
+                -compute_diffusivity(rheology, argsx) * (T[i1, j1, k1] - T[i, j1, k1]) * _dx
         end
 
-        if all( (i,j,k) .≤ size(qTy) )
-            Ty = (T[i1, j1, k1] + T[i1, j , k1]) * 0.5
+        if all((i, j, k) .≤ size(qTy))
+            Ty = (T[i1, j1, k1] + T[i1, j, k1]) * 0.5
             Pvertex = 0.0
             for kk in 0:1, ii in 0:1
                 args.P[clamp(ii, 1, nx), j, clamp(kk, 1, nz)]
             end
-            argsy = (; T = Ty, P=Pvertex)
+            argsy = (; T=Ty, P=Pvertex)
 
-            qTy[i, j, k] = -compute_diffusivity(rheology, argsy) * (T[i1, j1, k1] - T[i1, j , k1]) * _dy
+            qTy[i, j, k] =
+                -compute_diffusivity(rheology, argsy) * (T[i1, j1, k1] - T[i1, j, k1]) * _dy
         end
 
-        if all( (i,j,k) .≤ size(qTz) )
-            Tz = (T[i1, j1, k1] + T[i1, j1, k ]) * 0.5
+        if all((i, j, k) .≤ size(qTz))
+            Tz = (T[i1, j1, k1] + T[i1, j1, k]) * 0.5
             Pvertex = 0.0
             for jj in 0:1, ii in 0:1
                 args.P[clamp(ii, 1, nx), clamp(jj, 1, ny), k]
             end
-            argsz = (; T = Tz, P=Pvertex)
+            argsz = (; T=Tz, P=Pvertex)
 
-            qTz[i, j, k] = -compute_diffusivity(rheology, argsz) * (T[i1, j1, k1] - T[i1, j1, k ]) * _dz
+            qTz[i, j, k] =
+                -compute_diffusivity(rheology, argsz) * (T[i1, j1, k1] - T[i1, j1, k]) * _dz
         end
     end
 

@@ -16,14 +16,14 @@ end
     return nothing
 end
 
-function viscosity(ni, di, li, rc, η0, ηi; b_width = (1, 1, 1))
+function viscosity(ni, di, li, rc, η0, ηi; b_width=(1, 1, 1))
     η = @fill(η0, ni...)
 
     @parallel (1:ni[1], 1:ni[2], 1:ni[3]) _viscosity!(η, ηi, rc, li, di)
 
     # smooth viscosity field
     η2 = deepcopy(η)
-    for _ = 1:10
+    for _ in 1:10
         @hide_communication b_width begin # communication/computation overlap
             @parallel smooth!(η2, η, 1.0)
             η, η2 = η2, η
@@ -35,28 +35,28 @@ function viscosity(ni, di, li, rc, η0, ηi; b_width = (1, 1, 1))
 end
 
 function solVi3D(;
-    Δη = 1e-3,
-    nx = 32 - 1,
-    ny = 32 - 1,
-    nz = 32 - 1,
-    lx = 1e1,
-    ly = 1e1,
-    lz = 1e1,
-    rc = 1e0,
-    εbg = 1e0,
-    init_MPI = true,
-    finalize_MPI = false,
+    Δη=1e-3,
+    nx=32 - 1,
+    ny=32 - 1,
+    nz=32 - 1,
+    lx=1e1,
+    ly=1e1,
+    lz=1e1,
+    rc=1e0,
+    εbg=1e0,
+    init_MPI=true,
+    finalize_MPI=false,
 )
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
     ni = nx, ny, nz # number of nodes in x- and y-
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI)...) # init MPI
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
     li = (lx, ly, lz)  # domain length in x- and y-
-    origin = zero(nx),zero(ny),zero(nz)
+    origin = zero(nx), zero(ny), zero(nz)
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni, origin=origin) # nodes at the center and vertices of the cells
+    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
@@ -82,29 +82,10 @@ function solVi3D(;
     ## Boundary conditions
     pureshear_bc!(stokes, di, li, εbg)
     flow_bcs = FlowBoundaryConditions(;
-        free_slip = (
-            left = false,
-            right = false,
-            top = false,
-            bot = false,
-            back = false,
-            front = false,
-        ),
-        no_slip = (
-            left = false,
-            right = false,
-            top = false,
-            bot = false,
-            back = false,
-            front = false,
-        ),
-        periodicity = (
-            left = false,
-            right = false,
-            top = false,
-            bot = false,
-            back = false,
-            front = false,
+        free_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
+        no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
+        periodicity=(
+            left=false, right=false, top=false, bot=false, back=false, front=false
         ),
     )
 
@@ -116,23 +97,12 @@ function solVi3D(;
     local iters
     while t < ttot
         iters = solve!(
-            stokes,
-            pt_stokes,
-            di,
-            flow_bcs,
-            ρg,
-            η,
-            Kb,
-            Gc,
-            dt,
-            igg;
-            iterMax = 5000,
-            nout = 100,
+            stokes, pt_stokes, di, flow_bcs, ρg, η, Kb, Gc, dt, igg; iterMax=5000, nout=100
         )
         t += dt
     end
 
-    finalize_global_grid(; finalize_MPI = finalize_MPI)
+    finalize_global_grid(; finalize_MPI=finalize_MPI)
 
-    return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), stokes, iters
+    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters
 end

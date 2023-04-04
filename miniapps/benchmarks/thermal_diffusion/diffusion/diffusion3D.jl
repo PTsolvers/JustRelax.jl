@@ -12,17 +12,17 @@ using MPI
 end
 
 function diffusion_3D(;
-    nx = 32,
-    ny = 32,
-    nz = 32,
-    lx = 100e3,
-    ly = 100e3,
-    lz = 100e3,
-    ρ = 3.3e3,
-    Cp = 1.2e3,
-    K = 3.0,
-    init_MPI = MPI.Initialized() ? false : true,
-    finalize_MPI = false,
+    nx=32,
+    ny=32,
+    nz=32,
+    lx=100e3,
+    ly=100e3,
+    lz=100e3,
+    ρ=3.3e3,
+    Cp=1.2e3,
+    K=3.0,
+    init_MPI=MPI.Initialized() ? false : true,
+    finalize_MPI=false,
 )
     kyr = 1e3 * 3600 * 24 * 365.25
     Myr = 1e6 * 3600 * 24 * 365.25
@@ -33,9 +33,9 @@ function diffusion_3D(;
     ni = (nx, ny, nz)
     li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
-    xci, = lazy_grid(di, li; origin = (0, 0, -lz)) # nodes at the center and vertices of the cells
+    xci, xvi = lazy_grid(di, li, ni, origin=(0, 0, -lz)) # nodes at the center and vertices of the cells
 
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI)...) # init MPI
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
@@ -50,7 +50,7 @@ function diffusion_3D(;
 
     # Boundary conditions
     pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li)
-    thermal_bc = (frontal = true, lateral = true)
+    thermal_bc = (frontal=true, lateral=true)
 
     @parallel (1:nx, 1:ny, 1:nz) init_T!(thermal.T, xci[3])
     @parallel assign!(thermal.Told, thermal.T)
@@ -71,15 +71,15 @@ function diffusion_3D(;
             di,
             igg,
             dt;
-            iterMax = 10e3,
-            nout = 1,
-            verbose = false,
+            iterMax=10e3,
+            nout=1,
+            verbose=false,
         )
         t += dt
         it += 1
     end
 
-    finalize_global_grid(; finalize_MPI = finalize_MPI)
+    finalize_global_grid(; finalize_MPI=finalize_MPI)
 
-    return (ni = ni, xci = xci, li = li, di = di), thermal, iters
+    return (ni=ni, xci=xci, li=li, di=di), thermal, iters
 end

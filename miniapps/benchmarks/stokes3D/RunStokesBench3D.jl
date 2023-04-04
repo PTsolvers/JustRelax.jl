@@ -28,15 +28,15 @@ if benchmark == :taylorGreen
 
     # run benchmark
     geometry, stokes, iters = taylorGreen(;
-        nx = nx,
-        ny = ny,
-        nz = nz,
-        init_MPI = MPI.Initialized() ? false : true,
-        finalize_MPI = finalize_MPI,
+        nx=nx,
+        ny=ny,
+        nz=nz,
+        init_MPI=MPI.Initialized() ? false : true,
+        finalize_MPI=finalize_MPI,
     )
 
     # plot results
-    f = plot(stokes, geometry; cmap = :vik)
+    f = plot(stokes, geometry; cmap=:vik)
 
     # compute error
     L2_p, L2_vx, L2_vy, L2_vz = error(stokes, geometry)
@@ -51,15 +51,15 @@ elseif benchmark == :Burstedde
 
     # run benchmark
     geometry, stokes, iters = burstedde(;
-        nx = nx,
-        ny = ny,
-        nz = nz,
-        init_MPI = MPI.Initialized() ? false : true,
-        finalize_MPI = finalize_MPI,
+        nx=nx,
+        ny=ny,
+        nz=nz,
+        init_MPI=MPI.Initialized() ? false : true,
+        finalize_MPI=finalize_MPI,
     )
 
     # plot results
-    f = plot(stokes, geometry; cmap = :vik)
+    f = plot(stokes, geometry; cmap=:vik)
 
     # compute error
     L2_p, L2_vx, L2_vy, L2_vz = error(stokes, geometry)
@@ -80,17 +80,17 @@ elseif benchmark == :solvi
 
     # run model
     geometry, stokes, iters = solVi3D(;
-        Δη = Δη,
-        nx = nx,
-        ny = ny,
-        nz = nz,
-        lx = lx,
-        ly = ly,
-        lz = lz,
-        rc = rc,
-        εbg = εbg,
-        init_MPI = MPI.Initialized() ? false : true,
-        finalize_MPI = finalize_MPI,
+        Δη=Δη,
+        nx=nx,
+        ny=ny,
+        nz=nz,
+        lx=lx,
+        ly=ly,
+        lz=lz,
+        rc=rc,
+        εbg=εbg,
+        init_MPI=MPI.Initialized() ? false : true,
+        finalize_MPI=finalize_MPI,
     )
 
 else

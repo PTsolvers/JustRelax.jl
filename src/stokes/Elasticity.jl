@@ -271,13 +271,15 @@ end
     dt,
     θ_dτ,
 )
+    #! format: off
     # convinience closure
     Base.@propagate_inbounds @inline function gather(A)
-        return A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1]
+        A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1]
     end
     Base.@propagate_inbounds @inline function av(T)
-        return (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
+        (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
     end
+    #! format: on
 
     @inbounds begin
         k = keys(args_η)

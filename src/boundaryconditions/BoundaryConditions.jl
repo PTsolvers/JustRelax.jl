@@ -30,15 +30,15 @@ struct FlowBoundaryConditions{T,nD} <: AbstractBoundaryConditions
     end
 end
 
-bc_index(x::NTuple{2,T}) where {T} = mapreduce(xi -> max(size(xi)...), max, x)
-bc_index(x::T) where {T<:AbstractArray{<:Any,2}} = max(size(x)...)
+@inline bc_index(x::NTuple{2,T}) where {T} = mapreduce(xi -> max(size(xi)...), max, x)
+@inline bc_index(x::T) where {T<:AbstractArray{<:Any,2}} = max(size(x)...)
 
-function bc_index(x::NTuple{3,T}) where {T}
+@inline function bc_index(x::NTuple{3,T}) where {T}
     nx, ny, nz = size(x[1])
     return max((nx, ny), (ny, nz), (nx, nz))
 end
 
-function bc_index(x::T) where {T<:AbstractArray{<:Any,3}}
+@inline function bc_index(x::T) where {T<:AbstractArray{<:Any,3}}
     nx, ny, nz = size(x)
     return max((nx, ny), (ny, nz), (nx, nz))
 end

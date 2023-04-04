@@ -38,7 +38,6 @@ end
     return compute_dt(unpack(V), di, dt_diff)
 end
 
-
 @inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v
 

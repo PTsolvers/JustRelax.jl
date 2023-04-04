@@ -1,4 +1,4 @@
-function plot(stokes::StokesArrays, geometry, rc; cmap=:vik)
+function plot(stokes::StokesArrays, geometry, rc; cmap = :vik)
     xci, xvi = geometry.xci, geometry.xvi
 
     cx, cy = (geometry.xvi[1][end] - geometry.xvi[1][1]) / 2,
@@ -8,24 +8,24 @@ function plot(stokes::StokesArrays, geometry, rc; cmap=:vik)
 
     islice = geometry.ni[1] ÷ 2
 
-    f = Figure(; resolution=(2600, 900), fontsize=20)
+    f = Figure(; resolution = (2600, 900), fontsize = 20)
 
     # Pressure
-    ax = Axis(f[1, 1]; axis=1, title="Pressure numeric")
-    h = heatmap!(ax, xci[1], xci[2], stokes.P[islice, :, :]; colormap=cmap)
-    lines!(ax, xi, yi; linewidth=3, color=:black)
+    ax = Axis(f[1, 1]; axis = 1, title = "Pressure numeric")
+    h = heatmap!(ax, xci[1], xci[2], stokes.P[islice, :, :]; colormap = cmap)
+    lines!(ax, xi, yi; linewidth = 3, color = :black)
     Colorbar(f[1, 2], h)
 
     # Vx
-    ax = Axis(f[1, 3]; axis=1, title="Vx numeric")
-    h = heatmap!(ax, xvi[1], xci[2], stokes.V.Vx[islice, :, :]; colormap=cmap)
-    lines!(ax, xi, yi; linewidth=3, color=:black)
+    ax = Axis(f[1, 3]; axis = 1, title = "Vx numeric")
+    h = heatmap!(ax, xvi[1], xci[2], stokes.V.Vx[islice, :, :]; colormap = cmap)
+    lines!(ax, xi, yi; linewidth = 3, color = :black)
     Colorbar(f[1, 4], h)
 
     # Vy
-    ax = Axis(f[1, 5]; axis=1, title="Vy numeric")
-    h = heatmap!(ax, xvi[1], xci[2], stokes.V.Vy[islice, :, :]; colormap=cmap)
-    lines!(ax, xi, yi; linewidth=3, color=:black)
+    ax = Axis(f[1, 5]; axis = 1, title = "Vy numeric")
+    h = heatmap!(ax, xvi[1], xci[2], stokes.V.Vy[islice, :, :]; colormap = cmap)
+    lines!(ax, xi, yi; linewidth = 3, color = :black)
     Colorbar(f[1, 6], h)
 
     return f

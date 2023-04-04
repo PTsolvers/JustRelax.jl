@@ -30,15 +30,15 @@ struct FlowBoundaryConditions{T,nD} <: AbstractBoundaryConditions
     end
 end
 
-bc_index(x::NTuple{2,T}) where T = mapreduce(xi->max(size(xi)...), max, x)
-bc_index(x::T) where {T<:AbstractArray{<:Any, 2}} = max(size(x)...)
+@inline bc_index(x::NTuple{2,T}) where {T} = mapreduce(xi -> max(size(xi)...), max, x)
+@inline bc_index(x::T) where {T<:AbstractArray{<:Any,2}} = max(size(x)...)
 
-function bc_index(x::NTuple{3,T}) where T
+@inline function bc_index(x::NTuple{3,T}) where {T}
     nx, ny, nz = size(x[1])
     return max((nx, ny), (ny, nz), (nx, nz))
 end
 
-function bc_index(x::T) where T<:AbstractArray{<:Any, 3}
+@inline function bc_index(x::T) where {T<:AbstractArray{<:Any,3}}
     nx, ny, nz = size(x)
     return max((nx, ny), (ny, nz), (nx, nz))
 end
@@ -66,8 +66,7 @@ end
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes` 
 """
-function flow_bcs!(stokes, bcs::FlowBoundaryConditions, di) 
-    V = @unpack stokes.V
+function flow_bcs!(bcs::FlowBoundaryConditions, di, V...)
     n = bc_index(V)
     _di = inv.(di)
 
@@ -79,6 +78,12 @@ function flow_bcs!(stokes, bcs::FlowBoundaryConditions, di)
     do_bc(bcs.periodicity) &&
         (@parallel (@idx n) periodic_boundaries!(V..., bcs.periodicity))
 
+    return nothing
+end
+
+function flow_bcs!(stokes, bcs::FlowBoundaryConditions, di)
+    V = @unpack stokes.V
+    flow_bcs!(bcs, di, V...)
     return nothing
 end
 
@@ -122,21 +127,21 @@ end
 
 @parallel_indices (i, j) function free_slip!(Ax, Ay, Az, bc)
     @inbounds begin
-       # free slip in the front and back XZ planes
+        # free slip in the front and back XZ planes
         if bc.front
             if i ≤ size(Ax, 1) && j ≤ size(Ax, 3)
-                Ax[i, 1, j] = Ax[i, 2,  j]
+                Ax[i, 1, j] = Ax[i, 2, j]
             end
             if i ≤ size(Az, 1) && j ≤ size(Az, 3)
-                Az[i, 1, j] = Az[i, 2,  j]
+                Az[i, 1, j] = Az[i, 2, j]
             end
         end
         if bc.back
             if i ≤ size(Ax, 1) && j ≤ size(Ax, 3)
-                Ax[i, end, j] = Ax[end-i, 1, j]
+                Ax[i, end, j] = Ax[end - i, 1, j]
             end
             if i ≤ size(Az, 1) && j ≤ size(Az, 3)
-                Az[i, end, j] = Az[end-i, 1, j]
+                Az[i, end, j] = Az[end - i, 1, j]
             end
         end
         # free slip in the front and back XY planes
@@ -150,10 +155,10 @@ end
         end
         if bc.bot
             if i ≤ size(Ax, 1) && j ≤ size(Ax, 2)
-                Ax[i, j, end] = Ax[end-i, j, 1]
+                Ax[i, j, end] = Ax[end - i, j, 1]
             end
             if i ≤ size(Ay, 1) && j ≤ size(Ay, 2)
-                Ay[i, j, end] = Ay[end-i, j, 1]
+                Ay[i, j, end] = Ay[end - i, j, 1]
             end
         end
         # free slip in the front and back YZ planes
@@ -167,17 +172,17 @@ end
         end
         if bc.right
             if i ≤ size(Ay, 2) && j ≤ size(Ay, 3)
-                Ay[end, i, j] = Ay[end-1, i, j]
+                Ay[end, i, j] = Ay[end - 1, i, j]
             end
             if i ≤ size(Az, 2) && j ≤ size(Az, 3)
-                Az[end, i, j] = Az[end-1, i, j]
+                Az[end, i, j] = Az[end - 1, i, j]
             end
-        end 
+        end
     end
     return nothing
 end
 
-@parallel_indices (i) function free_slip!(T::_T, bc) where _T<:AbstractArray{<:Any, 2}
+@parallel_indices (i) function free_slip!(T::_T, bc) where {_T<:AbstractArray{<:Any,2}}
     @inbounds begin
         if i ≤ size(T, 1)
             bc.bot && (T[i, 1] = T[i, 2])
@@ -191,7 +196,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function free_slip!(T::_T, bc) where _T<:AbstractArray{<:Any, 3}
+@parallel_indices (i, j) function free_slip!(T::_T, bc) where {_T<:AbstractArray{<:Any,3}}
     nx, ny, nz = size(T)
     @inbounds begin
         if i ≤ nx && j ≤ ny
@@ -224,7 +229,9 @@ end
     return nothing
 end
 
-@parallel_indices (i) function periodic_boundaries!(T::_T, bc) where _T<:AbstractArray{<:Any, 2}
+@parallel_indices (i) function periodic_boundaries!(
+    T::_T, bc
+) where {_T<:AbstractArray{<:Any,2}}
     @inbounds begin
         if i ≤ size(T, 1)
             bc.bot && (T[i, 1] = T[i, end - 1])
@@ -238,7 +245,9 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function periodic_boundaries!(T::_T, bc) where _T<:AbstractArray{<:Any, 3}
+@parallel_indices (i, j) function periodic_boundaries!(
+    T::_T, bc
+) where {_T<:AbstractArray{<:Any,3}}
     nx, ny, nz = size(T)
     @inbounds begin
         if i ≤ nx && j ≤ ny
@@ -260,7 +269,6 @@ end
 function pureshear_bc!(
     stokes::StokesArrays, xci::NTuple{2,T}, xvi::NTuple{2,T}, εbg
 ) where {T}
-    # unpack
     stokes.V.Vx[:, 2:(end - 1)] .= PTArray([εbg * x for x in xvi[1], y in xci[2]])
     stokes.V.Vy[2:(end - 1), :] .= PTArray([-εbg * y for x in xci[1], y in xvi[2]])
 

@@ -31,13 +31,13 @@ function body_forces(xi::NTuple{3,T}, η, β) where {T}
     dηdz = @. -β * (1 - 2 * z) * η
 
     fx = @. ((y * z + 3 * x^2 * y^3 * z) - η * (2 + 6 * x * y)) -
-            dηdx * (2 + 4 * x + 2 * y + 6 * x^2 * y) - dηdy * (x + x^3 + y + 2 * x * y^2) -
-        dηdz * (-3 * z - 10 * x * y * z)
+       dηdx * (2 + 4 * x + 2 * y + 6 * x^2 * y) - dηdy * (x + x^3 + y + 2 * x * y^2) -
+       dηdz * (-3 * z - 10 * x * y * z)
     fy = @. ((x * z + 3 * x^3 * y^2 * z) - η * (2 + 2 * x^2 + 2 * y^2)) -
-            dηdx * (x + x^3 + y + 2 * x * y^2) - dηdy * (2 + 2 * x + 4 * y + 4 * x^2 * y) -
-        dηdz * (-3 * z - 5 * x^2 * z)
+       dηdx * (x + x^3 + y + 2 * x * y^2) - dηdy * (2 + 2 * x + 4 * y + 4 * x^2 * y) -
+       dηdz * (-3 * z - 5 * x^2 * z)
     fz = @. ((x * y + x^3 * y^3) - η * (-10 * y * z)) - dηdx * (-3 * z - 10 * x * y * z) -
-            dηdy * (-3 * z - 5 * x^2 * z) - dηdz * (-4 - 6 * x - 6 * y - 10 * x^2 * y)
+       dηdy * (-3 * z - 5 * x^2 * z) - dηdz * (-4 - 6 * x - 6 * y - 10 * x^2 * y)
 
     return fx, fy, fz
 end
@@ -91,9 +91,9 @@ end
 function velocity!(stokes, xci, xvi)
     xc, yc, zc = xci
     # xv, yv, zv = xvi
-    di = ntuple(i->xci[i][2]-xci[i][1], Val(3))
-    xv, yv, zv = ntuple(i-> (xci[i][1]-di[i]):di[i]:(xci[i][end]+di[i]), Val(3))
-    xc, yc, zc = ntuple(i-> 0.0:di[i]:(xci[i][end]+di[i]/2), Val(3))
+    di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
+    xv, yv, zv = ntuple(i -> (xci[i][1]-di[i]):di[i]:(xci[i][end]+di[i]), Val(3))
+    xc, yc, zc = ntuple(i -> 0.0:di[i]:(xci[i][end]+di[i]/2), Val(3))
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
 
     _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y
@@ -104,11 +104,11 @@ function velocity!(stokes, xci, xvi)
         T = eltype(Vx)
         if all((i, j, k) .≤ size(Vx))
             if (i == size(Vx, 1)) ||
-                (j == size(Vx, 2)) ||
-                (k == size(Vx, 3)) ||
-                (i == 1) ||
-                (j == 1) ||
-                (k == 1)
+               (j == size(Vx, 2)) ||
+               (k == size(Vx, 3)) ||
+               (i == 1) ||
+               (j == 1) ||
+               (k == 1)
                 Vx[i, j, k] = _velocity_x(xc[i], yv[j], zv[k])
             else
                 Vx[i, j, k] = zero(T)
@@ -116,11 +116,11 @@ function velocity!(stokes, xci, xvi)
         end
         if all((i, j, k) .≤ size(Vy))
             if (i == size(Vy, 1)) ||
-                (j == size(Vy, 2)) ||
-                (k == size(Vy, 3)) ||
-                (i == 1) ||
-                (j == 1) ||
-                (k == 1)
+               (j == size(Vy, 2)) ||
+               (k == size(Vy, 3)) ||
+               (i == 1) ||
+               (j == 1) ||
+               (k == 1)
                 Vy[i, j, k] = _velocity_y(xv[i], yc[j], zv[k])
             else
                 Vy[i, j, k] = zero(T)
@@ -128,11 +128,11 @@ function velocity!(stokes, xci, xvi)
         end
         if all((i, j, k) .≤ size(Vz))
             if (i == size(Vz, 1)) ||
-                (j == size(Vz, 2)) ||
-                (k == size(Vz, 3)) ||
-                (i == 1) ||
-                (j == 1) ||
-                (k == 1)
+               (j == size(Vz, 2)) ||
+               (k == size(Vz, 3)) ||
+               (i == 1) ||
+               (j == 1) ||
+               (k == 1)
                 Vz[i, j, k] = _velocity_z(xv[i], yv[j], zc[k])
             else
                 Vz[i, j, k] = zero(T)
@@ -148,9 +148,9 @@ end
 function analytical_velocity!(stokes, xci, xvi)
     xc, yc, zc = xci
     xv, yv, zv = xvi
-    di = ntuple(i->xci[i][2]-xci[i][1], Val(3))
-    xv, yv, zv = ntuple(i-> (xci[i][1]-di[i]):di[i]:(xci[i][end]+di[i]), Val(3))
-    xc, yc, zc = ntuple(i-> 0.0:di[i]:(xci[i][end]+di[i]/2), Val(3))
+    di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
+    xv, yv, zv = ntuple(i -> (xci[i][1]-di[i]):di[i]:(xci[i][end]+di[i]), Val(3))
+    xc, yc, zc = ntuple(i -> 0.0:di[i]:(xci[i][end]+di[i]/2), Val(3))
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
 
     _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y
@@ -174,7 +174,7 @@ function analytical_velocity!(stokes, xci, xvi)
     @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
 end
 
-function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
+function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = false)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
@@ -182,9 +182,10 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     ni = (nx, ny, nz) # number of nodes in x- and y-
     lx = ly = lz = 1e0
     li = (lx, ly, lz)  # domain length in x- and y-
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    origin = zero(nx),zero(ny),zero(nz)
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI)...) # init MPI
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li) # nodes at the center and vertices of the cells
+    xci, xvi = lazy_grid(di, li, ni, origin=origin) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total siηlation time
@@ -205,7 +206,32 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     K = @fill(Inf, ni...)
 
     ## Boundary conditions
-    freeslip = (freeslip_x=false, freeslip_y=false, freeslip_z=false)
+    flow_bcs = FlowBoundaryConditions(;
+        free_slip = (
+            left = false,
+            right = false,
+            top = false,
+            bot = false,
+            back = false,
+            front = false,
+        ),
+        no_slip = (
+            left = false,
+            right = false,
+            top = false,
+            bot = false,
+            back = false,
+            front = false,
+        ),
+        periodicity = (
+            left = false,
+            right = false,
+            top = false,
+            bot = false,
+            back = false,
+            front = false,
+        ),
+    )
     # impose analytical velociity at the boundaries of the domain
     velocity!(stokes, xci, xvi)
 
@@ -218,20 +244,20 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             stokes,
             pt_stokes,
             di,
-            freeslip,
+            flow_bcs,
             ρg,
             η,
             G,
             K,
             dt,
             igg;
-            iterMax=20e3,
-            b_width=(4, 4, 4),
+            iterMax = 20e3,
+            b_width = (4, 4, 4),
         )
         t += dt
     end
 
-    finalize_global_grid(; finalize_MPI=finalize_MPI)
+    finalize_global_grid(; finalize_MPI = finalize_MPI)
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters
+    return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), stokes, iters
 end

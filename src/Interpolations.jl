@@ -15,12 +15,14 @@ end
 )
     nx, ny, nz = size(center_xz)
 
+    #! format: off
     Base.@propagate_inbounds @inline function clamp_idx(i, j, k)
         i = clamp(i, 1, nx)
         j = clamp(j, 1, ny)
         k = clamp(k, 1, nz)
         i, j, k
     end
+    #! format: on
 
     @inbounds begin
         # if all( (i,j,k) .≤ size(vertex_yz))

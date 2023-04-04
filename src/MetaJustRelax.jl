@@ -17,11 +17,15 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     if model.device == :gpu
         eval(:(@init_parallel_stencil(CUDA, $T, $N)))
         Base.eval(Main, Meta.parse("using CUDA"))
-        eval(:(const PTArray = CUDA.CuArray{$T,$N}))
+        if !isconst(Main, :PTArray)
+            eval(:(const PTArray = CUDA.CuArray{$T,$N}))
+        end
     else
         @eval begin
             @init_parallel_stencil(Threads, $T, $N)
-            const PTArray = Array{$T,$N}
+            if !isconst(Main, :PTArray)
+                const PTArray = Array{$T,$N}
+            end
         end
     end
 

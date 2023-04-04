@@ -46,8 +46,9 @@ function save_hdf5(fname, dim_g, I, comm_cart, info, data::Vararg{Any,N}) where 
     h5open("$(fname).h5", "w", comm_cart, info) do file
         for data_i in data
             name, field = @namevar data_i
-            dset =
-                create_dataset(file, "/" * name, datatype(eltype(field)), dataspace(dim_g))
+            dset = create_dataset(
+                file, "/" * name, datatype(eltype(field)), dataspace(dim_g)
+            )
             dset[I.indices...] = Array(field)
         end
     end

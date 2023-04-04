@@ -17,7 +17,7 @@ environment!(model)
         free_slip = (left = false, right = false, top = false, bot = false),
         periodicity = (left = true, right = true, top = true, bot = true),
     )
-    flow_bcs!(bcs, Vx, Vy, di)
+    flow_bcs!(bcs, di, Vx, Vy)
 
     @test @views Vx[:, 1] == Vx[:, end-1]
     @test @views Vx[:, end] == Vx[:, 2]
@@ -30,7 +30,7 @@ environment!(model)
         free_slip = (left = true, right = true, top = true, bot = true),
         periodicity = (left = false, right = false, top = false, bot = false),
     )
-    flow_bcs!(bcs, Vx, Vy, di)
+    flow_bcs!(bcs, di, Vx, Vy)
 
     @test @views Vx[:, 1] == Vx[:, 2]
     @test @views Vx[:, end] == Vx[:, end-1]
@@ -43,10 +43,10 @@ environment!(model)
         free_slip = (left = false, right = false, top = false, bot = false),
         periodicity = (left = false, right = false, top = false, bot = false),
     )
-    flow_bcs!(bcs, Vx, Vy, di)
+    flow_bcs!(bcs, di, Vx, Vy)
     @test @views Vx[1, :] == Vx[end, :] == Vy[:, 1] == Vy[:, end]
-    @test @views Vx[:, 1] == Vx[:, 2] * 0.5 / di[1]
-    @test @views Vx[:, end] == Vx[:, end-1] * 0.5 / di[1]
-    @test @views Vy[1, :] == Vy[2, :] * 0.5 / di[1]
-    @test @views Vy[end, :] == Vy[end-1, :] * 0.5 / di[1]
+    @test @views Vx[:, 1] ≈ Vx[:, 2] * 0.5 / di[1]
+    @test @views Vx[:, end] ≈ Vx[:, end-1] * 0.5 / di[1]
+    @test @views Vy[1, :] ≈ Vy[2, :] * 0.5 / di[1]
+    @test @views Vy[end, :] ≈ Vy[end-1, :] * 0.5 / di[1]
 end

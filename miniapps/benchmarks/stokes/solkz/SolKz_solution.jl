@@ -2,7 +2,7 @@
 Analytical solution adapted from Underworld (https://github.com/underworldcode). As stated in the Underworld repository, 
 the code is released under the  GNU LESSER GENERAL PUBLIC LICENSE (LGPL-3) license
 =#
-function _solkz_solution(x, z; Δη = 1e6)
+function _solkz_solution(x, z; Δη=1e6)
     B = log(Δη) / 2
     n = 3 * π
     sigma = 1

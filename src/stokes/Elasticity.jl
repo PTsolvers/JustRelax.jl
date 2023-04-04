@@ -961,7 +961,7 @@ end
     Base.@propagate_inbounds @inline dy(x) = x[i, j + 1, k] - x[i, j, k]
     Base.@propagate_inbounds @inline dz(x) = x[i, j, k + 1] - x[i, j, k]
     #! format: on
-    
+
     @inbounds begin
         if all((i, j, k) .< size(Vx) .- 1)
             Rx_ijk =

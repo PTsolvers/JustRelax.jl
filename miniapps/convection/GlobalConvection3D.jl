@@ -4,53 +4,44 @@ model = PS_Setup(:gpu, Float64, 3)
 environment!(model)
 
 @parallel_indices (i, j, k) function update_buoyancy!(fz, T, ρ0gα)
-
     fz[i, j, k] =
         ρ0gα *
         0.125 *
         (
             T[i, j, k] +
-            T[i+1, j, k] +
-            T[i, j+1, k] +
-            T[i+1, j+1, k] +
-            T[i, j, k+1] +
-            T[i+1, j, k+1] +
-            T[i, j+1, k+1] +
-            T[i+1, j+1, k+1]
+            T[i + 1, j, k] +
+            T[i, j + 1, k] +
+            T[i + 1, j + 1, k] +
+            T[i, j, k + 1] +
+            T[i + 1, j, k + 1] +
+            T[i, j + 1, k + 1] +
+            T[i + 1, j + 1, k + 1]
         )
 
     return nothing
 end
 
 @parallel_indices (i, j, k) function computeViscosity!(η, v, args)
-
-    Base.Base.@propagate_inbounds @inline av(T) =
+    Base.Base.@propagate_inbounds @inline function av(T)
         0.125 * (
             T[i, j, k] +
-            T[i+1, j, k] +
-            T[i, j+1, k] +
-            T[i+1, j+1, k] +
-            T[i, j, k+1] +
-            T[i+1, j, k+1] +
-            T[i, j+1, k+1] +
-            T[i+1, j+1, k+1]
+            T[i + 1, j, k] +
+            T[i, j + 1, k] +
+            T[i + 1, j + 1, k] +
+            T[i, j, k + 1] +
+            T[i + 1, j, k + 1] +
+            T[i, j + 1, k + 1] +
+            T[i + 1, j + 1, k + 1]
         )
+    
 
-    @inbounds η[i, j, k] = computeViscosity_εII(v, 1.0, (; T = av(args.T)))
+    @inbounds η[i, j, k] = computeViscosity_εII(v, 1.0, (; T=av(args.T)))
 
     return nothing
 end
 
 @parallel_indices (i, j, k) function _elliptical_perturbation!(
-    T,
-    δT,
-    xc,
-    yc,
-    zc,
-    r,
-    x,
-    y,
-    z,
+    T, δT, xc, yc, zc, r, x, y, z
 )
     if (((x[i] - xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
         T[i, j, k] *= δT / 100 + 1
@@ -59,17 +50,8 @@ end
 end
 
 function elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi)
-
     @parallel_indices (i, j, k) function _elliptical_perturbation!(
-        T,
-        δT,
-        xc,
-        yc,
-        zc,
-        r,
-        x,
-        y,
-        z,
+        T, δT, xc, yc, zc, r, x, y, z
     )
         @inbounds if (((x[i] - xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
             T[i, j, k] *= δT / 100 + 1
@@ -78,7 +60,6 @@ function elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi)
     end
 
     @parallel _elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi...)
-
 end
 
 @parallel_indices (i, j, k) function init_T!(T, z, k, Tm, Tp, Tmin, Tmax)
@@ -94,19 +75,13 @@ end
     Ths = Tmax - Ths
     Tᵢ = max(Tᵢ, Ths)
     T[i, j, k] = max(Tᵢ, Tmin)
-    return
+    return nothing
 end
 
-function thermal_convection3D(;
-    ar = 8,
-    ny = 16,
-    nx = ny * 8,
-    nz = ny * 8,
-    figdir = "figs3D",
-)
+function thermal_convection3D(; ar=8, ny=16, nx=ny * 8, nz=ny * 8, figdir="figs3D")
 
     # Physical domain ------------------------------------
-    CharUnits = GEO_units(; viscosity = 1e23, length = 2900km, temperature = 1000K)
+    CharUnits = GEO_units(; viscosity=1e23, length=2900km, temperature=1000K)
     lz = 2900km
     lx = lz * ar
     ly = lz * ar
@@ -117,38 +92,38 @@ function thermal_convection3D(;
     li = lx_nd, ly_nd, lz_nd               # domain length in x-, y-, and z-
     di = @. li / ni                        # grid step in x-, y-,y- and z-
     origin = 0.0, 0.0, 0.0                     # Origin coordinates
-    xci, xvi = lazy_grid(di, li; origin = origin)  # nodes at the center and vertices of the cells
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = true)...) # init MPI
+    xci, xvi = lazy_grid(di, li, ni, origin=origin)  # nodes at the center and vertices of the cells
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=true)...) # init MPI
     ni_v = (nx - 2) * igg.dims[1], (ny - 2) * igg.dims[2], (nz - 2) * igg.dims[3]
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     G0 = Inf
     η_reg = 0.1
-    pl = DruckerPrager_regularised(; C = 1e4, ϕ = 90.0, η_vp = η_reg, Ψ = 0.0) # non-regularized plasticity
-    el = SetConstantElasticity(; G = G0, ν = 0.5)                           # elastic spring
+    pl = DruckerPrager_regularised(; C=1e4, ϕ=90.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
+    el = SetConstantElasticity(; G=G0, ν=0.5)                           # elastic spring
     creep = ArrheniusType()                                                # Arrhenius-like (T-dependant) viscosity
     Ra = 1e7                                                            # Rayleigh number Ra = ρ0 * g * α * ΔT * lz_nd^3 / (η0* κ)
     # Define rheolgy struct
     rheology = SetMaterialParams(;
-        Name = "Mantle", # optional
-        Phase = 1,
-        Density = ConstantDensity(; ρ = 1.0),
-        HeatCapacity = ConstantHeatCapacity(; cp = 1.0),
-        Conductivity = ConstantConductivity(; k = 1.0),
-        CompositeRheology = CompositeRheology(creep, el),
-        Elasticity = el,
-        Gravity = ConstantGravity(; g = Ra),
+        Name="Mantle", # optional
+        Phase=1,
+        Density=ConstantDensity(; ρ=1.0),
+        HeatCapacity=ConstantHeatCapacity(; cp=1.0),
+        Conductivity=ConstantConductivity(; k=1.0),
+        CompositeRheology=CompositeRheology(creep, el),
+        Elasticity=el,
+        Gravity=ConstantGravity(; g=Ra),
     )
     rheology_pl = SetMaterialParams(;
-        Name = "Mantle", # optional
-        Phase = 1,
-        Density = ConstantDensity(; ρ = 1.0),
-        HeatCapacity = ConstantHeatCapacity(; cp = 1.0),
-        Conductivity = ConstantConductivity(; k = 1.0),
-        CompositeRheology = CompositeRheology(creep, el, pl),
-        Elasticity = el,
-        Gravity = ConstantGravity(; g = Ra),
+        Name="Mantle", # optional
+        Phase=1,
+        Density=ConstantDensity(; ρ=1.0),
+        HeatCapacity=ConstantHeatCapacity(; cp=1.0),
+        Conductivity=ConstantConductivity(; k=1.0),
+        CompositeRheology=CompositeRheology(creep, el, pl),
+        Elasticity=el,
+        Gravity=ConstantGravity(; g=Ra),
     )
     κ = 1.0                          # heat diffusivity
     dt = dt_diff = 0.5 / 6.1 * min(di...)^3 / κ # diffusive CFL timestep limiter
@@ -169,33 +144,19 @@ function thermal_convection3D(;
     elliptical_perturbation!(thermal.T, δT, xc, yc, zc, r, xvi)
     # Boundary conditions
     thermal_bc = TemperatureBoundaryConditions(;
-        no_flux = (
-            left = true,
-            right = true,
-            top = false,
-            bot = false,
-            front = true,
-            back = true,
-        ),
-        periodicity = (
-            left = false,
-            right = false,
-            top = false,
-            bot = false,
-            front = false,
-            back = false,
-        ),
+        no_flux=(left=true, right=true, top=false, bot=false, front=true, back=true),
+        periodicity=(left=false, right=false, top=false, bot=false, front=false, back=false),
     )
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1e-4, CFL = 1 / √3)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4, CFL=1 / √3)
     # Rheology
     η = @ones(ni...)
     # v               = CompositeRheology( (ArrheniusType(),) )
-    args_η = (; dt = dt, T = thermal.T)
+    args_η = (; dt=dt, T=thermal.T)
     @parallel (@idx ni) computeViscosity!(η, rheology.CompositeRheology[1], args_η) # init viscosity field
     η_vep = deepcopy(η)
     dt_elasticity = Inf
@@ -203,30 +164,9 @@ function thermal_convection3D(;
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     # Boundary conditions
     flow_bc = FlowBoundaryConditions(;
-        free_slip = (
-            left = true,
-            right = true,
-            top = true,
-            bot = true,
-            front = true,
-            back = true,
-        ),
-        no_slip = (
-            left = false,
-            right = false,
-            top = false,
-            bot = false,
-            front = false,
-            back = false,
-        ),
-        periodicity = (
-            left = false,
-            right = false,
-            top = false,
-            bot = false,
-            front = false,
-            back = false,
-        ),
+        free_slip=(left=true, right=true, top=true, bot=true, front=true, back=true),
+        no_slip=(left=false, right=false, top=false, bot=false, front=false, back=false),
+        periodicity=(left=false, right=false, top=false, bot=false, front=false, back=false),
     )
     # ----------------------------------------------------
 
@@ -263,8 +203,8 @@ function thermal_convection3D(;
             it > 3 ? rheology_pl : rheology,
             dt_elasticity,
             igg;
-            iterMax = 250e3,
-            nout = 1e3,
+            iterMax=250e3,
+            nout=1e3,
         )
         dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
@@ -279,41 +219,41 @@ function thermal_convection3D(;
         # Plotting ---------------------
         if igg.me == 0 && it == 1 || rem(it, 25) == 0
             @parallel (1:nx, 1:ny, 1:nz) vertex2center!(Tc, thermal.T)
-            gather!(Array(Tc[2:end-1, 2:end-1, 2:end-1]), Tg)
-            gather!(Array(η_vep[2:end-1, 2:end-1, 2:end-1]), ηg)
+            gather!(Array(Tc[2:(end - 1), 2:(end - 1), 2:(end - 1)]), Tg)
+            gather!(Array(η_vep[2:(end - 1), 2:(end - 1), 2:(end - 1)]), ηg)
 
-            fig = Figure(resolution = (900, 1800))
-            ax1 = Axis(fig[1, 1], aspect = ar, title = "T")
-            ax2 = Axis(fig[2, 1], aspect = ar, title = "η")
-            ax3 = Axis(fig[3, 1], aspect = ar, title = "τII")
-            ax4 = Axis(fig[4, 1], aspect = ar, title = "Vz")
+            fig = Figure(; resolution=(900, 1800))
+            ax1 = Axis(fig[1, 1]; aspect=ar, title="T")
+            ax2 = Axis(fig[2, 1]; aspect=ar, title="η")
+            ax3 = Axis(fig[3, 1]; aspect=ar, title="τII")
+            ax4 = Axis(fig[4, 1]; aspect=ar, title="Vz")
             h1 = heatmap!(
                 ax1,
-                xci[1][2:end-1],
-                xci[2][2:end-1],
-                Array(Tg[nx÷2, :, :]),
-                colormap = :batlow,
+                xci[1][2:(end - 1)],
+                xci[2][2:(end - 1)],
+                Array(Tg[nx ÷ 2, :, :]);
+                colormap=:batlow,
             )
             h2 = heatmap!(
                 ax2,
-                xci[1][2:end-1],
-                xci[2][2:end-1],
-                Array(log10.(ηg[nx÷2, :, :])),
-                colormap = :batlow,
+                xci[1][2:(end - 1)],
+                xci[2][2:(end - 1)],
+                Array(log10.(ηg[nx ÷ 2, :, :]));
+                colormap=:batlow,
             )
             h3 = heatmap!(
                 ax3,
-                xci[1][2:end-1],
-                xci[2][2:end-1],
-                Array(stokes.τ.II[2:end-1, ny÷2, :]),
-                colormap = :batlow,
+                xci[1][2:(end - 1)],
+                xci[2][2:(end - 1)],
+                Array(stokes.τ.II[2:(end - 1), ny ÷ 2, :]);
+                colormap=:batlow,
             )
             h4 = heatmap!(
                 ax4,
-                xci[1][2:end-1],
-                xvi[2][2:end-1],
-                Array(stokes.V.Vz[2:end-1, ny÷2, :]),
-                colormap = :batlow,
+                xci[1][2:(end - 1)],
+                xvi[2][2:(end - 1)],
+                Array(stokes.V.Vz[2:(end - 1), ny ÷ 2, :]);
+                colormap=:batlow,
             )
             Colorbar(fig[1, 2], h1)
             Colorbar(fig[2, 2], h2)
@@ -326,9 +266,9 @@ function thermal_convection3D(;
 
     end
 
-    finalize_global_grid(; finalize_MPI = true)
+    finalize_global_grid(; finalize_MPI=true)
 
-    return (ni = ni, xci = xci, li = li, di = di), thermal
+    return (ni=ni, xci=xci, li=li, di=di), thermal
 end
 
 figdir = "figs3D"
@@ -338,4 +278,4 @@ nx = (n - 2) * ar
 ny = (n - 2) * ar
 nz = (n - 2)
 
-thermal_convection3D(; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz);
+thermal_convection3D(; figdir=figdir, ar=ar, nx=nx, ny=ny, nz=nz);

@@ -1,12 +1,9 @@
-using Pkg; Pkg.activate("@dev")
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
-
-Pkg.activate(".")
 using JustRelax
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
+using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel function update_buoyancy!(fz, T, ρ0gα)

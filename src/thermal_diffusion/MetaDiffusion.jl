@@ -26,7 +26,9 @@ function make_thermal_arrays!(ndim)
 
             function ThermalArrays(ni::NTuple{2,Integer})
                 nx, ny = ni
-                T, ΔT, Told = @zeros(nx + 3, ny + 1), @zeros(nx + 3, ny + 1), @zeros(nx + 3, ny + 1)
+                T, ΔT, Told = @zeros(nx + 3, ny + 1),
+                @zeros(nx + 3, ny + 1),
+                @zeros(nx + 3, ny + 1)
                 dT_dt = @zeros(nx + 1, ny - 1)
                 qTx = @zeros(nx + 2, ny - 1)
                 qTy = @zeros(nx + 1, ny)

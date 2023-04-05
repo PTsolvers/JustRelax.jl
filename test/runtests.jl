@@ -11,7 +11,7 @@ function runtests()
         ),
     )
     nfail = 0
-    printstyled("Testing package JustRelax.jl\n"; bold = true, color = :white)
+    printstyled("Testing package JustRelax.jl\n"; bold=true, color=:white)
 
     for f in testfiles
         println("")

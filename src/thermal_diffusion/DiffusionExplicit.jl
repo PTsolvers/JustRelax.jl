@@ -413,7 +413,6 @@ end
                 Pvertex += args.P[i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)]
             end
             argsx = (; T=Tx, P=Pvertex * 0.25)
-
             qTx[i, j, k] =
                 -compute_diffusivity(rheology, argsx) * (T[i1, j1, k1] - T[i, j1, k1]) * _dx
         end
@@ -425,7 +424,6 @@ end
                 args.P[clamp(i + ii, 1, nx), j, clamp(k + kk, 1, nz)]
             end
             argsy = (; T=Ty, P=Pvertex * 0.25)
-
             qTy[i, j, k] =
                 -compute_diffusivity(rheology, argsy) * (T[i1, j1, k1] - T[i1, j, k1]) * _dy
         end
@@ -437,7 +435,6 @@ end
                 args.P[clamp(i + ii, 1, nx), clamp(j + jj, 1, ny), k]
             end
             argsz = (; T=Tz, P=Pvertex * 0.25)
-
             qTz[i, j, k] =
                 -compute_diffusivity(rheology, argsz) * (T[i1, j1, k1] - T[i1, j1, k]) * _dz
         end

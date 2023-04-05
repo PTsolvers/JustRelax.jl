@@ -203,4 +203,4 @@ n = 32
 nx = n * ar - 2
 ny = n - 2
 
-# thermal_convection2D(; figdir = figdir, ar = ar, nx = nx, ny = ny);
+thermal_convection2D(; figdir = figdir, ar = ar, nx = nx, ny = ny);

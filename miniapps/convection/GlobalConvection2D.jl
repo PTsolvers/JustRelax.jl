@@ -146,7 +146,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
         # ------------------------------
 
         # Stokes solver ----------------
-        iters = @edit solve!(
+        iters = solve!(
             stokes,
             thermal,
             pt_stokes,

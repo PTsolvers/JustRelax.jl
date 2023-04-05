@@ -14,12 +14,12 @@ end
 
 ## GeoParams
 
-function compute_diffusivity(rheology::MaterialParams, args)
+@inline function compute_diffusivity(rheology::MaterialParams, args)
     return compute_conductivity(rheology, args) *
            inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
 end
 
-function compute_diffusivity(rheology::MaterialParams, ρ::Number, args)
+@inline function compute_diffusivity(rheology::MaterialParams, ρ::Number, args)
     return compute_conductivity(rheology, args) *
            inv(compute_heatcapacity(rheology, args) * ρ)
 end
@@ -187,15 +187,22 @@ end
     qTx, qTy, T, rheology::MaterialParams, args, _dx, _dy
 )
     i1, j1 = @add 1 i j # augment indices by 1
+    nPx, nPy = size(args.P)
 
     if all((i, j) .≤ size(qTx))
+        Tx = (T[i1, j1] + T[i, j1]) * 0.5
+        Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
+        argsx = (; T=Tx, P=Pvertex)
         @inbounds qTx[i, j] =
-            -compute_diffusivity(rheology, args) * (T[i1, j1] - T[i, j1]) * _dx
+            -compute_diffusivity(rheology, argsx) * (T[i1, j1] - T[i, j1]) * _dx
     end
 
     if all((i, j) .≤ size(qTy))
+        Ty = (T[i1, j1] + T[i1, j]) * 0.5
+        Pvertex = (args.P[i1, clamp(j - 1, 1, nPy)] + args.P[i, clamp(j - 1, 1, nPy)]) * 0.5
+        argsy = (; T=Ty, P=Pvertex)
         @inbounds qTy[i, j] =
-            -compute_diffusivity(rheology, args) * (T[i1, j1] - T[i1, j]) * _dy
+            -compute_diffusivity(rheology, argsy) * (T[i1, j1] - T[i1, j]) * _dy
     end
 
     return nothing
@@ -207,8 +214,8 @@ end
         i2, j2 = @add 2 i j # augment indices by 2
 
         @inbounds begin
-            Vxᵢⱼ = 0.5 * (Vx[i2, j2] + Vx[i1, j2])
-            Vyᵢⱼ = 0.5 * (Vy[i2, j2] + Vy[i2, j1])
+            Vxᵢⱼ = 0.5 * (Vx[i1, j2] + Vx[i, j2])
+            Vyᵢⱼ = 0.5 * (Vy[i1, j2] + Vy[i1, j1])
 
             dT_dt[i, j] =
                 -((qTx[i1, j] - qTx[i, j]) * _dx + (qTy[i, j1] - qTy[i, j]) * _dy) -
@@ -339,7 +346,6 @@ function JustRelax.solve!(
     # Compute some constant stuff
     _dx, _dy = inv.(di)
     nx, ny = size(thermal.T)
-
     # solve heat diffusion
     @parallel assign!(thermal.Told, thermal.T)
     @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
@@ -406,8 +412,7 @@ end
             for jj in 0:1, kk in 0:1
                 Pvertex += args.P[i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)]
             end
-            argsx = (; T=Tx, P=Pvertex)
-
+            argsx = (; T=Tx, P=Pvertex * 0.25)
             qTx[i, j, k] =
                 -compute_diffusivity(rheology, argsx) * (T[i1, j1, k1] - T[i, j1, k1]) * _dx
         end
@@ -416,10 +421,9 @@ end
             Ty = (T[i1, j1, k1] + T[i1, j, k1]) * 0.5
             Pvertex = 0.0
             for kk in 0:1, ii in 0:1
-                args.P[clamp(ii, 1, nx), j, clamp(kk, 1, nz)]
+                args.P[clamp(i + ii, 1, nx), j, clamp(k + kk, 1, nz)]
             end
-            argsy = (; T=Ty, P=Pvertex)
-
+            argsy = (; T=Ty, P=Pvertex * 0.25)
             qTy[i, j, k] =
                 -compute_diffusivity(rheology, argsy) * (T[i1, j1, k1] - T[i1, j, k1]) * _dy
         end
@@ -428,10 +432,9 @@ end
             Tz = (T[i1, j1, k1] + T[i1, j1, k]) * 0.5
             Pvertex = 0.0
             for jj in 0:1, ii in 0:1
-                args.P[clamp(ii, 1, nx), clamp(jj, 1, ny), k]
+                args.P[clamp(i + ii, 1, nx), clamp(j + jj, 1, ny), k]
             end
-            argsz = (; T=Tz, P=Pvertex)
-
+            argsz = (; T=Tz, P=Pvertex * 0.25)
             qTz[i, j, k] =
                 -compute_diffusivity(rheology, argsz) * (T[i1, j1, k1] - T[i1, j1, k]) * _dz
         end
@@ -439,6 +442,7 @@ end
 
     return nothing
 end
+
 @parallel_indices (i, j, k) function advect_T!(
     dT_dt, qTx, qTy, qTz, T, Vx, Vy, Vz, _dx, _dy, _dz
 )

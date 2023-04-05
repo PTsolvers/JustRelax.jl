@@ -12,7 +12,7 @@ using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
 end
 
 @parallel_indices (i, j) function computeViscosity!(η, v, args)
-    @inline av(T) = 0.25 * (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1])
+    @inline av(T) = 0.25 * (T[i + 1, j] + T[i + 2, j] + T[i + 1, j + 1] + T[i + 2, j + 1])
 
     @inbounds η[i, j] = computeViscosity_εII(v, 1.0, (; T=av(args.T)))
 
@@ -62,11 +62,11 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
 
     # Physical properties using GeoParams ----------------
     η_reg = 1e1
-    G0 = 5e6                                                             # shear modulus
+    G0 = Inf                                                             # shear modulus
     pl = DruckerPrager_regularised(; C=1e4, ϕ=90.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     el = SetConstantElasticity(; G=G0, ν=0.5)                            # elastic spring
     creep = ArrheniusType()                                                 # Arrhenius-like (T-dependant) viscosity
-    Ra = 1e7
+    Ra = 1e6
     # Define rheolgy struct
     rheology = SetMaterialParams(;
         Name="Mantle",
@@ -89,7 +89,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
         Gravity=ConstantGravity(; g=Ra),
     )
     κ = 1.0                          # heat diffusivity
-    dt = dt_diff = 0.5 / 6.1 * min(di...)^3 / κ # diffusive CFL timestep limiter
+    dt = dt_diff = 0.5 / 2.1 * min(di...)^2 / κ # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -98,7 +98,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
         no_flux=(left=true, right=true, top=false, bot=false),
         periodicity=(left=false, right=false, top=false, bot=false),
     )
-    args_T = (;)
+    args_T = (; stokes.P)
     # initialize thermal profile - Half space cooling
     k = 1.0
     Tm, Tp = 1900 / 2300, 1600 / 2300
@@ -107,7 +107,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
     # Elliptical temperature anomaly 
     xc, yc = 0.5 * lx_nd, 0.15 * ly_nd  # origin of thermal anomaly
     δT = 10.0                   # thermal perturbation (in %)
-    r = 0.05                  # radius of perturbation
+    r = 0.1                  # radius of perturbation
     elliptical_perturbation!(thermal.T, δT, xc, yc, r, xvi)
     # ----------------------------------------------------
 
@@ -146,7 +146,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
         # ------------------------------
 
         # Stokes solver ----------------
-        iters = solve!(
+        iters = @edit solve!(
             stokes,
             thermal,
             pt_stokes,
@@ -156,8 +156,8 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
             η,
             η_vep,
             it > 3 ? rheology_depth : rheology, # do a few initial time-steps without plasticity to improve convergence
-            dt;
-            iterMax=150e3,
+            dt_elasticity,
+            iterMax=25e3,
             nout=1e3,
         )
         dt = compute_dt(stokes, di, dt_diff)
@@ -203,4 +203,4 @@ n = 32
 nx = n * ar - 2
 ny = n - 2
 
-thermal_convection2D(; figdir=figdir, ar=ar, nx=nx, ny=ny);
+thermal_convection2D(; figdir = figdir, ar = ar, nx = nx, ny = ny);

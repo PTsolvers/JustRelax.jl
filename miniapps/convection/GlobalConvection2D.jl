@@ -12,7 +12,7 @@ using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
 end
 
 @parallel_indices (i, j) function computeViscosity!(η, v, args)
-    @inline av(T) = 0.25 * (T[i + 1, j] + T[i + 2, j] + T[i + 1, j + 1] + T[i + 2, j + 1])
+    @inline av(T) = (T[i + 1, j] + T[i + 2, j] + T[i + 1, j + 1] + T[i + 2, j + 1]) * 0.25
 
     @inbounds η[i, j] = computeViscosity_εII(v, 1.0, (; T=av(args.T)))
 
@@ -98,7 +98,6 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
         no_flux=(left=true, right=true, top=false, bot=false),
         periodicity=(left=false, right=false, top=false, bot=false),
     )
-    args_T = (; stokes.P)
     # initialize thermal profile - Half space cooling
     k = 1.0
     Tm, Tp = 1900 / 2300, 1600 / 2300
@@ -164,6 +163,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
         # ------------------------------
 
         # Thermal solver ---------------
+        args_T = (; stokes.P)
         solve!(thermal, thermal_bc, stokes, rheology, args_T, di, dt)
         # ------------------------------
 
@@ -177,7 +177,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
             ax2 = Axis(fig[2, 1]; aspect=ar, title="Vy")
             ax3 = Axis(fig[3, 1]; aspect=ar, title="τII")
             ax4 = Axis(fig[4, 1]; aspect=ar, title="η")
-            h1 = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T); colormap=:batlow)
+            h1 = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1, :]); colormap=:batlow)
             h2 = heatmap!(
                 ax2, xci[1], xvi[2], Array(stokes.V.Vy[2:(end - 1), :]); colormap=:batlow
             )
@@ -204,3 +204,36 @@ nx = n * ar - 2
 ny = n - 2
 
 thermal_convection2D(; figdir = figdir, ar = ar, nx = nx, ny = ny);
+
+
+
+@parallel_indices (i, j) function foo!(
+    qTx, qTy, T, rheology::MaterialParams, args, _dx, _dy
+)
+    i1, j1 = @add 1 i j # augment indices by 1
+    nPx, nPy = size(args.P)
+
+    if all((i, j) .≤ size(qTx))
+        Tx = (T[i1, j1] + T[i, j1]) * 0.5
+        Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
+        argsx = (; T=Tx, P=Pvertex)
+        @inbounds qTx[i, j] =
+            -compute_diffusivity(rheology, argsx) * (T[i1, j1] - T[i, j1]) * _dx
+    end
+
+    if all((i, j) .≤ size(qTy))
+        Ty = (T[i1, j1] + T[i1, j]) * 0.5
+        Pvertex = (args.P[i1, clamp(j - 1, 1, nPy)] + args.P[i, clamp(j - 1, 1, nPy)]) * 0.5
+        argsy = (; T=Ty, P=Pvertex)
+        @inbounds qTy[i, j] =
+            -compute_diffusivity(rheology, argsy) * (T[i1, j1] - T[i1, j]) * _dy
+    end
+
+    return nothing
+end
+
+_dx, _dy=inv.(di)
+
+@parallel (1:(nx - 1), 1:(ny - 1)) foo!(
+    thermal.qTx, thermal.qTy, thermal.T, rheology, args_T, _dx, _dy
+)

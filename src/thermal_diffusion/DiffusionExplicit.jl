@@ -187,21 +187,22 @@ end
     qTx, qTy, T, rheology::MaterialParams, args, _dx, _dy
 )
     i1, j1 = @add 1 i j # augment indices by 1
-    nPx, nPy = size(args.P)
+    nPx = size(args.P, 1)
 
-    if all((i, j) .≤ size(qTx))
+
+    @inbounds if all((i, j) .≤ size(qTx))
         Tx = (T[i1, j1] + T[i, j1]) * 0.5
         Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
         argsx = (; T=Tx, P=Pvertex)
-        @inbounds qTx[i, j] =
+        qTx[i, j] =
             -compute_diffusivity(rheology, argsx) * (T[i1, j1] - T[i, j1]) * _dx
     end
 
-    if all((i, j) .≤ size(qTy))
+    @inbounds if all((i, j) .≤ size(qTy))
         Ty = (T[i1, j1] + T[i1, j]) * 0.5
-        Pvertex = (args.P[i1, clamp(j - 1, 1, nPy)] + args.P[i, clamp(j - 1, 1, nPy)]) * 0.5
+        Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i-1, 1, nPx), j]) * 0.5
         argsy = (; T=Ty, P=Pvertex)
-        @inbounds qTy[i, j] =
+        qTy[i, j] =
             -compute_diffusivity(rheology, argsy) * (T[i1, j1] - T[i1, j]) * _dy
     end
 

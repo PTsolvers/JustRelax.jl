@@ -419,7 +419,7 @@ function JustRelax.solve!(
     # unpack
     _di = inv.(di)
     ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
-    nx, ny = size(stokes.P)
+    ni = nx, ny = size(stokes.P)
     P_old = deepcopy(stokes.P)
 
     # ~preconditioner

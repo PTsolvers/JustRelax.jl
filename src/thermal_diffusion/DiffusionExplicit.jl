@@ -189,21 +189,18 @@ end
     i1, j1 = @add 1 i j # augment indices by 1
     nPx = size(args.P, 1)
 
-
     @inbounds if all((i, j) .≤ size(qTx))
         Tx = (T[i1, j1] + T[i, j1]) * 0.5
         Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
         argsx = (; T=Tx, P=Pvertex)
-        qTx[i, j] =
-            -compute_diffusivity(rheology, argsx) * (T[i1, j1] - T[i, j1]) * _dx
+        qTx[i, j] = -compute_diffusivity(rheology, argsx) * (T[i1, j1] - T[i, j1]) * _dx
     end
 
     @inbounds if all((i, j) .≤ size(qTy))
         Ty = (T[i1, j1] + T[i1, j]) * 0.5
-        Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i-1, 1, nPx), j]) * 0.5
+        Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
         argsy = (; T=Ty, P=Pvertex)
-        qTy[i, j] =
-            -compute_diffusivity(rheology, argsy) * (T[i1, j1] - T[i1, j]) * _dy
+        qTy[i, j] = -compute_diffusivity(rheology, argsy) * (T[i1, j1] - T[i1, j]) * _dy
     end
 
     return nothing

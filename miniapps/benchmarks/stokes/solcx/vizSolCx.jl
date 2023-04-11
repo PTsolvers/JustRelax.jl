@@ -174,7 +174,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
         ax1,
         geometry.xvi[1],
         geometry.xci[2],
-        log10.(err1(Array(stokes.V.Vx), solc.vx));
+        log10.(err1(Array(stokes.V.Vx[:,2:end-1]), solc.vx));
         colormap=:batlow,
     )
     xlims!(ax1, (0, 1))
@@ -212,7 +212,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
         ax1,
         geometry.xci[1],
         geometry.xvi[2],
-        log10.(err1(Array(stokes.V.Vy), solc.vy));
+        log10.(err1(Array(stokes.V.Vy[2:end-1,:]), solc.vy));
         colormap=:batlow,
     )
     xlims!(ax1, (0, 1))

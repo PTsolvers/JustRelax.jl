@@ -36,7 +36,7 @@ Base.@propagate_inbounds function rotate_stress!(
 
     ## 3) Update stress
     for k in 1:N
-        τ[k][idx...] += muladd(τij_adv[k], dt, τr_voigt[k])
+        τ[k][idx...] = muladd(τij_adv[k], dt, τr_voigt[k])
     end
     return nothing
 end

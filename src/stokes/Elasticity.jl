@@ -547,7 +547,7 @@ function JustRelax.solve!(
 
     if -Inf < dt < Inf
         update_τ_o!(stokes)
-        # @parallel (1:nx, 1:ny) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
+        @parallel (@idx ni) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
     end
 
     return (

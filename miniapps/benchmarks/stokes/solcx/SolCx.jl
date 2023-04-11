@@ -52,14 +52,18 @@ function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true,
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni = nx, ny # number of nodes in x- and y-
-    li = lx, ly  # domain length in x- and y-
-    di = @. li / ni # grid step in x- and -y
-    max_li = max(li...)
-    nDim = length(ni) # domain dimension
+    ni = (nx, ny) # number of nodes in x- and y-
+    li = (lx, ly)  # domain length in x- and y-
+    origin = zero(nx), zero(ny)
     igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
-    xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
-    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
+    di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+
+    # di = @. li / ni # grid step in x- and -y
+    # max_li = max(li...)
+    # nDim = length(ni) # domain dimension
+    # xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
+    # xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
     g = 1
 
     ## (Physical) Time domain and discretization
@@ -105,6 +109,7 @@ function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true,
         )
         t += Δt
     end
+
     finalize_global_grid(; finalize_MPI=finalize_MPI)
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters, ρ

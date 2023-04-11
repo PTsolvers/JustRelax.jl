@@ -45,10 +45,16 @@ function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, �
     # independent of (MPI) parallelization
     ni = (nx, ny) # number of nodes in x- and y-
     li = (lx, ly)  # domain length in x- and y-
-    di = @. li / ni # grid step in x- and -y
-    nDim = length(ni) # domain dimension
-    xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
-    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
+    origin = zero(nx), zero(ny)
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
+    di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+
+    
+    # di = @. li / ni # grid step in x- and -y
+    # nDim = length(ni) # domain dimension
+    # xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
+    # xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 5 # total simulation time
@@ -92,9 +98,11 @@ function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, �
             η,
             Gc,
             K,
-            dt;
-            nout=500,
+            dt,
+            igg;
             iterMax=20e3,
+            nout=500,
+            b_width=(4, 4, 1),
             verbose=true,
         )
         t += Δt
@@ -106,6 +114,8 @@ function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, �
             colormap=:batlow,
         )
     end
+
+    finalize_global_grid(; finalize_MPI=finalize_MPI)
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters
 end

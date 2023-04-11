@@ -1,6 +1,7 @@
 using Pkg;
-Pkg.activate(".");
+Pkg.activate("../../../.");
 using JustRelax, Printf, LinearAlgebra
+using MPI: MPI
 # using CairoMakie
 
 # setup ParallelStencil.jl environment
@@ -8,10 +9,13 @@ model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 # choose benchmark
-benchmark = :solkz
+benchmark = :solcx
 
 # model resolution (number of gridpoints)
 nx, ny = 128, 128
+
+# set MPI
+finalize_MPI = false
 
 # :single for a single run model with nx, ny resolution
 # :multiple for grid sensitivy error plot
@@ -31,7 +35,12 @@ if benchmark == :solcx
     Δη = 1e6
     if runtype == :single
         # run model
-        geometry, stokes, iters, ρ = solCx(Δη; nx=nx, ny=ny)
+        geometry, stokes, iters, ρ = solCx(Δη;
+        nx=nx, 
+        ny=ny, 
+        init_MPI=MPI.Initialized() ? false : true,
+        finalize_MPI=finalize_MPI,
+        )
 
         # plot model output and error
         f = plot_solCx_error(geometry, stokes, Δη; cmap=:romaO)
@@ -54,7 +63,12 @@ elseif benchmark == :solkz
     Δη = 1e6
     if runtype == :single
         # run model
-        geometry, stokes, iters, = solKz(; Δη=Δη, nx=nx, ny=ny)
+        geometry, stokes, iters, = solKz(; Δη=Δη,
+        nx=nx,
+        ny=ny,
+        init_MPI=MPI.Initialized() ? false : true,
+        finalize_MPI=finalize_MPI,
+        )
 
         # plot model output and error
         f = plot_solKz_error(geometry, stokes; cmap=:romaO)

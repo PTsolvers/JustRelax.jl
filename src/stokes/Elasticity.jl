@@ -52,7 +52,7 @@ using ParallelStencil.FiniteDifferences2D
 using GeoParams, LinearAlgebra, Printf
 
 import JustRelax: stress, strain, elastic_iter_params!, PTArray, Velocity, SymmetricTensor
-import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic
+import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!, @tuple
 
 import ..Stokes2D: compute_P!, compute_V!, compute_strain_rate!
@@ -316,10 +316,11 @@ function JustRelax.solve!(
     ρg,
     η,
     K,
-    dt;
+    dt,
+    igg::IGG;
     iterMax=10e3,
     nout=500,
-    b_width=(4, 4, 1),
+    b_width=(4,4,1),
     verbose=true,
 ) where {A,B,C,D,T}
 
@@ -429,7 +430,7 @@ function JustRelax.solve!(
     igg::IGG;
     iterMax=10e3,
     nout=500,
-    b_width=(4,4,1)
+    b_width=(4,4,1),
     verbose=true,
 ) where {A,B,C,D,T}
 
@@ -500,9 +501,173 @@ function JustRelax.solve!(
                     ητ,
                     _di...,
                 )
-                update_halo!(stokes.V.Vx, stokes.V.Vy, 1)
+                update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # free slip boundary conditions
+            flow_bcs!(stokes, flow_bcs, di)
+        end
+
+        iter += 1
+        if iter % nout == 0 && iter > 1
+            @parallel (@idx ni) compute_Res!(
+                stokes.R.Rx,
+                stokes.R.Ry,
+                stokes.P,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy,
+                ρg[1],
+                ρg[2],
+                _di...,
+            )
+            errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+            push!(norm_Rx, errs[1])
+            push!(norm_Ry, errs[2])
+            push!(norm_∇V, errs[3])
+            err = maximum(errs)
+            push!(err_evo1, err)
+            push!(err_evo2, iter)
+            if igg.me == 0 && ((verbose && err > ϵ) || iter == iterMax)
+                @printf(
+                    "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
+                    iter,
+                    err,
+                    norm_Rx[end],
+                    norm_Ry[end],
+                    norm_∇V[end]
+                )
+            end
+            # isnan(err) && error("NaN(s)")   #not working yet
+        end
+
+        if igg.me == 0 && err ≤ ϵ
+            println("Pseudo-transient iterations converged in $iter iterations")
+        end
+    end
+
+    if -Inf < dt < Inf
+        update_τ_o!(stokes)
+        # @parallel (1:nx, 1:ny) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
+    end
+
+    return (
+        iter=iter,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_∇V=norm_∇V,
+    )
+end
+
+# GeoParams: general (visco-elasto-plastic) solver
+
+tupleize(v::MaterialParams) = (v,)
+tupleize(v::Tuple) = v
+
+@parallel function center2vertex!(vertex, center)
+    @inn(vertex) = @av(center)
+    return nothing
+end
+
+function JustRelax.solve!(
+    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
+    thermal::ThermalArrays,
+    pt_stokes::PTStokesCoeffs,
+    di::NTuple{2,T},
+    flow_bcs,
+    ρg,
+    η,
+    η_vep,
+    MatParam::MaterialParams,
+    dt,
+    igg::IGG;
+    iterMax=10e3,
+    nout=500,
+    b_width=(4,4,1),
+    verbose=true,
+) where {A,B,C,D,T}
+
+    # unpack
+    _di = inv.(di)
+    ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
+    ni = nx, ny = size(stokes.P)
+    P_old = deepcopy(stokes.P)
+    z = LinRange(di[2] * 0.5, 1.0 - di[2] * 0.5, ny)
+
+    # ~preconditioner
+    ητ = deepcopy(η)
+    @hide_communication b_width begin # communication/computation overlap
+        @parallel compute_maxloc!(ητ, η)
+        update_halo!(ητ)
+    end
+
+
+    Kb = get_Kb(MatParam)
+
+    # errors
+    err = 2 * ϵ
+    iter = 0
+    err_evo1 = Float64[]
+    err_evo2 = Float64[]
+    norm_Rx = Float64[]
+    norm_Ry = Float64[]
+    norm_∇V = Float64[]
+
+    # solver loop
+    wtime0 = 0.0
+    while iter < 2 || (err > ϵ && iter ≤ iterMax)
+        wtime0 += @elapsed begin
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+            @parallel compute_P!(
+                stokes.P, P_old, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
+            )
+            @parallel (@idx ni.+1) compute_strain_rate!(
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.xy,
+                stokes.∇V,
+                stokes.V.Vx,
+                stokes.V.Vy,
+                _di...,
+            )
+            @parallel (@idx ni) compute_τ_gp!(
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.xy_c,
+                stokes.τ.II,
+                stokes.τ_o.xx,
+                stokes.τ_o.yy,
+                stokes.τ_o.xy,
+                stokes.ε.xx,
+                stokes.ε.yy,
+                stokes.ε.xy,
+                η,
+                η_vep,
+                z,
+                thermal.T,
+                tupleize(MatParam), # needs to be a tuple
+                dt,
+                θ_dτ,
+            )
+            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            @hide_communication b_width begin # communication/computation overlap
+                @parallel compute_V!(
+                    stokes.V.Vx,
+                    stokes.V.Vy,
+                    stokes.P,
+                    stokes.τ.xx,
+                    stokes.τ.yy,
+                    stokes.τ.xy,
+                    ηdτ,
+                    ρg[1],
+                    ρg[2],
+                    ητ,
+                    _di...,
+                )
+                update_halo!(stokes.V.Vx, stokes.V.Vy)
+            end
+            # apply boundary conditions boundary conditions
             flow_bcs!(stokes, flow_bcs, di)
         end
 
@@ -546,163 +711,7 @@ function JustRelax.solve!(
 
     if -Inf < dt < Inf
         update_τ_o!(stokes)
-        # @parallel (1:nx, 1:ny) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
-    end
-
-    return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_∇V=norm_∇V,
-    )
-end
-
-# GeoParams: general (visco-elasto-plastic) solver
-
-tupleize(v::MaterialParams) = (v,)
-tupleize(v::Tuple) = v
-
-@parallel function center2vertex!(vertex, center)
-    @inn(vertex) = @av(center)
-    return nothing
-end
-
-function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
-    thermal::ThermalArrays,
-    pt_stokes::PTStokesCoeffs,
-    di::NTuple{2,T},
-    flow_bcs,
-    ρg,
-    η,
-    η_vep,
-    MatParam::MaterialParams,
-    dt;
-    igg::IGG;
-    iterMax=10e3,
-    nout=500,
-    b_width=(4,4,1)
-    verbose=true,
-) where {A,B,C,D,T}
-
-    # unpack
-    _di = inv.(di)
-    ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
-    ni = nx, ny = size(stokes.P)
-    P_old = deepcopy(stokes.P)
-    z = LinRange(di[2] * 0.5, 1.0 - di[2] * 0.5, ny)
-
-    # ~preconditioner
-    ητ = deepcopy(η)
-    @hide_communication b_width begin # communication/computation overlap
-        @parallel compute_maxloc!(ητ, η)
-        update_halo!(ητ)
-    end
-
-
-    Kb = get_Kb(MatParam)
-
-    # errors
-    err = 2 * ϵ
-    iter = 0
-    err_evo1 = Float64[]
-    err_evo2 = Float64[]
-    norm_Rx = Float64[]
-    norm_Ry = Float64[]
-    norm_∇V = Float64[]
-
-    # solver loop
-    wtime0 = 0.0
-    while iter < 2 || (err > ϵ && iter ≤ iterMax)
-        wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
-            @parallel compute_P!(
-                stokes.P, P_old, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
-            )
-            @parallel compute_strain_rate!(
-                stokes.ε.xx,
-                stokes.ε.yy,
-                stokes.ε.xy,
-                stokes.∇V,
-                stokes.V.Vx,
-                stokes.V.Vy,
-                _di...,
-            )
-            @parallel (1:nx, 1:ny) compute_τ_gp!(
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy_c,
-                stokes.τ.II,
-                stokes.τ_o.xx,
-                stokes.τ_o.yy,
-                stokes.τ_o.xy,
-                stokes.ε.xx,
-                stokes.ε.yy,
-                stokes.ε.xy,
-                η,
-                η_vep,
-                z,
-                thermal.T,
-                tupleize(MatParam), # needs to be a tuple
-                dt,
-                θ_dτ,
-            )
-            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            @parallel compute_V!(
-                stokes.V.Vx,
-                stokes.V.Vy,
-                stokes.P,
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy,
-                ηdτ,
-                ρg[1],
-                ρg[2],
-                ητ,
-                _di...,
-            )
-            # apply boundary conditions boundary conditions
-            flow_bcs!(stokes, flow_bcs, di)
-        end
-
-        iter += 1
-        if iter % nout == 0 && iter > 1
-            @parallel (1:nx, 1:ny) compute_Res!(
-                stokes.R.Rx,
-                stokes.R.Ry,
-                stokes.P,
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy,
-                ρg[1],
-                ρg[2],
-                _di...,
-            )
-            errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
-            push!(norm_Rx, errs[1])
-            push!(norm_Ry, errs[2])
-            push!(norm_∇V, errs[3])
-            err = maximum(errs)
-            push!(err_evo1, err)
-            push!(err_evo2, iter)
-            if (verbose && err > ϵ) || (iter == iterMax)
-                @printf(
-                    "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
-                    iter,
-                    err,
-                    norm_Rx[end],
-                    norm_Ry[end],
-                    norm_∇V[end]
-                )
-            end
-        end
-    end
-
-    if -Inf < dt < Inf
-        update_τ_o!(stokes)
-        @parallel (1:nx, 1:ny) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
+        @parallel (@idx ni) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
     end
 
     return (
@@ -728,11 +737,11 @@ function JustRelax.solve!(
     phase_c,
     args_η,
     MatParam::NTuple{N,MaterialParams},
-    dt;
+    dt,
     igg::IGG;
     iterMax=10e3,
     nout=500,
-    b_width=(4, 4, 1),
+    b_width=(4,4,1),
     verbose=true,
 ) where {A,B,C,D,N,T}
 

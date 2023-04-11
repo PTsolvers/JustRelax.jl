@@ -46,7 +46,7 @@ end
 function plot_solCx(geometry, stokes::StokesArrays, ρ; cmap=:vik, fun=heatmap!)
     f = Figure(; resolution=(3000, 1800), fontsize=28)
 
-    #Ddensity
+    #Density
     ax1 = Axis(f[1, 1]; aspect=1)
     h1 = fun(ax1, geometry.xci[1], geometry.xci[2], ρ; colormap=cmap)
 

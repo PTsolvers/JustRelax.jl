@@ -47,7 +47,7 @@ function solCx_density(xci, ni)
     return ρ
 end
 
-function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
+function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true, finalize_MPI=false)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
@@ -57,6 +57,7 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     di = @. li / ni # grid step in x- and -y
     max_li = max(li...)
     nDim = length(ni) # domain dimension
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
     xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
     xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
     g = 1
@@ -97,10 +98,14 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt; iterMax=150_000, nout=100
+            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt, igg::IGG;
+            iterMax=10e3,
+            nout=500,
+            b_width=(4,4,1)
         )
         t += Δt
     end
+    finalize_global_grid(; finalize_MPI=finalize_MPI)
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters, ρ
 end

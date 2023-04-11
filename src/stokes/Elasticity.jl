@@ -419,7 +419,7 @@ function JustRelax.solve!(
     # unpack
     _di = inv.(di)
     ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
-    nx, ny = size(stokes.P)
+    ni = nx, ny = size(stokes.P)
     P_old = deepcopy(stokes.P)
 
     # ~preconditioner
@@ -519,7 +519,7 @@ function JustRelax.solve!(
 
     if -Inf < dt < Inf
         update_τ_o!(stokes)
-        # @parallel (1:nx, 1:ny) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
+        @parallel (@idx ni) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
     end
 
     return (
@@ -669,7 +669,7 @@ function JustRelax.solve!(
 
     if -Inf < dt < Inf
         update_τ_o!(stokes)
-        @parallel (1:nx, 1:ny) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
+        @parallel (@idx ni) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
     end
 
     return (

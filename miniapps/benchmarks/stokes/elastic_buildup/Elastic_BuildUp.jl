@@ -36,13 +36,13 @@ function elastic_buildup(;
     η = fill(η0, nx, ny)
     g = 0.0 # gravity
     Gc = @fill(G, ni...)
-    K = @fill(Inf, ni...)
+    Kb = @fill(Inf, ni...)
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-9, CFL=1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, CFL=1 / √2.1)
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
@@ -59,7 +59,7 @@ function elastic_buildup(;
     while t < ttot
         dt = t < 10 * kyr ? 0.05 * kyr : 1.0 * kyr
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, Gc, K, dt; iterMax=150e3, nout=1000
+            stokes, pt_stokes, di, flow_bcs, ρg, η, Gc, Kb, dt; iterMax=150e3, nout=1000
         )
 
         @show t += dt

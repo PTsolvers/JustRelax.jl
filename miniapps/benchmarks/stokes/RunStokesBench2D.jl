@@ -2,7 +2,7 @@ using Pkg;
 Pkg.activate("../../../.");
 using JustRelax, Printf, LinearAlgebra
 using MPI: MPI
-# using CairoMakie
+using CairoMakie
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)

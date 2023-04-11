@@ -1332,7 +1332,7 @@ function JustRelax.solve!(
     ϵ = pt_stokes.ϵ
     # geometry
     _di = @. 1 / di
-    nx, ny, nz = size(stokes.P)
+    ni = nx, ny, nz = size(stokes.P)
 
     # ~preconditioner
     ητ = deepcopy(η)

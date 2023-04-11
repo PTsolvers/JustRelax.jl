@@ -18,7 +18,7 @@ function check_convergence_case1()
     G = 10e9 # shear modulus
     # run model
     _, _, av_τyy, sol_τyy, t, = elastic_buildup(;
-        nx=nx, ny=ny, lx=lx, ly=ly, endtime=endtime, η0=η0, εbg=εbg, G=G
+        nx=nx, ny=ny, lx=lx, ly=ly, endtime=endtime, η0=η0, εbg=εbg, G=G, init_MPI=false, finalize_MPI=false
     )
 
     err =

@@ -14,7 +14,7 @@ function plot_elastic_buildup(av_τyy, sol_τyy, t)
 end
 
 function elastic_buildup(;
-    nx=256 - 1, ny=256 - 1, lx=100e3, ly=100e3, endtime=500, η0=1e22, εbg=1e-14, G=10^10
+    nx=256 - 1, ny=256 - 1, lx=100e3, ly=100e3, endtime=500, η0=1e22, εbg=1e-14, G=10^10, init_MPI=false, finalize_MPI=false
 )
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
@@ -23,6 +23,7 @@ function elastic_buildup(;
     ni = (nx, ny) # number of nodes in x- and y-
     li = (lx, ly)  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) # init MPI
     nDim = length(ni) # domain dimension
     origin = 0.0, 0.0
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
@@ -59,7 +60,8 @@ function elastic_buildup(;
     while t < ttot
         dt = t < 10 * kyr ? 0.05 * kyr : 1.0 * kyr
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, Gc, Kb, dt; iterMax=150e3, nout=1000
+            stokes, pt_stokes, di, flow_bcs, ρg, η, Gc, Kb, dt,igg; iterMax=150e3, nout=1000,b_width=(4, 4, 1),
+            verbose=false,
         )
 
         @show t += dt
@@ -69,6 +71,7 @@ function elastic_buildup(;
         push!(sol_τyy, solution(εbg, t, G, η0))
         push!(tt, t / kyr)
     end
+    finalize_global_grid(; finalize_MPI=finalize_MPI)
 
     return (ni=ni, xci=xci, xvi=xvi, li=li), stokes, av_τyy, sol_τyy, tt, iters
 end

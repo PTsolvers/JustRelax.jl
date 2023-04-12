@@ -36,8 +36,8 @@ function solcx_error(geometry, stokes::StokesArrays; order=2)
     gridsize = reduce(*, geometry.di)
     Li(A, B; order=2) = norm(A .- B, order)
 
-    L2_vx = Li(stokes.V.Vx, PTArray(solk.vx); order=order) * gridsize
-    L2_vy = Li(stokes.V.Vy, PTArray(solk.vy); order=order) * gridsize
+    L2_vx = Li(stokes.V.Vx[:, 2:end - 1], PTArray(solk.vx); order=order) * gridsize
+    L2_vy = Li(stokes.V.Vy[2:end - 1,:], PTArray(solk.vy); order=order) * gridsize
     L2_p = Li(stokes.P, PTArray(solk.p); order=order) * gridsize
 
     return L2_vx, L2_vy, L2_p
@@ -212,7 +212,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
         ax1,
         geometry.xci[1],
         geometry.xvi[2],
-        log10.(err1(Array(stokes.V.Vy[2:end-1,:]), solc.vy));
+        log10.(err1(Array(stokes.V.Vy[2:(end-1),:]), solc.vy));
         colormap=:batlow,
     )
     xlims!(ax1, (0, 1))

@@ -84,7 +84,7 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
     ρg = @zeros(ni...), @zeros(ni...)
     dt = Inf
     G = @fill(Inf, ni...)
-    K = @fill(Inf, ni...)
+    Kb = @fill(Inf, ni...)
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
@@ -98,7 +98,7 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt, igg; iterMax=150e3, nout=1e3, b_width=(4, 4, 1),
+            stokes, pt_stokes, di, flow_bcs, ρg, η, G, Kb, dt, igg; iterMax=150e3, nout=1e3, b_width=(4, 4, 1),
         )
         t += Δt
     end
@@ -112,7 +112,7 @@ function multiple_solVi(; Δη=1e-3, lx=1e1, ly=1e1, rc=1e0, εbg=1e0, nrange::U
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, iters = solVi(; Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc=rc, εbg=εbg)
+        geometry, stokes, iters = solVi(; Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc=rc, εbg=εbg,  init_MPI=false, finalize_MPI=false)
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, Δη, εbg, rc; order=2)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

@@ -38,7 +38,7 @@ function solvi_viscosity(xci, ni, li, rc, η0, ηi)
     return η
 end
 
-function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, εbg=1e0)
+function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, εbg=1e0, init_MPI=true, finalize_MPI=false)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
@@ -75,7 +75,7 @@ function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, �
     # dt = η0 / (G * ξ)
     dt = 0.25
     Gc = @fill(G, ni...)
-    K = @fill(Inf, ni...)
+    Kb = @fill(Inf, ni...)
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
@@ -97,11 +97,11 @@ function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, �
             ρg,
             η,
             Gc,
-            K,
+            Kb,
             dt,
             igg;
-            iterMax=20e3,
-            nout=500,
+            iterMax=100e3,
+            nout=1e3,
             b_width=(4, 4, 1),
             verbose=true,
         )
@@ -124,7 +124,7 @@ function multiple_solViEl(; Δη=1e-3, lx=1e1, ly=1e1, rc=1e0, εbg=1e0, nrange:
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, iters = solVi(; Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc=rc, εbg=εbg)
+        geometry, stokes, iters = solViEl(; Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc=rc, εbg=εbg,init_MPI=true, finalize_MPI=false)
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, Δη, εbg, rc; order=2)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)
@@ -149,92 +149,4 @@ function multiple_solViEl(; Δη=1e-3, lx=1e1, ly=1e1, rc=1e0, εbg=1e0, nrange:
     ax.xlabel = "h"
     ax.ylabel = "L2 norm"
     return f
-end
-
-# unpack
-_dx, _dy = inv.(di)
-lx, ly = li
-Vx, Vy = stokes.V.Vx, stokes.V.Vy
-dVx, dVy = stokes.dV.Vx, stokes.dV.Vy
-εxx, εyy, εxy = JustRelax.strain(stokes)
-τ, τ_o = JustRelax.stress(stokes)
-τxx, τyy, τxy = τ
-τxx_o, τyy_o, τxy_o = τ_o
-P, ∇V = stokes.P, stokes.∇V
-Rx, Ry, RP = stokes.R.Rx, stokes.R.Ry, stokes.R.RP
-ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
-
-ρgx, ρgy = ρg
-P_old = deepcopy(P)
-
-# ~preconditioner
-ητ = deepcopy(η)
-@parallel JustRelax.compute_maxloc!(ητ, η)
-apply_free_slip!(freeslip, ητ, ητ)
-
-# PT numerical coefficients
-# @parallel elastic_iter_params!(dτ_Rho, Gdτ, ητ, Vpdτ, G, dt, Re, r, max_li)
-
-_sqrt_leng_Rx = one(T) / sqrt(length(Rx))
-_sqrt_leng_Ry = one(T) / sqrt(length(Ry))
-_sqrt_leng_∇V = one(T) / sqrt(length(∇V))
-
-# errors
-err = 2 * ϵ
-iter = 0
-cont = 0
-err_evo1 = Float64[]
-err_evo2 = Float64[]
-norm_Rx = Float64[]
-norm_Ry = Float64[]
-norm_∇V = Float64[]
-
-# solver loop
-wtime0 = 0.0
-while iter < 2 || (err > ϵ && iter ≤ iterMax)
-    wtime0 += @elapsed begin
-        # free slip boundary conditions
-        apply_free_slip!(freeslip, Vx, Vy)
-        for _ in 1:1000
-            @parallel JustRelax.Elasticity2D.compute_∇V!(∇V, Vx, Vy, _dx, _dy)
-            @parallel JustRelax.Elasticity2D.compute_strain_rate!(
-                εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
-            )
-            @parallel JustRelax.Elasticity2D.compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
-            @parallel JustRelax.Elasticity2D.compute_τ!(
-                τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, Gc, θ_dτ, dt
-            )
-            @parallel JustRelax.Elasticity2D.compute_V!(
-                Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy
-            )
-        end
-        heatmap(xci[1], xci[2], εxy; colormap=:batlow)
-        heatmap(xci[1], xci[2], τxx; colormap=:batlow)
-        heatmap(xci[1], xci[2], Rx; colormap=:batlow)
-    end
-
-    iter += 1
-    if iter % nout == 0 && iter > 1
-        @parallel JustRelax.Elasticity2D.compute_Res!(
-            Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
-        )
-
-        push!(norm_Rx, maximum(abs.(Rx)))
-        push!(norm_Ry, maximum(abs.(Ry)))
-        push!(norm_∇V, maximum(abs.(RP)))
-        err = max(norm_Rx[end], norm_Ry[end], norm_∇V[end])
-        push!(err_evo1, err)
-        push!(err_evo2, iter)
-
-        if (verbose && (err > ϵ)) || (iter == iterMax)
-            @printf(
-                "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
-                iter,
-                err,
-                norm_Rx[end],
-                norm_Ry[end],
-                norm_∇V[end]
-            )
-        end
-    end
 end

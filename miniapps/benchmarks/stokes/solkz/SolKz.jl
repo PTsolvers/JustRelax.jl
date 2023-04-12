@@ -52,12 +52,12 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true
     igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) # init MPI
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    
+    g = 1 # gravity
     # di = @. li / ni # grid step in x- and -y
     # nDim = length(ni) # domain dimension
     # xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
     # xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
-    g = 1 # gravity
+
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
@@ -76,7 +76,7 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true
     ρg = @zeros(ni...), fy
     dt = Inf
     G = @fill(Inf, ni...)
-    K = @fill(Inf, ni...)
+    Kb = @fill(Inf, ni...)
 
     ## Boundary conditions
     flow_bcs = FlowBoundaryConditions(;
@@ -88,7 +88,7 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt, igg; iterMax=150e3, nout=1e3, b_width=(4, 4, 1),
+            stokes, pt_stokes, di, flow_bcs, ρg, η, G, Kb, dt, igg; iterMax=150e3, nout=1e3, b_width=(4, 4, 1),
         )
         t += Δt
     end
@@ -102,7 +102,7 @@ function multiple_solKz(; Δη=1e-6, nrange::UnitRange=4:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solKz(; Δη=Δη, nx=nx, ny=ny)
+        geometry, stokes, = solKz(; Δη=Δη, nx=nx, ny=ny, init_MPI=true, finalize_MPI=false)
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes; order=1)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

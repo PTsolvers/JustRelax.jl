@@ -211,3 +211,7 @@ function plot_solVi_error(geometry, stokes::StokesArrays, Δη, εbg, rc)
 
     return f
 end
+
+err2(A::AbstractArray, B::AbstractArray) = @. √(((A - B)^2))
+
+err1(A::AbstractArray, B::AbstractArray) = @. abs(A - B)

@@ -83,7 +83,7 @@ function multiple_elastic_buildup(;
     for i in nrange
         nx = ny = 2^i - 1
         geometry, stokes, av_τyy, sol_τyy, t, iters = elastic_buildup(;
-            nx=nx, ny=ny, lx=lx, ly=ly, endtime=endtime, η0=η0, εbg=εbg, G=G
+            nx=nx, ny=ny, lx=lx, ly=ly, endtime=endtime, η0=η0, εbg=εbg, G=G, init_MPI=false, finalize_MPI=false,
         )
 
         push!(av_err, mean(@. abs(av_τyy - sol_τyy) / sol_τyy))

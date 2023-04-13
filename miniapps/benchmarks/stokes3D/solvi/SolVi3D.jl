@@ -1,3 +1,11 @@
+using ParallelStencil.FiniteDifferences3D
+
+# Benchmark reference:
+#   D. W. Schmid and Y. Y. Podladchikov. Analytical solutions for deformable elliptical inclusions in
+#   general shear. Geophysical Journal International, 155(1):269–288, 2003.
+
+include("vizSolVi3D.jl")
+
 @parallel function smooth!(A2::AbstractArray{T,3}, A::AbstractArray{T,3}, fact::T) where {T}
     @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
     return nothing
@@ -66,7 +74,7 @@ function solVi3D(;
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di)
+    pt_stokes = PTStokesCoeffs(li, di, CFL=1 / √3)
 
     ## Setup-specific parameters and fields
     ξ = 1.0 # Maxwell relaxation time

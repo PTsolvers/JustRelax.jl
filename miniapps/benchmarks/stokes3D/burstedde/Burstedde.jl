@@ -232,7 +232,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             K,
             dt,
             igg;
-            iterMax=20e3,
+            iterMax=100e3,
             b_width=(4, 4, 4),
         )
         t += Δt

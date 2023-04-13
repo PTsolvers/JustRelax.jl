@@ -189,7 +189,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total siηlation time
-    dt = 1   # physical time step
+    Δt = 1   # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
@@ -235,7 +235,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             iterMax=20e3,
             b_width=(4, 4, 4),
         )
-        t += dt
+        t += Δt
     end
 
     finalize_global_grid(; finalize_MPI=finalize_MPI)

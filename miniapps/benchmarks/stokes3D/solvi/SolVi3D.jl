@@ -60,7 +60,7 @@ function solVi3D(;
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
-    dt = 1   # physical time step
+    Δt = 1   # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
@@ -99,7 +99,7 @@ function solVi3D(;
         iters = solve!(
             stokes, pt_stokes, di, flow_bcs, ρg, η, Kb, Gc, dt, igg; iterMax=5000, nout=100
         )
-        t += dt
+        t += Δt
     end
 
     finalize_global_grid(; finalize_MPI=finalize_MPI)

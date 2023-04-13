@@ -7,7 +7,7 @@ model = PS_Setup(:cpu, Float64, 3)
 environment!(model)
 
 # choose benchmark
-benchmark = :solvi
+benchmark = :taylorGreen
 
 # model resolution (number of gridpoints)
 nx, ny, nz = 16, 16, 16

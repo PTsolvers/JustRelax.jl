@@ -28,5 +28,7 @@ function plot(stokes::StokesArrays, geometry, rc; cmap=:vik)
     lines!(ax, xi, yi; linewidth=3, color=:black)
     Colorbar(f[1, 6], h)
 
+    save("SolVi3D.png", f)
+
     return f
 end

@@ -7,7 +7,7 @@ model = PS_Setup(:cpu, Float64, 3)
 environment!(model)
 
 # choose benchmark
-benchmark = :taylorGreen
+benchmark = :solvi
 
 # model resolution (number of gridpoints)
 nx, ny, nz = 16, 16, 16
@@ -93,7 +93,7 @@ elseif benchmark == :solvi
         finalize_MPI=finalize_MPI,
     )
     # plot results
-    f = plot(stokes, geometry; cmap=:vik)
+    f = plot(stokes, geometry, rc; cmap=:vik)
 
 else
     throw("Benchmark not available.")

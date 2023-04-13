@@ -60,12 +60,6 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
 
-    # di = @. li / ni # grid step in x- and -y
-    # max_li = max(li...)
-    # nDim = length(ni) # domain dimension
-    # xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
-    # xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
-
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
     Δt = 1   # physical time step

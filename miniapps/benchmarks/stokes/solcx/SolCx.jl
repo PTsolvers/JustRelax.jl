@@ -47,7 +47,7 @@ function solCx_density(xci, ni)
     return ρ
 end
 
-function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true, finalize_MPI=false)
+function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true, finalize_MPI=false, b_width=(4,4,1))
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
@@ -59,12 +59,6 @@ function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true,
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     g = 1
-    # di = @. li / ni # grid step in x- and -y
-    # max_li = max(li...)
-    # nDim = length(ni) # domain dimension
-    # xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
-    # xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
-
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
@@ -74,7 +68,7 @@ function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true,
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; CFL=0.1 / √2.1)
 
     ## Setup-specific parameters and fields
     η = solCx_viscosity(xci, ni; Δη=Δη) # viscosity field
@@ -90,6 +84,7 @@ function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true,
     for _ in 1:5
         @hide_communication b_width begin
             @parallel smooth!(η2, η, 1.0)
+            update_halo!(η2, η)
         end
         @parallel (1:size(η2, 1)) free_slip_y!(η2)
         η, η2 = η2, η
@@ -104,9 +99,9 @@ function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true,
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt, igg::IGG;
-            iterMax=10e3,
-            nout=500,
+            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt, igg;
+            iterMax=150e3,
+            nout=1e3,
             b_width=(4,4,1)
         )
         t += Δt

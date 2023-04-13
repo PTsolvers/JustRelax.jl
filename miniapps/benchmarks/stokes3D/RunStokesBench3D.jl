@@ -92,6 +92,8 @@ elseif benchmark == :solvi
         init_MPI=MPI.Initialized() ? false : true,
         finalize_MPI=finalize_MPI,
     )
+    # plot results
+    f = plot(stokes, geometry; cmap=:vik)
 
 else
     throw("Benchmark not available.")

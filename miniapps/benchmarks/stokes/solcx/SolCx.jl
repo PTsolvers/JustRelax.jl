@@ -41,7 +41,7 @@ function solCx_density(xci, ni)
         @all(ρ) = _density(@all(x), @all(y))
         return nothing
     end
-    # compute viscosity
+    # compute density
     @parallel density(ρ, x, y)
 
     return ρ
@@ -58,13 +58,13 @@ function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true,
     igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-
+    g = 1
     # di = @. li / ni # grid step in x- and -y
     # max_li = max(li...)
     # nDim = length(ni) # domain dimension
     # xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
     # xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
-    g = 1
+
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
@@ -88,7 +88,9 @@ function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true,
     # smooth viscosity jump (otherwise no convergence for Δη > ~15)
     η2 = deepcopy(η)
     for _ in 1:5
-        @parallel smooth!(η2, η, 1.0)
+        @hide_communication b_width begin
+            @parallel smooth!(η2, η, 1.0)
+        end
         @parallel (1:size(η2, 1)) free_slip_y!(η2)
         η, η2 = η2, η
     end
@@ -119,7 +121,7 @@ function multiple_solCx(; Δη=1e6, nrange::UnitRange=6:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solCx(Δη; nx=nx, ny=ny)
+        geometry, stokes, = solCx(Δη; nx=nx, ny=ny, init_MPI=false, finalize_MPI=false)
         L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes; order=1)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

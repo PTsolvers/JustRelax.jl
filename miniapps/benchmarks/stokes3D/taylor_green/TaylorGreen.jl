@@ -76,7 +76,7 @@ function velocity!(stokes, xci, xvi)
     end
 
     @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-    return stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)], stokes.V.Vy[2:(end - 1), :, 2:(end - 1)], stokes.V.Vz[2:(end - 1), 2:(end - 1), :] = Vx,
+    stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)], stokes.V.Vy[2:(end - 1), :, 2:(end - 1)], stokes.V.Vz[2:(end - 1), 2:(end - 1), :] = Vx,
     Vy,
     Vz
 end
@@ -114,7 +114,7 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
 
     ## Boundary conditions
     flow_bcs = FlowBoundaryConditions(;
-        free_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
+        free_slip=(left=true, right=true, top=true, bot=true, back=true, front=true),
         no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
         periodicity=(
             left=false, right=false, top=false, bot=false, back=false, front=false

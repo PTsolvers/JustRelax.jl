@@ -31,7 +31,7 @@ function check_convergence_case1()
         lz=lz,
         rc=rc,
         εbg=εbg,
-        init_MPI=false,
+        init_MPI=true,
         finalize_MPI=false,
     )
 

@@ -74,6 +74,7 @@ function velocity!(stokes, xci, xvi)
     end
 
     @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+    stokes.V.Vx[:, 2:(end-1), 2:(end-1)], stokes.V.Vy[2:(end-1), :, 2:(end-1)], stokes.V.Vz[2:(end-1), 2:(end-1), :] = Vx, Vy, Vz
 end
 
 function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)

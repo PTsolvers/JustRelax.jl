@@ -91,7 +91,7 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
-    Δt = Inf    # physical time step
+    Δt = 1    # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays

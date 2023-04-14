@@ -23,7 +23,7 @@ end
 function velocity!(stokes, xci, xvi)
     xc, yc, zc = xci
     xv, yv, zv = xvi
-    Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
+    Vx, Vy, Vz = stokes.V.Vx[:, 2:(end-1), 2:(end-1)], stokes.V.Vy[2:(end-1), :, 2:(end-1)], stokes.V.Vz[2:(end-1), 2:(end-1), :]
 
     _velocity_x(x, y, z) = -2cos(2 * π * x) * sin(2 * π * y) * sin(2 * π * z)
     _velocity_y(x, y, z) = sin(2 * π * x) * cos(2 * π * y) * sin(2 * π * z)

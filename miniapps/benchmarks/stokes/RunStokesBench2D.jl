@@ -35,11 +35,12 @@ if benchmark == :solcx
     Δη = 1e6
     if runtype == :single
         # run model
-        geometry, stokes, iters, ρ = solCx(Δη;
-        nx=nx, 
-        ny=ny, 
-        init_MPI=MPI.Initialized() ? false : true,
-        finalize_MPI=finalize_MPI,
+        geometry, stokes, iters, ρ = solCx(
+            Δη;
+            nx=nx,
+            ny=ny,
+            init_MPI=MPI.Initialized() ? false : true,
+            finalize_MPI=finalize_MPI,
         )
 
         # plot model output and error
@@ -63,11 +64,12 @@ elseif benchmark == :solkz
     Δη = 1e6
     if runtype == :single
         # run model
-        geometry, stokes, iters, = solKz(; Δη=Δη,
-        nx=nx,
-        ny=ny,
-        init_MPI=MPI.Initialized() ? false : true,
-        finalize_MPI=finalize_MPI,
+        geometry, stokes, iters, = solKz(;
+            Δη=Δη,
+            nx=nx,
+            ny=ny,
+            init_MPI=MPI.Initialized() ? false : true,
+            finalize_MPI=finalize_MPI,
         )
 
         # plot model output and error
@@ -92,8 +94,17 @@ elseif benchmark == :solvi
     lx, ly = 2e0, 2e0 # domain siye in x and y directions
     if runtype == :single
         # run model
-        geometry, stokes, iters = solVi(; Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc=rc, εbg=εbg, init_MPI=MPI.Initialized() ? false : true,
-        finalize_MPI=finalize_MPI,)
+        geometry, stokes, iters = solVi(;
+            Δη=Δη,
+            nx=nx,
+            ny=ny,
+            lx=lx,
+            ly=ly,
+            rc=rc,
+            εbg=εbg,
+            init_MPI=MPI.Initialized() ? false : true,
+            finalize_MPI=finalize_MPI,
+        )
 
         # plot model output and error
         f = plot_solVi_error(geometry, stokes, Δη, εbg, rc)
@@ -115,7 +126,15 @@ elseif benchmark == :solviel
     if runtype == :single
         # run model
         geometry, stokes, iters = solViEl(;
-            Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc=rc, εbg=εbg, init_MPI=MPI.Initialized() ? false : true, finalize_MPI=finalize_MPI,
+            Δη=Δη,
+            nx=nx,
+            ny=ny,
+            lx=lx,
+            ly=ly,
+            rc=rc,
+            εbg=εbg,
+            init_MPI=MPI.Initialized() ? false : true,
+            finalize_MPI=finalize_MPI,
         )
 
         # plot model output and error
@@ -143,7 +162,15 @@ elseif benchmark == :elastic_buildup
     if runtype == :single
         # run model
         geometry, stokes, av_τyy, sol_τyy, t, iters = elastic_buildup(;
-            nx=nx, ny=ny, lx=lx, ly=ly, endtime=endtime, η0=η0, εbg=εbg, G=G,init_MPI=MPI.Initialized() ? false : true,
+            nx=nx,
+            ny=ny,
+            lx=lx,
+            ly=ly,
+            endtime=endtime,
+            η0=η0,
+            εbg=εbg,
+            G=G,
+            init_MPI=MPI.Initialized() ? false : true,
             finalize_MPI=finalize_MPI,
         )
         # plot model output and error

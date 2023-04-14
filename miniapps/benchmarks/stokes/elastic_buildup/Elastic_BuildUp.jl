@@ -14,7 +14,16 @@ function plot_elastic_buildup(av_τyy, sol_τyy, t)
 end
 
 function elastic_buildup(;
-    nx=256 - 1, ny=256 - 1, lx=100e3, ly=100e3, endtime=500, η0=1e22, εbg=1e-14, G=10^10, init_MPI=false, finalize_MPI=false
+    nx=256 - 1,
+    ny=256 - 1,
+    lx=100e3,
+    ly=100e3,
+    endtime=500,
+    η0=1e22,
+    εbg=1e-14,
+    G=10^10,
+    init_MPI=false,
+    finalize_MPI=false,
 )
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
@@ -60,7 +69,19 @@ function elastic_buildup(;
     while t < ttot
         dt = t < 10 * kyr ? 0.05 * kyr : 1.0 * kyr
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, Gc, Kb, dt,igg; iterMax=150e3, nout=1000,b_width=(4, 4, 1),
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            η,
+            Gc,
+            Kb,
+            dt,
+            igg;
+            iterMax=150e3,
+            nout=1000,
+            b_width=(4, 4, 1),
             verbose=false,
         )
 
@@ -83,7 +104,16 @@ function multiple_elastic_buildup(;
     for i in nrange
         nx = ny = 2^i - 1
         geometry, stokes, av_τyy, sol_τyy, t, iters = elastic_buildup(;
-            nx=nx, ny=ny, lx=lx, ly=ly, endtime=endtime, η0=η0, εbg=εbg, G=G, init_MPI=false, finalize_MPI=false,
+            nx=nx,
+            ny=ny,
+            lx=lx,
+            ly=ly,
+            endtime=endtime,
+            η0=η0,
+            εbg=εbg,
+            G=G,
+            init_MPI=false,
+            finalize_MPI=false,
         )
 
         push!(av_err, mean(@. abs(av_τyy - sol_τyy) / sol_τyy))

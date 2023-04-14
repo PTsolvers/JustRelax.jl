@@ -43,7 +43,6 @@ end
 
 module Elasticity2D
 
-
 using ImplicitGlobalGrid
 using ..JustRelax
 using CUDA
@@ -52,7 +51,8 @@ using ParallelStencil.FiniteDifferences2D
 using GeoParams, LinearAlgebra, Printf
 
 import JustRelax: stress, strain, elastic_iter_params!, PTArray, Velocity, SymmetricTensor
-import JustRelax: Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
+import JustRelax:
+    Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!, @tuple
 
 import ..Stokes2D: compute_P!, compute_V!, compute_strain_rate!
@@ -320,7 +320,7 @@ function JustRelax.solve!(
     igg::IGG;
     iterMax=10e3,
     nout=500,
-    b_width=(4,4,1),
+    b_width=(4, 4, 1),
     verbose=true,
 ) where {A,B,C,D,T}
 
@@ -362,22 +362,22 @@ function JustRelax.solve!(
             # free slip boundary conditions
             # apply_free_slip!(freeslip, Vx, Vy)
             @parallel (@idx ni) compute_∇V!(∇V, Vx, Vy, _dx, _dy)
-            @parallel (@idx ni.+1) compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
+                εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
+            )
             @parallel compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
-            @parallel (@idx ni.+1) compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, θ_dτ)
+            @parallel (@idx ni .+ 1) compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, θ_dτ)
 
             @hide_communication b_width begin
-            @parallel compute_V!(Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
-            update_halo!(Vx, Vy)
+                @parallel compute_V!(Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
+                update_halo!(Vx, Vy)
             end
             flow_bcs!(stokes, flow_bcs, di)
         end
 
         iter += 1
         if iter % nout == 0 && iter > 1
-            @parallel (@idx ni) compute_Res!(
-                Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
-            )
+            @parallel (@idx ni) compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
             Vmin, Vmax = extrema(Vx)
             Pmin, Pmax = extrema(P)
             push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
@@ -430,7 +430,7 @@ function JustRelax.solve!(
     igg::IGG;
     iterMax=10e3,
     nout=500,
-    b_width=(4,4,1),
+    b_width=(4, 4, 1),
     verbose=true,
 ) where {A,B,C,D,T}
 
@@ -447,7 +447,6 @@ function JustRelax.solve!(
         update_halo!(ητ)
     end
 
-
     # errors
     err = 2 * ϵ
     iter = 0
@@ -462,7 +461,7 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
-            @parallel (@idx ni.+1) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.ε.xx,
                 stokes.ε.yy,
                 stokes.ε.xy,
@@ -472,7 +471,7 @@ function JustRelax.solve!(
                 _di...,
             )
             @parallel compute_P!(stokes.P, P_old, stokes.R.RP, stokes.∇V, η, K, dt, r, θ_dτ)
-            @parallel (@idx ni.+1) compute_τ!(
+            @parallel (@idx ni .+ 1) compute_τ!(
                 stokes.τ.xx,
                 stokes.τ.yy,
                 stokes.τ.xy,
@@ -584,7 +583,7 @@ function JustRelax.solve!(
     igg::IGG;
     iterMax=10e3,
     nout=500,
-    b_width=(4,4,1),
+    b_width=(4, 4, 1),
     verbose=true,
 ) where {A,B,C,D,T}
 
@@ -601,7 +600,6 @@ function JustRelax.solve!(
         @parallel compute_maxloc!(ητ, η)
         update_halo!(ητ)
     end
-
 
     Kb = get_Kb(MatParam)
 
@@ -622,7 +620,7 @@ function JustRelax.solve!(
             @parallel compute_P!(
                 stokes.P, P_old, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
             )
-            @parallel (@idx ni.+1) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.ε.xx,
                 stokes.ε.yy,
                 stokes.ε.xy,
@@ -741,7 +739,7 @@ function JustRelax.solve!(
     igg::IGG;
     iterMax=10e3,
     nout=500,
-    b_width=(4,4,1),
+    b_width=(4, 4, 1),
     verbose=true,
 ) where {A,B,C,D,N,T}
 
@@ -1373,7 +1371,7 @@ function JustRelax.solve!(
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
             )
-            @parallel (@idx ni.+1) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.∇V,
                 stokes.ε.xx,
                 stokes.ε.yy,
@@ -1386,7 +1384,7 @@ function JustRelax.solve!(
                 stokes.V.Vz,
                 _di...,
             )
-            @parallel (@idx ni.+1) compute_τ!(
+            @parallel (@idx ni .+ 1) compute_τ!(
                 stokes.τ.xx,
                 stokes.τ.yy,
                 stokes.τ.zz,

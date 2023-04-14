@@ -40,7 +40,9 @@ function solKz_density(xci, ni)
     return ρ
 end
 
-function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true, finalize_MPI=false)
+function solKz(;
+    Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true, finalize_MPI=false
+)
 
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
@@ -53,7 +55,7 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     g = 1 # gravity
-   
+
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
     Δt = 1   # physical time step
@@ -83,7 +85,19 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, G, Kb, dt, igg; iterMax=150e3, nout=1e3, b_width=(4, 4, 1),
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            η,
+            G,
+            Kb,
+            dt,
+            igg;
+            iterMax=150e3,
+            nout=1e3,
+            b_width=(4, 4, 1),
         )
         t += Δt
     end

@@ -47,7 +47,16 @@ function solCx_density(xci, ni)
     return ρ
 end
 
-function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true, finalize_MPI=false, b_width=(4,4,1))
+function solCx(
+    Δη=Δη;
+    nx=256 - 1,
+    ny=256 - 1,
+    lx=1e0,
+    ly=1e0,
+    init_MPI=true,
+    finalize_MPI=false,
+    b_width=(4, 4, 1),
+)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
@@ -99,10 +108,19 @@ function solCx(Δη=Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true,
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt, igg;
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            η,
+            G,
+            K,
+            dt,
+            igg;
             iterMax=150e3,
             nout=1e3,
-            b_width=(4,4,1)
+            b_width=(4, 4, 1),
         )
         t += Δt
     end

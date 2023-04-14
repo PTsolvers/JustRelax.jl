@@ -58,6 +58,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
     li = lx_nd, ly_nd                     # domain length in x- and y-
     di = @. li / ni                       # grid step in x- and -y
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI=true)...) # init MPI
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
@@ -156,6 +157,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
             η_vep,
             it > 3 ? rheology_depth : rheology, # do a few initial time-steps without plasticity to improve convergence
             dt_elasticity,
+            igg;
             iterMax=25e3,
             nout=1e3,
         )
@@ -177,7 +179,9 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny * 8, figdir="figs2D")
             ax2 = Axis(fig[2, 1]; aspect=ar, title="Vy")
             ax3 = Axis(fig[3, 1]; aspect=ar, title="τII")
             ax4 = Axis(fig[4, 1]; aspect=ar, title="η")
-            h1 = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1, :]); colormap=:batlow)
+            h1 = heatmap!(
+                ax1, xvi[1], xvi[2], Array(thermal.T[2:(end - 1), :]); colormap=:batlow
+            )
             h2 = heatmap!(
                 ax2, xci[1], xvi[2], Array(stokes.V.Vy[2:(end - 1), :]); colormap=:batlow
             )
@@ -203,9 +207,7 @@ n = 32
 nx = n * ar - 2
 ny = n - 2
 
-thermal_convection2D(; figdir = figdir, ar = ar, nx = nx, ny = ny);
-
-
+thermal_convection2D(; figdir=figdir, ar=ar, nx=nx, ny=ny);
 
 @parallel_indices (i, j) function foo!(
     qTx, qTy, T, rheology::MaterialParams, args, _dx, _dy
@@ -229,10 +231,12 @@ thermal_convection2D(; figdir = figdir, ar = ar, nx = nx, ny = ny);
             -compute_diffusivity(rheology, argsy) * (T[i1, j1] - T[i1, j]) * _dy
     end
 
+    finalize_global_grid(; finalize_MPI=true)
+    
     return nothing
 end
 
-_dx, _dy=inv.(di)
+_dx, _dy = inv.(di)
 
 @parallel (1:(nx - 1), 1:(ny - 1)) foo!(
     thermal.qTx, thermal.qTy, thermal.T, rheology, args_T, _dx, _dy

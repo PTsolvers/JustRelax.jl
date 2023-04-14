@@ -38,7 +38,17 @@ function solvi_viscosity(xci, ni, li, rc, η0, ηi)
     return η
 end
 
-function solViEl(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, rc=0.01, εbg=1e0, init_MPI=true, finalize_MPI=false)
+function solViEl(;
+    Δη=1e-3,
+    nx=256 - 1,
+    ny=256 - 1,
+    lx=1e0,
+    ly=1e0,
+    rc=0.01,
+    εbg=1e0,
+    init_MPI=true,
+    finalize_MPI=false,
+)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
@@ -118,7 +128,17 @@ function multiple_solViEl(; Δη=1e-3, lx=1e1, ly=1e1, rc=1e0, εbg=1e0, nrange:
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, iters = solViEl(; Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc=rc, εbg=εbg,init_MPI=true, finalize_MPI=false)
+        geometry, stokes, iters = solViEl(;
+            Δη=Δη,
+            nx=nx,
+            ny=ny,
+            lx=lx,
+            ly=ly,
+            rc=rc,
+            εbg=εbg,
+            init_MPI=true,
+            finalize_MPI=false,
+        )
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, Δη, εbg, rc; order=2)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

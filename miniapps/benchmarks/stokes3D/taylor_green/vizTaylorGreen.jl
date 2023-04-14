@@ -99,9 +99,9 @@ function error(stokes, geometry)
     vx, vy, vz, p = analytical_solution(geometry.xci, geometry.xvi)
 
     order = 2
-    L2_vx = norm(stokes.V.Vx .- vx, order) * gridsize
-    L2_vy = norm(stokes.V.Vy .- vy, order) * gridsize
-    L2_vz = norm(stokes.V.Vz .- vz, order) * gridsize
+    L2_vx = norm(stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)] .- vx, order) * gridsize
+    L2_vy = norm(stokes.V.Vy[2:(end - 1), :, 2:(end - 1)] .- vy, order) * gridsize
+    L2_vz = norm(stokes.V.Vz[2:(end - 1), 2:(end - 1), :] .- vz, order) * gridsize
     L2_p = norm(stokes.P .- (p), order) * gridsize
 
     return L2_p, L2_vx, L2_vy, L2_vz

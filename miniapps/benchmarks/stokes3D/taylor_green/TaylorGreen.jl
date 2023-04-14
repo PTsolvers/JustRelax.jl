@@ -23,7 +23,9 @@ end
 function velocity!(stokes, xci, xvi)
     xc, yc, zc = xci
     xv, yv, zv = xvi
-    Vx, Vy, Vz = stokes.V.Vx[:, 2:(end-1), 2:(end-1)], stokes.V.Vy[2:(end-1), :, 2:(end-1)], stokes.V.Vz[2:(end-1), 2:(end-1), :]
+    Vx, Vy, Vz = stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)],
+    stokes.V.Vy[2:(end - 1), :, 2:(end - 1)],
+    stokes.V.Vz[2:(end - 1), 2:(end - 1), :]
 
     _velocity_x(x, y, z) = -2cos(2 * π * x) * sin(2 * π * y) * sin(2 * π * z)
     _velocity_y(x, y, z) = sin(2 * π * x) * cos(2 * π * y) * sin(2 * π * z)
@@ -74,7 +76,9 @@ function velocity!(stokes, xci, xvi)
     end
 
     @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-    stokes.V.Vx[:, 2:(end-1), 2:(end-1)], stokes.V.Vy[2:(end-1), :, 2:(end-1)], stokes.V.Vz[2:(end-1), 2:(end-1), :] = Vx, Vy, Vz
+    return stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)], stokes.V.Vy[2:(end - 1), :, 2:(end - 1)], stokes.V.Vz[2:(end - 1), 2:(end - 1), :] = Vx,
+    Vy,
+    Vz
 end
 
 function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)

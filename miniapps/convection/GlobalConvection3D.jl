@@ -22,7 +22,7 @@ environment!(model)
 end
 
 @parallel_indices (i, j, k) function computeViscosity!(η, v, args)
-    Base.Base.@propagate_inbounds @inline function av(T)
+    Base.Base.@propagate_inbounds @inline av(T)
         0.125 * (
             T[i, j, k] +
             T[i + 1, j, k] +

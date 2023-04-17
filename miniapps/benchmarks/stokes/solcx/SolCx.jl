@@ -10,10 +10,11 @@ include("vizSolCx.jl")
     return nothing
 end
 
-function solCx_viscosity(xci, ni; Δη=1e6)
+function solCx_viscosity(xci, ni, di; Δη=1e6)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x = PTArray([xci for xci in xc, _ in yc])
+    x = PTArray(zeros(ni...))
+    x = PTArray([x_g(ix,di[1],x) for ix in 1:size(xc,1), _ in 1:size(yc,1)])
     η = PTArray(zeros(ni...))
     # inner closure
     _viscosity(x, Δη) = ifelse(x ≤ 0.5, 1e0, Δη)
@@ -28,11 +29,13 @@ function solCx_viscosity(xci, ni; Δη=1e6)
     return η
 end
 
-function solCx_density(xci, ni)
+function solCx_density(xci, ni, di)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x = PTArray([xci for xci in xc, _ in yc])
-    y = PTArray([yci for _ in xc, yci in yc])
+    x = PTArray(zeros(ni...))
+    y = PTArray(zeros(ni...))
+    x = PTArray([x_g(ix,di[1],x) for ix in 1:size(xc,1), _ in 1:size(yc,1)])
+    y = PTArray([y_g(ix,di[2],y) for _ in 1:size(xc,1), ix in 1:size(yc,1)])
     ρ = PTArray(zeros(ni))
     # inner closure
     _density(x, y) = -sin(π * y) * cos(π * x)
@@ -80,8 +83,8 @@ function solCx(
     pt_stokes = PTStokesCoeffs(li, di; CFL=0.1 / √2.1)
 
     ## Setup-specific parameters and fields
-    η = solCx_viscosity(xci, ni; Δη=Δη) # viscosity field
-    ρ = solCx_density(xci, ni)
+    η = solCx_viscosity(xci, ni, di; Δη=Δη) # viscosity field
+    ρ = solCx_density(xci, ni, di)
     fy = ρ .* g
     ρg = @zeros(ni...), fy
     dt = Inf

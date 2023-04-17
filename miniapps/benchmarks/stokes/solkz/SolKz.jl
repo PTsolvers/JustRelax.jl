@@ -3,10 +3,11 @@ using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity
 # include benchmark related plotting and error functions
 include("vizSolKz.jl")
 
-function solKz_viscosity(xci, ni; B=log(1e6))
+function solKz_viscosity(xci, ni, di; B=log(1e6))
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    y = PTArray([yci for _ in xc, yci in yc])
+    y = PTArray(zeros(ni...))
+    y = PTArray([y_g(ix,di[2],y) for _ in 1:size(xc,1), ix in 1:size(yc,1)])
     η = @zeros(ni...)
     # inner closure
     _viscosity(y, B) = exp(B * y)
@@ -21,11 +22,13 @@ function solKz_viscosity(xci, ni; B=log(1e6))
     return η
 end
 
-function solKz_density(xci, ni)
+function solKz_density(xci, ni, di)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x = PTArray([xci for xci in xc, _ in yc])
-    y = PTArray([yci for _ in xc, yci in yc])
+    x = PTArray(zeros(ni...))
+    y = PTArray(zeros(ni...))
+    x = PTArray([x_g(ix,di[1],x) for ix in 1:size(xc,1), _ in 1:size(yc,1)])
+    y = PTArray([y_g(ix,di[2],y) for _ in 1:size(xc,1), ix in 1:size(yc,1)])
     ρ = @zeros(ni...)
     # inner closure
     _density(x, y) = -sin(2 * y) * cos(3 * π * x)
@@ -67,8 +70,8 @@ function solKz(;
     pt_stokes = PTStokesCoeffs(li, di; Re=5π, CFL=1 / √2.1)
 
     ## Setup-specific parameters and fields
-    η = solKz_viscosity(xci, ni; B=log(Δη)) # viscosity field
-    ρ = solKz_density(xci, ni)
+    η = solKz_viscosity(xci, ni, di; B=log(Δη)) # viscosity field
+    ρ = solKz_density(xci, ni, di)
     fy = ρ * g
     ρg = @zeros(ni...), fy
     dt = Inf
@@ -111,7 +114,7 @@ function multiple_solKz(; Δη=1e-6, nrange::UnitRange=4:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solKz(; Δη=Δη, nx=nx, ny=ny, init_MPI=true, finalize_MPI=false)
+        geometry, stokes, = solKz(; Δη=Δη, nx=nx, ny=ny, init_MPI=false, finalize_MPI=false)
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes; order=1)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

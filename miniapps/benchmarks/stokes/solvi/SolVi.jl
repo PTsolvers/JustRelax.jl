@@ -20,7 +20,7 @@ function solvi_viscosity(ni, di, li, rc, η0, ηi)
     dx, dy = di
     lx, ly = li
     # cx, cy = lx/2, ly/2
-    η = fill(η0, ni...)
+    η = @fill(η0, ni...)
 
     # _viscosity!(η, xci, yci, rc, ηi, cx, cy)
 

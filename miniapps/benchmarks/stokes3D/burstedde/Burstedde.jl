@@ -13,14 +13,9 @@ include("vizBurstedde.jl")
 end
 
 function viscosity(xi, di, β)
-    xx, yy, zz = xi
     ni = length.(xi)
-    η = @allocate ni...
-    x ,y, z    = PTArray(zeros(ni...)), PTArray(zeros(ni...)), PTArray(zeros(ni...))
-    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xx,1), _ in 1:size(yy,1), _ in 1:size(zz,1)])
-    y = PTArray([y_g(ix, di[2], y) for _ in 1:size(xx,1), ix in 1:size(yy,1), _ in 1:size(zz,1)])
-    z = PTArray([z_g(ix, di[3], z) for _ in 1:size(xx,1), _ in 1:size(yy,1), ix in 1:size(zz,1)])
-    @parallel (1:ni[1], 1:ni[2], 1:ni[3]) _viscosity!(η, x, y, z, β)
+    η = @zeros(ni...)
+    @parallel (@idx ni) _viscosity!(η, xi[1], xi[2], xi[3], β)
 
     return η
 end
@@ -28,10 +23,10 @@ end
 function body_forces(xi::NTuple{3,T}, di, η, β) where {T}
     xx, yy, zz = xi
     ni = length.(xi)
-    x ,y, z    = PTArray(zeros(ni...)), PTArray(zeros(ni...)), PTArray(zeros(ni...))
-    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xx,1), _ in 1:size(yy,1), _ in 1:size(zz,1)])
-    y = PTArray([y_g(ix, di[2], y) for _ in 1:size(xx,1), ix in 1:size(yy,1), _ in 1:size(zz,1)])
-    z = PTArray([z_g(ix, di[3], z) for _ in 1:size(xx,1), _ in 1:size(yy,1), ix in 1:size(zz,1)])
+    x ,y, z    =  @zeros(ni...),  @zeros(ni...),  @zeros(ni...)
+    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xx,1), ix in 1:size(yy,1), ix in 1:size(zz,1)])
+    y = PTArray([y_g(iy, di[2], y) for iy in 1:size(xx,1), iy in 1:size(yy,1), iy in 1:size(zz,1)])
+    z = PTArray([z_g(iz, di[3], z) for iz in 1:size(xx,1), iz in 1:size(yy,1), iz in 1:size(zz,1)])
 
     dηdx = @. -β * (1 - 2 * x) * η
     dηdy = @. -β * (1 - 2 * y) * η
@@ -96,21 +91,16 @@ function body_forces_z(x, y, z, η, β)
 end
 
 function velocity!(stokes, xci, xvi, di)
-    # xc, yc, zc = xci
-    # xv, yv, zv = xvi
-    xv, yv, zv = ntuple(i -> (xci[i][1] - di[i]):di[i]:(xci[i][end] + di[i]), Val(3))
-    xc, yc, zc = ntuple(i -> 0.0:di[i]:(xci[i][end] + di[i] / 2), Val(3))
+    xc, yc, zc = xci
+    xv, yv, zv = xvi
     ni = length.(xci)
-    x ,y, z    = PTArray(zeros(ni...)), PTArray(zeros(ni...)), PTArray(zeros(ni...))
-    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xc,1), _ in 1:size(yc,1), _ in 1:size(zc,1)])
-    y = PTArray([y_g(ix, di[2], y) for _ in 1:size(xc,1), ix in 1:size(yc,1), _ in 1:size(zc,1)])
-    z = PTArray([z_g(ix, di[3], z) for _ in 1:size(xc,1), _ in 1:size(yc,1), ix in 1:size(zc,1)])
-    # xc, yc, zc = xci
-    # # xv, yv, zv = xvi
-    # di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
-    # xv, yv, zv = ntuple(i -> (xci[i][1] - di[i]):di[i]:(xci[i][end] + di[i]), Val(3))
-    # xc, yc, zc = ntuple(i -> 0.0:di[i]:(xci[i][end] + di[i] / 2), Val(3))
-    Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
+    x ,y, z    =  @zeros(ni...),  @zeros(ni...),  @zeros(ni...)
+    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xc,1), _ in 1:size(yc,1), ix in 1:size(zc,1)])
+    y = PTArray([y_g(iy, di[2], y) for iy in 1:size(xc,1), iy in 1:size(yc,1), iy in 1:size(zc,1)])
+    z = PTArray([z_g(iz, di[3], z) for iz in 1:size(xc,1), iz in 1:size(yc,1), iiz in 1:size(zc,1)])
+    Vx, Vy, Vz = stokes.V.Vx[1:(end-1), 2:(end - 1), 2:(end - 1)],
+    stokes.V.Vy[2:(end - 1), 1:(end-1), 2:(end - 1)],
+    stokes.V.Vz[2:(end - 1), 2:(end - 1), 1:(end-1)]
 
     _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y
     _velocity_y(x, y, z) = y + x * y + y^2 + x^2 * y^2
@@ -159,20 +149,22 @@ function velocity!(stokes, xci, xvi, di)
     end
 
     @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+    stokes.V.Vx[1:(end-1), 2:(end - 1), 2:(end - 1)], stokes.V.Vy[2:(end - 1), 1:(end-1), 2:(end - 1)], stokes.V.Vz[2:(end - 1), 2:(end - 1), 1:(end-1)] = Vx,
+    Vy,
+    Vz
 end
 
 function analytical_velocity!(stokes, xci, xvi, di)
-    # xc, yc, zc = xci
-    # xv, yv, zv = xvi[1][2:end-1]
-    # di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
-    xv, yv, zv = ntuple(i -> (xci[i][1] - di[i]):di[i]:(xci[i][end] + di[i]), Val(3))
-    xc, yc, zc = ntuple(i -> 0.0:di[i]:(xci[i][end] + di[i] / 2), Val(3))
-
-    x ,y, z    = PTArray(zeros(ni...)), PTArray(zeros(ni...)), PTArray(zeros(ni...))
-    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xc,1), _ in 1:size(yc,1), _ in 1:size(zc,1)])
-    y = PTArray([y_g(ix, di[2], y) for _ in 1:size(xc,1), ix in 1:size(yc,1), _ in 1:size(zc,1)])
-    z = PTArray([z_g(ix, di[3], z) for _ in 1:size(xc,1), _ in 1:size(yc,1), ix in 1:size(zc,1)])
-    Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
+    xc, yc, zc = xci
+    xv, yv, zv = xvi
+    x ,y, z    =  @zeros(ni...),  @zeros(ni...),  @zeros(ni...)
+    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xc,1), _ in 1:size(yc,1), ix in 1:size(zc,1)])
+    y = PTArray([y_g(iy, di[2], y) for iy in 1:size(xc,1), iy in 1:size(yc,1), iy in 1:size(zc,1)])
+    z = PTArray([z_g(iz, di[3], z) for iz in 1:size(xc,1), iz in 1:size(yc,1), iiz in 1:size(zc,1)])
+    # Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
+    Vx, Vy, Vz = stokes.V.Vx[1:(end-1), 2:(end - 1), 2:(end - 1)],
+    stokes.V.Vy[2:(end - 1), 1:(end-1), 2:(end - 1)],
+    stokes.V.Vz[2:(end - 1), 2:(end - 1), 1:(end-1)]
 
     _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y
     _velocity_y(x, y, z) = y + x * y + y^2 + x^2 * y^2
@@ -193,6 +185,10 @@ function analytical_velocity!(stokes, xci, xvi, di)
     end
 
     @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+    stokes.V.Vx[1:(end-1), 2:(end - 1), 2:(end - 1)], stokes.V.Vy[2:(end - 1), 1:(end-1), 2:(end - 1)], stokes.V.Vz[2:(end - 1), 2:(end - 1), 1:(end-1)] = Vx,
+    Vy,
+    Vz
+
 end
 
 function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)

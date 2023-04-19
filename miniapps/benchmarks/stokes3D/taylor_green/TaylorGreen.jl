@@ -8,11 +8,13 @@ using MPI
 
 include("vizTaylorGreen.jl")
 
-function body_forces(xi::NTuple{3,T}) where {T}
+function body_forces(xi::NTuple{3,T}, di) where {T}
     xx, yy, zz = xi
-    x = PTArray([x for x in xx, y in yy, z in zz])
-    y = PTArray([y for x in xx, y in yy, z in zz])
-    z = PTArray([z for x in xx, y in yy, z in zz])
+    ni = length.(xi)
+    x ,y, z    =  @zeros(ni...),  @zeros(ni...),  @zeros(ni...)
+    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xx,1), ix in 1:size(yy,1), ix in 1:size(zz,1)])
+    y = PTArray([y_g(iy, di[2], y) for iy in 1:size(xx,1), iy in 1:size(yy,1), iy in 1:size(zz,1)])
+    z = PTArray([z_g(iz, di[3], z) for iz in 1:size(xx,1), iz in 1:size(yy,1), iz in 1:size(zz,1)])
 
     fz, fy = @zeros(size(x)...), @zeros(size(x)...)
     fx = @. -36 * π^2 * cos(2 * π * x) * sin(2 * π * y) * sin(2 * π * z)
@@ -107,7 +109,7 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     ## Setup-specific parameters and fields
     β = 10.0
     η = @ones(ni...) # add reference 
-    ρg = body_forces(xci) # => ρ*(gx, gy, gz)
+    ρg = body_forces(xci, di) # => ρ*(gx, gy, gz)
     dt = Inf
     Gc = @fill(Inf, ni...)
     K = @fill(Inf, ni...)

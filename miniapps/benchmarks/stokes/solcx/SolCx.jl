@@ -58,7 +58,7 @@ function solCx(
     ly=1e0,
     init_MPI=true,
     finalize_MPI=false,
-    b_width=(4, 4, 1),
+    b_width=(4, 4),
 )
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications

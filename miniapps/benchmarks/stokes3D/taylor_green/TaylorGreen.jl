@@ -8,7 +8,7 @@ using MPI
 
 include("vizTaylorGreen.jl")
 
-function body_forces(xi::NTuple{3,T}, di) where {T}
+function body_forces(xi::NTuple{3,T}) where {T}
     xx, yy, zz = xi
     x = PTArray([x for x in xx, y in yy, z in zz])
     y = PTArray([y for x in xx, y in yy, z in zz])
@@ -105,14 +105,14 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     ## Setup-specific parameters and fields
     β = 10.0
     η = @ones(ni...) # add reference 
-    ρg = body_forces(xci, di) # => ρ*(gx, gy, gz)
+    ρg = body_forces(xci) # => ρ*(gx, gy, gz)
     dt = Inf
     Gc = @fill(Inf, ni...)
     K = @fill(Inf, ni...)
 
     ## Boundary conditions
     flow_bcs = FlowBoundaryConditions(;
-        free_slip=(left=true, right=true, top=true, bot=true, back=true, front=true),
+        free_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
         no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
         periodicity=(
             left=false, right=false, top=false, bot=false, back=false, front=false

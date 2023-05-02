@@ -20,7 +20,7 @@ function viscosity(xi, di, β)
     return η
 end
 
-function body_forces(xi::NTuple{3,T}, di, η, β) where {T}
+function body_forces(xi::NTuple{3,T}, η, β) where {T}
     xx, yy, zz = xi
     x = PTArray([x for x in xx, y in yy, z in zz])
     y = PTArray([y for x in xx, y in yy, z in zz])
@@ -140,8 +140,8 @@ function velocity!(stokes, xci, xvi, di)
         return nothing
     end
 
-    @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-    # @parallel _velocity!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, xc, yc, zc, xv, yv, zv)
+    # @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+    @parallel _velocity!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, xc, yc, zc, xv, yv, zv)
 end
 
 function analytical_velocity!(stokes, xci, xvi, di)
@@ -198,7 +198,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     ## Setup-specific parameters and fields
     β = 10.0
     η = viscosity(xci, di, β) # add reference 
-    ρg = body_forces(xci, di, η, β) # => ρ*(gx, gy, gz)
+    ρg = body_forces(xci, η, β) # => ρ*(gx, gy, gz)
     dt = Inf
     G = @fill(Inf, ni...)
     K = @fill(Inf, ni...)

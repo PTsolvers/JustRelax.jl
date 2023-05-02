@@ -3,9 +3,10 @@ using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity
 # include benchmark related plotting and error functions
 include("vizSolKz.jl")
 
-function solKz_viscosity(xci, ni; B=log(1e6))
+function solKz_viscosity(xci, ni, di; B=log(1e6))
     xc, yc = xci
     # make grid array (will be eaten by GC)
+    y = PTArray(zeros(ni...))
     y = PTArray([yci for _ in xc, yci in yc])
     η = @zeros(ni...)
     # inner closure
@@ -21,7 +22,7 @@ function solKz_viscosity(xci, ni; B=log(1e6))
     return η
 end
 
-function solKz_density(xci, ni)
+function solKz_density(xci, ni, di)
     xc, yc = xci
     # make grid array (will be eaten by GC)
     x = PTArray([xci for xci in xc, _ in yc])
@@ -40,7 +41,9 @@ function solKz_density(xci, ni)
     return ρ
 end
 
-function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
+function solKz(;
+    Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0, init_MPI=true, finalize_MPI=false
+)
 
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
@@ -48,10 +51,10 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     # independent of (MPI) parallelization
     ni = (nx, ny) # number of nodes in x- and y-
     li = (lx, ly)  # domain length in x- and y-
-    di = @. li / ni # grid step in x- and -y
-    nDim = length(ni) # domain dimension
-    xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
-    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
+    origin = zero(nx), zero(ny)
+    igg = IGG(init_global_grid(nx, ny, 0; init_MPI=init_MPI)...) # init MPI
+    di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     g = 1 # gravity
 
     ## (Physical) Time domain and discretization
@@ -65,13 +68,13 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     pt_stokes = PTStokesCoeffs(li, di; Re=5π, CFL=1 / √2.1)
 
     ## Setup-specific parameters and fields
-    η = solKz_viscosity(xci, ni; B=log(Δη)) # viscosity field
-    ρ = solKz_density(xci, ni)
+    η = solKz_viscosity(xci, ni, di; B=log(Δη)) # viscosity field
+    ρ = solKz_density(xci, ni, di)
     fy = ρ * g
     ρg = @zeros(ni...), fy
     dt = Inf
     G = @fill(Inf, ni...)
-    K = @fill(Inf, ni...)
+    Kb = @fill(Inf, ni...)
 
     ## Boundary conditions
     flow_bcs = FlowBoundaryConditions(;
@@ -83,10 +86,24 @@ function solKz(; Δη=1e6, nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt; iterMax=150e3, nout=1e3
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            η,
+            G,
+            Kb,
+            dt,
+            igg;
+            iterMax=150e3,
+            nout=1e3,
+            b_width=(4, 4),
         )
         t += Δt
     end
+
+    finalize_global_grid(; finalize_MPI=finalize_MPI)
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters, ρ
 end
@@ -95,7 +112,7 @@ function multiple_solKz(; Δη=1e-6, nrange::UnitRange=4:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solKz(; Δη=Δη, nx=nx, ny=ny)
+        geometry, stokes, = solKz(; Δη=Δη, nx=nx, ny=ny, init_MPI=false, finalize_MPI=false)
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes; order=1)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

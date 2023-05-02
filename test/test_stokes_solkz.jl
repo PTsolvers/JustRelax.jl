@@ -11,9 +11,12 @@ include("../miniapps/benchmarks/stokes/solkz/SolKz.jl")
 function check_convergence_case1()
     nx = 64
     ny = 64
-    _, _, iters, _ = solKz(; nx=nx, ny=ny)
-    iters_expected = (iter=3000, err_evo1=[4.813927034774679e-13])
-    return iters.iter == iters_expected.iter && iters.err_evo1[end] < 1e-6
+    _, _, iters, _ = solKz(; nx=nx, ny=ny, init_MPI=true, finalize_MPI=false)
+
+    tol = 1e-8
+    passed = iters.err_evo1[end] < tol
+
+    return passed
 end
 
 @testset begin

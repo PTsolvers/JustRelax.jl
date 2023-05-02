@@ -63,29 +63,29 @@ function plot(stokes::StokesArrays, geometry; cmap=:vik)
     f = Figure(; resolution=(2600, 900), fontsize=20)
 
     # Pressure
-    ax = Axis(f[1, 1]; axis=1, title="Pressure numeric")
+    ax = Axis(f[1, 1]; title="Pressure numeric")
     h = heatmap!(ax, xci[1], xci[2], stokes.P[islice, :, :]; colormap=cmap)
     Colorbar(f[1, 2], h)
 
-    ax = Axis(f[2, 1]; axis=1, title="Pressure analytical")
+    ax = Axis(f[2, 1]; title="Pressure analytical")
     h = heatmap!(ax, xci[1], xci[2], p[islice, :, :]; colormap=:vik)
     Colorbar(f[2, 2], h)
 
     # Vx
-    ax = Axis(f[1, 3]; axis=1, title="Vx numeric")
+    ax = Axis(f[1, 3]; title="Vx numeric")
     h = heatmap!(ax, xvi[1], xci[2], stokes.V.Vx[islice, :, :]; colormap=cmap)
     Colorbar(f[1, 4], h)
 
-    ax = Axis(f[2, 3]; axis=1, title="Vx analytical")
+    ax = Axis(f[2, 3]; title="Vx analytical")
     h = heatmap!(ax, xvi[1], xci[2], vx[islice, :, :]; colormap=cmap)
     Colorbar(f[2, 4], h)
 
     # Vy
-    ax = Axis(f[1, 5]; axis=1, title="Vy numeric")
+    ax = Axis(f[1, 5]; title="Vy numeric")
     h = heatmap!(ax, xvi[1], xci[2], stokes.V.Vy[islice, :, :]; colormap=cmap)
     Colorbar(f[1, 6], h)
 
-    ax = Axis(f[2, 5]; axis=1, title="Vy analytical")
+    ax = Axis(f[2, 5]; title="Vy analytical")
     h = heatmap!(ax, xvi[1], xci[2], vy[islice, :, :]; colormap=cmap)
     Colorbar(f[2, 6], h)
 
@@ -99,9 +99,9 @@ function error(stokes, geometry)
     vx, vy, vz, p = analytical_solution(geometry.xci, geometry.xvi)
 
     order = 2
-    L2_vx = norm(stokes.V.Vx .- vx, order) * gridsize
-    L2_vy = norm(stokes.V.Vy .- vy, order) * gridsize
-    L2_vz = norm(stokes.V.Vz .- vz, order) * gridsize
+    L2_vx = norm(stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)] .- vx, order) * gridsize
+    L2_vy = norm(stokes.V.Vy[2:(end - 1), :, 2:(end - 1)] .- vy, order) * gridsize
+    L2_vz = norm(stokes.V.Vz[2:(end - 1), 2:(end - 1), :] .- vz, order) * gridsize
     L2_p = norm(stokes.P .- (p), order) * gridsize
 
     return L2_p, L2_vx, L2_vy, L2_vz

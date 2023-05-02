@@ -20,7 +20,7 @@ function solvi_viscosity(ni, di, li, rc, η0, ηi)
     dx, dy = di
     lx, ly = li
     # cx, cy = lx/2, ly/2
-    η = fill(η0, ni...)
+    η = @fill(η0, ni...)
 
     # _viscosity!(η, xci, yci, rc, ηi, cx, cy)
 
@@ -48,18 +48,27 @@ function solvi_viscosity(ni, di, li, rc, η0, ηi)
     return η
 end
 
-function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg=1e0)
+function solVi(;
+    Δη=1e-3,
+    nx=256 - 1,
+    ny=256 - 1,
+    lx=1e1,
+    ly=1e1,
+    rc=1e0,
+    εbg=1e0,
+    init_MPI=true,
+    finalize_MPI=false,
+)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
     ni = (nx, ny) # number of nodes in x- and y-
     li = (lx, ly)  # domain length in x- and y-
-    di = @. li / ni # grid step in x- and -y
-    max_li = max(li...)
-    nDim = length(ni) # domain dimension
-    xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
-    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
+    origin = zero(nx), zero(ny)
+    igg = IGG(init_global_grid(nx, ny, 0; init_MPI=init_MPI)...) # init MPI
+    di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
@@ -79,7 +88,7 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
     ρg = @zeros(ni...), @zeros(ni...)
     dt = Inf
     G = @fill(Inf, ni...)
-    K = @fill(Inf, ni...)
+    Kb = @fill(Inf, ni...)
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
@@ -93,10 +102,24 @@ function solVi(; Δη=1e-3, nx=256 - 1, ny=256 - 1, lx=1e1, ly=1e1, rc=1e0, εbg
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt; iterMax=150e3, nout=1e3
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            η,
+            G,
+            Kb,
+            dt,
+            igg;
+            iterMax=150e3,
+            nout=1e3,
+            b_width=(4, 4),
         )
         t += Δt
     end
+
+    finalize_global_grid(; finalize_MPI=finalize_MPI)
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters
 end
@@ -105,7 +128,17 @@ function multiple_solVi(; Δη=1e-3, lx=1e1, ly=1e1, rc=1e0, εbg=1e0, nrange::U
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, iters = solVi(; Δη=Δη, nx=nx, ny=ny, lx=lx, ly=ly, rc=rc, εbg=εbg)
+        geometry, stokes, iters = solVi(;
+            Δη=Δη,
+            nx=nx,
+            ny=ny,
+            lx=lx,
+            ly=ly,
+            rc=rc,
+            εbg=εbg,
+            init_MPI=false,
+            finalize_MPI=false,
+        )
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, Δη, εbg, rc; order=2)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

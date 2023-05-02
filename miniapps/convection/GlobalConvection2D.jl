@@ -232,7 +232,7 @@ thermal_convection2D(; figdir=figdir, ar=ar, nx=nx, ny=ny);
     end
 
     finalize_global_grid(; finalize_MPI=true)
-    
+
     return nothing
 end
 

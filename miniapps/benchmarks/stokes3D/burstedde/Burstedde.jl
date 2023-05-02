@@ -91,8 +91,10 @@ end
 function velocity!(stokes, xci, xvi, di)
     # xc, yc, zc = xci
     xv, yv, zv = xvi
-    di = ntuple(i->xci[i][2]-xci[i][1], Val(3))
-    xc, yc, zc = ntuple(i-> LinRange(xci[i][1]-di[i], xci[i][end]+di[i], length(xci[i])+2 ), Val(3))
+    di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
+    xc, yc, zc = ntuple(
+        i -> LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i]) + 2), Val(3)
+    )
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
     _velocity_x(x, y) = x + x^2 + x * y + x^3 * y
     _velocity_y(x, y) = y + x * y + y^2 + x^2 * y^2
@@ -147,8 +149,10 @@ end
 function analytical_velocity!(stokes, xci, xvi, di)
     xc, yc, zc = xci
     xv, yv, zv = xvi
-    di = ntuple(i->xci[i][2]-xci[i][1], Val(3))
-    xc, yc, zc = ntuple(i-> LinRange(xci[i][1]-di[i], xci[i][end]+di[i], length(xci[i])+2 ), Val(3))
+    di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
+    xc, yc, zc = ntuple(
+        i -> LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i]) + 2), Val(3)
+    )
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
     _velocity_x(x, y) = x + x^2 + x * y + x^3 * y
     _velocity_y(x, y) = y + x * y + y^2 + x^2 * y^2
@@ -169,7 +173,6 @@ function analytical_velocity!(stokes, xci, xvi, di)
     end
 
     @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-
 end
 
 function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
@@ -212,7 +215,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
         ),
     )
     # impose analytical velociity at the boundaries of the domain
-    velocity!(stokes, xci, xvi,di)
+    velocity!(stokes, xci, xvi, di)
 
     # Physical time loop
     t = 0.0

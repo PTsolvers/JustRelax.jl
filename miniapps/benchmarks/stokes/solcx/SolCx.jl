@@ -13,8 +13,7 @@ end
 function solCx_viscosity(xci, ni, di; Δη=1e6)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x = PTArray(zeros(ni...))
-    x = PTArray([x_g(ix,di[1],x) for ix in 1:size(xc,1), _ in 1:size(yc,1)])
+    x = PTArray([xci for xci in xc, _ in yc])
     η = PTArray(zeros(ni...))
     # inner closure
     _viscosity(x, Δη) = ifelse(x ≤ 0.5, 1e0, Δη)
@@ -32,10 +31,8 @@ end
 function solCx_density(xci, ni, di)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x = PTArray(zeros(ni...))
-    y = PTArray(zeros(ni...))
-    x = PTArray([x_g(ix,di[1],x) for ix in 1:size(xc,1), _ in 1:size(yc,1)])
-    y = PTArray([y_g(ix,di[2],y) for _ in 1:size(xc,1), ix in 1:size(yc,1)])
+    x = PTArray([xci for xci in xc, _ in yc])
+    y = PTArray([yci for _ in xc, yci in yc])
     ρ = PTArray(zeros(ni))
     # inner closure
     _density(x, y) = -sin(π * y) * cos(π * x)

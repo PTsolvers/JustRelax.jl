@@ -7,7 +7,7 @@ function solKz_viscosity(xci, ni, di; B=log(1e6))
     xc, yc = xci
     # make grid array (will be eaten by GC)
     y = PTArray(zeros(ni...))
-    y = PTArray([y_g(ix,di[2],y) for _ in 1:size(xc,1), ix in 1:size(yc,1)])
+    y = PTArray([yci for _ in xc, yci in yc])
     η = @zeros(ni...)
     # inner closure
     _viscosity(y, B) = exp(B * y)
@@ -25,10 +25,8 @@ end
 function solKz_density(xci, ni, di)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x = PTArray(zeros(ni...))
-    y = PTArray(zeros(ni...))
-    x = PTArray([x_g(ix,di[1],x) for ix in 1:size(xc,1), _ in 1:size(yc,1)])
-    y = PTArray([y_g(ix,di[2],y) for _ in 1:size(xc,1), ix in 1:size(yc,1)])
+    x = PTArray([xci for xci in xc, _ in yc])
+    y = PTArray([yci for _ in xc, yci in yc])
     ρ = @zeros(ni...)
     # inner closure
     _density(x, y) = -sin(2 * y) * cos(3 * π * x)

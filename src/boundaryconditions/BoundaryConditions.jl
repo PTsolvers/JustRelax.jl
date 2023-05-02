@@ -138,10 +138,10 @@ end
         end
         if bc.back
             if i ≤ size(Ax, 1) && j ≤ size(Ax, 3)
-                Ax[i, end, j] = Ax[end - i, 1, j]
+                Ax[i, end, j] = Ax[i, end - 1, j]
             end
             if i ≤ size(Az, 1) && j ≤ size(Az, 3)
-                Az[i, end, j] = Az[end - i, 1, j]
+                Az[i, end, j] = Az[i, end - 1, j]
             end
         end
         # free slip in the front and back XY planes
@@ -155,10 +155,10 @@ end
         end
         if bc.bot
             if i ≤ size(Ax, 1) && j ≤ size(Ax, 2)
-                Ax[i, j, end] = Ax[end - i, j, 1]
+                Ax[i, j, end] = Ax[i, j, end-1]
             end
             if i ≤ size(Ay, 1) && j ≤ size(Ay, 2)
-                Ay[i, j, end] = Ay[end - i, j, 1]
+                Ay[i, j, end] = Ay[i, j, end-1]
             end
         end
         # free slip in the front and back YZ planes
@@ -181,6 +181,7 @@ end
     end
     return nothing
 end
+
 
 @parallel_indices (i) function free_slip!(T::_T, bc) where {_T<:AbstractArray{<:Any,2}}
     @inbounds begin

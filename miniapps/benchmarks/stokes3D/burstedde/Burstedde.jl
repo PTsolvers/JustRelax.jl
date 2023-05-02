@@ -22,11 +22,9 @@ end
 
 function body_forces(xi::NTuple{3,T}, di, η, β) where {T}
     xx, yy, zz = xi
-    ni = length.(xi)
-    x ,y, z    =  @zeros(ni...),  @zeros(ni...),  @zeros(ni...)
-    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xx,1), ix in 1:size(yy,1), ix in 1:size(zz,1)])
-    y = PTArray([y_g(iy, di[2], y) for iy in 1:size(xx,1), iy in 1:size(yy,1), iy in 1:size(zz,1)])
-    z = PTArray([z_g(iz, di[3], z) for iz in 1:size(xx,1), iz in 1:size(yy,1), iz in 1:size(zz,1)])
+    x = PTArray([x for x in xx, y in yy, z in zz])
+    y = PTArray([y for x in xx, y in yy, z in zz])
+    z = PTArray([z for x in xx, y in yy, z in zz])
 
     dηdx = @. -β * (1 - 2 * x) * η
     dηdy = @. -β * (1 - 2 * y) * η
@@ -91,19 +89,13 @@ function body_forces_z(x, y, z, η, β)
 end
 
 function velocity!(stokes, xci, xvi, di)
-    xc, yc, zc = xci
+    # xc, yc, zc = xci
     xv, yv, zv = xvi
-    ni = length.(xci)
-    x ,y, z    =  @zeros(ni...),  @zeros(ni...),  @zeros(ni...)
-    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xc,1), _ in 1:size(yc,1), ix in 1:size(zc,1)])
-    y = PTArray([y_g(iy, di[2], y) for iy in 1:size(xc,1), iy in 1:size(yc,1), iy in 1:size(zc,1)])
-    z = PTArray([z_g(iz, di[3], z) for iz in 1:size(xc,1), iz in 1:size(yc,1), iiz in 1:size(zc,1)])
-    Vx, Vy, Vz = stokes.V.Vx[1:(end-1), 2:(end - 1), 2:(end - 1)],
-    stokes.V.Vy[2:(end - 1), 1:(end-1), 2:(end - 1)],
-    stokes.V.Vz[2:(end - 1), 2:(end - 1), 1:(end-1)]
-
-    _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y
-    _velocity_y(x, y, z) = y + x * y + y^2 + x^2 * y^2
+    di = ntuple(i->xci[i][2]-xci[i][1], Val(3))
+    xc, yc, zc = ntuple(i-> LinRange(xci[i][1]-di[i], xci[i][end]+di[i], length(xci[i])+2 ), Val(3))
+    Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
+    _velocity_x(x, y) = x + x^2 + x * y + x^3 * y
+    _velocity_y(x, y) = y + x * y + y^2 + x^2 * y^2
     _velocity_z(x, y, z) = -2z - 3x * z - 3y * z - 5x^2 * y * z
 
     @parallel_indices (i, j, k) function _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
@@ -115,7 +107,7 @@ function velocity!(stokes, xci, xvi, di)
                 (i == 1) ||
                 (j == 1) ||
                 (k == 1)
-                Vx[i, j, k] = _velocity_x(xc[i], yv[j], zv[k])
+                Vx[i, j, k] = _velocity_x(xv[i], yc[j])
             else
                 Vx[i, j, k] = zero(T)
             end
@@ -127,7 +119,7 @@ function velocity!(stokes, xci, xvi, di)
                 (i == 1) ||
                 (j == 1) ||
                 (k == 1)
-                Vy[i, j, k] = _velocity_y(xv[i], yc[j], zv[k])
+                Vy[i, j, k] = _velocity_y(xc[i], yv[j])
             else
                 Vy[i, j, k] = zero(T)
             end
@@ -139,7 +131,7 @@ function velocity!(stokes, xci, xvi, di)
                 (i == 1) ||
                 (j == 1) ||
                 (k == 1)
-                Vz[i, j, k] = _velocity_z(xv[i], yv[j], zc[k])
+                Vz[i, j, k] = _velocity_z(xc[i], yc[j], zv[k])
             else
                 Vz[i, j, k] = zero(T)
             end
@@ -149,33 +141,25 @@ function velocity!(stokes, xci, xvi, di)
     end
 
     @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-    stokes.V.Vx[1:(end-1), 2:(end - 1), 2:(end - 1)], stokes.V.Vy[2:(end - 1), 1:(end-1), 2:(end - 1)], stokes.V.Vz[2:(end - 1), 2:(end - 1), 1:(end-1)] = Vx,
-    Vy,
-    Vz
+    # @parallel _velocity!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, xc, yc, zc, xv, yv, zv)
 end
 
 function analytical_velocity!(stokes, xci, xvi, di)
     xc, yc, zc = xci
     xv, yv, zv = xvi
-    x ,y, z    =  @zeros(ni...),  @zeros(ni...),  @zeros(ni...)
-    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xc,1), _ in 1:size(yc,1), ix in 1:size(zc,1)])
-    y = PTArray([y_g(iy, di[2], y) for iy in 1:size(xc,1), iy in 1:size(yc,1), iy in 1:size(zc,1)])
-    z = PTArray([z_g(iz, di[3], z) for iz in 1:size(xc,1), iz in 1:size(yc,1), iiz in 1:size(zc,1)])
-    # Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
-    Vx, Vy, Vz = stokes.V.Vx[1:(end-1), 2:(end - 1), 2:(end - 1)],
-    stokes.V.Vy[2:(end - 1), 1:(end-1), 2:(end - 1)],
-    stokes.V.Vz[2:(end - 1), 2:(end - 1), 1:(end-1)]
-
-    _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y
-    _velocity_y(x, y, z) = y + x * y + y^2 + x^2 * y^2
+    di = ntuple(i->xci[i][2]-xci[i][1], Val(3))
+    xc, yc, zc = ntuple(i-> LinRange(xci[i][1]-di[i], xci[i][end]+di[i], length(xci[i])+2 ), Val(3))
+    Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
+    _velocity_x(x, y) = x + x^2 + x * y + x^3 * y
+    _velocity_y(x, y) = y + x * y + y^2 + x^2 * y^2
     _velocity_z(x, y, z) = -2z - 3x * z - 3y * z - 5x^2 * y * z
 
     @parallel_indices (i, j, k) function _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-        if (i ≤ size(Vx, 1)) && (j ≤ size(Vx, 2)) && (k ≤ size(Vx, 3))
-            Vx[i, j, k] = _velocity_x(xv[i], yc[j], zc[k])
+        if (i ≤ size(Vx, 1)) && (j ≤ size(Vx, 2)) #&& (k ≤ size(Vx, 3))
+            Vx[i, j, k] = _velocity_x(xv[i], yc[j])
         end
-        if (i ≤ size(Vy, 1)) && (j ≤ size(Vy, 2)) && (k ≤ size(Vy, 3))
-            Vy[i, j, k] = _velocity_y(xc[i], yv[j], zc[k])
+        if (i ≤ size(Vy, 1)) && (j ≤ size(Vy, 2)) #&& (k ≤ size(Vy, 3))
+            Vy[i, j, k] = _velocity_y(xc[i], yv[j])
         end
         if (i ≤ size(Vz, 1)) && (j ≤ size(Vz, 2)) && (k ≤ size(Vz, 3))
             Vz[i, j, k] = _velocity_z(xc[i], yc[j], zv[k])
@@ -185,9 +169,6 @@ function analytical_velocity!(stokes, xci, xvi, di)
     end
 
     @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-    stokes.V.Vx[1:(end-1), 2:(end - 1), 2:(end - 1)], stokes.V.Vy[2:(end - 1), 1:(end-1), 2:(end - 1)], stokes.V.Vz[2:(end - 1), 2:(end - 1), 1:(end-1)] = Vx,
-    Vy,
-    Vz
 
 end
 
@@ -224,7 +205,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
 
     ## Boundary conditions
     flow_bcs = FlowBoundaryConditions(;
-        free_slip=(left=true, right=true, top=true, bot=true, back=true, front=true),
+        free_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
         no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
         periodicity=(
             left=false, right=false, top=false, bot=false, back=false, front=false

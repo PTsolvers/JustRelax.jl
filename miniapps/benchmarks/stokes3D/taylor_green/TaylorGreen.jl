@@ -10,12 +10,10 @@ include("vizTaylorGreen.jl")
 
 function body_forces(xi::NTuple{3,T}, di) where {T}
     xx, yy, zz = xi
-    ni = length.(xi)
-    x ,y, z    =  @zeros(ni...),  @zeros(ni...),  @zeros(ni...)
-    x = PTArray([x_g(ix, di[1], x) for ix in 1:size(xx,1), ix in 1:size(yy,1), ix in 1:size(zz,1)])
-    y = PTArray([y_g(iy, di[2], y) for iy in 1:size(xx,1), iy in 1:size(yy,1), iy in 1:size(zz,1)])
-    z = PTArray([z_g(iz, di[3], z) for iz in 1:size(xx,1), iz in 1:size(yy,1), iz in 1:size(zz,1)])
-
+    x = PTArray([x for x in xx, y in yy, z in zz])
+    y = PTArray([y for x in xx, y in yy, z in zz])
+    z = PTArray([z for x in xx, y in yy, z in zz])
+    
     fz, fy = @zeros(size(x)...), @zeros(size(x)...)
     fx = @. -36 * π^2 * cos(2 * π * x) * sin(2 * π * y) * sin(2 * π * z)
 
@@ -25,9 +23,9 @@ end
 function velocity!(stokes, xci, xvi)
     xc, yc, zc = xci
     xv, yv, zv = xvi
-    Vx, Vy, Vz = stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)],
-    stokes.V.Vy[2:(end - 1), :, 2:(end - 1)],
-    stokes.V.Vz[2:(end - 1), 2:(end - 1), :]
+    di = ntuple(i->xci[i][2]-xci[i][1], Val(3))
+    xc, yc, zc = ntuple(i-> LinRange(xci[i][1]-di[i], xci[i][end]+di[i], length(xci[i])+2 ), Val(3))
+    Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
 
     _velocity_x(x, y, z) = -2cos(2 * π * x) * sin(2 * π * y) * sin(2 * π * z)
     _velocity_y(x, y, z) = sin(2 * π * x) * cos(2 * π * y) * sin(2 * π * z)
@@ -78,9 +76,7 @@ function velocity!(stokes, xci, xvi)
     end
 
     @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-    stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)], stokes.V.Vy[2:(end - 1), :, 2:(end - 1)], stokes.V.Vz[2:(end - 1), 2:(end - 1), :] = Vx,
-    Vy,
-    Vz
+
 end
 
 function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)

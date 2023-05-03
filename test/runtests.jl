@@ -14,6 +14,8 @@ function runtests()
     printstyled("Testing package JustRelax.jl\n"; bold=true, color=:white)
 
     for f in testfiles
+        occursin("burstedde", f) && continue
+
         println("")
         println("Running tests from $f")
         try

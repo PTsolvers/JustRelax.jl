@@ -10,7 +10,7 @@ include("vizSolCx.jl")
     return nothing
 end
 
-function solCx_viscosity(xci, ni; Δη=1e6)
+function solCx_viscosity(xci, ni, di; Δη=1e6)
     xc, yc = xci
     # make grid array (will be eaten by GC)
     x = PTArray([xci for xci in xc, _ in yc])
@@ -28,7 +28,7 @@ function solCx_viscosity(xci, ni; Δη=1e6)
     return η
 end
 
-function solCx_density(xci, ni)
+function solCx_density(xci, ni, di)
     xc, yc = xci
     # make grid array (will be eaten by GC)
     x = PTArray([xci for xci in xc, _ in yc])
@@ -41,24 +41,32 @@ function solCx_density(xci, ni)
         @all(ρ) = _density(@all(x), @all(y))
         return nothing
     end
-    # compute viscosity
+    # compute density
     @parallel density(ρ, x, y)
 
     return ρ
 end
 
-function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
+function solCx(
+    Δη=Δη;
+    nx=256 - 1,
+    ny=256 - 1,
+    lx=1e0,
+    ly=1e0,
+    init_MPI=true,
+    finalize_MPI=false,
+    b_width=(4, 4),
+)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni = nx, ny # number of nodes in x- and y-
-    li = lx, ly  # domain length in x- and y-
-    di = @. li / ni # grid step in x- and -y
-    max_li = max(li...)
-    nDim = length(ni) # domain dimension
-    xci = Tuple([(di[i] / 2):di[i]:(li[i] - di[i] / 2) for i in 1:nDim]) # nodes at the center of the cells
-    xvi = Tuple([0:di[i]:li[i] for i in 1:nDim]) # nodes at the vertices of the cells
+    ni = (nx, ny) # number of nodes in x- and y-
+    li = (lx, ly)  # domain length in x- and y-
+    origin = zero(nx), zero(ny)
+    igg = IGG(init_global_grid(nx, ny, 0; init_MPI=init_MPI)...) #init MPI
+    di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     g = 1
 
     ## (Physical) Time domain and discretization
@@ -69,11 +77,11 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; CFL=0.1 / √2.1)
 
     ## Setup-specific parameters and fields
-    η = solCx_viscosity(xci, ni; Δη=Δη) # viscosity field
-    ρ = solCx_density(xci, ni)
+    η = solCx_viscosity(xci, ni, di; Δη=Δη) # viscosity field
+    ρ = solCx_density(xci, ni, di)
     fy = ρ .* g
     ρg = @zeros(ni...), fy
     dt = Inf
@@ -83,7 +91,10 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     # smooth viscosity jump (otherwise no convergence for Δη > ~15)
     η2 = deepcopy(η)
     for _ in 1:5
-        @parallel smooth!(η2, η, 1.0)
+        @hide_communication b_width begin
+            @parallel smooth!(η2, η, 1.0)
+            update_halo!(η2, η)
+        end
         @parallel (1:size(η2, 1)) free_slip_y!(η2)
         η, η2 = η2, η
     end
@@ -97,10 +108,24 @@ function solCx(Δη; nx=256 - 1, ny=256 - 1, lx=1e0, ly=1e0)
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, G, K, dt; iterMax=150_000, nout=100
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            η,
+            G,
+            K,
+            dt,
+            igg;
+            iterMax=150e3,
+            nout=1e3,
+            b_width=(4, 4),
         )
         t += Δt
     end
+
+    finalize_global_grid(; finalize_MPI=finalize_MPI)
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters, ρ
 end
@@ -109,7 +134,7 @@ function multiple_solCx(; Δη=1e6, nrange::UnitRange=6:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solCx(Δη; nx=nx, ny=ny)
+        geometry, stokes, = solCx(Δη; nx=nx, ny=ny, init_MPI=false, finalize_MPI=false)
         L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes; order=1)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

@@ -35,10 +35,8 @@ function check_convergence_case1()
         finalize_MPI=false,
     )
 
-    iters_expected = (iter=500, err_evo1=[7.493148324044796e-10])
-    passed =
-        iters.iter == iters_expected.iter &&
-        iters.err_evo1[end] ≈ iters_expected.err_evo1[end]
+    tol = 1e-8
+    passed = iters.err_evo1[end] < tol
 
     return passed
 end

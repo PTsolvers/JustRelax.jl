@@ -23,6 +23,10 @@ end
 function velocity!(stokes, xci, xvi)
     xc, yc, zc = xci
     xv, yv, zv = xvi
+    di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
+    xc, yc, zc = ntuple(
+        i -> LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i]) + 2), Val(3)
+    )
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
 
     _velocity_x(x, y, z) = -2cos(2 * π * x) * sin(2 * π * y) * sin(2 * π * z)
@@ -91,18 +95,19 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
-    dt = Inf   # physical time step
+    Δt = 1    # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di)
+    pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √3)
 
     ## Setup-specific parameters and fields
     β = 10.0
     η = @ones(ni...) # add reference 
     ρg = body_forces(xci) # => ρ*(gx, gy, gz)
+    dt = Inf
     Gc = @fill(Inf, ni...)
     K = @fill(Inf, ni...)
 
@@ -136,7 +141,7 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             iterMax=10e3,
             b_width=(4, 4, 4),
         )
-        t += dt
+        t += Δt
     end
 
     finalize_global_grid(; finalize_MPI=finalize_MPI)

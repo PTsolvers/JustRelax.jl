@@ -12,10 +12,10 @@ include("vizBurstedde.jl")
     return nothing
 end
 
-function viscosity(xi, β)
+function viscosity(xi, di, β)
     ni = length.(xi)
-    η = @allocate ni...
-    @parallel (1:ni[1], 1:ni[2], 1:ni[3]) _viscosity!(η, xi[1], xi[2], xi[3], β)
+    η = @zeros(ni...)
+    @parallel (@idx ni) _viscosity!(η, xi[1], xi[2], xi[3], β)
 
     return η
 end
@@ -88,16 +88,16 @@ function body_forces_z(x, y, z, η, β)
     return dot(st, fz)
 end
 
-function velocity!(stokes, xci, xvi)
-    xc, yc, zc = xci
-    # xv, yv, zv = xvi
+function velocity!(stokes, xci, xvi, di)
+    # xc, yc, zc = xci
+    xv, yv, zv = xvi
     di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
-    xv, yv, zv = ntuple(i -> (xci[i][1] - di[i]):di[i]:(xci[i][end] + di[i]), Val(3))
-    xc, yc, zc = ntuple(i -> 0.0:di[i]:(xci[i][end] + di[i] / 2), Val(3))
+    xc, yc, zc = ntuple(
+        i -> LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i]) + 2), Val(3)
+    )
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
-
-    _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y
-    _velocity_y(x, y, z) = y + x * y + y^2 + x^2 * y^2
+    _velocity_x(x, y) = x + x^2 + x * y + x^3 * y
+    _velocity_y(x, y) = y + x * y + y^2 + x^2 * y^2
     _velocity_z(x, y, z) = -2z - 3x * z - 3y * z - 5x^2 * y * z
 
     @parallel_indices (i, j, k) function _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
@@ -109,7 +109,7 @@ function velocity!(stokes, xci, xvi)
                 (i == 1) ||
                 (j == 1) ||
                 (k == 1)
-                Vx[i, j, k] = _velocity_x(xc[i], yv[j], zv[k])
+                Vx[i, j, k] = _velocity_x(xv[i], yc[j])
             else
                 Vx[i, j, k] = zero(T)
             end
@@ -121,7 +121,7 @@ function velocity!(stokes, xci, xvi)
                 (i == 1) ||
                 (j == 1) ||
                 (k == 1)
-                Vy[i, j, k] = _velocity_y(xv[i], yc[j], zv[k])
+                Vy[i, j, k] = _velocity_y(xc[i], yv[j])
             else
                 Vy[i, j, k] = zero(T)
             end
@@ -133,7 +133,7 @@ function velocity!(stokes, xci, xvi)
                 (i == 1) ||
                 (j == 1) ||
                 (k == 1)
-                Vz[i, j, k] = _velocity_z(xv[i], yv[j], zc[k])
+                Vz[i, j, k] = _velocity_z(xc[i], yc[j], zv[k])
             else
                 Vz[i, j, k] = zero(T)
             end
@@ -142,27 +142,28 @@ function velocity!(stokes, xci, xvi)
         return nothing
     end
 
-    @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+    # @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+    @parallel _velocity!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, xc, yc, zc, xv, yv, zv)
 end
 
-function analytical_velocity!(stokes, xci, xvi)
+function analytical_velocity!(stokes, xci, xvi, di)
     xc, yc, zc = xci
     xv, yv, zv = xvi
     di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
-    xv, yv, zv = ntuple(i -> (xci[i][1] - di[i]):di[i]:(xci[i][end] + di[i]), Val(3))
-    xc, yc, zc = ntuple(i -> 0.0:di[i]:(xci[i][end] + di[i] / 2), Val(3))
+    xc, yc, zc = ntuple(
+        i -> LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i]) + 2), Val(3)
+    )
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
-
-    _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y
-    _velocity_y(x, y, z) = y + x * y + y^2 + x^2 * y^2
+    _velocity_x(x, y) = x + x^2 + x * y + x^3 * y
+    _velocity_y(x, y) = y + x * y + y^2 + x^2 * y^2
     _velocity_z(x, y, z) = -2z - 3x * z - 3y * z - 5x^2 * y * z
 
     @parallel_indices (i, j, k) function _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-        if (i ≤ size(Vx, 1)) && (j ≤ size(Vx, 2)) && (k ≤ size(Vx, 3))
-            Vx[i, j, k] = _velocity_x(xv[i], yc[j], zc[k])
+        if (i ≤ size(Vx, 1)) && (j ≤ size(Vx, 2)) #&& (k ≤ size(Vx, 3))
+            Vx[i, j, k] = _velocity_x(xv[i], yc[j])
         end
-        if (i ≤ size(Vy, 1)) && (j ≤ size(Vy, 2)) && (k ≤ size(Vy, 3))
-            Vy[i, j, k] = _velocity_y(xc[i], yv[j], zc[k])
+        if (i ≤ size(Vy, 1)) && (j ≤ size(Vy, 2)) #&& (k ≤ size(Vy, 3))
+            Vy[i, j, k] = _velocity_y(xc[i], yv[j])
         end
         if (i ≤ size(Vz, 1)) && (j ≤ size(Vz, 2)) && (k ≤ size(Vz, 3))
             Vz[i, j, k] = _velocity_z(xc[i], yc[j], zv[k])
@@ -189,17 +190,17 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total siηlation time
-    dt = 1   # physical time step
+    Δt = 1   # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
     stokes = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di)
+    pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √3)
 
     ## Setup-specific parameters and fields
     β = 10.0
-    η = viscosity(xci, β) # add reference 
+    η = viscosity(xci, di, β) # add reference 
     ρg = body_forces(xci, η, β) # => ρ*(gx, gy, gz)
     dt = Inf
     G = @fill(Inf, ni...)
@@ -214,7 +215,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
         ),
     )
     # impose analytical velociity at the boundaries of the domain
-    velocity!(stokes, xci, xvi)
+    velocity!(stokes, xci, xvi, di)
 
     # Physical time loop
     t = 0.0
@@ -232,10 +233,11 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             K,
             dt,
             igg;
-            iterMax=20e3,
+            iterMax=10e3,
+            nout=1e3,
             b_width=(4, 4, 4),
         )
-        t += dt
+        t += Δt
     end
 
     finalize_global_grid(; finalize_MPI=finalize_MPI)

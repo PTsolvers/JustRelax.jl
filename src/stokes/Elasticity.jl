@@ -303,6 +303,13 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function compute_ρg!(ρg, rheology, phase_c, args)
+    ρg[i, j] =
+        compute_density(rheology, phase_c[i, j], ntuple_idx(args, i, j)) *
+        compute_gravity(rheology, phase_c[i, j])
+    return nothing
+end
+
 ## 2D VISCO-ELASTIC STOKES SOLVER 
 
 # viscous solver
@@ -733,6 +740,7 @@ function JustRelax.solve!(
             @parallel compute_strain_rate!(
                 @tuple(stokes.ε)..., stokes.∇V, @tuple(stokes.V)..., _di...
             )
+            @parallel (@idx ni) compute_ρg!(ρg[2], MatParam, phase_c, (T=thermal.T, P=stokes.P))
             @parallel (@idx ni) compute_τ_gp!(
                 stokes.τ.xx,
                 stokes.τ.yy,

@@ -810,7 +810,7 @@ function JustRelax.solve!(
                     ητ,
                     _di...,
                 )
-                update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+                update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # apply boundary conditions boundary conditions
             # apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)

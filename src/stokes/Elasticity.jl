@@ -57,7 +57,7 @@ import JustRelax: compute_maxloc!, solve!, @tuple
 
 import ..Stokes2D: compute_P!, compute_V!, compute_strain_rate!
 
-export solve!
+export solve!, compute_ρg!
 
 include("StressRotation.jl")
 

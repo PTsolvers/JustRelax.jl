@@ -798,8 +798,8 @@ function JustRelax.solve!(
                 η_vep,
                 z,
                 thermal.T,
-                phase_v[i, j],
-                phase_c[i, j],
+                phase_v,
+                phase_c,
                 args_η,
                 tupleize(MatParam), # needs to be a tuple
                 dt,

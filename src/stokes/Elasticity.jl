@@ -780,12 +780,12 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
 
             @parallel (@idx ni) compute_P!(
-                stokes.P, P_old, stokes.R.RP, stokes.∇V, η, MatParam, phase_c, dt, r, θ_dτ
+                stokes.P, P_old, stokes.R.RP, stokes.∇V, η, MatParam, phase_c[i, j], dt, r, θ_dτ
             )
             @parallel (@idx ni) compute_strain_rate!(
                 @tuple(stokes.ε)..., stokes.∇V, @tuple(stokes.V)..., _di...
             )
-            @parallel (@idx ni) compute_ρg!(ρg[2], ϕ, MatParam, phase_c, (T=thermal.T, P=stokes.P))
+            @parallel (@idx ni) compute_ρg!(ρg[2], ϕ, MatParam, phase_c[i, j], (T=thermal.T, P=stokes.P))
             @parallel (@idx ni) compute_τ_gp!(
                 stokes.τ.xx,
                 stokes.τ.yy,
@@ -797,8 +797,8 @@ function JustRelax.solve!(
                 η_vep,
                 z,
                 thermal.T,
-                phase_v,
-                phase_c,
+                phase_v[i, j],
+                phase_c[i, j],
                 args_η,
                 tupleize(MatParam), # needs to be a tuple
                 dt,

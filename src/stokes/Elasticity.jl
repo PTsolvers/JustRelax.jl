@@ -308,7 +308,7 @@ end
 #update density depending on melt fraction and number of phases
 @parallel_indices (i, j) function compute_ρg!(ρg,ϕ, rheology, phase_c, args)
     ρg[i, j] =
-        compute_density_ratio((1-ϕ[i, j],ϕ[i, j],0), rheology, ntuple_idx(args, i, j)) *
+        compute_density_ratio((1-ϕ[i, j],ϕ[i, j],0.0), rheology, ntuple_idx(args, i, j)) *
         compute_gravity(rheology, phase_c[i, j])
     return nothing
 end

@@ -293,7 +293,7 @@ end
         args = (; zip(k, v)..., dt=dt, T=av(T), τII_old=0.0)
         εij_p = εxx[i, j] + 1e-25, εyy[i, j] + 1e-25, gather(εxyv) .+ 1e-25
         τij_p_o = τxx_o[i, j], τyy_o[i, j], gather(τxyv_o)
-        phases = phase_c[i], phase_c[i], gather(phase_v) # for now hard-coded for a single phase
+        phases = phase_c[i, j], phase_c[i, j], gather(phase_v) # for now hard-coded for a single phase
         # update stress and effective viscosity
         τij, τII[i, j], ηᵢ = compute_τij(rheology, εij_p, args, τij_p_o, phases)
         τxx[i, j] += dτ_r * (-(τxx[i, j]) + τij[1]) / ηᵢ # NOTE: from GP Tij = 2*η_vep * εij
@@ -305,9 +305,10 @@ end
     return nothing
 end
 
+#update density depending on melt fraction and number of phases
 @parallel_indices (i, j) function compute_ρg!(ρg,ϕ, rheology, phase_c, args)
     ρg[i, j] =
-        compute_density_ratio((1-ϕ[i, j],ϕ[i, j]), rheology, ntuple_idx(args, i, j)) *
+        compute_density_ratio((1-ϕ[i, j],ϕ[i, j],0), rheology, ntuple_idx(args, i, j)) *
         compute_gravity(rheology, phase_c[i, j])
     return nothing
 end
@@ -780,12 +781,12 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
 
             @parallel (@idx ni) compute_P!(
-                stokes.P, P_old, stokes.R.RP, stokes.∇V, η, MatParam, phase_c[i, j], dt, r, θ_dτ
+                stokes.P, P_old, stokes.R.RP, stokes.∇V, η, MatParam, phase_c, dt, r, θ_dτ
             )
             @parallel (@idx ni) compute_strain_rate!(
                 @tuple(stokes.ε)..., stokes.∇V, @tuple(stokes.V)..., _di...
             )
-            @parallel (@idx ni) compute_ρg!(ρg[2], ϕ, MatParam, phase_c[i, j], (T=thermal.T, P=stokes.P))
+            @parallel (@idx ni) compute_ρg!(ρg[2], ϕ, MatParam, phase_c, (T=thermal.T, P=stokes.P))
             @parallel (@idx ni) compute_τ_gp!(
                 stokes.τ.xx,
                 stokes.τ.yy,

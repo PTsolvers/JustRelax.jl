@@ -19,7 +19,7 @@ end
            inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
 end
 
-function compute_diffusivity(rheology, phase, args) where N
+function compute_diffusivity(rheology, phase, args)
     return compute_conductivity(rheology, phase, args) *
            inv(compute_heatcapacity(rheology, phase, args) * compute_density(rheology, phase, args))
 end
@@ -29,7 +29,7 @@ end
            inv(compute_heatcapacity(rheology, args) * ρ)
 end
 
-function compute_diffusivity(rheology, ρ, phase, args) where N
+function compute_diffusivity(rheology, ρ, phase, args)
     return compute_conductivity(rheology, phase, args) *
            inv(compute_heatcapacity(rheology, phase, args) * ρ)
 end

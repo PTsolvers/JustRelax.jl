@@ -337,7 +337,7 @@ end
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
-    rheology::NTuple{N,MaterialParams},
+    rheology,
     args::NamedTuple,
     di::NTuple{2,_T},
     dt;
@@ -369,7 +369,7 @@ function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
-    rheology::NTuple{N,MaterialParams},
+    rheology,
     args::NamedTuple,
     di::NTuple{2,_T},
     dt,
@@ -408,7 +408,7 @@ function JustRelax.solve!(
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
     phases,
-    rheology::NTuple{N,MaterialParams},
+    rheology,
     args::NamedTuple,
     di::NTuple{2,_T},
     dt,
@@ -679,7 +679,7 @@ end
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
-    rheology::NTuple{N,MaterialParams},
+    rheology,
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;
@@ -716,7 +716,7 @@ function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
-    rheology::NTuple{N,MaterialParams},
+    rheology,
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;
@@ -767,7 +767,7 @@ function JustRelax.solve!(
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
     phases,
-    rheology::NTuple{N,MaterialParams},
+    rheology,
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;

@@ -19,17 +19,17 @@ end
            inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
 end
 
-function compute_diffusivity(rheology, phase, args)
+@inline function compute_diffusivity(rheology, phase::Int, args)
     return compute_conductivity(rheology, phase, args) *
            inv(compute_heatcapacity(rheology, phase, args) * compute_density(rheology, phase, args))
 end
 
-@inline function compute_diffusivity(rheology, ρ::Number, args)
+@inline function compute_diffusivity(rheology, ρ, args)
     return compute_conductivity(rheology, args) *
            inv(compute_heatcapacity(rheology, args) * ρ)
 end
 
-function compute_diffusivity(rheology, ρ, phase, args)
+@inline function compute_diffusivity(rheology, ρ, phase::Int, args)
     return compute_conductivity(rheology, phase, args) *
            inv(compute_heatcapacity(rheology, phase, args) * ρ)
 end
@@ -234,7 +234,7 @@ end
         Ty = (T[i1, j1] + T[i1, j]) * 0.5
         Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
         argsy = (; T=Ty, P=Pvertex)
-        qTy[i, j] = -compute_diffusivity(rrheology, phases[i, j], ntuple_idx(argsy, i, j)) * (T[i1, j1] - T[i1, j]) * _dy
+        qTy[i, j] = -compute_diffusivity(rheology, phases[i, j], ntuple_idx(argsy, i, j)) * (T[i1, j1] - T[i1, j]) * _dy
     end
 
     return nothing

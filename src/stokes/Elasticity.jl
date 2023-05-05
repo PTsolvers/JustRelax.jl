@@ -314,7 +314,7 @@ end
 
     ρg[i, j] =
         compute_density_ratio((1-ϕ[i, j],ϕ[i, j],0.0), rheology, (; T = av(args.T), P=args.P[i, j])) *
-        compute_gravity(rheology[1],phase_c)
+        compute_gravity(rheology[1],phase_c[i, j])
     return nothing
 end
 

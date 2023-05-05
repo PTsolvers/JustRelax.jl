@@ -14,22 +14,22 @@ end
 
 ## GeoParams
 
-@inline function compute_diffusivity(rheology::MaterialParams, args)
+@inline function compute_diffusivity(rheology::NTuple{N,MaterialParams}, args)
     return compute_conductivity(rheology, args) *
            inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
 end
 
-function compute_diffusivity(rheology::NTuple{N, MaterialParams}, phase::Int, args) where N
+function compute_diffusivity(rheology::NTuple{N,MaterialParams}, phase, args) where N
     return compute_conductivity(rheology, phase, args) *
            inv(compute_heatcapacity(rheology, phase, args) * compute_density(rheology, phase, args))
 end
 
-@inline function compute_diffusivity(rheology::MaterialParams, ρ::Number, args)
+@inline function compute_diffusivity(rheology::NTuple{N,MaterialParams}, ρ::Number, args)
     return compute_conductivity(rheology, args) *
            inv(compute_heatcapacity(rheology, args) * ρ)
 end
 
-function compute_diffusivity(rheology::NTuple{N, MaterialParams}, ρ, phase::Int, args) where N
+function compute_diffusivity(rheology::NTuple{N, MaterialParams}, ρ, phase, args) where N
     return compute_conductivity(rheology, phase, args) *
            inv(compute_heatcapacity(rheology, phase, args) * ρ)
 end
@@ -195,7 +195,7 @@ export solve!
 end
 
 @parallel_indices (i, j) function compute_flux!(
-    qTx, qTy, T, rheology::MaterialParams, args, _dx, _dy
+    qTx, qTy, T, rheology::NTuple{N,MaterialParams}, args, _dx, _dy
 )
     i1, j1 = @add 1 i j # augment indices by 1
     nPx = size(args.P, 1)
@@ -218,7 +218,7 @@ end
 end
 
 @parallel_indices (i, j) function compute_flux!(
-    qTx, qTy, T, phases, rheology::MaterialParams, args, _dx, _dy
+    qTx, qTy, T, phases, rheology::NTuple{N,MaterialParams}, args, _dx, _dy
 )
     i1, j1 = @add 1 i j # augment indices by 1
     nPx = size(args.P, 1)
@@ -337,7 +337,7 @@ end
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
-    rheology::MaterialParams,
+    rheology::NTuple{N,MaterialParams},
     args::NamedTuple,
     di::NTuple{2,_T},
     dt;
@@ -369,7 +369,7 @@ function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
-    rheology::MaterialParams,
+    rheology::NTuple{N,MaterialParams},
     args::NamedTuple,
     di::NTuple{2,_T},
     dt,
@@ -408,7 +408,7 @@ function JustRelax.solve!(
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
     phases,
-    rheology::MaterialParams,
+    rheology::NTuple{N,MaterialParams},
     args::NamedTuple,
     di::NTuple{2,_T},
     dt,
@@ -471,7 +471,7 @@ export solve!
 end
 
 @parallel_indices (i, j, k) function compute_flux!(
-    qTx, qTy, qTz, T, rheology::MaterialParams, args, _dx, _dy, _dz
+    qTx, qTy, qTz, T, rheology::NTuple{N,MaterialParams}, args, _dx, _dy, _dz
 )
     i1, j1, k1 = (i, j, k) .+ 1  # augment indices by 1
     nx, ny, nz = size(args.P)
@@ -515,7 +515,7 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_flux!(
-    qTx, qTy, qTz, T, phases, rheology::MaterialParams, args, _dx, _dy, _dz
+    qTx, qTy, qTz, T, phases, rheology::NTuple{N,MaterialParams}, args, _dx, _dy, _dz
 )
     i1, j1, k1 = (i, j, k) .+ 1  # augment indices by 1
     nx, ny, nz = size(args.P)
@@ -679,7 +679,7 @@ end
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
-    rheology::MaterialParams,
+    rheology::NTuple{N,MaterialParams},
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;
@@ -716,7 +716,7 @@ function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
-    rheology::MaterialParams,
+    rheology::NTuple{N,MaterialParams},
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;
@@ -767,7 +767,7 @@ function JustRelax.solve!(
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
     phases,
-    rheology::MaterialParams,
+    rheology::NTuple{N,MaterialParams},
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;

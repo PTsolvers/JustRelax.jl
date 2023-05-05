@@ -515,7 +515,7 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_flux!(
-    qTx, qTy, qTz, T, rheology::MaterialParams, args, _dx, _dy, _dz
+    qTx, qTy, qTz, T, phases, rheology::MaterialParams, args, _dx, _dy, _dz
 )
     i1, j1, k1 = (i, j, k) .+ 1  # augment indices by 1
     nx, ny, nz = size(args.P)

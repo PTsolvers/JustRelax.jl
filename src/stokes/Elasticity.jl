@@ -239,7 +239,7 @@ end
     η_vep,
     z,
     T,
-    MatParam,
+    rheology,
     dt,
     θ_dτ,
 )
@@ -287,7 +287,7 @@ end
         k = keys(args_η)
         v = getindex.(values(args_η), i, j)
         # # numerics
-        # dτ_r                = 1.0 / (θ_dτ + η[i, j] / (get_G(MatParam[1]) * dt) + 1.0) # original
+        # dτ_r                = 1.0 / (θ_dτ + η[i, j] / (get_G(rheology[1]) * dt) + 1.0) # original
         dτ_r = 1.0 / (θ_dτ / η[i, j] + 1.0 / η_vep[i, j]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
         # # Setup up input for GeoParams.jl
         args = (; zip(k, v)..., dt=dt, T=av(T), τII_old=0.0)
@@ -591,7 +591,7 @@ function JustRelax.solve!(
     ρg,
     η,
     η_vep,
-    MatParam::MaterialParams,
+    rheology::MaterialParams,
     dt,
     igg::IGG;
     iterMax=10e3,
@@ -614,7 +614,7 @@ function JustRelax.solve!(
         update_halo!(ητ)
     end
 
-    Kb = get_Kb(MatParam)
+    Kb = get_Kb(rheology)
 
     # errors
     err = 2 * ϵ
@@ -657,7 +657,7 @@ function JustRelax.solve!(
                 η_vep,
                 z,
                 thermal.T,
-                tupleize(MatParam), # needs to be a tuple
+                tupleize(rheology), # needs to be a tuple
                 dt,
                 θ_dτ,
             )
@@ -748,7 +748,7 @@ function JustRelax.solve!(
     phase_v,
     phase_c,
     args_η,
-    MatParam::NTuple{N,MaterialParams},
+    rheology::NTuple{N,MaterialParams},
     dt,
     igg::IGG;
     iterMax=10e3,
@@ -786,7 +786,7 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
 
             @parallel (@idx ni) compute_P!(
-                stokes.P, P_old, stokes.R.RP, stokes.∇V, η, MatParam, phase_c, dt, r, θ_dτ
+                stokes.P, P_old, stokes.R.RP, stokes.∇V, η, rheology, phase_c, dt, r, θ_dτ
             )
             @parallel (@idx ni) compute_strain_rate!(
                 @tuple(stokes.ε)..., stokes.∇V, @tuple(stokes.V)..., _di...
@@ -806,7 +806,7 @@ function JustRelax.solve!(
                 phase_v,
                 phase_c,
                 args_η,
-                tupleize(MatParam), # needs to be a tuple
+                tupleize(rheology), # needs to be a tuple
                 dt,
                 θ_dτ,
             )
@@ -1239,7 +1239,7 @@ end
     η_vep,
     z,
     T,
-    MatParam,
+    rheology,
     dt,
     θ_dτ,
 )
@@ -1249,7 +1249,7 @@ end
     @inline gather_xy(A) = A[i, j, k], A[i + 1, j, k], A[i, j + 1, k], A[i + 1, j + 1, k]
 
     @inbounds begin
-        # dτ_r = 1.0 / (θ_dτ + η[i, j, k] / (get_G(MatParam[1]) * dt) + 1.0) # original
+        # dτ_r = 1.0 / (θ_dτ + η[i, j, k] / (get_G(rheology[1]) * dt) + 1.0) # original
         dτ_r = 1.0 / (θ_dτ / η[i, j, k] + 1.0 / η_vep[i, j, k]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
         # Setup up input for GeoParams.jl
         T_cell =
@@ -1282,7 +1282,7 @@ end
         )
         phases = (1, 1, 1, (1, 1, 1, 1), (1, 1, 1, 1), (1, 1, 1, 1)) # for now hard-coded for a single phase
         # update stress and effective viscosity
-        τij, τII[i, j, k], ηᵢ = compute_τij(MatParam, εij_p, args, τij_p_o, phases)
+        τij, τII[i, j, k], ηᵢ = compute_τij(rheology, εij_p, args, τij_p_o, phases)
         τ = ( # caching out improves a wee bit the performance
             τxx[i, j, k],
             τyy[i, j, k],
@@ -1515,7 +1515,7 @@ function JustRelax.solve!(
     ρg,
     η,
     η_vep,
-    MatParam::MaterialParams,
+    rheology::MaterialParams,
     dt,
     igg::IGG;
     iterMax=10e3,
@@ -1554,8 +1554,8 @@ function JustRelax.solve!(
     norm_Rz = Float64[]
     norm_∇V = Float64[]
 
-    Kb = get_Kb(MatParam)
-    G = get_G(MatParam)
+    Kb = get_Kb(rheology)
+    G = get_G(rheology)
     @copy stokes.P0 stokes.P
 
     # solver loop
@@ -1613,7 +1613,7 @@ function JustRelax.solve!(
                 η_vep,
                 z,
                 thermal.T,
-                tupleize(MatParam), # needs to be a tuple
+                tupleize(rheology), # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
             )

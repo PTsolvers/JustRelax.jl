@@ -14,14 +14,25 @@ end
 
 ## GeoParams
 
-@inline function compute_diffusivity(rheology::MaterialParams, args)
+@inline function compute_diffusivity(rheology, args)
     return compute_conductivity(rheology, args) *
            inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
 end
 
-@inline function compute_diffusivity(rheology::MaterialParams, ρ::Number, args)
+@inline function compute_diffusivity(rheology, phase::Int, args)
+    return compute_conductivity(rheology, phase, args) * inv(
+        compute_heatcapacity(rheology, phase, args) * compute_density(rheology, phase, args)
+    )
+end
+
+@inline function compute_diffusivity(rheology, ρ, args)
     return compute_conductivity(rheology, args) *
            inv(compute_heatcapacity(rheology, args) * ρ)
+end
+
+@inline function compute_diffusivity(rheology, ρ, phase::Int, args)
+    return compute_conductivity(rheology, phase, args) *
+           inv(compute_heatcapacity(rheology, phase, args) * ρ)
 end
 
 # 1D THERMAL DIFFUSION MODULE
@@ -183,9 +194,7 @@ export solve!
     return nothing
 end
 
-@parallel_indices (i, j) function compute_flux!(
-    qTx, qTy, T, rheology::MaterialParams, args, _dx, _dy
-)
+@parallel_indices (i, j) function compute_flux!(qTx, qTy, T, rheology, args, _dx, _dy)
     i1, j1 = @add 1 i j # augment indices by 1
     nPx = size(args.P, 1)
 
@@ -201,6 +210,35 @@ end
         Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
         argsy = (; T=Ty, P=Pvertex)
         qTy[i, j] = -compute_diffusivity(rheology, argsy) * (T[i1, j1] - T[i1, j]) * _dy
+    end
+
+    return nothing
+end
+
+@parallel_indices (i, j) function compute_flux!(
+    qTx, qTy, T, phases, rheology, args, _dx, _dy
+)
+    i1, j1 = @add 1 i j # augment indices by 1
+    nPx = size(args.P, 1)
+
+    @inbounds if all((i, j) .≤ size(qTx))
+        Tx = (T[i1, j1] + T[i, j1]) * 0.5
+        Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
+        argsx = (; T=Tx, P=Pvertex)
+        qTx[i, j] =
+            -compute_diffusivity(rheology, phases[i, j], ntuple_idx(argsx, i, j)) *
+            (T[i1, j1] - T[i, j1]) *
+            _dx
+    end
+
+    @inbounds if all((i, j) .≤ size(qTy))
+        Ty = (T[i1, j1] + T[i1, j]) * 0.5
+        Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
+        argsy = (; T=Ty, P=Pvertex)
+        qTy[i, j] =
+            -compute_diffusivity(rheology, phases[i, j], ntuple_idx(argsy, i, j)) *
+            (T[i1, j1] - T[i1, j]) *
+            _dy
     end
 
     return nothing
@@ -303,7 +341,7 @@ end
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
-    rheology::MaterialParams,
+    rheology,
     args::NamedTuple,
     di::NTuple{2,_T},
     dt;
@@ -335,7 +373,7 @@ function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
-    rheology::MaterialParams,
+    rheology,
     args::NamedTuple,
     di::NTuple{2,_T},
     dt,
@@ -348,6 +386,44 @@ function JustRelax.solve!(
     @parallel assign!(thermal.Told, thermal.T)
     @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
         thermal.qTx, thermal.qTy, thermal.T, rheology, args, _dx, _dy
+    )
+    @parallel advect_T!(
+        thermal.dT_dt,
+        thermal.qTx,
+        thermal.qTy,
+        thermal.T,
+        stokes.V.Vx,
+        stokes.V.Vy,
+        _dx,
+        _dy,
+    )
+    @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+    thermal_bcs!(thermal.T, thermal_bc)
+
+    @. thermal.ΔT = thermal.T - thermal.Told
+
+    return nothing
+end
+
+# Upwind advection
+function JustRelax.solve!(
+    thermal::ThermalArrays{M},
+    thermal_bc::TemperatureBoundaryConditions,
+    stokes,
+    phases,
+    rheology,
+    args::NamedTuple,
+    di::NTuple{2,_T},
+    dt,
+) where {_T,M<:AbstractArray{<:Any,2}}
+
+    # Compute some constant stuff
+    _dx, _dy = inv.(di)
+    nx, ny = size(thermal.T)
+    # solve heat diffusion
+    @parallel assign!(thermal.Told, thermal.T)
+    @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
+        thermal.qTx, thermal.qTy, thermal.T, phases, rheology, args, _dx, _dy
     )
     @parallel advect_T!(
         thermal.dT_dt,
@@ -398,7 +474,7 @@ export solve!
 end
 
 @parallel_indices (i, j, k) function compute_flux!(
-    qTx, qTy, qTz, T, rheology::MaterialParams, args, _dx, _dy, _dz
+    qTx, qTy, qTz, T, rheology, args, _dx, _dy, _dz
 )
     i1, j1, k1 = (i, j, k) .+ 1  # augment indices by 1
     nx, ny, nz = size(args.P)
@@ -435,6 +511,62 @@ end
             argsz = (; T=Tz, P=Pvertex * 0.25)
             qTz[i, j, k] =
                 -compute_diffusivity(rheology, argsz) * (T[i1, j1, k1] - T[i1, j1, k]) * _dz
+        end
+    end
+
+    return nothing
+end
+
+@parallel_indices (i, j, k) function compute_flux!(
+    qTx, qTy, qTz, T, phases, rheology, args, _dx, _dy, _dz
+)
+    i1, j1, k1 = (i, j, k) .+ 1  # augment indices by 1
+    nx, ny, nz = size(args.P)
+
+    @inbounds begin
+        if all((i, j, k) .≤ size(qTx))
+            Tx = (T[i1, j1, k1] + T[i, j1, k1]) * 0.5
+            Pvertex = 0.0
+            for jj in 0:1, kk in 0:1
+                Pvertex += args.P[i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)]
+            end
+            argsx = (; T=Tx, P=Pvertex * 0.25)
+            qTx[i, j, k] =
+                -compute_diffusivity(
+                    rheology, phases[i, j, k], ntuple_idx(argsx, i, j, k)
+                ) *
+                (T[i1, j1, k1] - T[i, j1, k1]) *
+                _dx
+        end
+
+        if all((i, j, k) .≤ size(qTy))
+            Ty = (T[i1, j1, k1] + T[i1, j, k1]) * 0.5
+            Pvertex = 0.0
+            for kk in 0:1, ii in 0:1
+                args.P[clamp(i + ii, 1, nx), j, clamp(k + kk, 1, nz)]
+            end
+            argsy = (; T=Ty, P=Pvertex * 0.25)
+            qTy[i, j, k] =
+                -compute_diffusivity(
+                    rheology, phases[i, j, k], ntuple_idx(argsy, i, j, k)
+                ) *
+                (T[i1, j1, k1] - T[i1, j, k1]) *
+                _dy
+        end
+
+        if all((i, j, k) .≤ size(qTz))
+            Tz = (T[i1, j1, k1] + T[i1, j1, k]) * 0.5
+            Pvertex = 0.0
+            for jj in 0:1, ii in 0:1
+                args.P[clamp(i + ii, 1, nx), clamp(j + jj, 1, ny), k]
+            end
+            argsz = (; T=Tz, P=Pvertex * 0.25)
+            qTz[i, j, k] =
+                -compute_diffusivity(
+                    rheology, phases[i, j, k], ntuple_idx(argsz, i, j, k)
+                ) *
+                (T[i1, j1, k1] - T[i1, j1, k]) *
+                _dz
         end
     end
 
@@ -562,7 +694,7 @@ end
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
-    rheology::MaterialParams,
+    rheology,
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;
@@ -599,7 +731,7 @@ function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
-    rheology::MaterialParams,
+    rheology,
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;
@@ -616,6 +748,57 @@ function JustRelax.solve!(
     # compute upwind advection
     @parallel (@idx ni .- 1) compute_flux!(
         thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, rheology, args, _di...
+    )
+    # update thermal array
+    @hide_communication b_width begin # communication/computation overlap
+        @parallel advect_T!(
+            thermal.dT_dt,
+            thermal.qTx,
+            thermal.qTy,
+            thermal.qTz,
+            thermal.T,
+            stokes.V.Vx,
+            stokes.V.Vy,
+            stokes.V.Vz,
+            _di...,
+        )
+        update_halo!(thermal.T)
+    end
+    # apply boundary conditions
+    @hide_communication b_width begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        update_halo!(thermal.T)
+    end
+    thermal_bcs!(thermal.T, thermal_bc)
+
+    # @. thermal.ΔT = thermal.T - thermal.Told
+
+    return nothing
+end
+
+# upwind advection 
+function JustRelax.solve!(
+    thermal::ThermalArrays{M},
+    thermal_bc::TemperatureBoundaryConditions,
+    stokes,
+    phases,
+    rheology,
+    args::NamedTuple,
+    di::NTuple{3,_T},
+    dt;
+    b_width=(4, 4, 4),
+) where {_T,M<:AbstractArray{<:Any,3}}
+
+    # Compute some constant stuff
+    _di = inv.(di)
+    ni = size(thermal.T)
+
+    ## SOLVE HEAT DIFFUSION
+    # copy thermal array from previous time step
+    @copy thermal.Told thermal.T
+    # compute upwind advection
+    @parallel (@idx ni .- 1) compute_flux!(
+        thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, phases, rheology, args, _di...
     )
     # update thermal array
     @hide_communication b_width begin # communication/computation overlap

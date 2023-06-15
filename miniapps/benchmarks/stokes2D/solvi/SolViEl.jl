@@ -110,13 +110,6 @@ function solViEl(;
             verbose=true,
         )
         t += Δt
-        heatmap(
-            xci[1],
-            xci[2],
-            stokes.V.Vx;
-            # stokes.ε.xy;
-            colormap=:batlow,
-        )
     end
 
     finalize_global_grid(; finalize_MPI=finalize_MPI)

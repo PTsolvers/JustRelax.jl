@@ -50,17 +50,20 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export solve!
 
         include(joinpath(@__DIR__, "Utils.jl"))
-        export @allocate, @add, @idx, @copy, compute_dt, assign!, tupleize
+        export @allocate, @add, @idx, @copy
+        export @velocity, @strain, @stress, @tensor, @shear, @normal, @stress_center, @strain_center, @tensor_center
+        export compute_dt, assign!, tupleize
 
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
         export pureshear_bc!, FlowBoundaryConditions, flow_bcs!
         export TemperatureBoundaryConditions, thermal_boundary_conditions!, thermal_bcs!
         export free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
 
-        include(joinpath(@__DIR__, "stokes/Stokes.jl"))
-        export stress
+        # include(joinpath(@__DIR__, "stokes/Stokes.jl"))
+        # export stress
 
-        include(joinpath(@__DIR__, "stokes/Elasticity.jl"))
+        include(joinpath(@__DIR__, "stokes/Stokes2D.jl"))
+        include(joinpath(@__DIR__, "stokes/Stokes3D.jl"))
 
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionExplicit.jl"))
         # include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
@@ -68,16 +71,24 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         include(joinpath(@__DIR__, "Interpolations.jl"))
         export vertex2center!, center2vertex!
+
+        include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
+        export compute_ρg
+        
+        include(joinpath(@__DIR__, "rheology/Viscosity.jl"))
+        export compute_viscosity
+        
     end
 
     # conditional submodule load
     module_names = if N === 1
         (Symbol("ThermalDiffusion$(N)D"),)
     elseif N === 2
-        (Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
+        (Symbol("Stokes$(N)D"), Symbol("ThermalDiffusion$(N)D"))
     else
-        (Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
+        (Symbol("Stokes$(N)D"), Symbol("ThermalDiffusion$(N)D"))
     end
+
     for m in module_names
         Base.@eval begin
             @reexport import .$m

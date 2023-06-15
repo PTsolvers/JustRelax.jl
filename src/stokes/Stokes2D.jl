@@ -867,7 +867,7 @@ function JustRelax.solve!(
     if !isinf(dt) # if dt is inf, then we are in the non-elastic case
         update_τ_o!(stokes)
         @parallel (@idx ni) rotate_stress!(
-            @velocity(stokes.V), @tensor(stokes.τ_o), _di, dt
+            @velocity(stokes), @tensor(stokes.τ_o), _di, dt
         )
     end
 
@@ -998,7 +998,7 @@ function JustRelax.solve!(
     if !isinf(dt) # if dt is inf, then we are in the non-elastic case
         update_τ_o!(stokes)
         @parallel (@idx ni) rotate_stress!(
-            @velocity(stokes.V), @tensor(stokes.τ_o), _di, dt
+            @velocity(stokes), @tensor(stokes.τ_o), _di, dt
         )
     end
 
@@ -1140,7 +1140,7 @@ function JustRelax.solve!(
     if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
         update_τ_o!(stokes)
         @parallel (@idx ni) rotate_stress!(
-            @velocity(stokes.V), @tensor(stokes.τ_o), _di, dt
+            @velocity(stokes), @tensor(stokes.τ_o), _di, dt
         )
     end
 

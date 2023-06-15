@@ -61,6 +61,15 @@ export solve!, compute_ρg!
 
 include("StressRotation.jl")
 
+# Helper kernels
+
+Base.@propagate_inbounds @inline  _d_xa(A<:AbstractArray{T,2}, i, j, _dx) where T = (A[i + 1, j] - A[i, j]) * _dx
+Base.@propagate_inbounds @inline  _d_ya(A<:AbstractArray{T,2}, i, j, _dy) where T = (A[i, j + 1] - A[i, j]) * _dy
+Base.@propagate_inbounds @inline  _d_xi(A<:AbstractArray{T,2}, i, j, _dx) where T = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
+Base.@propagate_inbounds @inline  _d_yi(A<:AbstractArray{T,2}, i, j, _dy) where T = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
+Base.@propagate_inbounds @inline _av_xa(A<:AbstractArray{T,2}, i, j) where T = (A[i + 1, j] + A[i, j]) * 0.5
+Base.@propagate_inbounds @inline _av_ya(A<:AbstractArray{T,2}, i, j) where T = (A[i, j + 1] + A[i, j]) * 0.5
+
 ## 2D ELASTIC KERNELS
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
@@ -119,12 +128,9 @@ end
     P, P_old, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ
 ) where {N}
     @inbounds begin
-        RP[i, j] =
-            -∇V[i, j] - (P[i, j] - P_old[i, j]) / (get_Kb(rheology, phase[i, j]) * dt)
-        P[i, j] =
-            P[i, j] +
-            RP[i, j] /
-            (1.0 / (r / θ_dτ * η[i, j]) + 1.0 / (get_Kb(rheology, phase[i, j]) * dt))
+        _Kdt = inv(get_Kb(rheology, phase[i, j]) * dt)
+        RP[i, j] = RP_ij = -∇V[i, j] - (P[i, j] - P_old[i, j]) * _Kdt
+        P[i, j] += RP_ij * inv(inv(r / θ_dτ * η[i, j]) + _Kdt)
     end
     return nothing
 end
@@ -141,14 +147,16 @@ end
     return nothing
 end
 
+
+
 @parallel_indices (i, j) function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
-    # Again, indices i, j are captured by the closure
-    Base.@propagate_inbounds @inline d_xa(A) = (A[i + 1, j] - A[i, j]) * _dx
-    Base.@propagate_inbounds @inline d_ya(A) = (A[i, j + 1] - A[i, j]) * _dy
-    Base.@propagate_inbounds @inline d_xi(A) = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
-    Base.@propagate_inbounds @inline d_yi(A) = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
-    Base.@propagate_inbounds @inline av_xa(A) = (A[i + 1, j] + A[i, j]) * 0.5
-    Base.@propagate_inbounds @inline av_ya(A) = (A[i, j + 1] + A[i, j]) * 0.5
+    # Closures
+    @inline  d_xa(A) = _d_xa(A, i, j, _dx)
+    @inline  d_ya(A) = _d_ya(A, i, j, _dy)
+    @inline  d_xi(A) = _d_xi(A, i, j, _dx)
+    @inline  d_yi(A) = _d_yi(A, i, j, _dy)
+    @inline av_xa(A) = _av_xa(A,i,j)
+    @inline av_ya(A) = _av_ya(A,i,j)
 
     @inbounds begin
         if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
@@ -165,13 +173,13 @@ end
     Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, ητ, ηdτ, _dx, _dy
 )
 
-    # Again, indices i, j are captured by the closure
-    Base.@propagate_inbounds @inline d_xa(A) = (A[i + 1, j] - A[i, j]) * _dx
-    Base.@propagate_inbounds @inline d_ya(A) = (A[i, j + 1] - A[i, j]) * _dy
-    Base.@propagate_inbounds @inline d_xi(A) = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
-    Base.@propagate_inbounds @inline d_yi(A) = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
-    Base.@propagate_inbounds @inline av_xa(A) = (A[i + 1, j] + A[i, j]) * 0.5
-    Base.@propagate_inbounds @inline av_ya(A) = (A[i, j + 1] + A[i, j]) * 0.5
+    # Closures
+    @inline  d_xa(A) = _d_xa(A, i, j, _dx)
+    @inline  d_ya(A) = _d_ya(A, i, j, _dy)
+    @inline  d_xi(A) = _d_xi(A, i, j, _dx)
+    @inline  d_yi(A) = _d_yi(A, i, j, _dy)
+    @inline av_xa(A) = _av_xa(A,i,j)
+    @inline av_ya(A) = _av_ya(A,i,j)
 
     @inbounds begin
         if all((i, j) .≤ size(Rx))
@@ -206,46 +214,19 @@ end
         (
             -(@all(τxx) - @all(τxx_o)) * @all(η) / (@all(G) * dt) - @all(τxx) +
             2.0 * @all(η) * @all(εxx)
-        ) * 1.0 / (θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
+        ) * inv(θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
     @all(τyy) =
         @all(τyy) +
         (
             -(@all(τyy) - @all(τyy_o)) * @all(η) / (@all(G) * dt) - @all(τyy) +
             2.0 * @all(η) * @all(εyy)
-        ) * 1.0 / (θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
+        ) * inv(θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
     @inn(τxy) =
         @inn(τxy) +
         (
             -(@inn(τxy) - @inn(τxy_o)) * @av(η) / (@av(G) * dt) - @inn(τxy) +
             2.0 * @av(η) * @inn(εxy)
-        ) * 1.0 / (θ_dτ + @av(η) / (@av(G) * dt) + 1.0)
-
-    return nothing
-end
-
-# visco-elasto-plastic with GeoParams
-@parallel_indices (i, j) function compute_τ_gp!(
-    τxx,
-    τyy,
-    τxy,
-    τII,
-    τxx_o,
-    τyy_o,
-    τxyv_o,
-    εxx,
-    εyy,
-    εxyv,
-    η,
-    η_vep,
-    z,
-    T,
-    rheology,
-    dt,
-    θ_dτ,
-)
-    # convinience closure
-    @inline gather(A) = A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1]
-    @inline av(T) = (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
+        ) * inv(θ_dτ + @av(η) / (@av(G) * dt) + 1.0)
 
     return nothing
 end

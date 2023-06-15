@@ -236,6 +236,58 @@ end
     return nothing
 end
 
+# visco-elasto-plastic with GeoParams - with single phases
+@parallel_indices (i, j) function compute_τ_gp!(
+    τxx,
+    τyy,
+    τxy,
+    τII,
+    τxx_o,
+    τyy_o,
+    τxyv_o,
+    εxx,
+    εyy,
+    εxyv,
+    η,
+    η_vep,
+    T,
+    args_η,
+    rheology,
+    dt,
+    θ_dτ,
+)
+    #! format: off
+    # convinience closure
+    Base.@propagate_inbounds @inline function gather(A)
+        A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1]
+    end
+    Base.@propagate_inbounds @inline function av(T)
+        (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
+    end
+    #! format: on
+
+    @inbounds begin
+        k = keys(args_η)
+        v = getindex.(values(args_η), i, j)
+        # numerics
+        # dτ_r                = 1.0 / (θ_dτ + η[i, j] / (get_G(rheology[1]) * dt) + 1.0) # original
+        dτ_r = 1.0 / (θ_dτ / η[i, j] + 1.0 / η_vep[i, j]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
+        # # Setup up input for GeoParams.jl
+        args = (; zip(k, v)..., dt=dt, T=av(T), τII_old=0.0)
+        εij_p = εxx[i, j] + 1e-25, εyy[i, j] + 1e-25, gather(εxyv) .+ 1e-25
+        τij_p_o = τxx_o[i, j], τyy_o[i, j], gather(τxyv_o)
+        phases = 1, 1, (1,1,1,1) # there is only one phase...
+        # update stress and effective viscosity
+        τij, τII[i, j], ηᵢ = compute_τij(rheology, εij_p, args, τij_p_o, phases)
+        τxx[i, j] += dτ_r * (-(τxx[i, j]) + τij[1]) / ηᵢ # NOTE: from GP Tij = 2*η_vep * εij
+        τyy[i, j] += dτ_r * (-(τyy[i, j]) + τij[2]) / ηᵢ
+        τxy[i, j] += dτ_r * (-(τxy[i, j]) + τij[3]) / ηᵢ
+        η_vep[i, j] = ηᵢ
+    end
+
+    return nothing
+end
+
 # visco-elasto-plastic with GeoParams - with multiple phases
 @parallel_indices (i, j) function compute_τ_gp!(
     τxx,
@@ -250,7 +302,6 @@ end
     εxyv,
     η,
     η_vep,
-    z,
     T,
     phase_v,
     phase_c,
@@ -312,7 +363,7 @@ function JustRelax.solve!(
 
     # unpack
     _dx, _dy = inv.(di)
-    ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
+    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
 
     # ~preconditioner
@@ -419,7 +470,7 @@ function JustRelax.solve!(
 
     # unpack
     _di = inv.(di)
-    ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
+    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = nx, ny = size(stokes.P)
 
     # ~preconditioner
@@ -547,9 +598,8 @@ function JustRelax.solve!(
 
     # unpack
     _di = inv.(di)
-    ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
-    ni = nx, ny = size(stokes.P)
-    z = LinRange(di[2] * 0.5, 1.0 - di[2] * 0.5, ny)
+    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    ni = size(stokes.P)
 
     # ~preconditioner
     ητ = deepcopy(η)
@@ -587,7 +637,6 @@ function JustRelax.solve!(
                 @strain(stokes)...,
                 η,
                 η_vep,
-                z,
                 thermal.T,
                 tupleize(rheology), # needs to be a tuple
                 dt,
@@ -685,9 +734,8 @@ function JustRelax.solve!(
 
     # unpack
     _di = inv.(di)
-    ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
-    ni = nx, ny = size(stokes.P)
-    z = LinRange(di[2] * 0.5, 1.0 - di[2] * 0.5, ny)
+    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    ni = size(stokes.P)
     # ~preconditioner
     ητ = deepcopy(η)
     @hide_communication b_width begin # communication/computation overlap
@@ -723,7 +771,6 @@ function JustRelax.solve!(
                 @strain(stokes)...,
                 η,
                 η_vep,
-                z,
                 thermal.T,
                 phase_v,
                 phase_c,
@@ -746,7 +793,6 @@ function JustRelax.solve!(
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # apply boundary conditions boundary conditions
-            # apply_free_slip!(freeslip, stokes.V.Vx, stokes.V.Vy)
             flow_bcs!(stokes, flow_bcs, di)
         end
 

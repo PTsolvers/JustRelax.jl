@@ -1,5 +1,3 @@
-using Pkg;
-Pkg.activate("../../../.");
 using JustRelax, Printf, LinearAlgebra
 using MPI: MPI
 using CairoMakie
@@ -12,7 +10,7 @@ environment!(model)
 benchmark = :solcx
 
 # model resolution (number of gridpoints)
-nx, ny = 128, 128
+nx, ny = 64, 64
 
 # set MPI
 finalize_MPI = false

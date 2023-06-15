@@ -1,5 +1,5 @@
 # unpacks fields of the struct x into a tuple
-@generated function unpack(x::T) where {T}
+@generated function unpack(x::T) where T
     return quote
         Base.@_inline_meta
         tuple(_unpack(x, fieldnames($T))...)
@@ -13,29 +13,18 @@ macro unpack(x)
     end
 end
 
-"""
-    compute_dt(V, di, dt_diff)
-
-Compute time step given the velocity `V::NTuple{ndim, Array{ndim, T}}`, 
-the grid spacing `di` and the diffusive time step `dt_diff` as :
-
-    dt = min(dt_diff, dt_adv)
-
-where the advection time `dt_adv` step is  
-
-    dt_adv = max( dx_i/ maximum(abs(Vx_i)), ... , dx_ndim/ maximum(abs(Vx_ndim))) / (ndim + 0.1)
-"""
-@inline function compute_dt(V, di, dt_diff)
-    n = inv(length(V) + 0.1)
-    dt_adv = mapreduce(x -> x[1] / maximum(y -> abs(y), x[2]), max, zip(di, V)) * n
-    return min(dt_diff, dt_adv)
-end
-
 @inline compute_dt(S::StokesArrays, di) = compute_dt(S.V, di, Inf)
 @inline compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(S.V, di, dt_diff)
 
 @inline function compute_dt(V::Velocity, di, dt_diff)
     return compute_dt(unpack(V), di, dt_diff)
+end
+
+@inline function compute_dt(V, di, dt_diff)
+    n = inv(length(V) + 0.1)
+    dt_adv =
+        mapreduce(x->x[1]/maximum(y->abs(y), x[2]), max, zip(di, V)) * n
+    return min(dt_diff, dt_adv)
 end
 
 @inline tupleize(v) = (v,)
@@ -73,10 +62,140 @@ macro tuple(A)
     end
 end
 
-_tuple(V::Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
-_tuple(V::Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
-_tuple(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy_c
-function _tuple(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+@inline _tuple(V::Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
+@inline _tuple(V::Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
+@inline _tuple(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy_c
+@inline function _tuple(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+    return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
+end
+
+"""
+    @velocity(V)
+
+Unpacks the velocity arrays `V` from the StokesArrays `A`.
+"""
+macro velocity(A)
+    return quote
+        unpack_velocity(($(esc(A))).V)
+    end
+end
+
+@inline unpack_velocity(V::Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
+@inline unpack_velocity(V::Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
+
+"""
+    @strain(A)
+
+Unpacks the strain rate tensor `ε` from the StokesArrays `A`, where its components are defined in the staggered grid.
+Shear components are unpack following Voigt's notation.
+"""
+macro strain(A)
+    return quote
+        unpack_tensor_stag(($(esc(A))).ε)
+    end
+end
+
+"""
+    @stress(A)
+
+Unpacks the deviatoric stress tensor `τ` from the StokesArrays `A`, where its components are defined in the staggered grid.
+Shear components are unpack following Voigt's notation.
+"""
+macro stress(A)
+    return quote
+        unpack_tensor_stag(($(esc(A))).τ)
+    end
+end
+
+"""
+    @tensor(A)
+
+Unpacks the symmetric tensor `A`, where its components are defined in the staggered grid.
+Shear components are unpack following Voigt's notation.
+"""
+macro tensor(A)
+    return quote
+        unpack_tensor_stag(($(esc(A))))
+    end
+end
+
+@inline unpack_tensor_stag(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy
+@inline function unpack_tensor_stag(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+    return A.xx, A.yy, A.zz, A.yz, A.xz, A.xy
+end
+
+"""
+    @shear(A)
+
+Unpacks the shear components of the symmetric tensor `A`, where its components are defined in the staggered grid.
+Shear components are unpack following Voigt's notation.
+"""
+macro shear(A)
+    return quote
+        unpack_shear_components_stag(($(esc(A))))
+    end
+end
+
+@inline unpack_shear_components_stag(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xy
+@inline function unpack_shear_components_stag(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+    return A.yz, A.xz, A.xy
+end
+
+"""
+    @normal(A)
+
+Unpacks the normal components of the symmetric tensor `A`, where its components are defined in the staggered grid.
+Shear components are unpack following Voigt's notation.
+"""
+macro normal(A)
+    return quote
+        unpack_normal_components_stag(($(esc(A))))
+    end
+end
+
+@inline unpack_normal_components_stag(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy
+@inline function unpack_normal_components_stag(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+    return A.xx, A.yy, A.zz
+end
+
+"""
+    @strain_center(A)
+
+Unpacks the strain rate tensor `ε` from the StokesArrays `A`, where its components are defined in the center of the grid cells.
+Shear components are unpack following Voigt's notation.
+"""
+macro strain_center(A)
+    return quote
+        unpack_tensor_center(($(esc(A))).ε)
+    end
+end
+
+"""
+    @stress_center(A)
+
+Unpacks the deviatoric stress tensor `τ` from the StokesArrays `A`, where its components are defined in the center of the grid cells.
+Shear components are unpack following Voigt's notation.
+"""
+macro stress_center(A)
+    return quote
+        unpack_tensor_center(($(esc(A))).τ)
+    end
+end
+
+"""
+    @tensor_center(A)
+
+Unpacks the symmetric tensor `A`, where its components are defined in the center of the grid cells.
+Shear components are unpack following Voigt's notation.
+"""
+macro tensor_center(A)
+    return quote
+        unpack_tensor_center(($(esc(A))))
+    end
+end
+
+@inline unpack_tensor_center(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy_c
+@inline function unpack_tensor_center(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
 end
 

@@ -63,12 +63,14 @@ include("StressRotation.jl")
 
 # Helper kernels
 
-Base.@propagate_inbounds @inline  _d_xa(A<:AbstractArray{T,2}, i, j, _dx) where T = (A[i + 1, j] - A[i, j]) * _dx
-Base.@propagate_inbounds @inline  _d_ya(A<:AbstractArray{T,2}, i, j, _dy) where T = (A[i, j + 1] - A[i, j]) * _dy
-Base.@propagate_inbounds @inline  _d_xi(A<:AbstractArray{T,2}, i, j, _dx) where T = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
-Base.@propagate_inbounds @inline  _d_yi(A<:AbstractArray{T,2}, i, j, _dy) where T = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
-Base.@propagate_inbounds @inline _av_xa(A<:AbstractArray{T,2}, i, j) where T = (A[i + 1, j] + A[i, j]) * 0.5
-Base.@propagate_inbounds @inline _av_ya(A<:AbstractArray{T,2}, i, j) where T = (A[i, j + 1] + A[i, j]) * 0.5
+@inline Base.@propagate_inbounds  _d_xa(A<:AbstractArray{T,2}, i, j, _dx) where T = (A[i + 1, j] - A[i, j]) * _dx
+@inline Base.@propagate_inbounds  _d_ya(A<:AbstractArray{T,2}, i, j, _dy) where T = (A[i, j + 1] - A[i, j]) * _dy
+@inline Base.@propagate_inbounds  _d_xi(A<:AbstractArray{T,2}, i, j, _dx) where T = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
+@inline Base.@propagate_inbounds  _d_yi(A<:AbstractArray{T,2}, i, j, _dy) where T = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
+@inline Base.@propagate_inbounds     _av(A<:AbstractArray{T,2}, i, j)     where T = (A[i + 1, j] + A[i + 2, j] + A[i + 1, j + 1] + A[i + 2, j + 1]) * 0.25
+@inline Base.@propagate_inbounds  _av_xa(A<:AbstractArray{T,2}, i, j)     where T = (A[i + 1, j] + A[i, j]) * 0.5
+@inline Base.@propagate_inbounds  _av_ya(A<:AbstractArray{T,2}, i, j)     where T = (A[i, j + 1] + A[i, j]) * 0.5
+@inline Base.@propagate_inbounds _gather(A<:AbstractArray{T,2}, i, j)     where T = A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1] 
 
 @parallel function center2vertex!(vertex, center)
     @inn(vertex) = @av(center)
@@ -339,6 +341,93 @@ end
         η_vep[i, j] = ηᵢ
     end
 
+    return nothing
+end
+
+
+@parallel_indices (i, j) function compute_τ_nonlinear!(
+    τxx,
+    τyy,
+    τxy,
+    τII,
+    τxx_old,
+    τyy_old,
+    τxyv_old,
+    εxx,
+    εyy,
+    εxyv,
+    P,
+    η,
+    η_vep,
+    MatParam,
+    dt,
+    θ_dτ,
+)
+
+    # convinience closure
+    @inline gather(A)   = _gather(A, i, j)
+    @inline av(A)       = _av(A, i, j)
+    @inline av_shear(A) = 0.25 * sum(gather(A))
+
+    @inbounds begin
+        _Gdt    = inv(get_G(MatParam[1]) * dt)
+        ηij     = η[i, j]
+        dτ_r    = inv(θ_dτ + ηij * _Gdt + 1.0) # original
+        # cache tensors
+        εij_p   = εxx[i, j], εyy[i, j], av_shear(εxyv)
+        τij_p_o = τxx_old[i,j], τyy_old[i,j], av_shear(τxyv_old) 
+        τij     = τxx[i,j], τyy[i,j], τxy[i, j]
+
+        # Stress increment
+        dτij = ntuple(Val(3)) do i
+            dτ_r * (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij_p[i]))
+        end
+        # trial stress
+        τII_trial = second_invariant((dτij + τij)...)
+
+        # get plastic paremeters (if any...)
+        is_pl, C, sinϕ, η_reg = plastic_params(MatParam[1])
+        τy = C + P[i,j] * sinϕ
+
+        if is_pl && τII_trial > τy && P[i,j] > 0.0
+            # yield function
+            F = τII_trial - τy
+            λ = (F > 0.0) * F * inv(ηij + η_reg) * is_pl
+            # derivatives of the plastic potential
+            _λτII_trial = τII_trial * λ
+           
+            dτ_pl = ntuple(Val(3)) do i
+                # derivatives of the plastic potential
+                λdQdτ = 0.5 * (τij[i] + dτij[i]) * _λτII_trial
+                # corrected stress
+                dτ_r * (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij_p[i] - λdQdτ))
+            end
+            τij = τij .+ dτ_pl
+            τxx[i,j] = τij[1]
+            τyy[i,j] = τij[2]
+            τxy[i,j] = τij[3]
+
+            # visco-elastic strain rates
+            εij_ve = ntuple(Val(3)) do i
+                εij_p[i] + 0.5 * τij_p_o[i] * _Gdt
+            end
+            εII_ve     = second_invariant(εij_ve...)
+            τII[i,j]   = second_invariant(τij...)
+            η_vep[i,j] = τII[i,j] * 0.5 / εII_ve
+        
+        else
+            τij = τij .+ dτij
+            τxx[i,j] = dτij[1]
+            τyy[i,j] = dτij[2]
+            τxy[i,j] = dτij[3]
+
+            # visco-elastic strain rates
+            τII[i,j]   = second_invariant(τij...)
+            η_vep[i,j] = ηij
+
+        end        
+    end
+    
     return nothing
 end
 

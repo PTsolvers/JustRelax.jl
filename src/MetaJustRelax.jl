@@ -74,7 +74,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     module_names = if N === 1
         (Symbol("ThermalDiffusion$(N)D"),)
     elseif N === 2
-        (Symbol("Stokes$(N)D"), Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
+        (Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
     else
         (Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
     end

@@ -70,6 +70,11 @@ Base.@propagate_inbounds @inline  _d_yi(A<:AbstractArray{T,2}, i, j, _dy) where 
 Base.@propagate_inbounds @inline _av_xa(A<:AbstractArray{T,2}, i, j) where T = (A[i + 1, j] + A[i, j]) * 0.5
 Base.@propagate_inbounds @inline _av_ya(A<:AbstractArray{T,2}, i, j) where T = (A[i, j + 1] + A[i, j]) * 0.5
 
+@parallel function center2vertex!(vertex, center)
+    @inn(vertex) = @av(center)
+    return nothing
+end
+
 ## 2D ELASTIC KERNELS
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
@@ -111,25 +116,25 @@ end
 end
 
 ## Compressible 
-@parallel function compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
-    @all(RP) = -@all(∇V) - (@all(P) - @all(P_old)) / (@all(K) * dt)
+@parallel function compute_P!(P, P0, RP, ∇V, η, K, dt, r, θ_dτ)
+    @all(RP) = -@all(∇V) - (@all(P) - @all(P0)) / (@all(K) * dt)
     @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (@all(K) * dt))
     return nothing
 end
 
 ## Compressible - GeoParams
-@parallel function compute_P!(P, P_old, RP, ∇V, η, K::Number, dt, r, θ_dτ)
-    @all(RP) = -@all(∇V) - (@all(P) - @all(P_old)) / (K * dt)
+@parallel function compute_P!(P, P0, RP, ∇V, η, K::Number, dt, r, θ_dτ)
+    @all(RP) = -@all(∇V) - (@all(P) - @all(P0)) / (K * dt)
     @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (K * dt))
     return nothing
 end
 
 @parallel_indices (i, j) function compute_P!(
-    P, P_old, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ
 ) where {N}
     @inbounds begin
         _Kdt = inv(get_Kb(rheology, phase[i, j]) * dt)
-        RP[i, j] = RP_ij = -∇V[i, j] - (P[i, j] - P_old[i, j]) * _Kdt
+        RP[i, j] = RP_ij = -∇V[i, j] - (P[i, j] - P0[i, j]) * _Kdt
         P[i, j] += RP_ij * inv(inv(r / θ_dτ * η[i, j]) + _Kdt)
     end
     return nothing
@@ -307,17 +312,8 @@ function JustRelax.solve!(
 
     # unpack
     _dx, _dy = inv.(di)
-    Vx, Vy = stokes.V.Vx, stokes.V.Vy
-    εxx, εyy, εxy = strain(stokes)
-    τ, _ = stress(stokes)
-    τxx, τyy, τxy = τ
-    P, ∇V = stokes.P, stokes.∇V
-    Rx, Ry, RP = stokes.R.Rx, stokes.R.Ry, stokes.R.RP
     ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
-    ni = nx, ny = size(P)
-
-    ρgx, ρgy = ρg
-    P_old = deepcopy(P)
+    ni = size(stokes.P)
 
     # ~preconditioner
     ητ = deepcopy(η)
@@ -340,30 +336,36 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
 
-            # free slip boundary conditions
-            # apply_free_slip!(freeslip, Vx, Vy)
-            @parallel (@idx ni) compute_∇V!(∇V, Vx, Vy, _dx, _dy)
-            @parallel (@idx ni .+ 1) compute_strain_rate!(
-                εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+            
+            @parallel (@idx ni.+1) compute_strain_rate!(
+                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-            @parallel compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
-            @parallel (@idx ni .+ 1) compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, θ_dτ)
+            @parallel compute_P!(stokes.P, stokes.P0, stokes.RP, stokes.∇V, η, K, dt, r, θ_dτ)
+            @parallel (@idx ni .+ 1) compute_τ!( @stress(stokes)..., @strain(stokes)..., η, θ_dτ)
 
             @hide_communication b_width begin
-                @parallel compute_V!(Vx, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
-                update_halo!(Vx, Vy)
+                @parallel compute_V!(@velocity(stokes)..., stokes.P, @stress(stokes)..., ηdτ, ρg..., ητ, _dx, _dy)
+                update_halo!(@velocity(stokes)...)
             end
             flow_bcs!(stokes, flow_bcs, di)
         end
 
         iter += 1
         if iter % nout == 0 && iter > 1
-            @parallel (@idx ni) compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
-            Vmin, Vmax = extrema(Vx)
-            Pmin, Pmax = extrema(P)
-            push!(norm_Rx, norm(Rx) / (Pmax - Pmin) * lx / sqrt(length(Rx)))
-            push!(norm_Ry, norm(Ry) / (Pmax - Pmin) * lx / sqrt(length(Ry)))
-            push!(norm_∇V, norm(∇V) / (Vmax - Vmin) * lx / sqrt(length(∇V)))
+            @parallel (@idx ni) compute_Res!(
+                stokes.R.Rx,
+                stokes.R.Ry,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+            )            
+            Vmin, Vmax = extrema(stokes.V.Vx)
+            Pmin, Pmax = extrema(stokes.P)
+            push!(norm_Rx, norm(stokes.R.Rx) / (Pmax - Pmin) * lx / sqrt(length(stokes.R.Rx)))
+            push!(norm_Ry, norm(stokes.R.Ry) / (Pmax - Pmin) * lx / sqrt(length(stokes.R.Ry)))
+            push!(norm_∇V, norm(stokes.∇V) / (Vmax - Vmin) * lx / sqrt(length(stokes.∇V)))
             err = max(norm_Rx[end], norm_Ry[end], norm_∇V[end])
             push!(err_evo1, err)
             push!(err_evo2, iter)
@@ -419,7 +421,6 @@ function JustRelax.solve!(
     _di = inv.(di)
     ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
     ni = nx, ny = size(stokes.P)
-    P_old = deepcopy(stokes.P)
 
     # ~preconditioner
     ητ = deepcopy(η)
@@ -443,25 +444,16 @@ function JustRelax.solve!(
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                stokes.ε.xx,
-                stokes.ε.yy,
-                stokes.ε.xy,
+                @strain(stokes)...,
                 stokes.∇V,
-                stokes.V.Vx,
-                stokes.V.Vy,
+                @velocity(stokes)...,
                 _di...,
             )
-            @parallel compute_P!(stokes.P, P_old, stokes.R.RP, stokes.∇V, η, K, dt, r, θ_dτ)
+            @parallel compute_P!(stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, K, dt, r, θ_dτ)
             @parallel (@idx ni .+ 1) compute_τ!(
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy,
-                stokes.τ_o.xx,
-                stokes.τ_o.yy,
-                stokes.τ_o.xy,
-                stokes.ε.xx,
-                stokes.ε.yy,
-                stokes.ε.xy,
+                @stress(stokes)...,
+                @tensor(stokes.τ_o)...,
+                @strain(stokes)...,
                 η,
                 G,
                 θ_dτ,
@@ -469,15 +461,11 @@ function JustRelax.solve!(
             )
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
-                    stokes.V.Vx,
-                    stokes.V.Vy,
+                    @velocity(stokes)...,
                     stokes.P,
-                    stokes.τ.xx,
-                    stokes.τ.yy,
-                    stokes.τ.xy,
+                    @stress(stokes)...,
                     ηdτ,
-                    ρg[1],
-                    ρg[2],
+                    ρg...,
                     ητ,
                     _di...,
                 )
@@ -493,11 +481,8 @@ function JustRelax.solve!(
                 stokes.R.Rx,
                 stokes.R.Ry,
                 stokes.P,
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy,
-                ρg[1],
-                ρg[2],
+                @stress(stokes)...,
+                ρg...,
                 _di...,
             )
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
@@ -525,9 +510,9 @@ function JustRelax.solve!(
         end
     end
 
-    if -Inf < dt < Inf
+    if !isinf(dt) # if dt is inf, then we are in the non-elastic case
         update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
+        @parallel (@idx ni) rotate_stress!(@velocity(stokes.V), @tensor(stokes.τ_o), _di, dt)
     end
 
     return (
@@ -541,14 +526,6 @@ function JustRelax.solve!(
 end
 
 # GeoParams: general (visco-elasto-plastic) solver
-
-tupleize(v::MaterialParams) = (v,)
-tupleize(v::Tuple) = v
-
-@parallel function center2vertex!(vertex, center)
-    @inn(vertex) = @av(center)
-    return nothing
-end
 
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
@@ -572,7 +549,6 @@ function JustRelax.solve!(
     _di = inv.(di)
     ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
     ni = nx, ny = size(stokes.P)
-    P_old = deepcopy(stokes.P)
     z = LinRange(di[2] * 0.5, 1.0 - di[2] * 0.5, ny)
 
     # ~preconditioner
@@ -597,30 +573,18 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel compute_P!(
-                stokes.P, P_old, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
+                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
             )
-            @parallel (@idx ni .+ 1) compute_strain_rate!(
-                stokes.ε.xx,
-                stokes.ε.yy,
-                stokes.ε.xy,
-                stokes.∇V,
-                stokes.V.Vx,
-                stokes.V.Vy,
-                _di...,
+            @parallel (@idx ni.+1) compute_strain_rate!(
+                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
             @parallel (@idx ni) compute_τ_gp!(
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy_c,
+                @tensor_center(stokes.τ)...,
                 stokes.τ.II,
-                stokes.τ_o.xx,
-                stokes.τ_o.yy,
-                stokes.τ_o.xy,
-                stokes.ε.xx,
-                stokes.ε.yy,
-                stokes.ε.xy,
+                @tensor(stokes.τ_o)...,
+                @strain(stokes)...,
                 η,
                 η_vep,
                 z,
@@ -629,18 +593,15 @@ function JustRelax.solve!(
                 dt,
                 θ_dτ,
             )
+
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
-                    stokes.V.Vx,
-                    stokes.V.Vy,
+                    @velocity(stokes)...,
                     stokes.P,
-                    stokes.τ.xx,
-                    stokes.τ.yy,
-                    stokes.τ.xy,
+                    @stress(stokes)...,
                     ηdτ,
-                    ρg[1],
-                    ρg[2],
+                    ρg...,
                     ητ,
                     _di...,
                 )
@@ -656,11 +617,8 @@ function JustRelax.solve!(
                 stokes.R.Rx,
                 stokes.R.Ry,
                 stokes.P,
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy,
-                ρg[1],
-                ρg[2],
+                @stress(stokes)...,
+                ρg...,
                 _di...,
             )
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
@@ -688,9 +646,9 @@ function JustRelax.solve!(
         end
     end
 
-    if -Inf < dt < Inf
+    if !isinf(dt) # if dt is inf, then we are in the non-elastic case
         update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
+        @parallel (@idx ni) rotate_stress!(@velocity(stokes.V), @tensor(stokes.τ_o), _di, dt)
     end
 
     return (
@@ -729,7 +687,6 @@ function JustRelax.solve!(
     _di = inv.(di)
     ϵ, r, θ_dτ, ηdτ = pt_stokes.ϵ, pt_stokes.r, pt_stokes.θ_dτ, pt_stokes.ηdτ
     ni = nx, ny = size(stokes.P)
-    P_old = deepcopy(stokes.P)
     z = LinRange(di[2] * 0.5, 1.0 - di[2] * 0.5, ny)
     # ~preconditioner
     ητ = deepcopy(η)
@@ -751,22 +708,19 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
-
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel (@idx ni) compute_P!(
-                stokes.P, P_old, stokes.R.RP, stokes.∇V, η, rheology, phase_c, dt, r, θ_dτ
+                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, rheology, phase_c, dt, r, θ_dτ
             )
-            @parallel (@idx ni) compute_strain_rate!(
-                @tuple(stokes.ε)..., stokes.∇V, @tuple(stokes.V)..., _di...
+            @parallel (@idx ni.+1) compute_strain_rate!(
+                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
             @parallel (@idx ni) compute_ρg!(ρg[2], ϕ, rheology, (T=thermal.T, P=stokes.P))
             @parallel (@idx ni) compute_τ_gp!(
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy_c,
+                @tensor_center(stokes.τ)...,
                 stokes.τ.II,
-                @tuple(stokes.τ_o)...,
-                @tuple(stokes.ε)...,
+                @tensor(stokes.τ_o)...,
+                @strain(stokes)...,
                 η,
                 η_vep,
                 z,
@@ -781,15 +735,11 @@ function JustRelax.solve!(
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
-                    stokes.V.Vx,
-                    stokes.V.Vy,
+                    @velocity(stokes)...,
                     stokes.P,
-                    stokes.τ.xx,
-                    stokes.τ.yy,
-                    stokes.τ.xy,
+                    @stress(stokes)...,
                     ηdτ,
-                    ρg[1],
-                    ρg[2],
+                    ρg...,
                     ητ,
                     _di...,
                 )
@@ -806,11 +756,8 @@ function JustRelax.solve!(
                 stokes.R.Rx,
                 stokes.R.Ry,
                 stokes.P,
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.xy,
-                ρg[1],
-                ρg[2],
+                @stress(stokes)...,
+                ρg...,
                 _di...,
             )
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
@@ -838,9 +785,9 @@ function JustRelax.solve!(
         end
     end
 
-    if -Inf < dt < Inf
+    if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
         update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(@tuple(stokes.V), @tuple(stokes.τ_o), _di, dt)
+        @parallel (@idx ni) rotate_stress!(@velocity(stokes.V), @tensor(stokes.τ_o), _di, dt)
     end
 
     return (
@@ -854,3 +801,4 @@ function JustRelax.solve!(
 end
 
 end # END OF MODULE
+

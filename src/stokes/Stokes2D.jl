@@ -1,10 +1,5 @@
 ## DIMENSION AGNOSTIC KERNELS
 
-# @parallel function compute_maxloc!(A::AbstractArray, B::AbstractArray)
-#     @inn(A) = @maxloc(B)
-#     return nothing
-# end
-
 @parallel function elastic_iter_params!(
     dτ_Rho::AbstractArray,
     Gdτ::AbstractArray,
@@ -52,14 +47,11 @@ using GeoParams, LinearAlgebra, Printf
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
-import JustRelax: compute_maxloc!, solve!
+import JustRelax: compute_maxloc!, solve!, compute_ρg!, compute_viscosity
 
 export solve!, compute_ρg!
 
 include("StressRotation.jl")
-
-
-## 2D ELASTIC KERNELS
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
     τxx, τyy, τxy, τxy_c = stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ.xy_c
@@ -171,24 +163,24 @@ end
     @inbounds begin
         if all((i, j) .≤ size(Rx))
             R = Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
-            Vx[i + 1, j + 1] += R * ηdτ / av_xa(ητ)
+            Vx[i + 1, j + 1] += R * ηdτ * inv(av_xa(ητ))
         end
         if all((i, j) .≤ size(Ry))
             R = Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
-            Vy[i + 1, j + 1] += R * ηdτ / av_ya(ητ)
+            Vy[i + 1, j + 1] += R * ηdτ * inv(av_ya(ητ))
         end
     end
 
     return nothing
 end
 
-# Stress calculation
+# Stress kernels
 
 # viscous
 @parallel function compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, θ_dτ)
-    @all(τxx) = @all(τxx) + (-@all(τxx) + 2.0 * @all(η) * @all(εxx)) * 1.0 / (θ_dτ + 1.0)
-    @all(τyy) = @all(τyy) + (-@all(τyy) + 2.0 * @all(η) * @all(εyy)) * 1.0 / (θ_dτ + 1.0)
-    @inn(τxy) = @inn(τxy) + (-@inn(τxy) + 2.0 * @av(η) * @inn(εxy)) * 1.0 / (θ_dτ + 1.0)
+    @all(τxx) = @all(τxx) + (-@all(τxx) + 2.0 * @all(η) * @all(εxx)) * inv(θ_dτ + 1.0)
+    @all(τyy) = @all(τyy) + (-@all(τyy) + 2.0 * @all(η) * @all(εyy)) * inv(θ_dτ + 1.0)
+    @inn(τxy) = @inn(τxy) + (-@inn(τxy) + 2.0 * @av(η) * @inn(εxy)) * inv(θ_dτ + 1.0)
     return nothing
 end
 
@@ -201,19 +193,19 @@ end
         (
             -(@all(τxx) - @all(τxx_o)) * @all(η) / (@all(G) * dt) - @all(τxx) +
             2.0 * @all(η) * @all(εxx)
-        ) * inv(θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
+        ) * inv(θ_dτ + @all(η) * inv(@all(G) * dt) + 1.0)
     @all(τyy) =
         @all(τyy) +
         (
             -(@all(τyy) - @all(τyy_o)) * @all(η) / (@all(G) * dt) - @all(τyy) +
             2.0 * @all(η) * @all(εyy)
-        ) * inv(θ_dτ + @all(η) / (@all(G) * dt) + 1.0)
+        ) * inv(θ_dτ + @all(η) * inv(@all(G) * dt) + 1.0)
     @inn(τxy) =
         @inn(τxy) +
         (
             -(@inn(τxy) - @inn(τxy_o)) * @av(η) / (@av(G) * dt) - @inn(τxy) +
             2.0 * @av(η) * @inn(εxy)
-        ) * inv(θ_dτ + @av(η) / (@av(G) * dt) + 1.0)
+        ) * inv(θ_dτ + @av(η) * inv(@av(G) * dt) + 1.0)
 
     return nothing
 end
@@ -240,9 +232,7 @@ end
 )
     #! format: off
     # convinience closure
-    Base.@propagate_inbounds @inline function gather(A)
-        A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1]
-    end
+    Base.@propagate_inbounds @inline gather(A) = _gather(A, i, j)
     Base.@propagate_inbounds @inline function av(T)
         (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
     end
@@ -294,9 +284,7 @@ end
 )
     #! format: off
     # convinience closure
-    Base.@propagate_inbounds @inline function gather(A)
-        A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1]
-    end
+    Base.@propagate_inbounds @inline gather(A) = _gather(A, i, j)
     Base.@propagate_inbounds @inline function av(T)
         (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
     end
@@ -600,7 +588,7 @@ function compute_stress_increment_and_trial(τij, τij_p_o, ηij, εij_p, _Gdt, 
         Base.@_inline_meta
         dτ_r * (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij_p[i]))
     end
-    return dτij, second_invariant((dτij + τij)...)
+    return dτij, second_invariant((dτij .+ τij)...)
 end
 
 @inline isyielding(is_pl, τII_trial, τy, Pij) =  is_pl && τII_trial > τy && Pij > 0
@@ -932,10 +920,15 @@ function JustRelax.solve!(
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
             )
+            if err < 1e-2
+                args_ρ = (T=thermal.T, P=stokes.P)
+                @parallel (@idx ni) compute_ρg!(ρg[2], rheology, (T=thermal.T, P=stokes.P))
+            end
+
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-            @parallel (@idx ni) compute_τ_gp!(
+            @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ)...,
                 stokes.τ.II,
                 @tensor(stokes.τ_o)...,

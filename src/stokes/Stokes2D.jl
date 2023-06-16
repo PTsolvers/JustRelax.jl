@@ -49,7 +49,7 @@ using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
 using GeoParams, LinearAlgebra, Printf
 
-import JustRelax: stress, strain, elastic_iter_params!, PTArray, Velocity, SymmetricTensor
+import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!

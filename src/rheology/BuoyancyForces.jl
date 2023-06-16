@@ -3,7 +3,7 @@
 
 Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`.
 """
-@parallel_indices (i, j) function compute_ρg!(ρg, rheology, args)
+@parallel_indices (i, j) function compute_ρg!(ρg::_T, rheology, args) where {_T<:AbstractArray{M, 2} where M<:Real}
 
     i1, j1 = i + 1, j + 1
     i2 = i + 2
@@ -20,7 +20,7 @@ Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_ρg!(ρg, rheology, args)
+@parallel_indices (i, j, k) function compute_ρg!(ρg::_T, rheology, args) where {_T<:AbstractArray{M, 3} where M<:Real}
 
     av_T() = _av(args.T, i, j, k) - 273.0
 
@@ -40,7 +40,7 @@ end
 Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`. 
 The `phase_ratios` are used to compute the density of the composite rheology.
 """
-@parallel_indices (i, j) function compute_ρg!(ρg, phase_ratios, rheology, args)
+@parallel_indices (i, j) function compute_ρg!(ρg::_T, phase_ratios, rheology, args) where {_T<:AbstractArray{M, 2} where M<:Real}
 
     i1, j1 = i + 1, j + 1
     i2 = i + 2
@@ -57,7 +57,7 @@ The `phase_ratios` are used to compute the density of the composite rheology.
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_ρg!(ρg, phase_ratios, rheology, args)
+@parallel_indices (i, j, k) function compute_ρg!(ρg::_T, phase_ratios, rheology, args) where {_T<:AbstractArray{M, 3} where M<:Real}
 
     av_T() = _av(args.T, i, j, k) - 273.0
 
@@ -70,5 +70,10 @@ end
     return nothing
 end
 
+@inline compute_ρg(rheology::MaterialParams, args) = compute_density(rheology, args) * compute_gravity(rheology)
+@inline compute_ρg(rheology::MaterialParams, args, phase_ratios) = compute_density(phase_ratios, rheology, args) * compute_gravity(rheology)
+
 @inline compute_ρg(rheology, args) = compute_density(rheology, args) * compute_gravity(rheology[1])
 @inline compute_ρg(rheology, args, phase_ratios) = compute_density(phase_ratios, rheology, args) * compute_gravity(rheology[1])
+
+

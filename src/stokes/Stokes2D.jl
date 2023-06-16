@@ -1,9 +1,9 @@
 ## DIMENSION AGNOSTIC KERNELS
 
-@parallel function compute_maxloc!(A::AbstractArray, B::AbstractArray)
-    @inn(A) = @maxloc(B)
-    return nothing
-end
+# @parallel function compute_maxloc!(A::AbstractArray, B::AbstractArray)
+#     @inn(A) = @maxloc(B)
+#     return nothing
+# end
 
 @parallel function elastic_iter_params!(
     dτ_Rho::AbstractArray,
@@ -38,7 +38,7 @@ end
     return nothing
 end
 
-## 2D ELASTICITY MODULE
+## 2D STOKES MODULE
 
 module Stokes2D
 
@@ -666,10 +666,10 @@ function JustRelax.solve!(
 
     # ~preconditioner
     ητ = deepcopy(η)
-    @hide_communication b_width begin # communication/computation overlap
-        @parallel compute_maxloc!(ητ, η)
+    # @hide_communication b_width begin # communication/computation overlap
+        compute_maxloc!(ητ, η)
         update_halo!(ητ)
-    end
+    # end
 
     # errors
     err = 2 * ϵ
@@ -780,14 +780,14 @@ function JustRelax.solve!(
     # unpack
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
-    ni = nx, ny = size(stokes.P)
+    ni = size(stokes.P)
 
     # ~preconditioner
     ητ = deepcopy(η)
-    @hide_communication b_width begin # communication/computation overlap
-        @parallel compute_maxloc!(ητ, η)
+    # @hide_communication b_width begin # communication/computation overlap
+        compute_maxloc!(ητ, η; window = (1, 1, 1))
         update_halo!(ητ)
-    end
+    # end
 
     # errors
     err = 2 * ϵ
@@ -908,10 +908,10 @@ function JustRelax.solve!(
 
     # ~preconditioner
     ητ = deepcopy(η)
-    @hide_communication b_width begin # communication/computation overlap
-        @parallel compute_maxloc!(ητ, η)
+    # @hide_communication b_width begin # communication/computation overlap
+        compute_maxloc!(ητ, η)
         update_halo!(ητ)
-    end
+    # end
 
     Kb = get_Kb(rheology)
 
@@ -1040,10 +1040,10 @@ function JustRelax.solve!(
     ni = size(stokes.P)
     # ~preconditioner
     ητ = deepcopy(η)
-    @hide_communication b_width begin # communication/computation overlap
-        @parallel compute_maxloc!(ητ, η)
+    # @hide_communication b_width begin # communication/computation overlap
+        compute_maxloc!(ητ, η)
         update_halo!(ητ)
-    end
+    # end
 
     # errors
     err = 2 * ϵ

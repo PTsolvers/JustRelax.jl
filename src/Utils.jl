@@ -1,3 +1,65 @@
+"""
+    maxloc!(B, A; window)
+
+Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` and store the result in `B`.
+"""
+function compute_maxloc!(B, A; window = (1, 1, 1))
+    ni = size(A)
+    width_x, width_y, width_z = window
+
+    @parallel_indices (i, j) function _maxloc!(B::T, A::T) where T<:AbstractArray{<:Number, 2}
+        B[i, j] = _maxloc_window_clamped(A, i, j, width_x, width_y)
+        return
+    end
+    
+    @parallel_indices (i, j, k) function _maxloc!(B::T, A::T) where T<:AbstractArray{<:Number, 3}
+        B[i, j, k] = _maxloc_window_clamped(A, i, j, k, width_x, width_y, width_z)
+        return
+    end
+
+    @parallel (@idx ni) _maxloc!(B, A)
+end
+
+@inline function _maxloc_window_clamped(A, I, J, width_x, width_y) 
+    nx, ny = size(A)
+    I_range = (I - width_x):(I + width_x)
+    J_range = (J - width_y):(J + width_y)
+    x = -Inf
+    for i in I_range
+        ii = clamp(i, 1, nx)
+        for j in J_range
+            jj = clamp(j, 1, ny)
+            Aij = A[ii, jj]
+            if Aij > x
+                x = Aij
+            end
+        end
+    end
+    return x
+end
+
+@inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
+    nx, ny, nz = size(A)
+    I_range = (I - width_x):(I + width_x)
+    J_range = (J - width_y):(J + width_y)
+    K_range = (K - width_z):(K + width_z)
+    x = -Inf
+    for i in I_range
+        ii = clamp(i, 1, nx)
+        for j in J_range
+            jj = clamp(j, 1, ny)
+            for k in K_range
+                kk = clamp(k, 1, nz)
+                Aijk = A[ii, jj, kk]
+                if Aijk > x
+                    x = Aijk
+                end
+            end
+        end
+    end
+    return x
+end
+
 # unpacks fields of the struct x into a tuple
 @generated function unpack(x::T) where T
     return quote

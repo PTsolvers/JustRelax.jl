@@ -1,4 +1,5 @@
 using JustRelax
+
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
@@ -207,37 +208,4 @@ n = 32
 nx = n * ar - 2
 ny = n - 2
 
-thermal_convection2D(; figdir=figdir, ar=ar, nx=nx, ny=ny);
-
-@parallel_indices (i, j) function foo!(
-    qTx, qTy, T, rheology::MaterialParams, args, _dx, _dy
-)
-    i1, j1 = @add 1 i j # augment indices by 1
-    nPx, nPy = size(args.P)
-
-    if all((i, j) .≤ size(qTx))
-        Tx = (T[i1, j1] + T[i, j1]) * 0.5
-        Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
-        argsx = (; T=Tx, P=Pvertex)
-        @inbounds qTx[i, j] =
-            -compute_diffusivity(rheology, argsx) * (T[i1, j1] - T[i, j1]) * _dx
-    end
-
-    if all((i, j) .≤ size(qTy))
-        Ty = (T[i1, j1] + T[i1, j]) * 0.5
-        Pvertex = (args.P[i1, clamp(j - 1, 1, nPy)] + args.P[i, clamp(j - 1, 1, nPy)]) * 0.5
-        argsy = (; T=Ty, P=Pvertex)
-        @inbounds qTy[i, j] =
-            -compute_diffusivity(rheology, argsy) * (T[i1, j1] - T[i1, j]) * _dy
-    end
-
-    finalize_global_grid(; finalize_MPI=true)
-
-    return nothing
-end
-
-_dx, _dy = inv.(di)
-
-@parallel (1:(nx - 1), 1:(ny - 1)) foo!(
-    thermal.qTx, thermal.qTy, thermal.T, rheology, args_T, _dx, _dy
-)
+# thermal_convection2D(; figdir=figdir, ar=ar, nx=nx, ny=ny);

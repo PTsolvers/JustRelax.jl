@@ -4,13 +4,8 @@
 Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`.
 """
 @parallel_indices (i, j) function compute_ρg!(ρg::_T, rheology, args) where {_T<:AbstractArray{M, 2} where M<:Real}
-
-    i1, j1 = i + 1, j + 1
-    i2 = i + 2
-    @inline av_T() = 0.25 * (T[i1, j] + T[i2, j] + T[i1, j1] + T[i2, j1]) - 273.0
-    
-    # index arguments for the current cell cell center
-    T = av_T()
+     # index arguments for the current cell cell center
+    T = args.T[i, j] - 273.0 
     P = args.P[i, j]
     args_ij =(; T, P)
     
@@ -42,12 +37,7 @@ The `phase_ratios` are used to compute the density of the composite rheology.
 """
 @parallel_indices (i, j) function compute_ρg!(ρg::_T, phase_ratios, rheology, args) where {_T<:AbstractArray{M, 2} where M<:Real}
 
-    i1, j1 = i + 1, j + 1
-    i2 = i + 2
-    @inline av_T() = 0.25 * (T[i1, j] + T[i2, j] + T[i1, j1] + T[i2, j1]) - 273.0
-    
-    # index arguments for the current cell cell center
-    T = av_T()
+    T = args.T[i, j] - 273.0 
     P = args.P[i, j]
     args_ij =(; T, P)
 

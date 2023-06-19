@@ -312,94 +312,6 @@ end
     return nothing
 end
 
-# # single phase visco-elasto-plastic with GeoParams
-# @parallel_indices (i, j) function compute_τ_nonlinear!(
-#     τxx,
-#     τyy,
-#     τxy,
-#     τII,
-#     τxx_old,
-#     τyy_old,
-#     τxyv_old,
-#     εxx,
-#     εyy,
-#     εxyv,
-#     P,
-#     η,
-#     η_vep,
-#     MatParam,
-#     dt,
-#     θ_dτ,
-# )
-
-#     # convinience closure
-#     @inline gather(A) = _gather(A, i, j)
-#     @inline av(A) = _av(A, i, j)
-#     @inline av_shear(A) = 0.25 * sum(gather(A))
-
-#     @inbounds begin
-#         _Gdt = inv(get_G(MatParam[1]) * dt)
-#         ηij = η[i, j]
-#         dτ_r = inv(θ_dτ + ηij * _Gdt + 1.0) # original
-#         # cache tensors
-#         εij_p = εxx[i, j], εyy[i, j], av_shear(εxyv)
-#         τij_p_o = τxx_old[i, j], τyy_old[i, j], av_shear(τxyv_old)
-#         τij = τxx[i, j], τyy[i, j], τxy[i, j]
-
-#         # Stress increment
-#         dτij = ntuple(Val(3)) do i
-#             dτ_r * (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij_p[i]))
-#         end
-#         # trial stress
-#         τII_trial = second_invariant((dτij + τij)...)
-
-#         # get plastic paremeters (if any...)
-#         is_pl, C, sinϕ, η_reg = plastic_params(MatParam[1])
-#         τy = C + P[i, j] * sinϕ
-
-#         if is_pl && τII_trial > τy && P[i, j] > 0.0
-#             # yield function
-#             F = τII_trial - τy
-#             λ = (F > 0.0) * F * inv(ηij + η_reg) * is_pl
-#             # derivatives of the plastic potential
-#             _λτII_trial = τII_trial * λ
-
-#             dτ_pl = ntuple(Val(3)) do i
-#                 # derivatives of the plastic potential
-#                 λdQdτ = 0.5 * (τij[i] + dτij[i]) * _λτII_trial
-#                 # corrected stress
-#                 dτ_r * (
-#                     -(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] +
-#                     2.0 * ηij * (εij_p[i] - λdQdτ)
-#                 )
-#             end
-#             τij = τij .+ dτ_pl
-#             τxx[i, j] = τij[1]
-#             τyy[i, j] = τij[2]
-#             τxy[i, j] = τij[3]
-
-#             # visco-elastic strain rates
-#             εij_ve = ntuple(Val(3)) do i
-#                 εij_p[i] + 0.5 * τij_p_o[i] * _Gdt
-#             end
-#             εII_ve = second_invariant(εij_ve...)
-#             τII[i, j] = second_invariant(τij...)
-#             η_vep[i, j] = τII[i, j] * 0.5 / εII_ve
-
-#         else
-#             τij = τij .+ dτij
-#             τxx[i, j] = τij[1]
-#             τyy[i, j] = τij[2]
-#             τxy[i, j] = τij[3]
-
-#             # visco-elastic strain rates
-#             τII[i, j] = second_invariant(τij...)
-#             η_vep[i, j] = ηij
-#         end
-#     end
-
-#     return nothing
-# end
 
 # single phase visco-elasto-plastic flow
 @parallel_indices (i, j) function compute_τ_nonlinear!(
@@ -416,7 +328,8 @@ end
     P,
     η,
     η_vep,
-    MatParam,
+    λ,
+    rheology,
     dt,
     θ_dτ,
 )
@@ -424,11 +337,11 @@ end
 
     # numerics
     ηij = η[i, j]
-    _Gdt = inv(get_G(MatParam[1]) * dt)
+    _Gdt = inv(get_G(rheology[1]) * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt) 
 
     # get plastic paremeters (if any...)
-    is_pl, C, sinϕ, η_reg = plastic_params(MatParam[1])
+    is_pl, C, sinϕ, η_reg = plastic_params(rheology[1])
     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
 
     _compute_τ_nonlinear!(
@@ -445,7 +358,7 @@ end
         P,
         ηij,
         η_vep,
-        MatParam,
+        λ,
         dτ_r,
         _Gdt,
         plastic_parameters,
@@ -470,8 +383,9 @@ end
     P,
     η,
     η_vep,
+    λ,
     phase_center,
-    MatParam,
+    rheology,
     dt,
     θ_dτ,
 )
@@ -480,11 +394,11 @@ end
     # numerics
     ηij = η[i, j]
     phase = phase_center[i, j]
-    _Gdt = inv(get_G(MatParam, phase) * dt)
+    _Gdt = inv(get_G(rheology, phase) * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt) 
 
     # get plastic paremeters (if any...)
-    is_pl, C, sinϕ, η_reg = plastic_params(MatParam, phase)
+    is_pl, C, sinϕ, η_reg = plastic_params(rheology, phase)
     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
 
     _compute_τ_nonlinear!(
@@ -501,7 +415,7 @@ end
         P,
         ηij,
         η_vep,
-        MatParam,
+        λ,
         dτ_r,
         _Gdt,
         plastic_parameters,
@@ -509,123 +423,6 @@ end
     )
 
     return nothing
-end
-
-# inner kernel to compute the plastic stress update within Pseudo-Transient stress continuation
-function _compute_τ_nonlinear!(
-    τxx,
-    τyy,
-    τxy,
-    τII,
-    τxx_old,
-    τyy_old,
-    τxyv_old,
-    εxx,
-    εyy,
-    εxyv,
-    P,
-    ηij,
-    η_vep,
-    MatParam,
-    dτ_r,
-    _Gdt,
-    plastic_parameters,
-    idx::Vararg{Integer, 2}
-)
-
-    i, j = idx
-
-    # cache tensors
-    εij_p, τij_p_o, τij = cache_tensors(
-        (τxx, τyy, τxy), (τxx_old, τyy_old, τxyv_old), (εxx, εyy, εxyv), i, j
-    )
-
-    # Stress increment and trial stress
-    dτij, τII_trial = compute_stress_increment_and_trial(τij, τij_p_o, ηij, εij_p, _Gdt, dτ_r)
-
-    # get plastic paremeters (if any...)
-    (; is_pl, C, sinϕ, η_reg) = plastic_parameters
-    τy = C + P[i, j] * sinϕ
-
-    if isyielding(is_pl, τII_trial, τy, P[i, j]) 
-        # derivatives plastic stress correction
-        dτ_pl = compute_dτ_pl(τij, dτij, τij_p_o, εij_p, τII_trial, ηij, η_reg, _Gdt)
-        τij = τij .+ dτ_pl
-        correct_stress!(τxx, τyy, τxy, τij, i, j)
-        # visco-elastic strain rates
-        εij_ve = ntuple(Val(3)) do i
-            εij_p[i] + 0.5 * τij_p_o[i] * _Gdt
-        end
-        τII[i, j] = τII_ij = second_invariant(τij...)
-        η_vep[i, j] = τII_ij * 0.5 / second_invariant(εij_ve...)
-    else
-        τij = τij .+ dτij
-        correct_stress!(τxx, τyy, τxy, τij, i, j)
-        τII[i, j] = second_invariant(τij...)
-        η_vep[i, j] = ηij
-    end
-
-    return nothing
-end
-
-# single phase visco-elasto-plastic with GeoParams
-@inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + ηij * _Gdt + 1.0) 
-
-# cache tensors
-function cache_tensors(τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, idx::Vararg{Integer, N}) where N
-
-    @inline av_shear(A) = 0.25 * sum(_gather(A, idx...))
-
-    εij_p = ε[1][idx...], ε[2][idx...], av_shear(ε[3])
-    τij_p_o = τ_old[1][idx...], τ_old[2][idx...], av_shear(τ_old[3])
-    τij = getindex.(τ, idx...)
-    
-    return εij_p, τij_p_o, τij
-end
-
-function compute_stress_increment_and_trial(τij, τij_p_o, ηij, εij_p, _Gdt, dτ_r)
-    dτij = ntuple(Val(3)) do i
-        Base.@_inline_meta
-        dτ_r * (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij_p[i]))
-    end
-    return dτij, second_invariant((dτij .+ τij)...)
-end
-
-@inline isyielding(is_pl, τII_trial, τy, Pij) =  is_pl && τII_trial > τy && Pij > 0
-
-function compute_dτ_pl(τij, dτij, τij_p_o, εij_p, τII_trial, ηij, η_reg, _Gdt)
-    # yield function
-    F = τII_trial - τy
-    # Plastic multiplier
-    λ = (F > 0.0) * F * inv(ηij + η_reg) * is_pl
-    _λτII_trial = τII_trial * λ
-    dτ_pl = ntuple(Val(3)) do i
-        Base.@_inline_meta
-        # derivatives of the plastic potential
-        λdQdτ = 0.5 * (τij[i] + dτij[i]) * _λτII_trial
-        # corrected stress
-        dτ_r * (
-            -(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] +
-            2.0 * ηij * (εij_p[i] - λdQdτ)
-        )
-    end
-    return dτ_pl
-end
-
-@inline correct_stress!(τxx, τyy, τxy, τij, idx::Vararg{Integer, 2}) = correct_stress!((τxx, τyy, τxy), τij, idx...)
-@inline correct_stress!(τ, τij, idx::Vararg{Integer, 2}) = Base.@nexprs 3 i -> τ[i][idx...] = τij[i]
-
-@inline isplastic(x::AbstractPlasticity) = true
-@inline isplastic(x) = false
-
-@inline plastic_params(v) = plastic_params(v.CompositeRheology[1].elements)
-
-@generated function plastic_params(v::NTuple{N, Any}) where N
-    quote
-        Base.@_inline_meta
-        Base.@nexprs $N i -> isplastic(v[i]) && return true, v[i].C.val, v[i].sinϕ.val, v[i].η_vp.val
-        (false, 0.0, 0.0, 0.0)
-    end
 end
 
 ## 2D VISCO-ELASTIC STOKES SOLVER 
@@ -881,11 +678,12 @@ function JustRelax.solve!(
     η,
     η_vep,
     rheology::MaterialParams,
+    args,
     dt,
     igg::IGG;
     iterMax=10e3,
     nout=500,
-    b_width=(4, 4, 1),
+    b_width=(4, 4, 0),
     verbose=true,
 ) where {A,B,C,D,T}
 
@@ -902,6 +700,7 @@ function JustRelax.solve!(
     # end
 
     Kb = get_Kb(rheology)
+    @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
 
     # errors
     err = 2 * ϵ
@@ -914,28 +713,35 @@ function JustRelax.solve!(
 
     # solver loop
     wtime0 = 0.0
+    nonlinear = false
+    λ = @zeros(ni...)
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
             )
-            if err < 1e-2
-                args_ρ = (T=thermal.T, P=stokes.P)
-                @parallel (@idx ni) compute_ρg!(ρg[2], rheology, (T=thermal.T, P=stokes.P))
-            end
+            
+            @parallel (@idx ni) compute_ρg!(ρg[2], rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
+
+            ν = 0.05
+            @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, tupleize(rheology))
+            compute_maxloc!(ητ, η)
+            update_halo!(ητ)
+
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ)...,
                 stokes.τ.II,
                 @tensor(stokes.τ_o)...,
                 @strain(stokes)...,
+                stokes.P,
                 η,
                 η_vep,
-                thermal.T,
+                λ,
                 tupleize(rheology), # needs to be a tuple
                 dt,
                 θ_dτ,
@@ -1067,7 +873,7 @@ function JustRelax.solve!(
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-            @parallel (@idx ni) compute_ρg!(ρg[2], ϕ, rheology, (T=thermal.T, P=stokes.P))
+            @parallel (@idx ni) compute_ρg!(ρg[2], ϕ, rheology, (T=thermal.Tc, P=stokes.P))
             @parallel (@idx ni) compute_τ_gp!(
                 @tensor_center(stokes.τ)...,
                 stokes.τ.II,

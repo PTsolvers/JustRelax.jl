@@ -70,13 +70,13 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export ThermalParameters
 
         include(joinpath(@__DIR__, "Interpolations.jl"))
-        export vertex2center!, center2vertex!
+        export vertex2center!, center2vertex!, temperature2center!
 
         include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
-        export compute_ρg
+        export compute_ρg!
         
         include(joinpath(@__DIR__, "rheology/Viscosity.jl"))
-        export compute_viscosity
+        export compute_viscosity!
         
     end
 

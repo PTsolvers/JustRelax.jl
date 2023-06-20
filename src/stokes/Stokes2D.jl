@@ -344,17 +344,15 @@ end
     is_pl, C, sinϕ, η_reg = plastic_params(rheology[1])
     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
 
+    τ = τxx, τyy, τxy
+    τ_old = τxx_old, τyy_old, τxyv_old
+    ε = εxx, εyy, εxyv
+
     _compute_τ_nonlinear!(
-        τxx,
-        τyy,
-        τxy,
+        τ,
         τII,
-        τxx_old,
-        τyy_old,
-        τxyv_old,
-        εxx,
-        εyy,
-        εxyv,
+        τ_old,
+        ε,
         P,
         ηij,
         η_vep,
@@ -401,17 +399,15 @@ end
     is_pl, C, sinϕ, η_reg = plastic_params(rheology, phase)
     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
 
+    τ = τxx, τyy, τxy
+    τ_old = τxx_old, τyy_old, τxyv_old
+    ε = εxx, εyy, εxyv
+
     _compute_τ_nonlinear!(
-        τxx,
-        τyy,
-        τxy,
+        τ,
         τII,
-        τxx_old,
-        τyy_old,
-        τxyv_old,
-        εxx,
-        εyy,
-        εxyv,
+        τ_old,
+        ε,
         P,
         ηij,
         η_vep,

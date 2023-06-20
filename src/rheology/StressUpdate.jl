@@ -1,15 +1,9 @@
 # inner kernel to compute the plastic stress update within Pseudo-Transient stress continuation
 function _compute_τ_nonlinear!(
-    τxx,
-    τyy,
-    τxy,
+    τ::NTuple{N1, T},
     τII,
-    τxx_old,
-    τyy_old,
-    τxyv_old,
-    εxx,
-    εyy,
-    εxyv,
+    τ_old::NTuple{N1, T},
+    ε::NTuple{N1, T},
     P,
     ηij,
     η_vep,
@@ -17,40 +11,36 @@ function _compute_τ_nonlinear!(
     dτ_r,
     _Gdt,
     plastic_parameters,
-    idx::Vararg{Integer, 2}
-)
-
-    i, j = idx
+    idx::Vararg{Integer, N2}
+) where {N1, T}
 
     # cache tensors
-    τij, τij_p_o, εij_p = cache_tensors(
-        (τxx, τyy, τxy), (τxx_old, τyy_old, τxyv_old), (εxx, εyy, εxyv), i, j
-    )
+    τij, τij_p_o, εij_p = cache_tensors(τ, τ_old, ε, idx...)
 
     # Stress increment and trial stress
     dτij, τII_trial = compute_stress_increment_and_trial(τij, τij_p_o, ηij, εij_p, _Gdt, dτ_r)
 
     # get plastic paremeters (if any...)
     (; is_pl, C, sinϕ, η_reg) = plastic_parameters
-    τy = C + P[i, j] * sinϕ
+    τy = C + P[idx...] * sinϕ
 
     if isyielding(is_pl, τII_trial, τy, P[i, j]) 
         # derivatives plastic stress correction
-        dτ_pl, λ[i, j] = compute_dτ_pl(τij, dτij, τij_p_o, εij_p, τy, τII_trial, ηij, λ[i,j], η_reg, _Gdt, dτ_r)
+        dτ_pl, λ[idx...] = compute_dτ_pl(τij, dτij, τij_p_o, εij_p, τy, τII_trial, ηij, λ[idx...], η_reg, _Gdt, dτ_r)
         τij = τij .+ dτ_pl
-        correct_stress!(τxx, τyy, τxy, τij, i, j)
+        correct_stress!(τ, τij, idx...)
         # visco-elastic strain rates
-        εij_ve = ntuple(Val(3)) do i
+        εij_ve = ntuple(Val(N1)) do i
             εij_p[i] + 0.5 * τij_p_o[i] * _Gdt
         end
-        τII[i, j] = τII_ij = second_invariant(τij...)
-        η_vep[i, j] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
+        τII[idx...] = τII_ij = second_invariant(τij...)
+        η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
 
     else
         τij = τij .+ dτij
-        correct_stress!(τxx, τyy, τxy, τij, i, j)
-        τII[i, j] = second_invariant(τij...)
-        η_vep[i, j] = ηij
+        correct_stress!(τ, τij, idx...)
+        τII[idx...] = second_invariant(τij...)
+        η_vep[idx...] = ηij
     end
 
     return nothing

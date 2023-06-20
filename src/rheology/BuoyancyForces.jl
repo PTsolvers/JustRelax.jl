@@ -17,10 +17,8 @@ end
 
 @parallel_indices (i, j, k) function compute_ρg!(ρg::_T, rheology, args) where {_T<:AbstractArray{M, 3} where M<:Real}
 
-    av_T() = _av(args.T, i, j, k) - 273.0
-
     # index arguments for the current cell cell center
-    T = av_T()
+    T = args.T[i, j, k] - 273.0 
     P = args.P[i, j, k]
     args_ijk =(; T, P)
 
@@ -49,10 +47,8 @@ end
 
 @parallel_indices (i, j, k) function compute_ρg!(ρg::_T, phase_ratios, rheology, args) where {_T<:AbstractArray{M, 3} where M<:Real}
 
-    av_T() = _av(args.T, i, j, k) - 273.0
-
     # index arguments for the current cell cell center
-    T = av_T()
+    T = args.T[i, j, k] - 273.0 
     P = args.P[i, j, k]
     args_ijk =(; T, P)
 
@@ -62,7 +58,6 @@ end
 
 @inline compute_ρg(rheology::MaterialParams, args) = compute_density(rheology, args) * compute_gravity(rheology)
 @inline compute_ρg(rheology::MaterialParams, args, phase_ratios) = compute_density(phase_ratios, rheology, args) * compute_gravity(rheology)
-
 @inline compute_ρg(rheology, args) = compute_density(rheology, args) * compute_gravity(rheology[1])
 @inline compute_ρg(rheology, args, phase_ratios) = compute_density(phase_ratios, rheology, args) * compute_gravity(rheology[1])
 

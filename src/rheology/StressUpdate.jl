@@ -12,7 +12,7 @@ function _compute_τ_nonlinear!(
     _Gdt,
     plastic_parameters,
     idx::Vararg{Integer, N2}
-) where {N1, T}
+) where {N1, N2, T}
 
     # cache tensors
     τij, τij_p_o, εij_p = cache_tensors(τ, τ_old, ε, idx...)

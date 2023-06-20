@@ -31,11 +31,9 @@ end
 # visco-elasto-plastic with GeoParams
 @parallel_indices (i, j) function compute_viscosity_gp!(η, args, MatParam)
 
-    # convinience closure
-    @inline av(T)     = (T[i + 1, j] + T[i + 2, j] + T[i + 1, j + 1] + T[i + 2, j + 1]) * 0.25
 
     @inbounds begin
-        args_ij       = (; dt = args.dt, P = (args.P[i, j]), depth = abs(args.depth[j]), T=av(args.T), τII_old=0.0)
+        args_ij       = (; dt = args.dt, P = (args.P[i, j]), depth = abs(args.depth[j]), T=args.T[i,j], τII_old=0.0)
         εij_p         = 1.0, 1.0, (1.0, 1.0, 1.0, 1.0)
         τij_p_o       = 0.0, 0.0, (0.0, 0.0, 0.0, 0.0)
         phases        = 1, 1, (1,1,1,1) # for now hard-coded for a single phase
@@ -103,11 +101,7 @@ end
 
 @parallel_indices (i, j) function compute_ρg!(ρg, rheology, args)
    
-    i1, j1 = i + 1, j + 1
-    i2 = i + 2
-    @inline av(T) = 0.25 * (T[i1,j] + T[i2,j] + T[i1,j1] + T[i2,j1]) - 273.0
-
-    @inbounds ρg[i, j] = -compute_density(rheology, (; T = av(args.T), P=args.P[i, j])) * compute_gravity(rheology.Gravity[1])
+    @inbounds ρg[i, j] = -compute_density(rheology, (; T = args.T[i, j], P=args.P[i, j])) * compute_gravity(rheology.Gravity[1])
 
     return nothing
 end
@@ -138,13 +132,13 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
 
     # Physical properties using GeoParams ----------------
     η_reg     = 1e8
-    G0        = 80e9    # shear modulus
-    cohesion  = 30e6*0.0
+    G0        = 70e9    # shear modulus
+    cohesion  = 30e6
     friction  = asind(0.01)
     # friction  = 30.0
     pl        = DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     # pl        = DruckerPrager(; C = 30e6, ϕ=friction, Ψ=0.0) # non-regularized plasticity
-    el        = SetConstantElasticity(; G=G0, ν=0.45)                             # elastic spring
+    el        = SetConstantElasticity(; G=G0, ν=0.5)                             # elastic spring
     β         = inv(get_Kb(el))
     # creep     = ArrheniusType2(; η0 = 1e22, T0=1600, Ea=100e3, Va=1.0e-6)       # Arrhenius-like (T-dependant) viscosity
     # creep     = LinearViscous(; η = 1e22)       # Arrhenius-like (T-dependant) viscosity
@@ -226,6 +220,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # thermal.T[2:end-1,:] .+= PTArray(@. exp(-(10*(xv-4)^2 + 80*(yv + 0.75)^2)) * 50)
     @views thermal.T[:, 1]   .= Tmax
     @views thermal.T[:, end] .= Tmin
+    @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -235,26 +230,24 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # Buoyancy forces
     ρg              = @zeros(ni...), @zeros(ni...)
     for _ in 1:2
-        @parallel (@idx ni) compute_ρg!(ρg[2], rheology, (T=thermal.T, P=stokes.P))
+        @parallel (@idx ni) compute_ρg!(ρg[2], rheology, (T=thermal.Tc, P=stokes.P))
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
 
     # Rheology
     η               = @ones(ni...)
-    args_ηv         = (; T = thermal.T, P = stokes.P, depth = xci[2], dt = Inf)
-    @parallel (@idx ni) compute_viscosity_gp!(η, args_ηv, (rheology,))
+    depth           = PTArray([y for x in xci[1], y in xci[2]])
+    args            = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
+    @parallel (@idx ni) compute_viscosity_gp!(η, args, (rheology,))
     η_vep           = deepcopy(η)
-    dt_elasticity   = Inf
     # Boundary conditions
     flow_bcs = FlowBoundaryConditions(; 
-        # free_slip = (left=false, right=false, top=true, bot=true),
-        # periodicity = (left = true, right = true, top = false, bot = false),
         free_slip   = (left = true, right=true, top=true, bot=true),
         periodicity = (left = false, right = false, top = false, bot = false),
     )
     # ----------------------------------------------------
 
-    # IO ----- -------------------------------------------
+    # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)
     # ----------------------------------------------------
@@ -288,6 +281,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         # ------------------------------
  
         # Stokes solver ----------------
+        args = (; T = thermal.Tc, P = stokes.P, depth = depth, dt=Inf)
         iters = solve!(
             stokes,
             thermal,
@@ -297,7 +291,8 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D")
             ρg,
             η,
             η_vep,
-            rheology,
+            rheology_depth,
+            args,
             dt,
             igg;
             iterMax=250e3,
@@ -368,4 +363,4 @@ function run()
     thermal_convection2D(; figdir=figdir, ar=ar,nx=nx, ny=ny);
 end
 
-# run()
+run()

@@ -107,6 +107,13 @@ end
 @inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v
 
+"""
+    continuation_log(x_new, x_old, ν
+
+Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
+"""
+@inline continuation_log(x_new, x_old, ν) = exp((1-ν)*log(x_old) + ν*log(x_new))
+
 # MACROS
 
 """

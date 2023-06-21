@@ -52,7 +52,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         include(joinpath(@__DIR__, "Utils.jl"))
         export @allocate, @add, @idx, @copy
         export @velocity, @strain, @stress, @tensor, @shear, @normal, @stress_center, @strain_center, @tensor_center
-        export compute_dt, assign!, tupleize, compute_maxloc!
+        export compute_dt, assign!, tupleize, compute_maxloc!, continuation_log
 
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
         export pureshear_bc!, FlowBoundaryConditions, flow_bcs!

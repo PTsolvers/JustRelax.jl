@@ -467,6 +467,7 @@ version = "1.3.1"
 [[deps.GeoParams]]
 deps = ["BibTeX", "DelimitedFiles", "ForwardDiff", "Interpolations", "KernelDensitySJ", "LaTeXStrings", "LinearAlgebra", "Loess", "Parameters", "Requires", "Roots", "Setfield", "SpecialFunctions", "Static", "StaticArrays", "Statistics", "StatsBase", "UnPack", "Unidecode", "Unitful"]
 git-tree-sha1 = "25e888f835736e3f64843b2f381ce98e92a9c536"
+pinned = true
 repo-rev = "main"
 repo-url = "https://github.com/JuliaGeodynamics/GeoParams.jl.git"
 uuid = "e018b62d-d9de-4a26-8697-af89c310ae38"
@@ -1083,6 +1084,7 @@ version = "1.50.9+0"
 [[deps.ParallelStencil]]
 deps = ["AMDGPU", "CUDA", "CellArrays", "MacroTools", "Random", "StaticArrays"]
 git-tree-sha1 = "85d6c1c4ab05071ce9dc13de7b57b323535963ac"
+pinned = true
 repo-rev = "main"
 repo-url = "https://github.com/omlins/ParallelStencil.jl.git"
 uuid = "94395366-693c-11ea-3b26-d9b7aac5d958"

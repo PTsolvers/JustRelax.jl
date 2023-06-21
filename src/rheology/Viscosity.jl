@@ -1,16 +1,20 @@
+@inline function local_viscosity_args(args, I::Vararg{Integer, N}) where  N
+    v = getindex.(values(args), I...)
+    local_args = (; zip(keys(args), v)..., dt = args.dt, τII_old=0.0)
+    return local_args
+end
 
+# 2D kernel
 @parallel_indices (i, j) function compute_viscosity!(η, ν, εxx, εyy, εxyv, args, rheology)
 
     # convinience closure
     @inline gather(A) = _gather(A, i, j)
    
     # we nee strain rate not to be zero, otherwise we get NaNs
-    εII_0 = (εxx[i, j] == 0 && εyy[i, j] == 0) ? 1e-15 : 0.0
+    εII_0 = (εxx[i, j] == εyy[i, j] == 0) * 1e-15
 
     # argument fields at local index
-    v = getindex.(values(args), i, j)
-    k = keys(args)
-    args_ij  = (; zip(k, v)..., dt = args.dt, τII_old=0.0)
+    args_ij  = local_viscosity_args(args, i, j, k)
 
     # cache strain rate and stress 
     εij_p    = εII_0 + εxx[i, j], -εII_0 + εyy[i, j], gather(εxyv)
@@ -19,8 +23,43 @@
 
     # update stress and effective viscosity
     _, _, ηi = compute_τij(rheology, εij_p, args_ij, τij_p_o, phases)
-    ηi       = exp((1-ν)*log(η[i, j]) + ν*log(ηi))
+    ηi       = continuation_log(ηi, η[i, j], ν) 
     η[i, j]  = clamp(ηi, 1e16, 1e24)
+    
+    return nothing
+end
+
+#3D kernel
+@parallel_indices (i, j, k) function compute_viscosity!(η, ν, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology)
+
+   # convinience closures
+    @inline gather_yz(A) = _gather_yz(A, i, j, k)
+    @inline gather_xz(A) = _gather_xz(A, i, j, k)
+    @inline gather_xy(A) = _gather_xy(A, i, j, k)
+   
+    # we nee strain rate not to be zero, otherwise we get NaNs
+    εII_0 = (εxx[i, j, k] == εyy[i, j, k] == εzz[i, j, k] == 0) * 1e-18 
+
+    # # argument fields at local index
+    args_ijk = local_viscosity_args(args, i, j, k)
+
+    # cache strain rate and stress 
+    _zeros = 0.0, 0.0, 0.0, 0.0
+    _ones  = 1, 1, 1, 1
+    εij    = 
+        εII_0   + εxx[i, j, k], 
+       -εII_0/2 + εyy[i, j, k], 
+       -εII_0/2 + εzz[i, j, k], 
+        gather_yz(εyzv), 
+        gather_xz(εxzv), 
+        gather_xy(εxyv)
+    τij_o  = 0.0, 0.0, 0.0, _zeros, _zeros, _zeros
+    phases = 1  , 1  , 1  ,  _ones,  _ones,  _ones
+
+    # update stress and effective viscosity
+    _, _, ηi   = compute_τij(rheology, εij, args_ijk, τij_o, phases)
+    ηi         = continuation_log(ηi, η[i, j, k], ν) 
+    η[i, j, k] = clamp(ηi, 1e16, 1e24)
     
     return nothing
 end

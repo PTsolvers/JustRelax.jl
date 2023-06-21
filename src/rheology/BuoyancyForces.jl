@@ -4,27 +4,21 @@
 Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`.
 """
 @parallel_indices (i, j) function compute_ρg!(ρg::_T, rheology, args) where {_T<:AbstractArray{M, 2} where M<:Real}
-     # index arguments for the current cell cell center
-    T = args.T[i, j] - 273.0 
-    P = args.P[i, j]
-    args_ij =(; T, P)
-    
-    # compute ρg = density * gravity
-    @inbounds ρg[i, j] = -compute_ρg(rheology, args_ij)
-
+    _compute_ρg!(ρg, rheology, args, i, j)
     return nothing
 end
 
 @parallel_indices (i, j, k) function compute_ρg!(ρg::_T, rheology, args) where {_T<:AbstractArray{M, 3} where M<:Real}
-
-    # index arguments for the current cell cell center
-    T = args.T[i, j, k] - 273.0 
-    P = args.P[i, j, k]
-    args_ijk =(; T, P)
-
-    ρg[i, j, k] = compute_ρg(rheology, args_ijk)
-    
+    _compute_ρg!(ρg, rheology, args, i, j, k)
     return nothing
+end
+
+function _compute_ρg!(ρg, rheology, args, I::Vararg{Int, N}) where {N}
+    # index arguments for the current cell cell center
+    T = args.T[I...] - 273.0 
+    P = args.P[I...]
+    args_ijk =(; T, P)
+    ρg[I...] = compute_ρg(rheology, args_ijk)
 end
 
 """
@@ -34,26 +28,21 @@ Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object
 The `phase_ratios` are used to compute the density of the composite rheology.
 """
 @parallel_indices (i, j) function compute_ρg!(ρg::_T, phase_ratios, rheology, args) where {_T<:AbstractArray{M, 2} where M<:Real}
-
-    T = args.T[i, j] - 273.0 
-    P = args.P[i, j]
-    args_ij =(; T, P)
-
-    # compute ρg = density * gravity
-    @inbounds ρg[i, j] = -compute_ρg(rheology, args_ij, phase_ratios[i, j])
-
+    _compute_ρg!(ρg, phase_ratios, rheology, args, i, j, k)
     return nothing
 end
 
 @parallel_indices (i, j, k) function compute_ρg!(ρg::_T, phase_ratios, rheology, args) where {_T<:AbstractArray{M, 3} where M<:Real}
-
-    # index arguments for the current cell cell center
-    T = args.T[i, j, k] - 273.0 
-    P = args.P[i, j, k]
-    args_ijk =(; T, P)
-
-    ρg[i, j, k] = compute_ρg(rheology, args_ijk, phase_ratios[i, j, k])
+    _compute_ρg!(ρg, phase_ratios, rheology, args, i, j, k)
     return nothing
+end
+
+function _compute_ρg!(ρg, phase_ratios, rheology, args, I::Vararg{Int, N}) where {N}
+    # index arguments for the current cell cell center
+    T = args.T[I...] - 273.0 
+    P = args.P[I...]
+    args_ijk =(; T, P)
+    ρg[I...] = compute_ρg(rheology, args_ijk, phase_ratios[I...])
 end
 
 @inline compute_ρg(rheology::MaterialParams, args) = compute_density(rheology, args) * compute_gravity(rheology)

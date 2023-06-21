@@ -53,15 +53,36 @@ end
 @inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + ηij * _Gdt + 1.0) 
 
 # cache tensors
-function cache_tensors(τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, idx::Vararg{Integer, N}) where N
+function cache_tensors(τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, idx::Vararg{Integer, 2})
 
     @inline av_shear(A) = 0.25 * sum(_gather(A, idx...))
 
-    εij_p = ε[1][idx...], ε[2][idx...], av_shear(ε[3])
-    τij_p_o = τ_old[1][idx...], τ_old[2][idx...], av_shear(τ_old[3])
+    εij = ε[1][idx...], ε[2][idx...], av_shear(ε[3])
+    τij_o = τ_old[1][idx...], τ_old[2][idx...], av_shear(τ_old[3])
+    τij = getindex.(τ, idx...)
+
+    return τij, τij_o, εij
+             
+end
+
+function cache_tensors(τ::NTuple{6, Any}, τ_old::NTuple{6, Any}, ε::NTuple{6, Any}, idx::Vararg{Integer, 3})
+    
+    @inline av_shear(A) = 0.125 * sum(_gather(A, idx...))
+
+    Val6 = Val(6)
+    
+    # normal components of the strain rate and old-stress tensors
+    ε_normal = ntuple(i -> ε[i][idx...], Val6)
+    τ_old_normal = ntuple(i -> τ_old[i][idx...], Val6)
+    # shear components of the strain rate and old-stress tensors
+    ε_shear = ntuple(i -> av_shear(ε[i]), Val6)
+    τ_old_shear = ntuple(i -> av_shear(τ_old[3]), Val6)
+    # cache ij-th components of the tensors into a tuple in Voigt notation 
+    εij = (ε_normal..., ε_shear...)
+    τij_o = (τ_old_normal..., τ_old_shear...)
     τij = getindex.(τ, idx...)
     
-    return τij, τij_p_o, εij_p
+    return τij, τij_o, εij                
 end
 
 function compute_stress_increment_and_trial(τij::NTuple{N, T}, τij_p_o, ηij, εij_p, _Gdt, dτ_r) where {N, T}

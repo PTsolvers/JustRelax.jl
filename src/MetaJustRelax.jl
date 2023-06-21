@@ -59,11 +59,17 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export TemperatureBoundaryConditions, thermal_boundary_conditions!, thermal_bcs!
         export free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
 
-        # include(joinpath(@__DIR__, "stokes/Stokes.jl"))
-        # export stress
+        include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
+        export compute_ρg!
+        
+        include(joinpath(@__DIR__, "rheology/Viscosity.jl"))
+        export compute_viscosity!
 
         include(joinpath(@__DIR__, "stokes/Stokes2D.jl"))
+        export solve!
+
         include(joinpath(@__DIR__, "stokes/Stokes3D.jl"))
+        export solve!
 
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionExplicit.jl"))
         # include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
@@ -72,11 +78,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         include(joinpath(@__DIR__, "Interpolations.jl"))
         export vertex2center!, center2vertex!, temperature2center!
 
-        include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
-        export compute_ρg!
-        
-        include(joinpath(@__DIR__, "rheology/Viscosity.jl"))
-        export compute_viscosity!
+
         
     end
 

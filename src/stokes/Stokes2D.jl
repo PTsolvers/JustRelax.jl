@@ -47,9 +47,9 @@ using GeoParams, LinearAlgebra, Printf
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
-import JustRelax: compute_maxloc!, solve!, compute_ρg!, compute_viscosity
+import JustRelax: compute_maxloc!, solve!
 
-export solve!, compute_ρg!
+export solve!
 
 include("StressRotation.jl")
 
@@ -312,7 +312,6 @@ end
     return nothing
 end
 
-
 # single phase visco-elasto-plastic flow
 @parallel_indices (i, j) function compute_τ_nonlinear!(
     τxx,
@@ -390,8 +389,8 @@ end
     idx = i, j
 
     # numerics
-    ηij = η[i, j]
-    phase = phase_center[i, j]
+    ηij = @inbounds η[i, j]
+    phase = @inbounds phase_center[i, j]
     _Gdt = inv(get_G(rheology, phase) * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt) 
 

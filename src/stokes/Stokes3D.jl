@@ -321,16 +321,16 @@ end
     τyz, τxz, τxy, τyz_o, τxz_o, τxy_o, εyz, εxz, εxy, η, G, dt, θ_dτ
 )
     #! format: off
-    Base.@propagate_inbounds @inline function av_xy(x)
+    @inline Base.@propagate_inbounds function av_xy(x)
         0.25 * (x[i - 1, j - 1, k] + x[i - 1, j, k] + x[i, j - 1, k] + x[i, j, k])
     end
-    Base.@propagate_inbounds @inline function av_xz(x)
+    @inline Base.@propagate_inbounds function av_xz(x)
         0.25 * (x[i, j, k] + x[i - 1, j, k] + x[i, j, k - 1] + x[i - 1, j, k - 1])
     end
-    Base.@propagate_inbounds @inline function av_yz(x)
+    @inline Base.@propagate_inbounds function av_yz(x)
         0.25 * (x[i, j, k] + x[i, j - 1, k] + x[i, j, k - 1] + x[i, j - 1, k - 1])
     end
-    Base.@propagate_inbounds @inline current(x) = x[i, j, k]
+    @inline Base.@propagate_inbounds current(x) = x[i, j, k]
     #! format: on
 
     @inbounds begin
@@ -847,18 +847,20 @@ function JustRelax.solve!(
                 _di...,
             )
              
-            # Update buoyancy
-            @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
+            # # Update buoyancy
+            # @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
          
             ν = 1e-3
             @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, tupleize(rheology))
-            # @hide_communication b_width begin # communication/computation overlap
-                compute_maxloc!(ητ, η)
-                update_halo!(ητ)
-            end
-            # @parallel (1:ny, 1:nz) free_slip_x!(ητ)
-            # @parallel (1:nx, 1:nz) free_slip_y!(ητ)
-            # @parallel (1:nx, 1:ny) free_slip_z!(ητ)
+            compute_maxloc!(ητ, η)
+            update_halo!(ητ)
+            # # @hide_communication b_width begin # communication/computation overlap
+                # compute_maxloc!(ητ, η)
+                # update_halo!(ητ)
+            # # end
+            # # @parallel (1:ny, 1:nz) free_slip_x!(ητ)
+            # # @parallel (1:nx, 1:nz) free_slip_y!(ητ)
+            # # @parallel (1:nx, 1:ny) free_slip_z!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ)...,

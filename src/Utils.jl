@@ -1,119 +1,3 @@
-
-"""
-    @idx(args...)
-
-Make a linear range from `1` to `args[i]`, with `i ∈ [1, ..., n]`
-"""
-macro idx(args...)
-    return quote
-        _idx(tuple($(esc.(args)...))...)
-    end
-end
-
-@inline Base.@pure _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
-@inline Base.@pure _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
-
-"""
-    maxloc!(B, A; window)
-
-Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` and store the result in `B`.
-"""
-function compute_maxloc!(B, A; window = (1, 1, 1))
-    ni = size(A)
-    width_x, width_y, width_z = window
-
-    @parallel_indices (i, j) function _maxloc!(B::T, A::T) where T<:AbstractArray{<:Number, 2}
-        B[i, j] = _maxloc_window_clamped(A, i, j, width_x, width_y)
-        return
-    end
-    
-    @parallel_indices (i, j, k) function _maxloc!(B::T, A::T) where T<:AbstractArray{<:Number, 3}
-        B[i, j, k] = _maxloc_window_clamped(A, i, j, k, width_x, width_y, width_z)
-        return
-    end
-
-    @parallel (@idx ni) _maxloc!(B, A)
-end
-
-@inline function _maxloc_window_clamped(A, I, J, width_x, width_y) 
-    nx, ny = size(A)
-    I_range = (I - width_x):(I + width_x)
-    J_range = (J - width_y):(J + width_y)
-    x = -Inf
-    for i in I_range
-        ii = clamp(i, 1, nx)
-        for j in J_range
-            jj = clamp(j, 1, ny)
-            Aij = A[ii, jj]
-            if Aij > x
-                x = Aij
-            end
-        end
-    end
-    return x
-end
-
-@inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
-    nx, ny, nz = size(A)
-    I_range = (I - width_x):(I + width_x)
-    J_range = (J - width_y):(J + width_y)
-    K_range = (K - width_z):(K + width_z)
-    x = -Inf
-    for i in I_range
-        ii = clamp(i, 1, nx)
-        for j in J_range
-            jj = clamp(j, 1, ny)
-            for k in K_range
-                kk = clamp(k, 1, nz)
-                Aijk = A[ii, jj, kk]
-                if Aijk > x
-                    x = Aijk
-                end
-            end
-        end
-    end
-    return x
-end
-
-# unpacks fields of the struct x into a tuple
-@generated function unpack(x::T) where T
-    return quote
-        Base.@_inline_meta
-        tuple(_unpack(x, fieldnames($T))...)
-    end
-end
-_unpack(a, fields) = (getfield(a, fi) for fi in fields)
-
-macro unpack(x)
-    return quote
-        unpack($(esc(x)))
-    end
-end
-
-@inline compute_dt(S::StokesArrays, di) = compute_dt(S.V, di, Inf)
-@inline compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(S.V, di, dt_diff)
-
-@inline function compute_dt(V::Velocity, di, dt_diff)
-    return compute_dt(unpack(V), di, dt_diff)
-end
-
-@inline function compute_dt(V, di, dt_diff)
-    n = inv(length(V) + 0.1)
-    dt_adv =
-        mapreduce(x->x[1]/maximum(y->abs(y), x[2]), max, zip(di, V)) * n
-    return min(dt_diff, dt_adv)
-end
-
-@inline tupleize(v) = (v,)
-@inline tupleize(v::Tuple) = v
-
-"""
-    continuation_log(x_new, x_old, ν
-
-Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
-"""
-@inline continuation_log(x_new, x_old, ν) = exp((1-ν)*log(x_old) + ν*log(x_new))
-
 # MACROS
 
 """
@@ -288,6 +172,131 @@ end
 macro allocate(ni...)
     return esc(:(PTArray(undef, $(ni...))))
 end
+
+"""
+    @idx(args...)
+
+Make a linear range from `1` to `args[i]`, with `i ∈ [1, ..., n]`
+"""
+macro idx(args...)
+    return quote
+        _idx(tuple($(esc.(args)...))...)
+    end
+end
+
+@inline Base.@pure _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
+@inline Base.@pure _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
+
+"""
+    maxloc!(B, A; window)
+
+Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` and store the result in `B`.
+"""
+function compute_maxloc!(B, A; window = (1, 1, 1))
+    ni = size(A)
+    width_x, width_y, width_z = window
+
+    @parallel_indices (i, j) function _maxloc!(B::T, A::T) where T<:AbstractArray{<:Number, 2}
+        B[i, j] = _maxloc_window_clamped(A, i, j, width_x, width_y)
+        return
+    end
+    
+    @parallel_indices (i, j, k) function _maxloc!(B::T, A::T) where T<:AbstractArray{<:Number, 3}
+        B[i, j, k] = _maxloc_window_clamped(A, i, j, k, width_x, width_y, width_z)
+        return
+    end
+
+    @parallel (@idx ni) _maxloc!(B, A)
+end
+
+@inline function _maxloc_window_clamped(A, I, J, width_x, width_y) 
+    nx, ny = size(A)
+    I_range = (I - width_x):(I + width_x)
+    J_range = (J - width_y):(J + width_y)
+    x = -Inf
+    for i in I_range
+        ii = clamp(i, 1, nx)
+        for j in J_range
+            jj = clamp(j, 1, ny)
+            Aij = A[ii, jj]
+            if Aij > x
+                x = Aij
+            end
+        end
+    end
+    return x
+end
+
+@inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
+    nx, ny, nz = size(A)
+    I_range = (I - width_x):(I + width_x)
+    J_range = (J - width_y):(J + width_y)
+    K_range = (K - width_z):(K + width_z)
+    x = -Inf
+    for i in I_range
+        ii = clamp(i, 1, nx)
+        for j in J_range
+            jj = clamp(j, 1, ny)
+            for k in K_range
+                kk = clamp(k, 1, nz)
+                Aijk = A[ii, jj, kk]
+                if Aijk > x
+                    x = Aijk
+                end
+            end
+        end
+    end
+    return x
+end
+
+# unpacks fields of the struct x into a tuple
+@generated function unpack(x::T) where T
+    return quote
+        Base.@_inline_meta
+        tuple(_unpack(x, fieldnames($T))...)
+    end
+end
+_unpack(a, fields) = (getfield(a, fi) for fi in fields)
+
+macro unpack(x)
+    return quote
+        unpack($(esc(x)))
+    end
+end
+
+"""
+    compute_dt(S::StokesArrays, di)
+
+Compute the time step `dt` for the velocity field `S.V` for a regular gridwith grid spacing `di`.
+"""
+@inline compute_dt(S::StokesArrays, di) = compute_dt(@velocity(S), di, Inf)
+
+"""
+    compute_dt(S::StokesArrays, di, dt_diff)
+
+Compute the time step `dt` for the velocity field `S.V` and the diffusive maximum time step 
+`dt_diff` for a regular gridwith grid spacing `di`.
+"""
+@inline compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(@velocity(S), di, dt_diff)
+
+@inline function compute_dt(V::NTuple, di, dt_diff)
+    n = inv(length(V) + 0.1)
+    dt_adv =
+        mapreduce(x -> x[1] * inv(maximum(abs.(x[2]))), max, zip(di, V)) * n
+    return min(dt_diff, dt_adv)
+end
+
+@inline tupleize(v) = (v,)
+@inline tupleize(v::Tuple) = v
+
+"""
+    continuation_log(x_new, x_old, ν
+
+Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
+"""
+@inline continuation_log(x_new, x_old, ν) = exp((1-ν)*log(x_old) + ν*log(x_new))
+
+
 
 # Others
 

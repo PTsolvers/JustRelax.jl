@@ -665,7 +665,6 @@ end
 
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
-    thermal::ThermalArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{2,T},
     flow_bcs,
@@ -695,7 +694,6 @@ function JustRelax.solve!(
     # end
 
     Kb = get_Kb(rheology)
-    @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
 
     # errors
     err = 2 * ϵ

@@ -71,16 +71,18 @@ function cache_tensors(τ::NTuple{6, Any}, τ_old::NTuple{6, Any}, ε::NTuple{6,
     @inline av_xz(A) = 0.125 * sum(_gather_xz(A, idx...))
     @inline av_xy(A) = 0.125 * sum(_gather_xy(A, idx...))
 
-    fn_av = (av_yz, av_xz, av_xy)
+    # fn_av = (av_yz, av_xz, av_xy)
 
     Val3 = Val(3)
     
     # normal components of the strain rate and old-stress tensors
-    ε_normal = ntuple(i -> ε[i][idx...], Val3)
+    ε_normal     = ntuple(i -> ε[i][idx...], Val3)
     τ_old_normal = ntuple(i -> τ_old[i][idx...], Val3)
     # shear components of the strain rate and old-stress tensors
-    ε_shear = ntuple(i -> fn_av[i](ε[i+3]), Val3)
-    τ_old_shear = ntuple(i -> fn_av[i](τ_old[i+3]), Val3)
+    # ε_shear = ntuple(i -> fn_av[i](ε[i+3], idx...), Val3)
+    # τ_old_shear = ntuple(i -> fn_av[i](τ_old[i+3], idx...), Val3)
+    ε_shear     = av_yz(ε[4])    , av_xz(ε[5])    , av_xy(ε[6])
+    τ_old_shear = av_yz(τ_old[4]), av_xz(τ_old[5]), av_xy(τ_old[6])
     # cache ij-th components of the tensors into a tuple in Voigt notation 
     εij = (ε_normal..., ε_shear...)
     τij_o = (τ_old_normal..., τ_old_shear...)

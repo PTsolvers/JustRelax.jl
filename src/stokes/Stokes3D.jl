@@ -165,15 +165,16 @@ end
     _dz,
 )
     #! format: off
-    Base.@propagate_inbounds @inline harm_x(x) = _harm_x(x, i, j, k)
-    Base.@propagate_inbounds @inline harm_y(x) = _harm_y(x, i, j, k)
-    Base.@propagate_inbounds @inline harm_z(x) = _harm_z(x, i, j, k)
-    Base.@propagate_inbounds @inline av_x(x)   = _av_x(x, i, j, k)
-    Base.@propagate_inbounds @inline av_y(x)   = _av_y(x, i, j, k)
-    Base.@propagate_inbounds @inline av_z(x)   = _av_z(x, i, j, k)
+    Base.@propagate_inbounds @inline harm_x(x) = 2.0 / (1.0 / x[i + 1, j, k] + 1.0 / x[i, j, k])
+    Base.@propagate_inbounds @inline harm_y(x) = 2.0 / (1.0 / x[i, j + 1, k] + 1.0 / x[i, j, k])
+    Base.@propagate_inbounds @inline harm_z(x) = 2.0 / (1.0 / x[i, j, k + 1] + 1.0 / x[i, j, k])
+    Base.@propagate_inbounds @inline av_x(x)   = 0.5 * (x[i + 1, j, k] + x[i, j, k])
+    Base.@propagate_inbounds @inline av_y(x)   = 0.5 * (x[i, j + 1, k] + x[i, j, k])
+    Base.@propagate_inbounds @inline av_z(x)   = 0.5 * (x[i, j, k + 1] + x[i, j, k])
     Base.@propagate_inbounds @inline dx(x)     = x[i + 1, j, k] - x[i, j, k]
     Base.@propagate_inbounds @inline dy(x)     = x[i, j + 1, k] - x[i, j, k]
     Base.@propagate_inbounds @inline dz(x)     = x[i, j, k + 1] - x[i, j, k]
+    
     #! format: on
 
     @inbounds begin
@@ -231,13 +232,40 @@ end
     θ_dτ,
 )
     #! format: off
-    @inline harm_xy(x) = _harm_xy(x, i, j, k)
-    @inline harm_xz(x) = _harm_xz(x, i, j, k)
-    @inline harm_yz(x) = _harm_yz(x, i, j, k)
-    @inline av_xy(x)   = _av_xy(x, i, j, k)
-    @inline av_xz(x)   = _av_xz(x, i, j, k)
-    @inline av_yz(x)   = _av_yz(x, i, j, k)
-    @inline current(x) = _current(x, i, j, k)
+    Base.@propagate_inbounds @inline function harm_xy(x)
+        4.0 / (
+            1.0 / x[i - 1, j - 1, k] +
+            1.0 / x[i - 1, j, k] +
+            1.0 / x[i, j - 1, k] +
+            1.0 / x[i, j, k]
+        )
+    end
+    Base.@propagate_inbounds @inline function harm_xz(x)
+        4.0 / (
+            1.0 / x[i, j, k] +
+            1.0 / x[i - 1, j, k] +
+            1.0 / x[i, j, k - 1] +
+            1.0 / x[i - 1, j, k - 1]
+        )
+    end
+    Base.@propagate_inbounds @inline function harm_yz(x)
+        4.0 / (
+            1.0 / x[i, j, k] +
+            1.0 / x[i, j - 1, k] +
+            1.0 / x[i, j, k - 1] +
+            1.0 / x[i, j - 1, k - 1]
+        )
+    end
+    Base.@propagate_inbounds @inline function av_xy(x)
+        0.25 * (x[i - 1, j - 1, k] + x[i - 1, j, k] + x[i, j - 1, k] + x[i, j, k])
+    end
+    Base.@propagate_inbounds @inline function av_xz(x)
+        0.25 * (x[i, j, k] + x[i - 1, j, k] + x[i, j, k - 1] + x[i - 1, j, k - 1])
+    end
+    Base.@propagate_inbounds @inline function av_yz(x)
+        0.25 * (x[i, j, k] + x[i, j - 1, k] + x[i, j, k - 1] + x[i, j - 1, k - 1])
+    end
+    Base.@propagate_inbounds @inline current(x) = x[i, j, k]
     #! format: om
 
     @inbounds begin
@@ -293,10 +321,16 @@ end
     τyz, τxz, τxy, τyz_o, τxz_o, τxy_o, εyz, εxz, εxy, η, G, dt, θ_dτ
 )
     #! format: off
-    @inline av_xy(x)   = _av_xy(x, i, j, k)
-    @inline av_xz(x)   = _av_xz(x, i, j, k)
-    @inline av_yz(x)   = _av_yz(x, i, j, k)
-    @inline current(x) = _current(x, i, j, k)
+    Base.@propagate_inbounds @inline function av_xy(x)
+        0.25 * (x[i - 1, j - 1, k] + x[i - 1, j, k] + x[i, j - 1, k] + x[i, j, k])
+    end
+    Base.@propagate_inbounds @inline function av_xz(x)
+        0.25 * (x[i, j, k] + x[i - 1, j, k] + x[i, j, k - 1] + x[i - 1, j, k - 1])
+    end
+    Base.@propagate_inbounds @inline function av_yz(x)
+        0.25 * (x[i, j, k] + x[i, j - 1, k] + x[i, j, k - 1] + x[i, j - 1, k - 1])
+    end
+    Base.@propagate_inbounds @inline current(x) = x[i, j, k]
     #! format: on
 
     @inbounds begin
@@ -821,8 +855,7 @@ function JustRelax.solve!(
             # @hide_communication b_width begin # communication/computation overlap
                 compute_maxloc!(ητ, η)
                 update_halo!(ητ)
-            # end
-
+            end
             # @parallel (1:ny, 1:nz) free_slip_x!(ητ)
             # @parallel (1:nx, 1:nz) free_slip_y!(ητ)
             # @parallel (1:nx, 1:ny) free_slip_z!(ητ)

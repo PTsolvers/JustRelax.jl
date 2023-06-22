@@ -296,6 +296,7 @@ function JustRelax.solve!(
     thermal_boundary_conditions!(thermal_bc, thermal.T)
 
     @. thermal.ΔT = thermal.T - thermal.Told
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
 end
@@ -332,6 +333,7 @@ function JustRelax.solve!(
     # thermal_boundary_conditions!(thermal_bc, thermal.T)
 
     @. thermal.ΔT = thermal.T - thermal.Told
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
 end
@@ -364,6 +366,7 @@ function JustRelax.solve!(
     # thermal_boundary_conditions!(thermal_bc, thermal.T)
 
     @. thermal.ΔT = thermal.T - thermal.Told
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
 end
@@ -401,6 +404,7 @@ function JustRelax.solve!(
     thermal_bcs!(thermal.T, thermal_bc)
 
     @. thermal.ΔT = thermal.T - thermal.Told
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
 end
@@ -439,6 +443,7 @@ function JustRelax.solve!(
     thermal_bcs!(thermal.T, thermal_bc)
 
     @. thermal.ΔT = thermal.T - thermal.Told
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
 end
@@ -644,6 +649,7 @@ function JustRelax.solve!(
         update_halo!(thermal.T)
     end
     thermal_bcs!(thermal.T, thermal_bc)
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
 end
@@ -685,6 +691,7 @@ function JustRelax.solve!(
     end
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_bcs!(thermal.T, thermal_bc)
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
 end
@@ -722,6 +729,7 @@ function JustRelax.solve!(
     # apply boundary conditions
     thermal_bcs!(thermal.T, thermal_bc)
     @. thermal.ΔT = thermal.T - thermal.Told
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
 end
@@ -771,7 +779,8 @@ function JustRelax.solve!(
     end
     thermal_bcs!(thermal.T, thermal_bc)
 
-    # @. thermal.ΔT = thermal.T - thermal.Told
+    @. thermal.ΔT = thermal.T - thermal.Told
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
 end
@@ -822,7 +831,8 @@ function JustRelax.solve!(
     end
     thermal_bcs!(thermal.T, thermal_bc)
 
-    # @. thermal.ΔT = thermal.T - thermal.Told
+    @. thermal.ΔT = thermal.T - thermal.Told
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
 end

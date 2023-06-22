@@ -13,7 +13,7 @@ export save_hdf5, checkpointing, metadata
 
 include("VTK.jl")
 
-export save_vtk
+export VTKDataSeries, append!, save_vtk
 
 export metadata
 

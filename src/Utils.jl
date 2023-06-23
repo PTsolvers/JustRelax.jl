@@ -87,7 +87,9 @@ macro tensor(A)
     end
 end
 
-@inline unpack_tensor_stag(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy
+@inline function unpack_tensor_stag(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T}
+    return A.xx, A.yy, A.xy
+end
 @inline function unpack_tensor_stag(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
     return A.xx, A.yy, A.zz, A.yz, A.xz, A.xy
 end
@@ -104,8 +106,14 @@ macro shear(A)
     end
 end
 
-@inline unpack_shear_components_stag(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xy
-@inline function unpack_shear_components_stag(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+@inline function unpack_shear_components_stag(
+    A::SymmetricTensor{<:AbstractArray{T,2}}
+) where {T}
+    return A.xy
+end
+@inline function unpack_shear_components_stag(
+    A::SymmetricTensor{<:AbstractArray{T,3}}
+) where {T}
     return A.yz, A.xz, A.xy
 end
 
@@ -121,9 +129,13 @@ macro normal(A)
     end
 end
 
-@inline unpack_normal_components_stag(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy
-@inline function unpack_normal_components_stag(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
-    return A.xx, A.yy, A.zz
+@generated function unpack_normal_components_stag(A::SymmetricTensor{<:AbstractArray{T, N}}) where {T, N}
+    syms = (:xx ,:yy, :zz)
+    quote
+        Base.@_inline_meta
+        Base.@nexprs $N i -> f_i = getfield(A, $syms[i])
+        Base.@ncall $N tuple f
+    end
 end
 
 """
@@ -162,7 +174,9 @@ macro tensor_center(A)
     end
 end
 
-@inline unpack_tensor_center(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy_c
+@inline function unpack_tensor_center(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T}
+    return A.xx, A.yy, A.xy_c
+end
 @inline function unpack_tensor_center(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
 end
@@ -192,24 +206,28 @@ end
 
 Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` and store the result in `B`.
 """
-function compute_maxloc!(B, A; window = (1, 1, 1))
+function compute_maxloc!(B, A; window=(1, 1, 1))
     ni = size(A)
     width_x, width_y, width_z = window
 
-    @parallel_indices (i, j) function _maxloc!(B::T, A::T) where T<:AbstractArray{<:Number, 2}
+    @parallel_indices (i, j) function _maxloc!(
+        B::T, A::T
+    ) where {T<:AbstractArray{<:Number,2}}
         B[i, j] = _maxloc_window_clamped(A, i, j, width_x, width_y)
-        return
+        return nothing
     end
-    
-    @parallel_indices (i, j, k) function _maxloc!(B::T, A::T) where T<:AbstractArray{<:Number, 3}
+
+    @parallel_indices (i, j, k) function _maxloc!(
+        B::T, A::T
+    ) where {T<:AbstractArray{<:Number,3}}
         B[i, j, k] = _maxloc_window_clamped(A, i, j, k, width_x, width_y, width_z)
-        return
+        return nothing
     end
 
     @parallel (@idx ni) _maxloc!(B, A)
 end
 
-@inline function _maxloc_window_clamped(A, I, J, width_x, width_y) 
+@inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
     nx, ny = size(A)
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)
@@ -250,7 +268,7 @@ end
 end
 
 # unpacks fields of the struct x into a tuple
-@generated function unpack(x::T) where T
+@generated function unpack(x::T) where {T}
     return quote
         Base.@_inline_meta
         tuple(_unpack(x, fieldnames($T))...)
@@ -281,8 +299,7 @@ Compute the time step `dt` for the velocity field `S.V` and the diffusive maximu
 
 @inline function compute_dt(V::NTuple, di, dt_diff)
     n = inv(length(V) + 0.1)
-    dt_adv =
-        mapreduce(x -> x[1] * inv(maximum(abs.(x[2]))), max, zip(di, V)) * n
+    dt_adv = mapreduce(x -> x[1] * inv(maximum(abs.(x[2]))), max, zip(di, V)) * n
     return min(dt_diff, dt_adv)
 end
 
@@ -294,9 +311,7 @@ end
 
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """
-@inline continuation_log(x_new, x_old, ν) = exp((1-ν)*log(x_old) + ν*log(x_new))
-
-
+@inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
 
 # Others
 

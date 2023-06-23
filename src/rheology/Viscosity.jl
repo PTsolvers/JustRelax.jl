@@ -15,7 +15,7 @@ end
         εII_0 = (εxx[i, j] == εyy[i, j] == 0) * 1e-15
 
         # argument fields at local index
-        args_ij = local_viscosity_args(args, i, j, k)
+        args_ij = local_viscosity_args(args, i, j)
 
         # cache strain rate and stress 
         εij_p = εII_0 + εxx[i, j], -εII_0 + εyy[i, j], gather(εxyv)

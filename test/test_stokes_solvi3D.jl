@@ -31,7 +31,7 @@ function check_convergence_case1()
         lz=lz,
         rc=rc,
         εbg=εbg,
-        init_MPI=true,
+        init_MPI=JustRelax.MPI.Initialized() ? false : true,
         finalize_MPI=false,
     )
 

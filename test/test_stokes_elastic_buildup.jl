@@ -6,7 +6,7 @@ using JustRelax
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
-include("../miniapps/benchmarks/stokes/elastic_buildup/Elastic_BuildUp.jl")
+include("../miniapps/benchmarks/stokes2D/elastic_buildup/Elastic_BuildUp.jl")
 
 function check_convergence_case1()
     # model specific parameters
@@ -17,6 +17,7 @@ function check_convergence_case1()
     εbg = 1e-14 # background strain rate (pure shear boundary conditions)
     G = 10e9 # shear modulus
     # run model
+    init_mpi = JustRelax.MPI.Initialized() ? false : true
     _, _, av_τyy, sol_τyy, t, = elastic_buildup(;
         nx=nx,
         ny=ny,
@@ -26,7 +27,7 @@ function check_convergence_case1()
         η0=η0,
         εbg=εbg,
         G=G,
-        init_MPI=true,
+        init_MPI=init_mpi,
         finalize_MPI=false,
     )
 

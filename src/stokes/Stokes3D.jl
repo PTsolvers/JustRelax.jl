@@ -1,9 +1,3 @@
-## UTILS
-
-function stress(stokes::StokesArrays{ViscoElastic,A,B,C,D,nDim}) where {A,B,C,D,nDim}
-    return stress(stokes.τ), stress(stokes.τ_o)
-end
-
 ## DIMENSION AGNOSTIC ELASTIC KERNELS
 
 @parallel function elastic_iter_params!(
@@ -92,13 +86,13 @@ end
     @inbounds begin
         # normal components are all located @ cell centers
         if all((i, j, k) .≤ size(εxx))
-            ∇Vᵢⱼₖ = ∇V[i, j, k] / 3.0
+            ∇Vijk = ∇V[i, j, k] * inv(3)
             # Compute ε_xx
-            εxx[i, j, k] = _dx * (Vx[i + 1, j + 1, k + 1] - Vx[i, j + 1, k + 1]) - ∇Vᵢⱼₖ
+            εxx[i, j, k] = _dx * (Vx[i + 1, j + 1, k + 1] - Vx[i, j + 1, k + 1]) - ∇Vijk
             # Compute ε_yy
-            εyy[i, j, k] = _dy * (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j, k + 1]) - ∇Vᵢⱼₖ
+            εyy[i, j, k] = _dy * (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j, k + 1]) - ∇Vijk
             # Compute ε_zz
-            εzz[i, j, k] = _dz * (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k]) - ∇Vᵢⱼₖ
+            εzz[i, j, k] = _dz * (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k]) - ∇Vijk
         end
         # Compute ε_yz
         if all((i, j, k) .≤ size(εyz))
@@ -130,14 +124,14 @@ end
 
 @parallel function compute_P!(P, P_old, RP, ∇V, η, K, dt, r, θ_dτ)
     @all(RP) = -@all(∇V) - (@all(P) - @all(P_old)) / (@all(K) * dt)
-    @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (@all(K) * dt))
+    @all(P) = @all(P) + @all(RP) * inv(inv(r * inv(θ_dτ) * @all(η)) + inv(@all(K) * dt))
     return nothing
 end
 
 ## Compressible - GeoParams
 @parallel function compute_P!(P, P_old, RP, ∇V, η, K::Number, dt, r, θ_dτ)
     @all(RP) = -@all(∇V) - (@all(P) - @all(P_old)) / (K * dt)
-    @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (K * dt))
+    @all(P) = @all(P) + @all(RP) * inv(inv(r * inv(θ_dτ) * @all(η)) + inv(K * dt))
     return nothing
 end
 
@@ -165,9 +159,9 @@ end
     _dz,
 )
     #! format: off
-    Base.@propagate_inbounds @inline harm_x(x) = 2.0 / (1.0 / x[i + 1, j, k] + 1.0 / x[i, j, k])
-    Base.@propagate_inbounds @inline harm_y(x) = 2.0 / (1.0 / x[i, j + 1, k] + 1.0 / x[i, j, k])
-    Base.@propagate_inbounds @inline harm_z(x) = 2.0 / (1.0 / x[i, j, k + 1] + 1.0 / x[i, j, k])
+    Base.@propagate_inbounds @inline harm_x(x) = 2.0 * inv(inv(x[i + 1, j, k]) + inv(x[i, j, k]))
+    Base.@propagate_inbounds @inline harm_y(x) = 2.0 * inv(inv(x[i, j + 1, k]) + inv(x[i, j, k]))
+    Base.@propagate_inbounds @inline harm_z(x) = 2.0 * inv(inv(x[i, j, k + 1]) + inv(x[i, j, k]))
     Base.@propagate_inbounds @inline av_x(x)   = 0.5 * (x[i + 1, j, k] + x[i, j, k])
     Base.@propagate_inbounds @inline av_y(x)   = 0.5 * (x[i, j + 1, k] + x[i, j, k])
     Base.@propagate_inbounds @inline av_z(x)   = 0.5 * (x[i, j, k + 1] + x[i, j, k])
@@ -233,27 +227,27 @@ end
 )
     #! format: off
     Base.@propagate_inbounds @inline function harm_xy(x)
-        4.0 / (
-            1.0 / x[i - 1, j - 1, k] +
-            1.0 / x[i - 1, j, k] +
-            1.0 / x[i, j - 1, k] +
-            1.0 / x[i, j, k]
+        4.0 * inv(
+            inv(x[i - 1, j - 1, k]) +
+            inv(x[i - 1, j, k]) +
+            inv(x[i, j - 1, k]) +
+            inv(x[i, j, k])
         )
     end
     Base.@propagate_inbounds @inline function harm_xz(x)
-        4.0 / (
-            1.0 / x[i, j, k] +
-            1.0 / x[i - 1, j, k] +
-            1.0 / x[i, j, k - 1] +
-            1.0 / x[i - 1, j, k - 1]
+        4.0 * inv(
+            inv(x[i, j, k]) +
+            inv(x[i - 1, j, k]) +
+            inv(x[i, j, k - 1]) +
+            inv(x[i - 1, j, k - 1])
         )
     end
     Base.@propagate_inbounds @inline function harm_yz(x)
-        4.0 / (
-            1.0 / x[i, j, k] +
-            1.0 / x[i, j - 1, k] +
-            1.0 / x[i, j, k - 1] +
-            1.0 / x[i, j - 1, k - 1]
+        4.0 * inv(
+            inv(x[i, j, k]) +
+            inv(x[i, j - 1, k]) +
+            inv(x[i, j, k - 1]) +
+            inv(x[i, j - 1, k - 1])
         )
     end
     Base.@propagate_inbounds @inline function av_xy(x)
@@ -270,24 +264,25 @@ end
 
     @inbounds begin
         if all((i, j, k) .≤ size(τxx))
+            _Gdt = inv(current(G) * dt)
             # Compute τ_xx
             τxx[i, j, k] +=
                 (
                     -(current(τxx) - current(τxx_o)) * current(η) / (current(G) * dt) -
                     current(τxx) + 2.0 * current(η) * current(εxx)
-                ) / (θ_dτ + current(η) / (current(G) * dt) + 1.0)
+                ) / (θ_dτ + current(η) * _Gdt + 1.0)
             # Compute τ_yy
             τyy[i, j, k] +=
                 (
                     -(current(τyy) - current(τyy_o)) * current(η) / (current(G) * dt) -
                     current(τyy) + 2.0 * current(η) * current(εyy)
-                ) / (θ_dτ + current(η) / (current(G) * dt) + 1.0)
+                ) / (θ_dτ + current(η) * _Gdt + 1.0)
             # Compute τ_zz
             τzz[i, j, k] +=
                 (
                     -(current(τzz) - current(τzz_o)) * current(η) / (current(G) * dt) -
                     current(τzz) + 2.0 * current(η) * current(εzz)
-                ) / (θ_dτ + current(η) / (current(G) * dt) + 1.0)
+                ) / (θ_dτ + current(η) * _Gdt + 1.0)
         end
         # Compute τ_xy
         if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
@@ -333,30 +328,31 @@ end
     @inline Base.@propagate_inbounds current(x) = x[i, j, k]
     #! format: on
 
+    _Gdt = inv(G * dt)
     @inbounds begin
         # Compute τ_xy
         if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
             τxy[i, j, k] +=
                 (
-                    -(current(τxy) - current(τxy_o)) * av_xy(η) / (G * dt) - current(τxy) +
+                    -(current(τxy) - current(τxy_o)) * av_xy(η) * _Gdt - current(τxy) +
                     2.0 * av_xy(η) * current(εxy)
-                ) / (θ_dτ + av_xy(η) / (G * dt) + 1.0)
+                ) * inv(θ_dτ + av_xy(η) * _Gdt + 1.0)
         end
         # Compute τ_xz
         if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
             τxz[i, j, k] +=
                 (
-                    -(current(τxz) - current(τxz_o)) * av_xz(η) / (G * dt) - current(τxz) +
+                    -(current(τxz) - current(τxz_o)) * av_xz(η) * _Gdt - current(τxz) +
                     2.0 * av_xz(η) * current(εxz)
-                ) / (θ_dτ + av_xz(η) / (G * dt) + 1.0)
+                ) * inv(θ_dτ + av_xz(η) * _Gdt + 1.0)
         end
         # Compute τ_yz
         if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
             τyz[i, j, k] +=
                 (
-                    -(current(τyz) - current(τyz_o)) * av_yz(η) / (G * dt) - current(τyz) +
+                    -(current(τyz) - current(τyz_o)) * av_yz(η) * _Gdt - current(τyz) +
                     2.0 * av_yz(η) * current(εyz)
-                ) / (θ_dτ + av_yz(η) / (G * dt) + 1.0)
+                ) * inv(θ_dτ + av_yz(η) * _Gdt + 1.0)
         end
     end
     return nothing
@@ -789,8 +785,6 @@ function JustRelax.solve!(
     verbose=true,
 ) where {A,B,C,D,T}
 
-    ## UNPACK
-
     # solver related
     ϵ = pt_stokes.ϵ
     # geometry
@@ -822,6 +816,7 @@ function JustRelax.solve!(
     G = get_G(rheology)
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
+
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -847,20 +842,13 @@ function JustRelax.solve!(
                 _di...,
             )
              
-            # # Update buoyancy
-            # @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
+            # Update buoyancy
+            @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
          
             ν = 1e-3
             @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, tupleize(rheology))
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
-            # # @hide_communication b_width begin # communication/computation overlap
-                # compute_maxloc!(ητ, η)
-                # update_halo!(ητ)
-            # # end
-            # # @parallel (1:ny, 1:nz) free_slip_x!(ητ)
-            # # @parallel (1:nx, 1:nz) free_slip_y!(ητ)
-            # # @parallel (1:nx, 1:ny) free_slip_z!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ)...,

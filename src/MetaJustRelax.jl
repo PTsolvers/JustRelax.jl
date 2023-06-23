@@ -18,7 +18,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         eval(:(@init_parallel_stencil(CUDA, $T, $N)))
         Base.eval(Main, Meta.parse("using CUDA"))
         if !isconst(Main, :PTArray)
-            eval(:(const PTArray = CUDA.CuArray{$T,$N}))
+            eval(:(const PTArray = CUDA.CuArray{$T, $N, CUDA.Mem.DeviceBuffer}))
         end
     else
         @eval begin

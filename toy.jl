@@ -1,25 +1,55 @@
-_f(x::Int) = x^1.2
-_f(x::Float64) = x^2.1
-
-function f1(x...)
-    sum(_f(xi) for xi in x)
+struct Foo2{T}
+    xx::T
+    yy::T
+    xy::T
 end
 
-function f2(x::Vararg{Any, N}) where N
-    sum(_f(xi) for xi in x)
+struct Foo3{T}
+    xx::T
+    yy::T
+    zz::T
+    yz::T
+    xz::T
+    xy::T
 end
 
-x1 = 1, 123.3, 21, 3.2 
-x2 = 1.8, 3, 2.1, 3 
+A = @rand(2, 2)
+B = @rand(2, 2, 2)
 
-@code_typed f1(x1...)
-@code_typed f1(x2...)
+foo2 = Foo2(A, A, A)
+foo3 = Foo3(B, B, B, B, B, B)
 
-@code_typed f2(x2...)
-@code_typed f2(x1...)
+function f1(A::SymmetricTensor{<:AbstractArray{T, N}}) where {T, N}
+    syms = (:xx ,:yy, :zz)
+    return ntuple(i -> getfield(A, syms[i]), N)
+end
 
-@btime f1($x1...)
-@btime f2($x1...)
+@generated function f2(A::SymmetricTensor{<:AbstractArray{T, N}}) where {T, N}
+    syms = (:xx ,:yy, :zz)
+    quote
+        Base.@_inline_meta
+        Base.@nexprs $N i -> f_i = getfield(A, $syms[i])
+        Base.@ncall $N tuple f
+    end
+end
 
-@btime f1($x2...)
-@btime f2($x2...)
+@inline function f3(
+    A::SymmetricTensor{<:AbstractArray{T,2}}
+) where {T}
+    return A.xx, A.yy
+end
+
+@inline function f4(
+    A::SymmetricTensor{<:AbstractArray{T,3}}
+) where {T}
+    return A.xx, A.yy, A.zz
+end
+
+
+@btime f1($A);
+@btime f2($A);
+@btime f4($A);
+
+@code_lowered f1(A)
+@code_lowered f2(A)
+@code_lowered f4(A)

@@ -1,4 +1,4 @@
-struct VTKDataSeries{T, S, G}
+struct VTKDataSeries{T,S,G}
     series::T
     path::S
     name::S
@@ -7,13 +7,13 @@ struct VTKDataSeries{T, S, G}
     function VTKDataSeries(full_name::String, xi)
         split_path = splitpath(full_name)
         name = last(split_path)
-        path = if length(split_path) > 1 
-            joinpath(split_path[1:end-1])
+        path = if length(split_path) > 1
+            joinpath(split_path[1:(end - 1)])
         else
             pwd()
         end
-        series = paraview_collection(full_name; append = true)
-        new{typeof(series), String, typeof(xi)}(series, path, name, xi)
+        series = paraview_collection(full_name; append=true)
+        return new{typeof(series),String,typeof(xi)}(series, path, name, xi)
     end
 end
 
@@ -32,12 +32,12 @@ function append!(data_series, data::NamedTuple, time_step, seconds)
     vtk_save(vtk)
     # open pvd file
     pvd_name = joinpath(data_series.path, data_series.name)
-    pvd = paraview_collection(pvd_name; append = true)
+    pvd = paraview_collection(pvd_name; append=true)
     # add vtk file to time series
     collection_add_timestep(pvd, vtk, seconds)
     # close pvd file
     vtk_save(pvd)
-    
+
     return nothing
 end
 

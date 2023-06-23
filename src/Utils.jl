@@ -129,8 +129,10 @@ macro normal(A)
     end
 end
 
-@generated function unpack_normal_components_stag(A::SymmetricTensor{<:AbstractArray{T, N}}) where {T, N}
-    syms = (:xx ,:yy, :zz)
+@generated function unpack_normal_components_stag(
+    A::SymmetricTensor{<:AbstractArray{T,N}}
+) where {T,N}
+    syms = (:xx, :yy, :zz)
     quote
         Base.@_inline_meta
         Base.@nexprs $N i -> f_i = getfield(A, $syms[i])

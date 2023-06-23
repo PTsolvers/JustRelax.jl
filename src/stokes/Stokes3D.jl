@@ -46,8 +46,7 @@ using LinearAlgebra
 using Printf
 using GeoParams
 
-import JustRelax:
-    elastic_iter_params!, PTArray, Velocity, SymmetricTensor, pureshear_bc!
+import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor, pureshear_bc!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
@@ -67,9 +66,7 @@ export solve!, pureshear_bc!
 end
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,3}) where {A,B,C,D}
-    @parallel update_τ_o!(
-        @tensor(stokes.τ_o)..., @stress(stokes)...
-    )
+    @parallel update_τ_o!(@tensor(stokes.τ_o)..., @stress(stokes)...)
 end
 
 @parallel_indices (i, j, k) function compute_∇V!(∇V, Vx, Vy, Vz, _dx, _dy, _dz)
@@ -168,7 +165,6 @@ end
     Base.@propagate_inbounds @inline dx(x)     = x[i + 1, j, k] - x[i, j, k]
     Base.@propagate_inbounds @inline dy(x)     = x[i, j + 1, k] - x[i, j, k]
     Base.@propagate_inbounds @inline dz(x)     = x[i, j, k + 1] - x[i, j, k]
-    
     #! format: on
 
     @inbounds begin
@@ -260,7 +256,7 @@ end
         0.25 * (x[i, j, k] + x[i, j - 1, k] + x[i, j, k - 1] + x[i, j - 1, k - 1])
     end
     Base.@propagate_inbounds @inline current(x) = x[i, j, k]
-    #! format: om
+    #! format: on
 
     @inbounds begin
         if all((i, j, k) .≤ size(τxx))
@@ -436,7 +432,7 @@ end
             τxy[i, j, k],
         )
         dτ_rηᵢ = dτ_r / ηᵢ
-        τxx[i, j, k] += dτ_rηᵢ * (-τ[1] + τij[1]) # NOTE: from GP Tij = 2*η_vep * εij
+        τxx[i, j, k] += dτ_rηᵢ * (-τ[1] + τij[1])
         τyy[i, j, k] += dτ_rηᵢ * (-τ[2] + τij[2])
         τzz[i, j, k] += dτ_rηᵢ * (-τ[3] + τij[3])
         # τyz[i, j, k]  += dτ_rηᵢ * (-τ[4] + τij[4]) 
@@ -481,7 +477,7 @@ end
     # numerics
     ηij = @inbounds η[idx...]
     _Gdt = inv(get_G(rheology[1]) * dt)
-    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt) 
+    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
     # get plastic paremeters (if any...)
     is_pl, C, sinϕ, η_reg = plastic_params(rheology[1])
     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
@@ -491,18 +487,7 @@ end
     ε = εxx, εyy, εzz, εyzv, εxzv, εxyv
 
     _compute_τ_nonlinear!(
-        τ,
-        τII,
-        τ_old,
-        ε,
-        P,
-        ηij,
-        η_vep,
-        λ,
-        dτ_r,
-        _Gdt,
-        plastic_parameters,
-        idx...
+        τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, idx...
     )
 
     return nothing
@@ -544,7 +529,7 @@ end
     ηij = @inbounds η[idx...]
     phase = @inbounds phase_center[idx...]
     _Gdt = inv(get_G(rheology[1]) * dt)
-    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt) 
+    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
     # get plastic paremeters (if any...)
     is_pl, C, sinϕ, η_reg = plastic_params(rheology[1], phase)
     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
@@ -554,18 +539,7 @@ end
     ε = εxx, εyy, εzz, εyzv, εxzv, εxyv
 
     _compute_τ_nonlinear!(
-        τ,
-        τII,
-        τ_old,
-        ε,
-        P,
-        ηij,
-        η_vep,
-        λ,
-        dτ_r,
-        _Gdt,
-        plastic_parameters,
-        idx...
+        τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, idx...
     )
 
     return nothing
@@ -789,13 +763,13 @@ function JustRelax.solve!(
     ϵ = pt_stokes.ϵ
     # geometry
     _di = @. 1 / di
-    ni  = size(stokes.P)
+    ni = size(stokes.P)
 
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-        compute_maxloc!(ητ, η)
-        update_halo!(ητ)
+    compute_maxloc!(ητ, η)
+    update_halo!(ητ)
     # end
     # @parallel (1:ny, 1:nz) free_slip_x!(ητ)
     # @parallel (1:nx, 1:nz) free_slip_y!(ητ)
@@ -821,9 +795,7 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(
-                stokes.∇V, @velocity(stokes)..., _di...
-            )
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel (@idx ni) compute_P!(
                 stokes.P,
                 stokes.P0,
@@ -836,17 +808,16 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
             )
             @parallel (@idx ni) compute_strain_rate!(
-                stokes.∇V,
-                @strain(stokes)...,
-                @velocity(stokes)...,
-                _di...,
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
-             
+
             # Update buoyancy
             @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
-         
+
             ν = 1e-3
-            @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, tupleize(rheology))
+            @parallel (@idx ni) compute_viscosity!(
+                η, ν, @strain(stokes)..., args, tupleize(rheology)
+            )
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 

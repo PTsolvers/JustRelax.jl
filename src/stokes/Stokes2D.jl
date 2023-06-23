@@ -337,7 +337,7 @@ end
     # numerics
     ηij = η[i, j]
     _Gdt = inv(get_G(rheology[1]) * dt)
-    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt) 
+    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     # get plastic paremeters (if any...)
     is_pl, C, sinϕ, η_reg = plastic_params(rheology[1])
@@ -348,18 +348,7 @@ end
     ε = εxx, εyy, εxyv
 
     _compute_τ_nonlinear!(
-        τ,
-        τII,
-        τ_old,
-        ε,
-        P,
-        ηij,
-        η_vep,
-        λ,
-        dτ_r,
-        _Gdt,
-        plastic_parameters,
-        idx...
+        τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, idx...
     )
 
     return nothing
@@ -392,7 +381,7 @@ end
     ηij = @inbounds η[i, j]
     phase = @inbounds phase_center[i, j]
     _Gdt = inv(get_G(rheology, phase) * dt)
-    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt) 
+    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     # get plastic paremeters (if any...)
     is_pl, C, sinϕ, η_reg = plastic_params(rheology, phase)
@@ -403,18 +392,7 @@ end
     ε = εxx, εyy, εxyv
 
     _compute_τ_nonlinear!(
-        τ,
-        τII,
-        τ_old,
-        ε,
-        P,
-        ηij,
-        η_vep,
-        λ,
-        dτ_r,
-        _Gdt,
-        plastic_parameters,
-        idx...
+        τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, idx...
     )
 
     return nothing
@@ -447,8 +425,8 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-        compute_maxloc!(ητ, η)
-        update_halo!(ητ)
+    compute_maxloc!(ητ, η)
+    update_halo!(ητ)
     # end
 
     # errors
@@ -565,8 +543,8 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-        compute_maxloc!(ητ, η; window = (1, 1, 1))
-        update_halo!(ητ)
+    compute_maxloc!(ητ, η; window=(1, 1, 1))
+    update_halo!(ητ)
     # end
 
     # errors
@@ -646,9 +624,7 @@ function JustRelax.solve!(
 
     if !isinf(dt) # if dt is inf, then we are in the non-elastic case
         update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(
-            @velocity(stokes), @tensor(stokes.τ_o), _di, dt
-        )
+        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
     end
 
     return (
@@ -689,8 +665,8 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-        compute_maxloc!(ητ, η)
-        update_halo!(ητ)
+    compute_maxloc!(ητ, η)
+    update_halo!(ητ)
     # end
 
     Kb = get_Kb(rheology)
@@ -714,7 +690,7 @@ function JustRelax.solve!(
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
             )
-            
+
             @parallel (@idx ni) compute_ρg!(ρg[2], rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
@@ -722,7 +698,9 @@ function JustRelax.solve!(
             )
 
             ν = 0.05
-            @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, tupleize(rheology))
+            @parallel (@idx ni) compute_viscosity!(
+                η, ν, @strain(stokes)..., args, tupleize(rheology)
+            )
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
@@ -789,9 +767,7 @@ function JustRelax.solve!(
 
     if !isinf(dt) # if dt is inf, then we are in the non-elastic case
         update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(
-            @velocity(stokes), @tensor(stokes.τ_o), _di, dt
-        )
+        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
     end
 
     return (
@@ -833,8 +809,8 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-        compute_maxloc!(ητ, η)
-        update_halo!(ητ)
+    compute_maxloc!(ητ, η)
+    update_halo!(ητ)
     # end
 
     # errors
@@ -931,9 +907,7 @@ function JustRelax.solve!(
 
     if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
         update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(
-            @velocity(stokes), @tensor(stokes.τ_o), _di, dt
-        )
+        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
     end
 
     return (

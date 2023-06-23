@@ -18,7 +18,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         eval(:(@init_parallel_stencil(CUDA, $T, $N)))
         Base.eval(Main, Meta.parse("using CUDA"))
         if !isconst(Main, :PTArray)
-            eval(:(const PTArray = CUDA.CuArray{$T, $N, CUDA.Mem.DeviceBuffer}))
+            eval(:(const PTArray = CUDA.CuArray{$T,$N,CUDA.Mem.DeviceBuffer}))
         end
     else
         @eval begin
@@ -42,26 +42,54 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
     # includes and exports
     @eval begin
-        export USE_GPU, PTArray
-        export Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs
-        export ThermalArrays, PTThermalCoeffs
-        export AbstractStokesModel,
-            AbstractElasticModel, Viscous, ViscoElastic, ViscoElastoPlastic
-        export solve!
+        export USE_GPU,
+            PTArray,
+            Velocity,
+            SymmetricTensor,
+            Residual,
+            StokesArrays,
+            PTStokesCoeffs,
+            ThermalArrays,
+            PTThermalCoeffs,
+            AbstractStokesModel,
+            AbstractElasticModel,
+            Viscous,
+            ViscoElastic,
+            ViscoElastoPlastic,
+            solve!
 
         include(joinpath(@__DIR__, "Utils.jl"))
         export @allocate, @add, @idx, @copy
-        export @velocity, @strain, @stress, @tensor, @shear, @normal, @stress_center, @strain_center, @tensor_center
-        export compute_dt, assign!, tupleize, compute_maxloc!, continuation_log
+        export @velocity,
+            @strain,
+            @stress,
+            @tensor,
+            @shear,
+            @normal,
+            @stress_center,
+            @strain_center,
+            @tensor_center,
+            compute_dt,
+            assign!,
+            tupleize,
+            compute_maxloc!,
+            continuation_log
 
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
-        export pureshear_bc!, FlowBoundaryConditions, flow_bcs!
-        export TemperatureBoundaryConditions, thermal_boundary_conditions!, thermal_bcs!
-        export free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
+        export pureshear_bc!,
+            FlowBoundaryConditions,
+            flow_bcs!,
+            TemperatureBoundaryConditions,
+            thermal_boundary_conditions!,
+            thermal_bcs!,
+            free_slip_x!,
+            free_slip_y!,
+            free_slip_z!,
+            apply_free_slip!
 
         include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
         export compute_ρg!
-        
+
         include(joinpath(@__DIR__, "rheology/Viscosity.jl"))
         export compute_viscosity!
 
@@ -77,9 +105,6 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         include(joinpath(@__DIR__, "Interpolations.jl"))
         export vertex2center!, center2vertex!, temperature2center!
-
-
-        
     end
 
     # conditional submodule load

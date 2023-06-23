@@ -1,16 +1,25 @@
 # From cell vertices to cell center
-@parallel_indices (i, j) function temperature2center!(T_center::T, T_vertex::T) where {T<:AbstractArray{_T, 2} where _T<:Real}
-    T_center[i, j] = (T_vertex[i + 1, j] + T_vertex[i + 2, j] + T_vertex[i + 1, j + 1] + T_vertex[i + 2, j + 1]) * 0.25
-    return 
+@parallel_indices (i, j) function temperature2center!(
+    T_center::T, T_vertex::T
+) where {T<:AbstractArray{_T,2} where {_T<:Real}}
+    T_center[i, j] =
+        (
+            T_vertex[i + 1, j] +
+            T_vertex[i + 2, j] +
+            T_vertex[i + 1, j + 1] +
+            T_vertex[i + 2, j + 1]
+        ) * 0.25
+    return nothing
 end
 
-@parallel_indices (i, j, k) function temperature2center!(T_center::T, T_vertex::T) where {T<:AbstractArray{_T, 3} where _T<:Real}
-    
-    @inline av_T() =  _av(T_vertex, i, j, k) 
+@parallel_indices (i, j, k) function temperature2center!(
+    T_center::T, T_vertex::T
+) where {T<:AbstractArray{_T,3} where {_T<:Real}}
+    @inline av_T() = _av(T_vertex, i, j, k)
 
     T_center[i, j, k] = av_T()
-    
-    return 
+
+    return nothing
 end
 
 @parallel function vertex2center!(center, vertex)

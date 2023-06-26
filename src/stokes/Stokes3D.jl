@@ -592,10 +592,12 @@ function JustRelax.solve!(
 
     # ~preconditioner
     ητ = deepcopy(η)
-    @hide_communication b_width begin # communication/computation overlap
-        @parallel compute_maxloc!(ητ, η)
-        update_halo!(ητ)
-    end
+    # @hide_communication b_width begin # communication/computation overlap
+    #     @parallel compute_maxloc!(ητ, η)
+    #     update_halo!(ητ)
+    # end
+    compute_maxloc!(ητ, η)
+    update_halo!(ητ)
     @parallel (1:size(ητ, 2), 1:size(ητ, 3)) free_slip_x!(ητ)
     @parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
     @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)

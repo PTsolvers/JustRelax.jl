@@ -6,7 +6,8 @@ function make_thermal_arrays!(ndim)
 
     @eval begin
         struct ThermalArrays{_T}
-            T::_T
+            T::_T # Temperature @ grid nodes
+            Tc::_T # Temperature @ cell centers
             ΔT::_T
             Told::_T
             dT_dt::_T
@@ -26,21 +27,23 @@ function make_thermal_arrays!(ndim)
 
             function ThermalArrays(ni::NTuple{2,Integer})
                 nx, ny = ni
-                T, ΔT, Told = @zeros(nx + 3, ny + 1),
-                @zeros(nx + 3, ny + 1),
-                @zeros(nx + 3, ny + 1)
+                T = @zeros(nx + 3, ny + 1)
+                ΔT = @zeros(nx + 3, ny + 1)
+                Told = @zeros(nx + 3, ny + 1)
+                Tc = @zeros(ni...)
                 dT_dt = @zeros(nx + 1, ny - 1)
                 qTx = @zeros(nx + 2, ny - 1)
                 qTy = @zeros(nx + 1, ny)
                 qTx2 = @zeros(nx + 2, ny - 1)
                 qTy2 = @zeros(nx + 1, ny)
                 ResT = @zeros(nx + 1, ny - 1)
-                return new{typeof(T)}(T, ΔT, Told, dT_dt, qTx, qTy, qTx2, qTy2, ResT)
+                return new{typeof(T)}(T, Tc, ΔT, Told, dT_dt, qTx, qTy, qTx2, qTy2, ResT)
             end
 
             function ThermalArrays(ni::NTuple{3,Integer})
                 nx, ny, nz = ni
                 T, ΔT, Told = @zeros(ni .+ 1...), @zeros(ni .+ 1...), @zeros(ni .+ 1...)
+                Tc = @zeros(ni...)
                 dT_dt = @zeros(ni .- 1)
                 qTx = @zeros(nx, ny - 1, nz - 1)
                 qTy = @zeros(nx - 1, ny, nz - 1)
@@ -50,7 +53,7 @@ function make_thermal_arrays!(ndim)
                 qTz2 = @zeros(nx - 1, ny - 1, nz)
                 ResT = @zeros((ni .- 1)...)
                 return new{typeof(T)}(
-                    T, ΔT, Told, dT_dt, qTx, qTy, qTz, qTx2, qTy2, qTz2, ResT
+                    T, Tc, ΔT, Told, dT_dt, qTx, qTy, qTz, qTx2, qTy2, qTz2, ResT
                 )
             end
         end

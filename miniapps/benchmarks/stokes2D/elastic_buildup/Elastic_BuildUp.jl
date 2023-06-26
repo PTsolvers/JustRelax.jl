@@ -63,6 +63,7 @@ function elastic_buildup(;
 
     # Physical time loop
     t = 0.0
+    it = 0
     ρg = @zeros(ni...), @ones(size(stokes.P)) .* g
     local iters
     av_τyy, sol_τyy, tt = Float64[], Float64[], Float64[]
@@ -85,7 +86,9 @@ function elastic_buildup(;
             verbose=false,
         )
 
-        @show t += dt
+        t += dt
+        it +=1
+        println("Iteration $it => t = $(t/kyr) kyrs")
 
         push!(av_τyy, maximum(abs.(stokes.τ.yy)))
         # push!(av_τyy, maximum(stokes.τ.yy))

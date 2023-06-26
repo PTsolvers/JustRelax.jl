@@ -18,7 +18,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         eval(:(@init_parallel_stencil(CUDA, $T, $N)))
         Base.eval(Main, Meta.parse("using CUDA"))
         if !isconst(Main, :PTArray)
-            eval(:(const PTArray = CUDA.CuArray{$T,$N}))
+            eval(:(const PTArray = CUDA.CuArray{$T,$N,CUDA.Mem.DeviceBuffer}))
         end
     else
         @eval begin
@@ -42,42 +42,80 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
     # includes and exports
     @eval begin
-        export USE_GPU, PTArray
-        export Velocity, SymmetricTensor, Residual, StokesArrays, PTStokesCoeffs
-        export ThermalArrays, PTThermalCoeffs
-        export AbstractStokesModel,
-            AbstractElasticModel, Viscous, ViscoElastic, ViscoElastoPlastic
-        export solve!
+        export USE_GPU,
+            PTArray,
+            Velocity,
+            SymmetricTensor,
+            Residual,
+            StokesArrays,
+            PTStokesCoeffs,
+            ThermalArrays,
+            PTThermalCoeffs,
+            AbstractStokesModel,
+            AbstractElasticModel,
+            Viscous,
+            ViscoElastic,
+            ViscoElastoPlastic,
+            solve!
 
         include(joinpath(@__DIR__, "Utils.jl"))
-        export @allocate, @add, @idx, @copy, compute_dt, assign!, tupleize
+        export @allocate, @add, @idx, @copy
+        export @velocity,
+            @strain,
+            @stress,
+            @tensor,
+            @shear,
+            @normal,
+            @stress_center,
+            @strain_center,
+            @tensor_center,
+            compute_dt,
+            assign!,
+            tupleize,
+            compute_maxloc!,
+            continuation_log
 
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
-        export pureshear_bc!, FlowBoundaryConditions, flow_bcs!
-        export TemperatureBoundaryConditions, thermal_boundary_conditions!, thermal_bcs!
-        export free_slip_x!, free_slip_y!, free_slip_z!, apply_free_slip!
+        export pureshear_bc!,
+            FlowBoundaryConditions,
+            flow_bcs!,
+            TemperatureBoundaryConditions,
+            thermal_boundary_conditions!,
+            thermal_bcs!,
+            free_slip_x!,
+            free_slip_y!,
+            free_slip_z!,
+            apply_free_slip!
 
-        include(joinpath(@__DIR__, "stokes/Stokes.jl"))
-        export stress
+        include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
+        export compute_ρg!
 
-        include(joinpath(@__DIR__, "stokes/Elasticity.jl"))
+        include(joinpath(@__DIR__, "rheology/Viscosity.jl"))
+        export compute_viscosity!
+
+        include(joinpath(@__DIR__, "stokes/Stokes2D.jl"))
+        export solve!
+
+        include(joinpath(@__DIR__, "stokes/Stokes3D.jl"))
+        export solve!
 
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionExplicit.jl"))
         # include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
         export ThermalParameters
 
         include(joinpath(@__DIR__, "Interpolations.jl"))
-        export vertex2center!, center2vertex!
+        export vertex2center!, center2vertex!, temperature2center!
     end
 
     # conditional submodule load
     module_names = if N === 1
         (Symbol("ThermalDiffusion$(N)D"),)
     elseif N === 2
-        (Symbol("Stokes$(N)D"), Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
+        (Symbol("Stokes$(N)D"), Symbol("ThermalDiffusion$(N)D"))
     else
-        (Symbol("Elasticity$(N)D"), Symbol("ThermalDiffusion$(N)D"))
+        (Symbol("Stokes$(N)D"), Symbol("ThermalDiffusion$(N)D"))
     end
+
     for m in module_names
         Base.@eval begin
             @reexport import .$m

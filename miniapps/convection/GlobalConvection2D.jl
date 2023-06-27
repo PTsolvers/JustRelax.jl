@@ -27,20 +27,6 @@ end
 end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
-# visco-elasto-plastic with GeoParams
-@parallel_indices (i, j) function compute_viscosity_gp!(η, args, MatParam)
-
-    @inbounds begin
-        args_ij       = (; dt = args.dt, P = (args.P[i, j]), depth = abs(args.depth[j]), T=args.T[i,j], τII_old=0.0)
-        εij_p         = 1.0, 1.0, (1.0, 1.0, 1.0, 1.0)
-        τij_p_o       = 0.0, 0.0, (0.0, 0.0, 0.0, 0.0)
-        phases        = 1, 1, (1,1,1,1) # for now hard-coded for a single phase
-        # # update stress and effective viscosity
-        _, _, η[i, j] = compute_τij(MatParam, εij_p, args_ij, τij_p_o, phases)
-    end
-    
-    return nothing
-end
 
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
@@ -190,7 +176,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     η               = @ones(ni...)
     depth           = PTArray([y for x in xci[1], y in xci[2]])
     args            = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
-    @parallel (@idx ni) compute_viscosity_gp!(η, args, (rheology,))
+    @parallel (@idx ni) compute_viscosity!(η, 1, 1e-15, args, rheology)
     η_vep           = deepcopy(η)
     # Boundary conditions
     flow_bcs = FlowBoundaryConditions(; 
@@ -234,7 +220,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
             ρg,
             η,
             η_vep,
-            rheology_plastic,
+            rheology,
             args,
             dt,
             igg;
@@ -300,4 +286,4 @@ function run()
     thermal_convection2D(; figdir=figdir, ar=ar,nx=nx, ny=ny);
 end
 
-run()
+# run()

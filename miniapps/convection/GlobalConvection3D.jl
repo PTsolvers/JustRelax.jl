@@ -28,25 +28,6 @@ end
 end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
-# visco-elasto-plastic with GeoParams
-@parallel_indices (i, j, k) function compute_viscosity_gp!(η, args, MatParam)
-
-    onesf  = 1.0, 1.0, 1.0, 1.0
-    zerosf = 0.0, 0.0, 0.0, 0.0
-    onesi  = 1, 1, 1, 1
-
-    @inbounds begin
-        args_ij       = (; dt = args.dt, P = (args.P[i, j, k]), depth = abs(args.depth[i, j, k]), T=args.T[i, j, k], τII_old=0.0)
-        εij_p         = 1.0, 1.0, 1.0, onesf, onesf, onesf
-        τij_p_o       = 0.0, 0.0, 1.0, zerosf, zerosf, zerosf
-        phases        = 1, 1, 1, onesi, onesi, onesi 
-        # update stress and effective viscosity
-        _, _, η[i, j, k] = compute_τij(MatParam, εij_p, args_ij, τij_p_o, phases)
-    end
-    
-    return nothing
-end
-
 const idx_k = ParallelStencil.INDICES[3]
 macro all_k(A)
     esc(:($A[$idx_k]))
@@ -101,7 +82,7 @@ end
 
 Rayleigh_number(ρ, α, ΔT, κ, η0) = ρ * 9.81 * α * ΔT * 2890e3^3 * inv(κ * η0) 
 
-function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D")
+function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", thermal_perturbation = :random)
     
     # initialize MPI
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI = JustRelax.MPI.Initialized() ? false : true)...) 
@@ -201,7 +182,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D")
     η               = @ones(ni...)
     depth           = PTArray([abs(z) for x in xci[1], y in xci[2], z in xci[3]])
     args            = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
-    @parallel (@idx ni) compute_viscosity_gp!(η, args, (rheology,))
+    @parallel (@idx ni) compute_viscosity!(η, 1, 1e-15, args, rheology)
     η_vep           = deepcopy(η)
     # Boundary conditions
     flow_bcs = FlowBoundaryConditions(; 
@@ -324,4 +305,4 @@ function run()
     thermal_convection3D(; figdir=figdir, ar=ar,nx=nx, ny=ny, nz=nz);
 end
 
-run()
+# run()

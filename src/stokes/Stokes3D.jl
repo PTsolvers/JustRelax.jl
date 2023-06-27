@@ -817,9 +817,7 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
 
             ν = 1e-3
-            @parallel (@idx ni) compute_viscosity!(
-                η, ν, @strain(stokes)..., args, rheology
-            )
+            @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, rheology)
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 

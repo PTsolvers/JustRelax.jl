@@ -37,7 +37,6 @@ end
 end
 
 @parallel_indices (i, j) function compute_viscosity!(η, ν, εII, args, rheology)
-
     @inbounds begin
         # argument fields at local index
         args_ij = local_args(args, i, j)
@@ -87,16 +86,13 @@ end
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_viscosity!(
-    η, ν, εII, args, rheology
-)
-
+@parallel_indices (i, j, k) function compute_viscosity!(η, ν, εII, args, rheology)
     @inbounds begin
         # # argument fields at local index
         args_ijk = local_viscosity_args(args, i, j, k)
 
         # compute second invariant of strain rate tensor
-        εII_ij = εII[i,j,k]
+        εII_ij = εII[i, j, k]
 
         # update stress and effective viscosity
         ηi = compute_viscosity_εII(rheology, εII_ij, args_ijk)

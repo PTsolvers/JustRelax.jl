@@ -245,7 +245,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
 
         it += 1
         t += dt
-        println("Time step number $it, t = $t, dt = $dt, iters = $iters")
+        println("Time step number $it, t = $t, dt = $dt, iters = $it")
         println("   time = $(t/(1e6 * 3600 * 24 *365.25)), dt = $(dt/(1e6 * 3600 * 24 *365.25)) \n")
 
         # Plotting ---------------------

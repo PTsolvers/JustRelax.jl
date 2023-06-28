@@ -1,7 +1,7 @@
 using JustRelax
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2)
+model = PS_Setup(:gpu, Float64, 2)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
@@ -99,12 +99,12 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     creep = CustomRheology(custom_εII, custom_τII, v_args)
 
     # Physical properties using GeoParams ----------------
-    η_reg     = 1e8
-    G0        = 70e9    # shear modulus
+    η_reg     = 1e16
+    G0        = 70e9 # shear modulus
     cohesion  = 30e6
     friction  = asind(0.01)
     pl        = DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-    el        = SetConstantElasticity(; G=G0, ν=0.5)                             # elastic spring
+    el        = SetConstantElasticity(; G=G0, ν=0.5) # elastic spring
     β         = inv(get_Kb(el))
 
     rheology = SetMaterialParams(;
@@ -147,12 +147,12 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     thermal_bcs!(thermal.T, thermal_bc)
     # Temperature anomaly 
     if thermal_perturbation == :random
-        δT          = 5.0              # thermal perturbation (in %)
+        δT          = 5.0               # thermal perturbation (in %)
         random_perturbation!(thermal.T, δT, (lx*1/8, lx*7/8), (-2000e3, -2600e3), xvi)
 
     elseif thermal_perturbation == :circular
         δT          = 10.0              # thermal perturbation (in %)
-        xc, yc      = 0.5*lx, -0.75*ly  # origin of thermal anomaly
+        xc, yc      = 0.5*lx, -0.75*ly  # center of the thermal anomaly
         r           = 150e3             # radius of perturbation
         circular_perturbation!(thermal.T, δT, xc, yc, r, xvi)
     end
@@ -220,7 +220,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
             ρg,
             η,
             η_vep,
-            rheology,
+            rheology_plastic,
             args,
             dt,
             igg;
@@ -286,4 +286,4 @@ function run()
     thermal_convection2D(; figdir=figdir, ar=ar,nx=nx, ny=ny);
 end
 
-# run()
+run()

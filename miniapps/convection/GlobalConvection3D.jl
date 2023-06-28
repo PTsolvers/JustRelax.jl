@@ -257,8 +257,13 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         )
         # ------------------------------
 
-        @show it += 1
+        it += 1
         t += dt
+
+        println("\n")
+        println("Time step number $it, iteration = $it")
+        println("   time = $(t/(1e6 * 3600 * 24 *365.25)) Myrs, dt = $(dt/(1e6 * 3600 * 24 *365.25)) Myrs")
+        println("\n")
 
         # Plotting ---------------------
         if it == 1 || rem(it, 5) == 0
@@ -305,4 +310,4 @@ function run()
     thermal_convection3D(; figdir=figdir, ar=ar,nx=nx, ny=ny, nz=nz);
 end
 
-# run()
+run()

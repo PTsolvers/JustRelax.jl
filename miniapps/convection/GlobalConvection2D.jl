@@ -245,14 +245,14 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
 
         it += 1
         t += dt
-        
+
         println("\n")
-        println("Time step number $it, iteration = $it")
+        println("Time step number $it")
         println("   time = $(t/(1e6 * 3600 * 24 *365.25)) Myrs, dt = $(dt/(1e6 * 3600 * 24 *365.25)) Myrs")
         println("\n")
 
         # Plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 10) == 0
             fig = Figure(resolution = (1000, 1000), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")

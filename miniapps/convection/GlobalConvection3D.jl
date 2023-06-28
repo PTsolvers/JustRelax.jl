@@ -261,7 +261,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         t += dt
 
         println("\n")
-        println("Time step number $it, iteration = $it")
+        println("Time step number $it")
         println("   time = $(t/(1e6 * 3600 * 24 *365.25)) Myrs, dt = $(dt/(1e6 * 3600 * 24 *365.25)) Myrs")
         println("\n")
 

@@ -214,20 +214,40 @@ function compute_maxloc!(B, A; window=(1, 1, 1))
 
     @parallel_indices (i, j) function _maxloc!(
         B::T, A::T
-    ) where {T<:AbstractArray{X,2} where {X<:Number}}
+    ) where {X<:Number,T<:AbstractArray{X,2}}
         B[i, j] = _maxloc_window_clamped(A, i, j, width_x, width_y)
         return nothing
     end
 
     @parallel_indices (i, j, k) function _maxloc!(
         B::T, A::T
-    ) where {T<:AbstractArray{X,3} where {X<:Number}}
+    ) where {X<:Number, T<:AbstractArray{X,3}}
         B[i, j, k] = _maxloc_window_clamped(A, i, j, k, width_x, width_y, width_z)
         return nothing
     end
 
     @parallel (@idx ni) _maxloc!(B, A)
 end
+# function compute_maxloc!(B, A; window=(1, 1, 1))
+#     ni = size(A)
+#     width_x, width_y, width_z = window
+
+#     @parallel_indices (i, j) function _maxloc!(
+#         B::T, A::T
+#     ) where {T<:AbstractArray{X,2} where {X<:Number}}
+#         B[i, j] = _maxloc_window_clamped(A, i, j, width_x, width_y)
+#         return nothing
+#     end
+
+#     @parallel_indices (i, j, k) function _maxloc!(
+#         B::T, A::T
+#     ) where {T<:AbstractArray{X,3} where {X<:Number}}
+#         B[i, j, k] = _maxloc_window_clamped(A, i, j, k, width_x, width_y, width_z)
+#         return nothing
+#     end
+
+#     @parallel (@idx ni) _maxloc!(B, A)
+# end
 
 @inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
     nx, ny = size(A)

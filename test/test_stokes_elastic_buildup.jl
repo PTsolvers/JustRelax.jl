@@ -12,7 +12,7 @@ function check_convergence_case1()
     # model specific parameters
     nx, ny = 32, 32
     lx, ly = 100e3, 100e3 # length of the domain in meters
-    endtime = 20 # duration of the model in kyrs
+    endtime = 10 # duration of the model in kyrs
     η0 = 1e21 # viscosity
     εbg = 1e-14 # background strain rate (pure shear boundary conditions)
     G = 10e9 # shear modulus

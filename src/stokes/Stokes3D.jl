@@ -817,9 +817,7 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
 
             ν = 1e-3
-            @parallel (@idx ni) compute_viscosity!(
-                η, ν, @strain(stokes)..., args, tupleize(rheology)
-            )
+            @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, rheology)
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
@@ -832,7 +830,7 @@ function JustRelax.solve!(
                 η,
                 η_vep,
                 λ,
-                tupleize(rheology), # needs to be a tuple
+                rheology, # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
             )

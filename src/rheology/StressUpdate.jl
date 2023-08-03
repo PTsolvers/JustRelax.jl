@@ -93,11 +93,11 @@ function cache_tensors(
 end
 
 function compute_stress_increment_and_trial(
-    τij::NTuple{N,T}, τij_p_o, ηij, εij_p, _Gdt, dτ_r
+    τij::NTuple{N,T}, τij_o::NTuple{N,T}, ηij, εij::NTuple{N,T}, _Gdt, dτ_r
 ) where {N,T}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-        dτ_r * (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * εij_p[i])
+        @inbounds dτ_r * (-(τij[i] - τij_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * εij[i])
     end
     return dτij, second_invariant((τij .+ dτij)...)
 end
@@ -117,8 +117,8 @@ function compute_dτ_pl(
         # derivatives of the plastic potential
         λdQdτ = (τij[i] + dτij[i]) * λ_τII
         # corrected stress
-        dτ_r *
-        (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij_p[i] - λdQdτ))
+        # dτ_r * (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij_p[i] - λdQdτ))
+        dτij[i] - dτ_r * 2.0 * ηij * λdQdτ
     end
     return dτ_pl, λ
 end
@@ -148,5 +148,34 @@ end
         Base.@nexprs $N i ->
             isplastic(v[i]) && return true, v[i].C.val, v[i].sinϕ.val, v[i].η_vp.val
         (false, 0.0, 0.0, 0.0)
+    end
+end
+
+function plastic_params_phase(
+    rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio
+) where {N}
+    data = _plastic_params_phase(rheology, ratio)
+    # average over phases
+    is_pl = false
+    C = 0.0
+    sinϕ = 0.0
+    η_reg = 0.0
+    for n in 1:N
+        data[n][1] && (is_pl = true)
+        C += data[n][2] * ratio[n]
+        sinϕ += data[n][3] * ratio[n]
+        η_reg += data[n][4] * ratio[n]
+    end
+    return is_pl, C, sinϕ, η_reg
+end
+
+@generated function _plastic_params_phase(
+    rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio
+) where {N}
+    quote
+        Base.@_inline_meta
+        empty_args = false, 0.0, 0.0, 0.0
+        Base.@nexprs $N i -> a_i = ratio[i] == 0 ? empty_args : plastic_params(rheology[i])
+        Base.@ncall $N tuple a
     end
 end

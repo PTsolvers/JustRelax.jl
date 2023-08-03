@@ -287,7 +287,7 @@ end
 """
     compute_dt(S::StokesArrays, di)
 
-Compute the time step `dt` for the velocity field `S.V` for a regular gridwith grid spacing `di`.
+Compute the time step `dt` for the velocity field `S.V` for a regular grid with grid spacing `di`.
 """
 @inline compute_dt(S::StokesArrays, di) = compute_dt(@velocity(S), di, Inf)
 
@@ -301,7 +301,8 @@ Compute the time step `dt` for the velocity field `S.V` and the diffusive maximu
 
 @inline function compute_dt(V::NTuple, di, dt_diff)
     n = inv(length(V) + 0.1)
-    dt_adv = mapreduce(x -> x[1] * inv(maximum(abs.(x[2]))), max, zip(di, V)) * n
+    n = 0.95
+    dt_adv = mapreduce(x -> x[1] * inv(maximum(abs.(x[2]))), min, zip(di, V)) * n
     return min(dt_diff, dt_adv)
 end
 
@@ -309,7 +310,7 @@ end
 @inline tupleize(v::Tuple) = v
 
 """
-    continuation_log(x_new, x_old, ν
+    continuation_log(x_new, x_old, ν)
 
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """

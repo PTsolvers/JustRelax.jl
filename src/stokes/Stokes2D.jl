@@ -116,6 +116,17 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function compute_P!(
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::T, dt, r, θ_dτ
+) where {N, T<:JustRelax.CellArray}
+    @inbounds begin
+        _Kdt = inv(fn_ratio(get_Kb, rheology, phase_ratio[i, j]) * dt)
+        RP[i, j] = RP_ij = -∇V[i, j] - (P[i, j] - P0[i, j]) * _Kdt
+        P[i, j] += RP_ij * inv(inv(r / θ_dτ * η[i, j]) + _Kdt)
+    end
+    return nothing
+end
+
 @parallel function compute_V!(Vx, Vy, P, τxx, τyy, τxyv, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
     @inn(Vx) =
         @inn(Vx) +
@@ -370,7 +381,7 @@ end
     η,
     η_vep,
     λ,
-    phase_center,
+    phase_ratios::PhaseRatio,
     rheology,
     dt,
     θ_dτ,
@@ -379,12 +390,14 @@ end
 
     # numerics
     ηij = @inbounds η[i, j]
-    phase = @inbounds phase_center[i, j]
-    _Gdt = inv(get_G(rheology, phase) * dt)
+    phase = @inbounds phase_ratios[i, j]
+    G = fn_ratio(get_G, MatParam, phase)
+    _Gdt = inv(G * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     # get plastic paremeters (if any...)
     is_pl, C, sinϕ, η_reg = plastic_params(rheology, phase)
+
     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
 
     τ = τxx, τyy, τxy
@@ -392,7 +405,7 @@ end
     ε = εxx, εyy, εxyv
 
     _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, idx...
+        τ, τII, τ_old, ε, P, ηij, η_vep, phase_ratios, λ, dτ_r, _Gdt, plastic_parameters, idx...
     )
 
     return nothing
@@ -651,6 +664,7 @@ function JustRelax.solve!(
     args,
     dt,
     igg::IGG;
+    viscosity_cutoff = (1e16, 1e24),
     iterMax=10e3,
     nout=500,
     b_width=(4, 4, 0),
@@ -682,7 +696,6 @@ function JustRelax.solve!(
 
     # solver loop
     wtime0 = 0.0
-    nonlinear = false
     λ = @zeros(ni...)
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
@@ -697,8 +710,150 @@ function JustRelax.solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
+            ν = 0.01
+            @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff)
+            compute_maxloc!(ητ, η)
+            update_halo!(ητ)
+
+            @parallel (@idx ni) compute_τ_nonlinear!(
+                @tensor_center(stokes.τ)...,
+                stokes.τ.II,
+                @tensor(stokes.τ_o)...,
+                @strain(stokes)...,
+                stokes.P,
+                η,
+                η_vep,
+                λ,
+                tupleize(rheology), # needs to be a tuple
+                dt,
+                θ_dτ,
+            )
+
+            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            @hide_communication b_width begin # communication/computation overlap
+                @parallel compute_V!(
+                    @velocity(stokes)...,
+                    stokes.P,
+                    @stress(stokes)...,
+                    ηdτ,
+                    ρg...,
+                    ητ,
+                    _di...,
+                )
+                update_halo!(stokes.V.Vx, stokes.V.Vy)
+            end
+            # apply boundary conditions boundary conditions
+            flow_bcs!(stokes, flow_bcs, di)
+        end
+
+        iter += 1
+        if iter % nout == 0 && iter > 1
+            @parallel (@idx ni) compute_Res!(
+                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+            )
+            errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+            push!(norm_Rx, errs[1])
+            push!(norm_Ry, errs[2])
+            push!(norm_∇V, errs[3])
+            err = maximum(errs)
+            push!(err_evo1, err)
+            push!(err_evo2, iter)
+            if igg.me == 0 && ((verbose && err > ϵ) || iter == iterMax)
+                @printf(
+                    "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
+                    iter,
+                    err,
+                    norm_Rx[end],
+                    norm_Ry[end],
+                    norm_∇V[end]
+                )
+            end
+            isnan(err) && error("NaN(s)")
+        end
+
+        if igg.me == 0 && err ≤ ϵ
+            println("Pseudo-transient iterations converged in $iter iterations")
+        end
+    end
+
+    if !isinf(dt) # if dt is inf, then we are in the non-elastic case
+        update_τ_o!(stokes)
+        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
+    end
+
+    return (
+        iter=iter,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_∇V=norm_∇V,
+    )
+end
+
+## With phase ratios 
+
+function JustRelax.solve!(
+    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
+    pt_stokes::PTStokesCoeffs,
+    di::NTuple{2,T},
+    flow_bcs,
+    ρg,
+    η,
+    η_vep,
+    phase_ratios::PhaseRatio,
+    rheology,
+    args,
+    dt,
+    igg::IGG;
+    viscosity_cutoff = (1e16, 1e24),
+    iterMax=10e3,
+    nout=500,
+    b_width=(4, 4, 0),
+    verbose=true,
+) where {A,B,C,D,T}
+
+    # unpack
+    _di = inv.(di)
+    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    ni = size(stokes.P)
+
+    # ~preconditioner
+    ητ = deepcopy(η)
+    # @hide_communication b_width begin # communication/computation overlap
+    compute_maxloc!(ητ, η)
+    update_halo!(ητ)
+    # end
+    
+    # errors
+    err = 2 * ϵ
+    iter = 0
+    err_evo1 = Float64[]
+    err_evo2 = Float64[]
+    norm_Rx = Float64[]
+    norm_Ry = Float64[]
+    norm_∇V = Float64[]
+
+    # solver loop
+    wtime0 = 0.0
+    λ = @zeros(ni...)
+    # while iter < 2 
+    while iter < 2 || (err > ϵ && iter ≤ iterMax)
+        wtime0 += @elapsed begin
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+            
+            @parallel (@idx ni) compute_P!(
+                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, rheology, phase_ratios.center, dt, r, θ_dτ
+            )
+
+            @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
+                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+            )
+
             ν = 0.05
-            @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, rheology)
+            @parallel (@idx ni) compute_viscosity!(η, ν, phase_ratios.center, @strain(stokes)..., args, rheology, viscosity_cutoff)
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 

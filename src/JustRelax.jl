@@ -9,6 +9,8 @@ using CUDA
 using MPI
 using GeoParams
 using HDF5
+using CellArrays
+using StaticArrays
 
 function solve!() end
 
@@ -41,8 +43,11 @@ export _d_xa,
     _harm_xy,
     _current
 
+include("phases/CallArrays.jl")
+export @cell, element, setelement!, cellnum, cellaxes, new_empty_cell, setindex!
+
 include("rheology/StressUpdate.jl")
-export plastic_params, compute_dτ_r, _compute_τ_nonlinear!
+export plastic_params, plastic_params_phase, compute_dτ_r, _compute_τ_nonlinear!
 
 include("MetaJustRelax.jl")
 

@@ -87,6 +87,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             free_slip_z!,
             apply_free_slip!
 
+        include(joinpath(@__DIR__, "phases/phases.jl"))
+        export PhaseRatio, fn_ratio, phase_ratios_center
+
         include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
         export compute_ρg!
 

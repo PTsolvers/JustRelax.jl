@@ -1,4 +1,10 @@
 # From cell vertices to cell center
+
+function temperature2center!(thermal::ThermalArrays)
+    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
+    return nothing
+end
+
 @parallel_indices (i, j) function temperature2center!(
     T_center::T, T_vertex::T
 ) where {T<:AbstractArray{_T,2} where {_T<:Real}}

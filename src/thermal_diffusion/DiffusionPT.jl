@@ -47,8 +47,8 @@ end
 ## 3D KERNELS 
 
 @parallel_indices (i, j, k) function compute_flux!(
-    qTx, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
-)
+    qTx::AbstractArray{_T, 3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
+) where _T
     
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
@@ -78,8 +78,8 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_flux!(
-    qTx, qTy, qTz, qTx2, qTy2, qTz2, T, rheology, phase, θr_dτ, _dx, _dy, _dz, args
-)
+    qTx::AbstractArray{_T, 3}, qTy, qTz, qTx2, qTy2, qTz2, T, rheology, phase, θr_dτ, _dx, _dy, _dz, args
+) where _T
 
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
@@ -111,8 +111,8 @@ end
 end
 
 @parallel_indices (i, j, k) function update_T!(
-    T, Told, qTx, qTy, qTz, ρCp, dτ_ρ, _dt, _dx, _dy, _dz
-)
+    T::AbstractArray{_T, 3}, Told, qTx, qTy, qTz, ρCp, dτ_ρ, _dt, _dx, _dy, _dz
+) where _T
     av(A)   = _av(A, i, j, k)
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
@@ -128,8 +128,8 @@ end
 end
 
 @parallel_indices (i, j, k) function update_T!(
-    T, Told, qTx, qTy, qTz, rheology, phase, dτ_ρ, _dt, _dx, _dy, _dz, args
-)
+    T::AbstractArray{_T, 3}, Told, qTx, qTy, qTz, rheology, phase, dτ_ρ, _dt, _dx, _dy, _dz, args
+) where _T
     av(A)   = _av(A, i, j, k)
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
@@ -147,7 +147,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j, k) function check_res!(ResT, T, Told, qTx2, qTy2, qTz2, ρCp, _dt, _dx, _dy, _dz)
+@parallel_indices (i, j, k) function check_res!(ResT::AbstractArray{_T, 3}, T, Told, qTx2, qTy2, qTz2, ρCp, _dt, _dx, _dy, _dz) where _T
 
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
@@ -160,7 +160,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j, k) function check_res!(ResT, T, Told, qTx2, qTy2, qTz2, rheology, phase, _dt, _dx, _dy, _dz, args)
+@parallel_indices (i, j, k) function check_res!(ResT::AbstractArray{_T, 3}, T, Told, qTx2, qTy2, qTz2, rheology, phase, _dt, _dx, _dy, _dz, args) where _T
 
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
@@ -179,7 +179,7 @@ end
 
 ## 2D KERNELS
 
-@parallel_indices (i, j) function compute_flux!(qTx, qTy, qTx2, qTy2, T, K, θr_dτ, _dx, _dy)
+@parallel_indices (i, j) function compute_flux!(qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _dx, _dy) where _T
     nx = size(θr_dτ, 1)
 
     d_xa(A) = _d_xa(A, i, j, _dx)
@@ -200,8 +200,8 @@ end
 end
 
 @parallel_indices (i, j) function compute_flux!(
-    qTx, qTy, qTx2, qTy2, T, rheology, phase, θr_dτ, _dx, _dy, args
-)
+    qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, rheology, phase, θr_dτ, _dx, _dy, args
+) where _T
     nx = size(θr_dτ, 1)
 
     d_xa(A) = _d_xa(A, i, j, _dx)
@@ -225,8 +225,8 @@ end
 end
 
 @parallel_indices (i, j) function update_T!(
-    T, Told, qTx, qTy, ρCp, dτ_ρ, _dt, _dx, _dy
-)
+    T::AbstractArray{_T, 2}, Told, qTx, qTy, ρCp, dτ_ρ, _dt, _dx, _dy
+) where _T
     nx, = size(ρCp)
 
     d_xa(A) = _d_xa(A, i, j, _dx)
@@ -244,8 +244,8 @@ end
 end
 
 @parallel_indices (i, j) function update_T!(
-    T, Told, qTx, qTy, rheology, phase, dτ_ρ, _dt, _dx, _dy, args::NamedTuple
-)
+    T::AbstractArray{_T, 2}, Told, qTx, qTy, rheology, phase, dτ_ρ, _dt, _dx, _dy, args::NamedTuple
+) where _T
     nx, = size(args.P)
 
     d_xa(A) = _d_xa(A, i, j, _dx)
@@ -266,7 +266,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function check_res!(ResT, T, Told, qTx2, qTy2, ρCp, _dt, _dx, _dy)
+@parallel_indices (i, j) function check_res!(ResT::AbstractArray{_T, 2}, T, Told, qTx2, qTy2, ρCp, _dt, _dx, _dy) where _T
     nx, = size(ρCp)
 
     d_xa(A) = _d_xa(A, i, j, _dx)
@@ -280,7 +280,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function check_res!(ResT, T, Told, qTx2, qTy2, rheology, phase, _dt, _dx, _dy, args)
+@parallel_indices (i, j) function check_res!(ResT::AbstractArray{_T, 2}, T, Told, qTx2, qTy2, rheology, phase, _dt, _dx, _dy, args) where _T
     nx, = size(args.P)
 
     d_xa(A) = _d_xa(A, i, j, _dx)

@@ -7,9 +7,18 @@ Convinience macro to copy data from the array `A` into array `B`
 """
 macro copy(B, A)
     return quote
-        copyto!($(esc(B)), $(esc(A)))
+        multi_copyto!($(esc(B)), $(esc(A)))
     end
 end
+
+multi_copyto!(B::AbstractArray, A::AbstractArray) = copyto!(B, A)
+
+function multi_copyto!(B::NTuple{N, AbstractArray}, A::NTuple{N, AbstractArray}) where N
+    for (Bi, Ai) in zip(B, A)
+        copyto!(Bi, Ai)
+    end
+end
+
 
 """
     @add(I, args...)

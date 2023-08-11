@@ -388,6 +388,7 @@ function init_phases!(phases, particles::Particles, Lx, Ly; d=650e3, r=50e3)
             if ((x - Lx * 0.5)^2 + (y - Ly * 0.5)^2 + (depth - d)^2) ≤ r^2
                 JustRelax.@cell phases[ip, i, j, k] = 5.0
             end
+
         end
         return nothing
     end

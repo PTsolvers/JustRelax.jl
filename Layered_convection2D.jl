@@ -5,8 +5,8 @@ using JustPIC
 # set_backend(backend)
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:gpu, Float64, 2)
-# model = PS_Setup(:cpu, Float64, 2)
+# model = PS_Setup(:gpu, Float64, 2)
+model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
@@ -248,6 +248,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     xc_anomaly  = 0.5*lx
     yc_anomaly  = -350e3  # origin of thermal anomaly
     yc_anomaly  = -ly  # origin of thermal anomaly
+    yc_anomaly  = -650e3  # origin of thermal anomaly
     r_anomaly   = 25e3            # radius of perturbation
     init_phases!(pPhases, particles, lx; d=abs(yc_anomaly), r=r_anomaly)
     phase_ratios = PhaseRatio(ni, length(rheology))
@@ -346,11 +347,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     nt    = 30
     T_buffer = @zeros(ni.+1) 
     Told_buffer = similar(T_buffer)
+    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+        copyinn_x!(dst, src)
+    end
     grid2particle!(pT, xvi, T_buffer, particles.coords)
 
     local iters
-    while it < 150
-    # while (t/(1e6 * 3600 * 24 *365.25)) < 100
+    # while it < 150
+    while (t/(1e6 * 3600 * 24 *365.25)) < 100
         # Update buoyancy and viscosity -
         # args_ηv = (; T = thermal.Tc, P = stokes.P, dt=Inf)
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
@@ -377,7 +381,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
             iterMax=50e3,
             nout=1e3,
         );
-        @parallel (JustRelax.@idx ni) compute_invariant!(stokes.ε.II, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy)
+        @parallel (JustRelax.@idx ni) compute_invariant!(stokes.ε.II, @strain(stokes)...)
         dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
@@ -400,8 +404,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         end
         grid2particle!(pT, xvi, T_buffer, Told_buffer, particles.coords)
         # advect particles in space
-        V = stokes.V.Vx, stokes.V.Vy
-        advection_RK!(particles, V, grid_vx, grid_vy, dt, 2 / 3)
+        advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
         # advect particles in memory
         shuffle_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
@@ -415,13 +418,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         @views T_buffer[:, end]      .= 273.0
         @views thermal.T[2:end-1, :] .= T_buffer
         @views thermal.T[:, 1]       .= Tmax
-        @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
+        temperature2center!(thermal)
 
         @show it += 1
         t += dt
 
         # # Plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 10) == 0
             # p = particles.coords
             # ppx, ppy = p
             # pxv = ppx.data[:]./1e3
@@ -467,15 +470,15 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     return nothing
 end
 
-function run()
+# function run()
     figdir = "Plume2D"
     ar     = 2 # aspect ratio
-    n      = 64*3
+    n      = 64
     nx     = n*ar - 2
     ny     = n - 2
-    igg    = IGG(init_global_grid(nx, ny, 0)...) 
+    # igg    = IGG(init_global_grid(nx, ny, 0)...) 
 
     main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
-end
+# end
 
-run()
+# run()

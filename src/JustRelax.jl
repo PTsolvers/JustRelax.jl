@@ -18,8 +18,12 @@ export IGG, lazy_grid, Geometry
 include("MiniKernels.jl")
 export _d_xa,
     _d_ya,
+    _d_za,
+    _d_za,
     _d_xi,
     _d_yi,
+    _d_zi,
+    _d_zi,
     _av,
     _av_xa,
     _av_ya,

@@ -3,6 +3,9 @@ struct ThermalParameters{T}
     ρCp::T # density * heat capacity
 end
 
+
+
+
 # 1D THERMAL DIFFUSION MODULE
 
 module ThermalDiffusion1D

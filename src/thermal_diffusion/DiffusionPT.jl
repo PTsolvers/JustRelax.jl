@@ -179,7 +179,7 @@ end
 
 ## 2D KERNELS
 
-@parallel_indices (i, j) function compute_flux!(qTx::AbstractArray{Any, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _dx, _dy)
+@parallel_indices (i, j) function compute_flux!(qTx, qTy, qTx2, qTy2, T, K, θr_dτ, _dx, _dy)
     nx = size(θr_dτ, 1)
 
     d_xa(A) = _d_xa(A, i, j, _dx)
@@ -340,21 +340,21 @@ function update_T(::Nothing, b_width, thermal, rheology, phase, pt_thermal, _dt,
 end
 
 function update_T(igg, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
-    @hide_communication b_width begin # communication/computation overlap
+    # @hide_communication b_width begin # communication/computation overlap
         @parallel update_range(ni...) update_T!(
             thermal.T, thermal.Told, @qT(thermal)..., ρCp, pt_thermal.dτ_ρ, _dt, _di...,
         )
         update_halo!(thermal.T)
-    end
+    # end
 end
 
 function update_T(igg, b_width, thermal, rheology, phase, pt_thermal, _dt, _di, ni, args)
-    @hide_communication b_width begin # communication/computation overlap
+    # @hide_communication b_width begin # communication/computation overlap
         @parallel update_range(ni...) update_T!(
             thermal.T, thermal.Told, @qT(thermal)..., rheology, phase, pt_thermal.dτ_ρ, _dt, _di..., args
         )
         update_halo!(thermal.T)
-    end
+    # end
 end
 
 """
@@ -369,14 +369,15 @@ function heatdiffusion_PT!(
     K::AbstractArray,
     ρCp::AbstractArray,
     dt,
-    di,
-    igg;
+    di;
+    igg = nothing,
     b_width = (4, 4, 4),
     iterMax = 50e3,
     nout = 1e3,
     verbose = true
 )
 
+    @show igg, nout
     # Compute some constant stuff
     _dt = inv(dt)
     _di = inv.(di)
@@ -457,8 +458,8 @@ function heatdiffusion_PT!(
     rheology,
     args::NamedTuple,
     dt,
-    di,
-    igg;
+    di;
+    igg = nothing,
     phase = nothing,
     b_width = (4, 4, 4),
     iterMax = 50e3,

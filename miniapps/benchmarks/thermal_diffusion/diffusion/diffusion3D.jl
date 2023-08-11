@@ -18,10 +18,10 @@ function diffusion_3D(;
     lx=100e3,
     ly=100e3,
     lz=100e3,
-    ρ=3.3e3,
-    Cp=1.2e3,
-    K=3.0,
-    init_MPI=MPI.Initialized() ? false : true,
+    ρ0=3.3e3,
+    Cp0=1.2e3,
+    K0=3.0,
+    init_MPI=JustRelax.MPI.Initialized() ? false : true,
     finalize_MPI=false,
 )
     kyr = 1e3 * 3600 * 24 * 365.25
@@ -34,26 +34,38 @@ function diffusion_3D(;
     li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
     xci, xvi = lazy_grid(di, li, ni; origin=(0, 0, -lz)) # nodes at the center and vertices of the cells
-
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+
+    # Define the thermal parameters with GeoParams
+    rheology = SetMaterialParams(;
+        Phase             = 1,
+        Density           = PT_Density(; ρ0=3.1e3, β=0.0, T0=0.0, α = 1.5e-5),
+        HeatCapacity      = ConstantHeatCapacity(; cp=Cp0),
+        Conductivity      = ConstantConductivity(; k=K0),
+    )
+
+    # fields needed to compute density on the fly
+    P = @zeros(ni...)
+    args = (; P=P)
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
     thermal = ThermalArrays(ni)
 
     # physical parameters
-    ρ = @fill(ρ, ni...)
-    Cp = @fill(Cp, ni...)
-    K = @fill(K, ni...)
+    ρ = @fill(ρ0, ni...)
+    Cp = @fill(Cp0, ni...)
+    K = @fill(K0, ni...)
     ρCp = @. Cp * ρ
-    thermal_parameters = ThermalParameters(K, ρCp)
 
     # Boundary conditions
     pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li)
-    thermal_bc = (frontal=true, lateral=true)
+    thermal_bc = TemperatureBoundaryConditions(; 
+        no_flux     = (left = true, right = true, top = false, bot = false, front=true, back=true), 
+        periodicity = (left = false, right = false, top = false, bot = false, front=false, back=false),
+    )
 
-    @parallel (1:nx, 1:ny, 1:nz) init_T!(thermal.T, xci[3])
-    @parallel assign!(thermal.Told, thermal.T)
+    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])
 
     t = 0.0
     it = 0
@@ -62,24 +74,22 @@ function diffusion_3D(;
     # Physical time loop
     local iters
     while it < nt
-        iters = solve!(
+        heatdiffusion_PT!(
             thermal,
             pt_thermal,
-            thermal_parameters,
             thermal_bc,
-            ni,
-            di,
-            igg,
-            dt;
-            iterMax=10e3,
-            nout=1,
-            verbose=false,
+            rheology,
+            args,
+            dt,
+            di,;
+            igg
         )
+       
         t += dt
         it += 1
     end
 
     finalize_global_grid(; finalize_MPI=finalize_MPI)
 
-    return (ni=ni, xci=xci, li=li, di=di), thermal, iters
+    return (ni=ni, xci=xci, li=li, di=di), thermal
 end

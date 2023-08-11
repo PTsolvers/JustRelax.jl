@@ -9,10 +9,11 @@
     return nothing
 end
 
-function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ=3.3e3, Cp=1.2e3, K=3.0)
+
+function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, K0=3.0)
     kyr = 1e3 * 3600 * 24 * 365.25
-    Myr = 1e6 * 3600 * 24 * 365.25
-    ttot = 10 * Myr # total simulation time
+    Myr = 1e3 * kyr
+    ttot = 1 * Myr # total simulation time
     dt = 50 * kyr # physical time step
 
     # Physical domain
@@ -21,44 +22,49 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ=3.3e3, Cp=1.2e3, K=
     di = @. li / ni # grid step in x- and -y
     xci, xvi = lazy_grid(di, li, ni; origin=(0, -ly)) # nodes at the center and vertices of the cells
 
-    ## Allocate arrays needed for every Thermal Diffusion
-    # general thermal arrays
-    thermal = ThermalArrays(ni)
+    # Define the thermal parameters with GeoParams
+    rheology = SetMaterialParams(;
+        Phase             = 1,
+        Density           = PT_Density(; ρ0=3.1e3, β=0.0, T0=0.0, α = 1.5e-5),
+        HeatCapacity      = ConstantHeatCapacity(; cp=Cp0),
+        Conductivity      = ConstantConductivity(; k=K0),
+    )
+    # fields needed to compute density on the fly
+    P = @zeros(ni...)
+    args = (; P=P)
 
+    ## Allocate arrays needed for every Thermal Diffusion
+    thermal = ThermalArrays(ni)
     # physical parameters
-    ρ = @fill(ρ, ni...)
-    Cp = @fill(Cp, ni...)
-    K = @fill(K, ni...)
+    ρ = @fill(ρ0, ni...)
+    Cp = @fill(Cp0, ni...)
+    K = @fill(K0, ni...)
     ρCp = @. Cp * ρ
-    thermal_parameters = ThermalParameters(K, ρCp)
 
     pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li)
-    thermal_bc = (flux_x=false, flux_y=false)
+    thermal_bc = TemperatureBoundaryConditions(; 
+        no_flux = (left = true, right = true, top = false, bot = false), 
+    )
+    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
 
-    @parallel (1:nx, 1:ny) init_T!(thermal.T, xci[2])
-    @parallel assign!(thermal.Told, thermal.T)
-
+    # Time loop
     t = 0.0
     it = 0
     nt = Int(ceil(ttot / dt))
-    # Physical time loop
-    local iters
     while it < nt
-        iters = solve!(
+        heatdiffusion_PT!(
             thermal,
             pt_thermal,
-            thermal_parameters,
             thermal_bc,
-            ni,
+            rheology,
+            args,
+            dt,
             di,
-            dt;
-            iterMax=10e3,
-            nout=1,
-            verbose=false,
         )
+
         it += 1
         t += dt
     end
 
-    return (ni=ni, xci=xci, li=li, di=di), thermal, iters
+    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), thermal
 end

@@ -29,20 +29,20 @@ end
 const T3 = AbstractArray{<:Real,3}
 
 # finite differences
-@inline _dx(A::T, i, j, k) where {T<:T3} = A[i + 1, j, k] - A[i, j, k]
-@inline _dy(A::T, i, j, k) where {T<:T3} = A[i, j + 1, k] - A[i, j, k]
-@inline _dz(A::T, i, j, k) where {T<:T3} = A[i, j, k + 1] - A[i, j, k]
-@inline _d_xi(A::T, i, j, k) where {T<:T3} = A[i + 1, j + 1, k + 1] - A[i, j + 1, k + 1]
-@inline _d_yi(A::T, i, j, k) where {T<:T3} = A[i + 1, j + 1, k + 1] - A[i + 1, j, k + 1]
-@inline _d_zi(A::T, i, j, k) where {T<:T3} = A[i + 1, j + 1, k + 1] - A[i + 1, j + 1, k]
+@inline _d_xa(A::T, i, j, k, _dx) where {T<:T3} = (A[i + 1, j, k] - A[i, j, k]) * _dx
+@inline _d_ya(A::T, i, j, k, _dy) where {T<:T3} = (A[i, j + 1, k] - A[i, j, k]) * _dy
+@inline _d_za(A::T, i, j, k, _dz) where {T<:T3} = (A[i, j, k + 1] - A[i, j, k]) * _dz
+@inline _d_xi(A::T, i, j, k, _dx) where {T<:T3} = (A[i + 1, j + 1, k + 1] - A[i, j + 1, k + 1]) * _dx
+@inline _d_yi(A::T, i, j, k, _dy) where {T<:T3} = (A[i + 1, j + 1, k + 1] - A[i + 1, j, k + 1]) * _dy
+@inline _d_zi(A::T, i, j, k, _dz) where {T<:T3} = (A[i + 1, j + 1, k + 1] - A[i + 1, j + 1, k]) * _dz
 # averages
 @inline _av(A::T, i, j, k) where {T<:T3} = 0.125 * mysum(A, i:(i + 1), j:(j + 1), k:(k + 1))
 @inline _av_x(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i + 1, j, k] + A[i, j, k])
 @inline _av_y(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i, j + 1, k] + A[i, j, k])
 @inline _av_z(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i, j, k + 1] + A[i, j, k])
-@inline _av_xy(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i - 1), j:(j - 1))
-@inline _av_xz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i - 1), k:(k - 1))
-@inline _av_yz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, j:(j - 1), k:(k - 1))
+@inline _av_xy(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:(j + 1), k:k)
+@inline _av_xz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:j , k:(k + 1))
+@inline _av_yz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:i, j:(j + 1), k:(k + 1))
 # harmonic averages
 @inline function _harm_x(A::T, i, j, k) where {T<:T3}
     return eltype(A)(2) * inv(inv(A[i + 1, j, k]) + inv(A[i, j, k]))
@@ -54,13 +54,13 @@ end
     return eltype(A)(2) * inv(inv(A[i, j, k + 1]) + inv(A[i, j, k]))
 end
 @inline function _harm_xy(A::T, i, j, k) where {T<:T3}
-    return eltype(A)(4) * inv(mysum(inv, A, i:(i - 1), j:(j - 1)))
+    return eltype(A)(4) * inv(mysum(A, i:(i + 1), j:(j + 1), k:k))
 end
 @inline function _harm_xz(A::T, i, j, k) where {T<:T3}
-    return eltype(A)(4) * inv(mysum(inv, A, i:(i - 1), k:(k - 1)))
+    return eltype(A)(4) * inv(mysum(A, i:(i + 1), j:j , k:(k + 1)))
 end
 @inline function _harm_yz(A::T, i, j, k) where {T<:T3}
-    return eltype(A)(4) * inv(mysum(inv, A, j:(j - 1), k:(k - 1)))
+    return eltype(A)(4) * inv(mysum(A, i:i, j:(j + 1), k:(k + 1)))
 end
 # others
 @inline function _gather_yz(A::T, i, j, k) where {T<:T3}
@@ -80,7 +80,7 @@ mysum(A, ranges::Vararg{T,N}) where {T,N} = mysum(identity, A, ranges...)
 function mysum(f::F, A, ranges_i) where {F<:Function}
     s = 0.0
     for i in ranges_i
-        s += @inbounds f(A[i])
+        s += f(A[i])
     end
     return s
 end
@@ -88,7 +88,7 @@ end
 function mysum(f::F, A, ranges_i, ranges_j) where {F<:Function}
     s = 0.0
     for i in ranges_i, j in ranges_j
-        s += @inbounds f(A[i, j])
+        s += f(A[i, j])
     end
     return s
 end
@@ -96,7 +96,7 @@ end
 function mysum(f::F, A, ranges_i, ranges_j, ranges_k) where {F<:Function}
     s = 0.0
     for i in ranges_i, j in ranges_j, k in ranges_k
-        s += @inbounds f(A[i, j, k])
+        s += f(A[i, j, k])
     end
     return s
 end

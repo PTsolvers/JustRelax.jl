@@ -32,16 +32,22 @@ const T3 = AbstractArray{<:Real,3}
 @inline _d_xa(A::T, i, j, k, _dx) where {T<:T3} = (A[i + 1, j, k] - A[i, j, k]) * _dx
 @inline _d_ya(A::T, i, j, k, _dy) where {T<:T3} = (A[i, j + 1, k] - A[i, j, k]) * _dy
 @inline _d_za(A::T, i, j, k, _dz) where {T<:T3} = (A[i, j, k + 1] - A[i, j, k]) * _dz
-@inline _d_xi(A::T, i, j, k, _dx) where {T<:T3} = (A[i + 1, j + 1, k + 1] - A[i, j + 1, k + 1]) * _dx
-@inline _d_yi(A::T, i, j, k, _dy) where {T<:T3} = (A[i + 1, j + 1, k + 1] - A[i + 1, j, k + 1]) * _dy
-@inline _d_zi(A::T, i, j, k, _dz) where {T<:T3} = (A[i + 1, j + 1, k + 1] - A[i + 1, j + 1, k]) * _dz
+@inline function _d_xi(A::T, i, j, k, _dx) where {T<:T3}
+    return (A[i + 1, j + 1, k + 1] - A[i, j + 1, k + 1]) * _dx
+end
+@inline function _d_yi(A::T, i, j, k, _dy) where {T<:T3}
+    return (A[i + 1, j + 1, k + 1] - A[i + 1, j, k + 1]) * _dy
+end
+@inline function _d_zi(A::T, i, j, k, _dz) where {T<:T3}
+    return (A[i + 1, j + 1, k + 1] - A[i + 1, j + 1, k]) * _dz
+end
 # averages
 @inline _av(A::T, i, j, k) where {T<:T3} = 0.125 * mysum(A, i:(i + 1), j:(j + 1), k:(k + 1))
 @inline _av_x(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i + 1, j, k] + A[i, j, k])
 @inline _av_y(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i, j + 1, k] + A[i, j, k])
 @inline _av_z(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i, j, k + 1] + A[i, j, k])
 @inline _av_xy(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:(j + 1), k:k)
-@inline _av_xz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:j , k:(k + 1))
+@inline _av_xz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:j, k:(k + 1))
 @inline _av_yz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:i, j:(j + 1), k:(k + 1))
 # harmonic averages
 @inline function _harm_x(A::T, i, j, k) where {T<:T3}
@@ -57,7 +63,7 @@ end
     return eltype(A)(4) * inv(mysum(A, i:(i + 1), j:(j + 1), k:k))
 end
 @inline function _harm_xz(A::T, i, j, k) where {T<:T3}
-    return eltype(A)(4) * inv(mysum(A, i:(i + 1), j:j , k:(k + 1)))
+    return eltype(A)(4) * inv(mysum(A, i:(i + 1), j:j, k:(k + 1)))
 end
 @inline function _harm_yz(A::T, i, j, k) where {T<:T3}
     return eltype(A)(4) * inv(mysum(A, i:i, j:(j + 1), k:(k + 1)))

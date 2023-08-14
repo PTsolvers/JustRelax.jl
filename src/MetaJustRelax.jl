@@ -103,7 +103,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionExplicit.jl"))
         export ThermalParameters
-        
+
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionPT.jl"))
         export heatdiffusion_PT!
 

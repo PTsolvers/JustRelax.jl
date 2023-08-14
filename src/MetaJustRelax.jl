@@ -71,6 +71,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             @tensor_center,
             @qT,
             @qT2,
+            @residuals,
             compute_dt,
             assign!,
             tupleize,

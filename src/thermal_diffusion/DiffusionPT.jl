@@ -576,7 +576,7 @@ function heatdiffusion_PT!(
 
     while err > ϵ && iter < iterMax
         wtime0 += @elapsed begin
-            @parallel flux_range(ni...) JustRelax.compute_flux!(
+            @parallel flux_range(ni...) compute_flux!(
                 @qT(thermal)...,
                 @qT2(thermal)...,
                 thermal.T,

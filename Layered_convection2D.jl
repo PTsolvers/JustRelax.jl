@@ -1,12 +1,12 @@
 using JustRelax, CUDA
 using JustPIC
-# backend = "CUDA"
+backend = "CUDA"
 # backend = "Threads"
 # set_backend(backend)
 
 # setup ParallelStencil.jl environment
-# model = PS_Setup(:gpu, Float64, 2)
-model = PS_Setup(:cpu, Float64, 2)
+model = PS_Setup(:gpu, Float64, 2)
+# model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
@@ -194,6 +194,17 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
     @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
+function rectangular_perturbation!(T, δT, xc, yc, r, xvi)
+
+    @parallel_indices (i, j) function _rectangular_perturbation!(T, δT, xc, yc, r, x, y)
+        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
+            T[i, j] += δT
+        end
+        return nothing
+    end
+
+    @parallel _rectangular_perturbation!(T, δT, xc, yc, r, xvi...)
+end
 # --------------------------------------------------------------------------------
 
 Rayleigh_number(ρ, α, ΔT, κ, η0) = ρ * 9.81 * α * ΔT * 2890e3^3 * inv(κ * η0) 
@@ -214,7 +225,7 @@ end
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
 
     # Physical domain ------------------------------------
-    ly       = 400e3       # domain length in y
+    ly       = 700e3       # domain length in y
     lx       = ly * ar     # domain length in x
     ni       = nx, ny      # number of cells
     li       = lx, ly      # domain length in x- and y-
@@ -233,7 +244,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     
     # Initialize particles -------------------------------
     # nxcell, max_xcell, min_xcell = 16, 24, 8
-    nxcell, max_xcell, min_xcell = 24, 48, 18
+    nxcell, max_xcell, min_xcell = 20, 20, 10
     particles = init_particles_cellarrays(
         nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
     )
@@ -244,11 +255,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     particle_args = (pT, pPhases)
 
     # Elliptical temperature anomaly 
-    δT          = 10.0           # temperature perturbation    
-    xc_anomaly  = 0.5*lx
-    yc_anomaly  = -350e3  # origin of thermal anomaly
-    yc_anomaly  = -ly  # origin of thermal anomaly
-    yc_anomaly  = -650e3  # origin of thermal anomaly
+    δT          = 50.0           # temperature perturbation    
+    xc_anomaly  = lx/2  # origin of thermal anomaly
+    yc_anomaly  = -625e3  # origin of thermal anomaly
     r_anomaly   = 25e3            # radius of perturbation
     init_phases!(pPhases, particles, lx; d=abs(yc_anomaly), r=r_anomaly)
     phase_ratios = PhaseRatio(ni, length(rheology))
@@ -293,10 +302,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     end
     thermal_bcs!(thermal.T, thermal_bc)
    
-    elliptical_perturbation!(thermal.T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi)
-    @views thermal.T[:, end] .= Tmin
-    Tbot = Tmax = 2000.0 + 273
-    @views thermal.T[:, 1]   .= Tmax
+    rectangular_perturbation!(thermal.T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi)
+    # @views thermal.T[:, end] .= Tmin
+    # Tbot = Tmax = 2000.0 + 273
+    # @views thermal.T[:, 1]   .= Tmax
     # Tbot = Tmax
     @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
@@ -356,7 +365,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # while it < 150
     while (t/(1e6 * 3600 * 24 *365.25)) < 100
         # Update buoyancy and viscosity -
-        # args_ηv = (; T = thermal.Tc, P = stokes.P, dt=Inf)
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         @parallel (JustRelax.@idx ni) JustRelax.compute_viscosity!(
             η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (1e16, 1e24)
@@ -365,7 +373,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         # ------------------------------
  
         # Stokes solver ----------------
-        solve!(
+        @time solve!(
             stokes,
             pt_stokes,
             di,
@@ -472,13 +480,70 @@ end
 
 # function run()
     figdir = "Plume2D"
-    ar     = 2 # aspect ratio
-    n      = 64
+    ar     = 1 # aspect ratio
+    n      = 282
     nx     = n*ar - 2
     ny     = n - 2
-    # igg    = IGG(init_global_grid(nx, ny, 0)...) 
-
-    main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
+    igg  = if !(JustRelax.MPI.Initialized())
+        IGG(init_global_grid(nx, ny, 0; init_MPI= true)...)
+    else
+        igg
+    end
+    # main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
 # end
 
 # run()
+
+# environment!(model)
+# solve!(
+#     stokes,
+#     pt_stokes,
+#     di,
+#     flow_bcs,
+#     ρg,
+#     η,
+#     η_vep,
+#     phase_ratios,
+#     rheology,
+#     args,
+#     dt,
+#     igg;
+#     iterMax=50e3,
+#     nout=1e3,
+# );
+
+# @parallel (@idx ni) JustRelax.Stokes2D.compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+
+# @parallel_indices (i, j) function foo!(
+#     εxx::AbstractArray{T,2}, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
+# ) where {T}
+#     d_xi(A) = _d_xi(A, i, j, _dx)
+#     d_yi(A) = _d_yi(A, i, j, _dy)
+#     d_xa(A) = _d_xa(A, i, j, _dx)
+#     d_ya(A) = _d_ya(A, i, j, _dy)
+
+#     if all((i, j) .≤ size(εxx))
+#         ∇V_ij = ∇V[i, j] / 3.0
+#         εxx[i, j] = d_xi(Vx) - ∇V_ij
+#         εyy[i, j] = d_yi(Vy) - ∇V_ij
+#     end
+#     εxy[i, j] = 0.5 * (d_ya(Vx) + d_xa(Vy))
+#     return nothing
+# end
+
+# @parallel (@idx ni .+ 1) JustRelax.Stokes2D.compute_strain_rate!(
+# # @parallel (@idx ni .+ 1) foo!(
+#     @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+# )
+
+environment!(model)
+
+@parallel JustRelax.Stokes2D.compute_V!(
+    @velocity(stokes)...,
+    stokes.P,
+    @stress(stokes)...,
+    ηdτ,
+    ρg...,
+    ητ,
+    _di...,
+)

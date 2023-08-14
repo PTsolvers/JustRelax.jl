@@ -48,7 +48,7 @@ function init_rheologies(; is_plastic = true)
     # Physical properties using GeoParams ----------------
     η_reg     = 1e16
     G0        = 30e9    # shear modulus
-    cohesion  = 20e6
+    cohesion  = 3e6
     # friction  = asind(0.01)
     friction  = 20.0
     pl        = if is_plastic 
@@ -323,7 +323,7 @@ function init_phases!(phases, particles::Particles, Lx; d=650e3, r=50e3)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
-        @inbounds for ip in JustRelax.cellaxes(phases)
+        @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
             # quick escape
             JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
@@ -360,7 +360,7 @@ end
 function init_phases!(phases, particles::Particles, Lx, Ly; d=650e3, r=50e3)
 
     @parallel_indices (i, j, k) function init_phases!(phases, px, py, pz, index, r, Lx, Ly)
-        @inbounds for ip in cellaxes(phases)
+        @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
             JustRelax.@cell(index[ip, i, j, k]) == 0 && continue
 

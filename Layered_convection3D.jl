@@ -33,10 +33,10 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, z, dx, dy
         x0, y0, z0 = x[i], y[j], z[k]
         # fill index array
         for l in 1:nxcell
-            @cell px[l, i, j, k] = x0 + dx * δ()
-            @cell py[l, i, j, k] = y0 + dy * δ()
-            @cell pz[l, i, j, k] = z0 + dz * δ()
-            @cell index[l, i, j, k] = true
+            JustRelax.@cell px[l, i, j, k] = x0 + dx * δ()
+            JustRelax.@cell py[l, i, j, k] = y0 + dy * δ()
+            JustRelax.@cell pz[l, i, j, k] = z0 + dz * δ()
+            JustRelax.@cell index[l, i, j, k] = true
         end
         return nothing
     end
@@ -52,15 +52,15 @@ end
 function velocity_grids(xci, xvi, di)
     dx, dy, dz = di
     x, y, z = xci
-    x_ghost = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1])+2)
-    y_ghost = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2])+2)
-    z_ghost = LinRange(xci[3][1] - dz, xci[3][end] + dz, length(xci[3])+2)
+    x_ghost = LinRange(x[1] - dx, x[end] + dx, length(x)+2)
+    y_ghost = LinRange(y[1] - dy, y[end] + dy, length(y)+2)
+    z_ghost = LinRange(z[1] - dz, z[end] + dz, length(z)+2)
 
     grid_vx = xvi[1], y_ghost, z_ghost
     grid_vy = x_ghost, xvi[2], z_ghost
-    grid_vy = x_ghost, y_ghost, xvi[3]
+    grid_vz = x_ghost, y_ghost, xvi[3]
 
-    return grid_vx, grid_vy
+    return grid_vx, grid_vy, grid_vz
 end
 #############################################################
 
@@ -220,10 +220,10 @@ end
     return nothing
 end
 
-function main3D(nx, ny, nz, ar; figdir="figs2D")
+function main3D(igg, nx, ny, nz, ar; figdir="figs2D")
 
     # Physical domain ------------------------------------
-    lz       = 650e3             # domain length in y
+    lz       = 400e3             # domain length in y
     lx = ly  = lz * ar
     origin   = 0.0, 0.0, -lz                        # origin coordinates
     ni       = nx, ny, nz                           # number of cells
@@ -233,9 +233,6 @@ function main3D(nx, ny, nz, ar; figdir="figs2D")
     # ----------------------------------------------------
 
     # Init MPI -------------------------------------------
-    igg  = IGG(
-        init_global_grid(nx, ny, nz; init_MPI=JustRelax.MPI.Initialized() ? false : true)...
-    )
     # ni_v = nx_g(), ny_g(), nz_g()
     # ni_v = (nx-2)*igg.dims[1], (ny-2)*igg.dims[2], (nz-2)*igg.dims[3]
     # ----------------------------------------------------
@@ -266,11 +263,11 @@ function main3D(nx, ny, nz, ar; figdir="figs2D")
     δT          = 150.0           # temperature perturbation    
     xc_anomaly  = 0.5*lx
     yc_anomaly  = 0.5*ly
-    zc_anomaly  = -650e3  # origin of thermal anomaly
+    zc_anomaly  = -350e3  # origin of thermal anomaly
     r_anomaly   = 100e3            # radius of perturbation
     init_phases!(pPhases, particles, lx, ly; d=abs(zc_anomaly), r=r_anomaly)
     phase_ratios = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    @parallel (JustRelax.@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -319,13 +316,13 @@ function main3D(nx, ny, nz, ar; figdir="figs2D")
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     for _ in 1:1
-        @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P))
+        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P))
         @parallel init_P!(stokes.P, ρg[3], xci[3])
     end
     # Rheology
     η               = @ones(ni...)
     args_ηv         = (; T = thermal.T, P = stokes.P, depth = xci[3], dt = Inf)
-    @parallel (@idx ni) compute_viscosity!(η, phase_ratios.center, @strain(stokes)..., args_ηv, rheology)
+    @parallel (JustRelax.@idx ni) compute_viscosity!(η, phase_ratios.center, @strain(stokes)..., args_ηv, rheology)
  
     η_vep           = deepcopy(η)
     # Boundary conditions
@@ -333,7 +330,6 @@ function main3D(nx, ny, nz, ar; figdir="figs2D")
         free_slip   = (left=true , right=true , top=true , bot=true , front=true , back=true ),
         no_slip     = (left=false, right=false, top=false, bot=false, front=false, back=false),
         periodicity = (left=false, right=false, top=false, bot=false, front=false, back=false),
-        free_surface = false
     )
    
     # IO ----- -------------------------------------------
@@ -359,15 +355,13 @@ function main3D(nx, ny, nz, ar; figdir="figs2D")
 
     # # Update buoyancy and viscosity
     # args_ηv = (; T = thermal.T, P = stokes.P, dt=Inf)
-    # @parallel (@idx ni) compute_viscosity!(η, phase_ratios.center, @strain(stokes)..., args_ηv, rheology)
-    # @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P))
+    # @parallel (JustRelax.@idx ni) compute_viscosity!(η, phase_ratios.center, @strain(stokes)..., args_ηv, rheology)
+    # @parallel (JustRelax.@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P))
     # # ------------------------------
 
     # Time loop
     t, it = 0.0, 0
     nt    = 250
-    # ηs    = similar(η);
-    # η0    = deepcopy(η);
     
     local iters
 
@@ -375,8 +369,8 @@ function main3D(nx, ny, nz, ar; figdir="figs2D")
     # while (t/(1e6 * 3600 * 24 *365.25)) < 100
         # Update buoyancy and viscosity
         args_ηv = (; T = thermal.T, P = stokes.P, dt=Inf)
-        @parallel (@idx ni) compute_viscosity!(η, phase_ratios.center, @strain(stokes)..., args_ηv, rheology)
-        @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P))
+        @parallel (JustRelax.@idx ni) compute_viscosity!(η, phase_ratios.center, @strain(stokes)..., args_ηv, rheology)
+        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P))
         # ------------------------------
 
         # for _ in 1:10
@@ -404,11 +398,11 @@ function main3D(nx, ny, nz, ar; figdir="figs2D")
             rheology,
             dt,
             igg,
-            iterMax=150e3,
+            iterMax=50e3,
             nout=1000,
         );
 
-        @parallel (@idx ni) compute_invariant!(stokes.ε.II, @strain(stokes)...)
+        @parallel (JustRelax.@idx ni) compute_invariant!(stokes.ε.II, @strain(stokes)...)
         dt = compute_dt(stokes, di, dt_diff) * .75
         println("dt = $(dt/(1e6 * 3600 * 24 *365.25)) Myrs")
         # ------------------------------
@@ -439,7 +433,7 @@ function main3D(nx, ny, nz, ar; figdir="figs2D")
         @show inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
         # update phase ratios
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+        @parallel (JustRelax.@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
         # interpolate fields from particle to grid vertices
         gathering_xvertex!(thermal.T, pT, xvi, particles.coords)
         # gather_temperature_xvertex!(thermal.T, pT, ρCₚp, xvi, particles.coords)
@@ -482,10 +476,10 @@ function main3D(nx, ny, nz, ar; figdir="figs2D")
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
-            Colorbar(fig[1,2], h1) #, height=100)
-            Colorbar(fig[2,2], h2) #, height=100)
-            Colorbar(fig[3,2], h3) #, height=100)
-            Colorbar(fig[4,2], h4) #, height=100)
+            Colorbar(fig[1,2], h1)
+            Colorbar(fig[2,2], h2)
+            Colorbar(fig[3,2], h3)
+            Colorbar(fig[4,2], h4)
             fig
             save( joinpath(figdir, "$(it).png"), fig)
 
@@ -501,15 +495,58 @@ function main3D(nx, ny, nz, ar; figdir="figs2D")
     return nothing
 end
 
-function run()
+# function run()
     figdir = "Plume3D"
     ar     = 2 # aspect ratio
     n      = 32
     nx     = n*ar - 2
     ny     = n*ar - 2
     nz     = n - 2
+    igg  = if !(JustRelax.MPI.Initialized())
+        IGG(
+            init_global_grid(nx, ny, nz; init_MPI= true)...
+        )
+    else
+        igg
 
-    main3D(nx, ny, nz, ar; figdir=figdir);
-end
+    end
+#     main3D(nx, ny, nz, ar; figdir=figdir);
+# end
 
-run()
+# run()
+
+
+# environment!(model);
+# # @parallel (JustRelax.@idx ni) foo!(
+# @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.compute_P!(
+#     stokes.P,
+#     stokes.P0,
+#     stokes.R.RP,
+#     stokes.∇V,
+#     η,
+#     rheology,
+#     phase_ratios.center,
+#     dt,
+#     pt_stokes.r,
+#     pt_stokes.θ_dτ,
+# )
+
+# @parallel (@idx ni) JustRelax.Stokes3D.compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+# @parallel (@idx ni) JustRelax.Stokes3D.compute_strain_rate!(
+#     stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
+# )
+
+# @parallel (@idx ni) JustRelax.Stokes3D.compute_τ_nonlinear!(
+#     @stress_center(stokes)...,
+#     stokes.τ.II,
+#     @tensor(stokes.τ_o)...,
+#     @strain(stokes)...,
+#     stokes.P,
+#     η,
+#     η_vep,
+#     λ,
+#     phase_ratios.center,
+#     rheology,
+#     dt,
+#     pt_stokes.θ_dτ,
+# )

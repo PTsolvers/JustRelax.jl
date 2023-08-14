@@ -221,6 +221,25 @@ end
     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
 end
 
+
+"""
+    @residuals(A)
+
+Unpacks the momentum residuals from `A`.
+"""
+macro residuals(A)
+    return quote
+        unpack_residuals(($(esc(A))))
+    end
+end
+
+@inline function unpack_residuals(A::Residual{<:AbstractArray{T,2}}) where {T}
+    return A.Rx, A.Ry
+end
+@inline function unpack_residuals(A::Residual{<:AbstractArray{T,3}}) where {T}
+    return A.Rx, A.Ry, A.Rz
+end
+
 ## Memory allocators
 
 macro allocate(ni...)

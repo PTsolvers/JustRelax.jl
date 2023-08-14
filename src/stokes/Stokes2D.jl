@@ -52,6 +52,8 @@ import JustRelax: compute_maxloc!, solve!
 export solve!
 
 include("StressRotation.jl")
+include("PressureKernels.jl")
+include("VelocityKernels.jl")
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
     τxx, τyy, τxy, τxy_c = stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ.xy_c
@@ -70,120 +72,120 @@ end
     return nothing
 end
 
-@parallel function compute_∇V!(∇V, Vx, Vy, _dx, _dy)
-    @all(∇V) = @d_xi(Vx) * _dx + @d_yi(Vy) * _dy
-    return nothing
-end
+# @parallel function compute_∇V!(∇V, Vx, Vy, _dx, _dy)
+#     @all(∇V) = @d_xi(Vx) * _dx + @d_yi(Vy) * _dy
+#     return nothing
+# end
 
-@parallel function compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
-    @all(εxx) = @d_xi(Vx) * _dx - @all(∇V) / 3.0
-    @all(εyy) = @d_yi(Vy) * _dy - @all(∇V) / 3.0
-    @all(εxy) = 0.5 * (@d_ya(Vx) * _dy + @d_xa(Vy) * _dx)
-    return nothing
-end
+# @parallel function compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, _dx, _dy)
+#     @all(εxx) = @d_xi(Vx) * _dx - @all(∇V) / 3.0
+#     @all(εyy) = @d_yi(Vy) * _dy - @all(∇V) / 3.0
+#     @all(εxy) = 0.5 * (@d_ya(Vx) * _dy + @d_xa(Vy) * _dx)
+#     return nothing
+# end
 
 # Continuity equation
 
-## Incompressible 
-@parallel function compute_P!(P, RP, ∇V, η, r, θ_dτ)
-    @all(RP) = -@all(∇V)
-    @all(P) = @all(P) + @all(RP) * r / θ_dτ * @all(η)
-    return nothing
-end
+# ## Incompressible 
+# @parallel function compute_P!(P, RP, ∇V, η, r, θ_dτ)
+#     @all(RP) = -@all(∇V)
+#     @all(P) = @all(P) + @all(RP) * r / θ_dτ * @all(η)
+#     return nothing
+# end
 
-## Compressible 
-@parallel function compute_P!(P, P0, RP, ∇V, η, K, dt, r, θ_dτ)
-    @all(RP) = -@all(∇V) - (@all(P) - @all(P0)) / (@all(K) * dt)
-    @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (@all(K) * dt))
-    return nothing
-end
+# ## Compressible 
+# @parallel function compute_P!(P, P0, RP, ∇V, η, K, dt, r, θ_dτ)
+#     @all(RP) = -@all(∇V) - (@all(P) - @all(P0)) / (@all(K) * dt)
+#     @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (@all(K) * dt))
+#     return nothing
+# end
 
-## Compressible - GeoParams
-@parallel function compute_P!(P, P0, RP, ∇V, η, K::Number, dt, r, θ_dτ)
-    @all(RP) = -@all(∇V) - (@all(P) - @all(P0)) / (K * dt)
-    @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (K * dt))
-    return nothing
-end
+# ## Compressible - GeoParams
+# @parallel function compute_P!(P, P0, RP, ∇V, η, K::Number, dt, r, θ_dτ)
+#     @all(RP) = -@all(∇V) - (@all(P) - @all(P0)) / (K * dt)
+#     @all(P) = @all(P) + @all(RP) / (1.0 / (r / θ_dτ * @all(η)) + 1.0 / (K * dt))
+#     return nothing
+# end
 
-@parallel_indices (i, j) function compute_P!(
-    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ
-) where {N}
-    @inbounds begin
-        _Kdt = inv(get_Kb(rheology, phase[i, j]) * dt)
-        RP[i, j] = RP_ij = -∇V[i, j] - (P[i, j] - P0[i, j]) * _Kdt
-        P[i, j] += RP_ij * inv(inv(r / θ_dτ * η[i, j]) + _Kdt)
-    end
-    return nothing
-end
+# @parallel_indices (i, j) function compute_P!(
+#     P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ
+# ) where {N}
+#     @inbounds begin
+#         _Kdt = inv(get_Kb(rheology, phase[i, j]) * dt)
+#         RP[i, j] = RP_ij = -∇V[i, j] - (P[i, j] - P0[i, j]) * _Kdt
+#         P[i, j] += RP_ij * inv(inv(r / θ_dτ * η[i, j]) + _Kdt)
+#     end
+#     return nothing
+# end
 
-@parallel_indices (i, j) function compute_P!(
-    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::T, dt, r, θ_dτ
-) where {N, T<:JustRelax.CellArray}
-    @inbounds begin
-        _Kdt = inv(fn_ratio(get_Kb, rheology, phase_ratio[i, j]) * dt)
-        RP[i, j] = RP_ij = -∇V[i, j] - (P[i, j] - P0[i, j]) * _Kdt
-        P[i, j] += RP_ij * inv(inv(r / θ_dτ * η[i, j]) + _Kdt)
-    end
-    return nothing
-end
+# @parallel_indices (i, j) function compute_P!(
+#     P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::T, dt, r, θ_dτ
+# ) where {N,T<:JustRelax.CellArray}
+#     @inbounds begin
+#         _Kdt = inv(fn_ratio(get_Kb, rheology, phase_ratio[i, j]) * dt)
+#         RP[i, j] = RP_ij = -∇V[i, j] - (P[i, j] - P0[i, j]) * _Kdt
+#         P[i, j] += RP_ij * inv(inv(r / θ_dτ * η[i, j]) + _Kdt)
+#     end
+#     return nothing
+# end
 
-@parallel function compute_V!(Vx, Vy, P, τxx, τyy, τxyv, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
-    @inn(Vx) =
-        @inn(Vx) +
-        (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @av_xa(ρgx)) * ηdτ /
-        @harm_xa(ητ)
-    @inn(Vy) =
-        @inn(Vy) +
-        (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @av_ya(ρgy)) * ηdτ /
-        @harm_ya(ητ)
-    return nothing
-end
+# @parallel function compute_V!(Vx, Vy, P, τxx, τyy, τxyv, ηdτ, ρgx, ρgy, ητ, _dx, _dy)
+#     @inn(Vx) =
+#         @inn(Vx) +
+#         (-@d_xa(P) * _dx + @d_xa(τxx) * _dx + @d_yi(τxyv) * _dy - @av_xa(ρgx)) * ηdτ /
+#         @harm_xa(ητ)
+#     @inn(Vy) =
+#         @inn(Vy) +
+#         (-@d_ya(P) * _dy + @d_ya(τyy) * _dy + @d_xi(τxyv) * _dx - @av_ya(ρgy)) * ηdτ /
+#         @harm_ya(ητ)
+#     return nothing
+# end
 
-@parallel_indices (i, j) function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
-    # Closures
-    @inline d_xa(A) = _d_xa(A, i, j, _dx)
-    @inline d_ya(A) = _d_ya(A, i, j, _dy)
-    @inline d_xi(A) = _d_xi(A, i, j, _dx)
-    @inline d_yi(A) = _d_yi(A, i, j, _dy)
-    @inline av_xa(A) = _av_xa(A, i, j)
-    @inline av_ya(A) = _av_ya(A, i, j)
+# @parallel_indices (i, j) function compute_Res!(Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy)
+#     # Closures
+#     @inline d_xa(A) = _d_xa(A, i, j, _dx)
+#     @inline d_ya(A) = _d_ya(A, i, j, _dy)
+#     @inline d_xi(A) = _d_xi(A, i, j, _dx)
+#     @inline d_yi(A) = _d_yi(A, i, j, _dy)
+#     @inline av_xa(A) = _av_xa(A, i, j)
+#     @inline av_ya(A) = _av_ya(A, i, j)
 
-    @inbounds begin
-        if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-            Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
-        end
-        if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-            Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
-        end
-    end
-    return nothing
-end
+#     @inbounds begin
+#         if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
+#             Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
+#         end
+#         if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+#             Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
+#         end
+#     end
+#     return nothing
+# end
 
-@parallel_indices (i, j) function compute_V_Res!(
-    Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, ητ, ηdτ, _dx, _dy
-)
+# @parallel_indices (i, j) function compute_V_Res!(
+#     Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ρgx, ρgy, ητ, ηdτ, _dx, _dy
+# )
 
-    # Closures
-    @inline d_xa(A) = _d_xa(A, i, j, _dx)
-    @inline d_ya(A) = _d_ya(A, i, j, _dy)
-    @inline d_xi(A) = _d_xi(A, i, j, _dx)
-    @inline d_yi(A) = _d_yi(A, i, j, _dy)
-    @inline av_xa(A) = _av_xa(A, i, j)
-    @inline av_ya(A) = _av_ya(A, i, j)
+#     # Closures
+#     @inline d_xa(A) = _d_xa(A, i, j, _dx)
+#     @inline d_ya(A) = _d_ya(A, i, j, _dy)
+#     @inline d_xi(A) = _d_xi(A, i, j, _dx)
+#     @inline d_yi(A) = _d_yi(A, i, j, _dy)
+#     @inline av_xa(A) = _av_xa(A, i, j)
+#     @inline av_ya(A) = _av_ya(A, i, j)
 
-    @inbounds begin
-        if all((i, j) .≤ size(Rx))
-            R = Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
-            Vx[i + 1, j + 1] += R * ηdτ * inv(av_xa(ητ))
-        end
-        if all((i, j) .≤ size(Ry))
-            R = Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
-            Vy[i + 1, j + 1] += R * ηdτ * inv(av_ya(ητ))
-        end
-    end
+#     @inbounds begin
+#         if all((i, j) .≤ size(Rx))
+#             R = Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
+#             Vx[i + 1, j + 1] += R * ηdτ * inv(av_xa(ητ))
+#         end
+#         if all((i, j) .≤ size(Ry))
+#             R = Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
+#             Vy[i + 1, j + 1] += R * ηdτ * inv(av_ya(ητ))
+#         end
+#     end
 
-    return nothing
-end
+#     return nothing
+# end
 
 # Stress kernels
 
@@ -405,7 +407,19 @@ end
     ε = εxx, εyy, εxyv
 
     _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, P, ηij, η_vep, phase_ratios, λ, dτ_r, _Gdt, plastic_parameters, idx...
+        τ,
+        τII,
+        τ_old,
+        ε,
+        P,
+        ηij,
+        η_vep,
+        phase_ratios,
+        λ,
+        dτ_r,
+        _Gdt,
+        plastic_parameters,
+        idx...,
     )
 
     return nothing
@@ -664,7 +678,7 @@ function JustRelax.solve!(
     args,
     dt,
     igg::IGG;
-    viscosity_cutoff = (1e16, 1e24),
+    viscosity_cutoff=(1e16, 1e24),
     iterMax=10e3,
     nout=500,
     b_width=(4, 4, 0),
@@ -711,7 +725,9 @@ function JustRelax.solve!(
             )
 
             ν = 0.01
-            @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff)
+            @parallel (@idx ni) compute_viscosity!(
+                η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff
+            )
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
@@ -806,7 +822,7 @@ function JustRelax.solve!(
     args,
     dt,
     igg::IGG;
-    viscosity_cutoff = (1e16, 1e24),
+    viscosity_cutoff=(1e16, 1e24),
     iterMax=10e3,
     nout=500,
     b_width=(4, 4, 0),
@@ -824,7 +840,7 @@ function JustRelax.solve!(
     compute_maxloc!(ητ, η)
     update_halo!(ητ)
     # end
-    
+
     # errors
     err = 2 * ϵ
     iter = 0
@@ -833,6 +849,11 @@ function JustRelax.solve!(
     norm_Rx = Float64[]
     norm_Ry = Float64[]
     norm_∇V = Float64[]
+    sizehint!(norm_Rx, Int(iterMax))
+    sizehint!(norm_Ry, Int(iterMax))
+    sizehint!(norm_∇V, Int(iterMax))
+    sizehint!(err_evo1, Int(iterMax))
+    sizehint!(err_evo2, Int(iterMax))
 
     # solver loop
     wtime0 = 0.0
@@ -841,9 +862,18 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
-            
+
             @parallel (@idx ni) compute_P!(
-                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, rheology, phase_ratios.center, dt, r, θ_dτ
+                stokes.P,
+                stokes.P0,
+                stokes.R.RP,
+                stokes.∇V,
+                η,
+                rheology,
+                phase_ratios.center,
+                dt,
+                r,
+                θ_dτ,
             )
 
             @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
@@ -853,7 +883,15 @@ function JustRelax.solve!(
             )
 
             ν = 0.05
-            @parallel (@idx ni) compute_viscosity!(η, ν, phase_ratios.center, @strain(stokes)..., args, rheology, viscosity_cutoff)
+            @parallel (@idx ni) compute_viscosity!(
+                η,
+                ν,
+                phase_ratios.center,
+                @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
+            )
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 

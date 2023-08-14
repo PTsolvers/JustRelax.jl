@@ -1,8 +1,8 @@
 # using CairoMakie
-using JustRelax
+using JustRelax, GeoParams
 
 # setup ParallelStencil.jl environment
-dimension = 3 # 1 | 2 | 3 
+dimension = 3 # 2 | 3 
 device = :cpu # :cpu | :gpu
 precision = Float64
 model = PS_Setup(device, precision, dimension)
@@ -18,18 +18,18 @@ if dimension === 3
     nx, ny, nz = 32, 32, 32
 
     # start model
-    geometry, thermal, iters = diffusion_3D(;
+    geometry, thermal = diffusion_3D(;
         nx=nx,
         ny=ny,
         nz=nz,
         lx=L,
         ly=L,
         lz=L,
-        ρ=3.3e3,
-        Cp=1.2e3,
-        K=3.0,
-        init_MPI=MPI.Initialized() ? false : true,
-        finalize_MPI=false,
+        ρ0=3.3e3,
+        Cp0=1.2e3,
+        K0=3.0,
+        init_MPI=JustRelax.MPI.Initialized() ? false : true,
+        finalize_MPI=true,
     )
 
 elseif dimension == 2
@@ -40,17 +40,8 @@ elseif dimension == 2
     nx, ny = 64, 64
 
     # start model
-    geometry, thermal, iters = diffusion_2D(;
-        nx=nx, ny=ny, lx=L, ly=L, ρ=3.3e3, Cp=1.2e3, K=3.0
+    geometry, thermal = diffusion_2D(;
+        nx=nx, ny=ny, lx=L, ly=L, ρ0=3.3e3, Cp0=1.2e3, K0=3.0
     )
 
-elseif dimension == 1
-    # include model setup
-    include("diffusion/diffusion1D.jl")
-
-    # model resolution (number of gridpoints)
-    nx = 256
-
-    # start model
-    geometry, thermal, iters = diffusion_1D(; nx=nx, lx=L, ρ=3.3e3, Cp=1.2e3, K=3.0)
 end

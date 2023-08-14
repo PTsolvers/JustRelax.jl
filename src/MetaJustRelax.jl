@@ -69,6 +69,8 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             @stress_center,
             @strain_center,
             @tensor_center,
+            @qT,
+            @qT2,
             compute_dt,
             assign!,
             tupleize,
@@ -100,8 +102,10 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export solve!
 
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionExplicit.jl"))
-        # include(joinpath(@__DIR__, "thermal_diffusion/Diffusion.jl"))
         export ThermalParameters
+
+        include(joinpath(@__DIR__, "thermal_diffusion/DiffusionPT.jl"))
+        export heatdiffusion_PT!
 
         include(joinpath(@__DIR__, "Interpolations.jl"))
         export vertex2center!, center2vertex!, temperature2center!

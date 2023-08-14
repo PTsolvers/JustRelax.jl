@@ -7,7 +7,15 @@ Convinience macro to copy data from the array `A` into array `B`
 """
 macro copy(B, A)
     return quote
-        copyto!($(esc(B)), $(esc(A)))
+        multi_copyto!($(esc(B)), $(esc(A)))
+    end
+end
+
+multi_copyto!(B::AbstractArray, A::AbstractArray) = copyto!(B, A)
+
+function multi_copyto!(B::NTuple{N,AbstractArray}, A::NTuple{N,AbstractArray}) where {N}
+    for (Bi, Ai) in zip(B, A)
+        copyto!(Bi, Ai)
     end
 end
 
@@ -50,6 +58,36 @@ end
 
 @inline unpack_velocity(V::Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
 @inline unpack_velocity(V::Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
+
+"""
+    @qT(V)
+
+Unpacks the flux arrays `qT_i` from the ThermalArrays `A`.
+"""
+macro qT(A)
+    return quote
+        unpack_qT(($(esc(A))))
+    end
+end
+
+@inline unpack_qT(A::ThermalArrays{<:AbstractArray{T,2}}) where {T} = A.qTx, A.qTy
+@inline unpack_qT(A::ThermalArrays{<:AbstractArray{T,3}}) where {T} = A.qTx, A.qTy, A.qTz
+
+"""
+    @qT2(V)
+
+Unpacks the flux arrays `qT2_i` from the ThermalArrays `A`.
+"""
+macro qT2(A)
+    return quote
+        unpack_qT2(($(esc(A))))
+    end
+end
+
+@inline unpack_qT2(A::ThermalArrays{<:AbstractArray{T,2}}) where {T} = A.qTx2, A.qTy2
+@inline function unpack_qT2(A::ThermalArrays{<:AbstractArray{T,3}}) where {T}
+    return A.qTx2, A.qTy2, A.qTz2
+end
 
 """
     @strain(A)

@@ -181,6 +181,33 @@ end
     return 
 end
 
+
+@parallel_indices (i, j) function init_T_Attila!(T, z)
+    depth   = abs(z[j])
+
+    if depth < 35e3
+        dTdZ = (923-273)/35e3
+        offset = 273e0
+        # dTdZ, offset
+        T[i, j] = depth * dTdZ + offset
+    
+    elseif 110e3 > depth ≥ 35e3
+        dTdZ = (1492-923)/75e3
+        offset = 923
+        # dTdZ, offset
+        T[i, j] = (depth - 35e3) * dTdZ + offset
+
+    elseif depth ≥ 110e3 
+        dTdZ = (1837 - 1492)/590e3
+        offset = 1492e0
+        # dTdZ, offset
+        T[i, j] = (depth - 110e3) * dTdZ + offset
+
+    end
+    
+    return nothing
+end
+
 function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
@@ -198,7 +225,10 @@ function rectangular_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _rectangular_perturbation!(T, δT, xc, yc, r, x, y)
         @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            T[i, j] += δT
+            depth = abs(y[j])
+            dTdZ = (2047 - 2017) / 50e3
+            offset = 2017
+            T[i, j] = (depth - 585e3) * dTdZ + offset
         end
         return nothing
     end
@@ -225,12 +255,12 @@ end
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
 
     # Physical domain ------------------------------------
-    ly       = 700e3       # domain length in y
-    lx       = ly * ar     # domain length in x
-    ni       = nx, ny      # number of cells
-    li       = lx, ly      # domain length in x- and y-
-    di       = @. li / ni  # grid step in x- and -y
-    origin   = 0.0, -ly    # origin coordinates
+    ly       = 700e3 - 15e3 # domain length in y
+    lx       = ly * ar      # domain length in x
+    ni       = nx, ny       # number of cells
+    li       = lx, ly       # domain length in x- and y-
+    di       = @. li / ni   # grid step in x- and -y
+    origin   = 0.0, -ly     # origin coordinates
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
@@ -257,7 +287,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # Elliptical temperature anomaly 
     δT          = 50.0           # temperature perturbation    
     xc_anomaly  = lx/2  # origin of thermal anomaly
-    yc_anomaly  = -625e3  # origin of thermal anomaly
+    yc_anomaly  = -610e3  # origin of thermal anomaly
     r_anomaly   = 25e3            # radius of perturbation
     init_phases!(pPhases, particles, lx; d=abs(yc_anomaly), r=r_anomaly)
     phase_ratios = PhaseRatio(ni, length(rheology))
@@ -273,33 +303,27 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # TEMPERATURE PROFILE --------------------------------
     thermal    = ThermalArrays(ni)
     thermal_bc = TemperatureBoundaryConditions(; 
-        # no_flux     = (left = false, right = false, top = false, bot = false), 
-        # periodicity = (left = true, right = true, top = false, bot = false),
         no_flux     = (left = true, right = true, top = false, bot = false), 
         periodicity = (left = false, right = false, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
-    # Tmin, Tmax  = 273.0, 1500.0
-    # @parallel init_T!(thermal.T, xvi[2])
-    # initialize thermal profile - Half space cooling
-    Tmin, Tmax  = 273.0, 1500.0 +273
-    @views thermal.T         .= Tmax
-    @views thermal.T[:, end] .= Tmin
-   
-    t = 0
-    while (t/(1e6 * 3600 * 24 *365.25)) < 25
-        # Thermal solver ---------------
-        solve!(
-            thermal,
-            thermal_bc,
-            rheology,
-            phase_ratios,
-            (; P=0.0),
-            di,
-            dt 
-        )
-        t+=dt
-    end
+    @parallel init_T_Attila!(thermal.T, xvi[2])
+    Tmax =  1837e0
+
+    # t = 0
+    # while (t/(1e6 * 3600 * 24 *365.25)) < 25
+    #     # Thermal solver ---------------
+    #     solve!(
+    #         thermal,
+    #         thermal_bc,
+    #         rheology,
+    #         phase_ratios,
+    #         (; P=0.0),
+    #         di,
+    #         dt 
+    #     )
+    #     t+=dt
+    # end
     thermal_bcs!(thermal.T, thermal_bc)
    
     rectangular_perturbation!(thermal.T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi)
@@ -311,18 +335,18 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # ----------------------------------------------------
    
     # Buoyancy forces
-    ρg              = @zeros(ni...), @zeros(ni...)
+    ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
         @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
     # Rheology
-    η               = @ones(ni...)
-    args_ηv         = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    η = @ones(ni...)
+    args_ηv = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (JustRelax.@idx ni) JustRelax.compute_viscosity!(
         η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args_ηv, rheology, (1e16, 1e24)
     )
-    η_vep           = deepcopy(η)
+    η_vep = deepcopy(η)
 
     # Boundary conditions
     flow_bcs = FlowBoundaryConditions(; 
@@ -478,7 +502,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     return nothing
 end
 
-# function run()
+function run()
     figdir = "Plume2D"
     ar     = 1 # aspect ratio
     n      = 282
@@ -489,61 +513,7 @@ end
     else
         igg
     end
-    # main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
-# end
+    main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
+end
 
 # run()
-
-# environment!(model)
-# solve!(
-#     stokes,
-#     pt_stokes,
-#     di,
-#     flow_bcs,
-#     ρg,
-#     η,
-#     η_vep,
-#     phase_ratios,
-#     rheology,
-#     args,
-#     dt,
-#     igg;
-#     iterMax=50e3,
-#     nout=1e3,
-# );
-
-# @parallel (@idx ni) JustRelax.Stokes2D.compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
-
-# @parallel_indices (i, j) function foo!(
-#     εxx::AbstractArray{T,2}, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
-# ) where {T}
-#     d_xi(A) = _d_xi(A, i, j, _dx)
-#     d_yi(A) = _d_yi(A, i, j, _dy)
-#     d_xa(A) = _d_xa(A, i, j, _dx)
-#     d_ya(A) = _d_ya(A, i, j, _dy)
-
-#     if all((i, j) .≤ size(εxx))
-#         ∇V_ij = ∇V[i, j] / 3.0
-#         εxx[i, j] = d_xi(Vx) - ∇V_ij
-#         εyy[i, j] = d_yi(Vy) - ∇V_ij
-#     end
-#     εxy[i, j] = 0.5 * (d_ya(Vx) + d_xa(Vy))
-#     return nothing
-# end
-
-# @parallel (@idx ni .+ 1) JustRelax.Stokes2D.compute_strain_rate!(
-# # @parallel (@idx ni .+ 1) foo!(
-#     @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
-# )
-
-environment!(model)
-
-@parallel JustRelax.Stokes2D.compute_V!(
-    @velocity(stokes)...,
-    stokes.P,
-    @stress(stokes)...,
-    ηdτ,
-    ρg...,
-    ητ,
-    _di...,
-)

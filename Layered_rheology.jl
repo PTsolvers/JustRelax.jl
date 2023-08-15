@@ -19,13 +19,17 @@ function init_rheologies(; is_plastic = true)
     diff_sublithospheric_mantle = DiffusionCreep(  A=10^-8.64 , n=1.0, E=335e3, V=4e-6,  r=0.0, R=8.3145)
 
     # Attila
-    disl_upper_crust            = DislocationCreep(A=5.07e-18, n=2.3, E=154e3, V=0.0  ,  r=0.0, R=8.3145)
-    disl_lower_crust            = DislocationCreep(A=2.08e-23, n=3.2, E=238e3, V=0.0  ,  r=0.0, R=8.3145)
-    disl_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=13e-6,  r=0.0, R=8.3145)
-    disl_sublithospheric_mantle = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=13e-6,  r=0.0, R=8.3145)
-    # disl_sublithospheric_mantle = DislocationCreep(A=10^-15.81, n=3.5, E=480e3, V=10e-6,  r=0.0, R=8.3145)
-    diff_lithospheric_mantle    = DiffusionCreep(  A=10^-8.16 , n=1.0, E=375e3, V=6e-6,  r=0.0, R=8.3145)
-    diff_sublithospheric_mantle = DiffusionCreep(  A=10^-8.64 , n=1.0, E=335e3, V=4e-6,  r=0.0, R=8.3145)
+    disl_upper_crust            = DislocationCreep(A=5.07e-18, n=2.3, E=154e3, V=6e-6,  r=0.0, R=8.3145)
+    disl_lower_crust            = DislocationCreep(A=2.08e-23, n=3.2, E=238e3, V=6e-6,  r=0.0, R=8.3145)
+    disl_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=6e-6,  r=0.0, R=8.3145)
+    disl_sublithospheric_mantle = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=6e-6,  r=0.0, R=8.3145)
+    diff_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=1.0, E=530e3, V=6e-6,  r=0.0, R=8.3145)
+    diff_sublithospheric_mantle = DislocationCreep(A=2.51e-17, n=1.0, E=530e3, V=6e-6,  r=0.0, R=8.3145)
+
+    # diff_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=13e-6,  r=0.0, R=8.3145)
+    # # disl_sublithospheric_mantle = DislocationCreep(A=10^-15.81, n=3.5, E=480e3, V=10e-6,  r=0.0, R=8.3145)
+    # # diff_lithospheric_mantle    = DiffusionCreep(  A=10^-8.16 , n=1.0, E=375e3, V=6e-6,  r=0.0, R=8.3145)
+    # diff_sublithospheric_mantle = DiffusionCreep(  A=10^-8.64 , n=1.0, E=335e3, V=4e-6,  r=0.0, R=8.3145)
 
 
     # Burov
@@ -36,10 +40,10 @@ function init_rheologies(; is_plastic = true)
     # diff_lithospheric_mantle    = DiffusionCreep(  A=10^-8.16 , n=1.0 , E=375e3, V=6e-6,   r=0.0, R=8.3145)
     # diff_sublithospheric_mantle = DiffusionCreep(  A=10^-16.6 , n=1.0 , E=375e3, V=2e-5,   r=1.0, R=8.3145)
 
-    el_upper_crust              = SetConstantElasticity(; G=36e9, ν=0.5)                             # elastic spring
-    el_lower_crust              = SetConstantElasticity(; G=40e9, ν=0.5)                             # elastic spring
-    el_lithospheric_mantle      = SetConstantElasticity(; G=74e9, ν=0.5)                             # elastic spring
-    el_sublithospheric_mantle   = SetConstantElasticity(; G=74e9, ν=0.5)       
+    el_upper_crust              = SetConstantElasticity(; G=25e9, ν=0.5)                             # elastic spring
+    el_lower_crust              = SetConstantElasticity(; G=25e9, ν=0.5)                             # elastic spring
+    el_lithospheric_mantle      = SetConstantElasticity(; G=67e9, ν=0.5)                             # elastic spring
+    el_sublithospheric_mantle   = SetConstantElasticity(; G=67e9, ν=0.5)       
     β_upper_crust              = inv(get_Kb(el_upper_crust))
     β_lower_crust              = inv(get_Kb(el_lower_crust))
     β_lithospheric_mantle      = inv(get_Kb(el_lithospheric_mantle))
@@ -47,10 +51,15 @@ function init_rheologies(; is_plastic = true)
 
     # Physical properties using GeoParams ----------------
     η_reg     = 1e16
-    G0        = 30e9    # shear modulus
     cohesion  = 3e6
-    # friction  = asind(0.01)
-    friction  = 20.0
+    friction  = asind(0.2)
+    # friction  = 20.0
+    pl_crust        = if is_plastic 
+        DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
+    else
+        DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
+    end
+    friction  = asind(0.3)
     pl        = if is_plastic 
         DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     else
@@ -68,20 +77,20 @@ function init_rheologies(; is_plastic = true)
         # Name              = "UpperCrust",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = PT_Density(; ρ0=2.7e3, β=β_upper_crust, T0=0.0, α = 2.5e-5),
+            Density           = PT_Density(; ρ0=2.75e3, β=β_upper_crust, T0=0.0, α = 3.5e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
             Conductivity      = ConstantConductivity(; k=2.7),
-            CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl)),
+            CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
             Elasticity        = el_upper_crust,
             Gravity           = ConstantGravity(; g=9.81),
         ),
         # Name              = "LowerCrust",
         SetMaterialParams(;
             Phase             = 2,
-            Density           = PT_Density(; ρ0=2.9e3, β=β_lower_crust, T0=0.0, α = 2.5e-5),
+            Density           = PT_Density(; ρ0=3e3, β=β_lower_crust, T0=0.0, α = 3.5e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
             Conductivity      = ConstantConductivity(; k=2.7),
-            CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl)),
+            CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
             Elasticity        = el_lower_crust,
         ),
         # Name              = "LithosphericMantle",
@@ -96,7 +105,7 @@ function init_rheologies(; is_plastic = true)
         # Name              = "SubLithosphericMantle",
         SetMaterialParams(;
             Phase             = 4,
-            Density           = PT_Density(; ρ0=3.4e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
+            Density           = PT_Density(; ρ0=3.3e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
             Conductivity      = ConstantConductivity(; k=3.3),
             CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
@@ -105,7 +114,7 @@ function init_rheologies(; is_plastic = true)
         # Name              = "Plume",
         SetMaterialParams(;
             Phase             = 5,
-            Density           = PT_Density(; ρ0=3.4e3-50, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
+            Density           = PT_Density(; ρ0=3.25e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
             Conductivity      = ConstantConductivity(; k=3.3),
             CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
@@ -227,8 +236,8 @@ function init_rheologies_simple(; is_plastic = true)
     η_reg     = 1e16
     G0        = 30e9    # shear modulus
     cohesion  = 20e6
-    # friction  = asind(0.01)
-    friction  = 20.0
+    friction  = asind(0.3)
+    # friction  = 20.0
     pl        = if is_plastic 
         DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     else
@@ -329,16 +338,16 @@ function init_phases!(phases, particles::Particles, Lx; d=650e3, r=50e3)
 
             x = JustRelax.@cell px[ip, i, j]
             depth = -(JustRelax.@cell py[ip, i, j]) #- 45e3 
-            if 0e0 ≤ depth ≤ 20e3
+            if 0e0 ≤ depth ≤ 21e3
                 JustRelax.@cell phases[ip, i, j] = 1.0
 
-            elseif 40e3 ≥ depth > 20e3
+            elseif 35e3 ≥ depth > 21e3
                 JustRelax.@cell phases[ip, i, j] = 2.0
 
-            elseif 100e3 ≥ depth > 40e3
+            elseif 90e3 ≥ depth > 35e3
                 JustRelax.@cell phases[ip, i, j] = 3.0
 
-            elseif depth > 100e3
+            elseif depth > 90e3
                 JustRelax.@cell phases[ip, i, j] = 4.0
 
             elseif 0e0 > depth 
@@ -370,7 +379,7 @@ function init_phases!(phases, particles::Particles, Lx, Ly; d=650e3, r=50e3)
             if 0e0 ≤ depth ≤ 20e3
                 JustRelax.@cell phases[ip, i, j, k] = 1.0
 
-            elseif 40e3 ≥ depth > 20e3
+            elseif 35e3 ≥ depth > 20e3
                 JustRelax.@cell phases[ip, i, j, k] = 2.0
 
             elseif 100e3 ≥ depth > 40e3

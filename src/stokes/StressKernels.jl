@@ -202,27 +202,27 @@ end
     harm_xy(A) = _harm_xyi(A, i, j, k)
     harm_xz(A) = _harm_xzi(A, i, j, k)
     harm_yz(A) = _harm_yzi(A, i, j, k)
-    _eval(A, i, j, k) = fn_ratio(get_G, rheology, A[i, j, k])
-    @inline Base.@propagate_inbounds function av_Gdt_xy(A)
+    @inline _f(A, i, j, k) = fn_ratio(get_G, rheology, A[i, j, k])
+    function av_Gdt_xy(A)
         x = 0.0
         for ii in (i - 1):i, jj in (j - 1):j, kk in k:k
-            x += _eval(A, ii, jj, kk)
+            x += _f(A, ii, jj, kk)
         end
-        return x * 0.25
+        inv(x * 0.25 * dt)
     end
-    @inline Base.@propagate_inbounds function av_Gdt_xz(A)
+    function av_Gdt_xz(A)
         x = 0.0
         for ii in (i - 1):i, jj in j:j, kk in (k - 1):k
-            x += _eval(A, ii, jj, kk)
+            x += _f(A, ii, jj, kk)
         end
-        return x * 0.25
+        inv(x * 0.25 * dt)
     end
-    @inline Base.@propagate_inbounds function av_Gdt_yz(A)
+    function av_Gdt_yz(A)
         x = 0.0
         for ii in i:i, jj in (j - 1):j, kk in (k - 1):k
-            x += _eval(A, ii, jj, kk)
+            x += _f(A, ii, jj, kk)
         end
-        return x * 0.25
+        inv(x * 0.25 * dt)
     end
 
     @inbounds begin

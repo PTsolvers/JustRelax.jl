@@ -541,7 +541,7 @@ end
     else
         igg
     end
-    main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
+    # main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
 # end
 
 # run()

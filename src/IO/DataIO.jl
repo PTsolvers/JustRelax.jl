@@ -26,7 +26,7 @@ function metadata(src, file, dst)
     @assert dst != pwd()
     if !ispath(dst)
         println("Created $dst folder")
-        mkpath(dest)
+        mkpath(dst)
     end
     for f in (file, "Manifest.toml", "Project.toml")
         newfile = joinpath(dst, basename(f))

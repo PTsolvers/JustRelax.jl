@@ -346,23 +346,23 @@ end
     compute_dt(S::StokesArrays, di, igg)
 
 Compute the time step `dt` for the velocity field `S.V` for a regular gridwith grid spacing `di`.
-The implicit global grid variable `igg` implies that the time step is calculated globally and not
+The implicit global grid variable `I` implies that the time step is calculated globally and not
 separately on each block.   
 """
-@inline compute_dt(S::StokesArrays, di, igg) = compute_dt(@velocity(S), di, Inf, igg)
+@inline compute_dt(S::StokesArrays, di, I::IGG) = compute_dt(@velocity(S), di, Inf, I::IGG)
 
 """
     compute_dt(S::StokesArrays, di, dt_diff)
 
 Compute the time step `dt` for the velocity field `S.V` and the diffusive maximum time step 
-`dt_diff` for a regular gridwith grid spacing `di`. The implicit global grid variable `igg`
+`dt_diff` for a regular gridwith grid spacing `di`. The implicit global grid variable `I`
 implies that the time step is calculated globally and not separately on each block.
 """
-@inline function compute_dt(S::StokesArrays, di, dt_diff, igg)
-    return compute_dt(@velocity(S), di, dt_diff, igg)
+@inline function compute_dt(S::StokesArrays, di, dt_diff,  I::IGG)
+    return compute_dt(@velocity(S), di, dt_diff,  I::IGG)
 end
 
-@inline function compute_dt(V::NTuple, di, dt_diff, igg)
+@inline function compute_dt(V::NTuple, di, dt_diff,  I::IGG)
     n = inv(length(V) + 0.1)
     dt_adv = mapreduce(x -> x[1] * inv(maximum_mpi(abs.(x[2]))), max, zip(di, V)) * n
     return min(dt_diff, dt_adv)

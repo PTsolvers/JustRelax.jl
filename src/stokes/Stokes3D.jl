@@ -699,10 +699,10 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
-            push!(norm_Rx, maximum(abs.(stokes.R.Rx)))
-            push!(norm_Ry, maximum(abs.(stokes.R.Ry)))
-            push!(norm_Rz, maximum(abs.(stokes.R.Rz)))
-            push!(norm_∇V, maximum(abs.(stokes.R.RP)))
+            push!(norm_Rx, maximum_mpi(abs.(stokes.R.Rx)))
+            push!(norm_Ry, maximum_mpi(abs.(stokes.R.Ry)))
+            push!(norm_Rz, maximum_mpi(abs.(stokes.R.Rz)))
+            push!(norm_∇V, maximum_mpi(abs.(stokes.R.RP)))
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)

@@ -358,11 +358,11 @@ Compute the time step `dt` for the velocity field `S.V` and the diffusive maximu
 `dt_diff` for a regular gridwith grid spacing `di`. The implicit global grid variable `I`
 implies that the time step is calculated globally and not separately on each block.
 """
-@inline function compute_dt(S::StokesArrays, di, dt_diff,  I::IGG)
-    return compute_dt(@velocity(S), di, dt_diff,  I::IGG)
+@inline function compute_dt(S::StokesArrays, di, dt_diff, I::IGG)
+    return compute_dt(@velocity(S), di, dt_diff, I::IGG)
 end
 
-@inline function compute_dt(V::NTuple, di, dt_diff,  I::IGG)
+@inline function compute_dt(V::NTuple, di, dt_diff, I::IGG)
     n = inv(length(V) + 0.1)
     dt_adv = mapreduce(x -> x[1] * inv(maximum_mpi(abs.(x[2]))), max, zip(di, V)) * n
     return min(dt_diff, dt_adv)

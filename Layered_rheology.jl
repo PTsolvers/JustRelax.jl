@@ -72,6 +72,21 @@ function init_rheologies(; is_plastic = true)
     end
     # pl        = DruckerPrager(; C = 30e6, ϕ=friction, Ψ=0.0) # non-regularized plasticity
 
+    # crust
+    K_crust = TP_Conductivity(;
+        a = 0.64,
+        b = 807e0,
+        c = 0.77,
+        d = 0.00004*1e-6,
+    )
+
+    K_mantle = TP_Conductivity(;
+        a = 0.73,
+        b = 1293e0,
+        c = 0.77,
+        d = 0.00004*1e-6,
+    )
+
     # Define rheolgy struct
     rheology = (
         # Name              = "UpperCrust",
@@ -79,7 +94,7 @@ function init_rheologies(; is_plastic = true)
             Phase             = 1,
             Density           = PT_Density(; ρ0=2.75e3, β=β_upper_crust, T0=0.0, α = 3.5e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
-            Conductivity      = ConstantConductivity(; k=2.7),
+            Conductivity      = K_crust,
             CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
             Elasticity        = el_upper_crust,
             Gravity           = ConstantGravity(; g=9.81),
@@ -89,7 +104,7 @@ function init_rheologies(; is_plastic = true)
             Phase             = 2,
             Density           = PT_Density(; ρ0=3e3, β=β_lower_crust, T0=0.0, α = 3.5e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
-            Conductivity      = ConstantConductivity(; k=2.7),
+            Conductivity      = K_crust,
             CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
             Elasticity        = el_lower_crust,
         ),
@@ -98,7 +113,7 @@ function init_rheologies(; is_plastic = true)
             Phase             = 3,
             Density           = PT_Density(; ρ0=3.3e3, β=β_lithospheric_mantle, T0=0.0, α = 3e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
-            Conductivity      = ConstantConductivity(; k=3.0),
+            Conductivity      = K_mantle,
             CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, el_lithospheric_mantle, pl)),
             Elasticity        = el_lithospheric_mantle,
         ),
@@ -107,7 +122,7 @@ function init_rheologies(; is_plastic = true)
             Phase             = 4,
             Density           = PT_Density(; ρ0=3.3e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
-            Conductivity      = ConstantConductivity(; k=3.3),
+            Conductivity      = K_mantle,
             CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
             Elasticity        = el_sublithospheric_mantle,
         ),
@@ -116,7 +131,7 @@ function init_rheologies(; is_plastic = true)
             Phase             = 5,
             Density           = PT_Density(; ρ0=3.25e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
-            Conductivity      = ConstantConductivity(; k=3.3),
+            Conductivity      = K_mantle,
             CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
             Elasticity        = el_sublithospheric_mantle,
         ),
@@ -348,7 +363,7 @@ function init_phases!(phases, particles::Particles, Lx; d=650e3, r=50e3)
                 JustRelax.@cell phases[ip, i, j] = 3.0
 
             elseif depth > 90e3
-                JustRelax.@cell phases[ip, i, j] = 4.0
+                JustRelax.@cell phases[ip, i, j] = 3.0
 
             elseif 0e0 > depth 
                 JustRelax.@cell phases[ip, i, j] = 6.0
@@ -356,7 +371,12 @@ function init_phases!(phases, particles::Particles, Lx; d=650e3, r=50e3)
             end
 
             # plume
-            if ((x - Lx * 0.5)^2 + (depth - d)^2) ≤ r^2
+            # if ((x - Lx * 0.5)^2 + (depth - d)^2) ≤ r^2
+            #     JustRelax.@cell phases[ip, i, j] = 5.0
+            # end
+
+            # plume - rectangular
+            if ((x - Lx * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
                 JustRelax.@cell phases[ip, i, j] = 5.0
             end
         end
@@ -393,8 +413,12 @@ function init_phases!(phases, particles::Particles, Lx, Ly; d=650e3, r=50e3)
 
             end
 
-            # plume
-            if ((x - Lx * 0.5)^2 + (y - Ly * 0.5)^2 + (depth - d)^2) ≤ r^2
+            # # plume - circular
+            # if ((x - Lx * 0.5)^2 + (y - Ly * 0.5)^2 + (depth - d)^2) ≤ r^2
+            #     JustRelax.@cell phases[ip, i, j, k] = 5.0
+            # end
+            # plume - rectangular
+            if ((x - Lx * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
                 JustRelax.@cell phases[ip, i, j, k] = 5.0
             end
 
@@ -405,6 +429,7 @@ function init_phases!(phases, particles::Particles, Lx, Ly; d=650e3, r=50e3)
     ni = size(phases)
     @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, Ly)
 end
+
 
 function dirichlet_velocities!(Vx, εbg, xvi, xci)
     lx = abs(reduce(-, extrema(xvi[1])))

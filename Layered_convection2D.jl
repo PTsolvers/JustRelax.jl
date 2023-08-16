@@ -1,5 +1,4 @@
-using JustRelax, CUDA
-using JustPIC
+using JustRelax, CUDA, JustRelax.DataIO, JustPIC
 backend = "CUDA"
 # backend = "Threads"
 # set_backend(backend)
@@ -252,6 +251,11 @@ Rayleigh_number(ρ, α, ΔT, κ, η0) = ρ * 9.81 * α * ΔT * 2890e3^3 * inv(κ
     return nothing
 end
 
+@parallel_indices (i,j) function compute_K!(K, rheology, phase, args)
+    K[i, j] =  fn_ratio(compute_conductivity, rheology, phase[i, j], (; T=args.T[i, j], P=args.P[i, j]))
+    return nothing
+end
+
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
 
     # Physical domain ------------------------------------
@@ -268,7 +272,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # Define rheolgy struct
     rheology     = init_rheologies(; is_plastic = true)
     # rheology     = init_rheologies_isoviscous()
-    κ            = (rheology[1].Conductivity[1].k / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0)).val
+    κ            = (10/ (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
     
@@ -327,10 +331,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     thermal_bcs!(thermal.T, thermal_bc)
    
     rectangular_perturbation!(thermal.T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi)
-    # @views thermal.T[:, end] .= Tmin
-    # Tbot = Tmax = 2000.0 + 273
-    # @views thermal.T[:, 1]   .= Tmax
-    # Tbot = Tmax
     @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
    
@@ -384,6 +384,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         copyinn_x!(dst, src)
     end
     grid2particle!(pT, xvi, T_buffer, particles.coords)
+
+    Vx_v = @zeros(ni.+1...)
+    Vy_v = @zeros(ni.+1...)
 
     local iters
     # while it < 150
@@ -455,8 +458,33 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         @show it += 1
         t += dt
 
-        # # Plotting ---------------------
+        # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 10) == 0
+            checkpointing(figdir, stokes, thermal.T, η, t)
+            JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            data_v = (; 
+                T = Array(thermal.T[2:end-1, :]),
+                τxy = Array(stokes.τ.xy),
+                εxy = Array(stokes.ε.xy),
+                Vx = Array(Vx_v),
+                Vy = Array(Vy_v),
+            )
+            data_c = (; 
+                P = Array(stokes.P),
+                τxx = Array(stokes.τ.xx),
+                τyy = Array(stokes.τ.yy),
+                εxx = Array(stokes.ε.xx),
+                εyy = Array(stokes.ε.yy),
+                η = Array(η),
+            )
+            save_vtk(
+                joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
+                xvi,
+                xci, 
+                data_v, 
+                data_c
+            )
+
             # p = particles.coords
             # ppx, ppy = p
             # pxv = ppx.data[:]./1e3
@@ -498,14 +526,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
 
     end
 
-    # return (ni=ni, xci=xci, li=li, di=di), thermal
     return nothing
 end
 
-function run()
+# function run()
     figdir = "Plume2D"
+    metadata(pwd(), "Layered_convection2D.jl", joinpath(figdir, "metadata"))
     ar     = 1 # aspect ratio
-    n      = 282
+    n      = 141
     nx     = n*ar - 2
     ny     = n - 2
     igg  = if !(JustRelax.MPI.Initialized())
@@ -514,6 +542,6 @@ function run()
         igg
     end
     main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
-end
+# end
 
 # run()

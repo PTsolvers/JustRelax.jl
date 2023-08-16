@@ -48,6 +48,7 @@ import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
+import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi
 
 export solve!
 
@@ -478,13 +479,17 @@ function JustRelax.solve!(
             Vmin, Vmax = extrema(stokes.V.Vx)
             Pmin, Pmax = extrema(stokes.P)
             push!(
-                norm_Rx, norm(stokes.R.Rx) / (Pmax - Pmin) * lx / sqrt(length(stokes.R.Rx))
+                norm_Rx,
+                norm_mpi(stokes.R.Rx) / (Pmax - Pmin) * lx / sqrt(length(stokes.R.Rx)),
             )
             push!(
-                norm_Ry, norm(stokes.R.Ry) / (Pmax - Pmin) * lx / sqrt(length(stokes.R.Ry))
+                norm_Ry,
+                norm_mpi(stokes.R.Ry) / (Pmax - Pmin) * lx / sqrt(length(stokes.R.Ry)),
             )
-            push!(norm_∇V, norm(stokes.∇V) / (Vmax - Vmin) * lx / sqrt(length(stokes.∇V)))
-            err = max(norm_Rx[end], norm_Ry[end], norm_∇V[end])
+            push!(
+                norm_∇V, norm_mpi(stokes.∇V) / (Vmax - Vmin) * lx / sqrt(length(stokes.∇V))
+            )
+            err = maximum_mpi(norm_Rx[end], norm_Ry[end], norm_∇V[end])
             push!(err_evo1, err)
             push!(err_evo2, iter)
             if igg.me == 0 && ((verbose && err > ϵ) || iter == iterMax)
@@ -597,11 +602,11 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
             )
-            errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+            errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
-            err = maximum(errs)
+            err = maximum_mpi(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
             if igg.me == 0 && ((verbose && err > ϵ) || iter == iterMax)
@@ -738,11 +743,11 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
             )
-            errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+            errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
-            err = maximum(errs)
+            err = maximum_mpi(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
             if igg.me == 0 && ((verbose && err > ϵ) || iter == iterMax)
@@ -878,11 +883,11 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
             )
-            errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+            errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
-            err = maximum(errs)
+            err = maximum_mpi(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
             if igg.me == 0 && (verbose || iter == iterMax)

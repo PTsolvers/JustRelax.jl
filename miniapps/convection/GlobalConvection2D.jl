@@ -54,8 +54,8 @@ end
 function circular_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _circular_perturbation!(T, δT, xc, yc, r, x, y)
-        @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i, j] *= δT/100 + 1
+        @inbounds if (((x[i] - xc))^2 + ((y[j] - yc))^2) ≤ r^2
+            T[i, j] *= δT / 100 + 1
         end
         return nothing
     end
@@ -67,8 +67,8 @@ function random_perturbation!(T, δT, xbox, ybox, xvi)
 
     @parallel_indices (i, j) function _random_perturbation!(T, δT, xbox, ybox, x, y)
         @inbounds if (xbox[1] ≤ x[i] ≤ xbox[2]) && (abs(ybox[1]) ≤ abs(y[j]) ≤ abs(ybox[2]))
-            δTi = δT * (rand() -  0.5) # random perturbation within ±δT [%]
-            T[i, j] *= δTi/100 + 1
+            δTi = δT * (rand() - 0.5) # random perturbation within ±δT [%]
+            T[i, j] *= δTi / 100 + 1
         end
         return nothing
     end
@@ -202,14 +202,14 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
         ylims!(ax1, -2890, 0)
         ylims!(ax2, -2890, 0)
         hideydecorations!(ax2)
-        save( joinpath(figdir, "initial_profile.png"), fig)
+        save(joinpath(figdir, "initial_profile.png"), fig)
         fig
     end
 
     # Time loop
     t, it = 0.0, 0
     local iters
-    while (t/(1e6 * 3600 * 24 *365.25)) < 4.5e3
+    while (t / (1e6 * 3600 * 24 * 365.25)) < 4.5e3
         # Stokes solver ----------------
         args = (; T = thermal.Tc, P = stokes.P, depth = depth, dt=Inf)
         iters = solve!(
@@ -227,7 +227,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
             iterMax=250e3,
             nout=1e3,
         );
-        dt = compute_dt(stokes, di, dt_diff)
+        dt = compute_dt(stokes, di, dt_diff, igg)
         # ------------------------------
 
         # Thermal solver ---------------

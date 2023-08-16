@@ -71,8 +71,8 @@ function random_perturbation!(T, δT, xbox, ybox, zbox, xvi)
             (ybox[1] ≤ y[j] ≤ ybox[2]) && 
             (abs(zbox[1]) ≤ abs(z[k]) ≤ abs(zbox[2]))
         @inbounds if inbox
-            δTi         = δT * (rand() -  0.5) # random perturbation within ±δT [%]
-            T[i, j, k] *= δTi/100 + 1
+            δTi         = δT * (rand() - 0.5) # random perturbation within ±δT [%]
+            T[i, j, k] *= δTi / 100 + 1
         end
         return nothing
     end
@@ -80,7 +80,7 @@ function random_perturbation!(T, δT, xbox, ybox, zbox, xvi)
     @parallel (@idx size(T)) _random_perturbation!(T, δT, xbox, ybox, zbox, xvi...)
 end
 
-Rayleigh_number(ρ, α, ΔT, κ, η0) = ρ * 9.81 * α * ΔT * 2890e3^3 * inv(κ * η0) 
+Rayleigh_number(ρ, α, ΔT, κ, η0) = ρ * 9.81 * α * ΔT * 2890e3^3 * inv(κ * η0)
 
 function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", thermal_perturbation = :random)
     
@@ -211,19 +211,19 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         ylims!(ax1, minimum(xvi[3])./1e3, 0)
         ylims!(ax2, minimum(xvi[3])./1e3, 0)
         hideydecorations!(ax2)
-        save( joinpath(figdir, "initial_profile.png"), fig)
+        save(joinpath(figdir, "initial_profile.png"), fig)
         fig
     end
 
     # Time loop
     t, it = 0.0, 0
     local iters
-    while (t/(1e6 * 3600 * 24 *365.25)) < 4.5e3
- 
+    while (t / (1e6 * 3600 * 24 * 365.25)) < 4.5e3
+
         # Update arguments needed to compute several physical properties
         # e.g. density, viscosity, etc -
-        args = (; T = thermal.Tc, P = stokes.P, depth = depth, dt=Inf)
-    
+        args = (; T=thermal.Tc, P=stokes.P, depth=depth, dt=Inf)
+
         # Stokes solver ----------------
         iters = solve!(
             stokes,
@@ -242,7 +242,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         );
 
         println("starting non linear iterations")
-        dt = compute_dt(stokes, di, dt_diff)
+        dt = compute_dt(stokes, di, dt_diff, igg)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -286,7 +286,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
             Colorbar(fig[3,2], h3)
             Colorbar(fig[4,2], h4)
             fig
-            save( joinpath(figdir, "$(it).png"), fig)
+            save(joinpath(figdir, "$(it).png"), fig)
             
             # save vtk time series 
             data_c = (; Temperature = Array(thermal.Tc),  TauII = Array(stokes.τ.II), Density=Array(ρg[3]./9.81))

@@ -50,6 +50,7 @@ import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor, pure
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
+import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi
 
 export solve!, pureshear_bc!
 

@@ -75,7 +75,11 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             assign!,
             tupleize,
             compute_maxloc!,
-            continuation_log
+            continuation_log,
+            mean_mpi,
+            norm_mpi,
+            minimum_mpi,
+            maximum_mpi
 
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
         export pureshear_bc!,

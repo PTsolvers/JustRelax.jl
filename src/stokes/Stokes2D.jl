@@ -479,12 +479,16 @@ function JustRelax.solve!(
             Vmin, Vmax = extrema(stokes.V.Vx)
             Pmin, Pmax = extrema(stokes.P)
             push!(
-                norm_Rx, norm_mpi(stokes.R.Rx) / (Pmax - Pmin) * lx / sqrt(length(stokes.R.Rx))
+                norm_Rx,
+                norm_mpi(stokes.R.Rx) / (Pmax - Pmin) * lx / sqrt(length(stokes.R.Rx)),
             )
             push!(
-                norm_Ry, norm_mpi(stokes.R.Ry) / (Pmax - Pmin) * lx / sqrt(length(stokes.R.Ry))
+                norm_Ry,
+                norm_mpi(stokes.R.Ry) / (Pmax - Pmin) * lx / sqrt(length(stokes.R.Ry)),
             )
-            push!(norm_∇V, norm_mpi(stokes.∇V) / (Vmax - Vmin) * lx / sqrt(length(stokes.∇V)))
+            push!(
+                norm_∇V, norm_mpi(stokes.∇V) / (Vmax - Vmin) * lx / sqrt(length(stokes.∇V))
+            )
             err = maximum_mpi(norm_Rx[end], norm_Ry[end], norm_∇V[end])
             push!(err_evo1, err)
             push!(err_evo2, iter)

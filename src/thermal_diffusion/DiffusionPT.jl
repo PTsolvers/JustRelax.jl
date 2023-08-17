@@ -12,28 +12,6 @@ end
 end
 @inline getindex_phase(::Nothing, I::Vararg{Int,N}) where {N} = nothing
 
-# @inline function compute_diffusivity(rheology, args)
-#     return compute_conductivity(rheology, args) *
-#            inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
-# end
-
-# @inline function compute_diffusivity(rheology, phase::Union{Nothing,Int}, args)
-#     return compute_phase(compute_conductivity, rheology, phase, args) * inv(
-#         compute_phase(compute_heatcapacity, rheology, phase, args) *
-#         compute_phase(compute_density, rheology, phase, args),
-#     )
-# end
-
-# @inline function compute_diffusivity(rheology, ρ, args)
-#     return compute_conductivity(rheology, args) *
-#            inv(compute_heatcapacity(rheology, args) * ρ)
-# end
-
-# @inline function compute_diffusivity(rheology, ρ, phase::Union{Nothing,Int}, args)
-#     return compute_phase(compute_conductivity, rheology, phase, args) *
-#            inv(compute_phase(compute_heatcapacity, rheology, phase, args) * ρ)
-# end
-
 @inline function compute_ρCp(rheology, args)
     return compute_heatcapacity(rheology, args) * compute_density(rheology, args)
 end
@@ -56,9 +34,9 @@ end
 @parallel_indices (i, j, k) function compute_flux!(
     qTx::AbstractArray{_T,3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
 ) where {_T}
-    d_xa(A) = _d_xi(A, i, j, k, _dx)
-    d_ya(A) = _d_yi(A, i, j, k, _dy)
-    d_za(A) = _d_zi(A, i, j, k, _dz)
+    d_xi(A) = _d_xi(A, i, j, k, _dx)
+    d_yi(A) = _d_yi(A, i, j, k, _dy)
+    d_zi(A) = _d_zi(A, i, j, k, _dz)
     av_xy(A) = _av_xy(A, i, j, k)
     av_xz(A) = _av_xz(A, i, j, k)
     av_yz(A) = _av_yz(A, i, j, k)
@@ -66,17 +44,17 @@ end
     I = i, j, k
 
     if all(I .≤ size(qTx))
-        qx = qTx2[I...] = -av_yz(K) * d_xa(T)
+        qx = qTx2[I...] = -av_yz(K) * d_xi(T)
         qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
     end
 
     if all(I .≤ size(qTy))
-        qy = qTy2[I...] = -av_xz(K) * d_ya(T)
+        qy = qTy2[I...] = -av_xz(K) * d_yi(T)
         qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
     end
 
     if all(I .≤ size(qTz))
-        qz = qTz2[I...] = -av_xy(K) * d_za(T)
+        qz = qTz2[I...] = -av_xy(K) * d_zi(T)
         qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
     end
 
@@ -99,9 +77,9 @@ end
     _dz,
     args,
 ) where {_T}
-    d_xa(A) = _d_xi(A, i, j, k, _dx)
-    d_ya(A) = _d_yi(A, i, j, k, _dy)
-    d_za(A) = _d_zi(A, i, j, k, _dz)
+    d_xi(A) = _d_xi(A, i, j, k, _dx)
+    d_yi(A) = _d_yi(A, i, j, k, _dy)
+    d_zi(A) = _d_zi(A, i, j, k, _dz)
     av_xy(A) = _av_xy(A, i, j, k)
     av_xz(A) = _av_xz(A, i, j, k)
     av_yz(A) = _av_yz(A, i, j, k)
@@ -121,7 +99,7 @@ end
                 get_K(getindex_phase(phase, i, j, k), args_ijk)
             ) * 0.25
 
-        qx = qTx2[I...] = -K * d_xa(T)
+        qx = qTx2[I...] = -K * d_xi(T)
         qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
     end
 
@@ -136,7 +114,7 @@ end
                 get_K(getindex_phase(phase, i, j, k), args_ijk)
             ) * 0.25
 
-        qy = qTy2[I...] = -K * d_ya(T)
+        qy = qTy2[I...] = -K * d_yi(T)
         qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
     end
 
@@ -151,7 +129,7 @@ end
                 get_K(getindex_phase(phase, i, j, k), args_ijk)
             ) * 0.25
 
-        qz = qTz2[I...] = -K * d_za(T)
+        qz = qTz2[I...] = -K * d_zi(T)
         qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
     end
 

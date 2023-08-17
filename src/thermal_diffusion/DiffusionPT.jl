@@ -301,14 +301,16 @@ end
 
     d_xa(A) = _d_xa(A, i, j, _dx)
     d_ya(A) = _d_ya(A, i, j, _dy)
+    #! format: off
     function av(A)
-        return (
+        (
             A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
             A[clamp(i - 1, 1, nx), j] +
             A[i, clamp(j - 1, 1, ny)] +
             A[i, j]
         ) * 0.25
     end
+    #! format: on
 
     T[i + 1, j + 1] +=
         av(dτ_ρ) * (
@@ -365,14 +367,16 @@ end
 
     d_xa(A) = _d_xa(A, i, j, _dx)
     d_ya(A) = _d_ya(A, i, j, _dy)
+    #! format: off
     function av(A)
-        return (
+        (
             A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
             A[clamp(i - 1, 1, nx), clamp(j, 1, ny)] +
             A[clamp(i, 1, nx), clamp(j - 1, 1, ny)] +
             A[clamp(i, 1, nx), clamp(j, 1, ny)]
         ) * 0.25
     end
+    #! format: on
 
     ResT[i, j] =
         -av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt - (d_xa(qTx2) + d_ya(qTy2))

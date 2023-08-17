@@ -93,12 +93,13 @@ end
 ## 2D 
 
 function velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=false)
+    ni = size(Vx_v)
     if !ghost_nodes
-        Vx2vertex_noghost!(Vx, Vx_v)
-        Vy2vertex_noghost!(Vy, Vy_v)
+        @parallel (@idx ni) Vx2vertex_noghost!(Vx_v, Vx)
+        @parallel (@idx ni) Vy2vertex_noghost!(Vy_v, Vy)
     else
-        Vx2vertex_ghost!(Vx, Vx_v)
-        Vy2vertex_ghost!(Vy, Vy_v)
+        @parallel (@idx ni) Vx2vertex_ghost!(Vx_v, Vx)
+        @parallel (@idx ni) Vy2vertex_ghost!(Vy_v, Vy)
     end
 end
 
@@ -107,11 +108,11 @@ function velocity2vertex(Vx, Vy, nv_x, nv_y; ghost_nodes=false)
     Vy_v = @allocate(nv_x, nv_y)
 
     if !ghost_nodes
-        Vx2vertex_noghost!(Vx, Vx_v)
-        Vy2vertex_noghost!(Vy, Vy_v)
+        Vx2vertex_noghost!(Vx_v, Vx)
+        Vy2vertex_noghost!(Vy_v, Vy)
     else
-        Vx2vertex_ghost!(Vx, Vx_v)
-        Vy2vertex_ghost!(Vy, Vy_v)
+        Vx2vertex_ghost!(Vx_v, Vx)
+        Vy2vertex_ghost!(Vy_v, Vy)
     end
 end
 

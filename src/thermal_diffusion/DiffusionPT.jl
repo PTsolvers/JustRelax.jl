@@ -109,44 +109,47 @@ end
     get_K(idx, args) = compute_phase(compute_conductivity, rheology, idx, args)
 
     I = i, j, k
-    
+
     @inbounds if all(I .≤ size(qTx))
-        T_ijk = (T[(I.+1)...] + T[i, j+1, k+1]) * 0.5
+        T_ijk = (T[(I .+ 1)...] + T[i, j + 1, k + 1]) * 0.5
         args_ijk = (; T=T_ijk, P=av_yz(args.P))
-        K = (
-            get_K(getindex_phase(phase, i, j+1, k), args_ijk) +
-            get_K(getindex_phase(phase, i, j, k+1), args_ijk) +
-            get_K(getindex_phase(phase, i, j+1, k+1), args_ijk) +
-            get_K(getindex_phase(phase, i, j, k), args_ijk)
-        ) * 0.25
-        
+        K =
+            (
+                get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
+                get_K(getindex_phase(phase, i, j, k + 1), args_ijk) +
+                get_K(getindex_phase(phase, i, j + 1, k + 1), args_ijk) +
+                get_K(getindex_phase(phase, i, j, k), args_ijk)
+            ) * 0.25
+
         qx = qTx2[I...] = -K * d_xa(T)
         qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
     end
 
     @inbounds if all(I .≤ size(qTy))
-        T_ijk = (T[(I.+1)...] + T[i+1, j, k+1]) * 0.5
+        T_ijk = (T[(I .+ 1)...] + T[i + 1, j, k + 1]) * 0.5
         args_ijk = (; T=T_ijk, P=av_xz(args.P))
-        K = (
-            get_K(getindex_phase(phase, i+1, j, k), args_ijk) +
-            get_K(getindex_phase(phase, i, j, k+1), args_ijk) +
-            get_K(getindex_phase(phase, i+1, j, k+1), args_ijk) +
-            get_K(getindex_phase(phase, i, j, k), args_ijk)
-        ) * 0.25
+        K =
+            (
+                get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
+                get_K(getindex_phase(phase, i, j, k + 1), args_ijk) +
+                get_K(getindex_phase(phase, i + 1, j, k + 1), args_ijk) +
+                get_K(getindex_phase(phase, i, j, k), args_ijk)
+            ) * 0.25
 
         qy = qTy2[I...] = -K * d_ya(T)
         qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
     end
 
     @inbounds if all(I .≤ size(qTz))
-        T_ijk = (T[(I.+1)...] + T[i+1, j+1, k]) * 0.5
+        T_ijk = (T[(I .+ 1)...] + T[i + 1, j + 1, k]) * 0.5
         args_ijk = (; T=T_ijk, P=av_xy(args.P))
-        K = (
-            get_K(getindex_phase(phase, i+1, j+1, k), args_ijk) +
-            get_K(getindex_phase(phase, i, j+1, k), args_ijk) +
-            get_K(getindex_phase(phase, i+1, j, k), args_ijk) +
-            get_K(getindex_phase(phase, i, j, k), args_ijk)
-        ) * 0.25
+        K =
+            (
+                get_K(getindex_phase(phase, i + 1, j + 1, k), args_ijk) +
+                get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
+                get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
+                get_K(getindex_phase(phase, i, j, k), args_ijk)
+            ) * 0.25
 
         qz = qTz2[I...] = -K * d_za(T)
         qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
@@ -162,13 +165,11 @@ end
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
     d_za(A) = _d_za(A, i, j, k, _dz)
-    
+
     I = i + 1, j + 1, k + 1
     T[I...] +=
-        av(dτ_ρ) * (
-            (-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) -
-            av(ρCp) * (T[I...] - Told[I...]) * _dt
-        )
+        av(dτ_ρ) *
+        ((-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) - av(ρCp) * (T[I...] - Told[I...]) * _dt)
 
     return nothing
 end
@@ -199,12 +200,11 @@ end
     args_ijk = (; T=T_ijk, P=av(args.P))
     phase_ijk = getindex_phase(phase, i, j, k)
 
-    T[I...] = 
-        T_ijk + av(dτ_ρ) * (
+    T[I...] =
+        T_ijk +
+        av(dτ_ρ) * (
             (-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) -
-            compute_ρCp(rheology, phase_ijk, args_ijk) *
-            (T_ijk - Told[I...]) *
-            _dt
+            compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt
         )
     return nothing
 end
@@ -220,8 +220,7 @@ end
     I = i + 1, j + 1, k + 1
 
     ResT[i, j, k] =
-        -av(ρCp) * (T[I...] - Told[I...]) * _dt -
-        (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2))
+        -av(ρCp) * (T[I...] - Told[I...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2))
 
     return nothing
 end
@@ -252,9 +251,8 @@ end
     phase_ijk = getindex_phase(phase, i, j, k)
 
     ResT[i, j, k] =
-        -compute_ρCp(rheology, phase_ijk, args_ijk) *
-        (T_ijk - Told[I...]) *
-        _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2))
+        -compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt -
+        (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2))
 
     return nothing
 end
@@ -325,12 +323,14 @@ end
 
     d_xa(A) = _d_xa(A, i, j, _dx)
     d_ya(A) = _d_ya(A, i, j, _dy)
-    av(A) = (
-        A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
-        A[clamp(i - 1, 1, nx), j] +
-        A[i, clamp(j - 1, 1, ny)] +
-        A[i, j]
-    ) * 0.25
+    function av(A)
+        return (
+            A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
+            A[clamp(i - 1, 1, nx), j] +
+            A[i, clamp(j - 1, 1, ny)] +
+            A[i, j]
+        ) * 0.25
+    end
 
     T[i + 1, j + 1] +=
         av(dτ_ρ) * (
@@ -359,31 +359,24 @@ end
     i1 = clamp(i, 1, nx)
     j0 = clamp(j - 1, 1, ny)
     j1 = clamp(j, 1, ny)
-    
+
     d_xa(A) = _d_xa(A, i, j, _dx)
     d_ya(A) = _d_ya(A, i, j, _dy)
-    av(A) = (
-        A[i0, j0] +
-        A[i0, j1] +
-        A[i1, j0] +
-        A[i1, j1]
-    ) * 0.25
+    av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
 
     T_ij = T[i + 1, j + 1]
     args_ij = (; T=T_ij, P=av(args.P))
 
-    ρCp = (
-        compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)        
-    ) * 0.25
+    ρCp =
+        (
+            compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
+            compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
+            compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
+            compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
+        ) * 0.25
 
     T[i + 1, j + 1] +=
-        av(dτ_ρ) * (
-            (-(d_xa(qTx) + d_ya(qTy))) -
-            ρCp * (T_ij - Told[i + 1, j + 1]) * _dt
-        )
+        av(dτ_ρ) * ((-(d_xa(qTx) + d_ya(qTy))) - ρCp * (T_ij - Told[i + 1, j + 1]) * _dt)
     return nothing
 end
 
@@ -394,12 +387,14 @@ end
 
     d_xa(A) = _d_xa(A, i, j, _dx)
     d_ya(A) = _d_ya(A, i, j, _dy)
-    av(A) = (
-        A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
-        A[clamp(i - 1, 1, nx), clamp(j, 1, ny)] +
-        A[clamp(i, 1, nx), clamp(j - 1, 1, ny)] +
-        A[clamp(i, 1, nx), clamp(j, 1, ny)]
-    ) * 0.25
+    function av(A)
+        return (
+            A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
+            A[clamp(i - 1, 1, nx), clamp(j, 1, ny)] +
+            A[clamp(i, 1, nx), clamp(j - 1, 1, ny)] +
+            A[clamp(i, 1, nx), clamp(j, 1, ny)]
+        ) * 0.25
+    end
 
     ResT[i, j] =
         -av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt - (d_xa(qTx2) + d_ya(qTy2))
@@ -415,30 +410,24 @@ end
     i1 = clamp(i, 1, nx)
     j0 = clamp(j - 1, 1, ny)
     j1 = clamp(j, 1, ny)
-    
+
     d_xa(A) = _d_xa(A, i, j, _dx)
     d_ya(A) = _d_ya(A, i, j, _dy)
-    av(A) = (
-        A[i0, j0] +
-        A[i0, j1] +
-        A[i1, j0] +
-        A[i1, j1]
-    ) * 0.25
+    av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
 
     T_ij = T[i + 1, j + 1]
     args_ij = (; T=T_ij, P=av(args.P))
 
-    ρCp = (
-        compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)        
-    ) * 0.25
+    ρCp =
+        (
+            compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
+            compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
+            compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
+            compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
+        ) * 0.25
 
     ResT[i, j] =
-        -ρCp *
-        (T[i + 1, j + 1] - Told[i + 1, j + 1]) *
-        _dt - (d_xa(qTx2) + d_ya(qTy2))
+        -ρCp * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt - (d_xa(qTx2) + d_ya(qTy2))
     return nothing
 end
 

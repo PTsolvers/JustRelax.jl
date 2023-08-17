@@ -12,27 +12,27 @@ end
 end
 @inline getindex_phase(::Nothing, I::Vararg{Int,N}) where {N} = nothing
 
-@inline function compute_diffusivity(rheology, args)
-    return compute_conductivity(rheology, args) *
-           inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
-end
+# @inline function compute_diffusivity(rheology, args)
+#     return compute_conductivity(rheology, args) *
+#            inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
+# end
 
-@inline function compute_diffusivity(rheology, phase::Union{Nothing,Int}, args)
-    return compute_phase(compute_conductivity, rheology, phase, args) * inv(
-        compute_phase(compute_heatcapacity, rheology, phase, args) *
-        compute_phase(compute_density, rheology, phase, args),
-    )
-end
+# @inline function compute_diffusivity(rheology, phase::Union{Nothing,Int}, args)
+#     return compute_phase(compute_conductivity, rheology, phase, args) * inv(
+#         compute_phase(compute_heatcapacity, rheology, phase, args) *
+#         compute_phase(compute_density, rheology, phase, args),
+#     )
+# end
 
-@inline function compute_diffusivity(rheology, ρ, args)
-    return compute_conductivity(rheology, args) *
-           inv(compute_heatcapacity(rheology, args) * ρ)
-end
+# @inline function compute_diffusivity(rheology, ρ, args)
+#     return compute_conductivity(rheology, args) *
+#            inv(compute_heatcapacity(rheology, args) * ρ)
+# end
 
-@inline function compute_diffusivity(rheology, ρ, phase::Union{Nothing,Int}, args)
-    return compute_phase(compute_conductivity, rheology, phase, args) *
-           inv(compute_phase(compute_heatcapacity, rheology, phase, args) * ρ)
-end
+# @inline function compute_diffusivity(rheology, ρ, phase::Union{Nothing,Int}, args)
+#     return compute_phase(compute_conductivity, rheology, phase, args) *
+#            inv(compute_phase(compute_heatcapacity, rheology, phase, args) * ρ)
+# end
 
 @inline function compute_ρCp(rheology, args)
     return compute_heatcapacity(rheology, args) * compute_density(rheology, args)
@@ -56,9 +56,9 @@ end
 @parallel_indices (i, j, k) function compute_flux!(
     qTx::AbstractArray{_T,3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
 ) where {_T}
-    d_xa(A) = _d_xa(A, i, j, k, _dx)
-    d_ya(A) = _d_ya(A, i, j, k, _dy)
-    d_za(A) = _d_za(A, i, j, k, _dz)
+    d_xa(A) = _d_xi(A, i, j, k, _dx)
+    d_ya(A) = _d_yi(A, i, j, k, _dy)
+    d_za(A) = _d_zi(A, i, j, k, _dz)
     av_xy(A) = _av_xy(A, i, j, k)
     av_xz(A) = _av_xz(A, i, j, k)
     av_yz(A) = _av_yz(A, i, j, k)
@@ -99,28 +99,55 @@ end
     _dz,
     args,
 ) where {_T}
-    d_xa(A) = _d_xa(A, i, j, k, _dx)
-    d_ya(A) = _d_ya(A, i, j, k, _dy)
-    d_za(A) = _d_za(A, i, j, k, _dz)
+    d_xa(A) = _d_xi(A, i, j, k, _dx)
+    d_ya(A) = _d_yi(A, i, j, k, _dy)
+    d_za(A) = _d_zi(A, i, j, k, _dz)
     av_xy(A) = _av_xy(A, i, j, k)
     av_xz(A) = _av_xz(A, i, j, k)
     av_yz(A) = _av_yz(A, i, j, k)
 
-    I = i, j, k
-    phase_ijk = getindex_phase(phase, I...)
-    K = compute_phase(compute_conductivity, rheology, phase_ijk, args)
+    get_K(idx, args) = compute_phase(compute_conductivity, rheology, idx, args)
 
+    I = i, j, k
+    
     @inbounds if all(I .≤ size(qTx))
+        T_ijk = (T[(I.+1)...] + T[i, j+1, k+1]) * 0.5
+        args_ijk = (; T=T_ijk, P=av_yz(args.P))
+        K = (
+            get_K(getindex_phase(phase, i, j+1, k), args_ijk) +
+            get_K(getindex_phase(phase, i, j, k+1), args_ijk) +
+            get_K(getindex_phase(phase, i, j+1, k+1), args_ijk) +
+            get_K(getindex_phase(phase, i, j, k), args_ijk)
+        ) * 0.25
+        
         qx = qTx2[I...] = -K * d_xa(T)
         qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
     end
 
     @inbounds if all(I .≤ size(qTy))
+        T_ijk = (T[(I.+1)...] + T[i+1, j, k+1]) * 0.5
+        args_ijk = (; T=T_ijk, P=av_xz(args.P))
+        K = (
+            get_K(getindex_phase(phase, i+1, j, k), args_ijk) +
+            get_K(getindex_phase(phase, i, j, k+1), args_ijk) +
+            get_K(getindex_phase(phase, i+1, j, k+1), args_ijk) +
+            get_K(getindex_phase(phase, i, j, k), args_ijk)
+        ) * 0.25
+
         qy = qTy2[I...] = -K * d_ya(T)
         qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
     end
 
     @inbounds if all(I .≤ size(qTz))
+        T_ijk = (T[(I.+1)...] + T[i+1, j+1, k]) * 0.5
+        args_ijk = (; T=T_ijk, P=av_xy(args.P))
+        K = (
+            get_K(getindex_phase(phase, i+1, j+1, k), args_ijk) +
+            get_K(getindex_phase(phase, i, j+1, k), args_ijk) +
+            get_K(getindex_phase(phase, i+1, j, k), args_ijk) +
+            get_K(getindex_phase(phase, i, j, k), args_ijk)
+        ) * 0.25
+
         qz = qTz2[I...] = -K * d_za(T)
         qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
     end
@@ -135,11 +162,12 @@ end
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
     d_za(A) = _d_za(A, i, j, k, _dz)
-
-    T[i + 1, j + 1, k + 1] +=
+    
+    I = i + 1, j + 1, k + 1
+    T[I...] +=
         av(dτ_ρ) * (
             (-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) -
-            av(ρCp) * (T[i + 1, j + 1, k + 1] - Told[i + 1, j + 1, k + 1]) * _dt
+            av(ρCp) * (T[I...] - Told[I...]) * _dt
         )
 
     return nothing
@@ -165,15 +193,17 @@ end
     d_ya(A) = _d_ya(A, i, j, k, _dy)
     d_za(A) = _d_za(A, i, j, k, _dz)
 
-    T_ijk = T[i + 1, j + 1, k + 1]
+    I = i + 1, j + 1, k + 1
+
+    T_ijk = T[I...]
     args_ijk = (; T=T_ijk, P=av(args.P))
     phase_ijk = getindex_phase(phase, i, j, k)
 
-    T[i + 1, j + 1, k + 1] +=
-        av(dτ_ρ) * (
+    T[I...] = 
+        T_ijk + av(dτ_ρ) * (
             (-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) -
             compute_ρCp(rheology, phase_ijk, args_ijk) *
-            (T_ijk - Told[i + 1, j + 1, k + 1]) *
+            (T_ijk - Told[I...]) *
             _dt
         )
     return nothing
@@ -187,8 +217,10 @@ end
     d_za(A) = _d_za(A, i, j, k, _dz)
     av(A) = _av(A, i, j, k)
 
+    I = i + 1, j + 1, k + 1
+
     ResT[i, j, k] =
-        -av(ρCp) * (T[i + 1, j + 1, k + 1] - Told[i + 1, j + 1, k + 1]) * _dt -
+        -av(ρCp) * (T[I...] - Told[I...]) * _dt -
         (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2))
 
     return nothing
@@ -214,13 +246,14 @@ end
     d_za(A) = _d_za(A, i, j, k, _dz)
     av(A) = _av(A, i, j, k)
 
-    T_ijk = T[i + 1, j + 1, k + 1]
+    I = i + 1, j + 1, k + 1
+    T_ijk = T[I...]
     args_ijk = (; T=T_ijk, P=av(args.P))
     phase_ijk = getindex_phase(phase, i, j, k)
 
     ResT[i, j, k] =
         -compute_ρCp(rheology, phase_ijk, args_ijk) *
-        (T_ijk - Told[i + 1, j + 1, k + 1]) *
+        (T_ijk - Told[I...]) *
         _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2))
 
     return nothing
@@ -233,18 +266,18 @@ end
 ) where {_T}
     nx = size(θr_dτ, 1)
 
-    d_xa(A) = _d_xa(A, i, j, _dx)
-    d_ya(A) = _d_ya(A, i, j, _dy)
+    d_xi(A) = _d_xi(A, i, j, _dx)
+    d_yi(A) = _d_yi(A, i, j, _dy)
     av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
     av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
 
     @inbounds if all((i, j) .≤ size(qTx))
-        qx = qTx2[i, j] = -av_xa(K) * d_xa(T)
+        qx = qTx2[i, j] = -av_xa(K) * d_xi(T)
         qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
     end
 
     @inbounds if all((i, j) .≤ size(qTy))
-        qy = qTy2[i, j] = -av_ya(K) * d_ya(T)
+        qy = qTy2[i, j] = -av_ya(K) * d_yi(T)
         qTy[i, j] = (qTy[i, j] * av_ya(θr_dτ) + qy) / (1.0 + av_ya(θr_dτ))
     end
     return nothing
@@ -255,36 +288,49 @@ end
 ) where {_T}
     nx = size(θr_dτ, 1)
 
-    d_xa(A) = _d_xa(A, i, j, _dx)
-    d_ya(A) = _d_ya(A, i, j, _dy)
+    d_xa(A) = _d_xi(A, i, j, _dx)
+    d_ya(A) = _d_yi(A, i, j, _dy)
     av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
     av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
 
-    phase_ij = getindex_phase(phase, i, j)
-    K = compute_phase(compute_conductivity, rheology, phase_ij, args)
-
     @inbounds if all((i, j) .≤ size(qTx))
+        phase_ij = getindex_phase(phase, clamp(i - 1, 1, nx), j + 1)
+        K1 = compute_phase(compute_conductivity, rheology, phase_ij, args)
+        phase_ij = getindex_phase(phase, clamp(i - 1, 1, nx), j)
+        K2 = compute_phase(compute_conductivity, rheology, phase_ij, args)
+        K = (K1 + K2) * 0.5
+
         qx = qTx2[i, j] = -K * d_xa(T)
         qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
     end
 
     @inbounds if all((i, j) .≤ size(qTy))
+        phase_ij = getindex_phase(phase, i, j)
+        K1 = compute_phase(compute_conductivity, rheology, phase_ij, args)
+        phase_ij = getindex_phase(phase, clamp(i - 1, 1, nx), j)
+        K2 = compute_phase(compute_conductivity, rheology, phase_ij, args)
+        K = (K1 + K2) * 0.5
+
         qy = qTy2[i, j] = -K * d_ya(T)
         qTy[i, j] = (qTy[i, j] * av_ya(θr_dτ) + qy) / (1.0 + av_ya(θr_dτ))
     end
+
     return nothing
 end
 
 @parallel_indices (i, j) function update_T!(
     T::AbstractArray{_T,2}, Told, qTx, qTy, ρCp, dτ_ρ, _dt, _dx, _dy
 ) where {_T}
-    nx, = size(ρCp)
+    nx, ny = size(ρCp)
 
     d_xa(A) = _d_xa(A, i, j, _dx)
     d_ya(A) = _d_ya(A, i, j, _dy)
-    av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av(A) = av_ya(av_xa(A))
+    av(A) = (
+        A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
+        A[clamp(i - 1, 1, nx), j] +
+        A[i, clamp(j - 1, 1, ny)] +
+        A[i, j]
+    ) * 0.25
 
     T[i + 1, j + 1] +=
         av(dτ_ρ) * (
@@ -307,22 +353,36 @@ end
     _dy,
     args::NamedTuple,
 ) where {_T}
-    nx, = size(args.P)
+    nx, ny = size(args.P)
 
+    i0 = clamp(i - 1, 1, nx)
+    i1 = clamp(i, 1, nx)
+    j0 = clamp(j - 1, 1, ny)
+    j1 = clamp(j, 1, ny)
+    
     d_xa(A) = _d_xa(A, i, j, _dx)
     d_ya(A) = _d_ya(A, i, j, _dy)
-    av_xa_cl(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av_ya_cl(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av(A) = av_ya_cl(av_xa_cl(A))
+    av(A) = (
+        A[i0, j0] +
+        A[i0, j1] +
+        A[i1, j0] +
+        A[i1, j1]
+    ) * 0.25
 
     T_ij = T[i + 1, j + 1]
     args_ij = (; T=T_ij, P=av(args.P))
-    phase_ij = getindex_phase(phase, i, j)
+
+    ρCp = (
+        compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
+        compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
+        compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
+        compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)        
+    ) * 0.25
 
     T[i + 1, j + 1] +=
         av(dτ_ρ) * (
             (-(d_xa(qTx) + d_ya(qTy))) -
-            compute_ρCp(rheology, phase_ij, args_ij) * (T_ij - Told[i + 1, j + 1]) * _dt
+            ρCp * (T_ij - Told[i + 1, j + 1]) * _dt
         )
     return nothing
 end
@@ -330,13 +390,16 @@ end
 @parallel_indices (i, j) function check_res!(
     ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, ρCp, _dt, _dx, _dy
 ) where {_T}
-    nx, = size(ρCp)
+    nx, ny = size(ρCp)
 
     d_xa(A) = _d_xa(A, i, j, _dx)
     d_ya(A) = _d_ya(A, i, j, _dy)
-    av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av(A) = av_ya(av_xa(A))
+    av(A) = (
+        A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
+        A[clamp(i - 1, 1, nx), clamp(j, 1, ny)] +
+        A[clamp(i, 1, nx), clamp(j - 1, 1, ny)] +
+        A[clamp(i, 1, nx), clamp(j, 1, ny)]
+    ) * 0.25
 
     ResT[i, j] =
         -av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt - (d_xa(qTx2) + d_ya(qTy2))
@@ -346,19 +409,34 @@ end
 @parallel_indices (i, j) function check_res!(
     ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, rheology, phase, _dt, _dx, _dy, args
 ) where {_T}
-    nx, = size(args.P)
+    nx, ny = size(args.P)
 
+    i0 = clamp(i - 1, 1, nx)
+    i1 = clamp(i, 1, nx)
+    j0 = clamp(j - 1, 1, ny)
+    j1 = clamp(j, 1, ny)
+    
     d_xa(A) = _d_xa(A, i, j, _dx)
     d_ya(A) = _d_ya(A, i, j, _dy)
-    av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av(A) = av_ya(av_xa(A))
+    av(A) = (
+        A[i0, j0] +
+        A[i0, j1] +
+        A[i1, j0] +
+        A[i1, j1]
+    ) * 0.25
 
-    args_ij = (; T=T[i + 1, j + 1], P=av(args.P))
-    phase_ij = getindex_phase(phase, i, j)
+    T_ij = T[i + 1, j + 1]
+    args_ij = (; T=T_ij, P=av(args.P))
+
+    ρCp = (
+        compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
+        compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
+        compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
+        compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)        
+    ) * 0.25
 
     ResT[i, j] =
-        -compute_ρCp(rheology, phase_ij, args_ij) *
+        -ρCp *
         (T[i + 1, j + 1] - Told[i + 1, j + 1]) *
         _dt - (d_xa(qTx2) + d_ya(qTy2))
     return nothing
@@ -421,8 +499,9 @@ function update_T(igg, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
     @parallel update_range(ni...) update_T!(
         thermal.T, thermal.Told, @qT(thermal)..., ρCp, pt_thermal.dτ_ρ, _dt, _di...
     )
-    return update_halo!(thermal.T)
+    update_halo!(thermal.T)
     # end
+    return nothing
 end
 
 function update_T(igg, b_width, thermal, rheology, phase, pt_thermal, _dt, _di, ni, args)
@@ -438,8 +517,9 @@ function update_T(igg, b_width, thermal, rheology, phase, pt_thermal, _dt, _di, 
         _di...,
         args,
     )
-    return update_halo!(thermal.T)
+    update_halo!(thermal.T)
     # end
+    return nothing
 end
 
 """
@@ -461,7 +541,6 @@ function heatdiffusion_PT!(
     nout=1e3,
     verbose=true,
 )
-    @show igg, nout
     # Compute some constant stuff
     _dt = inv(dt)
     _di = inv.(di)
@@ -480,7 +559,6 @@ function heatdiffusion_PT!(
     iter = 0
     wtime0 = 0e0
     err = 2 * ϵ
-    iterMax = 10e3
 
     println("\n ====================================\n")
     println("Starting thermal diffusion solver...\n")
@@ -514,7 +592,7 @@ function heatdiffusion_PT!(
             push!(norm_ResT, err)
             push!(iter_count, iter)
 
-            if verbose && (err < ϵ)
+            if verbose
                 @printf("iter = %d, err = %1.3e \n", iter, err)
             end
         end
@@ -569,14 +647,13 @@ function heatdiffusion_PT!(
     iter = 0
     wtime0 = 0e0
     err = 2 * ϵ
-    iterMax = 10e3
 
     println("\n ====================================\n")
     println("Starting thermal diffusion solver...\n")
 
     while err > ϵ && iter < iterMax
         wtime0 += @elapsed begin
-            @parallel flux_range(ni...) JustRelax.compute_flux!(
+            @parallel flux_range(ni...) compute_flux!(
                 @qT(thermal)...,
                 @qT2(thermal)...,
                 thermal.T,
@@ -612,7 +689,7 @@ function heatdiffusion_PT!(
             push!(norm_ResT, err)
             push!(iter_count, iter)
 
-            if verbose && (err < ϵ)
+            if verbose
                 @printf("iter = %d, err = %1.3e \n", iter, err)
             end
         end

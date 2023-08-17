@@ -1,4 +1,6 @@
-using JustRelax, CUDA, JustRelax.DataIO, JustPIC
+using CUDA
+CUDA.allowscalar(false)
+using JustRelax, JustRelax.DataIO, JustPIC
 backend = "CUDA"
 # backend = "Threads"
 # set_backend(backend)
@@ -388,7 +390,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     Vx_v = @zeros(ni.+1...)
     Vy_v = @zeros(ni.+1...)
 
-    local iters
     # while it < 150
     while (t/(1e6 * 3600 * 24 *365.25)) < 100
         # Update buoyancy and viscosity -
@@ -541,7 +542,7 @@ end
     else
         igg
     end
-    # main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
+    main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
 # end
 
 # run()

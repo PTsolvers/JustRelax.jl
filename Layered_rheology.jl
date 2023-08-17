@@ -349,7 +349,7 @@ function init_rheologies_simple(; is_plastic = true)
     )
 end
 
-function init_phases!(phases, particles::Particles, Lx; d=650e3, r=50e3)
+function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
@@ -392,7 +392,7 @@ function init_phases!(phases, particles::Particles, Lx; d=650e3, r=50e3)
     @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
 end
 
-function init_phases!(phases, particles::Particles, Lx, Ly; d=650e3, r=50e3)
+function init_phases!(phases, particles, Lx, Ly; d=650e3, r=50e3)
 
     @parallel_indices (i, j, k) function init_phases!(phases, px, py, pz, index, r, Lx, Ly)
         @inbounds for ip in JustRelax.cellaxes(phases)

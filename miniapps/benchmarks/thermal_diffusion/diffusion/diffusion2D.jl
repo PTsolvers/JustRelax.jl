@@ -9,6 +9,17 @@
     return nothing
 end
 
+function elliptical_perturbation!(T, δT, xc, yc, r, xvi)                                                               
+                                                                                                                           
+    @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)                                
+        @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2                                                          
+            T[i, j]  += δT                                                                                            
+        end                                                                                                            
+        return nothing                                                                                                 
+    end                                                                                                                
+                                                                                                                       
+    @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)                                                      
+end
 
 function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, K0=3.0)
     kyr = 1e3 * 3600 * 24 * 365.25
@@ -46,6 +57,12 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
         no_flux = (left = true, right = true, top = false, bot = false), 
     )
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
+
+    # Add thermal perturbation
+    δT = 100e0 # thermal perturbation
+    r  = 10e3 # thermal perturbation radius
+    center_perturbation = lx/2, -ly/2
+    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
 
     # Time loop
     t = 0.0

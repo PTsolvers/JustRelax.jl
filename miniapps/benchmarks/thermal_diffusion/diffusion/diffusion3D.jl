@@ -11,6 +11,18 @@ using MPI
     return nothing
 end
 
+function elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi)
+
+    @parallel_indices (i, j, k) function _elliptical_perturbation!(T, x, y, z)
+        @inbounds if (((x[i]-xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
+            T[i, j, k] += δT
+        end
+        return nothing
+    end
+
+    @parallel _elliptical_perturbation!(T, xvi...)
+end
+
 function diffusion_3D(;
     nx=32,
     ny=32,
@@ -59,7 +71,7 @@ function diffusion_3D(;
     ρCp = @. Cp * ρ
 
     # Boundary conditions
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li)
+    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
     thermal_bc = TemperatureBoundaryConditions(; 
         no_flux     = (left = true, right = true, top = false, bot = false, front=true, back=true), 
         periodicity = (left = false, right = false, top = false, bot = false, front=false, back=false),
@@ -67,12 +79,17 @@ function diffusion_3D(;
 
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])
 
+    # Add thermal perturbation
+    δT = 100e0 # thermal perturbation
+    r  = 10e3 # thermal perturbation radius
+    center_perturbation = lx/2, ly/2, -lz/2
+    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
+
     t = 0.0
     it = 0
     nt = Int(ceil(ttot / dt))
 
     # Physical time loop
-    local iters
     while it < nt
         heatdiffusion_PT!(
             thermal,

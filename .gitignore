@@ -11,3 +11,8 @@ Manifest.toml
 
 # Vim
 .*.sw[omp]
+
+*/*.png
+*/*.vti
+*/*.vtm
+*/*.h5

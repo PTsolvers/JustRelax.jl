@@ -181,7 +181,8 @@ end
         Base.@_inline_meta
         η = 0.0
         Base.@nexprs $N i ->
-            η +=
+            η += iszero(ratio[i]) ? 
+                0.0 :
                 compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args) *
                 ratio[i]
         η

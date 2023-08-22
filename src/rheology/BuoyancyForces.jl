@@ -67,7 +67,12 @@ end
     return compute_density(rheology, args) * compute_gravity(rheology[1])
 end
 
+# @inline function compute_buoyancy(rheology, args, phase_ratios)
+#     return compute_density_ratio(phase_ratios, rheology, args) *
+#            compute_gravity(rheology[1])
+# end
+
 @inline function compute_buoyancy(rheology, args, phase_ratios)
-    return compute_density_ratio(phase_ratios, rheology, args) *
+    return fn_ratio(compute_density, rheology, phase_ratios, args) *
            compute_gravity(rheology[1])
 end

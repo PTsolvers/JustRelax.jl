@@ -42,7 +42,7 @@ using ..JustRelax
 using CUDA
 using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
-using GeoParams, LinearAlgebra, Printf
+using GeoParams, LinearAlgebra, Printf, TimerOutputs
 
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax:
@@ -62,15 +62,8 @@ function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C
     τxx_o, τyy_o, τxy_o, τxy_o_c = stokes.τ_o.xx,
     stokes.τ_o.yy, stokes.τ_o.xy,
     stokes.τ_o.xy_c
-    @parallel update_τ_o!(τxx_o, τyy_o, τxy_o, τxy_o_c, τxx, τyy, τxy, τxy_c)
-    return nothing
-end
 
-@parallel function update_τ_o!(τxx_o, τyy_o, τxy_o, τxy_o_c, τxx, τyy, τxy, τxy_c)
-    @all(τxx_o) = @all(τxx)
-    @all(τyy_o) = @all(τyy)
-    @all(τxy_o) = @all(τxy)
-    @all(τxy_o_c) = @all(τxy_c)
+    @parallel (@idx size(τxy)) multi_copy!((τxx_o, τyy_o, τxy_o, τxy_o_c), (τxx, τyy, τxy, τxy_c))
     return nothing
 end
 
@@ -750,11 +743,12 @@ function JustRelax.solve!(
     wtime0 = 0.0
     λ = @zeros(ni...)
     # while iter < 2 
+    to = TimerOutput()
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+            @timeit to "Div" @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
-            @parallel (@idx ni) compute_P!(
+            @timeit to "Pressure" @parallel (@idx ni) compute_P!(
                 stokes.P,
                 stokes.P0,
                 stokes.R.RP,
@@ -767,14 +761,14 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+            @timeit to "ρg" @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
 
-            @parallel (@idx ni .+ 1) compute_strain_rate!(
+            @timeit to "ε" @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
             ν = 0.05
-            @parallel (@idx ni) compute_viscosity!(
+            @timeit to "viscosity" @parallel (@idx ni) compute_viscosity!(
                 η,
                 ν,
                 phase_ratios.center,
@@ -783,10 +777,10 @@ function JustRelax.solve!(
                 rheology,
                 viscosity_cutoff,
             )
-            compute_maxloc!(ητ, η)
+            @timeit to "maxloc" compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_τ_nonlinear!(
+            @timeit to "stress" @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ)...,
                 stokes.τ.II,
                 @tensor(stokes.τ_o)...,
@@ -852,14 +846,15 @@ function JustRelax.solve!(
         @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
     end
 
-    return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_∇V=norm_∇V,
-    )
+    # return (
+    #     iter=iter,
+    #     err_evo1=err_evo1,
+    #     err_evo2=err_evo2,
+    #     norm_Rx=norm_Rx,
+    #     norm_Ry=norm_Ry,
+    #     norm_∇V=norm_∇V,
+    # )
+    return to
 end
 
 function JustRelax.solve!(

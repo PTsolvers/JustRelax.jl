@@ -19,6 +19,17 @@ function multi_copyto!(B::NTuple{N,AbstractArray}, A::NTuple{N,AbstractArray}) w
     end
 end
 
+@parallel_indices (i, j) function multi_copy!(dst::NTuple{N, T}, src::NTuple{N, T}) where {N,T}
+    
+    @inbounds for (dst_i, src_i) in zip(dst, src)
+        if all((i,j) .≤ size(dst_i))
+            dst_i[i, j] = src_i[i, j]
+        end
+    end
+
+    return nothing
+end
+
 """
     @add(I, args...)
 
@@ -284,6 +295,26 @@ function compute_maxloc!(B, A; window=(1, 1, 1))
     end
 
     @parallel (@idx ni) _maxloc!(B, A)
+end
+
+
+function _compute_maxloc!(B, A, window)
+
+    I = indices(window)
+    
+    if all(I.<=size(A)) 
+        B[I...] = JustRelax._maxloc_window_clamped(A, I..., window...)
+    end
+
+    return nothing
+end
+
+function compute_maxloc!(B::CuArray{T1, N, T2}, A::CuArray{T1, N, T2}; window = ntuple(i->1, Val(N))) where {T1, T2, N}
+    nx, ny = size(A)
+    ntx, nty = 32, 32
+    blkx, blky = ceil(Int, nx / ntx), ceil(Int, ny / nty)
+    @sync @cuda threads=(ntx, nty) blocks=(blkx, blky) _compute_maxloc!(B, A, window)
+    return nothing
 end
 
 @inline function _maxloc_window_clamped(A, I, J, width_x, width_y)

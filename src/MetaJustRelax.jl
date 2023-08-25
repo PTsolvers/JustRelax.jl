@@ -80,7 +80,8 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             mean_mpi,
             norm_mpi,
             minimum_mpi,
-            maximum_mpi
+            maximum_mpi,
+            multi_copy!
 
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
         export pureshear_bc!,

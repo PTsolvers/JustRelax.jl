@@ -271,6 +271,19 @@ end
 @inline Base.@pure _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
 @inline Base.@pure _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
 
+function indices(::NTuple{3, T}) where {T}
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    k = (blockIdx().z - 1) * blockDim().z + threadIdx().z
+    return i, j, k
+end
+
+function indices(::NTuple{2, T}) where {T}
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    return i, j
+end
+
 """
     maxloc!(B, A; window)
 
@@ -313,7 +326,9 @@ function compute_maxloc!(B::CuArray{T1, N, T2}, A::CuArray{T1, N, T2}; window = 
     nx, ny = size(A)
     ntx, nty = 32, 32
     blkx, blky = ceil(Int, nx / ntx), ceil(Int, ny / nty)
-    @sync @cuda threads=(ntx, nty) blocks=(blkx, blky) _compute_maxloc!(B, A, window)
+    CUDA.@sync begin
+        @cuda threads=(ntx, nty) blocks=(blkx, blky) _compute_maxloc!(B, A, window)
+    end
     return nothing
 end
 
@@ -427,7 +442,8 @@ end
 
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """
-@inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
+# @inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
+@inline continuation_log(x_new, x_old, ν) = (1 - ν) * x_old + ν * x_new
 
 # Others
 

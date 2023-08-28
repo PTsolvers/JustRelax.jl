@@ -25,7 +25,7 @@ Return the number of phases in `x::PhaseRatio`.
 @inline function nphases(
     ::CellArray{StaticArraysCore.SArray{Tuple{N},T,N1,N},N2,N3,T_Array}
 ) where {N,T,N1,N2,N3,T_Array}
-    return N
+    return Val(N)
 end
 
 # ParallelStencil launch kernel for 2D
@@ -51,7 +51,7 @@ end
 
 @inline function phase_ratios_center(x::CellArray, phases, cell::Vararg{Int,N}) where {N}
     # total number of material phases
-    num_phases = Val(nphases(x))
+    num_phases = nphases(x)
     # number of active particles in this cell
     n = 0
     for j in cellaxes(phases)
@@ -101,7 +101,14 @@ end
     quote
         Base.@_inline_meta
         x = 0.0
-        Base.@nexprs $N i -> x += iszero(ratio[i]) ? 0.0 : fn(rheology[i], args) * ratio[i]
+        # Base.@nexprs $N i -> x +=  iszero(ratio[i]) ? 0.0 : fn(rheology[i], args) * ratio[i]
+        Base.@nexprs $N i -> x += (
+            r = ratio[i];
+            isone(r) && return fn(rheology[i], args) * r;
+            iszero(r) ? 0.0 : fn(rheology[i], args) * r;
+        )
         return x
     end
 end
+
+

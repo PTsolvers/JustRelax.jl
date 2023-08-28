@@ -1,7 +1,7 @@
 using CUDA
 CUDA.allowscalar(false)
 using JustRelax, JustRelax.DataIO, JustPIC
-backend = "CUDA"
+backend = "CUDA_Float64_2D"
 # backend = "Threads"
 # set_backend(backend)
 
@@ -18,6 +18,44 @@ include("Layered_rheology.jl")
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
 @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
 @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
+
+
+distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
+
+function phase_ratios_center_closest(x::PhaseRatio, cell_center, pcoords, phases, cell::Vararg{Int,N}) where {N}
+    return phase_ratios_center_closest(x.center, cell_center, pcoords, phases, cell...)
+end
+
+@inline function phase_ratios_center_closest(x::CellArray, cell_center, p, phases, cell::Vararg{Int,N}) where {N}
+    # number of active particles in this cell
+    dist_min = Inf
+    idx_min = -1
+    for i in 1:JustRelax.cellnum(phases)
+        p1 = ntuple(j-> JustRelax.@cell(p[j][i, cell...]), Val(N))
+        dist = distance(p1, cell_center)
+        if dist < dist_min 
+            dist_min = dist
+            idx_min = i
+        end
+        if i ≤  JustRelax.cellnum(x)
+            JustRelax.@cell x[i, cell...] = 0.0
+        end
+    end
+    phase_min = Int(JustRelax.@cell((phases[idx_min, cell...])))
+    JustRelax.@cell x[phase_min, cell...] = 1.0
+    # for i in 1:JustRelax.cellnum(x)
+    #     if i != phase_min
+    #         JustRelax.@cell x[i, cell...] = 0.0
+    #     else
+    #         JustRelax.@cell x[i, cell...] = 1.0
+    #     end
+    # end
+end
+
+@parallel_indices (i, j) function phase_ratios_center_closest(x, xci, pcoords, phases)
+    phase_ratios_center_closest(x, (xci[1][i], xci[2][j]), pcoords, phases, i, j)
+    return nothing
+end
 
 function init_particles(nxcell, max_xcell, min_xcell, x, y, dx, dy, nx, ny)
     ncells = nx * ny
@@ -230,6 +268,7 @@ function rectangular_perturbation!(T, δT, xc, yc, r, xvi)
             dTdZ = (2047 - 2017) / 50e3
             offset = 2017
             T[i, j] = (depth - 585e3) * dTdZ + offset
+            # T[i, j] += 50.0 
         end
         return nothing
     end
@@ -297,13 +336,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     r_anomaly   = 25e3            # radius of perturbation
     init_phases!(pPhases, particles, lx; d=abs(yc_anomaly), r=r_anomaly)
     phase_ratios = PhaseRatio(ni, length(rheology))
-    @parallel (JustRelax.@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    # @parallel (JustRelax.@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    @parallel (JustRelax.@idx ni) phase_ratios_center_closest(phase_ratios.center, xci, particles.coords, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -340,12 +380,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
         @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
+        # ρg[2] .= 3.3e3 * 9.81
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
     # Rheology
     η = @ones(ni...)
     args_ηv = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    @parallel (JustRelax.@idx ni) JustRelax.compute_viscosity!(
+    compute_viscosity!(
         η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args_ηv, rheology, (1e16, 1e24)
     )
     η_vep = deepcopy(η)
@@ -377,9 +418,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         fig
     end
 
-    # Time loop
-    t, it = 0.0, 0
-    nt    = 30
     T_buffer = @zeros(ni.+1) 
     Told_buffer = similar(T_buffer)
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
@@ -390,18 +428,22 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     Vx_v = @zeros(ni.+1...)
     Vy_v = @zeros(ni.+1...)
 
+    # Time loop
+    t, it = 0.0, 0
+    nt    = 30
     # while it < 150
-    while (t/(1e6 * 3600 * 24 *365.25)) < 100
+    while it < 100
+        # while (t/(1e6 * 3600 * 24 *365.25)) < 100
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        @parallel (JustRelax.@idx ni) JustRelax.compute_viscosity!(
-            η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (1e16, 1e24)
+        compute_viscosity!(
+            η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
         )
         @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
         # ------------------------------
  
         # Stokes solver ----------------
-        @time solve!(
+        to = solve!(
             stokes,
             pt_stokes,
             di,
@@ -414,11 +456,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
             args,
             dt,
             igg;
-            iterMax=50e3,
+            iterMax=75e3,
             nout=1e3,
-        );
+            viscosity_cutoff=(1e18, 1e24)
+        )
+        @show to
         @parallel (JustRelax.@idx ni) compute_invariant!(stokes.ε.II, @strain(stokes)...)
-        dt = compute_dt(stokes, di, dt_diff)
+        dt = compute_dt(stokes, di, dt_diff) * 0.9
         # ------------------------------
 
         # Thermal solver ---------------
@@ -435,10 +479,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
 
         # Advection --------------------
         # interpolate fields from grid vertices to particles
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
-        grid2particle!(pT, xvi, T_buffer, Told_buffer, particles.coords)
+        # for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+        #     copyinn_x!(dst, src)
+        # end
+        # grid2particle!(pT, xvi, T_buffer, Told_buffer, particles.coords)
+        grid2particle!(pT, xvi, T_buffer, particles.coords)
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
         # advect particles in memory
@@ -448,43 +493,44 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         # inject && break
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # # update phase ratios
-        @parallel (JustRelax.@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+        # @parallel (JustRelax.@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+        @parallel (JustRelax.@idx ni) phase_ratios_center_closest(phase_ratios.center, xci, particles.coords, pPhases)
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles.coords)
         @views T_buffer[:, end]      .= 273.0
         @views thermal.T[2:end-1, :] .= T_buffer
-        @views thermal.T[:, 1]       .= Tmax
+        # @views thermal.T[:, 1]       .= Tmax
         temperature2center!(thermal)
 
         @show it += 1
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 5) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
-            JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-            data_v = (; 
-                T = Array(thermal.T[2:end-1, :]),
-                τxy = Array(stokes.τ.xy),
-                εxy = Array(stokes.ε.xy),
-                Vx = Array(Vx_v),
-                Vy = Array(Vy_v),
-            )
-            data_c = (; 
-                P = Array(stokes.P),
-                τxx = Array(stokes.τ.xx),
-                τyy = Array(stokes.τ.yy),
-                εxx = Array(stokes.ε.xx),
-                εyy = Array(stokes.ε.yy),
-                η = Array(η),
-            )
-            save_vtk(
-                joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
-                xvi,
-                xci, 
-                data_v, 
-                data_c
-            )
+            # JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            # data_v = (; 
+            #     T = Array(thermal.T[2:end-1, :]),
+            #     τxy = Array(stokes.τ.xy),
+            #     εxy = Array(stokes.ε.xy),
+            #     Vx = Array(Vx_v),
+            #     Vy = Array(Vy_v),
+            # )
+            # data_c = (; 
+            #     P = Array(stokes.P),
+            #     τxx = Array(stokes.τ.xx),
+            #     τyy = Array(stokes.τ.yy),
+            #     εxx = Array(stokes.ε.xx),
+            #     εyy = Array(stokes.ε.yy),
+            #     η = Array(η),
+            # )
+            # save_vtk(
+            #     joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
+            #     xvi,
+            #     xci, 
+            #     data_v, 
+            #     data_c
+            # )
 
             # p = particles.coords
             # ppx, ppy = p
@@ -534,7 +580,7 @@ end
     figdir = "Plume2D"
     metadata(pwd(), "Layered_convection2D.jl", joinpath(figdir, "metadata"))
     ar     = 1 # aspect ratio
-    n      = 141
+    n      = 242
     nx     = n*ar - 2
     ny     = n - 2
     igg  = if !(JustRelax.MPI.Initialized())
@@ -544,5 +590,3 @@ end
     end
     main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
 # end
-
-# run()

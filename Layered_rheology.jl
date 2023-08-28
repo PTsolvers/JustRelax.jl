@@ -133,7 +133,7 @@ function init_rheologies(; is_plastic = true)
         # Name              = "Plume",
         SetMaterialParams(;
             Phase             = 5,
-            Density           = PT_Density(; ρ0=3.25e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
+            Density           = PT_Density(; ρ0=3.3e3-50, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
             Conductivity      = K_mantle,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),

@@ -5,12 +5,12 @@
 
 import Base.setindex!
 
-function Base.getindex(x::CellArray{SVector{Nv, T}, N1, N2, T}, I::Vararg{Int, N}) where {Nv, N, N1, N2, T}
+Base.@propagate_inbounds @inline function Base.getindex(x::CellArray{SVector{Nv, T}, N1, N2, T}, I::Vararg{Int, N}) where {Nv, N, N1, N2, T}
     idx_cell = cart2ind(x.dims, I...)
     SVector{Nv, T}(x.data[idx_cell, i, 1] for i in 1:Nv)
 end
 
-function Base.getindex(x::CPUCellArray{SVector{Nv, T}, N1, N2, T}, I::Vararg{Int, N}) where {Nv, N, N1, N2, T}
+Base.@propagate_inbounds @inline function Base.getindex(x::CPUCellArray{SVector{Nv, T}, N1, N2, T}, I::Vararg{Int, N}) where {Nv, N, N1, N2, T}
     idx_cell = cart2ind(x.dims, I...)
     SVector{Nv, T}(x.data[1, i, idx_cell] for i in 1:Nv)
 end

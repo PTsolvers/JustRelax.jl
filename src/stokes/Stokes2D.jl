@@ -744,6 +744,9 @@ function JustRelax.solve!(
     λ = @zeros(ni...)
     # while iter < 2 
     to = TimerOutput()
+    η0 = @zeros(ni...)
+    do_visc = true
+    GC.enable(false)
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @timeit to "Div" @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -761,22 +764,29 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            @timeit to "ρg" @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
-
+            # if rem(iter, 5) == 0
+                # @timeit to "ρg" @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+            # end
+            
             @timeit to "ε" @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            ν = 0.05
-            @timeit to "viscosity" @parallel (@idx ni) compute_viscosity!(
-                η,
-                ν,
-                phase_ratios.center,
-                @strain(stokes)...,
-                args,
-                rheology,
-                viscosity_cutoff,
-            )
+            # if rem(iter, nout) == 0
+            #     @copy η0 η
+            # end                
+            # if do_visc
+                ν = 1e-2
+                @timeit to "viscosity" compute_viscosity!(
+                    η,
+                    ν,
+                    phase_ratios.center,
+                    @strain(stokes)...,
+                    args,
+                    rheology,
+                    viscosity_cutoff,
+                )
+            # end
             @timeit to "maxloc" compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
@@ -795,8 +805,8 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            @hide_communication b_width begin # communication/computation overlap
-                @parallel compute_V!(
+            # @hide_communication b_width begin # communication/computation overlap
+                @timeit to "velocity" @parallel compute_V!(
                     @velocity(stokes)...,
                     stokes.P,
                     @stress(stokes)...,
@@ -805,18 +815,24 @@ function JustRelax.solve!(
                     ητ,
                     _di...,
                 )
-                update_halo!(stokes.V.Vx, stokes.V.Vy)
-            end
+            #     update_halo!(stokes.V.Vx, stokes.V.Vy)
+            # end
             # apply boundary conditions boundary conditions
             flow_bcs!(stokes, flow_bcs, di)
         end
 
         iter += 1
-        if iter % nout == 0 && iter > 1
+        @timeit to "checks" if iter % nout == 0 && iter > 1
+
+            # er_η = norm(@.(log10(η)-log10(η0)))
+            # # er_η = norm(@.((η)-(η0)))
+            # er_η < 1e-3 && (do_visc = false)
+            # @show er_η
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
             )
-            errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+            # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+            errs = (norm(stokes.R.Rx) / length(stokes.R.Rx), norm(stokes.R.Ry) / length(stokes.R.Ry), norm(stokes.R.RP) / length(stokes.R.RP))
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
@@ -845,6 +861,8 @@ function JustRelax.solve!(
         update_τ_o!(stokes)
         @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
     end
+
+    GC.enable(true)
 
     # return (
     #     iter=iter,

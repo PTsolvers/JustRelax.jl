@@ -343,7 +343,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -387,7 +387,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     η = @ones(ni...)
     args_ηv = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     compute_viscosity!(
-        η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args_ηv, rheology, (1e16, 1e24)
+        η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args_ηv, rheology, (1e18, 1e24)
     )
     η_vep = deepcopy(η)
 
@@ -432,16 +432,24 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     t, it = 0.0, 0
     nt    = 30
     # while it < 150
-    while it < 100
+    while it < 500
         # while (t/(1e6 * 3600 * 24 *365.25)) < 100
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        compute_viscosity!(
-            η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
-        )
+        # compute_viscosity!(
+        #     η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
+        # )
         @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
         # ------------------------------
- 
+
+        particle2grid!(T_buffer, pT, xvi, particles.coords)
+        @views T_buffer[:, end]      .= 273.0
+        @views thermal.T[2:end-1, :] .= T_buffer
+        # @views thermal.T[:, 1]       .= Tmax
+        temperature2center!(thermal)
+        @copy thermal.Told thermal.T
+        copyinn_x!(Told_buffer, thermal.Told)
+
         # Stokes solver ----------------
         to = solve!(
             stokes,
@@ -454,15 +462,15 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
             phase_ratios,
             rheology,
             args,
-            dt,
+            Inf,
             igg;
-            iterMax=75e3,
+            iterMax=100e3,
             nout=1e3,
-            viscosity_cutoff=(1e18, 1e24)
+            viscosity_cutoff=(1e16, 1e24)
         )
         @show to
         @parallel (JustRelax.@idx ni) compute_invariant!(stokes.ε.II, @strain(stokes)...)
-        dt = compute_dt(stokes, di, dt_diff) * 0.9
+        dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -477,15 +485,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         )
         # ------------------------------
 
-        # Advection --------------------
-        # interpolate fields from grid vertices to particles
-        # for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        #     copyinn_x!(dst, src)
-        # end
-        # grid2particle!(pT, xvi, T_buffer, Told_buffer, particles.coords)
-        grid2particle!(pT, xvi, T_buffer, particles.coords)
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
+        copyinn_x!(T_buffer, thermal.T)
+        grid2particle!(pT, xvi, T_buffer, Told_buffer, particles.coords)
         # advect particles in memory
         shuffle_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
@@ -493,20 +496,35 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         # inject && break
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # # update phase ratios
+        @parallel (JustRelax.@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+
+        # # Advection --------------------
+        # # interpolate fields from grid vertices to particles
+        # # for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+        # #     copyinn_x!(dst, src)
+        # # end
+        # copyinn_x!(T_buffer, thermal.T)
+        # grid2particle!(pT, xvi, T_buffer, Told_buffer, particles.coords)
+        # # grid2particle!(pT, xvi, T_buffer, particles.coords)
+        # # advect particles in space
+        # advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
+        # # advect particles in memory
+        # shuffle_particles!(particles, xvi, particle_args)
+        # # check if we need to inject particles
+        # @show inject = check_injection(particles)
+        # # inject && break
+        # inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
+        # # # update phase ratios
         # @parallel (JustRelax.@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
-        @parallel (JustRelax.@idx ni) phase_ratios_center_closest(phase_ratios.center, xci, particles.coords, pPhases)
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles.coords)
-        @views T_buffer[:, end]      .= 273.0
-        @views thermal.T[2:end-1, :] .= T_buffer
-        # @views thermal.T[:, 1]       .= Tmax
-        temperature2center!(thermal)
+        # # @parallel (JustRelax.@idx ni) phase_ratios_center_closest(phase_ratios.center, xci, particles.coords, pPhases)
+        # # interpolate fields from particle to grid vertices
+        
 
         @show it += 1
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || rem(it, 10) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
             # JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             # data_v = (; 
@@ -542,20 +560,21 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
 
             fig = Figure(resolution = (1000, 1600), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
-            # ax3 = Axis(fig[3,1], aspect = ar, title = "τII [MPa]")
+            # ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
+            ax2 = Axis(fig[2,1], aspect = ar, title = "τII [MPa]")
             ax3 = Axis(fig[3,1], aspect = ar, title = "log10(εII)")
             # ax4 = Axis(fig[4,1], aspect = ar, title = "ρ [kg/m3]")
             # ax4 = Axis(fig[4,1], aspect = ar, title = "τII - τy [Mpa]")
             ax4 = Axis(fig[4,1], aspect = ar, title = "log10(η)")
             h1 = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
             # h1 = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(abs.(ρg[2]./9.81)) , colormap=:batlow)
-            h2 = heatmap!(ax2, xci[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
+            # h2 = heatmap!(ax2, xci[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
+            h2 = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II.*1e-6) , colormap=:batlow)
             # h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(ppT[idxv]))
             # h3 = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II.*1e-6) , colormap=:batlow) 
             h3 = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow) 
             # # h3 = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(abs.(stokes.ε.xx))) , colormap=:batlow) 
-            h4 = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)) , colormap=:batlow)
+            h4 = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:batlow, colorrange=(18, 24))
             # h4 = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(abs.(ρg[2]./9.81)) , colormap=:batlow)
             # h4 = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(@.(stokes.P * friction  + cohesion - stokes.τ.II)/1e6) , colormap=:batlow)
             hidexdecorations!(ax1)
@@ -580,7 +599,7 @@ end
     figdir = "Plume2D"
     metadata(pwd(), "Layered_convection2D.jl", joinpath(figdir, "metadata"))
     ar     = 1 # aspect ratio
-    n      = 242
+    n      = 702
     nx     = n*ar - 2
     ny     = n - 2
     igg  = if !(JustRelax.MPI.Initialized())
@@ -590,3 +609,5 @@ end
     end
     main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
 # end
+
+

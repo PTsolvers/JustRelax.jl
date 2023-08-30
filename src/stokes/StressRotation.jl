@@ -1,3 +1,5 @@
+using StaticArrays 
+
 @parallel_indices (i, j) function rotate_stress!(V, τ::NTuple{3,T}, _di, dt) where {T}
     @inbounds rotate_stress!(V, τ, (i, j), _di, dt)
     return nothing
@@ -34,10 +36,28 @@ Base.@propagate_inbounds function rotate_stress!(
     # actually rotate stress tensor
     τr_voigt = GeoParams.rotate_elastic_stress2D(ω, τ_voigt, dt)
 
-    ## 3) Update stress
-    for k in 1:N
-        τ[k][idx...] = muladd(τij_adv[k], dt, τr_voigt[k])
-    end
+    # θ = ω * dt * 0.5
+    # # NOTE: inlining sincos speeds up considerably this kernel but breaks for < 1.8
+    # sinθ, cosθ = sincos(θ) 
+    # R = @SMatrix [
+    #     cosθ -sinθ
+    #     sinθ  cosθ
+    # ]
+    # τ_matrix = @SMatrix [
+    #     τ_voigt[1] τ_voigt[3]
+    #     τ_voigt[3] τ_voigt[2]
+    # ]
+    # τr = R * τ_matrix * R'
+    # τr_voigt = τr[1], τr[4], τr[2]
+
+    # 3) Update stress
+    # for k in 1:N
+    #     τ[k][idx...] = muladd(τij_adv[k], dt, τr_voigt[k])
+    # end
+    # τ[1][idx...]  =  ω
+    τ[1][idx...] += dt * (τij_adv[1] + 2 * ω * τ_voigt[3])
+    τ[2][idx...] += dt * (τij_adv[2] - 2 * ω * τ_voigt[3])
+    τ[3][idx...] += dt * (τij_adv[3] -     ω * (τ_voigt[1] - τ_voigt[2]))
     return nothing
 end
 
@@ -162,15 +182,17 @@ Base.@propagate_inbounds function cross_derivatives(Vx, Vy, _dx, _dy, i, j)
         0.25 *
         _dy *
         (
-            Vx[i, j1] - Vx[i, j] + Vx[i, j2] - Vx[i, j1] + Vx[i1, j1] - Vx[i1, j] +
-            Vx[i1, j2] - Vx[i1, j1]
+            # Vx[i, j1] - Vx[i, j] + Vx[i, j2] - Vx[i, j1] + Vx[i1, j1] - Vx[i1, j] +
+            # Vx[i1, j2] - Vx[i1, j1]
+            - Vx[i, j] + Vx[i, j2] - Vx[i1, j] + Vx[i1, j2] 
         )
     ∂Vy∂x =
         0.25 *
         _dx *
         (
-            Vy[i1, j] - Vy[i, j] + Vy[i2, j] - Vy[i1, j] + Vy[i1, j1] - Vy[i, j1] +
-            Vy[i2, j1] - Vy[i1, j1]
+            # Vy[i1, j] - Vy[i, j] + Vy[i2, j] - Vy[i1, j] + Vy[i1, j1] - Vy[i, j1] +
+            # Vy[i2, j1] - Vy[i1, j1]
+            - Vy[i, j] + Vy[i2, j] - Vy[i, j1] + Vy[i2, j1] 
         )
     return ∂Vx∂y, ∂Vy∂x
 end
@@ -225,7 +247,7 @@ Base.@propagate_inbounds function cross_derivatives(Vx, Vy, Vz, _dx, _dy, _dz, i
 end
 
 Base.@propagate_inbounds @inline function compute_vorticity(∂V∂x::NTuple{2,T}) where {T}
-    return ∂V∂x[1] - ∂V∂x[2]
+    return ∂V∂x[1] - ∂V∂x[2] 
 end # 2D
 Base.@propagate_inbounds @inline function compute_vorticity(∂V∂x::NTuple{3,T}) where {T}
     return ∂V∂x[3] - ∂V∂x[2], ∂V∂x[1] - ∂V∂x[3], ∂V∂x[2] - ∂V∂x[1]

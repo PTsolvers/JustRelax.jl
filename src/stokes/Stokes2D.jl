@@ -772,10 +772,10 @@ function JustRelax.solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            # if rem(iter, nout) == 0
-            #     @copy η0 η
-            # end                
-            # if do_visc
+            if rem(iter, nout) == 0
+                @copy η0 η
+            end                
+            if do_visc
                 ν = 1e-2
                 @timeit to "viscosity" compute_viscosity!(
                     η,
@@ -786,7 +786,7 @@ function JustRelax.solve!(
                     rheology,
                     viscosity_cutoff,
                 )
-            # end
+            end
             @timeit to "maxloc" compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
@@ -824,9 +824,9 @@ function JustRelax.solve!(
         iter += 1
         @timeit to "checks" if iter % nout == 0 && iter > 1
 
-            # er_η = norm(@.(log10(η)-log10(η0)))
-            # # er_η = norm(@.((η)-(η0)))
-            # er_η < 1e-3 && (do_visc = false)
+            er_η = norm(@.(log10(η)-log10(η0)))
+            # er_η = norm(@.((η)-(η0)))
+            er_η < 1e-3 && (do_visc = false)
             # @show er_η
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...

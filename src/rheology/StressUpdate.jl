@@ -52,7 +52,7 @@ function _compute_τ_nonlinear!(
 end
 
 # check if plasticity is active
-@inline isyielding(is_pl, τII_trial, τy, Pij) = is_pl && τII_trial > τy && Pij > 0
+@inline isyielding(is_pl, τII_trial, τy, Pij) = is_pl && τII_trial > τy # && Pij > 0
 
 @inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + ηij * _Gdt + 1.0)
 
@@ -114,11 +114,12 @@ function compute_dτ_pl(
 
     dτ_pl = ntuple(Val(N)) do i
         Base.@_inline_meta
+        dτ = dτij[i]
         # derivatives of the plastic potential
-        λdQdτ = (τij[i] + dτij[i]) * λ_τII
+        λdQdτ = (τij[i] + dτ) * λ_τII
         # corrected stress
         # dτ_r * (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij_p[i] - λdQdτ))
-        dτij[i] - dτ_r * 2.0 * ηij * λdQdτ
+        dτ - dτ_r * 2.0 * ηij * λdQdτ
     end
     return dτ_pl, λ
 end
@@ -147,6 +148,14 @@ end
         Base.@_inline_meta
         Base.@nexprs $N i ->
             isplastic(v[i]) && return true, v[i].C.val, v[i].sinϕ.val, v[i].η_vp.val
+        (false, 0.0, 0.0, 0.0)
+    end
+end
+
+@generated function plastic_params(v::NTuple{N, AbstractMaterialParamsStruct}, phase::Int) where N
+    quote
+        Base.@_inline_meta
+        Base.@nexprs $N i -> i==phase && return plastic_params(v[i])
         (false, 0.0, 0.0, 0.0)
     end
 end

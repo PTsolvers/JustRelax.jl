@@ -66,12 +66,11 @@ end
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes` 
 """
-function flow_bcs!(bcs::FlowBoundaryConditions, di, V...)
+function flow_bcs!(bcs::FlowBoundaryConditions, V...)
     n = bc_index(V)
-    _di = inv.(di)
 
     # no slip boundary conditions
-    do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip, _di...))
+    do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip))
     # free slip boundary conditions
     do_bc(bcs.free_slip) && (@parallel (@idx n) free_slip!(V..., bcs.free_slip))
     # periodic conditions
@@ -89,23 +88,23 @@ end
 
 # BOUNDARY CONDITIONS KERNELS
 
-@parallel_indices (i) function no_slip!(Ax, Ay, bc, _dx, _dy)
+@parallel_indices (i) function no_slip!(Ax, Ay, bc)
     @inbounds begin
         if bc.bot
             (i ≤ size(Ay, 1)) && (Ay[i, 1] = 0.0)
-            (1 < i < size(Ax, 1)) && (Ax[i, 1] = Ax[i, 2] * 0.5 * _dy)
+            (1 < i < size(Ax, 1)) && (Ax[i, 2] = Ax[i, 3] / 3)
         end
         if bc.top
             (i ≤ size(Ay, 1)) && (Ay[i, end] = 0.0)
-            (1 < i < size(Ax, 1)) && (Ax[i, end] = Ax[i, end - 1] * 0.5 * _dy)
+            (1 < i < size(Ax, 1)) && (Ax[i, end-1] = Ax[i, end - 2] / 3)
         end
         if bc.left
             (i ≤ size(Ax, 2)) && (Ax[1, i] = 0.0)
-            (1 < i < size(Ay, 2)) && (Ay[1, i] = Ay[2, i] * 0.5 * _dx)
+            (1 < i < size(Ay, 2)) && (Ay[2, i] = Ay[3, i] / 3)
         end
         if bc.right
             (i ≤ size(Ax, 2)) && (Ax[end, i] = 0.0)
-            (1 < i < size(Ay, 2)) && (Ay[end, i] = Ay[end - 1, i] * 0.5 * _dx)
+            (1 < i < size(Ay, 2)) && (Ay[end-1, i] = Ay[end - 2, i] / 3)
         end
     end
     return nothing

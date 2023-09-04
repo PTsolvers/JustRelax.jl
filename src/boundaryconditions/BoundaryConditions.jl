@@ -66,7 +66,7 @@ end
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes` 
 """
-function flow_bcs!(bcs::FlowBoundaryConditions, V...)
+function flow_bcs!(bcs::FlowBoundaryConditions, V)
     n = bc_index(V)
 
     # no slip boundary conditions
@@ -80,11 +80,7 @@ function flow_bcs!(bcs::FlowBoundaryConditions, V...)
     return nothing
 end
 
-function flow_bcs!(stokes, bcs::FlowBoundaryConditions, di)
-    V = @unpack stokes.V
-    flow_bcs!(bcs, di, V...)
-    return nothing
-end
+flow_bcs!(stokes, bcs::FlowBoundaryConditions) = flow_bcs!(bcs, @velocity(stokes))
 
 # BOUNDARY CONDITIONS KERNELS
 
@@ -96,7 +92,7 @@ end
         end
         if bc.top
             (i ≤ size(Ay, 1)) && (Ay[i, end] = 0.0)
-            (1 < i < size(Ax, 1)) && (Ax[i, end-1] = Ax[i, end - 2] / 3)
+            (1 < i < size(Ax, 1)) && (Ax[i, end - 1] = Ax[i, end - 2] / 3)
         end
         if bc.left
             (i ≤ size(Ax, 2)) && (Ax[1, i] = 0.0)
@@ -104,7 +100,7 @@ end
         end
         if bc.right
             (i ≤ size(Ax, 2)) && (Ax[end, i] = 0.0)
-            (1 < i < size(Ay, 2)) && (Ay[end-1, i] = Ay[end - 2, i] / 3)
+            (1 < i < size(Ay, 2)) && (Ay[end - 1, i] = Ay[end - 2, i] / 3)
         end
     end
     return nothing

@@ -45,10 +45,10 @@ environment!(model)
     )
     flow_bcs!(bcs, di, Vx, Vy)
     @test @views Vx[1, :] == Vx[end, :] == Vy[:, 1] == Vy[:, end]
-    @test @views Vx[:, 1] ≈ Vx[:, 2] * 0.5 / di[1]
-    @test @views Vx[:, end] ≈ Vx[:, end - 1] * 0.5 / di[1]
-    @test @views Vy[1, :] ≈ Vy[2, :] * 0.5 / di[1]
-    @test @views Vy[end, :] ≈ Vy[end - 1, :] * 0.5 / di[1]
+    @test @views Vx[:, 2] ≈ Vx[:, 3] / 3
+    @test @views Vx[:, end-1] ≈ Vx[:, end - 2] / 3
+    @test @views Vy[2, :] ≈ Vy[3, :] / 3
+    @test @views Vy[end-1, :] ≈ Vy[end - 2, :] / 3
 
     # test with StokesArrays
     # periodicity
@@ -91,8 +91,8 @@ environment!(model)
         stokes.V.Vx[end, :] ==
         stokes.V.Vy[:, 1] ==
         stokes.V.Vy[:, end]
-    @test @views stokes.V.Vx[:, 1] == stokes.V.Vx[:, 2] * 0.5 / di[1]
-    @test @views stokes.V.Vx[:, end] == stokes.V.Vx[:, end - 1] * 0.5 / di[1]
-    @test @views stokes.V.Vy[1, :] == stokes.V.Vy[2, :] * 0.5 / di[1]
-    @test @views stokes.V.Vy[end, :] == stokes.V.Vy[end - 1, :] * 0.5 / di[1]
+    @test @views stokes.V.Vx[:, 2] == stokes.V.Vx[:, 3] / 3
+    @test @views stokes.V.Vx[:, end-1] == stokes.V.Vx[:, end - 2] / 3
+    @test @views stokes.V.Vy[2, :] == stokes.V.Vy[3, :] / 3
+    @test @views stokes.V.Vy[end-1, :] == stokes.V.Vy[end - 2, :] / 3
 end

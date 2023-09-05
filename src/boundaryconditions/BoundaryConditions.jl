@@ -81,7 +81,9 @@ function _flow_bcs!(bcs::FlowBoundaryConditions, V)
 end
 
 flow_bcs!(stokes, bcs::FlowBoundaryConditions) = _flow_bcs!(bcs, @velocity(stokes))
-flow_bcs!(bcs::FlowBoundaryConditions, V::Vararg{T, N}) where {T, N} = _flow_bcs!(bcs, tuple(V...))
+function flow_bcs!(bcs::FlowBoundaryConditions, V::Vararg{T,N}) where {T,N}
+    return _flow_bcs!(bcs, tuple(V...))
+end
 
 # BOUNDARY CONDITIONS KERNELS
 

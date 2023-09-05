@@ -7,8 +7,6 @@ model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 @testset begin
-    di = 0.1, 0.1
-
     # periodicity
     n = 5 # number of elements
     Vx, Vy = @rand(n + 1, n + 2), @rand(n + 2, n + 1)
@@ -17,7 +15,7 @@ environment!(model)
         free_slip=(left=false, right=false, top=false, bot=false),
         periodicity=(left=true, right=true, top=true, bot=true),
     )
-    flow_bcs!(bcs, di, Vx, Vy)
+    flow_bcs!(bcs, Vx, Vy)
 
     @test @views Vx[:, 1] == Vx[:, end - 1]
     @test @views Vx[:, end] == Vx[:, 2]
@@ -30,7 +28,7 @@ environment!(model)
         free_slip=(left=true, right=true, top=true, bot=true),
         periodicity=(left=false, right=false, top=false, bot=false),
     )
-    flow_bcs!(bcs, di, Vx, Vy)
+    flow_bcs!(bcs, Vx, Vy)
 
     @test @views Vx[:, 1] == Vx[:, 2]
     @test @views Vx[:, end] == Vx[:, end - 1]
@@ -43,7 +41,7 @@ environment!(model)
         free_slip=(left=false, right=false, top=false, bot=false),
         periodicity=(left=false, right=false, top=false, bot=false),
     )
-    flow_bcs!(bcs, di, Vx, Vy)
+    flow_bcs!(bcs, Vx, Vy)
     @test @views Vx[1, :] == Vx[end, :] == Vy[:, 1] == Vy[:, end]
     @test @views Vx[:, 2] ≈ Vx[:, 3] / 3
     @test @views Vx[:, end-1] ≈ Vx[:, end - 2] / 3
@@ -59,7 +57,7 @@ environment!(model)
         free_slip=(left=false, right=false, top=false, bot=false),
         periodicity=(left=true, right=true, top=true, bot=true),
     )
-    flow_bcs!(stokes, flow_bcs, di)
+    flow_bcs!(stokes, flow_bcs)
 
     @test @views stokes.V.Vx[:, 1] == stokes.V.Vx[:, end - 1]
     @test @views stokes.V.Vx[:, end] == stokes.V.Vx[:, 2]
@@ -72,7 +70,7 @@ environment!(model)
         free_slip=(left=true, right=true, top=true, bot=true),
         periodicity=(left=false, right=false, top=false, bot=false),
     )
-    flow_bcs!(stokes, flow_bcs, di)
+    flow_bcs!(stokes, flow_bcs)
 
     @test @views stokes.V.Vx[:, 1] == stokes.V.Vx[:, 2]
     @test @views stokes.V.Vx[:, end] == stokes.V.Vx[:, end - 1]
@@ -85,7 +83,7 @@ environment!(model)
         free_slip=(left=false, right=false, top=false, bot=false),
         periodicity=(left=false, right=false, top=false, bot=false),
     )
-    flow_bcs!(stokes, flow_bcs, di)
+    flow_bcs!(stokes, flow_bcs)
 
     @test @views stokes.V.Vx[1, :] ==
         stokes.V.Vx[end, :] ==

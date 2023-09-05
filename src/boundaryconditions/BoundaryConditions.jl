@@ -66,7 +66,7 @@ end
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes` 
 """
-function flow_bcs!(bcs::FlowBoundaryConditions, V)
+function _flow_bcs!(bcs::FlowBoundaryConditions, V)
     n = bc_index(V)
 
     # no slip boundary conditions
@@ -80,7 +80,8 @@ function flow_bcs!(bcs::FlowBoundaryConditions, V)
     return nothing
 end
 
-flow_bcs!(stokes, bcs::FlowBoundaryConditions) = flow_bcs!(bcs, @velocity(stokes))
+flow_bcs!(stokes, bcs::FlowBoundaryConditions) = _flow_bcs!(bcs, @velocity(stokes))
+flow_bcs!(bcs::FlowBoundaryConditions, V::Vararg{T, N}) where {T, N} = _flow_bcs!(bcs, tuple(V...))
 
 # BOUNDARY CONDITIONS KERNELS
 

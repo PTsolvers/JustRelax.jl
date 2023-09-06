@@ -1,22 +1,15 @@
 # from "Fingerprinting secondary mantle plumes", Cloetingh et al. 2022
 
 function init_rheologies(; is_plastic = true)
-    # shit from Sird
-    # disl_upper_crust            = DislocationCreep(A=10^-15.0 , n=2.0, E=476e3, V=0.0  ,  r=0.0, R=8.3145)
-    # disl_lower_crust            = DislocationCreep(A=2.06e-23 , n=3.2, E=238e3, V=0.0  ,  r=0.0, R=8.3145)
-    # disl_lithospheric_mantle    = DislocationCreep(A=1.1e-16  , n=3.5, E=530e3, V=17e-6,  r=0.0, R=8.3145)
-    # disl_sublithospheric_mantle = DislocationCreep(A=1.1e-16  , n=3.5, E=530e3, V=20e-6,  r=0.0, R=8.3145)
-    # diff_lithospheric_mantle    = DiffusionCreep(A=2.46e-16   , n=1.0, E=375e3, V=10e-6,  r=0.0, R=8.3145)
-    # diff_sublithospheric_mantle = DiffusionCreep(A=2.46e-16   , n=1.0, E=375e3, V=10e-6,  r=0.0, R=8.3145)
 
     # Miguelitos
     # disl_upper_crust            = DislocationCreep(A=10^-28.0 , n=4.0, E=223e3, V=0.0  ,  r=0.0, R=8.3145)
-    disl_upper_crust            = DislocationCreep(A=10^-15.40, n=3.0, E=356e3, V=0.0  ,  r=0.0, R=8.3145)
-    disl_lower_crust            = DislocationCreep(A=10^-15.40, n=3.0, E=356e3, V=0.0  ,  r=0.0, R=8.3145)
-    disl_lithospheric_mantle    = DislocationCreep(A=10^-15.96, n=3.5, E=530e3, V=13e-6,  r=0.0, R=8.3145)
-    disl_sublithospheric_mantle = DislocationCreep(A=10^-15.81, n=3.5, E=480e3, V=10e-6,  r=0.0, R=8.3145)
-    diff_lithospheric_mantle    = DiffusionCreep(  A=10^-8.16 , n=1.0, E=375e3, V=6e-6,  r=0.0, R=8.3145)
-    diff_sublithospheric_mantle = DiffusionCreep(  A=10^-8.64 , n=1.0, E=335e3, V=4e-6,  r=0.0, R=8.3145)
+    # disl_upper_crust            = DislocationCreep(A=10^-15.40, n=3.0, E=356e3, V=0.0  ,  r=0.0, R=8.3145)
+    # disl_lower_crust            = DislocationCreep(A=10^-15.40, n=3.0, E=356e3, V=0.0  ,  r=0.0, R=8.3145)
+    # disl_lithospheric_mantle    = DislocationCreep(A=10^-15.96, n=3.5, E=530e3, V=13e-6,  r=0.0, R=8.3145)
+    # disl_sublithospheric_mantle = DislocationCreep(A=10^-15.81, n=3.5, E=480e3, V=10e-6,  r=0.0, R=8.3145)
+    # diff_lithospheric_mantle    = DiffusionCreep(  A=10^-8.16 , n=1.0, E=375e3, V=6e-6,  r=0.0, R=8.3145)
+    # diff_sublithospheric_mantle = DiffusionCreep(  A=10^-8.64 , n=1.0, E=335e3, V=4e-6,  r=0.0, R=8.3145)
 
     # Attila
     disl_upper_crust            = DislocationCreep(A=5.07e-18, n=2.3, E=154e3, V=6e-6,  r=0.0, R=8.3145)
@@ -26,19 +19,6 @@ function init_rheologies(; is_plastic = true)
     diff_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=1.0, E=530e3, V=6e-6,  r=0.0, R=8.3145)
     diff_sublithospheric_mantle = DislocationCreep(A=2.51e-17, n=1.0, E=530e3, V=6e-6,  r=0.0, R=8.3145)
 
-    # diff_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=13e-6,  r=0.0, R=8.3145)
-    # # disl_sublithospheric_mantle = DislocationCreep(A=10^-15.81, n=3.5, E=480e3, V=10e-6,  r=0.0, R=8.3145)
-    # # diff_lithospheric_mantle    = DiffusionCreep(  A=10^-8.16 , n=1.0, E=375e3, V=6e-6,  r=0.0, R=8.3145)
-    # diff_sublithospheric_mantle = DiffusionCreep(  A=10^-8.64 , n=1.0, E=335e3, V=4e-6,  r=0.0, R=8.3145)
-
-
-    # Burov
-    # disl_upper_crust            = DislocationCreep(A=10^-14.96, n=2.25, E=212e3, V=0.0  ,  r=0.0, R=8.3145)
-    # disl_lower_crust            = DislocationCreep(A=10^-14.96, n=2.25, E=212e3, V=0.0  ,  r=0.0, R=8.3145)
-    # disl_lithospheric_mantle    = DislocationCreep(A=10^-15.96, n=3.5 , E=530e3, V=13e-6,  r=0.0, R=8.3145)
-    # disl_sublithospheric_mantle = DislocationCreep(A=10^-19.04, n=3.5 , E=480e3, V=1.1e-5, r=1.2, R=8.3145)
-    # diff_lithospheric_mantle    = DiffusionCreep(  A=10^-8.16 , n=1.0 , E=375e3, V=6e-6,   r=0.0, R=8.3145)
-    # diff_sublithospheric_mantle = DiffusionCreep(  A=10^-16.6 , n=1.0 , E=375e3, V=2e-5,   r=1.0, R=8.3145)
 
     el_upper_crust              = SetConstantElasticity(; G=25e9, ν=0.5)                             # elastic spring
     el_lower_crust              = SetConstantElasticity(; G=25e9, ν=0.5)                             # elastic spring
@@ -143,12 +123,11 @@ function init_rheologies(; is_plastic = true)
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase             = 6,
-            Density           = ConstantDensity(; ρ=2e3),
+            Density           = ConstantDensity(; ρ=1e3),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             Conductivity      = ConstantConductivity(; k=15.0),
             CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
-            # Elasticity        = SetConstantElasticity(; G=Inf, ν=0.5) ,
         ),
     )
 end
@@ -219,7 +198,7 @@ function init_rheologies_isoviscous()
     # Name              = "StickyAir",
     sticky_air = SetMaterialParams(;
         Phase             = 6,
-        Density           = ConstantDensity(; ρ=2e3),
+        Density           = ConstantDensity(; ρ=1e3),
         HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
         Conductivity      = ConstantConductivity(; k=15.0),
         CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
@@ -233,121 +212,6 @@ function init_rheologies_isoviscous()
     return rheology
 end
 
-function init_rheologies_simple(; is_plastic = true)
-  
-    # Attila
-    disl_upper_crust            = DislocationCreep(A=5.07e-18, n=2.3, E=154e3, V=0.0  ,  r=0.0, R=8.3145)
-    disl_lower_crust            = DislocationCreep(A=2.08e-23, n=3.2, E=238e3, V=0.0  ,  r=0.0, R=8.3145)
-    disl_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=13e-6,  r=0.0, R=8.3145)
-    disl_sublithospheric_mantle = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=13e-6,  r=0.0, R=8.3145)
-    # disl_sublithospheric_mantle = DislocationCreep(A=10^-15.81, n=3.5, E=480e3, V=10e-6,  r=0.0, R=8.3145)
-    diff_lithospheric_mantle    = DiffusionCreep(  A=10^-8.16 , n=1.0, E=375e3, V=6e-6,  r=0.0, R=8.3145)
-    diff_sublithospheric_mantle = DiffusionCreep(  A=10^-8.64 , n=1.0, E=335e3, V=4e-6,  r=0.0, R=8.3145)
-    
-    el_upper_crust              = SetConstantElasticity(; G=36e9, ν=0.5)                             # elastic spring
-    el_lower_crust              = SetConstantElasticity(; G=40e9, ν=0.5)                             # elastic spring
-    el_lithospheric_mantle      = SetConstantElasticity(; G=74e9, ν=0.5)                             # elastic spring
-    el_sublithospheric_mantle   = SetConstantElasticity(; G=74e9, ν=0.5)       
-    β_upper_crust              = inv(get_Kb(el_upper_crust))
-    β_lower_crust              = inv(get_Kb(el_lower_crust))
-    β_lithospheric_mantle      = inv(get_Kb(el_lithospheric_mantle))
-    β_sublithospheric_mantle   = inv(get_Kb(el_sublithospheric_mantle))
-
-    # Physical properties using GeoParams ----------------
-    η_reg     = 1e16
-    G0        = 30e9    # shear modulus
-    cohesion  = 20e6
-    friction  = asind(0.3)
-    # friction  = 20.0
-    pl        = if is_plastic 
-        DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-    else
-        DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-    end
-    pl_wz     = if is_plastic 
-        DruckerPrager_regularised(; C = 2e6, ϕ=2.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-    else
-        DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-    end
-    # pl        = DruckerPrager(; C = 30e6, ϕ=friction, Ψ=0.0) # non-regularized plasticity
-
-    upper_crust = SetMaterialParams(;
-            Phase             = 1,
-            Density           = PT_Density(; ρ0=2.7e3, β=β_upper_crust, T0=0.0, α = 2.5e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
-            Conductivity      = ConstantConductivity(; k=2.7),
-            CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl)),
-            Elasticity        = el_upper_crust,
-            Gravity           = ConstantGravity(; g=9.81),
-        )
-        # Name              = "LowerCrust",
-    lower_crust = SetMaterialParams(;
-            Phase             = 2,
-            Density           = PT_Density(; ρ0=2.9e3, β=β_lower_crust, T0=0.0, α = 2.5e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
-            Conductivity      = ConstantConductivity(; k=2.7),
-            CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl)),
-            Elasticity        = el_lower_crust,
-            Gravity           = ConstantGravity(; g=9.81),
-        )
-        # Name              = "LithosphericMantle",
-    lithospheric_mantle = SetMaterialParams(;
-            Phase             = 3,
-            Density           = PT_Density(; ρ0=3.3e3, β=β_lithospheric_mantle, T0=0.0, α = 3e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
-            Conductivity      = ConstantConductivity(; k=3.0),
-            CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, )),
-            Elasticity        = el_lithospheric_mantle,
-            Gravity           = ConstantGravity(; g=9.81),
-        )
-        # Name              = "SubLithosphericMantle",
-    sublithospheric_mantle = SetMaterialParams(;
-            Phase             = 4,
-            Density           = PT_Density(; ρ0=3.4e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
-            Conductivity      = ConstantConductivity(; k=3.3),
-            CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, )),
-            Elasticity        = el_sublithospheric_mantle,
-            Gravity           = ConstantGravity(; g=9.81),
-        )
-        # Name              = "Plume",
-    plume = SetMaterialParams(;
-            Phase             = 5,
-            Density           = PT_Density(; ρ0=3.4e3-50, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
-            Conductivity      = ConstantConductivity(; k=3.3),
-            CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
-            Elasticity        = el_sublithospheric_mantle,
-            Gravity           = ConstantGravity(; g=9.81),
-        )
-        # Name              = "StickyAir",
-    sticky_air = SetMaterialParams(;
-            Phase             = 6,
-            Density           = ConstantDensity(; ρ=2e3),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
-            Conductivity      = ConstantConductivity(; k=15.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
-            # Elasticity        = SetConstantElasticity(; G=Inf, ν=0.5) ,
-        )
-    # Define rheolgy struct
-    rheology = (
-        lower_crust,
-        lower_crust,
-        lithospheric_mantle,
-        sublithospheric_mantle,
-        sublithospheric_mantle,
-        sublithospheric_mantle,
-    )
-
-    rheology = (
-        lithospheric_mantle,
-        lithospheric_mantle,
-        lithospheric_mantle,
-        sublithospheric_mantle,
-        sublithospheric_mantle,
-        plume,
-    )
-end
 
 function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
     ni = size(phases)
@@ -472,4 +336,17 @@ function dirichlet_velocities_pureshear!(Vx, Vy, εbg, xvi, xci)
     Vy[:, 1]   .= εbg * abs(yv[1])
     Vx[1, :]   .= εbg * (xv[1]-lx/2)
     Vx[end, :] .= εbg * (xv[end]-lx/2)
+end
+
+firstlast(x::AbstractArray) = first(x), last(x)
+firstlast(x::CuArray) = extrema(x)
+
+function inner_limits(grid::NTuple{N, T}, dxi)  where {N,T}
+    # ntuple(Val(N)) do i
+    #     x1 = firstlast.(grid[i])
+    #     ntuple(j -> x1[j] .+ (dxi[j] * 0.5, -dxi[j] * 0.5) , Val(N))
+    # end
+    ntuple(Val(N)) do i
+        ntuple(j -> firstlast.(grid[i])[j], Val(N))
+    end
 end

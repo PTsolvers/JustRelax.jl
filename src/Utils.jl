@@ -404,7 +404,6 @@ Compute the time step `dt` for the velocity field `S.V` and the diffusive maximu
 
 @inline function compute_dt(V::NTuple, di, dt_diff)
     n = inv(length(V) + 0.1)
-    n = 0.95
     dt_adv = mapreduce(x -> x[1] * inv(maximum(abs.(x[2]))), min, zip(di, V)) * n
     return min(dt_diff, dt_adv)
 end

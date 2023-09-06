@@ -51,6 +51,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             PTStokesCoeffs,
             ThermalArrays,
             PTThermalCoeffs,
+            compute_pt_thermal_arrays!,
             AbstractStokesModel,
             AbstractElasticModel,
             Viscous,

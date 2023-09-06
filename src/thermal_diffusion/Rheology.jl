@@ -30,7 +30,7 @@ end
     return conductivity * inv(heatcapacity * ρ)
 end
 
-# ρCp
+# ρ*Cp
 
 @inline function compute_ρCp(rheology, args)
     return compute_heatcapacity(rheology, args) * compute_density(rheology, args)
@@ -42,8 +42,8 @@ end
 end
 
 @inline function compute_ρCp(rheology, phase_ratios::SArray, args)
-    return fn_ratios(compute_heatcapacity, rheology, phase_ratios, args) *
-           fn_ratios(compute_density, rheology, phase_ratios, args)
+    return fn_ratio(compute_heatcapacity, rheology, phase_ratios, args) *
+           fn_ratio(compute_density, rheology, phase_ratios, args)
 end
 
 @inline function compute_ρCp(rheology, ρ, args)
@@ -55,5 +55,5 @@ end
 end
 
 @inline function compute_ρCp(rheology, ρ, phase_ratios::SArray, args)
-    return fn_ratios(compute_heatcapacity, rheology, phase_ratios, args) * ρ
+    return fn_ratio(compute_heatcapacity, rheology, phase_ratios, args) * ρ
 end

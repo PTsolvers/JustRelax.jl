@@ -471,23 +471,20 @@ end
 ## Stress invariants 
 
 @parallel_indices (i, j) function tensor_invariant!(II, xx, yy, xyv)
-    
     I = i, j
 
     # convinience closure
     @inline gather(A) = _gather(A, I...)
-   
+
     @inbounds begin
-        τ        = xx[I...], yy[I...], gather(xyv)
+        τ = xx[I...], yy[I...], gather(xyv)
         II[I...] = GeoParams.second_invariant_staggered(τ...)
     end
-    
+
     return nothing
 end
 
-
 @parallel_indices (i, j, k) function tensor_invariant!(II, xx, yy, zz, yz, xz, xy)
-
     I = i, j, k
 
     # convinience closure
@@ -496,9 +493,9 @@ end
     @inline gather_xy(A) = _gather_xy(A, I...)
 
     @inbounds begin
-        τ       = xx[I...], yy[I...], zz[I...], gather_yz(yz), gather_xz(xz), gather_xy(xy)
+        τ = xx[I...], yy[I...], zz[I...], gather_yz(yz), gather_xz(xz), gather_xy(xy)
         II[I...] = GeoParams.second_invariant_staggered(τ...)
     end
-    
+
     return nothing
 end

@@ -110,9 +110,9 @@ end
         Base.@_inline_meta
         x = 0.0
         # Base.@nexprs $N i -> x +=  iszero(ratio[i]) ? 0.0 : fn(rheology[i], args) * ratio[i]
-        Base.@nexprs $N i -> x += begin 
-            r = ratio[i];
-            isone(r) && return fn(rheology[i], args) * r;
+        Base.@nexprs $N i -> x += begin
+            r = ratio[i]
+            isone(r) && return fn(rheology[i], args) * r
             iszero(r) ? 0.0 : fn(rheology[i], args) * r
         end
         return x

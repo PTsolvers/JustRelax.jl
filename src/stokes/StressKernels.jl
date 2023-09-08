@@ -3,7 +3,7 @@
 @parallel_indices (i, j) function compute_τ!(
     τxx::AbstractArray{T,2}, τyy, τxy, εxx, εyy, εxy, η, θ_dτ
 ) where {T}
-    av(A) = _av(A, i, j)
+    av(A) = _av_a(A, i, j)
 
     denominator = inv(θ_dτ + 1.0)
     η_ij = η[i, j]
@@ -25,7 +25,7 @@ end
 @parallel_indices (i, j) function compute_τ!(
     τxx::AbstractArray{T,2}, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
 ) where {T}
-    av(A) = _av(A, i, j)
+    av(A) = _av_a(A, i, j)
 
     # Normal components
     _Gdt = inv(G[i, j] * dt)

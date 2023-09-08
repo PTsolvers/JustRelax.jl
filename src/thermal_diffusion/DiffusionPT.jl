@@ -5,9 +5,11 @@
 @inline get_phase(x::PhaseRatio) = x.center
 @inline get_phase(x) = x
 
-update_pt_thermal_arrays!(::Vararg{Any,N}) where N = nothing
+update_pt_thermal_arrays!(::Vararg{Any,N}) where {N} = nothing
 
-function update_pt_thermal_arrays!(pt_thermal, phase_ratios::PhaseRatio, rheology, args, _dt)
+function update_pt_thermal_arrays!(
+    pt_thermal, phase_ratios::PhaseRatio, rheology, args, _dt
+)
     ni = size(phase_ratios.center)
 
     @parallel (@idx ni) compute_pt_thermal_arrays!(
@@ -18,7 +20,7 @@ function update_pt_thermal_arrays!(pt_thermal, phase_ratios::PhaseRatio, rheolog
         args,
         pt_thermal.max_lxyz,
         pt_thermal.Vpdτ,
-        _dt
+        _dt,
     )
 
     return nothing
@@ -315,12 +317,11 @@ end
     end
 
     if all((i, j) .≤ size(qTy))
-
         ii, jj = min(i, nx), j
         phase_ij = getindex_phase(phase, ii, jj)
         args_ij = ntuple_idx(args, ii, jj)
         K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
-        
+
         ii, jj = max(i - 1, 1), j
         phase_ij = getindex_phase(phase, ii, jj)
         args_ij = ntuple_idx(args, ii, jj)
@@ -334,20 +335,19 @@ end
     return nothing
 end
 
-
 @parallel_indices (i, j) function compute_flux!(
     qTx::AbstractArray{_T,2},
     qTy,
-    qTx2, 
+    qTx2,
     qTy2,
     T,
     rheology::NTuple{N,AbstractMaterialParamsStruct},
-    phase_ratios::CellArray{C1, C2, C3, C4},
+    phase_ratios::CellArray{C1,C2,C3,C4},
     θr_dτ,
     _dx,
     _dy,
     args,
-) where {_T, N, C1, C2, C3, C4}
+) where {_T,N,C1,C2,C3,C4}
     nx = size(θr_dτ, 1)
 
     d_xi(A) = _d_xi(A, i, j, _dx)
@@ -376,7 +376,7 @@ end
         phase_ij = getindex_phase(phase_ratios, ii, jj)
         args_ij = ntuple_idx(args, ii, jj)
         K1 = compute_K(phase_ij, args_ij)
-        
+
         ii, jj = clamp(i - 1, 1, nx), j
         phase_ij = getindex_phase(phase_ratios, ii, jj)
         args_ij = ntuple_idx(args, ii, jj)
@@ -695,7 +695,6 @@ function heatdiffusion_PT!(
     nout=1e3,
     verbose=true,
 )
-
     phases = get_phase(phase)
 
     # Compute some constant stuff
@@ -733,7 +732,9 @@ function heatdiffusion_PT!(
                 _di...,
                 args,
             )
-            update_T(igg, b_width, thermal, rheology, phases, pt_thermal, _dt, _di, ni, args)
+            update_T(
+                igg, b_width, thermal, rheology, phases, pt_thermal, _dt, _di, ni, args
+            )
             thermal_bcs!(thermal.T, thermal_bc)
         end
 

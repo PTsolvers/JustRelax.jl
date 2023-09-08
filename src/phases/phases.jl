@@ -76,7 +76,7 @@ end
 ) where {N1,N2}
     quote
         Base.@_inline_meta
-        Base.@nexprs $N1 i -> reps_i = begin 
+        Base.@nexprs $N1 i -> reps_i = begin
             c = 0
             for j in cellaxes(phases)
                 c += @cell(phases[j, cell...]) == i
@@ -110,21 +110,24 @@ end
         Base.@_inline_meta
         x = 0.0
         # Base.@nexprs $N i -> x +=  iszero(ratio[i]) ? 0.0 : fn(rheology[i], args) * ratio[i]
-        Base.@nexprs $N i -> x += (
+        Base.@nexprs $N i -> x += begin 
             r = ratio[i];
             isone(r) && return fn(rheology[i], args) * r;
-            iszero(r) ? 0.0 : fn(rheology[i], args) * r;
-        )
+            iszero(r) ? 0.0 : fn(rheology[i], args) * r
+        end
         return x
     end
 end
 
 # ParallelStencil launch kernel for 2D
-@parallel_indices (i, j) function phase_ratios_center(ratio_centers, px, py, xc, yc, di, phases)
-
+@parallel_indices (i, j) function phase_ratios_center(
+    ratio_centers, px, py, xc, yc, di, phases
+)
     I = i, j
 
-    w = phase_ratio_weights(px[I...], py[I...], phases[I...], xc[i], yc[j], di, JustRelax.nphases(ratio_centers))
+    w = phase_ratio_weights(
+        px[I...], py[I...], phases[I...], xc[i], yc[j], di, JustRelax.nphases(ratio_centers)
+    )
 
     for k in 1:numphases(ratio_centers)
         JustRelax.@cell ratio_centers[k, I...] = w[k]
@@ -132,11 +135,12 @@ end
     return nothing
 end
 
-@inline δ(i, j) = i == j 
+@inline δ(i, j) = i == j
 
-function phase_ratio_weights(pxi::SVector{N1, T}, pyi::SVector{N1, T}, ph::SVector{N1, T}, xc, yc, di, ::Val{NC}) where {N1, NC, T}
-
-    if @generated 
+function phase_ratio_weights(
+    pxi::SVector{N1,T}, pyi::SVector{N1,T}, ph::SVector{N1,T}, xc, yc, di, ::Val{NC}
+) where {N1,NC,T}
+    if @generated
         quote
             Base.@_inline_meta
             # wrap cell center coordinates into a tuple
@@ -144,7 +148,7 @@ function phase_ratio_weights(pxi::SVector{N1, T}, pyi::SVector{N1, T}, ph::SVect
             # Initiaze phase ratio weights (note: can't use ntuple() here because of the @generated function)
             Base.@nexprs $NC i -> w_i = zero($T)
             w = Base.@ncall $NC tuple w
-    
+
             # initialie sum of weights
             sumw = zero($T)
             Base.@nexprs $N1 i -> begin
@@ -156,19 +160,18 @@ function phase_ratio_weights(pxi::SVector{N1, T}, pyi::SVector{N1, T}, ph::SVect
                 Base.@nexprs $NC j -> tmp_j = w[j] + x * δ(ph_local, j)
                 w = Base.@ncall $NC tuple tmp
             end
-            
+
             # return phase ratios weights w = sum(w * δij(i, phase)) / sum(w)
             _sumw = inv(sum(w))
             Base.@nexprs $NC i -> w_i = w[i] * _sumw
             w = Base.@ncall $NC tuple w
             return w
-            
         end
     else
         # wrap cell center coordinates into a tuple
         cell_center = xc, yc
         # Initiaze phase ratio weights (note: can't use ntuple() here because of the @generated function)
-        w = ntuple(_->zero(T), Val(NC))
+        w = ntuple(_ -> zero(T), Val(NC))
         # initialie sum of weights
         sumw = zero(T)
 
@@ -196,5 +199,3 @@ end
         return val
     end
 end
-
-τ_viscous:ε_viscous

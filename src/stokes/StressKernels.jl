@@ -203,6 +203,7 @@ end
     harm_xz(A) = _harm_xzi(A, i, j, k)
     harm_yz(A) = _harm_yzi(A, i, j, k)
     @inline _f(A, i, j, k) = fn_ratio(get_G, rheology, A[i, j, k])
+    #! format: off
     function av_Gdt_xy(A)
         x = 0.0
         for ii in (i - 1):i, jj in (j - 1):j, kk in k:k
@@ -224,6 +225,7 @@ end
         end
         inv(x * 0.25 * dt)
     end
+    #! format: on
 
     @inbounds begin
         # Compute τ_xy

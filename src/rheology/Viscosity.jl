@@ -44,17 +44,13 @@ end
     return nothing
 end
 
-
-function _compute_viscosity!(
-    η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
-)
-    
+function _compute_viscosity!(η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff)
     I = JustRelax.indices(size(η))
 
     # convinience closure
     @inline gather(A) = _gather(A, I...)
 
-    if all(I.<=size(η)) 
+    if all(I .<= size(η))
         # we need strain rate not to be zero, otherwise we get NaNs
         εII_0 = (εxx[I...] == εyy[I...] == 0) * 1e-15
 
@@ -77,24 +73,20 @@ function _compute_viscosity!(
     return nothing
 end
 
-function compute_viscosity!(η::CuArray{T1, N, T2}, x...) where {T1, T2, N}
+function compute_viscosity!(η::CuArray{T1,N,T2}, x...) where {T1,T2,N}
     nx, ny = size(η)
     ntx, nty = 16, 16
     blkx, blky = ceil(Int, nx / ntx), ceil(Int, ny / nty)
     CUDA.@sync begin
-        @cuda threads=(ntx, nty) blocks=(blkx, blky) _compute_viscosity!(
-            η, x...
-        )    
+        @cuda threads = (ntx, nty) blocks = (blkx, blky) _compute_viscosity!(η, x...)
     end
 
     return nothing
 end
 
-function compute_viscosity!(η::Array, x...) 
+function compute_viscosity!(η::Array, x...)
     ni = size(η)
-    @parallel (JustRelax.@idx ni) JustRelax.compute_viscosity!(
-        η, x...
-    )
+    @parallel (JustRelax.@idx ni) JustRelax.compute_viscosity!(η, x...)
     return nothing
 end
 
@@ -234,12 +226,12 @@ end
     quote
         Base.@_inline_meta
         η = 0.0
-        Base.@nexprs $N i ->(
-            η += iszero(ratio[i]) ? 
-                0.0 :
-                inv(compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args)) *
-                ratio[i];
-
+        Base.@nexprs $N i -> (
+            η += if iszero(ratio[i])
+                0.0
+            else
+                inv(compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args)) * ratio[i]
+            end
         )
         inv(η)
     end

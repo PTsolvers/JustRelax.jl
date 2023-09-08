@@ -12,7 +12,6 @@ end
     return nothing
 end
 
-
 # 1D THERMAL DIFFUSION MODULE
 
 module ThermalDiffusion1D
@@ -223,28 +222,44 @@ end
 end
 
 @parallel_indices (i, j) function compute_flux!(
-    qTx, qTy, T, rheology::NTuple{N, AbstractMaterialParamsStruct}, phase_ratios, args, _dx, _dy
-) where N
-
+    qTx,
+    qTy,
+    T,
+    rheology::NTuple{N,AbstractMaterialParamsStruct},
+    phase_ratios,
+    args,
+    _dx,
+    _dy,
+) where {N}
     i1, j1 = @add 1 i j # augment indices by 1
     nPx = size(args.P, 1)
 
     if all((i, j) .≤ size(qTx))
         Tx = (T[i1, j1] + T[i, j1]) * 0.5 - 273.0
         Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
-        phase_ratios_vertex = (phase_ratios[clamp(i - 1, 1, nPx), j1] + phase_ratios[clamp(i - 1, 1, nPx), j]) * 0.5
+        phase_ratios_vertex =
+            (
+                phase_ratios[clamp(i - 1, 1, nPx), j1] +
+                phase_ratios[clamp(i - 1, 1, nPx), j]
+            ) * 0.5
         argsx = (; T=Tx, P=Pvertex)
         qTx[i, j] =
-            -compute_diffusivity(rheology, phase_ratios_vertex, argsx) * (T[i1, j1] - T[i, j1]) * _dx
+            -compute_diffusivity(rheology, phase_ratios_vertex, argsx) *
+            (T[i1, j1] - T[i, j1]) *
+            _dx
     end
 
     if all((i, j) .≤ size(qTy))
         Ty = (T[i1, j1] + T[i1, j]) * 0.5 - 273.0
-        Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i-1, 1, nPx), j]) * 0.5
-        phase_ratios_vertex = (phase_ratios[clamp(i, 1, nPx), j] + phase_ratios[clamp(i-1, 1, nPx), j]) * 0.5
+        Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
+        phase_ratios_vertex =
+            (phase_ratios[clamp(i, 1, nPx), j] + phase_ratios[clamp(i - 1, 1, nPx), j]) *
+            0.5
         argsy = (; T=Ty, P=Pvertex)
         qTy[i, j] =
-            -compute_diffusivity(rheology, phase_ratios_vertex, argsy) * (T[i1, j1] - T[i1, j]) * _dy
+            -compute_diffusivity(rheology, phase_ratios_vertex, argsy) *
+            (T[i1, j1] - T[i1, j]) *
+            _dy
     end
 
     return nothing
@@ -381,12 +396,12 @@ end
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
-    rheology:: NTuple{N, AbstractMaterialParamsStruct} ,
+    rheology::NTuple{N,AbstractMaterialParamsStruct},
     phase_ratios::PhaseRatio,
     args::NamedTuple,
     di::NTuple{2,_T},
-    dt
-) where {_T, N, M<:AbstractArray{<:Any,2}}
+    dt,
+) where {_T,N,M<:AbstractArray{<:Any,2}}
 
     # Compute some constant stuff
     _di = inv.(di)
@@ -616,53 +631,76 @@ end
 
 # multiple phases with GeoParams
 @parallel_indices (i, j, k) function compute_flux!(
-    qTx, qTy, qTz, T, rheology::NTuple{N, AbstractMaterialParamsStruct}, phase_ratios, args, _dx, _dy, _dz
-) where N
-
+    qTx,
+    qTy,
+    qTz,
+    T,
+    rheology::NTuple{N,AbstractMaterialParamsStruct},
+    phase_ratios,
+    args,
+    _dx,
+    _dy,
+    _dz,
+) where {N}
     i1, j1, k1 = (i, j, k) .+ 1  # augment indices by 1
     nx, ny, nz = size(args.P)
 
     @inbounds begin
-        if all( (i,j,k) .≤ size(qTx) )
-            Tx = (T[i1, j1, k1] + T[i , j1, k1]) * 0.5
+        if all((i, j, k) .≤ size(qTx))
+            Tx = (T[i1, j1, k1] + T[i, j1, k1]) * 0.5
             Pvertex = 0.0
             phase_ratios_vertex = new_empty_cell(phase_ratios)
             for jj in 0:1, kk in 0:1
-                Pvertex += args.P[i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)]  
-                phase_ratios_vertex += phase_ratios[i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)]  
+                Pvertex += args.P[i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)]
+                phase_ratios_vertex += phase_ratios[
+                    i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)
+                ]
             end
-            argsx = (; T = Tx, P=Pvertex * 0.25)
+            argsx = (; T=Tx, P=Pvertex * 0.25)
             phase_ratios_vertex *= 0.25
 
-            qTx[i, j, k] = -compute_diffusivity(rheology, phase_ratios_vertex, argsx) * (T[i1, j1, k1] - T[i , j1, k1]) * _dx
+            qTx[i, j, k] =
+                -compute_diffusivity(rheology, phase_ratios_vertex, argsx) *
+                (T[i1, j1, k1] - T[i, j1, k1]) *
+                _dx
         end
 
-        if all( (i,j,k) .≤ size(qTy) )
-            Ty = (T[i1, j1, k1] + T[i1, j , k1]) * 0.5
+        if all((i, j, k) .≤ size(qTy))
+            Ty = (T[i1, j1, k1] + T[i1, j, k1]) * 0.5
             Pvertex = 0.0
             phase_ratios_vertex = new_empty_cell(phase_ratios)
             for kk in 0:1, ii in 0:1
                 Pvertex += args.P[clamp(i + ii, 1, nx), j, clamp(k + kk, 1, nz)]
-                phase_ratios_vertex += phase_ratios[clamp(i + ii, 1, nx), j, clamp(k + kk, 1, nz)]
+                phase_ratios_vertex += phase_ratios[
+                    clamp(i + ii, 1, nx), j, clamp(k + kk, 1, nz)
+                ]
             end
-            argsy = (; T = Ty, P=Pvertex * 0.25)
+            argsy = (; T=Ty, P=Pvertex * 0.25)
             phase_ratios_vertex *= 0.25
 
-            qTy[i, j, k] = -compute_diffusivity(rheology, phase_ratios_vertex, argsy) * (T[i1, j1, k1] - T[i1, j , k1]) * _dy
+            qTy[i, j, k] =
+                -compute_diffusivity(rheology, phase_ratios_vertex, argsy) *
+                (T[i1, j1, k1] - T[i1, j, k1]) *
+                _dy
         end
 
-        if all( (i,j,k) .≤ size(qTz) )
-            Tz = (T[i1, j1, k1] + T[i1, j1, k ]) * 0.5
+        if all((i, j, k) .≤ size(qTz))
+            Tz = (T[i1, j1, k1] + T[i1, j1, k]) * 0.5
             Pvertex = 0.0
             phase_ratios_vertex = new_empty_cell(phase_ratios)
             for jj in 0:1, ii in 0:1
                 Pvertex += args.P[clamp(i + ii, 1, nx), clamp(j + jj, 1, ny), k]
-                phase_ratios_vertex += phase_ratios[clamp(i + ii, 1, nx), clamp(j + jj, 1, ny), k]
+                phase_ratios_vertex += phase_ratios[
+                    clamp(i + ii, 1, nx), clamp(j + jj, 1, ny), k
+                ]
             end
-            argsz = (; T = Tz, P=Pvertex * 0.25)
+            argsz = (; T=Tz, P=Pvertex * 0.25)
             phase_ratios_vertex *= 0.25
 
-            qTz[i, j, k] = -compute_diffusivity(rheology, phase_ratios_vertex, argsz) * (T[i1, j1, k1] - T[i1, j1, k ]) * _dz
+            qTz[i, j, k] =
+                -compute_diffusivity(rheology, phase_ratios_vertex, argsz) *
+                (T[i1, j1, k1] - T[i1, j1, k]) *
+                _dz
         end
     end
 
@@ -829,7 +867,7 @@ end
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
-    rheology:: NTuple{N, AbstractMaterialParamsStruct},
+    rheology::NTuple{N,AbstractMaterialParamsStruct},
     phase_ratios::PhaseRatio,
     args::NamedTuple,
     di::NTuple{3,_T},
@@ -839,14 +877,21 @@ function JustRelax.solve!(
 
     # Compute some constant stuff
     _di = inv.(di)
-    ni  = size(thermal.T)
+    ni = size(thermal.T)
 
     ## SOLVE HEAT DIFFUSION
     # copy thermal array from previous time step
     @copy thermal.Told thermal.T
     # compute flux
-    @parallel (@idx ni.-1) compute_flux!(
-        thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, rheology, phase_ratios.center, args, _di...
+    @parallel (@idx ni .- 1) compute_flux!(
+        thermal.qTx,
+        thermal.qTy,
+        thermal.qTz,
+        thermal.T,
+        rheology,
+        phase_ratios.center,
+        args,
+        _di...,
     )
     # compute upwind advection
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _di...)

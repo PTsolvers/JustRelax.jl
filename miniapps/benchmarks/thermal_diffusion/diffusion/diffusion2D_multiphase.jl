@@ -1,3 +1,18 @@
+using CUDA
+CUDA.allowscalar(false)
+
+using Printf, LinearAlgebra, GeoParams, SpecialFunctions, CellArrays, StaticArrays
+using JustRelax
+backend = "CUDA_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
+# set_backend(backend) # run this on the REPL to switch backend
+
+# setup ParallelStencil.jl environment
+device = occursin("CUDA", JustPIC.backend) ? :gpu : :cpu
+model = PS_Setup(device, Float64, 2)
+environment!(model)
+
+import JustRelax.@cell
+
 @inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
 @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
@@ -170,3 +185,5 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), thermal
 end
+
+diffusion_2D()

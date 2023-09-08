@@ -217,9 +217,9 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
 
         # Compute U rms ---------------
         Urms_it = let
-            JustRelax.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx[:, 2:end-1], stokes.V.Vy[2:end-1, :]; ghost_nodes=false)
-            U = hypot.(Vx_v, Vy_v)
-            sum(U.^2 .* prod(di)) |> sqrt
+            JustRelax.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
+            @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
+            sum(Vx_v.^2) * prod(di) |> sqrt
         end
         push!(Urms, Urms_it)
         push!(trms, t)

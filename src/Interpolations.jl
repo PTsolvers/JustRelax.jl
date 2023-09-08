@@ -102,7 +102,7 @@ function velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=false)
         @parallel (@idx ni) Vy2vertex_noghost!(Vy_v, Vy)
     else
         @parallel (@idx ni) Vx2vertex_ghost!(Vx_v, Vx)
-        # @parallel (@idx ni) Vy2vertex_ghost!(Vy_v, Vy)
+        @parallel (@idx ni) Vy2vertex_ghost!(Vy_v, Vy)
     end
 end
 
@@ -154,7 +154,7 @@ end
 end
 
 @parallel_indices (i, j) function Vy2vertex_ghost!(V, Vy)
-    @inline av = _av_xa(A, i, j)
+    @inline av(A) = _av_xa(A, i, j)
     V[i, j] = av(Vy)
 
     return nothing

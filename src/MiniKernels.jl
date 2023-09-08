@@ -11,6 +11,8 @@ const T2 = AbstractArray{T,2} where {T}
 @inline _av_a(A::T, i, j) where {T<:T2} = 0.25 * mysum(A, (i):(i + 1), (j):(j + 1))
 @inline _av_xa(A::T, i, j) where {T<:T2} = (A[i + 1, j] + A[i, j]) * 0.5
 @inline _av_ya(A::T, i, j) where {T<:T2} = (A[i, j + 1] + A[i, j]) * 0.5
+@inline _av_xi(A::T, i, j) where {T<:T2} = (A[i + 1, j + 1] + A[i, j + 1]) * 0.5
+@inline _av_yi(A::T, i, j) where {T<:T2} = (A[i + 1, j + 1] + A[i + 1, j]) * 0.5
 # harmonic averages
 @inline function _harm(A::T, i, j) where {T<:T2}
     return eltype(A)(4) * mysum(inv, A, (i + 1):(i + 2), (j + 1):(j + 2))

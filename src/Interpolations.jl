@@ -53,7 +53,6 @@ end
     #! format: on
 
     @inbounds begin
-        # if all( (i,j,k) .≤ size(vertex_yz))
         if i ≤ size(vertex_yz, 1) &&
             (1 < j < size(vertex_yz, 2)) &&
             (1 < k < size(vertex_yz, 3))
@@ -65,7 +64,6 @@ end
                     center_yz[clamp_idx(i, j, k)...]
                 )
         end
-        # if all( (i,j,k) .≤ size(vertex_xz))
         if (1 < i < size(vertex_xz, 1)) &&
             j ≤ size(vertex_xz, 2) &&
             (1 < k < size(vertex_xz, 3))
@@ -77,7 +75,6 @@ end
                     center_xz[clamp_idx(i, j, k)...]
                 )
         end
-        # if all( (i,j,k) .≤ size(vertex_xy))
         if (1 < i < size(vertex_xy, 1)) &&
             (1 < j < size(vertex_xy, 2)) &&
             k ≤ size(vertex_xy, 3)
@@ -105,7 +102,7 @@ function velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=false)
         @parallel (@idx ni) Vy2vertex_noghost!(Vy_v, Vy)
     else
         @parallel (@idx ni) Vx2vertex_ghost!(Vx_v, Vx)
-        @parallel (@idx ni) Vy2vertex_ghost!(Vy_v, Vy)
+        # @parallel (@idx ni) Vy2vertex_ghost!(Vy_v, Vy)
     end
 end
 
@@ -114,11 +111,11 @@ function velocity2vertex(Vx, Vy, nv_x, nv_y; ghost_nodes=false)
     Vy_v = @allocate(nv_x, nv_y)
 
     if !ghost_nodes
-        Vx2vertex_noghost!(Vx_v, Vx)
-        Vy2vertex_noghost!(Vy_v, Vy)
+        @parallel (@idx ni) Vx2vertex_noghost!(Vx_v, Vx)
+        @parallel (@idx ni) Vy2vertex_noghost!(Vy_v, Vy)
     else
-        Vx2vertex_ghost!(Vx_v, Vx)
-        Vy2vertex_ghost!(Vy_v, Vy)
+        @parallel (@idx ni) Vx2vertex_ghost!(Vx_v, Vx)
+        @parallel (@idx ni) Vy2vertex_ghost!(Vy_v, Vy)
     end
 end
 
@@ -132,6 +129,7 @@ end
     elseif j == size(Vx, 2)
         V[i, j] = Vx[i, end]
     end
+
     return nothing
 end
 
@@ -149,28 +147,16 @@ end
 end
 
 @parallel_indices (i, j) function Vx2vertex_ghost!(V, Vx)
-    if 1 < j < size(Vx, 2)
-        V[i, j] = 0.5 * (Vx[i + 1, j - 1] + Vx[i + 1, j])
+    @inline av(A) = _av_ya(A, i, j)
 
-    elseif i == 1
-        V[i, j] = Vx[i + 1, j]
-
-    elseif j == size(Vx, 2)
-        V[i, j] = Vx[i + 1, end]
-    end
+    V[i, j] = av(Vx)
     return nothing
 end
 
 @parallel_indices (i, j) function Vy2vertex_ghost!(V, Vy)
-    if 1 < i < size(Vy, 1)
-        V[i, j] = 0.5 * (Vy[i - 1, j + 1] + Vy[i, j + 1])
+    @inline av = _av_xa(A, i, j)
+    V[i, j] = av(Vy)
 
-    elseif i == 1
-        V[i, j] = Vx[i, j + 1]
-
-    elseif i == size(Vy, 1)
-        V[i, j] = Vx[end, j + 1]
-    end
     return nothing
 end
 

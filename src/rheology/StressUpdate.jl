@@ -44,8 +44,8 @@ function _compute_τ_nonlinear!(
     else
         τij = τij .+ dτij
         correct_stress!(τ, τij, idx...)
-        τII[idx...] = second_invariant(τij...)
-        η_vep[idx...] = ηij
+        τII[idx...] = τII_ij = second_invariant(τij...)
+        η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_p...))
     end
 
     return nothing

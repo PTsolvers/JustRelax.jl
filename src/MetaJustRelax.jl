@@ -132,7 +132,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
     for m in module_names
         Base.@eval begin
-            @reexport import .$m
+            @reexport using .$m
         end
     end
 end

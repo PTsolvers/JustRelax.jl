@@ -142,7 +142,7 @@ function JustRelax.solve!(
                 )
                 update_halo!(@velocity(stokes)...)
             end
-            flow_bcs!(stokes, flow_bcs, di)
+            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -268,7 +268,7 @@ function JustRelax.solve!(
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # free slip boundary conditions
-            flow_bcs!(stokes, flow_bcs, di)
+            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -411,7 +411,7 @@ function JustRelax.solve!(
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # apply boundary conditions boundary conditions
-            flow_bcs!(stokes, flow_bcs, di)
+            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -735,7 +735,7 @@ function JustRelax.solve!(
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # apply boundary conditions boundary conditions
-            flow_bcs!(stokes, flow_bcs, di)
+            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1

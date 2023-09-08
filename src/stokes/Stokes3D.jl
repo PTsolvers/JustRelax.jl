@@ -222,7 +222,7 @@ function JustRelax.solve!(
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
 
-            flow_bcs!(stokes, flow_bcs, di)
+            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -387,7 +387,7 @@ function JustRelax.solve!(
                 )
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
-            flow_bcs!(stokes, flow_bcs, di)
+            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1

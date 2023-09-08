@@ -59,7 +59,7 @@ function elastic_buildup(;
     flow_bcs = FlowBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true)
     )
-    flow_bcs!(stokes, flow_bcs, di)
+    flow_bcs!(stokes, flow_bcs)
 
     # Physical time loop
     t = 0.0

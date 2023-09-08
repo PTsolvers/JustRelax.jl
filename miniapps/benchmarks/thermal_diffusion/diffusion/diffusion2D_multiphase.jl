@@ -97,7 +97,7 @@ function init_phases!(phases, particles, xc, yc, r)
     @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index)
 end
 
-function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, K0=3.0)
+function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     kyr = 1e3 * 3600 * 24 * 365.25
     Myr = 1e3 * kyr
     ttot = 1 * Myr # total simulation time
@@ -158,7 +158,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     # PT coefficients for thermal diffusion
     args = (; P=P, T=thermal.Tc)
     pt_thermal = JustRelax.PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.9 / √2
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.65 / √2
     )
 
     # Time loop
@@ -176,7 +176,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
             di;
             phase=phase_ratios,
             iterMax=1e3,
-            nout=100,
+            nout=10,
         )
 
         it += 1

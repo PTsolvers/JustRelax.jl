@@ -50,12 +50,15 @@ import JustRelax:
 import JustRelax: compute_maxloc!, solve!
 import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi
 
-export solve!
-
 include("StressRotation.jl")
 include("PressureKernels.jl")
 include("VelocityKernels.jl")
 include("StressKernels.jl")
+
+export solve!,
+    rotate_stress_particles_jaumann!,
+    rotate_stress_particles_roation_matrix!,
+    compute_vorticity!
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
     τxx, τyy, τxy, τxy_c = stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ.xy_c
@@ -63,247 +66,11 @@ function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C
     stokes.τ_o.yy, stokes.τ_o.xy,
     stokes.τ_o.xy_c
 
-    @parallel (@idx size(τxy)) multi_copy!((τxx_o, τyy_o, τxy_o, τxy_o_c), (τxx, τyy, τxy, τxy_c))
+    @parallel (@idx size(τxy)) multi_copy!(
+        (τxx_o, τyy_o, τxy_o, τxy_o_c), (τxx, τyy, τxy, τxy_c)
+    )
     return nothing
 end
-
-# Stress kernels
-
-# # viscous
-# @parallel function compute_τ!(τxx, τyy, τxy, εxx, εyy, εxy, η, θ_dτ)
-#     @all(τxx) = @all(τxx) + (-@all(τxx) + 2.0 * @all(η) * @all(εxx)) * inv(θ_dτ + 1.0)
-#     @all(τyy) = @all(τyy) + (-@all(τyy) + 2.0 * @all(η) * @all(εyy)) * inv(θ_dτ + 1.0)
-#     @inn(τxy) = @inn(τxy) + (-@inn(τxy) + 2.0 * @av(η) * @inn(εxy)) * inv(θ_dτ + 1.0)
-#     return nothing
-# end
-
-# # visco-elastic
-# @parallel function compute_τ!(
-#     τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
-# )
-#     @all(τxx) =
-#         @all(τxx) +
-#         (
-#             -(@all(τxx) - @all(τxx_o)) * @all(η) / (@all(G) * dt) - @all(τxx) +
-#             2.0 * @all(η) * @all(εxx)
-#         ) * inv(θ_dτ + @all(η) * inv(@all(G) * dt) + 1.0)
-#     @all(τyy) =
-#         @all(τyy) +
-#         (
-#             -(@all(τyy) - @all(τyy_o)) * @all(η) / (@all(G) * dt) - @all(τyy) +
-#             2.0 * @all(η) * @all(εyy)
-#         ) * inv(θ_dτ + @all(η) * inv(@all(G) * dt) + 1.0)
-#     @inn(τxy) =
-#         @inn(τxy) +
-#         (
-#             -(@inn(τxy) - @inn(τxy_o)) * @av(η) / (@av(G) * dt) - @inn(τxy) +
-#             2.0 * @av(η) * @inn(εxy)
-#         ) * inv(θ_dτ + @av(η) * inv(@av(G) * dt) + 1.0)
-
-#     return nothing
-# end
-
-# # visco-elasto-plastic with GeoParams - with single phases
-# @parallel_indices (i, j) function compute_τ_gp!(
-#     τxx,
-#     τyy,
-#     τxy,
-#     τII,
-#     τxx_o,
-#     τyy_o,
-#     τxyv_o,
-#     εxx,
-#     εyy,
-#     εxyv,
-#     η,
-#     η_vep,
-#     T,
-#     args_η,
-#     rheology,
-#     dt,
-#     θ_dτ,
-# )
-#     #! format: off
-#     # convinience closure
-#     Base.@propagate_inbounds @inline gather(A) = _gather(A, i, j)
-#     Base.@propagate_inbounds @inline function av(T)
-#         (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
-#     end
-#     #! format: on
-
-#     @inbounds begin
-#         k = keys(args_η)
-#         v = getindex.(values(args_η), i, j)
-#         # numerics
-#         # dτ_r                = 1.0 / (θ_dτ + η[i, j] / (get_G(rheology[1]) * dt) + 1.0) # original
-#         dτ_r = 1.0 / (θ_dτ / η[i, j] + 1.0 / η_vep[i, j]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
-#         # # Setup up input for GeoParams.jl
-#         args = (; zip(k, v)..., dt=dt, T=av(T), τII_old=0.0)
-#         εij_p = εxx[i, j] + 1e-25, εyy[i, j] + 1e-25, gather(εxyv) .+ 1e-25
-#         τij_p_o = τxx_o[i, j], τyy_o[i, j], gather(τxyv_o)
-#         phases = 1, 1, (1, 1, 1, 1) # there is only one phase...
-#         # update stress and effective viscosity
-#         τij, τII[i, j], ηᵢ = compute_τij(rheology, εij_p, args, τij_p_o, phases)
-#         τxx[i, j] += dτ_r * (-(τxx[i, j]) + τij[1]) / ηᵢ # NOTE: from GP Tij = 2*η_vep * εij
-#         τyy[i, j] += dτ_r * (-(τyy[i, j]) + τij[2]) / ηᵢ
-#         τxy[i, j] += dτ_r * (-(τxy[i, j]) + τij[3]) / ηᵢ
-#         η_vep[i, j] = ηᵢ
-#     end
-
-#     return nothing
-# end
-
-# # visco-elasto-plastic with GeoParams - with multiple phases
-# @parallel_indices (i, j) function compute_τ_gp!(
-#     τxx,
-#     τyy,
-#     τxy,
-#     τII,
-#     τxx_o,
-#     τyy_o,
-#     τxyv_o,
-#     εxx,
-#     εyy,
-#     εxyv,
-#     η,
-#     η_vep,
-#     T,
-#     phase_v,
-#     phase_c,
-#     args_η,
-#     rheology,
-#     dt,
-#     θ_dτ,
-# )
-#     #! format: off
-#     # convinience closure
-#     Base.@propagate_inbounds @inline gather(A) = _gather(A, i, j)
-#     Base.@propagate_inbounds @inline function av(T)
-#         (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1]) * 0.25
-#     end
-#     #! format: on
-
-#     @inbounds begin
-#         k = keys(args_η)
-#         v = getindex.(values(args_η), i, j)
-#         # # numerics
-#         # dτ_r                = 1.0 / (θ_dτ + η[i, j] / (get_G(rheology[1]) * dt) + 1.0) # original
-#         dτ_r = 1.0 / (θ_dτ / η[i, j] + 1.0 / η_vep[i, j]) # equivalent to dτ_r = @. 1.0/(θ_dτ + η/(G*dt) + 1.0)
-#         # # Setup up input for GeoParams.jl
-#         args = (; zip(k, v)..., dt=dt, T=av(T), τII_old=0.0)
-#         εij_p = εxx[i, j] + 1e-25, εyy[i, j] + 1e-25, gather(εxyv) .+ 1e-25
-#         τij_p_o = τxx_o[i, j], τyy_o[i, j], gather(τxyv_o)
-#         phases = phase_c[i, j], phase_c[i, j], gather(phase_v) # for now hard-coded for a single phase
-#         # update stress and effective viscosity
-#         τij, τII[i, j], ηᵢ = compute_τij(rheology, εij_p, args, τij_p_o, phases)
-#         τxx[i, j] += dτ_r * (-(τxx[i, j]) + τij[1]) / ηᵢ # NOTE: from GP Tij = 2*η_vep * εij
-#         τyy[i, j] += dτ_r * (-(τyy[i, j]) + τij[2]) / ηᵢ
-#         τxy[i, j] += dτ_r * (-(τxy[i, j]) + τij[3]) / ηᵢ
-#         η_vep[i, j] = ηᵢ
-#     end
-
-#     return nothing
-# end
-
-# # single phase visco-elasto-plastic flow
-# @parallel_indices (i, j) function compute_τ_nonlinear!(
-#     τxx,
-#     τyy,
-#     τxy,
-#     τII,
-#     τxx_old,
-#     τyy_old,
-#     τxyv_old,
-#     εxx,
-#     εyy,
-#     εxyv,
-#     P,
-#     η,
-#     η_vep,
-#     λ,
-#     rheology,
-#     dt,
-#     θ_dτ,
-# )
-#     idx = i, j
-
-#     # numerics
-#     ηij = η[i, j]
-#     _Gdt = inv(get_G(rheology[1]) * dt)
-#     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
-
-#     # get plastic paremeters (if any...)
-#     is_pl, C, sinϕ, η_reg = plastic_params(rheology[1])
-#     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
-
-#     τ = τxx, τyy, τxy
-#     τ_old = τxx_old, τyy_old, τxyv_old
-#     ε = εxx, εyy, εxyv
-
-#     _compute_τ_nonlinear!(
-#         τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, idx...
-#     )
-
-#     return nothing
-# end
-
-# # multi phase visco-elasto-plastic flow, where phases are defined in the cell center
-# @parallel_indices (i, j) function compute_τ_nonlinear!(
-#     τxx,
-#     τyy,
-#     τxy,
-#     τII,
-#     τxx_old,
-#     τyy_old,
-#     τxyv_old,
-#     εxx,
-#     εyy,
-#     εxyv,
-#     P,
-#     η,
-#     η_vep,
-#     λ,
-#     phase_ratios::PhaseRatio,
-#     rheology,
-#     dt,
-#     θ_dτ,
-# )
-#     idx = i, j
-
-#     # numerics
-#     ηij = @inbounds η[i, j]
-#     phase = @inbounds phase_ratios[i, j]
-#     G = fn_ratio(get_G, MatParam, phase)
-#     _Gdt = inv(G * dt)
-#     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
-
-#     # get plastic paremeters (if any...)
-#     is_pl, C, sinϕ, η_reg = plastic_params(rheology, phase)
-
-#     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
-
-#     τ = τxx, τyy, τxy
-#     τ_old = τxx_old, τyy_old, τxyv_old
-#     ε = εxx, εyy, εxyv
-
-#     _compute_τ_nonlinear!(
-#         τ,
-#         τII,
-#         τ_old,
-#         ε,
-#         P,
-#         ηij,
-#         η_vep,
-#         phase_ratios,
-#         λ,
-#         dτ_r,
-#         _Gdt,
-#         plastic_parameters,
-#         idx...,
-#     )
-
-#     return nothing
-# end
 
 ## 2D VISCO-ELASTIC STOKES SOLVER 
 
@@ -749,7 +516,9 @@ function JustRelax.solve!(
     GC.enable(false)
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @timeit to "Div" @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+            @timeit to "Div" @parallel (@idx ni) compute_∇V!(
+                stokes.∇V, @velocity(stokes)..., _di...
+            )
 
             @timeit to "Pressure" @parallel (@idx ni) compute_P!(
                 stokes.P,
@@ -765,9 +534,9 @@ function JustRelax.solve!(
             )
 
             # if rem(iter, 5) == 0
-                # @timeit to "ρg" @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+            # @timeit to "ρg" @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
             # end
-            
+
             @timeit to "ε" @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
@@ -776,16 +545,16 @@ function JustRelax.solve!(
             #     @copy η0 η
             # end                
             # if do_visc
-                ν = 1e-2
-                @timeit to "viscosity" compute_viscosity!(
-                    η,
-                    ν,
-                    phase_ratios.center,
-                    @strain(stokes)...,
-                    args,
-                    rheology,
-                    viscosity_cutoff,
-                )
+            ν = 1e-2
+            @timeit to "viscosity" compute_viscosity!(
+                η,
+                ν,
+                phase_ratios.center,
+                @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
+            )
             # end
             @timeit to "maxloc" compute_maxloc!(ητ, η)
             update_halo!(ητ)
@@ -806,15 +575,9 @@ function JustRelax.solve!(
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             # @hide_communication b_width begin # communication/computation overlap
-                @timeit to "velocity" @parallel compute_V!(
-                    @velocity(stokes)...,
-                    stokes.P,
-                    @stress(stokes)...,
-                    ηdτ,
-                    ρg...,
-                    ητ,
-                    _di...,
-                )
+            @timeit to "velocity" @parallel compute_V!(
+                @velocity(stokes)..., stokes.P, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
+            )
             #     update_halo!(stokes.V.Vx, stokes.V.Vy)
             # end
             # apply boundary conditions boundary conditions
@@ -832,7 +595,11 @@ function JustRelax.solve!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
-            errs = (norm(stokes.R.Rx) / length(stokes.R.Rx), norm(stokes.R.Ry) / length(stokes.R.Ry), norm(stokes.R.RP) / length(stokes.R.RP))
+            errs = (
+                norm(stokes.R.Rx) / length(stokes.R.Rx),
+                norm(stokes.R.Ry) / length(stokes.R.Ry),
+                norm(stokes.R.RP) / length(stokes.R.RP),
+            )
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
@@ -1000,10 +767,10 @@ function JustRelax.solve!(
         end
     end
 
-    if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
-        update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
-    end
+    # if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
+    #     update_τ_o!(stokes)
+    #     # @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
+    # end
 
     return (
         iter=iter,

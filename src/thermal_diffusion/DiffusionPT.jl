@@ -489,6 +489,7 @@ H_s = \\Chi \\cdot \\tau_{ij} ( \\dot{\\varepsilon}_{ij} - \\dot{\\varepsilon}^{
     εxx,
     εyy,
     εxyv,
+    shearheating,
     phase_center,
     rheology, 
     dt,
@@ -516,7 +517,7 @@ H_s = \\Chi \\cdot \\tau_{ij} ( \\dot{\\varepsilon}_{ij} - \\dot{\\varepsilon}^{
     
 
 
-    GeoParams.compute_shearheating(X, τij, εij_p, εij_el)
+    shearheating = GeoParams.compute_shearheating(X, τij, εij_p, εij_el)
     return nothing
 end
 
@@ -635,6 +636,7 @@ function heatdiffusion_PT!(
                 @tensor(stokes.τ_o)...,
                 stokes.τ_o.II,
                 @strain(stokes)...,
+                SH, 
                 phase_c,
                 tupleize(rheology), # needs to be a tuple
                 dt,
@@ -742,6 +744,7 @@ function heatdiffusion_PT!(
                 @tensor(stokes.τ_o)...,
                 stokes.τ_o.II,
                 @strain(stokes)...,
+                SH,
                 phase_c,
                 tupleize(rheology), # needs to be a tuple
                 dt,

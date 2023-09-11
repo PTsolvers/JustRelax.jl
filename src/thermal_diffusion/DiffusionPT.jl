@@ -457,6 +457,69 @@ end
     return ΔT[I...] = T[I...] - Told[I...]
 end
 
+""" 
+Compute shear heating withe GeoParams - should be dimension agnostic
+The efficiency of shear heating is set to 1.0 by default
+
+H_s = compute_shearheating(s:<AbstractShearheating, τ, ε, ε_el)
+
+Computes the shear heating source term
+
+```math  
+H_s = \\Chi \\cdot \\tau_{ij} ( \\dot{\\varepsilon}_{ij} - \\dot{\\varepsilon}^{el}_{ij})
+```
+
+# Parameters
+- ``\\Chi`` : The efficiency of shear heating (between 0-1)
+- ``\\tau_{ij}`` : The full deviatoric stress tensor [4 components in 2D; 9 in 3D]
+- ``\\dot{\\varepsilon}_{ij}`` : The full deviatoric strainrate tensor
+- ``\\dot{\\varepsilon}^{el}_{ij}`` : The full elastic deviatoric strainrate tensor
+
+
+"""
+@parallel_indices (i,j) function compute_SH!(
+    τxx,
+    τyy,
+    τxy,
+    τII,
+    τxx_old,
+    τyy_old,
+    τxyv_old,
+    τII_old,
+    εxx,
+    εyy,
+    εxyv,
+    phase_center,
+    rheology, 
+    dt,
+)
+
+    idx = i, j 
+
+    phase = @inbounds phase_center[i, j]
+    X = ConstantShearheating(Χ=1.0NoUnits)
+    _Gdt = inv(get_G(rheology, phase) *dt)
+
+    τ = τxx, τyy, τxy
+    τ_old = τxx_old, τyy_old, τxyv_old
+    ε = εxx, εyy, εxyv
+  
+    τij, τij_p_o, εij_p = cache_tensors(τ, τ_old, ε, idx...)
+    τII[idx...] = τII_ij = second_invariant(τij...)
+    τII_old[idx...] = τII_ij_old = second_invariant(τij_p_o...)
+
+    εij_el = if !isinf(_Gdt)
+        0.5 * ((τII_ij - τII_ij_old) * _Gdt)
+      else
+         zero(eltype(τxx))
+      end
+    
+
+
+    GeoParams.compute_shearheating(X, τij, εij_p, εij_el)
+    return nothing
+end
+
 ### SOLVERS COLLECTION BELOW - THEY SHOULD BE DIMENSION AGNOSTIC
 
 @inline flux_range(nx, ny) = @idx (nx + 3, ny + 1)
@@ -527,6 +590,8 @@ function heatdiffusion_PT!(
     thermal::ThermalArrays,
     pt_thermal::PTThermalCoeffs,
     thermal_bc::TemperatureBoundaryConditions,
+    stokes::StokesArrays,
+    SH::AbstractArray,
     K::AbstractArray,
     ρCp::AbstractArray,
     dt,
@@ -563,6 +628,16 @@ function heatdiffusion_PT!(
         wtime0 += @elapsed begin
             @parallel flux_range(ni...) compute_flux!(
                 @qT(thermal)..., @qT2(thermal)..., thermal.T, K, pt_thermal.θr_dτ, _di...
+            )
+            @parallel (@idx ni) compute_SH!(
+                @tensor_center(stokes.τ)...,
+                stokes.τ.II,
+                @tensor(stokes.τ_o)...,
+                stokes.τ_o.II,
+                @strain(stokes)...,
+                phase_c,
+                tupleize(rheology), # needs to be a tuple
+                dt,
             )
             update_T(igg, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
             thermal_bcs!(thermal.T, thermal_bc)
@@ -613,6 +688,8 @@ function heatdiffusion_PT!(
     thermal::ThermalArrays,
     pt_thermal::PTThermalCoeffs,
     thermal_bc::TemperatureBoundaryConditions,
+    stokes::StokesArrays,
+    SH::AbstractArray,
     rheology,
     args::NamedTuple,
     dt,
@@ -658,6 +735,16 @@ function heatdiffusion_PT!(
                 pt_thermal.θr_dτ,
                 _di...,
                 args,
+            )
+            @parallel (@idx ni) compute_SH!(
+                @tensor_center(stokes.τ)...,
+                stokes.τ.II,
+                @tensor(stokes.τ_o)...,
+                stokes.τ_o.II,
+                @strain(stokes)...,
+                phase_c,
+                tupleize(rheology), # needs to be a tuple
+                dt,
             )
             update_T(igg, b_width, thermal, rheology, phase, pt_thermal, _dt, _di, ni, args)
             thermal_bcs!(thermal.T, thermal_bc)

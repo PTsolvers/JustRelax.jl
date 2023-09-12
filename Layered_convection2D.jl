@@ -1,15 +1,16 @@
 using CUDA
 CUDA.allowscalar(false)
 using JustRelax, JustRelax.DataIO, JustPIC
-# backend = "CUDA_Float64_2D"
-# set_backend(backend)
+# set_backend("Threads_Float64_2D")
+# set_backend("CUDA_Float64_2D")
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:gpu, Float64, 2)
-# model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
+
+# Load file with all the rheology configurations
 include("Layered_rheology.jl")
 
 @inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
@@ -18,108 +19,6 @@ include("Layered_rheology.jl")
 @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
 
 distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
-
-function phase_ratios_center_closest(x::PhaseRatio, cell_center, pcoords, phases, cell::Vararg{Int,N}) where {N}
-    return phase_ratios_center_closest(x.center, cell_center, pcoords, phases, cell...)
-end
-
-@inline function phase_ratios_center_closest(x::CellArray, cell_center, p, phases, cell::Vararg{Int,N}) where {N}
-    # number of active particles in this cell
-    dist_min = Inf
-    idx_min = -1
-    for i in 1:JustRelax.cellnum(phases)
-        p1 = ntuple(j-> JustRelax.@cell(p[j][i, cell...]), Val(N))
-        dist = distance(p1, cell_center)
-        if dist < dist_min 
-            dist_min = dist
-            idx_min = i
-        end
-        if i ≤  JustRelax.cellnum(x)
-            JustRelax.@cell x[i, cell...] = 0.0
-        end
-    end
-    phase_min = Int(JustRelax.@cell((phases[idx_min, cell...])))
-    JustRelax.@cell x[phase_min, cell...] = 1.0
-    # for i in 1:JustRelax.cellnum(x)
-    #     if i != phase_min
-    #         JustRelax.@cell x[i, cell...] = 0.0
-    #     else
-    #         JustRelax.@cell x[i, cell...] = 1.0
-    #     end
-    # end
-end
-
-@parallel_indices (i, j) function phase_ratios_center_closest(x, xci, pcoords, phases)
-    phase_ratios_center_closest(x, (xci[1][i], xci[2][j]), pcoords, phases, i, j)
-    return nothing
-end
-
-function init_particles(nxcell, max_xcell, min_xcell, x, y, dx, dy, nx, ny)
-    ncells = nx * ny
-    np = max_xcell * ncells
-    px, py = ntuple(_ -> fill(NaN, max_xcell, nx, ny), Val(2))
-    # min_xcell = ceil(Int, nxcell / 2)
-    # min_xcell = 4
-
-    # index = zeros(UInt32, np)
-    inject = falses(nx, ny)
-    index = falses(max_xcell, nx, ny)
-    @inbounds for j in 1:ny, i in 1:nx
-        # center of the cell
-        x0, y0 = x[i], y[j]
-        # fill index array
-        for l in 1:nxcell
-            # px[l, i, j] = x0 + dx_2 * (1.0 + 0.8 * (rand() - 0.5))
-            # py[l, i, j] = y0 + dy_2 * (1.0 + 0.8 * (rand() - 0.5))
-            px[l, i, j] = x0 + dx * rand(0.05:1e-5: 0.95)
-            py[l, i, j] = y0 + dy * rand(0.05:1e-5: 0.95)
-            index[l, i, j] = true
-        end
-    end
-    
-    # nsplits = 3
-    # max_xcell = 2 * nsplits^2 * 2
-    # nxcell = round(Int, max_xcell / 2)
-    # ncells = nx * ny
-    # np = max_xcell * ncells
-    # px, py = ntuple(_ -> fill(NaN, max_xcell, nx, ny), Val(2))
-    #     # min_xcell = ceil(Int, nxcell / 2)
-    #     # min_xcell = 4
-    
-    # # index = zeros(UInt32, np)
-    # inject = falses(nx, ny)
-    # index = falses(max_xcell, nx, ny)
-    # @inbounds for j in 1:ny, i in 1:nx
-    #     # center of the cell
-    #     x0, y0 = x[i], y[j]
-    #     x_split = LinRange(x0, x0+dx, nsplits + 1)
-    #     y_split = LinRange(y0, y0+dy, nsplits + 1)
-    #     dx_split = x_split[2] - x_split[1]
-    #     dy_split = y_split[2] - y_split[1]
-    #     # fill index array
-    #     l = 1
-    #     while l ≤ nxcell
-    #         for ix in 1:nsplits, iy in 1:nsplits
-    #             px[l, i, j] = x_split[ix] + dx_split * rand()
-    #             py[l, i, j] = y_split[iy] + dy_split * rand()
-    #             index[l, i, j] = true
-    #             l += 1
-    #         end
-    #     end
-    # end
-
-    if JustPIC.backend === "CUDA"
-        pxi = CuArray.((px, py))
-        return Particles(
-            pxi, CuArray(index), CuArray(inject), nxcell, max_xcell, min_xcell, np, (nx, ny)
-        )
-
-    else
-        return Particles(
-            (px, py), index, inject, nxcell, max_xcell, min_xcell, np, (nx, ny)
-        )
-    end
-end
 
 function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, nx, ny)
     ni = nx, ny
@@ -149,6 +48,7 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
     )
 end
 
+# Velocity helper grids for the particle advection
 function velocity_grids(xci, xvi, di)
     dx, dy = di
     yVx = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2])+2)
@@ -159,9 +59,7 @@ function velocity_grids(xci, xvi, di)
 
     return grid_vx, grid_vy
 end
-#############################################################
 
-# HELPER FUNCTIONS ---------------------------------------------------------------
 function copyinn_x!(A, B)
 
     @parallel function f_x(A, B)
@@ -172,52 +70,20 @@ function copyinn_x!(A, B)
     @parallel f_x(A, B)
 end
 
-
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
 macro all_j(A)
     esc(:($A[$idx_j]))
 end
 
+# Initial pressure profile - not accurate
 @parallel function init_P!(P, ρg, z)
     @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
     return nothing
 end
 
-# Half-space-cooling model
+# Initial thermal profile
 @parallel_indices (i, j) function init_T!(T, z)
-    zi = z[j] #+ 45e3
-    if 0 ≥ zi > -35e3
-        dTdz = 600 / 35e3
-        T[i, j] = dTdz * -zi + 273
-
-    elseif -120e3 ≤ zi < -35e3
-        dTdz = 700 / 85e3
-        T[i, j] = dTdz * (-zi-35e3) + 600 + 273
-
-    elseif zi < -120e3
-        T[i, j] = 1280 * 3e-5 * 9.81 * (-zi-120e3) / 1200 + 1300 + 273
-
-    else
-        T[i, j] = 273.0
-        
-    end
-    return 
-end
-
-@parallel_indices (i, j) function init_T2!(T, z, κ, Tm, Tp, Tmin, Tmax, time)
-    yr      = 3600*24*365.25
-    dTdz    = (Tm-Tp)/650e3
-    zᵢ      = abs(z[j])
-    Tᵢ      = Tp + dTdz*(zᵢ)
-    time   *= yr
-    Ths     = Tmin + (Tm -Tmin) * erf((zᵢ)*0.5/(κ*time)^0.5)
-    T[i, j] = min(Tᵢ, Ths)
-    return 
-end
-
-
-@parallel_indices (i, j) function init_T_Attila!(T, z)
     depth   = -z[j]
 
     if depth < 0e0
@@ -246,12 +112,12 @@ end
     return nothing
 end
 
+# Thermal elliptical/rectangular
 function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
         @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i, j] = 2e3
-            # T[i, j] += δT
+            T[i, j] += δT
         end
         return nothing
     end
@@ -267,34 +133,17 @@ function rectangular_perturbation!(T, δT, xc, yc, r, xvi)
             dTdZ = (2047 - 2017) / 50e3
             offset = 2017
             T[i, j] = (depth - 585e3) * dTdZ + offset
-            # T[i, j] += 50.0 
         end
         return nothing
     end
 
     @parallel _rectangular_perturbation!(T, δT, xc, yc, r, xvi...)
 end
-# --------------------------------------------------------------------------------
 
-Rayleigh_number(ρ, α, ΔT, κ, η0) = ρ * 9.81 * α * ΔT * 2890e3^3 * inv(κ * η0) 
-
-@parallel_indices (i, j) function compute_invariant!(II, xx, yy, xyv)
-
-    # convinience closure
-    @inline Base.@propagate_inbounds gather(A) = A[i, j], A[i + 1, j], A[i, j + 1], A[i + 1, j + 1] 
-   
-    @inbounds begin
-        ij       = xx[i, j], yy[i, j], gather(xyv)
-        II[i, j] = GeoParams.second_invariant_staggered(ij...)
-    end
-    
-    return nothing
-end
-
-@parallel_indices (i,j) function compute_K!(K, rheology, phase, args)
-    K[i, j] =  fn_ratio(compute_conductivity, rheology, phase[i, j], (; T=args.T[i, j], P=args.P[i, j]))
-    return nothing
-end
+# @parallel_indices (i,j) function compute_K!(K, rheology, phase, args)
+#     K[i, j] =  fn_ratio(compute_conductivity, rheology, phase[i, j], (; T=args.T[i, j], P=args.P[i, j]))
+#     return nothing
+# end
 
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
 
@@ -304,21 +153,18 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     ni       = nx, ny           # number of cells
     li       = lx, ly           # domain length in x- and y-
     di       = @. li / ni       # grid step in x- and -y
-    origin   = 0.0, -ly + 15e3  # origin coordinates
+    origin   = 0.0, -ly + 15e3  # origin coordinates (15km f sticky air layer)
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    # Define rheolgy struct
     rheology     = init_rheologies(; is_plastic = true)
-    # rheology     = init_rheologies_isoviscous()
-    κ            = (10/ (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0))
+    κ            = (10 / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
     
     # Initialize particles -------------------------------
-    # nxcell, max_xcell, min_xcell = 16, 24, 8
-    nxcell, max_xcell, min_xcell = 20, 40, 10
+    nxcell, max_xcell, min_xcell = 20, 40, 1
     particles = init_particles_cellarrays(
         nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
     )
@@ -329,10 +175,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     particle_args = (pT, pPhases)
 
     # Elliptical temperature anomaly 
-    δT          = 50.0           # temperature perturbation    
-    xc_anomaly  = lx/2  # origin of thermal anomaly
+    δT          = 50.0    # temperature perturbation    
+    xc_anomaly  = lx/2    # origin of thermal anomaly
     yc_anomaly  = -610e3  # origin of thermal anomaly
-    r_anomaly   = 25e3            # radius of perturbation
+    r_anomaly   = 25e3    # radius of perturbation
     init_phases!(pPhases, particles, lx; d=abs(yc_anomaly), r=r_anomaly)
     phase_ratios = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
@@ -353,8 +199,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         periodicity = (left = false, right = false, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
-    @parallel init_T_Attila!(thermal.T, xvi[2])
-    Tmax =  1837e0
+    @parallel init_T!(thermal.T, xvi[2])
     thermal_bcs!(thermal.T, thermal_bc)
    
     rectangular_perturbation!(thermal.T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi)
@@ -376,7 +221,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     η_vep = deepcopy(η)
 
     # PT coefficients for thermal diffusion
-    pt_thermal = JustRelax.PTThermalCoeffs(
+    pt_thermal = PTThermalCoeffs(
         rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2
     )
 
@@ -422,9 +267,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
     # Time loop
     t, it = 0.0, 0
     nt    = 30
-    # while it < 150
-    while it < 100
-        # while (t/(1e6 * 3600 * 24 *365.25)) < 100
+    while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         compute_viscosity!(
@@ -452,7 +295,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
             viscosity_cutoff=(1e18, 1e24)
         )
         @show to
-        @parallel (JustRelax.@idx ni) compute_invariant!(stokes.ε.II, @strain(stokes)...)
+        @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
@@ -460,19 +303,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         particle2grid!(T_buffer, pT, xvi, particles.coords)
         @views T_buffer[:, end]      .= 273.0
         @views thermal.T[2:end-1, :] .= T_buffer
-        # @views thermal.T[:, 1]       .= Tmax
         temperature2center!(thermal)
 
         # Thermal solver ---------------
-        # solve!(
-        #     thermal,
-        #     thermal_bc,
-        #     rheology,
-        #     phase_ratios,
-        #     args,
-        #     di,
-        #     dt 
-        # )
         heatdiffusion_PT!(
             thermal,
             pt_thermal,
@@ -512,7 +345,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
         @show inject = check_injection(particles)
         # inject && break
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
-        # # update phase ratios
+        # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
         # @parallel (JustRelax.@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
         # @parallel (JustRelax.@idx ni) phase_ratios_center_closest(phase_ratios.center, xci, particles.coords, pPhases)
@@ -554,14 +387,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
                 data_c
             )
 
-            # p = particles.coords
-            # p 
-            # ppx, ppy = p
-            # pxv = ppx.data[:]./1e3
-            # pyv = ppy.data[:]./1e3
-            # clr = pPhases.data[:]
+            p = particles.coords
+            ppx, ppy = p
+            pxv = ppx.data[:]./1e3
+            pyv = ppy.data[:]./1e3
+            clr = pPhases.data[:]
             # ppT = pT.data[:]
-            # idxv = particles.index.data[:];
+            idxv = particles.index.data[:];
 
             fig = Figure(resolution = (1000, 1600), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
@@ -574,7 +406,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D")
             h1 = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
             # h1 = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(abs.(ρg[2]./9.81)) , colormap=:batlow)
             h2 = heatmap!(ax2, xci[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
-            # h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(ppT[idxv]))
+            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
             # h3 = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II.*1e-6) , colormap=:batlow) 
             h3 = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow) 
             # # h3 = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(abs.(stokes.ε.xx))) , colormap=:batlow) 
@@ -611,5 +443,5 @@ end
     else
         igg
     end
-    main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
+    # main2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);
 # end

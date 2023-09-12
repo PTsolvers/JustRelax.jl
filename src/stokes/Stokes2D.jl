@@ -510,9 +510,8 @@ function JustRelax.solve!(
     # solver loop
     wtime0 = 0.0
     λ = @zeros(ni...)
-    # while iter < 2 
     to = TimerOutput()
-    η0 = @zeros(ni...)
+    η0 = deepcopy(η)
     do_visc = true
     GC.enable(false)
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -542,21 +541,21 @@ function JustRelax.solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            # if rem(iter, nout) == 0
-            #     @copy η0 η
-            # end                
-            # if do_visc
-            ν = 1e-2
-            @timeit to "viscosity" compute_viscosity!(
-                η,
-                ν,
-                phase_ratios.center,
-                @strain(stokes)...,
-                args,
-                rheology,
-                viscosity_cutoff,
-            )
-            # end
+            if rem(iter, nout) == 0
+                @copy η0 η
+            end                
+            if do_visc
+                ν = 1e-2
+                @timeit to "viscosity" compute_viscosity!(
+                    η,
+                    ν,
+                    phase_ratios.center,
+                    @strain(stokes)...,
+                    args,
+                    rheology,
+                    viscosity_cutoff,
+                )
+            end
             @timeit to "maxloc" compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
@@ -575,14 +574,14 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            # @hide_communication b_width begin # communication/computation overlap
-            @timeit to "velocity" @parallel compute_V!(
-                @velocity(stokes)..., stokes.P, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
-            )
-            #     update_halo!(stokes.V.Vx, stokes.V.Vy)
-            # end
+            @hide_communication b_width begin # communication/computation overlap
+                @timeit to "velocity" @parallel compute_V!(
+                    @velocity(stokes)..., stokes.P, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
+                )
+                update_halo!(stokes.V.Vx, stokes.V.Vy)
+            end
             # apply boundary conditions boundary conditions
-            flow_bcs!(stokes, flow_bcs, di)
+            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -597,9 +596,9 @@ function JustRelax.solve!(
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (
-                norm(stokes.R.Rx) / length(stokes.R.Rx),
-                norm(stokes.R.Ry) / length(stokes.R.Ry),
-                norm(stokes.R.RP) / length(stokes.R.RP),
+                norm_mpi(stokes.R.Rx) / length(stokes.R.Rx),
+                norm_mpi(stokes.R.Ry) / length(stokes.R.Ry),
+                norm_mpi(stokes.R.RP) / length(stokes.R.RP),
             )
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])

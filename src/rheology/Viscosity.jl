@@ -44,53 +44,13 @@ end
     return nothing
 end
 
-function _compute_viscosity!(η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff)
-    I = JustRelax.indices(size(η))
-
-    # convinience closure
-    @inline gather(A) = _gather(A, I...)
-
-    if all(I .<= size(η))
-        # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = (εxx[I...] == εyy[I...] == 0) * 1e-15
-
-        # argument fields at local index
-        args_ij = JustRelax.local_viscosity_args(args, I...)
-
-        # local phase ratio
-        ratio_ij = ratios_center[I...]
-
-        # compute second invariant of strain rate tensor
-        εij = εII_0 + εxx[I...], -εII_0 + εyy[I...], gather(εxyv)
-        εII = second_invariant(εij...)
-
-        # compute and update stress viscosity
-        ηi = JustRelax.compute_phase_viscosity_εII(rheology, ratio_ij, εII, args_ij)
-        ηi = JustRelax.continuation_log(ηi, η[I...], ν)
-        η[I...] = clamp(ηi, cutoff...)
-    end
-
-    return nothing
-end
-
-function compute_viscosity!(η::CuArray{T1,N,T2}, x...) where {T1,T2,N}
-    nx, ny = size(η)
-    ntx, nty = 16, 16
-    blkx, blky = ceil(Int, nx / ntx), ceil(Int, ny / nty)
-    CUDA.@sync begin
-        @cuda threads = (ntx, nty) blocks = (blkx, blky) _compute_viscosity!(η, x...)
-    end
-
-    return nothing
-end
-
-function compute_viscosity!(η::Array, x...)
+function compute_viscosity!(η, x...)
     ni = size(η)
-    @parallel (JustRelax.@idx ni) JustRelax.compute_viscosity!(η, x...)
+    @parallel (JustRelax.@idx ni) _compute_viscosity!(η, x...)
     return nothing
 end
 
-@parallel_indices (i, j) function compute_viscosity!(
+@parallel_indices (i, j) function _compute_viscosity!(
     η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
 )
 

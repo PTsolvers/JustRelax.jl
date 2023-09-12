@@ -574,8 +574,8 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            @hide_communication b_width begin # communication/computation overlap
-                @timeit to "velocity" @parallel compute_V!(
+            @timeit to "velocity" @hide_communication b_width begin # communication/computation overlap
+                @parallel compute_V!(
                     @velocity(stokes)..., stokes.P, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
                 )
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
@@ -587,9 +587,8 @@ function JustRelax.solve!(
         iter += 1
         @timeit to "checks" if iter % nout == 0 && iter > 1
 
-            # er_η = norm(@.(log10(η)-log10(η0)))
-            # # er_η = norm(@.((η)-(η0)))
-            # er_η < 1e-3 && (do_visc = false)
+            er_η = norm_mpi(@.(log10(η)-log10(η0)))
+            er_η < 1e-3 && (do_visc = false)
             # @show er_η
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...

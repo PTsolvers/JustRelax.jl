@@ -121,7 +121,7 @@ function init_rheologies(; is_plastic = true)
     )
 end
 
-function init_phases!(phases, particles, Lx; d=650e3, r=50e3, anomaly_shape = :rectangular)
+function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
@@ -148,18 +148,9 @@ function init_phases!(phases, particles, Lx; d=650e3, r=50e3, anomaly_shape = :r
 
             end
 
-            if anomaly_shape === :elliptical
-                # plume - elliptical
-                if ((x - Lx * 0.5)^2 + (depth - d)^2) ≤ r^2
-                    JustRelax.@cell phases[ip, i, j] = 5.0
-                end
-            
-            elseif anomaly_shape === :rectangular
-                # plume - rectangular
-                if ((x - Lx * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
-                    JustRelax.@cell phases[ip, i, j] = 5.0
-                end
-
+            # plume - rectangular
+            if ((x - Lx * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
+                JustRelax.@cell phases[ip, i, j] = 5.0
             end
         end
         return nothing

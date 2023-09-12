@@ -1,6 +1,10 @@
 using CUDA
-CUDA.allowscalar(false)
+CUDA.allowscalar(false) # for safety
+
 using JustRelax, JustRelax.DataIO, JustPIC
+import JustRelax.@cell
+
+## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
 # set_backend("Threads_Float64_2D")
 # set_backend("CUDA_Float64_2D")
 
@@ -8,17 +12,19 @@ using JustRelax, JustRelax.DataIO, JustPIC
 model = PS_Setup(:gpu, Float64, 2)
 environment!(model)
 
+# Load script dependencies
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
 
+
+## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
+
 @inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
 @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
 @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
-
-distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
 
 function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, nx, ny)
     ni = nx, ny
@@ -34,8 +40,8 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
         x0, y0 = x[i], y[j]
         # fill index array
         for l in 1:nxcell
-            JustRelax.@cell px[l, i, j] = x0 + dx * rand(0.05:1e-5: 0.95)
-            JustRelax.@cell py[l, i, j] = y0 + dy * rand(0.05:1e-5: 0.95)
+            JustRelax.@cell px[l, i, j] = x0 + dx * rand(0.05:1e-5:0.95)
+            JustRelax.@cell py[l, i, j] = y0 + dy * rand(0.05:1e-5:0.95)
             JustRelax.@cell index[l, i, j] = true
         end
         return nothing
@@ -140,11 +146,9 @@ function rectangular_perturbation!(T, δT, xc, yc, r, xvi)
     @parallel _rectangular_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
-# @parallel_indices (i,j) function compute_K!(K, rheology, phase, args)
-#     K[i, j] =  fn_ratio(compute_conductivity, rheology, phase[i, j], (; T=args.T[i, j], P=args.P[i, j]))
-#     return nothing
-# end
+## END OF HELPER ---------------------------------------------------------------------
 
+## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Physical domain ------------------------------------
@@ -183,7 +187,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     phase_ratios = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
     @parallel (JustRelax.@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
-    # @parallel (JustRelax.@idx ni) phase_ratios_center_closest(phase_ratios.center, xci, particles.coords, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -411,6 +414,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     return nothing
 end
+## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
 figdir = "Plume2D"

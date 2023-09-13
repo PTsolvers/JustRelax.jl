@@ -516,9 +516,7 @@ function JustRelax.solve!(
     GC.enable(false)
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(
-                stokes.∇V, @velocity(stokes)..., _di...
-            )
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
             @parallel (@idx ni) compute_P!(
                 stokes.P,
@@ -543,7 +541,7 @@ function JustRelax.solve!(
 
             if rem(iter, nout) == 0
                 @copy η0 η
-            end                
+            end
             if do_visc
                 ν = 1e-2
                 @timeit to "viscosity" compute_viscosity!(
@@ -576,7 +574,13 @@ function JustRelax.solve!(
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
-                    @velocity(stokes)..., stokes.P, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
+                    @velocity(stokes)...,
+                    stokes.P,
+                    @stress(stokes)...,
+                    ηdτ,
+                    ρg...,
+                    ητ,
+                    _di...,
                 )
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
@@ -586,8 +590,7 @@ function JustRelax.solve!(
 
         iter += 1
         if iter % nout == 0 && iter > 1
-
-            er_η = norm_mpi(@.(log10(η)-log10(η0)))
+            er_η = norm_mpi(@.(log10(η) - log10(η0)))
             er_η < 1e-3 && (do_visc = false)
             # @show er_η
             @parallel (@idx ni) compute_Res!(

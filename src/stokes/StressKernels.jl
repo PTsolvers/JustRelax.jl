@@ -13,7 +13,7 @@
     τxx[i, j] += (-τxx[i, j] + 2.0 * η_ij * εxx[i, j]) * denominator
     τyy[i, j] += (-τyy[i, j] + 2.0 * η_ij * εyy[i, j]) * denominator
     # Shear components
-    if all((i, j) .< size(τxy).-1)
+    if all((i, j) .< size(τxy) .- 1)
         τxy[i + 1, j + 1] +=
             (-τxy[i + 1, j + 1] + 2.0 * @av(η) * εxy[i + 1, j + 1]) * denominator
     end

@@ -10,8 +10,9 @@ function solKz_viscosity(xci, ni, di; B=log(1e6))
     y     = PTArray([yci for _ in xc, yci in yc])
     η     = @zeros(ni...)
     
+    _viscosity(y, B) = exp(B * y)
+
     @parallel function viscosity(η, y, B)
-        _viscosity(y, B) = exp(B * y)
     
         @all(η) = _viscosity(@all(y), B)
         return nothing
@@ -30,8 +31,9 @@ function solKz_density(xci, ni, di)
     y      = PTArray([yci for _ in xc, yci in yc])
     ρ      = @zeros(ni...)
     
+    _density(x, y) = -sin(2 * y) * cos(3 * π * x)
+    
     @parallel function density(ρ, x, y)
-        _density(x, y) = -sin(2 * y) * cos(3 * π * x)
     
         @all(ρ) = _density(@all(x), @all(y))
         return nothing

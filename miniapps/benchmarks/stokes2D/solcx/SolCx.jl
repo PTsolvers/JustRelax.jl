@@ -16,8 +16,9 @@ function solCx_viscosity(xci, ni, di; Δη=1e6)
     x      = PTArray([xci for xci in xc, _ in yc])
     η      = @zeros(ni...)
     
+    _viscosity(x, Δη) = ifelse(x ≤ 0.5, 1e0, Δη)
+
     @parallel function viscosity(η, x)
-        _viscosity(x, Δη) = ifelse(x ≤ 0.5, 1e0, Δη)
        
         @all(η) = _viscosity(@all(x), Δη)
         return nothing
@@ -36,8 +37,9 @@ function solCx_density(xci, ni, di)
     y      = PTArray([yci for _ in xc, yci in yc])
     ρ      = PTArray(zeros(ni))
 
+    _density(x, y) = -sin(π * y) * cos(π * x)
+
     @parallel function density(ρ, x, y)
-        _density(x, y) = -sin(π * y) * cos(π * x)
        
         @all(ρ) = _density(@all(x), @all(y))
         return nothing
@@ -50,14 +52,14 @@ function solCx_density(xci, ni, di)
 end
 
 function solCx(
-    Δη=Δη;
-    nx=256 - 1,
-    ny=256 - 1,
-    lx=1e0,
-    ly=1e0,
-    init_MPI=true,
-    finalize_MPI=false,
-    b_width=(4, 4),
+    Δη           = Δη;
+    nx           = 256 - 1,
+    ny           = 256 - 1,
+    lx           = 1e0,
+    ly           = 1e0,
+    init_MPI     = true,
+    finalize_MPI = false,
+    b_width      = (4, 4),
 )
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
@@ -79,7 +81,7 @@ function solCx(
     # general stokes arrays
     stokes    = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; CFL = 0.1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; CFL = 1 / √2.1, ϵ = 1e-6)
 
     ## Setup-specific parameters and fields
     η         = solCx_viscosity(xci, ni, di; Δη = Δη) # viscosity field
@@ -122,7 +124,7 @@ function solCx(
             igg;
             iterMax = 150e3,
             nout    = 1e3,
-            b_width = (4, 4, 1),
+            b_width = (4, 4),
         )
         t += Δt
     end

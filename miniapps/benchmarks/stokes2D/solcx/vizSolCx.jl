@@ -31,14 +31,13 @@ function solCx_solution(geometry; η_left=1, η_right=1e6)
 end
 
 function solcx_error(geometry, stokes::StokesArrays; order=2)
-    solk = solCx_solution(geometry)
-
-    gridsize = reduce(*, geometry.di)
     Li(A, B; order=2) = norm(A .- B, order)
-
-    L2_vx = Li(stokes.V.Vx[:, 2:(end - 1)], PTArray(solk.vx); order=order) * gridsize
-    L2_vy = Li(stokes.V.Vy[2:(end - 1), :], PTArray(solk.vy); order=order) * gridsize
-    L2_p = Li(stokes.P, PTArray(solk.p); order=order) * gridsize
+    
+    solk     = solCx_solution(geometry)
+    gridsize = reduce(*, geometry.di)
+    L2_vx    = Li(stokes.V.Vx[:, 2:(end - 1)], PTArray(solk.vx); order=order) * gridsize
+    L2_vy    = Li(stokes.V.Vy[2:(end - 1), :], PTArray(solk.vy); order=order) * gridsize
+    L2_p     = Li(stokes.P, PTArray(solk.p); order=order) * gridsize
 
     return L2_vx, L2_vy, L2_p
 end
@@ -48,7 +47,7 @@ function plot_solCx(geometry, stokes::StokesArrays, ρ; cmap=:vik, fun=heatmap!)
 
     #Density
     ax1 = Axis(f[1, 1]; aspect=1)
-    h1 = fun(ax1, geometry.xci[1], geometry.xci[2], ρ; colormap=cmap)
+    h1  = fun(ax1, geometry.xci[1], geometry.xci[2], ρ; colormap=cmap)
 
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
@@ -56,21 +55,21 @@ function plot_solCx(geometry, stokes::StokesArrays, ρ; cmap=:vik, fun=heatmap!)
 
     # Pressure
     ax1 = Axis(f[1, 3]; aspect=1)
-    h1 = fun(ax1, geometry.xci[1], geometry.xci[2], stokes.P; colormap=cmap)
+    h1  = fun(ax1, geometry.xci[1], geometry.xci[2], stokes.P; colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[1, 4], h1; label="P")
 
     # Velocity-x
     ax1 = Axis(f[2, 1]; aspect=1)
-    h1 = fun(ax1, geometry.xvi[1], geometry.xci[2], stokes.V.Vx; colormap=cmap)
+    h1  = fun(ax1, geometry.xvi[1], geometry.xci[2], stokes.V.Vx; colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[2, 2], h1; label="Vx")
 
     # Velocity-y
     ax1 = Axis(f[2, 3]; aspect=1)
-    h1 = fun(ax1, geometry.xci[1], geometry.xvi[2], stokes.V.Vy; colormap=cmap)
+    h1  = fun(ax1, geometry.xci[1], geometry.xvi[2], stokes.V.Vy; colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[2, 4], h1; label="Vy")
@@ -84,18 +83,18 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
     solc = solCx_solution(geometry; η_right=Δη)
 
     # Plot
-    f = Figure(; resolution=(1200, 1000), fontsize=20)
+    f   = Figure(; resolution=(1200, 1000), fontsize=20)
 
     # ROW 1: PRESSURE
     # Numerical pressure
     ax1 = Axis(f[1, 1]; aspect=1, title="numerical")
-    h1 = heatmap!(
+    h1  = heatmap!(
         ax1,
         geometry.xci[1],
         geometry.xci[2],
         Array(stokes.P);
-        colormap=cmap,
-        colorrange=extrema(stokes.P),
+        colormap   = cmap,
+        colorrange = extrema(stokes.P),
     )
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
@@ -108,13 +107,13 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
 
     # Analytical pressure
     ax1 = Axis(f[1, 2]; aspect=1, title="analytical")
-    h1 = heatmap!(
+    h1  = heatmap!(
         ax1,
         geometry.xci[1],
         geometry.xci[2],
         solc.p;
-        colormap=cmap,
-        colorrange=extrema(stokes.P),
+        colormap   = cmap,
+        colorrange = extrema(stokes.P),
     )
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
@@ -128,7 +127,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
 
     # Pressure error
     ax1 = Axis(f[1, 4]; aspect=1)
-    h1 = heatmap!(
+    h1  = heatmap!(
         ax1,
         geometry.xci[1],
         geometry.xci[2],
@@ -148,7 +147,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
     # ROW 2: Velocity-x
     # Numerical
     ax1 = Axis(f[2, 1]; aspect=1)
-    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], Array(stokes.V.Vx); colormap=cmap)
+    h1  = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], Array(stokes.V.Vx); colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
 
@@ -158,7 +157,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
     hidexdecorations!(ax1)
 
     ax1 = Axis(f[2, 2]; aspect=1)
-    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], solc.vx; colormap=cmap)
+    h1  = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], solc.vx; colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[2, 3], h1; label="Vx", width=20, height=300, tellheight=true)
@@ -170,7 +169,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
     hideydecorations!(ax1)
 
     ax1 = Axis(f[2, 4]; aspect=1)
-    h1 = heatmap!(
+    h1  = heatmap!(
         ax1,
         geometry.xvi[1],
         geometry.xci[2],
@@ -190,7 +189,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
     # ROW 3: Velocity-y
     # Numerical
     ax1 = Axis(f[3, 1]; aspect=1)
-    h1 = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], Array(stokes.V.Vy); colormap=cmap)
+    h1  = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], Array(stokes.V.Vy); colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
 
@@ -198,7 +197,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
     ax1.yticks = 0:1
 
     ax1 = Axis(f[3, 2]; aspect=1)
-    h1 = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], solc.vy; colormap=cmap)
+    h1  = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], solc.vy; colormap=cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[3, 3], h1; label="Vy", width=20, height=300, tellheight=true)
@@ -208,7 +207,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
     hideydecorations!(ax1)
 
     ax1 = Axis(f[3, 4]; aspect=1)
-    h1 = heatmap!(
+    h1  = heatmap!(
         ax1,
         geometry.xci[1],
         geometry.xvi[2],
@@ -229,6 +228,6 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
     return f
 end
 
+err1(A::AbstractArray, B::AbstractArray) = @. abs(A - B)
 err2(A::AbstractArray, B::AbstractArray) = @. √(((A - B)^2))
 
-err1(A::AbstractArray, B::AbstractArray) = @. abs(A - B)

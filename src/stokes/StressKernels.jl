@@ -3,8 +3,7 @@
 @parallel_indices (i, j) function compute_τ!(
     τxx::AbstractArray{T,2}, τyy, τxy, εxx, εyy, εxy, η, θ_dτ
 ) where {T}
-    # av(A) = _av_a(A, i, j)
-    av(A) = _av(A, i, j)
+    @inline av(A) = _av_a(A, i, j)
 
     denominator = inv(θ_dτ + 1.0)
     η_ij = η[i, j]
@@ -23,58 +22,33 @@ end
 
 # Visco-elastic
 
-# @parallel_indices (i, j) function compute_τ!(
-#     τxx::AbstractArray{T,2}, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
-# ) where {T}
-#     av(A) = _av_a(A, i, j)
+@parallel_indices (i, j) function compute_τ!(
+    τxx::AbstractArray{T,2}, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
+) where {T}
+    @inline av(A) = _av_a(A, i, j)
 
-#     # Normal components
-#     _Gdt = inv(G[i, j] * dt)
-#     η_ij = η[i, j]
-#     denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-#     τxx[i, j] +=
-#         (-(τxx[i, j] - τxx_o[i, j]) * η_ij * _Gdt - τxx[i, j] + 2.0 * η_ij * εxx[i, j]) *
-#         denominator
-#     τyy[i, j] +=
-#         (-(τyy[i, j] - τyy_o[i, j]) * η_ij * _Gdt - τyy[i, j] + 2.0 * η_ij * εyy[i, j]) *
-#         denominator
+    # Normal components
+    _Gdt = inv(G[i, j] * dt)
+    η_ij = η[i, j]
+    denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
+    τxx[i, j] +=
+        (-(τxx[i, j] - τxx_o[i, j]) * η_ij * _Gdt - τxx[i, j] + 2.0 * η_ij * εxx[i, j]) *
+        denominator
+    τyy[i, j] +=
+        (-(τyy[i, j] - τyy_o[i, j]) * η_ij * _Gdt - τyy[i, j] + 2.0 * η_ij * εyy[i, j]) *
+        denominator
 
-#     # Shear components
-#     if all((i, j) .< size(τxy).-1)
-#         av_η_ij = av(η)
-#         _av_Gdt = inv(av(G) * dt)
-#         denominator = inv(θ_dτ + av_η_ij * _av_Gdt + 1.0)
-#         τxy[i + 1, j + 1] +=
-#             (
-#                 -(τxy[i + 1, j + 1] - τxy_o[i + 1, j + 1]) * av_η_ij * _av_Gdt +
-#                 2.0 * av_η_ij * εxy[i + 1, j + 1]
-#             ) * denominator
-#     end
-
-#     return nothing
-# end
-
-@parallel function compute_τ!(
-    τxx, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
-)
-    @all(τxx) =
-        @all(τxx) +
-        (
-            -(@all(τxx) - @all(τxx_o)) * @all(η) / (@all(G) * dt) - @all(τxx) +
-            2.0 * @all(η) * @all(εxx)
-        ) * inv(θ_dτ + @all(η) * inv(@all(G) * dt) + 1.0)
-    @all(τyy) =
-        @all(τyy) +
-        (
-            -(@all(τyy) - @all(τyy_o)) * @all(η) / (@all(G) * dt) - @all(τyy) +
-            2.0 * @all(η) * @all(εyy)
-        ) * inv(θ_dτ + @all(η) * inv(@all(G) * dt) + 1.0)
-    @inn(τxy) =
-        @inn(τxy) +
-        (
-            -(@inn(τxy) - @inn(τxy_o)) * @av(η) / (@av(G) * dt) - @inn(τxy) +
-            2.0 * @av(η) * @inn(εxy)
-        ) * inv(θ_dτ + @av(η) * inv(@av(G) * dt) + 1.0)
+    # Shear components
+    if all((i, j) .< size(τxy).-1)
+        av_η_ij = av(η)
+        _av_Gdt = inv(av(G) * dt)
+        denominator = inv(θ_dτ + av_η_ij * _av_Gdt + 1.0)
+        τxy[i + 1, j + 1] +=
+            (
+                -(τxy[i + 1, j + 1] - τxy_o[i + 1, j + 1]) * av_η_ij * _av_Gdt +
+                2.0 * av_η_ij * εxy[i + 1, j + 1]
+            ) * denominator
+    end
 
     return nothing
 end

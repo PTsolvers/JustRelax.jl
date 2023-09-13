@@ -39,7 +39,7 @@ end
         denominator
 
     # Shear components
-    if all((i, j) .< size(τxy).-1)
+    if all((i, j) .< size(τxy) .- 1)
         av_η_ij = av(η)
         _av_Gdt = inv(av(G) * dt)
         denominator = inv(θ_dτ + av_η_ij * _av_Gdt + 1.0)

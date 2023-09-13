@@ -15,16 +15,17 @@ end
     cell = i, j
 
     for ip in JustRelax.cellaxes(index)
-        !@cell(index[ip, cell...]) && continue
+        !@cell(index[ip, cell...]) && continue # no particle in this location
 
         ω_xy = @cell ω[ip, cell...]
         τ_xx = @cell xx[ip, cell...]
         τ_yy = @cell yy[ip, cell...]
         τ_xy = @cell xy[ip, cell...]
 
-        @cell xx[ip, cell...] = τ_xx - dt * τ_xy * ω_xy * 2.0
-        @cell yy[ip, cell...] = τ_yy + dt * τ_xy * ω_xy * 2.0
-        @cell xy[ip, cell...] = τ_xy + dt * (τ_xx - τ_yy) * ω_xy
+        tmp = τ_xy * ω_xy * 2.0
+        @cell xx[ip, cell...] = muladd(dt, cte, τ_xx)
+        @cell yy[ip, cell...] = muladd(dt, cte, τ_yy)
+        @cell xy[ip, cell...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
     end
 
     return nothing
@@ -36,7 +37,7 @@ end
     cell = i, j
 
     for ip in JustRelax.cellaxes(index)
-        !@cell(index[ip, cell...]) && continue
+        !@cell(index[ip, cell...]) && continue # no particle in this location
 
         θ = dt * @cell ω[ip, cell...]
         sinθ, cosθ = sincos(θ)

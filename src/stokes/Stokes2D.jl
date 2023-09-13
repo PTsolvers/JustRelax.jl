@@ -246,7 +246,7 @@ function JustRelax.solve!(
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, K, dt, r, θ_dτ
             )
-            @parallel (@idx ni .+ 1) compute_τ!(
+            @parallel (@idx ni) compute_τ!(
                 @stress(stokes)...,
                 @tensor(stokes.τ_o)...,
                 @strain(stokes)...,
@@ -516,11 +516,11 @@ function JustRelax.solve!(
     GC.enable(false)
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @timeit to "Div" @parallel (@idx ni) compute_∇V!(
+            @parallel (@idx ni) compute_∇V!(
                 stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            @timeit to "Pressure" @parallel (@idx ni) compute_P!(
+            @parallel (@idx ni) compute_P!(
                 stokes.P,
                 stokes.P0,
                 stokes.R.RP,
@@ -537,7 +537,7 @@ function JustRelax.solve!(
             # @timeit to "ρg" @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
             # end
 
-            @timeit to "ε" @parallel (@idx ni .+ 1) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
@@ -556,10 +556,10 @@ function JustRelax.solve!(
                     viscosity_cutoff,
                 )
             end
-            @timeit to "maxloc" compute_maxloc!(ητ, η)
+            compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
-            @timeit to "stress" @parallel (@idx ni) compute_τ_nonlinear!(
+            @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ)...,
                 stokes.τ.II,
                 @tensor(stokes.τ_o)...,
@@ -574,7 +574,7 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            @timeit to "velocity" @hide_communication b_width begin # communication/computation overlap
+            @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)..., stokes.P, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
                 )
@@ -585,7 +585,7 @@ function JustRelax.solve!(
         end
 
         iter += 1
-        @timeit to "checks" if iter % nout == 0 && iter > 1
+        if iter % nout == 0 && iter > 1
 
             er_η = norm_mpi(@.(log10(η)-log10(η0)))
             er_η < 1e-3 && (do_visc = false)
@@ -623,21 +623,16 @@ function JustRelax.solve!(
         end
     end
 
-    if !isinf(dt) # if dt is inf, then we are in the non-elastic case
-        update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
-    end
-
     GC.enable(true)
 
-    # return (
-    #     iter=iter,
-    #     err_evo1=err_evo1,
-    #     err_evo2=err_evo2,
-    #     norm_Rx=norm_Rx,
-    #     norm_Ry=norm_Ry,
-    #     norm_∇V=norm_∇V,
-    # )
+    return (
+        iter=iter,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_∇V=norm_∇V,
+    )
     return to
 end
 
@@ -766,10 +761,10 @@ function JustRelax.solve!(
         end
     end
 
-    # if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
-    #     update_τ_o!(stokes)
-    #     # @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
-    # end
+    if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
+        update_τ_o!(stokes)
+        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
+    end
 
     return (
         iter=iter,

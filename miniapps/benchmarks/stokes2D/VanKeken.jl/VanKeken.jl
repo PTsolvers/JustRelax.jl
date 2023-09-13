@@ -8,9 +8,10 @@ backend = "CUDA_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
 
 # setup ParallelStencil.jl environment
 device = occursin("CUDA", JustPIC.backend) ? :gpu : :cpu
-model = PS_Setup(device, Float64, 2)
+model  = PS_Setup(device, Float64, 2)
 environment!(model)
 
+# x-length of the domain
 const λ = 0.9142
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
@@ -21,21 +22,21 @@ const λ = 0.9142
 @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
 
 function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, nx, ny)
-    ni = nx, ny
+    ni     = nx, ny
     ncells = nx * ny
-    np = max_xcell * ncells
+    np     = max_xcell * ncells
     px, py = ntuple(_ -> @fill(NaN, ni..., celldims=(max_xcell,)) , Val(2))
 
-    inject = @fill(false, nx, ny, eltype=Bool)
-    index = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool) 
+    inject = @fill(false, nx, ny, eltype=Bool) # true if injection in given cell is required
+    index  = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool) # array that says if there's a particle in a given memory location
     
     @parallel_indices (i, j) function fill_coords_index(px, py, index)    
         # lower-left corner of the cell
         x0, y0 = x[i], y[j]
         # fill index array
         for l in 1:nxcell
-            JustRelax.@cell px[l, i, j] = x0 + dx * rand(0.05:1e-5: 0.95)
-            JustRelax.@cell py[l, i, j] = y0 + dy * rand(0.05:1e-5: 0.95)
+            JustRelax.@cell px[l, i, j]    = x0 + dx * rand(0.05:1e-5: 0.95)
+            JustRelax.@cell py[l, i, j]    = y0 + dy * rand(0.05:1e-5: 0.95)
             JustRelax.@cell index[l, i, j] = true
         end
         return nothing
@@ -48,11 +49,11 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
     )
 end
 
+# Define velocity grids with ghost nodes (for particle interpolations of the velocity field)
 function velocity_grids(xci, xvi, di)
-    dx, dy = di
-    yVx = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2])+2)
-    xVy = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1])+2)
-
+    dx, dy  = di
+    yVx     = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2])+2)
+    xVy     = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1])+2)
     grid_vx = xvi[1], yVx
     grid_vy = xVy, xvi[2]
 
@@ -65,11 +66,13 @@ macro all_j(A)
     esc(:($A[$idx_j]))
 end
 
+# Initial pressure guess
 @parallel function init_P!(P, ρg, z)
     @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
     return nothing
 end
 
+# Initialize phases on the particles
 function init_phases!(phases, particles)
     ni = size(phases)
     
@@ -108,66 +111,61 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     origin   = 0.0, 0.0     # origin coordinates
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     dt       = Inf 
-    # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    # Define rheolgy struct
     rheology = (
         # Low density phase
         SetMaterialParams(;
             Phase             = 1,
-            Density           = ConstantDensity(; ρ=1),
-            Gravity           = ConstantGravity(; g=1),
-            CompositeRheology = CompositeRheology((LinearViscous(;η=1e0),)),
+            Density           = ConstantDensity(; ρ = 1),
+            Gravity           = ConstantGravity(; g = 1),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1e0),)),
 
         ),
         # High density phase
         SetMaterialParams(;
-            Density           = ConstantDensity(; ρ=2),
-            Gravity           = ConstantGravity(; g=1),
-            CompositeRheology = CompositeRheology((LinearViscous(;η=1e0),)),
+            Density           = ConstantDensity(; ρ = 2),
+            Gravity           = ConstantGravity(; g = 1),
+            CompositeRheology = CompositeRheology((LinearViscous(;η = 1e0),)),
         ),
     )
-    # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 40, 40, 1
-    particles = init_particles_cellarrays(
-        nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
+    nxcell, max_p, min_p = 40, 40, 1
+    particles            = init_particles_cellarrays(
+        nxcell, max_p, min_p, xvi[1], xvi[2], di[1], di[2], nx, ny
     )
     # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+    grid_vx, grid_vy     = velocity_grids(xci, xvi, di)
     # temperature
-    pPhases, = init_particle_fields_cellarrays(particles, Val(1))
-    particle_args = (pPhases, )
+    pPhases,             = init_particle_fields_cellarrays(particles, Val(1))
+    particle_args        = (pPhases, )
     init_phases!(pPhases, particles)
-    phase_ratios = PhaseRatio(ni, length(rheology))
+    phase_ratios         = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
-    # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √2.1)
-    # ----------------------------------------------------
+    stokes               = StokesArrays(ni, ViscoElastic)
+    pt_stokes            = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √2.1)
 
     # Buoyancy forces
-    ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
+    ρg                   = @zeros(ni...), @zeros(ni...)
+    args                 = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
     @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     
     # Rheology
-    η = @ones(ni...)
+    η                    = @ones(ni...)
+    η_vep                = similar(η) # effective visco-elasto-plastic viscosity
     compute_viscosity!(
         η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
     )
-    η_vep = similar(η)
 
     # Boundary conditions
-    flow_bcs = FlowBoundaryConditions(; 
-        free_slip    = (left = true, right=true, top=false, bot=false),
-        no_slip      = (left = false, right=false, top=true, bot=true),
+    flow_bcs             = FlowBoundaryConditions(; 
+        free_slip = (left = true, right=true, top=false, bot=false),
+        no_slip   = (left = false, right=false, top=true, bot=true),
     )
 
     # IO ----- -------------------------------------------
@@ -176,14 +174,14 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     # ----------------------------------------------------
 
     # Buffer arrays to compute velocity rms
-    Vx_v = @zeros(ni.+1...)
-    Vy_v = @zeros(ni.+1...)
+    Vx_v  = @zeros(ni.+1...)
+    Vy_v  = @zeros(ni.+1...)
 
     # Time loop
     t, it = 0.0, 0
-    tmax = 2e3
-    Urms = Float64[]
-    trms = Float64[]
+    tmax  = 2e3
+    Urms  = Float64[]
+    trms  = Float64[]
     sizehint!(Urms, 100000)
     sizehint!(trms, 100000)
 
@@ -207,9 +205,9 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
             args,
             Inf,
             igg;
-            iterMax=10e3,
-            nout=50,
-            viscosity_cutoff=(-Inf, Inf)
+            iterMax          = 10e3,
+            nout             = 50,
+            viscosity_cutoff = -Inf, Inf
         )
         @show to
         dt = compute_dt(stokes, di) / 10
@@ -237,13 +235,13 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
 
         @show it += 1
-        t += dt
+        t        += dt
 
         # Plotting ---------------------
         if it == 1 || rem(it, 1000) == 0 || t >= tmax
             fig = Figure(resolution = (1000, 1000), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = 1/λ, title = "t=$t")
-            heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap=:oleron)
+            heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :oleron)
             save( joinpath(figdir, "$(it).png"), fig)
             fig
         end
@@ -261,8 +259,8 @@ n      = 128 + 2
 nx     = n - 2
 ny     = n - 2
 igg  = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 0; init_MPI= true)...)
+    IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
 else
     igg
 end
-main2D(igg; figdir=figdir, nx=nx, ny=ny);
+main2D(igg; figdir = figdir, nx = nx, ny = ny);

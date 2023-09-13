@@ -63,35 +63,35 @@ function solCx(
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni       = nx, ny # number of nodes in x- and y-
-    li       = lx, ly # domain length in x- and y-
-    origin   = zero(nx), zero(ny)
-    igg      = IGG(init_global_grid(nx, ny, 0; init_MPI=init_MPI)...) #init MPI
-    di       = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    g        = 1
+    ni        = nx, ny # number of nodes in x- and y-
+    li        = lx, ly # domain length in x- and y-
+    origin    = zero(nx), zero(ny)
+    igg       = IGG(init_global_grid(nx, ny, 0; init_MPI=init_MPI)...) #init MPI
+    di        = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    xci, xvi  = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    g         = 1
 
     ## (Physical) Time domain and discretization
-    ttot = 1 # total simulation time
-    Δt   = 1 # physical time step
+    ttot      = 1 # total simulation time
+    Δt        = 1 # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
     stokes    = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; CFL=0.1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; CFL = 0.1 / √2.1)
 
     ## Setup-specific parameters and fields
-    η  = solCx_viscosity(xci, ni, di; Δη=Δη) # viscosity field
-    ρ  = solCx_density(xci, ni, di)
-    fy = ρ .* g
-    ρg = @zeros(ni...), fy
-    dt = Inf
-    G  = @fill(Inf, ni...)
-    K  = @fill(Inf, ni...)
+    η         = solCx_viscosity(xci, ni, di; Δη = Δη) # viscosity field
+    ρ         = solCx_density(xci, ni, di)
+    fy        = ρ .* g
+    ρg        = @zeros(ni...), fy
+    dt        = Inf
+    G         = @fill(Inf, ni...)
+    K         = @fill(Inf, ni...)
 
     # smooth viscosity jump (otherwise no convergence for Δη > ~15)
-    η2 = deepcopy(η)
+    η2        = deepcopy(η)
     for _ in 1:5
         @hide_communication b_width begin
             @parallel smooth!(η2, η, 1.0)
@@ -103,7 +103,7 @@ function solCx(
 
     ## Boundary conditions
     flow_bcs = FlowBoundaryConditions(;
-        free_slip=(left=true, right=true, top=true, bot=true)
+        free_slip = (left = true, right = true, top = true, bot= true)
     )
     # Physical time loop
     t = 0.0
@@ -120,9 +120,9 @@ function solCx(
             K,
             dt,
             igg;
-            iterMax=150e3,
-            nout=1e3,
-            b_width=(4, 4),
+            iterMax = 150e3,
+            nout    = 1e3,
+            b_width = (4, 4, 1),
         )
         t += Δt
     end

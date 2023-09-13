@@ -17,80 +17,65 @@ function _viscosity!(η, xci, yci, rc, ηi, cx, cy)
 end
 
 function solvi_viscosity(xci, ni, li, rc, η0, ηi)
-    cx, cy = li ./ 2
-    η = fill(η0, ni...)
-    Rad2 = [(x - cx)^2 + (y - cy)^2 for x in xci[1], y in xci[2]]
+    cx, cy         = li ./ 2
+    η              = fill(η0, ni...)
+    Rad2           = [(x - cx)^2 + (y - cy)^2 for x in xci[1], y in xci[2]]
     η[Rad2 .< rc] .= ηi
-    # η2 = deepcopy(η)
-    # η3 = deepcopy(η)
-    # for _ in 1:10
-    #     @parallel smooth!(η2, η, 1.0)
-    #     η, η2 = η2, η
-    # end
-    # η3[Rad2 .< rc] .= η[Rad2 .< rc]
-    # η = deepcopy(η3)
-    # η2 = deepcopy(η)
-    # for _ in 1:10
-    #     @parallel smooth!(η2, η, 1.0)
-    #     η, η2 = η2, η
-    # end
-
+   
     return η
 end
 
 function solViEl(;
-    Δη=1e-3,
-    nx=256 - 1,
-    ny=256 - 1,
-    lx=1e0,
-    ly=1e0,
-    rc=0.01,
-    εbg=1e0,
-    init_MPI=true,
-    finalize_MPI=false,
+    Δη           = 1e-3,
+    nx           = 256 - 1,
+    ny           = 256 - 1,
+    lx           = 1e0,
+    ly           = 1e0,
+    rc           = 0.01,
+    εbg          = 1e0,
+    init_MPI     = true,
+    finalize_MPI = false,
 )
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni = (nx, ny) # number of nodes in x- and y-
-    li = (lx, ly)  # domain length in x- and y-
-    origin = zero(nx), zero(ny)
-    igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
-    di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    ni        = nx, ny # number of nodes in x- and y-
+    li        = lx, ly  # domain length in x- and y-
+    origin    = zero(nx), zero(ny)
+    igg       = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
+    di        = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    xci, xvi  = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
-    ttot = 5 # total simulation time
-    Δt = 1   # physical time step
+    ttot      = 5 # total simulation time
+    Δt        = 1   # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di)
 
     ## Setup-specific parameters and fields
-    η0 = 1e0  # matrix viscosity
-    ηi = 1e-1 # inclusion viscosity
-    η = solvi_viscosity(xci, ni, li, rc, η0, ηi) # viscosity field
-    ξ = 1.0 # Maxwell relaxation time
-    G = 1.0 # elastic shear modulus
-    # dt = η0 / (G * ξ)
-    dt = 0.25
-    Gc = @fill(G, ni...)
-    Kb = @fill(Inf, ni...)
-
+    η0        = 1e0  # matrix viscosity
+    ηi        = 1e-1 # inclusion viscosity
+    η         = solvi_viscosity(xci, ni, li, rc, η0, ηi) # viscosity field
+    ξ         = 1.0 # Maxwell relaxation time
+    G         = 1.0 # elastic shear modulus
+    dt        = 0.25
+    Gc        = @fill(G, ni...)
+    Kb        = @fill(Inf, ni...)
+    t         = 0.0
+    ρg        = @zeros(ni...), @zeros(ni...)
+    
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs  = FlowBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true)
     )
 
     # Physical time loop
-    t = 0.0
-    # ρg = (@zeros(nx-1, ny), @zeros(nx, ny-1))
-    ρg = @zeros(ni...), @zeros(ni...)
     local iters
     while t < ttot
         iters = solve!(
@@ -104,17 +89,17 @@ function solViEl(;
             Kb,
             dt,
             igg;
-            iterMax=100e3,
-            nout=1e3,
-            b_width=(4, 4, 1),
-            verbose=true,
+            iterMax = 100e3,
+            nout    = 1e3,
+            b_width = (4, 4, 1),
+            verbose = true,
         )
         t += Δt
     end
 
-    finalize_global_grid(; finalize_MPI=finalize_MPI)
+    finalize_global_grid(; finalize_MPI = finalize_MPI)
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters
+    return (ni = ni, xci = xci, xvi= xvi, li = li, di = di), stokes, iters
 end
 
 function multiple_solViEl(; Δη=1e-3, lx=1e1, ly=1e1, rc=1e0, εbg=1e0, nrange::UnitRange=4:8)
@@ -122,36 +107,35 @@ function multiple_solViEl(; Δη=1e-3, lx=1e1, ly=1e1, rc=1e0, εbg=1e0, nrange:
     for i in nrange
         nx = ny = 2^i - 1
         geometry, stokes, iters = solViEl(;
-            Δη=Δη,
-            nx=nx,
-            ny=ny,
-            lx=lx,
-            ly=ly,
-            rc=rc,
-            εbg=εbg,
-            init_MPI=true,
-            finalize_MPI=false,
+            Δη           = Δη,
+            nx           = nx,
+            ny           = ny,
+            lx           = lx,
+            ly           = ly,
+            rc           = rc,
+            εbg          = εbg,
+            init_MPI     = true,
+            finalize_MPI = false,
         )
-        L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, Δη, εbg, rc; order=2)
+        L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, Δη, εbg, rc; order = 2)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)
         push!(L2_p, L2_pi)
     end
 
     nx = @. 2^nrange - 1
-    h = @. (1 / nx)
-
-    f = Figure(; fontsize=28)
+    h  = @. (1 / nx)
+    f  = Figure(; fontsize=28)
     ax = Axis(
         f[1, 1];
-        yscale=log10,
-        xscale=log10,
-        yminorticksvisible=true,
-        yminorticks=IntervalsBetween(8),
+        yscale             = log10,
+        xscale             = log10,
+        yminorticksvisible = true,
+        yminorticks        = IntervalsBetween(8),
     )
-    lines!(ax, h, (L2_vx); linewidth=3, label="Vx")
-    lines!(ax, h, (L2_vy); linewidth=3, label="Vy")
-    lines!(ax, h, (L2_p); linewidth=3, label="P")
+    lines!(ax, h, (L2_vx); linewidth = 3, label = "Vx")
+    lines!(ax, h, (L2_vy); linewidth = 3, label = "Vy")
+    lines!(ax, h, (L2_p);  linewidth = 3, label = "P")
     axislegend(ax; position=:lt)
     ax.xlabel = "h"
     ax.ylabel = "L2 norm"

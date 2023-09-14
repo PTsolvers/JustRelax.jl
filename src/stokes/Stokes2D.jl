@@ -293,7 +293,6 @@ function JustRelax.solve!(
                     norm_∇V[end]
                 )
             end
-            # isnan(err) && error("NaN(s)")   #not working yet
         end
 
         if igg.me == 0 && err ≤ ϵ
@@ -303,7 +302,7 @@ function JustRelax.solve!(
 
     if !isinf(dt) # if dt is inf, then we are in the non-elastic case
         update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
+        # @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
     end
 
     return (

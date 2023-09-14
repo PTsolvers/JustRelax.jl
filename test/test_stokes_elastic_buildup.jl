@@ -29,7 +29,7 @@ function check_convergence_case1()
         G=G,
         init_MPI=init_mpi,
         finalize_MPI=false,
-    )
+    );
 
     err =
         sum(abs(abs.(av_τyy[i]) - sol_τyy[i]) / sol_τyy[i] for i in eachindex(av_τyy)) /

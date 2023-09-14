@@ -29,6 +29,7 @@ function metadata(src, file, dst)
         mkpath(dst)
     end
     for f in (file, "Manifest.toml", "Project.toml")
+        !isfile(f) && continue
         newfile = joinpath(dst, basename(f))
         isfile(newfile) && rm(newfile)
         cp(joinpath(src, f), newfile)

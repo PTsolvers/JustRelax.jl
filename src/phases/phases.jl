@@ -135,7 +135,7 @@ end
     return nothing
 end
 
-@inline δ(i, j) = i == j
+@inline δ(I::Vararg{T, N}) where {N,T} = reduce(isequal, I)
 
 function phase_ratio_weights(
     pxi::SVector{N1,T}, pyi::SVector{N1,T}, ph::SVector{N1,T}, xc, yc, di, ::Val{NC}
@@ -195,7 +195,7 @@ end
         Base.@_inline_meta
         val = one($T)
         Base.Cartesian.@nexprs $N i ->
-            @inbounds val *= one($T) - abs(a[i] - b[i]) * inv(di[i])
+            @inbounds val *= muladd(-abs(a[i] - b[i]), inv(di[i]), one($T))
         return val
     end
 end

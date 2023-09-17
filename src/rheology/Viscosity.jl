@@ -1,80 +1,80 @@
 ## 2D KERNELS
 
-@parallel_indices (i, j) function compute_viscosity!(
+@parallel_indices (I...) function compute_viscosity!(
     η, ν, εxx, εyy, εxyv, args, rheology, cutoff
 )
 
     # convinience closure
-    @inline gather(A) = _gather(A, i, j)
+    @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = (εxx[i, j] == εyy[i, j] == 0) * 1e-15
+        εII_0 = δ(εxx[I...], εyy[I...], 0.0) * 1e-15
 
         # argument fields at local index
-        args_ij = local_viscosity_args(args, i, j)
+        args_ij = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        εij = εII_0 + εxx[i, j], -εII_0 + εyy[i, j], gather(εxyv)
+        εij = εII_0 + εxx[I...], -εII_0 + εyy[I...], gather(εxyv)
         εII = second_invariant(εij...)
 
         # compute and update stress viscosity
         ηi = compute_viscosity_εII(rheology, εII, args_ij)
-        ηi = continuation_log(ηi, η[i, j], ν)
-        η[i, j] = clamp(ηi, cutoff...)
+        ηi = continuation_log(ηi, η[I...], ν)
+        η[I...] = clamp(ηi, cutoff...)
     end
 
     return nothing
 end
 
-@parallel_indices (i, j) function compute_viscosity!(η, ν, εII, args, rheology, cutoff)
+@parallel_indices (I...) function compute_viscosity!(η, ν, εII, args, rheology, cutoff)
     @inbounds begin
         # argument fields at local index
-        args_ij = local_viscosity_args(args, i, j)
+        args_ij = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        εII_ij = εII[i, j]
+        εII_ij = εII[I...]
 
         # compute and update stress viscosity
         ηi = compute_viscosity_εII(rheology, εII_ij, args_ij)
-        ηi = continuation_log(ηi, η[i, j], ν)
-        η[i, j] = clamp(ηi, cutoff...)
+        ηi = continuation_log(ηi, η[I...], ν)
+        η[I...] = clamp(ηi, cutoff...)
     end
 
     return nothing
 end
 
-function compute_viscosity!(η, x...)
-    ni = size(η)
-    @parallel (JustRelax.@idx ni) _compute_viscosity!(η, x...)
-    return nothing
-end
+# function compute_viscosity!(η, x...)
+#     ni = size(η)
+#     @parallel (JustRelax.@idx ni) _compute_viscosity!(η, x...)
+#     return nothing
+# end
 
-@parallel_indices (i, j) function _compute_viscosity!(
+@parallel_indices (I...) function compute_viscosity!(
     η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
 )
 
     # convinience closure
-    @inline gather(A) = _gather(A, i, j)
+    @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = (εxx[i, j] == εyy[i, j] == 0) * 1e-15
+        εII_0 = δ(εxx[I...], εyy[I...], 0.0) * 1e-18
 
         # argument fields at local index
-        args_ij = local_viscosity_args(args, i, j)
+        args_ij = local_viscosity_args(args, I...)
 
         # local phase ratio
-        ratio_ij = ratios_center[i, j]
+        ratio_ij = ratios_center[I...]
 
         # compute second invariant of strain rate tensor
-        εij = εII_0 + εxx[i, j], -εII_0 + εyy[i, j], gather(εxyv)
+        εij = εII_0 + εxx[I...], -εII_0 + εyy[I...], gather(εxyv)
         εII = second_invariant(εij...)
 
         # compute and update stress viscosity
         ηi = compute_phase_viscosity_εII(rheology, ratio_ij, εII, args_ij)
-        ηi = continuation_log(ηi, η[i, j], ν)
-        η[i, j] = clamp(ηi, cutoff...)
+        ηi = continuation_log(ηi, η[I...], ν)
+        η[I...] = clamp(ηi, cutoff...)
     end
 
     return nothing
@@ -82,24 +82,24 @@ end
 
 ## 3D KERNELS
 
-@parallel_indices (i, j, k) function compute_viscosity!(
+@parallel_indices (I...) function compute_viscosity!(
     η, ν, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
 )
 
     # convinience closures
-    @inline gather_yz(A) = _gather_yz(A, i, j, k)
-    @inline gather_xz(A) = _gather_xz(A, i, j, k)
-    @inline gather_xy(A) = _gather_xy(A, i, j, k)
+    @inline gather_yz(A) = _gather_yz(A, I...)
+    @inline gather_xz(A) = _gather_xz(A, I...)
+    @inline gather_xy(A) = _gather_xy(A, I...)
 
     @inbounds begin
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = (εxx[i, j, k] == εyy[i, j, k] == εzz[i, j, k] == 0) * 1e-18
+        εII_0 = δ(εxx[I...], εyy[I...], εzz[I...],0.0) * 1e-18
 
         # # argument fields at local index
-        args_ijk = local_viscosity_args(args, i, j, k)
+        args_ijk = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        εij_normal = εxx[i, j, k], εyy[i, j, k], εzz[i, j, k]
+        εij_normal = εxx[I...], εyy[I...], εzz[I...]
         εij_normal = εij_normal .+ (εII_0, -εII_0 * 0.5, -εII_0 * 0.5)
         εij_shear = gather_yz(εyzv), gather_xz(εxzv), gather_xy(εxyv)
         εij = (εij_normal..., εij_shear...)
@@ -107,51 +107,51 @@ end
 
         # update stress and effective viscosity
         ηi = compute_viscosity_εII(rheology, εII, args_ijk)
-        ηi = continuation_log(ηi, η[i, j, k], ν)
-        η[i, j, k] = clamp(ηi, cutoff...)
+        ηi = continuation_log(ηi, η[I...], ν)
+        η[I...] = clamp(ηi, cutoff...)
     end
 
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_viscosity!(η, ν, εII, args, rheology, cutoff)
+@parallel_indices (I...) function compute_viscosity!(η, ν, εII, args, rheology, cutoff)
     @inbounds begin
         # # argument fields at local index
-        args_ijk = local_viscosity_args(args, i, j, k)
+        args_ijk = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        εII_ij = εII[i, j, k]
+        εII_ij = εII[I...]
 
         # update stress and effective viscosity
         ηi = compute_viscosity_εII(rheology, εII_ij, args_ijk)
-        ηi = continuation_log(ηi, η[i, j, k], ν)
-        η[i, j, k] = clamp(ηi, cutoff...)
+        ηi = continuation_log(ηi, η[I...], ν)
+        η[I...] = clamp(ηi, cutoff...)
     end
 
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_viscosity!(
+@parallel_indices (I...) function compute_viscosity!(
     η, ν, ratios_center, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
 )
 
     # convinience closures
-    @inline gather_yz(A) = _gather_yz(A, i, j, k)
-    @inline gather_xz(A) = _gather_xz(A, i, j, k)
-    @inline gather_xy(A) = _gather_xy(A, i, j, k)
+    @inline gather_yz(A) = _gather_yz(A, I...)
+    @inline gather_xz(A) = _gather_xz(A, I...)
+    @inline gather_xy(A) = _gather_xy(A, I...)
 
     @inbounds begin
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = (εxx[i, j, k] == εyy[i, j, k] == εzz[i, j, k] == 0) * 1e-18
+        εII_0 = δ(εxx[I...], εyy[I...], εzz[I...], 0.0) * 1e-18
 
         # # argument fields at local index
-        args_ijk = local_viscosity_args(args, i, j, k)
+        args_ijk = local_viscosity_args(args, I...)
 
         # local phase ratio
-        ratio_ijk = ratios_center[i, j, k]
+        ratio_ijk = ratios_center[I...]
 
         # compute second invariant of strain rate tensor
-        εij_normal = εxx[i, j, k], εyy[i, j, k], εzz[i, j, k]
+        εij_normal = εxx[I...], εyy[I...], εzz[I...]
         εij_normal = εij_normal .+ (εII_0, -εII_0 * 0.5, -εII_0 * 0.5)
         εij_shear = gather_yz(εyzv), gather_xz(εxzv), gather_xy(εxyv)
         εij = (εij_normal..., εij_shear...)
@@ -159,8 +159,8 @@ end
 
         # update stress and effective viscosity
         ηi = compute_viscosity_εII(rheology, ratio_ijk, εII, args_ijk)
-        ηi = continuation_log(ηi, η[i, j, k], ν)
-        η[i, j, k] = clamp(ηi, cutoff...)
+        ηi = continuation_log(ηi, η[I...], ν)
+        η[I...] = clamp(ηi, cutoff...)
     end
 
     return nothing

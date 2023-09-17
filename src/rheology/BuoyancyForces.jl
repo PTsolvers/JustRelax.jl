@@ -3,26 +3,11 @@
 
 Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`.
 """
-@parallel_indices (i, j) function compute_ρg!(
-    ρg::_T, rheology, args
-) where {_T<:AbstractArray{M,2} where {M<:Real}}
-    _compute_ρg!(ρg, rheology, args, i, j)
-    return nothing
-end
 
-@parallel_indices (i, j, k) function compute_ρg!(
-    ρg::_T, rheology, args
-) where {_T<:AbstractArray{M,3} where {M<:Real}}
-    _compute_ρg!(ρg, rheology, args, i, j, k)
+@parallel_indices (I...) function compute_ρg!(ρg, rheology, args)   # index arguments for the current cell cell center
+    args_ijk = ntuple_idx(args, I...)
+    ρg[I...] = JustRelax.compute_buoyancy(rheology, args_ijk)
     return nothing
-end
-
-function _compute_ρg!(ρg, rheology, args, I::Vararg{Int,N}) where {N}
-    # index arguments for the current cell cell center
-    T = args.T[I...] - 273.0
-    P = args.P[I...]
-    args_ijk = (; T, P)
-    return ρg[I...] = compute_buoyancy(rheology, args_ijk)
 end
 
 """
@@ -31,26 +16,10 @@ end
 Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`. 
 The `phase_ratios` are used to compute the density of the composite rheology.
 """
-@parallel_indices (i, j) function compute_ρg!(
-    ρg::_T, phase_ratios, rheology, args
-) where {_T<:AbstractArray{M,2} where {M<:Real}}
-    _compute_ρg!(ρg, phase_ratios, rheology, args, i, j)
+@parallel_indices (I...) function compute_ρg!(ρg, phase_ratios, rheology, args)   # index arguments for the current cell cell center
+    args_ijk = ntuple_idx(args, I...)
+    ρg[I...] = JustRelax.compute_buoyancy(rheology, args_ijk,  phase_ratios[I...])
     return nothing
-end
-
-@parallel_indices (i, j, k) function compute_ρg!(
-    ρg::_T, phase_ratios, rheology, args
-) where {_T<:AbstractArray{M,3} where {M<:Real}}
-    _compute_ρg!(ρg, phase_ratios, rheology, args, i, j, k)
-    return nothing
-end
-
-function _compute_ρg!(ρg, phase_ratios, rheology, args, I::Vararg{Int,N}) where {N}
-    # index arguments for the current cell cell center
-    T = args.T[I...] - 273.0
-    P = args.P[I...]
-    args_ijk = (; T, P)
-    return ρg[I...] = compute_buoyancy(rheology, args_ijk, phase_ratios[I...])
 end
 
 ## Inner buoyancy force kernels

@@ -97,7 +97,9 @@ function compute_stress_increment_and_trial(
 ) where {N,T}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-        @inbounds dτ_r * muladd(2.0 * ηij, εij[i], muladd(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
+        @inbounds dτ_r * muladd(
+            2.0 * ηij, εij[i], muladd(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i])
+        )
     end
     return dτij, second_invariant((τij .+ dτij)...)
 end
@@ -117,7 +119,7 @@ function compute_dτ_pl(
         # derivatives of the plastic potential
         λdQdτ = (τij[i] + dτij[i]) * λ_τII
         # corrected stress
-        muladd(- dτ_r * 2.0, ηij * λdQdτ, dτij[i])
+        muladd(-dτ_r * 2.0, ηij * λdQdτ, dτij[i])
     end
     return dτ_pl, λ
 end

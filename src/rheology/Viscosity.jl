@@ -93,7 +93,7 @@ end
 
     @inbounds begin
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = δ(εxx[I...], εyy[I...], εzz[I...],0.0) * 1e-18
+        εII_0 = δ(εxx[I...], εyy[I...], εzz[I...], 0.0) * 1e-18
 
         # # argument fields at local index
         args_ijk = local_viscosity_args(args, I...)

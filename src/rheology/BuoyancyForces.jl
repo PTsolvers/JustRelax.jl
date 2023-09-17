@@ -18,7 +18,7 @@ The `phase_ratios` are used to compute the density of the composite rheology.
 """
 @parallel_indices (I...) function compute_ρg!(ρg, phase_ratios, rheology, args)   # index arguments for the current cell cell center
     args_ijk = ntuple_idx(args, I...)
-    ρg[I...] = JustRelax.compute_buoyancy(rheology, args_ijk,  phase_ratios[I...])
+    ρg[I...] = JustRelax.compute_buoyancy(rheology, args_ijk, phase_ratios[I...])
     return nothing
 end
 

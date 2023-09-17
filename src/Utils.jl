@@ -437,7 +437,7 @@ end
 @inline tupleize(v::Tuple) = v
 
 # Delta function
-@inline δ(I::Vararg{T, N}) where {N,T} = reduce((===), I)
+@inline δ(I::Vararg{T,N}) where {N,T} = reduce((===), I)
 
 """
     continuation_log(x_new, x_old, ν)

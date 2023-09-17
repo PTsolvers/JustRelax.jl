@@ -135,8 +135,6 @@ end
     return nothing
 end
 
-@inline δ(I::Vararg{T, N}) where {N,T} = reduce((===), I)
-
 function phase_ratio_weights(
     pxi::SVector{N1,T}, pyi::SVector{N1,T}, ph::SVector{N1,T}, xc, yc, di, ::Val{NC}
 ) where {N1,NC,T}

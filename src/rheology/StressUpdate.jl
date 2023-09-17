@@ -36,7 +36,7 @@ function _compute_τ_nonlinear!(
         correct_stress!(τ, τij, idx...)
         # visco-elastic strain rates
         εij_ve = ntuple(Val(N1)) do i
-            εij_p[i] + 0.5 * τij_p_o[i] * _Gdt
+            muladd(0.5 * τij_p_o[i], _Gdt, εij_p[i])
         end
         τII[idx...] = τII_ij = second_invariant(τij...)
         η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
@@ -52,9 +52,9 @@ function _compute_τ_nonlinear!(
 end
 
 # check if plasticity is active
-@inline isyielding(is_pl, τII_trial, τy, Pij) = is_pl && τII_trial > τy && Pij > 0
+@inline isyielding(is_pl, τII_trial, τy, Pij) = is_pl && τII_trial > τy
 
-@inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + ηij * _Gdt + 1.0)
+@inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + muladd(ηij, _Gdt, 1.0))
 
 # cache tensors
 function cache_tensors(
@@ -97,7 +97,7 @@ function compute_stress_increment_and_trial(
 ) where {N,T}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-        @inbounds dτ_r * (-(τij[i] - τij_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * εij[i])
+        @inbounds dτ_r * muladd(2.0 * ηij, εij[i], muladd(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
     end
     return dτij, second_invariant((τij .+ dτij)...)
 end
@@ -117,8 +117,7 @@ function compute_dτ_pl(
         # derivatives of the plastic potential
         λdQdτ = (τij[i] + dτij[i]) * λ_τII
         # corrected stress
-        # dτ_r * (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij_p[i] - λdQdτ))
-        dτij[i] - dτ_r * 2.0 * ηij * λdQdτ
+        muladd(- dτ_r * 2.0, ηij * λdQdτ, dτij[i])
     end
     return dτ_pl, λ
 end

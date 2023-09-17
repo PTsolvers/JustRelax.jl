@@ -15,3 +15,9 @@ Manifest.toml
 */*.png
 */*.vti
 */*.vtm
+*/*.h5
+
+*.png
+*.vti
+*.vtm
+*.h5

@@ -60,6 +60,35 @@ function make_thermal_arrays!(ndim)
     end
 end
 
+# function make_PTthermal_struct!()
+#     @eval begin
+#         struct PTThermalCoeffs{T,M,nDim}
+#             CFL::T
+#             ϵ::T
+#             max_lxyz::T
+#             max_lxyz2::T
+#             Vpdτ::T
+#             θr_dτ::M
+#             dτ_ρ::M
+
+#             function PTThermalCoeffs(
+#                 K, ρCp, dt, di::NTuple{nDim,T}, li::NTuple{nDim,Any}; ϵ=1e-8, CFL=0.9 / √3
+#             ) where {nDim,T}
+#                 Vpdτ = min(di...) * CFL
+#                 max_lxyz = max(li...)
+#                 max_lxyz2 = max_lxyz^2
+#                 Re = @. π + √(π * π + ρCp * max_lxyz2 / K / dt) # Numerical Reynolds number
+#                 θr_dτ = @. max_lxyz / Vpdτ / Re
+#                 dτ_ρ = @. Vpdτ * max_lxyz / K / Re
+
+#                 return new{eltype(Vpdτ),typeof(dτ_ρ),nDim}(
+#                     CFL, ϵ, max_lxyz, max_lxyz2, Vpdτ, θr_dτ, dτ_ρ
+#                 )
+#             end
+#         end
+#     end
+# end
+
 function make_PTthermal_struct!()
     @eval begin
         struct PTThermalCoeffs{T,M,nDim}
@@ -85,6 +114,70 @@ function make_PTthermal_struct!()
                     CFL, ϵ, max_lxyz, max_lxyz2, Vpdτ, θr_dτ, dτ_ρ
                 )
             end
+
+            function PTThermalCoeffs(
+                CFL::T, ϵ::T, max_lxyz::T, Vpdτ::T, θr_dτ::M, dτ_ρ::M
+            ) where {T,M}
+                nDim = length(size(θr_dτ))
+                return new{T,M,nDim}(CFL, ϵ, max_lxyz, max_lxyz^2, Vpdτ, θr_dτ, dτ_ρ)
+            end
+        end
+
+        function PTThermalCoeffs(
+            rheology,
+            phase_ratios,
+            args,
+            dt,
+            ni,
+            di::NTuple{nDim,T},
+            li::NTuple{nDim,Any};
+            ϵ=1e-8,
+            CFL=0.9 / √3,
+        ) where {nDim,T}
+            Vpdτ = min(di...) * CFL
+            max_lxyz = max(li...)
+            θr_dτ, dτ_ρ = @zeros(ni...), @zeros(ni...)
+
+            @parallel (1:ni[1], 1:ni[2]) compute_pt_thermal_arrays!(
+                θr_dτ, dτ_ρ, rheology, phase_ratios.center, args, max_lxyz, Vpdτ, inv(dt)
+            )
+
+            return PTThermalCoeffs(CFL, ϵ, max_lxyz, Vpdτ, θr_dτ, dτ_ρ)
+        end
+
+        @parallel_indices (i, j) function compute_pt_thermal_arrays!(
+            θr_dτ::AbstractArray{T,2}, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt
+        ) where {T}
+            _compute_pt_thermal_arrays!(
+                θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, i, j
+            )
+
+            return nothing
+        end
+
+        @parallel_indices (i, j, k) function compute_pt_thermal_arrays!(
+            θr_dτ::AbstractArray{T,3}, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt
+        ) where {T}
+            _compute_pt_thermal_arrays!(
+                θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, i, j, k
+            )
+
+            return nothing
+        end
+
+        function _compute_pt_thermal_arrays!(
+            θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int,N}
+        ) where {N}
+            args_ij = (; T=args.T[Idx...], P=args.P[Idx...])
+            phase_ij = phase[Idx...]
+            ρCp = JustRelax.compute_ρCp(rheology, phase_ij, args_ij)
+            _K = inv(fn_ratio(compute_conductivity, rheology, phase_ij, args_ij))
+
+            _Re = inv(π + √(π * π + ρCp * max_lxyz^2 * _K * _dt)) # Numerical Reynolds number
+            θr_dτ[Idx...] = max_lxyz / Vpdτ * _Re
+            dτ_ρ[Idx...] = Vpdτ * max_lxyz * _K * _Re
+
+            return nothing
         end
     end
 end

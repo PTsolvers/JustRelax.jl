@@ -51,6 +51,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             PTStokesCoeffs,
             ThermalArrays,
             PTThermalCoeffs,
+            compute_pt_thermal_arrays!,
             AbstractStokesModel,
             AbstractElasticModel,
             Viscous,
@@ -71,6 +72,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             @tensor_center,
             @qT,
             @qT2,
+            @residuals,
             compute_dt,
             assign!,
             tupleize,
@@ -79,7 +81,8 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             mean_mpi,
             norm_mpi,
             minimum_mpi,
-            maximum_mpi
+            maximum_mpi,
+            multi_copy!
 
         include(joinpath(@__DIR__, "boundaryconditions/BoundaryConditions.jl"))
         export pureshear_bc!,
@@ -92,6 +95,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             free_slip_y!,
             free_slip_z!,
             apply_free_slip!
+
+        include(joinpath(@__DIR__, "phases/phases.jl"))
+        export PhaseRatio, fn_ratio, phase_ratios_center
 
         include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
         export compute_ρg!
@@ -126,7 +132,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
     for m in module_names
         Base.@eval begin
-            @reexport import .$m
+            @reexport using .$m
         end
     end
 end

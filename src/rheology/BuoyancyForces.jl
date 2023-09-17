@@ -22,7 +22,7 @@ function _compute_ρg!(ρg, rheology, args, I::Vararg{Int,N}) where {N}
     T = args.T[I...] - 273.0
     P = args.P[I...]
     args_ijk = (; T, P)
-    return ρg[I...] = compute_ρg(rheology, args_ijk)
+    return ρg[I...] = compute_buoyancy(rheology, args_ijk)
 end
 
 """
@@ -34,7 +34,7 @@ The `phase_ratios` are used to compute the density of the composite rheology.
 @parallel_indices (i, j) function compute_ρg!(
     ρg::_T, phase_ratios, rheology, args
 ) where {_T<:AbstractArray{M,2} where {M<:Real}}
-    _compute_ρg!(ρg, phase_ratios, rheology, args, i, j, k)
+    _compute_ρg!(ρg, phase_ratios, rheology, args, i, j)
     return nothing
 end
 
@@ -50,18 +50,29 @@ function _compute_ρg!(ρg, phase_ratios, rheology, args, I::Vararg{Int,N}) wher
     T = args.T[I...] - 273.0
     P = args.P[I...]
     args_ijk = (; T, P)
-    return ρg[I...] = compute_ρg(rheology, args_ijk, phase_ratios[I...])
+    return ρg[I...] = compute_buoyancy(rheology, args_ijk, phase_ratios[I...])
 end
 
-@inline function compute_ρg(rheology::MaterialParams, args)
+## Inner buoyancy force kernels
+
+@inline function compute_buoyancy(rheology::MaterialParams, args)
     return compute_density(rheology, args) * compute_gravity(rheology)
 end
-@inline function compute_ρg(rheology::MaterialParams, args, phase_ratios)
-    return compute_density(phase_ratios, rheology, args) * compute_gravity(rheology)
+
+@inline function compute_buoyancy(rheology::MaterialParams, args, phase_ratios)
+    return compute_density_ratio(phase_ratios, rheology, args) * compute_gravity(rheology)
 end
-@inline function compute_ρg(rheology, args)
+
+@inline function compute_buoyancy(rheology, args)
     return compute_density(rheology, args) * compute_gravity(rheology[1])
 end
-@inline function compute_ρg(rheology, args, phase_ratios)
-    return compute_density(phase_ratios, rheology, args) * compute_gravity(rheology[1])
+
+# @inline function compute_buoyancy(rheology, args, phase_ratios)
+#     return compute_density_ratio(phase_ratios, rheology, args) *
+#            compute_gravity(rheology[1])
+# end
+
+@inline function compute_buoyancy(rheology, args, phase_ratios)
+    return fn_ratio(compute_density, rheology, phase_ratios, args) *
+           compute_gravity(rheology[1])
 end

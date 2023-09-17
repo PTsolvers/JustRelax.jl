@@ -1,3 +1,73 @@
+using StaticArrays
+
+## Stress Rotation on the particles
+
+@parallel_indices (i, j) function compute_vorticity!(vorticity, Vx, Vy, _dx, _dy)
+    dx(A) = _d_xa(A, i, j, _dx)
+    dy(A) = _d_ya(A, i, j, _dy)
+
+    vorticity[i, j] = 0.5 * (dx(Vy) - dy(Vx))
+
+    return nothing
+end
+
+@parallel_indices (i, j) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
+    cell = i, j
+
+    for ip in JustRelax.cellaxes(index)
+        !@cell(index[ip, cell...]) && continue # no particle in this location
+
+        ω_xy = @cell ω[ip, cell...]
+        τ_xx = @cell xx[ip, cell...]
+        τ_yy = @cell yy[ip, cell...]
+        τ_xy = @cell xy[ip, cell...]
+
+        tmp = τ_xy * ω_xy * 2.0
+        @cell xx[ip, cell...] = muladd(dt, cte, τ_xx)
+        @cell yy[ip, cell...] = muladd(dt, cte, τ_yy)
+        @cell xy[ip, cell...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
+    end
+
+    return nothing
+end
+
+@parallel_indices (i, j) function rotate_stress_particles_roation_matrix!(
+    xx, yy, xy, ω, index, dt
+)
+    cell = i, j
+
+    for ip in JustRelax.cellaxes(index)
+        !@cell(index[ip, cell...]) && continue # no particle in this location
+
+        θ = dt * @cell ω[ip, cell...]
+        sinθ, cosθ = sincos(θ)
+
+        τ_xx = @cell xx[ip, cell...]
+        τ_yy = @cell yy[ip, cell...]
+        τ_xy = @cell xy[ip, cell...]
+
+        R = @SMatrix [
+            cosθ -sinθ
+            sinθ cosθ
+        ]
+
+        τ = @SMatrix [
+            τ_xx τ_xy
+            τ_xy τ_yy
+        ]
+
+        τr = R * τ * R'
+
+        @cell xx[ip, cell...] = τr[1, 1]
+        @cell yy[ip, cell...] = τr[2, 2]
+        @cell xy[ip, cell...] = τr[1, 2]
+    end
+
+    return nothing
+end
+
+## Stress Rotation on the grid
+
 @parallel_indices (i, j) function rotate_stress!(V, τ::NTuple{3,T}, _di, dt) where {T}
     @inbounds rotate_stress!(V, τ, (i, j), _di, dt)
     return nothing
@@ -6,6 +76,24 @@ end
 @parallel_indices (i, j, k) function rotate_stress!(V, τ::NTuple{6,T}, _di, dt) where {T}
     @inbounds rotate_stress!(V, τ, (i, j, k), _di, dt)
     return nothing
+end
+
+@inline function tensor2voigt(xx, yy, xy, i, j)
+    av(A) = _av_a(A, i, j)
+
+    voigt = xx[i, j], yy[i, j], av(xy)
+
+    return voigt
+end
+
+@inline function tensor2voigt(xx, yy, zz, yz, xz, xy, i, j, k)
+    av_yz(A) = _av_yz(A, i, j, k)
+    av_xz(A) = _av_xz(A, i, j, k)
+    av_xy(A) = _av_xy(A, i, j, k)
+
+    voigt = xx[i, j], yy[i, j], zz[i, j], av_yz(yz), av_xz(xz), av_xy(xy)
+
+    return voigt
 end
 
 """
@@ -27,16 +115,30 @@ Base.@propagate_inbounds function rotate_stress!(
     # compute xy component of the vorticity tensor; normal components = 0.0
     ω = compute_vorticity(∂V∂x)
     # stress tensor in Voigt notation
-    τ_voigt = ntuple(Val(N)) do k
-        Base.@_inline_meta
-        τ[k][idx...]
-    end
+    # τ_voigt = ntuple(Val(N)) do k
+    #     Base.@_inline_meta
+    #     τ[k][idx...]
+    # end
+    τ_voigt = tensor2voigt(τ..., idx...)
+
     # actually rotate stress tensor
     τr_voigt = GeoParams.rotate_elastic_stress2D(ω, τ_voigt, dt)
 
+    R = @SMatrix [
+        0.0 -ω
+        ω 0.0
+    ]
+
+    τm = @SMatrix [
+        τ_voigt[1] τ_voigt[3]
+        τ_voigt[3] τ_voigt[2]
+    ]
+    τr = τm * R - R * τm
+    τr_voigt = τr[1, 1], τr[2, 2], τr[1, 2]
+
     ## 3) Update stress
     for k in 1:N
-        τ[k][idx...] = muladd(τij_adv[k], dt, τr_voigt[k])
+        τ[k][idx...] = muladd(τij_adv[k] * 0, dt, τr_voigt[k])
     end
     return nothing
 end
@@ -225,7 +327,7 @@ Base.@propagate_inbounds function cross_derivatives(Vx, Vy, Vz, _dx, _dy, _dz, i
 end
 
 Base.@propagate_inbounds @inline function compute_vorticity(∂V∂x::NTuple{2,T}) where {T}
-    return ∂V∂x[1] - ∂V∂x[2]
+    return ∂V∂x[2] - ∂V∂x[1]
 end # 2D
 Base.@propagate_inbounds @inline function compute_vorticity(∂V∂x::NTuple{3,T}) where {T}
     return ∂V∂x[3] - ∂V∂x[2], ∂V∂x[1] - ∂V∂x[3], ∂V∂x[2] - ∂V∂x[1]

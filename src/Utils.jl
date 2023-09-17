@@ -19,6 +19,18 @@ function multi_copyto!(B::NTuple{N,AbstractArray}, A::NTuple{N,AbstractArray}) w
     end
 end
 
+@parallel_indices (i, j) function multi_copy!(
+    dst::NTuple{N,T}, src::NTuple{N,T}
+) where {N,T}
+    @inbounds for (dst_i, src_i) in zip(dst, src)
+        if all((i, j) .≤ size(dst_i))
+            dst_i[i, j] = src_i[i, j]
+        end
+    end
+
+    return nothing
+end
+
 """
     @add(I, args...)
 
@@ -221,6 +233,24 @@ end
     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
 end
 
+"""
+    @residuals(A)
+
+Unpacks the momentum residuals from `A`.
+"""
+macro residuals(A)
+    return quote
+        unpack_residuals(($(esc(A))))
+    end
+end
+
+@inline function unpack_residuals(A::Residual{<:AbstractArray{T,2}}) where {T}
+    return A.Rx, A.Ry
+end
+@inline function unpack_residuals(A::Residual{<:AbstractArray{T,3}}) where {T}
+    return A.Rx, A.Ry, A.Rz
+end
+
 ## Memory allocators
 
 macro allocate(ni...)
@@ -240,6 +270,19 @@ end
 
 @inline Base.@pure _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
 @inline Base.@pure _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
+
+function indices(::NTuple{3,T}) where {T}
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    k = (blockIdx().z - 1) * blockDim().z + threadIdx().z
+    return i, j, k
+end
+
+function indices(::NTuple{2,T}) where {T}
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    return i, j
+end
 
 """
     maxloc!(B, A; window)
@@ -265,6 +308,28 @@ function compute_maxloc!(B, A; window=(1, 1, 1))
     end
 
     @parallel (@idx ni) _maxloc!(B, A)
+end
+
+function _compute_maxloc!(B, A, window)
+    I = indices(window)
+
+    if all(I .<= size(A))
+        B[I...] = JustRelax._maxloc_window_clamped(A, I..., window...)
+    end
+
+    return nothing
+end
+
+function compute_maxloc!(
+    B::CuArray{T1,N,T2}, A::CuArray{T1,N,T2}; window=ntuple(i -> 1, Val(N))
+) where {T1,T2,N}
+    nx, ny = size(A)
+    ntx, nty = 32, 32
+    blkx, blky = ceil(Int, nx / ntx), ceil(Int, ny / nty)
+    CUDA.@sync begin
+        @cuda threads = (ntx, nty) blocks = (blkx, blky) _compute_maxloc!(B, A, window)
+    end
+    return nothing
 end
 
 @inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
@@ -325,7 +390,7 @@ end
 """
     compute_dt(S::StokesArrays, di)
 
-Compute the time step `dt` for the velocity field `S.V` for a regular gridwith grid spacing `di`.
+Compute the time step `dt` for the velocity field `S.V` for a regular grid with grid spacing `di`.
 """
 @inline compute_dt(S::StokesArrays, di) = compute_dt(@velocity(S), di, Inf)
 
@@ -339,7 +404,7 @@ Compute the time step `dt` for the velocity field `S.V` and the diffusive maximu
 
 @inline function compute_dt(V::NTuple, di, dt_diff)
     n = inv(length(V) + 0.1)
-    dt_adv = mapreduce(x -> x[1] * inv(maximum(abs.(x[2]))), max, zip(di, V)) * n
+    dt_adv = mapreduce(x -> x[1] * inv(maximum(abs.(x[2]))), min, zip(di, V)) * n
     return min(dt_diff, dt_adv)
 end
 """
@@ -372,11 +437,12 @@ end
 @inline tupleize(v::Tuple) = v
 
 """
-    continuation_log(x_new, x_old, ν
+    continuation_log(x_new, x_old, ν)
 
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """
-@inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
+# @inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
+@inline continuation_log(x_new, x_old, ν) = (1 - ν) * x_old + ν * x_new
 
 # Others
 

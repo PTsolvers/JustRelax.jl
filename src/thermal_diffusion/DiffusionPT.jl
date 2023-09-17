@@ -1,8 +1,39 @@
 ## GeoParams
 
+# include("Rheology.jl")
+
+@inline get_phase(x::PhaseRatio) = x.center
+@inline get_phase(x) = x
+
+update_pt_thermal_arrays!(::Vararg{Any,N}) where {N} = nothing
+
+function update_pt_thermal_arrays!(
+    pt_thermal, phase_ratios::PhaseRatio, rheology, args, _dt
+)
+    ni = size(phase_ratios.center)
+
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        phase_ratios.center,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        _dt,
+    )
+
+    return nothing
+end
+
 @inline function compute_phase(fn::F, rheology, phase::Int, args) where {F}
     return fn(rheology, phase, args)
 end
+
+@inline function compute_phase(fn::F, rheology, phase::SVector, args) where {F}
+    return fn_ratio(fn, rheology, phase, args)
+end
+
 @inline compute_phase(fn::F, rheology, ::Nothing, args) where {F} = fn(rheology, args)
 
 @inline Base.@propagate_inbounds function getindex_phase(
@@ -264,30 +295,95 @@ end
 ) where {_T}
     nx = size(θr_dτ, 1)
 
-    d_xa(A) = _d_xi(A, i, j, _dx)
-    d_ya(A) = _d_yi(A, i, j, _dy)
+    d_xi(A) = _d_xi(A, i, j, _dx)
+    d_yi(A) = _d_yi(A, i, j, _dy)
     av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
     av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
 
-    @inbounds if all((i, j) .≤ size(qTx))
-        phase_ij = getindex_phase(phase, clamp(i - 1, 1, nx), j + 1)
-        K1 = compute_phase(compute_conductivity, rheology, phase_ij, args)
-        phase_ij = getindex_phase(phase, clamp(i - 1, 1, nx), j)
-        K2 = compute_phase(compute_conductivity, rheology, phase_ij, args)
+    if all((i, j) .≤ size(qTx))
+        ii, jj = clamp(i - 1, 1, nx), j + 1
+        phase_ij = getindex_phase(phase, ii, jj)
+        args_ij = ntuple_idx(args, ii, jj)
+        K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+
+        ii, jj = clamp(i - 1, 1, nx), j
+        phase_ij = getindex_phase(phase, ii, jj)
+        args_ij = ntuple_idx(args, ii, jj)
+        K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
         K = (K1 + K2) * 0.5
 
-        qx = qTx2[i, j] = -K * d_xa(T)
+        qx = qTx2[i, j] = -K * d_xi(T)
+        qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
+    end
+
+    if all((i, j) .≤ size(qTy))
+        ii, jj = min(i, nx), j
+        phase_ij = getindex_phase(phase, ii, jj)
+        args_ij = ntuple_idx(args, ii, jj)
+        K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+
+        ii, jj = max(i - 1, 1), j
+        phase_ij = getindex_phase(phase, ii, jj)
+        args_ij = ntuple_idx(args, ii, jj)
+        K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+        K = (K1 + K2) * 0.5
+
+        qy = qTy2[i, j] = -K * d_yi(T)
+        qTy[i, j] = (qTy[i, j] * av_ya(θr_dτ) + qy) / (1.0 + av_ya(θr_dτ))
+    end
+
+    return nothing
+end
+
+@parallel_indices (i, j) function compute_flux!(
+    qTx::AbstractArray{_T,2},
+    qTy,
+    qTx2,
+    qTy2,
+    T,
+    rheology::NTuple{N,AbstractMaterialParamsStruct},
+    phase_ratios::CellArray{C1,C2,C3,C4},
+    θr_dτ,
+    _dx,
+    _dy,
+    args,
+) where {_T,N,C1,C2,C3,C4}
+    nx = size(θr_dτ, 1)
+
+    d_xi(A) = _d_xi(A, i, j, _dx)
+    d_yi(A) = _d_yi(A, i, j, _dy)
+    av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
+    av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
+    compute_K(phase, args) = fn_ratio(compute_conductivity, rheology, phase, args)
+
+    @inbounds if all((i, j) .≤ size(qTx))
+        ii, jj = clamp(i - 1, 1, nx), j + 1
+        phase_ij = getindex_phase(phase_ratios, ii, jj)
+        args_ij = ntuple_idx(args, ii, jj)
+        K1 = compute_K(phase_ij, args_ij)
+
+        ii, jj = clamp(i - 1, 1, nx), j
+        phase_ij = getindex_phase(phase_ratios, ii, jj)
+        K2 = compute_K(phase_ij, args_ij)
+        K = (K1 + K2) * 0.5
+
+        qx = qTx2[i, j] = -K * d_xi(T)
         qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
     end
 
     @inbounds if all((i, j) .≤ size(qTy))
-        phase_ij = getindex_phase(phase, i, j)
-        K1 = compute_phase(compute_conductivity, rheology, phase_ij, args)
-        phase_ij = getindex_phase(phase, clamp(i - 1, 1, nx), j)
-        K2 = compute_phase(compute_conductivity, rheology, phase_ij, args)
+        ii, jj = min(i, nx), j
+        phase_ij = getindex_phase(phase_ratios, ii, jj)
+        args_ij = ntuple_idx(args, ii, jj)
+        K1 = compute_K(phase_ij, args_ij)
+
+        ii, jj = clamp(i - 1, 1, nx), j
+        phase_ij = getindex_phase(phase_ratios, ii, jj)
+        args_ij = ntuple_idx(args, ii, jj)
+        K2 = compute_K(phase_ij, args_ij)
         K = (K1 + K2) * 0.5
 
-        qy = qTy2[i, j] = -K * d_ya(T)
+        qy = qTy2[i, j] = -K * d_yi(T)
         qTy[i, j] = (qTy[i, j] * av_ya(θr_dτ) + qy) / (1.0 + av_ya(θr_dτ))
     end
 
@@ -599,6 +695,7 @@ function heatdiffusion_PT!(
     nout=1e3,
     verbose=true,
 )
+    phases = get_phase(phase)
 
     # Compute some constant stuff
     _dt = inv(dt)
@@ -607,6 +704,7 @@ function heatdiffusion_PT!(
     ϵ = pt_thermal.ϵ
     ni = size(thermal.Tc)
     @copy thermal.Told thermal.T
+    update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
 
     # errors 
     iter_count = Int64[]
@@ -629,12 +727,14 @@ function heatdiffusion_PT!(
                 @qT2(thermal)...,
                 thermal.T,
                 rheology,
-                phase,
+                phases,
                 pt_thermal.θr_dτ,
                 _di...,
                 args,
             )
-            update_T(igg, b_width, thermal, rheology, phase, pt_thermal, _dt, _di, ni, args)
+            update_T(
+                igg, b_width, thermal, rheology, phases, pt_thermal, _dt, _di, ni, args
+            )
             thermal_bcs!(thermal.T, thermal_bc)
         end
 
@@ -648,7 +748,7 @@ function heatdiffusion_PT!(
                     thermal.Told,
                     @qT2(thermal)...,
                     rheology,
-                    phase,
+                    phases,
                     _dt,
                     _di...,
                     args,

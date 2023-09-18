@@ -61,13 +61,14 @@ end
 
 # Velocity helper grids for the particle advection
 function velocity_grids(xci, xvi, di)
-    dx, dy  = di
-    yVx     = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2])+2)
-    xVy     = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1])+2)
-    grid_vx = xvi[1], yVx
-    grid_vy = xVy, xvi[2]
+    xghost     = ntuple(Val(3)) do i
+        LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i])+2)
+    end
+    grid_vx = xvi[1]   , xghost[2], xghost[3]
+    grid_vy = xghost[1], xvi[2]   , xghost[3]
+    grid_vz = xghost[1], xghost[2], xvi[3]
 
-    return grid_vx, grid_vy
+    return grid_vx, grid_vy, grid_vz
 end
 
 function copyinn_x!(A, B)
@@ -250,12 +251,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         fig
     end
 
-    T_buffer    = @zeros(ni.+1) 
-    Told_buffer = similar(T_buffer)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, xvi, T_buffer, particles.coords)
+    grid2particle!(pT, xvi, thermal.T, particles.coords)
 
     local Vx_v, Vy_v, Vz_v
     if save_vtk 
@@ -327,10 +323,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         # advect particles in memory
         shuffle_particles!(particles, xvi, particle_args)        
         # interpolate fields from grid vertices to particles
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
-        grid2particle!(pT, xvi, T_buffer, Told_buffer, particles.coords)
+        grid2particle!(pT, xvi, thermal.T, thermal.Told, particles.coords)
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
@@ -430,16 +423,3 @@ end
 
 # # run main script
 # main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
-
-x = dτ_r, τij_o, _Gdt, τij, ηij, εij = tuple(rand(6)...)
-
-function foo1(dτ_r, τij_o, _Gdt, τij, ηij, εij)
-    dτ_r * (-(τij - τij_o) * ηij * _Gdt - τij + 2.0 * ηij * εij)
-end
-
-
-function foo2(dτ_r, τij_o, _Gdt, τij, ηij, εij)
-    dτ_r * muladd(2.0 * ηij, εij, muladd(-((τij - τij_o)) * ηij, _Gdt, -τij))
-end
-
-@macroexpand @muladd dτ_r * (-(τij - τij_o) * ηij * _Gdt - τij + 2.0 * ηij * εij)

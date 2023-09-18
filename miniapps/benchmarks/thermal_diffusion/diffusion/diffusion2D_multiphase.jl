@@ -1,7 +1,7 @@
 using CUDA
 CUDA.allowscalar(false)
 
-using Printf, LinearAlgebra, GeoParams, SpecialFunctions, CellArrays, StaticArrays
+using Printf, LinearAlgebra, GeoParams, SpecialFunctions, CellArrays, StaticArrays, JustPIC
 using JustRelax
 backend = "CUDA_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
 # set_backend(backend) # run this on the REPL to switch backend
@@ -97,48 +97,58 @@ function init_phases!(phases, particles, xc, yc, r)
     @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index)
 end
 
+@parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
+    
+    args_ij = ntuple_idx(args, I...)
+    H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij) 
+
+    return nothing 
+end
+
 function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
-    kyr = 1e3 * 3600 * 24 * 365.25
-    Myr = 1e3 * kyr
-    ttot = 1 * Myr # total simulation time
-    dt = 50 * kyr # physical time step
+    kyr      = 1e3 * 3600 * 24 * 365.25
+    Myr      = 1e3 * kyr
+    ttot     = 1 * Myr # total simulation time
+    dt       = 50 * kyr # physical time step
 
     # Physical domain
-    ni = (nx, ny)
-    li = (lx, ly)  # domain length in x- and y-
-    di = @. li / ni # grid step in x- and -y
+    ni       = (nx, ny)
+    li       = (lx, ly)  # domain length in x- and y-
+    di       = @. li / ni # grid step in x- and -y
     xci, xvi = lazy_grid(di, li, ni; origin=(0, -ly)) # nodes at the center and vertices of the cells
 
     # Define the thermal parameters with GeoParams
     rheology = (
         SetMaterialParams(;
-            Phase             = 1,
-            Density           = PT_Density(; ρ0=3e3, β=0.0, T0=0.0, α = 1.5e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=Cp0),
-            Conductivity      = ConstantConductivity(; k=K0),
+            Phase           = 1,
+            Density         = PT_Density(; ρ0=3e3, β=0.0, T0=0.0, α = 1.5e-5),
+            HeatCapacity    = ConstantHeatCapacity(; cp=Cp0),
+            Conductivity    = ConstantConductivity(; k=K0),
+            RadioactiveHeat = ConstantRadioactiveHeat(1e-6),
         ),
         SetMaterialParams(;
-            Phase             = 1,
-            Density           = PT_Density(; ρ0=3.3e3, β=0.0, T0=0.0, α = 1.5e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=Cp0),
-            Conductivity      = ConstantConductivity(; k=K0),
+            Phase           = 1,
+            Density         = PT_Density(; ρ0=3.3e3, β=0.0, T0=0.0, α = 1.5e-5),
+            HeatCapacity    = ConstantHeatCapacity(; cp=Cp0),
+            Conductivity    = ConstantConductivity(; k=K0),
+            RadioactiveHeat = ConstantRadioactiveHeat(1e-7),
         ),
     )
  
     # fields needed to compute density on the fly
-    P = @zeros(ni...)
-    args = (; P=P)
+    P          = @zeros(ni...)
+    args       = (; P=P)
 
     ## Allocate arrays needed for every Thermal Diffusion
-    thermal = ThermalArrays(ni)
+    thermal    = ThermalArrays(ni)
     thermal_bc = TemperatureBoundaryConditions(; 
         no_flux = (left = true, right = true, top = false, bot = false), 
     )
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
 
     # Add thermal perturbation
-    δT = 100e0 # thermal perturbation
-    r  = 10e3 # thermal perturbation radius
+    δT                  = 100e0 # thermal perturbation
+    r                   = 10e3 # thermal perturbation radius
     center_perturbation = lx/2, -ly/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
     @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -149,20 +159,22 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
         nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
     )
     # temperature
-    pPhases, = init_particle_fields_cellarrays(particles, Val(1))
+    pPhases,     = init_particle_fields_cellarrays(particles, Val(1))
     init_phases!(pPhases, particles, center_perturbation..., r)
     phase_ratios = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
     # ----------------------------------------------------
 
+    @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
+
     # PT coefficients for thermal diffusion
-    args = (; P=P, T=thermal.Tc)
+    args       = (; P=P, T=thermal.Tc)
     pt_thermal = JustRelax.PTThermalCoeffs(
         rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.65 / √2
     )
 
     # Time loop
-    t = 0.0
+    t  = 0.0
     it = 0
     nt = Int(ceil(ttot / dt))
     while it < nt
@@ -174,13 +186,13 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
             args,
             dt,
             di;
-            phase=phase_ratios,
-            iterMax=1e3,
-            nout=10,
+            phase   = phase_ratios,
+            iterMax = 1e3,
+            nout    = 10,
         )
 
         it += 1
-        t += dt
+        t  += dt
     end
 
     return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), thermal

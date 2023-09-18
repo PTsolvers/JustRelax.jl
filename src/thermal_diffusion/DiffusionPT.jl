@@ -167,18 +167,20 @@ end
     return nothing
 end
 
-@parallel_indices (i, j, k) function update_T!(
-    T::AbstractArray{_T,3}, Told, qTx, qTy, qTz, ρCp, dτ_ρ, _dt, _dx, _dy, _dz
+@parallel_indices (I...) function update_T!(
+    T::AbstractArray{_T,3}, Told, qTx, qTy, qTz, H, ρCp, dτ_ρ, _dt, _dx, _dy, _dz
 ) where {_T}
-    av(A) = _av(A, i, j, k)
-    d_xa(A) = _d_xa(A, i, j, k, _dx)
-    d_ya(A) = _d_ya(A, i, j, k, _dy)
-    d_za(A) = _d_za(A, i, j, k, _dz)
+    av(A) = _av(A, I...)
+    d_xa(A) = _d_xa(A, I..., _dx)
+    d_ya(A) = _d_ya(A, I..., _dy)
+    d_za(A) = _d_za(A, I..., _dz)
 
-    I = i + 1, j + 1, k + 1
-    T[I...] +=
-        av(dτ_ρ) *
-        ((-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) - av(ρCp) * (T[I...] - Told[I...]) * _dt)
+    I1 = I .+ 1
+    T[I1...] +=
+        av(dτ_ρ) * (
+            (-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) -
+            av(ρCp) * (T[I1...] - Told[I1...]) * _dt
+        ) + av(H)
 
     return nothing
 end
@@ -189,6 +191,7 @@ end
     qTx,
     qTy,
     qTz,
+    H,
     rheology,
     phase,
     dτ_ρ,
@@ -213,13 +216,13 @@ end
         T_ijk +
         av(dτ_ρ) * (
             (-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) -
-            compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt
+            compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt + av(H)
         )
     return nothing
 end
 
 @parallel_indices (i, j, k) function check_res!(
-    ResT::AbstractArray{_T,3}, T, Told, qTx2, qTy2, qTz2, ρCp, _dt, _dx, _dy, _dz
+    ResT::AbstractArray{_T,3}, T, Told, qTx2, qTy2, qTz2, H, ρCp, _dt, _dx, _dy, _dz
 ) where {_T}
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
@@ -229,7 +232,8 @@ end
     I = i + 1, j + 1, k + 1
 
     ResT[i, j, k] =
-        -av(ρCp) * (T[I...] - Told[I...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2))
+        -av(ρCp) * (T[I...] - Told[I...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
+        av(H)
 
     return nothing
 end
@@ -241,6 +245,7 @@ end
     qTx2,
     qTy2,
     qTz2,
+    H,
     rheology,
     phase,
     _dt,
@@ -261,7 +266,7 @@ end
 
     ResT[i, j, k] =
         -compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt -
-        (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2))
+        (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) + av(H)
 
     return nothing
 end
@@ -391,7 +396,7 @@ end
 end
 
 @parallel_indices (i, j) function update_T!(
-    T::AbstractArray{_T,2}, Told, qTx, qTy, ρCp, dτ_ρ, _dt, _dx, _dy
+    T::AbstractArray{_T,2}, Told, qTx, qTy, H, ρCp, dτ_ρ, _dt, _dx, _dy
 ) where {_T}
     nx, ny = size(ρCp)
 
@@ -411,7 +416,7 @@ end
     T[i + 1, j + 1] +=
         av(dτ_ρ) * (
             (-(d_xa(qTx) + d_ya(qTy))) -
-            av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt
+            av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt + av(H)
         )
     return nothing
 end
@@ -421,6 +426,7 @@ end
     Told,
     qTx,
     qTy,
+    H,
     rheology,
     phase,
     dτ_ρ,
@@ -452,12 +458,13 @@ end
         ) * 0.25
 
     T[i + 1, j + 1] +=
-        av(dτ_ρ) * ((-(d_xa(qTx) + d_ya(qTy))) - ρCp * (T_ij - Told[i + 1, j + 1]) * _dt)
+        av(dτ_ρ) *
+        ((-(d_xa(qTx) + d_ya(qTy))) - ρCp * (T_ij - Told[i + 1, j + 1]) * _dt + av(H))
     return nothing
 end
 
 @parallel_indices (i, j) function check_res!(
-    ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, ρCp, _dt, _dx, _dy
+    ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, H, ρCp, _dt, _dx, _dy
 ) where {_T}
     nx, ny = size(ρCp)
 
@@ -475,12 +482,13 @@ end
     #! format: on
 
     ResT[i, j] =
-        -av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt - (d_xa(qTx2) + d_ya(qTy2))
+        -av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt -
+        (d_xa(qTx2) + d_ya(qTy2)) + av(H)
     return nothing
 end
 
 @parallel_indices (i, j) function check_res!(
-    ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, rheology, phase, _dt, _dx, _dy, args
+    ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, H, rheology, phase, _dt, _dx, _dy, args
 ) where {_T}
     nx, ny = size(args.P)
 
@@ -505,27 +513,14 @@ end
         ) * 0.25
 
     ResT[i, j] =
-        -ρCp * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt - (d_xa(qTx2) + d_ya(qTy2))
+        -ρCp * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
+        av(H)
     return nothing
 end
 
-@parallel_indices (i) function update_ΔT!(ΔT, T, Told)
-    _update_ΔT!(ΔT, T, Told, i)
+@parallel_indices (I...) function update_ΔT!(ΔT, T, Told)
+    ΔT[I...] = T[I...] - Told[I...]
     return nothing
-end
-
-@parallel_indices (i, j) function update_ΔT!(ΔT, T, Told)
-    _update_ΔT!(ΔT, T, Told, i, j)
-    return nothing
-end
-
-@parallel_indices (i, j, k) function update_ΔT!(ΔT, T, Told)
-    _update_ΔT!(ΔT, T, Told, i, j, k)
-    return nothing
-end
-
-@inline function _update_ΔT!(ΔT, T, Told, I::Vararg{Int,N}) where {N}
-    return ΔT[I...] = T[I...] - Told[I...]
 end
 
 ### SOLVERS COLLECTION BELOW - THEY SHOULD BE DIMENSION AGNOSTIC
@@ -541,7 +536,14 @@ end
 
 function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
     @parallel update_range(ni...) update_T!(
-        thermal.T, thermal.Told, @qT(thermal)..., ρCp, pt_thermal.dτ_ρ, _dt, _di...
+        thermal.T,
+        thermal.Told,
+        @qT(thermal)...,
+        thermal.H,
+        ρCp,
+        pt_thermal.dτ_ρ,
+        _dt,
+        _di...,
     )
 end
 
@@ -552,6 +554,7 @@ function update_T(
         thermal.T,
         thermal.Told,
         @qT(thermal)...,
+        thermal.H,
         rheology,
         phase,
         pt_thermal.dτ_ρ,
@@ -564,7 +567,14 @@ end
 function update_T(igg, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
     # @hide_communication b_width begin # communication/computation overlap
     @parallel update_range(ni...) update_T!(
-        thermal.T, thermal.Told, @qT(thermal)..., ρCp, pt_thermal.dτ_ρ, _dt, _di...
+        thermal.T,
+        thermal.Told,
+        @qT(thermal)...,
+        thermal.H,
+        ρCp,
+        pt_thermal.dτ_ρ,
+        _dt,
+        _di...,
     )
     update_halo!(thermal.T)
     # end
@@ -577,6 +587,7 @@ function update_T(igg, b_width, thermal, rheology, phase, pt_thermal, _dt, _di, 
         thermal.T,
         thermal.Told,
         @qT(thermal)...,
+        thermal.H,
         rheology,
         phase,
         pt_thermal.dτ_ρ,
@@ -648,6 +659,7 @@ function heatdiffusion_PT!(
                     thermal.T,
                     thermal.Told,
                     @qT2(thermal)...,
+                    thermal.H,
                     ρCp,
                     _dt,
                     _di...,
@@ -747,6 +759,7 @@ function heatdiffusion_PT!(
                     thermal.T,
                     thermal.Told,
                     @qT2(thermal)...,
+                    thermal.H,
                     rheology,
                     phases,
                     _dt,

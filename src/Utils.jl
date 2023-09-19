@@ -291,56 +291,24 @@ Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` a
 """
 function compute_maxloc!(B, A; window=(1, 1, 1))
     ni = size(A)
-    width_x, width_y, width_z = window
 
-    @parallel_indices (i, j) function _maxloc!(
-        B::T, A::T
-    ) where {T<:AbstractArray{<:Number,2}}
-        B[i, j] = _maxloc_window_clamped(A, i, j, width_x, width_y)
-        return nothing
-    end
-
-    @parallel_indices (i, j, k) function _maxloc!(
-        B::T, A::T
-    ) where {T<:AbstractArray{<:Number,3}}
-        B[i, j, k] = _maxloc_window_clamped(A, i, j, k, width_x, width_y, width_z)
+    @parallel_indices (I...) function _maxloc!(B, A)
+        B[I...] = _maxloc_window(A, I..., window...)
         return nothing
     end
 
     @parallel (@idx ni) _maxloc!(B, A)
 end
 
-function _compute_maxloc!(B, A, window)
-    I = indices(window)
-
-    if all(I .<= size(A))
-        B[I...] = JustRelax._maxloc_window_clamped(A, I..., window...)
-    end
-
-    return nothing
-end
-
-function compute_maxloc!(
-    B::CuArray{T1,N,T2}, A::CuArray{T1,N,T2}; window=ntuple(i -> 1, Val(N))
-) where {T1,T2,N}
-    nx, ny = size(A)
-    ntx, nty = 32, 32
-    blkx, blky = ceil(Int, nx / ntx), ceil(Int, ny / nty)
-    CUDA.@sync begin
-        @cuda threads = (ntx, nty) blocks = (blkx, blky) _compute_maxloc!(B, A, window)
-    end
-    return nothing
-end
-
-@inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
+@inline function _maxloc_window(A, I, J, width_x, width_y)
     nx, ny = size(A)
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)
     x = -Inf
     for i in I_range
-        ii = clamp(i, 1, nx)
+        ii = clamp(i, 1, nx) # handle boundary cells
         for j in J_range
-            jj = clamp(j, 1, ny)
+            jj = clamp(j, 1, ny) # handle boundary cells
             Aij = A[ii, jj]
             if Aij > x
                 x = Aij
@@ -350,18 +318,18 @@ end
     return x
 end
 
-@inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
+@inline function _maxloc_window(A, I, J, K, width_x, width_y, width_z)
     nx, ny, nz = size(A)
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)
     K_range = (K - width_z):(K + width_z)
     x = -Inf
     for i in I_range
-        ii = clamp(i, 1, nx)
+        ii = clamp(i, 1, nx) # handle boundary cells
         for j in J_range
-            jj = clamp(j, 1, ny)
+            jj = clamp(j, 1, ny) # handle boundary cells
             for k in K_range
-                kk = clamp(k, 1, nz)
+                kk = clamp(k, 1, nz) # handle boundary cells
                 Aijk = A[ii, jj, kk]
                 if Aijk > x
                     x = Aijk
@@ -437,7 +405,8 @@ end
 @inline tupleize(v::Tuple) = v
 
 # Delta function
-@inline δ(I::Vararg{T,N}) where {N,T} = reduce((===), I)
+@inline δ(I::Vararg{T, N}) where {N,T} = reduce((==), I)
+@inline δ(I::Vararg{Any, N}) where N = reduce((===), I)
 
 """
     continuation_log(x_new, x_old, ν)

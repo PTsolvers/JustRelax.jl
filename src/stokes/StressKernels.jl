@@ -198,7 +198,7 @@ end
 @parallel_indices (I...) function compute_τ_vertex!(
     τyz, τxz, τxy, τyz_o, τxz_o, τxy_o, εyz, εxz, εxy, η, rheology, phase_ratios, dt, θ_dτ
 )
-    I = i, j, k
+    i, j, k = I
 
     get(x) = x[I...]
     harm_xy(A) = _harm_xyi(A, I...)
@@ -368,7 +368,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_τ_nonlinear!(
+@parallel_indices (I...) function compute_τ_nonlinear!(
     τxx::AbstractArray{T,3},
     τyy,
     τzz,
@@ -396,7 +396,6 @@ end
     dt,
     θ_dτ,
 ) where {T}
-    I = i, j, k
 
     # numerics
     ηij = η[I...]
@@ -419,7 +418,7 @@ end
 end
 
 # multi phase visco-elasto-plastic flow, where phases are defined in the cell center
-@parallel_indices (i, j, k) function compute_τ_nonlinear!(
+@parallel_indices (I...) function compute_τ_nonlinear!(
     τxx::AbstractArray{T,3},
     τyy,
     τzz,
@@ -448,7 +447,6 @@ end
     dt,
     θ_dτ,
 ) where {T}
-    I = i, j, k
 
     # numerics
     ηij = @inbounds η[I...]

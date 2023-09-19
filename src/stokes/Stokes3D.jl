@@ -1,38 +1,3 @@
-## DIMENSION AGNOSTIC ELASTIC KERNELS
-
-@parallel function elastic_iter_params!(
-    dτ_Rho::AbstractArray,
-    Gdτ::AbstractArray,
-    ητ::AbstractArray,
-    Vpdτ::T,
-    G::T,
-    dt::M,
-    Re::T,
-    r::T,
-    max_li::T,
-) where {T,M}
-    @all(dτ_Rho) = Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (G * dt)))
-    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
-    return nothing
-end
-
-@parallel function elastic_iter_params!(
-    dτ_Rho::AbstractArray,
-    Gdτ::AbstractArray,
-    ητ::AbstractArray,
-    Vpdτ::T,
-    G::AbstractArray,
-    dt::M,
-    Re::T,
-    r::T,
-    max_li::T,
-) where {T,M}
-    @all(dτ_Rho) =
-        Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (@all(G) * dt)))
-    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
-    return nothing
-end
-
 ## 3D ELASTICITY MODULE
 
 module Stokes3D
@@ -46,18 +11,22 @@ using LinearAlgebra
 using Printf
 using GeoParams
 
-import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor, pureshear_bc!
+import JustRelax: PTArray, Velocity, SymmetricTensor, pureshear_bc!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
+import JustRelax: tensor_invariant!, compute_τ_nonlinear!, compute_τ_vertex!
 import JustRelax: compute_maxloc!, solve!
 import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi
 
-export solve!, pureshear_bc!
-
+include("StressRotation.jl")
 include("PressureKernels.jl")
-include("StressKernels.jl")
 include("VelocityKernels.jl")
 
+export solve!, pureshear_bc!
+    rotate_stress_particles_jaumann!,
+    rotate_stress_particles_roation_matrix!,
+    compute_vorticity!,
+    
 @parallel function update_τ_o!(
     τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o, τxx, τyy, τzz, τxy, τxz, τyz
 )
@@ -438,7 +407,6 @@ end
 # GeoParams and multiple phases
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
-    thermal::ThermalArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
     flow_bc::FlowBoundaryConditions,
@@ -447,11 +415,13 @@ function JustRelax.solve!(
     η_vep,
     phase_ratios::PhaseRatio,
     rheology::NTuple{N,AbstractMaterialParamsStruct},
+    args,
     dt,
     igg::IGG;
     iterMax=10e3,
     nout=500,
     b_width=(4, 4, 4),
+    viscosity_cutoff=(1e18, 1e24),
     verbose=true,
 ) where {A,B,C,D,T,N}
 
@@ -465,7 +435,7 @@ function JustRelax.solve!(
     # z = LinRange(di[3]*0.5, 1.0-di[3]*0.5, nz)
 
     # ~preconditioner
-    ητ = deepcopy(η)
+    ητ = similar(η)
     compute_maxloc!(ητ, η)
     update_halo!(ητ)
     # @hide_communication b_width begin # communication/computation overlap
@@ -490,7 +460,7 @@ function JustRelax.solve!(
     # Kb = get_Kb(rheology)
     # G  = get_G(rheology)
     @copy stokes.P0 stokes.P
-    # λ = @zeros(ni...)
+    λ = @zeros(ni...)
 
     # solver loop
     wtime0 = 0.0
@@ -516,65 +486,48 @@ function JustRelax.solve!(
             )
 
             # Update viscosity
-            args_ηv = (; T=thermal.T, P=stokes.P, dt=Inf)
-            ν = iter ≥ nout ? 0.05 : 0.0
-            # ν = 0.0
+            # ν = iter ≥ nout ? 0.05 : 0.0
+            # ν = iter ≥ nout ? 0.05 : 0.0
+            # ν = 1e-2
             # ν = (iter, 1000) == 0 ? 0.5 : 1.0
-            if err < 1e-3 && !boo
-                boo = true
-                println("Going non-linear at iteration $iter")
-            end
-            if boo
+            # if err < 1e-3 && !boo
+            #     boo = true
+            #     println("Going non-linear at iteration $iter")
+            # end
+            # if boo
                 # Update buoyancy
                 @parallel (@idx ni) compute_ρg!(
-                    ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P)
+                    ρg[end], phase_ratios.center, rheology, args
                 )
 
-                ν = 1e-3
+                ν = 0.0
                 @parallel (@idx ni) compute_viscosity!(
-                    η, ν, phase_ratios.center, @strain(stokes)..., args_ηv, rheology
+                    η, ν, phase_ratios.center, @strain(stokes)..., args, rheology, viscosity_cutoff
                 )
-                # @hide_communication b_width begin # communication/computation overlap
-                @parallel compute_maxloc!(ητ, η)
+                compute_maxloc!(ητ, η)
                 update_halo!(ητ)
+                # @hide_communication b_width begin # communication/computation overlap
+                #     @parallel compute_maxloc!(ητ, η)
+                #     update_halo!(ητ)
                 # end
                 @parallel (1:ny, 1:nz) free_slip_x!(ητ)
                 @parallel (1:nx, 1:nz) free_slip_y!(ητ)
                 @parallel (1:nx, 1:ny) free_slip_z!(ητ)
-            end
+            # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
-                @stress_center(stokes)...,
+                @tensor_center(stokes.τ)...,
                 stokes.τ.II,
                 @tensor(stokes.τ_o)...,
                 @strain(stokes)...,
                 stokes.P,
                 η,
                 η_vep,
-                phase_ratios.center,
+                λ,
                 rheology, # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
             )
-
-            # @parallel center2vertex!(
-            #     stokes.τ.yz, stokes.τ.xz, stokes.τ.xy, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c
-            # )
-
-            # args_η = (; P = stokes.P, T=thermal.T)
-            # @parallel (@idx ni) compute_τ_gp!(
-            #     @stress_center(stokes)...,
-            #     stokes.τ.II,
-            #     @tensor(stokes.τ_o)...,
-            #     @strain(stokes)...,
-            #     η,
-            #     η_vep,
-            #     args_η,
-            #     thermal.T,
-            #     rheology, # needs to be a tuple
-            #     dt,
-            #     pt_stokes.θ_dτ,
-            # )
 
             @parallel (@idx ni .+ 1) compute_τ_vertex!(
                 @shear(stokes.τ)...,
@@ -600,8 +553,7 @@ function JustRelax.solve!(
                 )
                 update_halo!(@velocity(stokes)...)
             end
-            # apply_free_slip!(flow_bc, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
-            flow_bcs!(stokes, flow_bc, di)
+            flow_bcs!(stokes, flow_bc)
         end
 
         iter += 1
@@ -650,3 +602,4 @@ function JustRelax.solve!(
 end
 
 end # END OF MODULE
+

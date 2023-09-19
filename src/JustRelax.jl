@@ -66,7 +66,7 @@ include("stokes/MetaStokes.jl")
 export PS_Setup, environment!, ps_reset!
 
 include("stokes/StressKernels.jl")
-export compute_τ_nonlinear!, tensor_invariant!
+export tensor_invariant!
 
 include("thermal_diffusion/MetaDiffusion.jl")
 

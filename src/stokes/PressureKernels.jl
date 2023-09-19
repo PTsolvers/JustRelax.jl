@@ -18,7 +18,7 @@ end
 ## Incompressible 
 @parallel_indices (I...) function compute_P!(
     P, RP, ∇V, η, r, θ_dτ
-) where {T}
+)
     RP[I...], P[I...] = _compute_P!(P[I...], ∇V[I...], η[I...], r, θ_dτ)
     return nothing
 end
@@ -26,7 +26,7 @@ end
 ## Compressible 
 @parallel_indices (I...) function compute_P!(
     P, P0, RP, ∇V, η, K, dt, r, θ_dτ
-) where {T}
+)
     RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], η[I...], K[I...], dt, r, θ_dτ
     )
@@ -46,14 +46,14 @@ end
     dt,
     r,
     θ_dτ,
-) where {T,N}
+) where N
     K = get_Kb(rheology, phase[I...])
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
 
 @parallel_indices (I...) function compute_P!(
-    P::AbstractArray{T,2},
+    P,
     P0,
     RP,
     ∇V,
@@ -63,7 +63,7 @@ end
     dt,
     r,
     θ_dτ,
-) where {N,T,C<:JustRelax.CellArray}
+) where {N,C<:JustRelax.CellArray}
     K = fn_ratio(get_Kb, rheology, phase_ratio[I...])
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
     return nothing

@@ -13,22 +13,46 @@ end
 
 multi_copyto!(B::AbstractArray, A::AbstractArray) = copyto!(B, A)
 
-function multi_copyto!(B::NTuple{N,AbstractArray}, A::NTuple{N,AbstractArray}) where {N}
-    for (Bi, Ai) in zip(B, A)
-        copyto!(Bi, Ai)
+function detect_arsg_size(A::NTuple{N, AbstractArray{T, Dims}}) where {N, T, Dims}
+    ntuple(Val(Dims)) do i 
+        s = ntuple(Val(N)) do j
+            size(A[j], i)
+        end
+        maximum(s)
     end
 end
 
-@parallel_indices (i, j) function multi_copy!(
+function multi_copyto!(
     dst::NTuple{N,T}, src::NTuple{N,T}
 ) where {N,T}
-    @inbounds for (dst_i, src_i) in zip(dst, src)
-        if all((i, j) .≤ size(dst_i))
-            dst_i[i, j] = src_i[i, j]
-        end
-    end
+    ni_src = detect_arsg_size(src)
+    ni_dst = detect_arsg_size(dst)
+    @assert ni_src == ni_dst 
+    @parallel (@idx ni_src) multi_copy!(dst, src) 
 
     return nothing
+end
+
+@parallel_indices (I...) function multi_copy!(
+    dst::NTuple{N,T}, src::NTuple{N,T}
+) where {N,T}
+
+    @inbounds unrolled_copy!(dst, src, I...)
+
+    return nothing
+end
+
+Base.@propagate_inbounds @generated function unrolled_copy!(
+    dst::NTuple{N,T}, src::NTuple{N,T}, I::Vararg{Int, NI}
+) where {N, NI, T}
+    quote
+        Base.@_inline_meta
+        Base.@nexprs $N n -> begin
+            if all(tuple(I...) .≤ size(dst[n]))
+                dst[n][I...] = src[n][I...]
+            end
+        end
+    end
 end
 
 """

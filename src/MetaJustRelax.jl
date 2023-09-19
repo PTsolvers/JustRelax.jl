@@ -105,6 +105,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         include(joinpath(@__DIR__, "rheology/Viscosity.jl"))
         export compute_viscosity!
 
+        include(joinpath(@__DIR__, "stokes/StressKernels.jl"))
+        export tensor_invariant!
+
         include(joinpath(@__DIR__, "stokes/Stokes2D.jl"))
         export solve!
 

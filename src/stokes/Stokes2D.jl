@@ -700,7 +700,9 @@ function JustRelax.solve!(
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-            @parallel (@idx ni) compute_ρg!(ρg[end], ϕ, rheology, (T=thermal.Tc, P=stokes.P))
+            @parallel (@idx ni) compute_ρg!(
+                ρg[end], ϕ, rheology, (T=thermal.Tc, P=stokes.P)
+            )
             @parallel (@idx ni) compute_τ_gp!(
                 @tensor_center(stokes.τ)...,
                 stokes.τ.II,

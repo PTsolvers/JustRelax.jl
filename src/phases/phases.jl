@@ -134,7 +134,6 @@ end
 #     return nothing
 # end
 
-
 # function phase_ratio_weights(
 #     pxi::SVector{N1,T}, pyi::SVector{N1,T}, ph::SVector{N1,T}, cell_center, di, ::Val{NC}
 # ) where {N1,NC,T}
@@ -184,14 +183,18 @@ end
 
 # ParallelStencil launch kernel for 2D
 @parallel_indices (I...) function phase_ratios_center(
-    ratio_centers, pxi::NTuple{N, T1}, xci::NTuple{N, T2}, di::NTuple{N, T3}, phases
+    ratio_centers, pxi::NTuple{N,T1}, xci::NTuple{N,T2}, di::NTuple{N,T3}, phases
 ) where {N,T1,T2,T3}
-    
+
     # index corresponding to the cell center
     cell_center = ntuple(i -> xci[i][I[i]], Val(N))
     # phase ratios weights (∑w = 1.0)
     w = phase_ratio_weights(
-        getindex.(pxi, I...), phases[I...], cell_center, di, JustRelax.nphases(ratio_centers)
+        getindex.(pxi, I...),
+        phases[I...],
+        cell_center,
+        di,
+        JustRelax.nphases(ratio_centers),
     )
     # update phase ratios array
     for k in 1:numphases(ratio_centers)
@@ -202,7 +205,7 @@ end
 end
 
 function phase_ratio_weights(
-    pxi::NTuple{NP, C}, ph::SVector{N1,T}, cell_center, di, ::Val{NC}
+    pxi::NTuple{NP,C}, ph::SVector{N1,T}, cell_center, di, ::Val{NC}
 ) where {N1,NC,NP,T,C}
     if @generated
         quote

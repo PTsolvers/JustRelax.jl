@@ -23,10 +23,9 @@ include("PressureKernels.jl")
 include("VelocityKernels.jl")
 
 export solve!, pureshear_bc!
-    rotate_stress_particles_jaumann!,
-    rotate_stress_particles_roation_matrix!,
-    compute_vorticity!,
-    
+rotate_stress_particles_jaumann!,
+rotate_stress_particles_roation_matrix!,
+compute_vorticity!,
 @parallel function update_τ_o!(
     τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o, τxx, τyy, τzz, τxy, τxz, τyz
 )
@@ -495,24 +494,28 @@ function JustRelax.solve!(
             #     println("Going non-linear at iteration $iter")
             # end
             # if boo
-                # Update buoyancy
-                @parallel (@idx ni) compute_ρg!(
-                    ρg[end], phase_ratios.center, rheology, args
-                )
+            # Update buoyancy
+            @parallel (@idx ni) compute_ρg!(ρg[end], phase_ratios.center, rheology, args)
 
-                ν = 0.0
-                @parallel (@idx ni) compute_viscosity!(
-                    η, ν, phase_ratios.center, @strain(stokes)..., args, rheology, viscosity_cutoff
-                )
-                compute_maxloc!(ητ, η)
-                update_halo!(ητ)
-                # @hide_communication b_width begin # communication/computation overlap
-                #     @parallel compute_maxloc!(ητ, η)
-                #     update_halo!(ητ)
-                # end
-                @parallel (1:ny, 1:nz) free_slip_x!(ητ)
-                @parallel (1:nx, 1:nz) free_slip_y!(ητ)
-                @parallel (1:nx, 1:ny) free_slip_z!(ητ)
+            ν = 0.0
+            @parallel (@idx ni) compute_viscosity!(
+                η,
+                ν,
+                phase_ratios.center,
+                @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
+            )
+            compute_maxloc!(ητ, η)
+            update_halo!(ητ)
+            # @hide_communication b_width begin # communication/computation overlap
+            #     @parallel compute_maxloc!(ητ, η)
+            #     update_halo!(ητ)
+            # end
+            @parallel (1:ny, 1:nz) free_slip_x!(ητ)
+            @parallel (1:nx, 1:nz) free_slip_y!(ητ)
+            @parallel (1:nx, 1:ny) free_slip_z!(ητ)
             # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -602,4 +605,3 @@ function JustRelax.solve!(
 end
 
 end # END OF MODULE
-

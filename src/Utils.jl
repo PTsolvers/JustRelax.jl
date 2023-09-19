@@ -26,8 +26,8 @@ end
 
 multi_copyto!(B::AbstractArray, A::AbstractArray) = copyto!(B, A)
 
-function detect_arsg_size(A::NTuple{N, AbstractArray{T, Dims}}) where {N, T, Dims}
-    ntuple(Val(Dims)) do i 
+function detect_arsg_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
+    ntuple(Val(Dims)) do i
         s = ntuple(Val(N)) do j
             size(A[j], i)
         end
@@ -35,13 +35,11 @@ function detect_arsg_size(A::NTuple{N, AbstractArray{T, Dims}}) where {N, T, Dim
     end
 end
 
-function multi_copyto!(
-    dst::NTuple{N,T}, src::NTuple{N,T}
-) where {N,T}
+function multi_copyto!(dst::NTuple{N,T}, src::NTuple{N,T}) where {N,T}
     ni_src = detect_arsg_size(src)
     ni_dst = detect_arsg_size(dst)
-    @assert ni_src == ni_dst 
-    @parallel (@idx ni_src) multi_copy!(dst, src) 
+    @assert ni_src == ni_dst
+    @parallel (@idx ni_src) multi_copy!(dst, src)
 
     return nothing
 end
@@ -49,15 +47,14 @@ end
 @parallel_indices (I...) function multi_copy!(
     dst::NTuple{N,T}, src::NTuple{N,T}
 ) where {N,T}
-
     @inbounds unrolled_copy!(dst, src, I...)
 
     return nothing
 end
 
 Base.@propagate_inbounds @generated function unrolled_copy!(
-    dst::NTuple{N,T}, src::NTuple{N,T}, I::Vararg{Int, NI}
-) where {N, NI, T}
+    dst::NTuple{N,T}, src::NTuple{N,T}, I::Vararg{Int,NI}
+) where {N,NI,T}
     quote
         Base.@_inline_meta
         Base.@nexprs $N n -> begin
@@ -428,8 +425,8 @@ end
 @inline tupleize(v::Tuple) = v
 
 # Delta function
-@inline δ(I::Vararg{T, N}) where {N,T} = reduce((==), I)
-@inline δ(I::Vararg{Any, N}) where N = reduce((===), I)
+@inline δ(I::Vararg{T,N}) where {N,T} = reduce((==), I)
+@inline δ(I::Vararg{Any,N}) where {N} = reduce((===), I)
 
 """
     continuation_log(x_new, x_old, ν)

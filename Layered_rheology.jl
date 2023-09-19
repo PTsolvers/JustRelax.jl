@@ -132,7 +132,7 @@ function init_phases!(phases, particles, Lx, Ly; d=650e3, r=50e3)
 
             x = JustRelax.@cell px[ip, I...]
             y = JustRelax.@cell py[ip, I...]
-            depth = abs(JustRelax.@cell pz[ip, I...])
+            depth = -(JustRelax.@cell pz[ip, I...])
             if 0e0 ≤ depth ≤ 21e3
                 @cell phases[ip, I...] = 1.0
 

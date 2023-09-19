@@ -195,13 +195,15 @@ end
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_τ_vertex!(
+@parallel_indices (I...) function compute_τ_vertex!(
     τyz, τxz, τxy, τyz_o, τxz_o, τxy_o, εyz, εxz, εxy, η, rheology, phase_ratios, dt, θ_dτ
 )
-    get(x) = x[i, j, k]
-    harm_xy(A) = _harm_xyi(A, i, j, k)
-    harm_xz(A) = _harm_xzi(A, i, j, k)
-    harm_yz(A) = _harm_yzi(A, i, j, k)
+    I = i, j, k
+
+    get(x) = x[I...]
+    harm_xy(A) = _harm_xyi(A, I...)
+    harm_xz(A) = _harm_xzi(A, I...)
+    harm_yz(A) = _harm_yzi(A, I...)
     @inline _f(A, i, j, k) = fn_ratio(get_G, rheology, A[i, j, k])
     #! format: off
     function av_Gdt_xy(A)
@@ -233,7 +235,7 @@ end
             _Gdt = av_Gdt_xy(phase_ratios)
             η_ij = harm_xy(η)
             denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-            τxy[i, j, k] +=
+            τxy[I...] +=
                 (
                     -(get(τxy) - get(τxy_o)) * η_ij * _Gdt - get(τxy) +
                     2.0 * η_ij * get(εxy)
@@ -244,7 +246,7 @@ end
             _Gdt = av_Gdt_xz(phase_ratios)
             η_ij = harm_xz(η)
             denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-            τxz[i, j, k] +=
+            τxz[I...] +=
                 (
                     -(get(τxz) - get(τxz_o)) * η_ij * _Gdt - get(τxz) +
                     2.0 * η_ij * get(εxz)
@@ -255,7 +257,7 @@ end
             _Gdt = av_Gdt_yz(phase_ratios)
             η_ij = harm_yz(η)
             denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-            τyz[i, j, k] +=
+            τyz[I...] +=
                 (
                     -(get(τyz) - get(τyz_o)) * η_ij * _Gdt - get(τyz) +
                     2.0 * η_ij * get(εyz)
@@ -470,8 +472,7 @@ end
 
 ## Stress invariants 
 
-@parallel_indices (i, j) function tensor_invariant!(II, xx, yy, xyv)
-    I = i, j
+@parallel_indices (I...) function tensor_invariant!(II, xx, yy, xyv)
 
     # convinience closure
     @inline gather(A) = _gather(A, I...)
@@ -484,8 +485,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j, k) function tensor_invariant!(II, xx, yy, zz, yz, xz, xy)
-    I = i, j, k
+@parallel_indices (I...) function tensor_invariant!(II, xx, yy, zz, yz, xz, xy)
 
     # convinience closure
     @inline gather_yz(A) = _gather_yz(A, I...)

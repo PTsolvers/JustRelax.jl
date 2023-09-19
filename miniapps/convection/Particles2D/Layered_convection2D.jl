@@ -268,7 +268,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         # ------------------------------
  
         # Stokes solver ----------------
-        to   = solve!(
+        solve!(
             stokes,
             pt_stokes,
             di,
@@ -285,7 +285,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             nout=1e3,
             viscosity_cutoff=(1e18, 1e24)
         )
-        @show to
         @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------

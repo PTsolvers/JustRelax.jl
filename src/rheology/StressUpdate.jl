@@ -27,7 +27,7 @@ function _compute_τ_nonlinear!(
     Pij = P[idx...]
     τy = C + Pij * sinϕ
 
-    if isyielding(is_pl, τII_trial, τy, Pij)
+    if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
         dτ_pl, λ[idx...] = compute_dτ_pl(
             τij, dτij, τij_p_o, εij_p, τy, τII_trial, ηij, λ[idx...], η_reg, _Gdt, dτ_r
@@ -52,7 +52,7 @@ function _compute_τ_nonlinear!(
 end
 
 # check if plasticity is active
-@inline isyielding(is_pl, τII_trial, τy, Pij) = is_pl && τII_trial > τy
+@inline isyielding(is_pl, τII_trial, τy) = is_pl && τII_trial > τy
 
 @inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + muladd(ηij, _Gdt, 1.0))
 

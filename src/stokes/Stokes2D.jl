@@ -45,6 +45,7 @@ using ParallelStencil.FiniteDifferences2D
 using GeoParams, LinearAlgebra, Printf, TimerOutputs
 
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
+import JustRelax: tensor_invariant!, compute_τ_nonlinear!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
@@ -58,8 +59,7 @@ include("StressKernels.jl")
 export solve!,
     rotate_stress_particles_jaumann!,
     rotate_stress_particles_roation_matrix!,
-    compute_vorticity!,
-    tensor_invariant!
+    compute_vorticity!
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
     τxx, τyy, τxy, τxy_c = stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ.xy_c
@@ -543,7 +543,7 @@ function JustRelax.solve!(
             end
             if do_visc
                 ν = 1e-2
-                @timeit to "viscosity" compute_viscosity!(
+                @parallel (@idx ni) compute_viscosity!(
                     η,
                     ν,
                     phase_ratios.center,
@@ -700,7 +700,7 @@ function JustRelax.solve!(
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-            @parallel (@idx ni) compute_ρg!(ρg[2], ϕ, rheology, (T=thermal.Tc, P=stokes.P))
+            @parallel (@idx ni) compute_ρg!(ρg[end], ϕ, rheology, (T=thermal.Tc, P=stokes.P))
             @parallel (@idx ni) compute_τ_gp!(
                 @tensor_center(stokes.τ)...,
                 stokes.τ.II,

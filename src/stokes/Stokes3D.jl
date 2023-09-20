@@ -319,10 +319,10 @@ function JustRelax.solve!(
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
-                @tensor_center(stokes.τ)...,
+                @tensor_center(stokes.τ),
                 stokes.τ.II,
-                @tensor(stokes.τ_o)...,
-                @strain(stokes)...,
+                @tensor(stokes.τ_o),
+                @strain(stokes),
                 stokes.P,
                 η,
                 η_vep,
@@ -519,10 +519,10 @@ function JustRelax.solve!(
             # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
-                @tensor_center(stokes.τ)...,
+                @tensor_center(stokes.τ),
                 stokes.τ.II,
-                @tensor(stokes.τ_o)...,
-                @strain(stokes)...,
+                @tensor(stokes.τ_o),
+                @strain(stokes),
                 stokes.P,
                 η,
                 η_vep,

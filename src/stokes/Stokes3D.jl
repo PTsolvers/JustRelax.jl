@@ -494,8 +494,9 @@ function JustRelax.solve!(
             #     println("Going non-linear at iteration $iter")
             # end
             # if boo
+
             # Update buoyancy
-            @parallel (@idx ni) compute_ρg!(ρg[end], phase_ratios.center, rheology, args)
+            # @parallel (@idx ni) compute_ρg!(ρg[end], phase_ratios.center, rheology, args)
 
             ν = 0.0
             @parallel (@idx ni) compute_viscosity!(
@@ -527,6 +528,7 @@ function JustRelax.solve!(
                 η,
                 η_vep,
                 λ,
+                phase_ratios.center,
                 rheology, # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,

@@ -272,8 +272,8 @@ end
 @parallel_indices (I...) function compute_τ_nonlinear!(
     τ,
     τII,
-    τxx_old,
-    ε, # @ vertices
+    τ_old,
+    ε,
     P,
     η,
     η_vep,
@@ -281,7 +281,7 @@ end
     rheology,
     dt,
     θ_dτ,
-)
+)   
     # numerics
     ηij = η[I...]
     _Gdt = inv(get_G(rheology[1]) * dt)
@@ -290,11 +290,6 @@ end
     # get plastic paremeters (if any...)
     is_pl, C, sinϕ, η_reg = plastic_params(rheology[1])
     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
-
-    τ = τxx, τyy, τzz, τyz, τxz, τxy
-    τ_old = τxx_old, τyy_old, τzz_old, τyzv_old, τxzv_old, τxyv_old
-    ε = εxx, εyy, εzz, εyzv, εxzv, εxyv
-
     _compute_τ_nonlinear!(
         τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
@@ -317,7 +312,7 @@ end
     rheology,
     dt,
     θ_dτ,
-)
+) 
     # numerics
     ηij = @inbounds η[I...]
     phase = @inbounds phase_center[I...]

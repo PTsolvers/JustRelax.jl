@@ -287,7 +287,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             args,
             dt,
             igg;
-            iterMax          = 1e0,
+            iterMax          = 1e1,
             nout             = 1e0,
             viscosity_cutoff = (1e18, 1e24)
         );
@@ -434,5 +434,3 @@ end
 # idxv     = particles.index.data[:];
 
 # scatter(Array(pxv[idxv]), Array(pyv[idxv]), Array(pzv[idxv]), color=Array(clr[idxv]))
-
-# JustRelax.Stokes3D.

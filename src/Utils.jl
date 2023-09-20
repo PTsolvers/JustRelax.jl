@@ -10,8 +10,8 @@ macro idx(args...)
     end
 end
 
-@inline Base.@pure _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
-@inline Base.@pure _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
+@inline _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
+@inline _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
 
 """
     copy(B, A)
@@ -28,7 +28,9 @@ multi_copyto!(B::AbstractArray, A::AbstractArray) = copyto!(B, A)
 
 function detect_arsg_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
     ntuple(Val(Dims)) do i
+        Base.@_inline_meta
         s = ntuple(Val(N)) do j
+            Base.@_inline_meta
             size(A[j], i)
         end
         maximum(s)
@@ -434,7 +436,7 @@ end
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """
 # @inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
-@inline continuation_log(x_new, x_old, ν) = (1 - ν) * x_old + ν * x_new
+@inline continuation_log(x_new, x_old, ν) = muladd((1 - ν), x_old,  ν * x_new) # (1 - ν) * x_old + ν * x_new
 
 # Others
 

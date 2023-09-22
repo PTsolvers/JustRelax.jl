@@ -22,22 +22,24 @@ function _compute_τ_nonlinear!(
         τij, τij_p_o, ηij, εij_p, _Gdt, dτ_r
     )
 
+    # visco-elastic strain rates
+    εij_ve = ntuple(Val(N1)) do i
+        εij_p[i] + 0.5 * τij_p_o[i] * _Gdt
+    end
+
     # get plastic paremeters (if any...)
     (; is_pl, C, sinϕ, η_reg) = plastic_parameters
     Pij = P[idx...]
     τy = C + Pij * sinϕ
 
-    if isyielding(is_pl, τII_trial, τy, Pij)
+    if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
         dτ_pl, λ[idx...] = compute_dτ_pl(
             τij, dτij, τij_p_o, εij_p, τy, τII_trial, ηij, λ[idx...], η_reg, _Gdt, dτ_r
         )
         τij = τij .+ dτ_pl
         correct_stress!(τ, τij, idx...)
-        # visco-elastic strain rates
-        εij_ve = ntuple(Val(N1)) do i
-            εij_p[i] + 0.5 * τij_p_o[i] * _Gdt
-        end
+        
         τII[idx...] = τII_ij = second_invariant(τij...)
         η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
 
@@ -45,14 +47,14 @@ function _compute_τ_nonlinear!(
         τij = τij .+ dτij
         correct_stress!(τ, τij, idx...)
         τII[idx...] = τII_ij = second_invariant(τij...)
-        η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_p...))
+        η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
     end
 
     return nothing
 end
 
 # check if plasticity is active
-@inline isyielding(is_pl, τII_trial, τy, Pij) = is_pl && τII_trial > τy && Pij > 0
+@inline isyielding(is_pl, τII_trial, τy) = is_pl && τII_trial > τy
 
 @inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + ηij * _Gdt + 1.0)
 
@@ -108,8 +110,11 @@ function compute_dτ_pl(
     # yield function
     F = τII_trial - τy
     # Plastic multiplier
-    ν = 0.9
-    λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(ηij + η_reg)
+    ν = 0.1
+    # λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(ηij + η_reg)
+    # λ = (F > 0.0) * F * inv(ηij + η_reg)
+    # λ = (F > 0.0) * F * inv(dτ_r + η_reg)
+    λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(dτ_r + η_reg)
     λ_τII = λ * 0.5 * inv(τII_trial)
 
     dτ_pl = ntuple(Val(N)) do i

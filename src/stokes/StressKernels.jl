@@ -53,6 +53,34 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function compute_τ_vertex!(
+    τxy::AbstractArray{T,2}, τxy_o, εxy, η, θ_dτ, dt, phase_ratios, rheology,
+) where {T}
+    @inline av(A) = _av_a(A, i, j)
+    @inline _f(A, i, j) = fn_ratio(get_G, rheology, A[i, j])
+    function av_Gdt(A)
+        x = 0.0
+        for ii in i:i+1, jj in j:j+1
+            x += _f(A, ii, jj)
+        end
+        inv(x * 0.25 * dt)
+    end
+
+    # Shear components
+    if all((i, j) .< size(τxy) .- 1)
+        av_η_ij = av(η)
+        _av_Gdt = av_Gdt(phase_ratios)
+        denominator = inv(θ_dτ + av_η_ij * _av_Gdt + 1.0)
+        τxy[i + 1, j + 1] +=
+            (
+                -(τxy[i + 1, j + 1] - τxy_o[i + 1, j + 1]) * av_η_ij * _av_Gdt +
+                2.0 * av_η_ij * εxy[i + 1, j + 1]
+            ) * denominator
+    end
+
+    return nothing
+end
+
 @parallel_indices (i, j, k) function compute_τ!(
     τxx,
     τyy,
@@ -324,7 +352,7 @@ end
     η,
     η_vep,
     λ,
-    phase_ratios::PhaseRatio,
+    phase_ratios,
     rheology,
     dt,
     θ_dτ,
@@ -334,7 +362,7 @@ end
     # numerics
     ηij = @inbounds η[I...]
     phase = @inbounds phase_ratios[I...]
-    G = fn_ratio(get_G, MatParam, phase)
+    G = fn_ratio(get_G, rheology, phase)
     _Gdt = inv(G * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
@@ -355,7 +383,6 @@ end
         P,
         ηij,
         η_vep,
-        phase_ratios,
         λ,
         dτ_r,
         _Gdt,

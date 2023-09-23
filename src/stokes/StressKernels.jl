@@ -68,14 +68,16 @@ end
 
     # Shear components
     if all((i, j) .< size(τxy) .- 1)
+        I = i + 1, j + 1
         av_η_ij = av(η)
-        _av_Gdt = av_Gdt(phase_ratios)
-        denominator = inv(θ_dτ + av_η_ij * _av_Gdt + 1.0)
-        τxy[i + 1, j + 1] +=
+
+        denominator = inv(θ_dτ + 1.0)
+
+        τxy[I...] +=
             (
-                -(τxy[i + 1, j + 1] - τxy_o[i + 1, j + 1]) * av_η_ij * _av_Gdt +
-                2.0 * av_η_ij * εxy[i + 1, j + 1]
+                -τxy[I...] + 2.0 * av_η_ij * εxy[I...]
             ) * denominator
+
     end
 
     return nothing

@@ -15,16 +15,16 @@ function _compute_τ_nonlinear!(
 ) where {N1,N2,T}
 
     # cache tensors
-    τij, τij_p_o, εij_p = cache_tensors(τ, τ_old, ε, idx...)
+    τij, τij_o, εij = cache_tensors(τ, τ_old, ε, idx...)
 
     # Stress increment and trial stress
     dτij, τII_trial = compute_stress_increment_and_trial(
-        τij, τij_p_o, ηij, εij_p, _Gdt, dτ_r
+        τij, τij_o, ηij, εij, _Gdt, dτ_r
     )
 
     # visco-elastic strain rates
     εij_ve = ntuple(Val(N1)) do i
-        εij_p[i] + 0.5 * τij_p_o[i] * _Gdt
+        εij[i] + 0.5 * τij_o[i] * _Gdt
     end
 
     # get plastic paremeters (if any...)
@@ -35,7 +35,7 @@ function _compute_τ_nonlinear!(
     if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
         dτ_pl, λ[idx...] = compute_dτ_pl(
-            τij, dτij, τij_p_o, εij_p, τy, τII_trial, ηij, λ[idx...], η_reg, _Gdt, dτ_r
+            τij, dτij, τij_o, εij, τy, τII_trial, ηij, λ[idx...], η_reg, _Gdt, dτ_r
         )
         τij = τij .+ dτ_pl
         correct_stress!(τ, τij, idx...)
@@ -65,8 +65,9 @@ function cache_tensors(
     @inline av_shear(A) = 0.25 * sum(_gather(A, idx...))
 
     εij = ε[1][idx...], ε[2][idx...], av_shear(ε[3])
-    τij_o = τ_old[1][idx...], τ_old[2][idx...], av_shear(τ_old[3])
+    # τij_o = τ_old[1][idx...], τ_old[2][idx...], av_shear(τ_old[3])
     τij = getindex.(τ, idx...)
+    τij_o = getindex.(τ_old, idx...)
 
     return τij, τij_o, εij
 end
@@ -105,12 +106,12 @@ function compute_stress_increment_and_trial(
 end
 
 function compute_dτ_pl(
-    τij::NTuple{N,T}, dτij, τij_p_o, εij_p, τy, τII_trial, ηij, λ0, η_reg, _Gdt, dτ_r
+    τij::NTuple{N,T}, dτij, τij_o, εij, τy, τII_trial, ηij, λ0, η_reg, _Gdt, dτ_r
 ) where {N,T}
     # yield function
     F = τII_trial - τy
     # Plastic multiplier
-    ν = 0.1
+    ν = 1e-2
     # λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(ηij + η_reg)
     # λ = (F > 0.0) * F * inv(ηij + η_reg)
     # λ = (F > 0.0) * F * inv(dτ_r + η_reg)
@@ -122,7 +123,7 @@ function compute_dτ_pl(
         # derivatives of the plastic potential
         λdQdτ = (τij[i] + dτij[i]) * λ_τII
         # corrected stress
-        # dτ_r * (-(τij[i] - τij_p_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij_p[i] - λdQdτ))
+        # dτ_r * (-(τij[i] - τij_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij[i] - λdQdτ))
         dτij[i] - dτ_r * 2.0 * ηij * λdQdτ
     end
     return dτ_pl, λ

@@ -518,6 +518,9 @@ function JustRelax.solve!(
         @parallel (@idx ni .+ 1)  multi_copy!(
             @tensor(stokes.τ_o), @tensor(stokes.τ),
         )
+        @parallel (@idx ni)  multi_copy!(
+            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ),
+        )
     end
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -552,7 +555,7 @@ function JustRelax.solve!(
                 @copy η0 η
             end
             # if do_visc
-                ν = 1e-2
+                ν = 1e0
                 @timeit to "viscosity" compute_viscosity!(
                     η,
                     ν,
@@ -564,11 +567,10 @@ function JustRelax.solve!(
                 )
             # end
 
-
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ)...,
                 stokes.τ.II,
-                @tensor(stokes.τ_o)...,
+                @tensor_center(stokes.τ_o)...,
                 @strain(stokes)...,
                 stokes.P,
                 η,
@@ -580,18 +582,18 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            # @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            
-            @parallel (@idx ni) compute_τ_vertex!(
-                stokes.τ.xy,
-                stokes.τ_o.xy,
-                stokes.ε.xy,
-                η,
-                pt_stokes.θ_dτ,
-                dt,
-                phase_ratios.center,
-                rheology
-            )
+            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+
+            # @parallel (@idx ni) compute_τ_vertex!(
+            #     stokes.τ.xy,
+            #     stokes.τ_o.xy,
+            #     stokes.ε.xy,
+            #     η,
+            #     pt_stokes.θ_dτ,
+            #     dt,
+            #     phase_ratios.center,
+            #     rheology
+            # )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(

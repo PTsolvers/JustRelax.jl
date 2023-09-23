@@ -363,8 +363,9 @@ end
     ηij = @inbounds η[I...]
     phase = @inbounds phase_ratios[I...]
     G = fn_ratio(get_G, rheology, phase)
+    _Gdτ  = inv(ηij * θ_dτ)
     _Gdt = inv(G * dt)
-    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
+    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdτ)
 
     # get plastic paremeters (if any...)
     is_pl, C, sinϕ, η_reg = plastic_params_phase(rheology, phase)

@@ -5,10 +5,11 @@ using Printf, GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
-model  = PS_Setup(:gpu, Float64, 2)
+model  = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
+solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
 function init_phases!(phase_ratios, xci, radius)
@@ -52,9 +53,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     G0      = 1.0           # elastic shear modulus
     Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
     εbg     = 1.0           # background strain-rate
-    η_reg   = 8e-3        # regularisation "viscosity"
+    η_reg   = 8e-3          # regularisation "viscosity"
+    # η_reg   = 1.25e-2       # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
-
+    # dt      *= 0.1
     el_bg   = ConstantElasticity(; G=G0, ν=0.5)
     el_inc  = ConstantElasticity(; G=Gi, ν=0.5)
     visc    = LinearViscous(; η=η0) 
@@ -93,7 +95,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-9,  CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.25 / √2.1)
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
@@ -108,7 +110,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Boundary conditions
     flow_bcs             = FlowBoundaryConditions(; 
-        free_slip = (left = false, right = false, top = false, bot=false),
+        free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
     stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
@@ -121,8 +123,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 1.5
+    tmax  = 2.5
     τII = Float64[]
+    sol = Float64[]
 
     # while it < 10
     while t < tmax
@@ -151,6 +154,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         it += 1
         t  += dt
 
+        push!(sol, solution(εbg, t, G0, η0))
+
         println("it = $it; t = $t \n")
 
         # visualisation
@@ -167,7 +172,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         heatmap!(ax2, xci..., Array(η_vep) , colormap=:batlow)
         heatmap!(ax3, xci..., Array(λ .!= 0) , colormap=:batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-        lines!(ax4, τII) 
+        lines!(ax4, τII, color = :black) 
+        lines!(ax4, sol, color = :red) 
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)
@@ -179,8 +185,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     return nothing
 end
 
-figdir = "ShearBand"
-n      = 64 + 2
+figdir = "ShearBand2"
+n      = 128 + 2
 nx     = n - 2
 ny     = n - 2
 igg  = if !(JustRelax.MPI.Initialized())

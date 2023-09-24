@@ -1,7 +1,7 @@
 # using CUDA
 # CUDA.allowscalar(false)
 
-using Printf, GeoParams, GLMakie, CellArrays
+using Printf, GeoParams, GLMakie, CellArrays, CSV, DataFrames
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
@@ -53,7 +53,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     G0      = 1.0           # elastic shear modulus
     Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
     εbg     = 1.0           # background strain-rate
-    η_reg   = 8e-3          # regularisation "viscosity"
+    η_reg   = 8e-3 * 0          # regularisation "viscosity"
     # η_reg   = 1.25e-2       # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     # dt      *= 0.1
@@ -95,7 +95,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.25 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-8,  CFL = 0.25 / √2.1)
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
@@ -123,15 +123,16 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 2.5
-    τII = Float64[]
-    sol = Float64[]
-
+    tmax  = 3
+    τII   = Float64[]
+    sol   = Float64[]
+    ttot  = Float64[]
+    iterations = Int64[]
     # while it < 10
     while t < tmax
 
         # Stokes solver ----------------
-        λ = solve!(
+        λ, iters = solve!(
             stokes,
             pt_stokes,
             di,
@@ -144,7 +145,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             args,
             dt,
             igg;
-            iterMax          = 50e3,
+            iterMax          = 150e3,
             nout             = 1e3,
             viscosity_cutoff = (-Inf, Inf)
         )
@@ -155,25 +156,27 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         t  += dt
 
         push!(sol, solution(εbg, t, G0, η0))
+        push!(ttot, t)
+        push!(iterations, iters)
 
         println("it = $it; t = $t \n")
 
         # visualisation
-        th = 0:pi/50:3*pi;
+        th    = 0:pi/50:3*pi;
         xunit = @. 0.1 * cos(th) + 0.5;
         yunit = @. 0.1 * sin(th) + 0.5;
 
-        fig = Figure(resolution = (1600, 1600), title = "t = $t")
-        ax1 = Axis(fig[1,1], aspect = 1, title = "τII")
-        ax2 = Axis(fig[2,1], aspect = 1, title = "η_vep")
-        ax3 = Axis(fig[1,2], aspect = 1, title = "λ")
-        ax4 = Axis(fig[2,2], aspect = 1)
+        fig   = Figure(resolution = (1600, 1600), title = "t = $t")
+        ax1   = Axis(fig[1,1], aspect = 1, title = "τII")
+        ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
+        ax3   = Axis(fig[1,2], aspect = 1, title = "λ")
+        ax4   = Axis(fig[2,2], aspect = 1)
         heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
         heatmap!(ax2, xci..., Array(η_vep) , colormap=:batlow)
         heatmap!(ax3, xci..., Array(λ .!= 0) , colormap=:batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-        lines!(ax4, τII, color = :black) 
-        lines!(ax4, sol, color = :red) 
+        lines!(ax4, ttot, τII, color = :black) 
+        lines!(ax4, ttot, sol, color = :red) 
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)
@@ -182,13 +185,22 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     end
 
+    df = DataFrame(
+        t = ttot,
+        τII = τII,
+        sol = sol,
+        iterations = iterations
+    )
+
+    CSV.write(joinpath(figdir, "data_$(nx).csv"), df)
+
     return nothing
 end
 
-figdir = "ShearBand2"
-n      = 128 + 2
+n      = 256 + 2
 nx     = n - 2
 ny     = n - 2
+figdir = "ShearBand_vertex_DP_$n"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
 else

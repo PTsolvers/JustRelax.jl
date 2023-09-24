@@ -142,9 +142,7 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(
-                stokes.∇V, @velocity(stokes)..., _di...
-            )
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel compute_P!(
                 stokes.P,
                 stokes.P0,
@@ -157,10 +155,7 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
             )
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                stokes.∇V,
-                @strain(stokes)...,
-                @velocity(stokes)...,
-                _di...,
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
             @parallel (@idx ni .+ 1) compute_τ!(
                 @stress(stokes)...,
@@ -263,7 +258,7 @@ function JustRelax.solve!(
 
     # ~preconditioner
     ητ = deepcopy(η)
-    
+
     # errors
     err = 2 * ϵ
     iter = 0
@@ -308,9 +303,15 @@ function JustRelax.solve!(
 
             ν = 1e-3
             @parallel (@idx ni) compute_viscosity!(
-                η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, viscosity_cutoff
+                η,
+                1.0,
+                phase_ratios.center,
+                @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
             )
-            
+
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
                 stokes.τ.II,
@@ -324,7 +325,6 @@ function JustRelax.solve!(
                 dt,
                 pt_stokes.θ_dτ,
             )
-            
 
             @parallel (@idx ni .+ 1) compute_τ_vertex!(
                 @shear(stokes.τ)...,
@@ -417,7 +417,7 @@ function JustRelax.solve!(
     nout=500,
     b_width=(4, 4, 4),
     verbose=true,
-    viscosity_cutoff = (-Inf, Inf)
+    viscosity_cutoff=(-Inf, Inf),
 ) where {A,B,C,D,T,N}
 
     ## UNPACK
@@ -483,14 +483,20 @@ function JustRelax.solve!(
             #     println("Going non-linear at iteration $iter")
             # end
             # if boo
-                # Update buoyancy
-                # @parallel (@idx ni) compute_ρg!(
-                #     ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P)
-                # )
+            # Update buoyancy
+            # @parallel (@idx ni) compute_ρg!(
+            #     ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P)
+            # )
 
             ν = 1e-3
             @parallel (@idx ni) compute_viscosity!(
-                η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, viscosity_cutoff
+                η,
+                1.0,
+                phase_ratios.center,
+                @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
             )
             # end
 

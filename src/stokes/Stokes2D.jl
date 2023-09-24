@@ -513,13 +513,11 @@ function JustRelax.solve!(
     η0 = deepcopy(η)
     do_visc = true
     GC.enable(false)
-    
+
     if !isinf(dt)
-        @parallel (@idx ni .+ 1)  multi_copy!(
-            @tensor(stokes.τ_o), @tensor(stokes.τ),
-        )
-        @parallel (@idx ni)  multi_copy!(
-            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ),
+        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        @parallel (@idx ni) multi_copy!(
+            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
         )
     end
 
@@ -555,16 +553,16 @@ function JustRelax.solve!(
                 @copy η0 η
             end
             # if do_visc
-                ν = 1e0
-                @timeit to "viscosity" compute_viscosity!(
-                    η,
-                    ν,
-                    phase_ratios.center,
-                    @strain(stokes)...,
-                    args,
-                    rheology,
-                    viscosity_cutoff,
-                )
+            ν = 1e0
+            @timeit to "viscosity" compute_viscosity!(
+                η,
+                ν,
+                phase_ratios.center,
+                @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
+            )
             # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -592,7 +590,7 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
                 dt,
                 phase_ratios.center,
-                rheology
+                rheology,
             )
 
             @hide_communication b_width begin # communication/computation overlap

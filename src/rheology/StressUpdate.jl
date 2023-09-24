@@ -18,9 +18,7 @@ function _compute_τ_nonlinear!(
     τij, τij_o, εij = cache_tensors(τ, τ_old, ε, idx...)
 
     # Stress increment and trial stress
-    dτij, τII_trial = compute_stress_increment_and_trial(
-        τij, τij_o, ηij, εij, _Gdt, dτ_r
-    )
+    dτij, τII_trial = compute_stress_increment_and_trial(τij, τij_o, ηij, εij, _Gdt, dτ_r)
 
     # visco-elastic strain rates
     εij_ve = ntuple(Val(N1)) do i
@@ -39,7 +37,7 @@ function _compute_τ_nonlinear!(
         )
         τij = τij .+ dτ_pl
         correct_stress!(τ, τij, idx...)
-        
+
         τII[idx...] = τII_ij = second_invariant(τij...)
         η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
 

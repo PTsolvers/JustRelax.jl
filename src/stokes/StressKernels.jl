@@ -54,16 +54,16 @@ end
 end
 
 @parallel_indices (i, j) function compute_τ_vertex!(
-    τxy::AbstractArray{T,2}, τxy_o, εxy, η, θ_dτ, dt, phase_ratios, rheology,
+    τxy::AbstractArray{T,2}, τxy_o, εxy, η, θ_dτ, dt, phase_ratios, rheology
 ) where {T}
     @inline av(A) = _av_a(A, i, j)
     @inline _f(A, i, j) = fn_ratio(get_G, rheology, A[i, j])
     function av_Gdt(A)
         x = 0.0
-        for ii in i:i+1, jj in j:j+1
+        for ii in i:(i + 1), jj in j:(j + 1)
             x += _f(A, ii, jj)
         end
-        inv(x * 0.25 * dt)
+        return inv(x * 0.25 * dt)
     end
 
     # Shear components
@@ -73,11 +73,7 @@ end
 
         denominator = inv(θ_dτ + 1.0)
 
-        τxy[I...] +=
-            (
-                -τxy[I...] + 2.0 * av_η_ij * εxy[I...]
-            ) * denominator
-
+        τxy[I...] += (-τxy[I...] + 2.0 * av_η_ij * εxy[I...]) * denominator
     end
 
     return nothing
@@ -440,7 +436,7 @@ end
     rheology,
     dt,
     θ_dτ,
-) 
+)
     # numerics
     ηij = @inbounds η[I...]
     phase = @inbounds phase_center[I...]
@@ -458,8 +454,10 @@ end
 end
 
 ## Stress invariants 
-@parallel_indices (I...) function tensor_invariant_center!(II, tensor::NTuple{N, T}) where {N, T}
-    II[I...] = second_invariant_staggered(getindex(tensor,I...)...)
+@parallel_indices (I...) function tensor_invariant_center!(
+    II, tensor::NTuple{N,T}
+) where {N,T}
+    II[I...] = second_invariant_staggered(getindex(tensor, I...)...)
     return nothing
 end
 

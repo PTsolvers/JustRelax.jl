@@ -94,7 +94,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     stokes       = StokesArrays(ni, ViscoElastic)
     pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-4,  CFL = 0.75 / √3.1)
     # Buoyancy forces
-    ρg           = @zeros(ni...), @zeros(ni...)
+    ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = dt)
     # Rheology
     η            = @ones(ni...)
@@ -107,6 +107,13 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     flow_bcs      = FlowBoundaryConditions(; 
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
+    )
+    flow_bcs = FlowBoundaryConditions(;
+        free_slip=(left=true, right=true, top=true, bot=true, back=true, front=true),
+        no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
+        periodicity=(
+            left=false, right=false, top=false, bot=false, back=false, front=false
+        ),
     )
     stokes.V.Vx  .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
     stokes.V.Vz  .= PTArray([-z*εbg for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
@@ -144,7 +151,6 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             nout             = 1e3,
             viscosity_cutoff = (-Inf, Inf)
         )
-        @show maximum(stokes.τ.II)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -157,9 +163,9 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         println("it = $it; t = $t \n")
 
         # visualisation
-        th    = 0:pi/50:3*pi;
-        xunit = @. 0.1 * cos(th) + 0.5;
-        yunit = @. 0.1 * sin(th) + 0.5;
+        th      = 0:pi/50:3*pi;
+        xunit   = @. 0.1 * cos(th) + 0.5;
+        yunit   = @. 0.1 * sin(th) + 0.5;
 
         i_slice = div(nx, 2) |> Int
         fig     = Figure(resolution = (1600, 1600), title = "t = $t")
@@ -167,9 +173,9 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
         ax3     = Axis(fig[1,2], aspect = 1, title = "λ")
         ax4     = Axis(fig[2,2], aspect = 1)
-        heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(η_vep) , colormap=:batlow)
-        heatmap!(ax3, xci..., Array(λ .!= 0) , colormap=:batlow)
+        heatmap!(ax1, xci..., Array(stokes.τ.II[:, i_slice, :]) , colormap=:batlow)
+        heatmap!(ax2, xci..., Array(η_vep[:, i_slice, :]) , colormap=:batlow)
+        # heatmap!(ax3, xci..., Array(λ .!= 0) , colormap=:batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black) 
         lines!(ax4, ttot, sol, color = :red) 

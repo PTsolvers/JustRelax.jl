@@ -104,10 +104,6 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     )
 
     # Boundary conditions
-    flow_bcs      = FlowBoundaryConditions(; 
-        free_slip = (left = true, right = true, top = true, bot = true),
-        no_slip   = (left = false, right = false, top = false, bot=false),
-    )
     flow_bcs = FlowBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true, back=true, front=true),
         no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
@@ -134,7 +130,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     while t < tmax
 
         # Stokes solver ----------------
-        λ, iters = solve!(
+        solve!(
             stokes,
             pt_stokes,
             di,
@@ -199,7 +195,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n            = 64 + 2
+n            = 16 + 2
 nx = ny = nz = n - 2
 figdir       = "ShearBand_vertex_DP_$n"
 igg          = if !(JustRelax.MPI.Initialized())

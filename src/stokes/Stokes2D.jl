@@ -568,10 +568,10 @@ function JustRelax.solve!(
             # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
-                @tensor_center(stokes.τ)...,
+                @tensor_center(stokes.τ),
                 stokes.τ.II,
-                @tensor_center(stokes.τ_o)...,
-                @strain(stokes)...,
+                @tensor_center(stokes.τ_o),
+                @strain(stokes),
                 stokes.P,
                 η,
                 η_vep,
@@ -582,18 +582,18 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            # @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
 
-            # @parallel (@idx ni) compute_τ_vertex!(
-            #     stokes.τ.xy,
-            #     stokes.τ_o.xy,
-            #     stokes.ε.xy,
-            #     η,
-            #     pt_stokes.θ_dτ,
-            #     dt,
-            #     phase_ratios.center,
-            #     rheology
-            # )
+            @parallel (@idx ni) compute_τ_vertex!(
+                stokes.τ.xy,
+                stokes.τ_o.xy,
+                stokes.ε.xy,
+                η_vep,
+                pt_stokes.θ_dτ,
+                dt,
+                phase_ratios.center,
+                rheology
+            )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -659,7 +659,7 @@ function JustRelax.solve!(
     #     norm_Ry=norm_Ry,
     #     norm_∇V=norm_∇V,
     # )
-    return λ
+    return λ, iter
 end
 
 function JustRelax.solve!(

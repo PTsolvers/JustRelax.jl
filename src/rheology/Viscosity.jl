@@ -158,7 +158,7 @@ end
         εII = second_invariant(εij...)
 
         # update stress and effective viscosity
-        ηi = compute_viscosity_εII(rheology, ratio_ijk, εII, args_ijk)
+        ηi = compute_phase_viscosity_εII(rheology, ratio_ijk, εII, args_ijk)
         ηi = continuation_log(ηi, η[i, j, k], ν)
         η[i, j, k] = clamp(ηi, cutoff...)
     end

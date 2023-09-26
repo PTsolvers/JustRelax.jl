@@ -491,7 +491,7 @@ function JustRelax.solve!(
             ν = 1e-3
             @parallel (@idx ni) compute_viscosity!(
                 η,
-                1.0,
+                ν,
                 phase_ratios.center,
                 @strain(stokes)...,
                 args,

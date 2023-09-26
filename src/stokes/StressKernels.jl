@@ -186,35 +186,28 @@ end
     @inbounds begin
         # Compute τ_xy
         if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
-            _Gdt = inv(av_xy(G) * dt)
             η_ij = harm_xy(η)
-            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
+            denominator = inv(θ_dτ + 1.0)
             τxy[i, j, k] +=
-                (
-                    -(get(τxy) - get(τxy_o)) * η_ij * _Gdt - get(τxy) +
-                    2.0 * η_ij * get(εxy)
-                ) * denominator
+                (-get(τxy) + 2.0 * η_ij * get(εxy)) * denominator
         end
+        
         # Compute τ_xz
         if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
-            _Gdt = inv(av_xz(G) * dt)
             η_ij = harm_xz(η)
-            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
+            denominator = inv(θ_dτ + 1.0)
             τxz[i, j, k] +=
                 (
-                    -(get(τxz) - get(τxz_o)) * η_ij * _Gdt - get(τxz) +
-                    2.0 * η_ij * get(εxz)
+                    - get(τxz) + 2.0 * η_ij * get(εxz)
                 ) * denominator
         end
         # Compute τ_yz
         if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
-            _Gdt = inv(av_yz(G) * dt)
             η_ij = harm_yz(η)
-            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
+            denominator = inv(θ_dτ + 1.0)
             τyz[i, j, k] +=
                 (
-                    -(get(τyz) - get(τyz_o)) * η_ij * _Gdt - get(τyz) +
-                    2.0 * η_ij * get(εyz)
+                    - get(τyz) + 2.0 * η_ij * get(εyz)
                 ) * denominator
         end
     end
@@ -224,67 +217,40 @@ end
 @parallel_indices (i, j, k) function compute_τ_vertex!(
     τyz, τxz, τxy, τyz_o, τxz_o, τxy_o, εyz, εxz, εxy, η, rheology, phase_ratios, dt, θ_dτ
 )
-    get(x) = x[i, j, k]
-    harm_xy(A) = _harm_xyi(A, i, j, k)
-    harm_xz(A) = _harm_xzi(A, i, j, k)
-    harm_yz(A) = _harm_yzi(A, i, j, k)
-    @inline _f(A, i, j, k) = fn_ratio(get_G, rheology, A[i, j, k])
-    #! format: off
-    function av_Gdt_xy(A)
-        x = 0.0
-        for ii in (i - 1):i, jj in (j - 1):j, kk in k:k
-            x += _f(A, ii, jj, kk)
-        end
-        inv(x * 0.25 * dt)
-    end
-    function av_Gdt_xz(A)
-        x = 0.0
-        for ii in (i - 1):i, jj in j:j, kk in (k - 1):k
-            x += _f(A, ii, jj, kk)
-        end
-        inv(x * 0.25 * dt)
-    end
-    function av_Gdt_yz(A)
-        x = 0.0
-        for ii in i:i, jj in (j - 1):j, kk in (k - 1):k
-            x += _f(A, ii, jj, kk)
-        end
-        inv(x * 0.25 * dt)
-    end
-    #! format: on
+    I = i, j, k 
+    harm_xy(A) = _harm_xyi(A, I...)
+    harm_xz(A) = _harm_xzi(A, I...)
+    harm_yz(A) = _harm_yzi(A, I...)
+    av_xy(A) = _av_xyi(A, I...)
+    av_xz(A) = _av_xzi(A, I...)
+    av_yz(A) = _av_yzi(A, I...)
 
     @inbounds begin
         # Compute τ_xy
         if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
-            _Gdt = av_Gdt_xy(phase_ratios)
-            η_ij = harm_xy(η)
-            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-            τxy[i, j, k] +=
+            η_ij = av_xy(η)
+            denominator = inv(θ_dτ + 1.0)
+            τxy[I...] +=
                 (
-                    -(get(τxy) - get(τxy_o)) * η_ij * _Gdt - get(τxy) +
-                    2.0 * η_ij * get(εxy)
+                    -τxy[I...] + 2.0 * η_ij * εxy[I...]
                 ) * denominator
         end
         # Compute τ_xz
         if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
-            _Gdt = av_Gdt_xz(phase_ratios)
-            η_ij = harm_xz(η)
-            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-            τxz[i, j, k] +=
+            η_ij = av_xz(η)
+            denominator = inv(θ_dτ + 1.0)
+            τxz[I...] +=
                 (
-                    -(get(τxz) - get(τxz_o)) * η_ij * _Gdt - get(τxz) +
-                    2.0 * η_ij * get(εxz)
+                    -τxz[I...] + 2.0 * η_ij * εxz[I...]
                 ) * denominator
         end
         # Compute τ_yz
         if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
-            _Gdt = av_Gdt_yz(phase_ratios)
-            η_ij = harm_yz(η)
-            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-            τyz[i, j, k] +=
+            η_ij = av_yz(η)
+            denominator = inv(θ_dτ + 1.0)
+            τyz[I...] +=
                 (
-                    -(get(τyz) - get(τyz_o)) * η_ij * _Gdt - get(τyz) +
-                    2.0 * η_ij * get(εyz)
+                    -τyz[I...] + 2.0 * η_ij * εyz[I...]
                 ) * denominator
         end
     end

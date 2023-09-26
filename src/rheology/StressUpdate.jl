@@ -21,32 +21,28 @@ function _compute_τ_nonlinear!(
     dτij, τII_trial = compute_stress_increment_and_trial(τij, τij_o, ηij, εij, _Gdt, dτ_r)
 
     # visco-elastic strain rates
-    εij_ve = ntuple(Val(N1)) do i
-        εij[i] + 0.5 * τij_o[i] * _Gdt
-    end
+    εij_ve = @. εij + 0.5 * τij_o * _Gdt
 
     # get plastic paremeters (if any...)
     (; is_pl, C, sinϕ, η_reg) = plastic_parameters
-    Pij = P[idx...]
-    τy = C + Pij * sinϕ
+    τy = C + P[idx...] * sinϕ
 
-    if isyielding(is_pl, τII_trial, τy)
+    dτij = if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
         dτ_pl, λ[idx...] = compute_dτ_pl(
             τij, dτij, τij_o, εij, τy, τII_trial, ηij, λ[idx...], η_reg, _Gdt, dτ_r
         )
-        τij = τij .+ dτ_pl
-        correct_stress!(τ, τij, idx...)
-
-        τII[idx...] = τII_ij = second_invariant(τij...)
-        η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
+        dτ_pl
 
     else
-        τij = τij .+ dτij
-        correct_stress!(τ, τij, idx...)
-        τII[idx...] = τII_ij = second_invariant(τij...)
-        η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
+        dτij
+        
     end
+
+    τij = τij .+ dτij
+    correct_stress!(τ, τij, idx...)
+    τII[idx...] = τII_ij = second_invariant(τij...)
+    η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
 
     return nothing
 end

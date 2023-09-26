@@ -47,13 +47,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Physical properties using GeoParams ----------------
     τ_y     = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ       = 30            # friction angle
+    ϕ       = 30*0            # friction angle
     C       = τ_y           # Cohesion
     η0      = 1.0           # viscosity
     G0      = 1.0           # elastic shear modulus
     Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
     εbg     = 1.0           # background strain-rate
-    η_reg   = 8e-3 * 0          # regularisation "viscosity"
+    η_reg   = 8e-3*0          # regularisation "viscosity"
     # η_reg   = 1.25e-2       # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     # dt      *= 0.1
@@ -95,7 +95,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-8,  CFL = 0.25 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-8,  CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
@@ -145,7 +145,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             args,
             dt,
             igg;
-            iterMax          = 150e3,
+            verbose          = false,
+            iterMax          = 250e3,
             nout             = 1e3,
             viscosity_cutoff = (-Inf, Inf)
         )
@@ -197,10 +198,11 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     return nothing
 end
 
-n      = 256 + 2
+N      = parse(Int, ARGS[1]) 
+n      = N + 2
 nx     = n - 2
 ny     = n - 2
-figdir = "ShearBand_vertex_DP_$n"
+figdir = "ShearBand2D/ShearBand_center_VM_$n"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
 else

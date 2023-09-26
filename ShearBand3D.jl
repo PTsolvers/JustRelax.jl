@@ -53,7 +53,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     G0          = 1.0           # elastic shear modulus
     Gi          = G0/(6.0-4.0)  # elastic shear modulus perturbation
     εbg         = 1.0           # background strain-rate
-    η_reg       = 8e-3 * 0          # regularisation "viscosity"
+    η_reg       = 8e-3          # regularisation "viscosity"
     # η_reg   = 1.25e-2       # regularisation "viscosity"
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
@@ -92,7 +92,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes       = StokesArrays(ni, ViscoElastic)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-4,  CFL = 0.75 / √3.1)
+    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-4,  CFL = 0.05 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = dt)
@@ -154,7 +154,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
-        push!(iterations, iters)
+        # push!(iterations, iters)
 
         println("it = $it; t = $t \n")
 
@@ -167,16 +167,16 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         fig     = Figure(resolution = (1600, 1600), title = "t = $t")
         ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
         ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
-        ax3     = Axis(fig[1,2], aspect = 1, title = "λ")
+        # ax3     = Axis(fig[1,2], aspect = 1, title = "λ")
         ax4     = Axis(fig[2,2], aspect = 1)
-        heatmap!(ax1, xci..., Array(stokes.τ.II[:, i_slice, :]) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(η_vep[:, i_slice, :]) , colormap=:batlow)
+        heatmap!(ax1, xci[1], xci[3], Array(stokes.τ.II[:, i_slice, :]) , colormap=:batlow)
+        heatmap!(ax2, xci[1], xci[3], Array(η_vep[:, i_slice, :]) , colormap=:batlow)
         # heatmap!(ax3, xci..., Array(λ .!= 0) , colormap=:batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black) 
         lines!(ax4, ttot, sol, color = :red) 
         hidexdecorations!(ax1)
-        hidexdecorations!(ax3)
+        # hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)
         # display(fig)
         # fig
@@ -187,7 +187,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         t = ttot,
         τII = τII,
         sol = sol,
-        iterations = iterations
+        # iterations = iterations
     )
 
     CSV.write(joinpath(figdir, "data_$(nx).csv"), df)
@@ -195,12 +195,13 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n            = 16 + 2
+N            = parse(Int, ARGS[1]) 
+n            = N + 2
 nx = ny = nz = n - 2
-figdir       = "ShearBand_vertex_DP_$n"
+figdir       = "ShearBand3D/ShearBand_vertex_$n"
 igg          = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
 else
     igg
 end
-# main(igg; figdir = figdir, nx = nx, ny = ny, nz = nz);
+main(igg; figdir = figdir, nx = nx, ny = ny, nz = nz);

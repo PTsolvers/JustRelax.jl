@@ -104,11 +104,11 @@ end
 
     if all((i, j) .< size(Vx) .- 1)
         Vx[i + 1, j + 1] +=
-            (-d_xa(P) + d_xa(τxx) + d_yi(τxy) - av_xa(ρgx)) * ηdτ / harm_xa(ητ)
+            (-d_xa(P) + d_xa(τxx) + d_yi(τxy) - av_xa(ρgx)) * ηdτ / av_xa(ητ)
     end
     if all((i, j) .< size(Vy) .- 1)
         Vy[i + 1, j + 1] +=
-            (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy)) * ηdτ / harm_ya(ητ)
+            (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy)) * ηdτ / av_ya(ητ)
     end
     return nothing
 end

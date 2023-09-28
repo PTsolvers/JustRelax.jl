@@ -89,15 +89,11 @@ function JustRelax.solve!(
 
     # ~preconditioner
     ητ = deepcopy(η)
-    # @hide_communication b_width begin # communication/computation overlap
-    #     @parallel compute_maxloc!(ητ, η)
-    #     update_halo!(ητ)
-    # end
     compute_maxloc!(ητ, η)
     update_halo!(ητ)
-    @parallel (1:size(ητ, 2), 1:size(ητ, 3)) free_slip_x!(ητ)
-    @parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
-    @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
+    # @parallel (1:size(ητ, 2), 1:size(ητ, 3)) free_slip_x!(ητ)
+    # @parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
+    # @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
 
     # errors
     err = 2 * ϵ
@@ -114,9 +110,7 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(
-                stokes.∇V, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, _di...
-            )
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel compute_P!(
                 stokes.P,
                 stokes.P0,
@@ -129,37 +123,12 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
             )
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                stokes.∇V,
-                stokes.ε.xx,
-                stokes.ε.yy,
-                stokes.ε.zz,
-                stokes.ε.yz,
-                stokes.ε.xz,
-                stokes.ε.xy,
-                stokes.V.Vx,
-                stokes.V.Vy,
-                stokes.V.Vz,
-                _di...,
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
             @parallel (@idx ni .+ 1) compute_τ!(
-                stokes.τ.xx,
-                stokes.τ.yy,
-                stokes.τ.zz,
-                stokes.τ.yz,
-                stokes.τ.xz,
-                stokes.τ.xy,
-                stokes.τ_o.xx,
-                stokes.τ_o.yy,
-                stokes.τ_o.zz,
-                stokes.τ_o.yz,
-                stokes.τ_o.xz,
-                stokes.τ_o.xy,
-                stokes.ε.xx,
-                stokes.ε.yy,
-                stokes.ε.zz,
-                stokes.ε.yz,
-                stokes.ε.xz,
-                stokes.ε.xy,
+                @stress(stokes)...,
+                @tensor(stokes.τ_o)...,
+                @strain(stokes)...,
                 η,
                 G,
                 dt,
@@ -167,22 +136,13 @@ function JustRelax.solve!(
             )
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
-                    stokes.V.Vx,
-                    stokes.V.Vy,
-                    stokes.V.Vz,
+                    @velocity(stokes)...,
                     stokes.R.Rx,
                     stokes.R.Ry,
                     stokes.R.Rz,
                     stokes.P,
-                    ρg[1],
-                    ρg[2],
-                    ρg[3],
-                    stokes.τ.xx,
-                    stokes.τ.yy,
-                    stokes.τ.zz,
-                    stokes.τ.yz,
-                    stokes.τ.xz,
-                    stokes.τ.xy,
+                    ρg...,
+                    @stress(stokes)...,
                     ητ,
                     pt_stokes.ηdτ,
                     _di...,
@@ -266,13 +226,6 @@ function JustRelax.solve!(
 
     # ~preconditioner
     ητ = deepcopy(η)
-    # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
-    update_halo!(ητ)
-    # end
-    # @parallel (1:ny, 1:nz) free_slip_x!(ητ)
-    # @parallel (1:nx, 1:nz) free_slip_y!(ητ)
-    # @parallel (1:nx, 1:ny) free_slip_z!(ητ)
 
     # errors
     err = 2 * ϵ
@@ -294,13 +247,16 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
+            compute_maxloc!(ητ, η)
+            update_halo!(ητ)
+
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel (@idx ni) compute_P!(
                 stokes.P,
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
-                η,
+                ητ,
                 Kb,
                 dt,
                 pt_stokes.r,
@@ -313,46 +269,38 @@ function JustRelax.solve!(
             # # Update buoyancy
             # @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
 
-            # ν = 1e-3
-            # @parallel (@idx ni) compute_viscosity!(
-            #     η, ν,  @strain(stokes)..., args, rheology, (1e18, 1e24)
-            # )
-            # compute_maxloc!(ητ, η)
-            # update_halo!(ητ)
-
-            @parallel (@idx ni .+ 1) compute_τ!(
-                @stress(stokes)...,
-                @tensor(stokes.τ_o)...,
+            ν = 1e-3
+            @parallel (@idx ni) compute_viscosity!(
+                η,
+                1.0,
+                phase_ratios.center,
                 @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
+            )
+
+            @parallel (@idx ni) compute_τ_nonlinear!(
+                @tensor_center(stokes.τ),
+                stokes.τ.II,
+                @tensor(stokes.τ_o),
+                @strain(stokes),
+                stokes.P,
                 η,
                 @ones(ni...),
                 dt,
                 pt_stokes.θ_dτ,
             )
 
-            # @parallel (@idx ni) compute_τ_nonlinear!(
-            #     @tensor_center(stokes.τ),
-            #     stokes.τ.II,
-            #     @tensor(stokes.τ_o),
-            #     @strain(stokes),
-            #     stokes.P,
-            #     η,
-            #     η_vep,
-            #     λ,
-            #     rheology, # needs to be a tuple
-            #     dt,
-            #     pt_stokes.θ_dτ,
-            # )
-
-            # @parallel (@idx ni .+ 1) compute_τ_vertex!(
-            #     @shear(stokes.τ)...,
-            #     @shear(stokes.τ_o)...,
-            #     @shear(stokes.ε)...,
-            #     η_vep,
-            #     G,
-            #     dt,
-            #     pt_stokes.θ_dτ,
-            # )
+            @parallel (@idx ni .+ 1) compute_τ_vertex!(
+                @shear(stokes.τ)...,
+                @shear(stokes.τ_o)...,
+                @shear(stokes.ε)...,
+                η_vep,
+                G,
+                dt,
+                pt_stokes.θ_dτ,
+            )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -436,6 +384,7 @@ function JustRelax.solve!(
     b_width=(4, 4, 4),
     viscosity_cutoff=(1e18, 1e24),
     verbose=true,
+    viscosity_cutoff=(-Inf, Inf),
 ) where {A,B,C,D,T,N}
 
     ## UNPACK
@@ -445,19 +394,6 @@ function JustRelax.solve!(
     # geometry
     _di = @. 1 / di
     ni = nx, ny, nz = size(stokes.P)
-    # z = LinRange(di[3]*0.5, 1.0-di[3]*0.5, nz)
-
-    # ~preconditioner
-    ητ = similar(η)
-    compute_maxloc!(ητ, η)
-    update_halo!(ητ)
-    # @hide_communication b_width begin # communication/computation overlap
-    #     @parallel compute_maxloc!(ητ, η)
-    #     update_halo!(ητ)
-    # end
-    @parallel (1:ny, 1:nz) free_slip_x!(ητ)
-    @parallel (1:nx, 1:nz) free_slip_y!(ητ)
-    @parallel (1:nx, 1:ny) free_slip_z!(ητ)
 
     # errors
     err = Inf
@@ -470,8 +406,6 @@ function JustRelax.solve!(
     norm_Rz = Float64[]
     norm_∇V = Float64[]
 
-    # Kb = get_Kb(rheology)
-    # G  = get_G(rheology)
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
 
@@ -480,13 +414,22 @@ function JustRelax.solve!(
     boo = false
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
+            # ~preconditioner
+            ητ = deepcopy(η)
+            compute_maxloc!(ητ, η)
+            update_halo!(ητ)
+            # @hide_communication b_width begin # communication/computation overlap
+            #     @parallel compute_maxloc!(ητ, η)
+            #     update_halo!(ητ)
+            # end
+
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel (@idx ni) compute_P!(
                 stokes.P,
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
-                η,
+                ητ,
                 rheology,
                 phase_ratios.center,
                 dt,
@@ -512,63 +455,40 @@ function JustRelax.solve!(
             # Update buoyancy
             # @parallel (@idx ni) compute_ρg!(ρg[end], phase_ratios.center, rheology, args)
 
-            # ν = 1e-3
-            # @parallel (@idx ni) compute_viscosity!(
-            #     η,
-            #     ν,
-            #     phase_ratios.center,
-            #     @strain(stokes)...,
-            #     args,
-            #     rheology,
-            #     viscosity_cutoff,
-            # )
-            # compute_maxloc!(ητ, η)
-            # update_halo!(ητ)
-            # # @hide_communication b_width begin # communication/computation overlap
-            # #     @parallel compute_maxloc!(ητ, η)
-            # #     update_halo!(ητ)
-            # # end
-            # @parallel (1:ny, 1:nz) free_slip_x!(ητ)
-            # @parallel (1:nx, 1:nz) free_slip_y!(ητ)
-            # @parallel (1:nx, 1:ny) free_slip_z!(ητ)
+            ν = 1e-3
+            @parallel (@idx ni) compute_viscosity!(
+                η,
+                ν,
+                phase_ratios.center,
+                @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
+            )
             # end
 
-            
-            @parallel (@idx ni .+ 1) compute_τ!(
-                @stress(stokes)...,
-                @tensor(stokes.τ_o)...,
-                @strain(stokes)...,
+            @parallel (@idx ni) compute_τ_nonlinear!(
+                @tensor_center(stokes.τ),
+                stokes.τ.II,
+                @tensor_center(stokes.τ_o),
+                @strain(stokes),
+                stokes.P,
                 η,
-                @ones(ni...),
+                η_vep,
+                λ,
+                phase_ratios.center,
+                tupleize(rheology), # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
             )
 
-            # @parallel (@idx ni) compute_τ_nonlinear!(
-            #     @tensor_center(stokes.τ),
-            #     stokes.τ.II,
-            #     @tensor(stokes.τ_o),
-            #     @strain(stokes),
-            #     stokes.P,
-            #     η,
-            #     η_vep,
-            #     λ,
-            #     phase_ratios.center,
-            #     rheology, # needs to be a tuple
-            #     dt,
-            #     pt_stokes.θ_dτ,
+            # @parallel center2vertex!(
+            #     stokes.τ.yz, stokes.τ.xz, stokes.τ.xy, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c
             # )
 
-            # @parallel (@idx ni .+ 1) compute_τ_vertex!(
-            #     @shear(stokes.τ)...,
-            #     @shear(stokes.τ_o)...,
-            #     @shear(stokes.ε)...,
-            #     η_vep,
-            #     rheology,
-            #     phase_ratios.center,
-            #     dt,
-            #     pt_stokes.θ_dτ,
-            # )
+            @parallel (@idx ni .+ 1) compute_τ_vertex!(
+                @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
+            )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(

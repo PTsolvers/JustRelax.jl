@@ -513,8 +513,19 @@ function JustRelax.solve!(
     η0 = deepcopy(η)
     do_visc = true
     GC.enable(false)
+
+    if !isinf(dt)
+        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        @parallel (@idx ni) multi_copy!(
+            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+        )
+    end
+
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
+            compute_maxloc!(ητ, η)
+            update_halo!(ητ)
+
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
             @parallel (@idx ni) compute_P!(
@@ -522,7 +533,7 @@ function JustRelax.solve!(
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
-                η,
+                ητ,
                 rheology,
                 phase_ratios.center,
                 dt,
@@ -559,18 +570,27 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
                 stokes.τ.II,
-                @tensor(stokes.τ_o),
+                @tensor_center(stokes.τ_o),
                 @strain(stokes),
                 stokes.P,
                 η,
                 η_vep,
                 λ,
+                phase_ratios.center,
                 tupleize(rheology), # needs to be a tuple
                 dt,
                 θ_dτ,
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+
+            # @parallel (@idx ni) compute_τ_vertex!(
+            #     stokes.τ.xy,
+            #     stokes.ε.xy,
+            #     η_vep,
+            #     pt_stokes.θ_dτ,
+            # )
+
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
@@ -627,15 +647,15 @@ function JustRelax.solve!(
 
     GC.enable(true)
 
-    return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_∇V=norm_∇V,
-    )
-    return to
+    # return (
+    #     iter=iter,
+    #     err_evo1=err_evo1,
+    #     err_evo2=err_evo2,
+    #     norm_Rx=norm_Rx,
+    #     norm_Ry=norm_Ry,
+    #     norm_∇V=norm_∇V,
+    # )
+    return λ, iter
 end
 
 function JustRelax.solve!(

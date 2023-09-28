@@ -520,14 +520,7 @@ function JustRelax.solve!(
             # )
 
             @parallel (@idx ni .+ 1) compute_τ_vertex!(
-                @shear(stokes.τ)...,
-                @shear(stokes.τ_o)...,
-                @shear(stokes.ε)...,
-                η_vep,
-                rheology,
-                phase_ratios.center,
-                dt,
-                pt_stokes.θ_dτ,
+                @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
             )
 
             @hide_communication b_width begin # communication/computation overlap

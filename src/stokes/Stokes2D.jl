@@ -580,18 +580,14 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            # @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
 
-            @parallel (@idx ni) compute_τ_vertex!(
-                stokes.τ.xy,
-                stokes.τ_o.xy,
-                stokes.ε.xy,
-                η_vep,
-                pt_stokes.θ_dτ,
-                dt,
-                phase_ratios.center,
-                rheology,
-            )
+            # @parallel (@idx ni) compute_τ_vertex!(
+            #     stokes.τ.xy,
+            #     stokes.ε.xy,
+            #     η_vep,
+            #     pt_stokes.θ_dτ,
+            # )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(

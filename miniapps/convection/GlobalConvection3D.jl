@@ -182,7 +182,9 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     η               = @ones(ni...)
     depth           = PTArray([abs(z) for x in xci[1], y in xci[2], z in xci[3]])
     args            = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
-    @parallel (@idx ni) compute_viscosity!(η, 1, 1e-15, args, rheology)
+    @parallel (@idx ni) compute_viscosity!(
+        η, 1.0,  @strain(stokes)..., args, rheology, (1e18, 1e24)
+    )
     η_vep           = deepcopy(η)
     # Boundary conditions
     flow_bcs = FlowBoundaryConditions(; 
@@ -225,7 +227,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         args = (; T=thermal.Tc, P=stokes.P, depth=depth, dt=Inf)
 
         # Stokes solver ----------------
-        iters = solve!(
+        solve!(
             stokes,
             pt_stokes,
             di,
@@ -299,7 +301,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     return (ni=ni, xci=xci, li=li, di=di), thermal
 end
 
-function run()
+# function run()
     figdir = "figs3D_test"
     ar     = 3 # aspect ratio
     n      = 32
@@ -307,7 +309,7 @@ function run()
     ny     = nx
     nz     = n - 2
 
-    thermal_convection3D(; figdir=figdir, ar=ar,nx=nx, ny=ny, nz=nz);
-end
+#     thermal_convection3D(; figdir=figdir, ar=ar,nx=nx, ny=ny, nz=nz);
+# end
 
-run()
+# run()

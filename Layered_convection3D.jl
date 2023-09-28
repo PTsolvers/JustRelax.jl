@@ -140,7 +140,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
+function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false)
 
     # Physical domain ------------------------------------
     lz            = 700e3                # domain length in z
@@ -212,11 +212,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Rheology
     η                = @ones(ni...)
-    η_vep            = similar(η)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e16, 1e24)
     )
+    η_vep            = deepcopy(η)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -285,10 +285,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             phase_ratios,
             rheology,
             args,
-            dt,
+            Inf,
             igg;
-            iterMax          = 1e1,
-            nout             = 1e0,
+            iterMax          = 10e3,
+            nout             = 1e3,
             viscosity_cutoff = (1e18, 1e24)
         );
         @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
@@ -409,7 +409,7 @@ end
 figdir   = "Plume3D"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 32*2
+n        = 66
 nx       = n - 2
 ny       = n - 2
 nz       = n - 2
@@ -422,7 +422,7 @@ end
 # @edit metadata(@__DIR__, "Layered_convection2D.jl", joinpath(figdir, "metadata"))
 
 # # run main script
-# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
+# main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
 
 # # Make particles plottable
 # p        = particles.coords

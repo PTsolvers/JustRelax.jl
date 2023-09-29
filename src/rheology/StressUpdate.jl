@@ -28,7 +28,6 @@ function _compute_τ_nonlinear!(
     τy = C * cosϕ + P[idx...] * sinϕ
 
     dτij = if isyielding(is_pl, τII_trial, τy)
-        CUDA.@cushow volume
         # derivatives plastic stress correction
         dτ_pl, λ[idx...] = compute_dτ_pl(
             τij, dτij, τy, τII_trial, ηij, λ[idx...], η_reg, dτ_r, volume
@@ -39,10 +38,10 @@ function _compute_τ_nonlinear!(
         dτij
     end
 
-    # τij = τij .+ dτij
-    # correct_stress!(τ, τij, idx...)
-    # τII[idx...] = τII_ij = second_invariant(τij...)
-    # η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
+    τij = τij .+ dτij
+    correct_stress!(τ, τij, idx...)
+    τII[idx...] = τII_ij = second_invariant(τij...)
+    η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
 
     return nothing
 end

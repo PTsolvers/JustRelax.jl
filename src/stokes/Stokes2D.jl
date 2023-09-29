@@ -507,9 +507,9 @@ function JustRelax.solve!(
     sizehint!(err_evo2, Int(iterMax))
 
     # solver loop
+    @copy stokes.P0 stokes.P
     wtime0 = 0.0
     λ = @zeros(ni...)
-    to = TimerOutput()
     η0 = deepcopy(η)
     do_visc = true
     GC.enable(false)
@@ -549,20 +549,20 @@ function JustRelax.solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            if rem(iter, nout) == 0
-                @copy η0 η
-            end
-            # if do_visc
-            ν = 1e0
-            @timeit to "viscosity" compute_viscosity!(
-                η,
-                ν,
-                phase_ratios.center,
-                @strain(stokes)...,
-                args,
-                rheology,
-                viscosity_cutoff,
-            )
+            # if rem(iter, nout) == 0
+            #     @copy η0 η
+            # end
+            # # if do_visc
+            # ν = 1e0
+            # @timeit to "viscosity" compute_viscosity!(
+            #     η,
+            #     ν,
+            #     phase_ratios.center,
+            #     @strain(stokes)...,
+            #     args,
+            #     rheology,
+            #     viscosity_cutoff,
+            # )
             # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(

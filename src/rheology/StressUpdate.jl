@@ -30,7 +30,7 @@ function _compute_τ_nonlinear!(
     dτij = if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
         dτ_pl, λ[idx...] = compute_dτ_pl(
-            τij, dτij, τij_o, εij, τy, τII_trial, ηij, λ[idx...], η_reg, _Gdt, dτ_r
+            τij, dτij, τy, τII_trial, ηij, λ[idx...], η_reg, dτ_r
         )
         dτ_pl
 
@@ -69,14 +69,13 @@ end
 function cache_tensors(
     τ::NTuple{6,Any}, τ_old::NTuple{6,Any}, ε::NTuple{6,Any}, idx::Vararg{Integer,3}
 )
-    @inline av_yz(A) = 0.125 * sum(_gather_yz(A, idx...))
-    @inline av_xz(A) = 0.125 * sum(_gather_xz(A, idx...))
-    @inline av_xy(A) = 0.125 * sum(_gather_xy(A, idx...))
+    @inline av_yz(A) = _av_yz(A, idx...)
+    @inline av_xz(A) = _av_xz(A, idx...)
+    @inline av_xy(A) = _av_xy(A, idx...)
 
-    Val3 = Val(3)
 
     # normal components of the strain rate and old-stress tensors
-    ε_normal = ntuple(i -> ε[i][idx...], Val3)
+    ε_normal = ntuple(i -> ε[i][idx...], Val(3))
     # τ_old_normal = ntuple(i -> τ_old[i][idx...], Val3)
     # shear components of the strain rate and old-stress tensors
     ε_shear = av_yz(ε[4]), av_xz(ε[5]), av_xy(ε[6])
@@ -101,15 +100,12 @@ function compute_stress_increment_and_trial(
 end
 
 function compute_dτ_pl(
-    τij::NTuple{N,T}, dτij, τij_o, εij, τy, τII_trial, ηij, λ0, η_reg, _Gdt, dτ_r
+    τij::NTuple{N,T}, dτij, τy, τII_trial, ηij, λ0, η_reg, dτ_r
 ) where {N,T}
     # yield function
     F = τII_trial - τy
     # Plastic multiplier
     ν = 1e-2
-    # λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(ηij + η_reg)
-    # λ = (F > 0.0) * F * inv(ηij + η_reg)
-    # λ = (F > 0.0) * F * inv(dτ_r + η_reg)
     λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(dτ_r + η_reg)
     λ_τII = λ * 0.5 * inv(τII_trial)
 
@@ -117,25 +113,27 @@ function compute_dτ_pl(
         Base.@_inline_meta
         # derivatives of the plastic potential
         λdQdτ = (τij[i] + dτij[i]) * λ_τII
-        # corrected stress
-        # dτ_r * (-(τij[i] - τij_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij[i] - λdQdτ))
+        # corrected stress: dτ_r * (-(τij[i] - τij_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij[i] - λdQdτ))
+        # NOTE: dτij[i] already contains the non-plastic stress increment 
         dτij[i] - dτ_r * 2.0 * ηij * λdQdτ
     end
     return dτ_pl, λ
 end
 
 # update the global arrays τ::NTuple{N, AbstractArray} with the local τij::NTuple{3, Float64} at indices idx::Vararg{Integer, N}
-@inline function correct_stress!(τ, τij, idx::Vararg{Integer,2})
-    Base.@nexprs 3 i -> τ[i][idx...] = τij[i]
+@generated function correct_stress!(τ, τij::NTuple{N1,T}, idx::Vararg{Integer, N2}) where {N1,N2,T}
+    quote
+        Base.@_inline_meta
+        Base.@nexprs $N1 i -> @inbounds τ[i][idx...] = τij[i]
+    end
 end
-@inline function correct_stress!(τ, τij, idx::Vararg{Integer,3})
-    Base.@nexprs 6 i -> τ[i][idx...] = τij[i]
+
+@inline function correct_stress!(τxx, τyy, τxy, τij, i, j)
+    return correct_stress!((τxx, τyy, τxy), τij, i, j)
 end
-@inline function correct_stress!(τxx, τyy, τxy, τij, idx::Vararg{Integer,2})
-    return correct_stress!((τxx, τyy, τxy), τij, idx...)
-end
-@inline function correct_stress!(τxx, τyy, τzz, τyz, τxz, τxy, τij, idx::Vararg{Integer,3})
-    return correct_stress!((τxx, τyy, τzz, τyz, τxz, τxy), τij, idx...)
+
+@inline function correct_stress!(τxx, τyy, τzz, τyz, τxz, τxy, τij, i, j, k)
+    return correct_stress!((τxx, τyy, τzz, τyz, τxz, τxy), τij, i, j, k)
 end
 
 @inline isplastic(x::AbstractPlasticity) = true

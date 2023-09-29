@@ -47,27 +47,27 @@ end
     if i ≤ nx && 1 < j1 ≤ ny && 1 < k1 ≤ nz
         vertex_yz[i, j1, k1] =
             0.25 * (
-                center_yz[i, j , k] +
+                center_yz[i, j, k] +
                 center_yz[i, j1, k] +
-                center_yz[i, j , k1] +
+                center_yz[i, j, k1] +
                 center_yz[i, j1, k1]
             )
     end
     if 1 < i1 ≤ nx && j ≤ ny && 1 < k1 ≤ nz
-      vertex_xz[i1, j, k1] =
+        vertex_xz[i1, j, k1] =
             0.25 * (
-                center_xz[i , j, k ] +
-                center_xz[i1, j, k ] +
-                center_xz[i , j, k1] +
+                center_xz[i, j, k] +
+                center_xz[i1, j, k] +
+                center_xz[i, j, k1] +
                 center_xz[i1, j, k1]
             )
     end
     if 1 < i1 ≤ nx && 1 < j1 ≤ ny && k ≤ nz
-      vertex_xy[i1, j1, k] =
+        vertex_xy[i1, j1, k] =
             0.25 * (
-                center_xy[i , j , k] +
-                center_xy[i1, j , k] +
-                center_xy[i , j1, k] +
+                center_xy[i, j, k] +
+                center_xy[i1, j, k] +
+                center_xy[i, j1, k] +
                 center_xy[i1, j1, k]
             )
     end

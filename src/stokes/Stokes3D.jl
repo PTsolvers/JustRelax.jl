@@ -506,9 +506,14 @@ function JustRelax.solve!(
                 dt,
                 pt_stokes.θ_dτ,
             )
-            
-            @parallel (@idx ni.+1) center2vertex!(
-                stokes.τ.yz, stokes.τ.xz, stokes.τ.xy, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c
+
+            @parallel (@idx ni .+ 1) center2vertex!(
+                stokes.τ.yz,
+                stokes.τ.xz,
+                stokes.τ.xy,
+                stokes.τ.yz_c,
+                stokes.τ.xz_c,
+                stokes.τ.xy_c,
             )
 
             # @parallel (@idx ni .+ 1) compute_τ_vertex!(
@@ -579,7 +584,7 @@ function JustRelax.solve!(
     #     time=wtime0,
     #     av_time=av_time,
     # )
-    λ
+    return λ
 end
 
 end # END OF MODULE

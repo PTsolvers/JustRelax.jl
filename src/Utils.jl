@@ -19,15 +19,15 @@ function multi_copyto!(B::NTuple{N,AbstractArray}, A::NTuple{N,AbstractArray}) w
     end
 end
 
-@parallel_indices (i, j) function multi_copy!(
+@parallel_indices (I...) function multi_copy!(
     dst::NTuple{N,T}, src::NTuple{N,T}
 ) where {N,T}
-    @inbounds for (dst_i, src_i) in zip(dst, src)
-        if all((i, j) .≤ size(dst_i))
-            dst_i[i, j] = src_i[i, j]
+    ntuple(Val(N)) do k
+        Base.@_inline_meta
+        if all(I .≤ size(dst[k]))
+            @inbounds dst[k][I...] = src[k][I...]
         end
     end
-
     return nothing
 end
 

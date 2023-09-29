@@ -384,8 +384,11 @@ end
     _Gdt = inv(fn_ratio(get_G, rheology, phase) * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
     # get plastic paremeters (if any...)
-    is_pl, C, sinϕ, η_reg = plastic_params_phase(rheology, phase)
-    plastic_parameters = (; is_pl, C, sinϕ, η_reg)
+    is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, phase)
+    # plastic volumetric change K*dt*sinϕ*sinψ
+    K = fn_ratio(get_bulkmodulus, rheology, phase)
+    volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ
+    plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
         τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...

@@ -25,9 +25,10 @@ function _compute_τ_nonlinear!(
 
     # # get plastic paremeters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
-    τy = C + P[idx...] * sinϕ
-    # τy = C * cosϕ + P[idx...] * sinϕ
+    # τy = C + P[idx...] * sinϕ
+    τy = C * cosϕ + P[idx...] * sinϕ
     ηve = 1/(1/ηij + _Gdt)
+
     dτij = if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
         dτ_pl, λ[idx...] = compute_dτ_pl(
@@ -38,6 +39,7 @@ function _compute_τ_nonlinear!(
 
     else
         dτij
+        
     end
 
     τij = τij .+ dτij

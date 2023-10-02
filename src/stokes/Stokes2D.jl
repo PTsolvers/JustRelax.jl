@@ -509,7 +509,6 @@ function JustRelax.solve!(
     # solver loop
     wtime0 = 0.0
     λ = @zeros(ni...)
-    to = TimerOutput()
     η0 = deepcopy(η)
     do_visc = true
     GC.enable(false)
@@ -543,7 +542,7 @@ function JustRelax.solve!(
             end
             if do_visc
                 ν = 1e-2
-                @timeit to "viscosity" compute_viscosity!(
+                @parallel (@idx ni) compute_viscosity!(
                     η,
                     ν,
                     phase_ratios.center,

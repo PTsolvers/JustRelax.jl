@@ -44,13 +44,7 @@ end
     return nothing
 end
 
-function compute_viscosity!(η, x...)
-    ni = size(η)
-    @parallel (JustRelax.@idx ni) _compute_viscosity!(η, x...)
-    return nothing
-end
-
-@parallel_indices (i, j) function _compute_viscosity!(
+@parallel_indices (i, j) function compute_viscosity!(
     η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
 )
 
@@ -158,7 +152,7 @@ end
         εII = second_invariant(εij...)
 
         # update stress and effective viscosity
-        ηi = compute_viscosity_εII(rheology, ratio_ijk, εII, args_ijk)
+        ηi = compute_phase_viscosity_εII(rheology, ratio_ijk, εII, args_ijk)
         ηi = continuation_log(ηi, η[i, j, k], ν)
         η[i, j, k] = clamp(ηi, cutoff...)
     end

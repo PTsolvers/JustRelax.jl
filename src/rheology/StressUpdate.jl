@@ -27,10 +27,10 @@ function _compute_τ_nonlinear!(
     Pij = P[idx...]
     τy = C + Pij * sinϕ
 
-    if isyielding(is_pl, τII_trial, τy, Pij)
+    if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
         dτ_pl, λ[idx...] = compute_dτ_pl(
-            τij, dτij, τij_p_o, εij_p, τy, τII_trial, ηij, λ[idx...], η_reg, _Gdt, dτ_r
+            τij, dτij, τy, τII_trial, ηij, λ[idx...], η_reg, dτ_r
         )
         τij = τij .+ dτ_pl
         correct_stress!(τ, τij, idx...)
@@ -52,45 +52,9 @@ function _compute_τ_nonlinear!(
 end
 
 # check if plasticity is active
-@inline isyielding(is_pl, τII_trial, τy, Pij) = is_pl && τII_trial > τy && Pij > 0
+@inline isyielding(is_pl, τII_trial, τy) = is_pl && τII_trial > τy 
 
 @inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + ηij * _Gdt + 1.0)
-
-# cache tensors
-function cache_tensors(
-    τ::NTuple{3,Any}, τ_old::NTuple{3,Any}, ε::NTuple{3,Any}, idx::Vararg{Integer,2}
-)
-    @inline av_shear(A) = 0.25 * sum(_gather(A, idx...))
-
-    εij = ε[1][idx...], ε[2][idx...], av_shear(ε[3])
-    τij_o = τ_old[1][idx...], τ_old[2][idx...], av_shear(τ_old[3])
-    τij = getindex.(τ, idx...)
-
-    return τij, τij_o, εij
-end
-
-function cache_tensors(
-    τ::NTuple{6,Any}, τ_old::NTuple{6,Any}, ε::NTuple{6,Any}, idx::Vararg{Integer,3}
-)
-    @inline av_yz(A) = 0.125 * sum(_gather_yz(A, idx...))
-    @inline av_xz(A) = 0.125 * sum(_gather_xz(A, idx...))
-    @inline av_xy(A) = 0.125 * sum(_gather_xy(A, idx...))
-
-    Val3 = Val(3)
-
-    # normal components of the strain rate and old-stress tensors
-    ε_normal = ntuple(i -> ε[i][idx...], Val3)
-    τ_old_normal = ntuple(i -> τ_old[i][idx...], Val3)
-    # shear components of the strain rate and old-stress tensors
-    ε_shear = av_yz(ε[4]), av_xz(ε[5]), av_xy(ε[6])
-    τ_old_shear = av_yz(τ_old[4]), av_xz(τ_old[5]), av_xy(τ_old[6])
-    # cache ij-th components of the tensors into a tuple in Voigt notation 
-    εij = (ε_normal..., ε_shear...)
-    τij_o = (τ_old_normal..., τ_old_shear...)
-    τij = getindex.(τ, idx...)
-
-    return τij, τij_o, εij
-end
 
 function compute_stress_increment_and_trial(
     τij::NTuple{N,T}, τij_o::NTuple{N,T}, ηij, εij::NTuple{N,T}, _Gdt, dτ_r
@@ -103,13 +67,13 @@ function compute_stress_increment_and_trial(
 end
 
 function compute_dτ_pl(
-    τij::NTuple{N,T}, dτij, τij_p_o, εij_p, τy, τII_trial, ηij, λ0, η_reg, _Gdt, dτ_r
+    τij::NTuple{N,T}, dτij, τy, τII_trial, ηij, λ0, η_reg, dτ_r
 ) where {N,T}
     # yield function
     F = τII_trial - τy
     # Plastic multiplier
-    ν = 0.9
-    λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(ηij + η_reg)
+    ν = 1e-4
+    λ = (1 - ν) * λ0 +  ν* (F > 0.0) * F * inv(dτ_r*ηij + η_reg)
     λ_τII = λ * 0.5 * inv(τII_trial)
 
     dτ_pl = ntuple(Val(N)) do i
@@ -178,4 +142,40 @@ end
         Base.@nexprs $N i -> a_i = ratio[i] == 0 ? empty_args : plastic_params(rheology[i])
         Base.@ncall $N tuple a
     end
+end
+
+# cache tensors
+function cache_tensors(
+    τ::NTuple{3,Any}, τ_old::NTuple{3,Any}, ε::NTuple{3,Any}, idx::Vararg{Integer,2}
+)
+    @inline av_shear(A) = 0.25 * sum(_gather(A, idx...))
+
+    εij = ε[1][idx...], ε[2][idx...], av_shear(ε[3])
+    τij_o = τ_old[1][idx...], τ_old[2][idx...], av_shear(τ_old[3])
+    τij = getindex.(τ, idx...)
+
+    return τij, τij_o, εij
+end
+
+function cache_tensors(
+    τ::NTuple{6,Any}, τ_old::NTuple{6,Any}, ε::NTuple{6,Any}, idx::Vararg{Integer,3}
+)
+    @inline av_yz(A) = 0.125 * sum(_gather_yz(A, idx...))
+    @inline av_xz(A) = 0.125 * sum(_gather_xz(A, idx...))
+    @inline av_xy(A) = 0.125 * sum(_gather_xy(A, idx...))
+
+    Val3 = Val(3)
+
+    # normal components of the strain rate and old-stress tensors
+    ε_normal = ntuple(i -> ε[i][idx...], Val3)
+    τ_old_normal = ntuple(i -> τ_old[i][idx...], Val3)
+    # shear components of the strain rate and old-stress tensors
+    ε_shear = av_yz(ε[4]), av_xz(ε[5]), av_xy(ε[6])
+    τ_old_shear = av_yz(τ_old[4]), av_xz(τ_old[5]), av_xy(τ_old[6])
+    # cache ij-th components of the tensors into a tuple in Voigt notation 
+    εij = (ε_normal..., ε_shear...)
+    τij_o = (τ_old_normal..., τ_old_shear...)
+    τij = getindex.(τ, idx...)
+
+    return τij, τij_o, εij
 end

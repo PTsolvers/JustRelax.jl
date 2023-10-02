@@ -12,11 +12,11 @@ import JustRelax.@cell
 # set_backend("CUDA_Float64_2D")
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:gpu, Float64, 2)
+model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
+using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
@@ -92,24 +92,24 @@ end
 @parallel_indices (i, j) function init_T!(T, z)
     depth = -z[j]
 
-    # (depth - 15e3) because we have 15km of sticky air
+    # (depth) because we have 15km of sticky air
     if depth < 0e0
-        T[i, j]  = 0.0
+        T[i, j]  = 273e0
 
-    elseif 0e0 ≤ (depth - 15e3) < 35e3
+    elseif 0e0 ≤ (depth) < 35e3
         dTdZ    = (923-273)/35e3
         offset  = 273e0
-        T[i, j] = (depth - 15e3) * dTdZ + offset
+        T[i, j] = (depth) * dTdZ + offset
     
-    elseif 110e3 > (depth - 15e3) ≥ 35e3
+    elseif 110e3 > (depth) ≥ 35e3
         dTdZ    = (1492-923)/75e3
         offset  = 923
-        T[i, j] = (depth - 15e3 - 35e3) * dTdZ + offset
+        T[i, j] = (depth - 35e3) * dTdZ + offset
 
-    elseif (depth - 15e3) ≥ 110e3 
+    elseif (depth) ≥ 110e3 
         dTdZ    = (1837 - 1492)/590e3
         offset  = 1492e0
-        T[i, j] = (depth - 15e3 - 110e3) * dTdZ + offset
+        T[i, j] = (depth - 110e3) * dTdZ + offset
 
     end
     
@@ -176,7 +176,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.5 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -200,13 +200,12 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
     # Rheology
-    η                = @ones(ni...)
+    η                = @zeros(ni...)
     η_vep            = similar(η)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    compute_viscosity!(
-        η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (1e16, 1e24)
+    @parallel (@idx ni) compute_viscosity!(
+        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
     )
-
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
         rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2
@@ -257,18 +256,19 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
+    while it < 1 #2 # run only for 5 Myrs
+        # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        compute_viscosity!(
+        @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
         )
         @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
         # ------------------------------
  
         # Stokes solver ----------------
-        to   = solve!(
+        solve!(
             stokes,
             pt_stokes,
             di,
@@ -279,13 +279,12 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             phase_ratios,
             rheology,
             args,
-            dt,
+            Inf,
             igg;
-            iterMax=75e3,
+            iterMax=50e3,
             nout=1e3,
             viscosity_cutoff=(1e18, 1e24)
         )
-        @show to
         @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
@@ -333,7 +332,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 1) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if save_vtk 
@@ -383,7 +382,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             # Plot 2nd invariant of strain rate
             h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow) 
             # Plot effective viscosity
-            h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:batlow)
+            h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:batlow, colorrange=(16, 24))
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -408,7 +407,7 @@ end
 figdir   = "Plume2D"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 242
+n        = 64
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -416,8 +415,6 @@ igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
-# save script metada
-@edit metadata(@__DIR__, "Layered_convection2D.jl", joinpath(figdir, "metadata"))
 
 # run main script
 main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);

@@ -90,18 +90,18 @@ function init_rheologies(; is_plastic = true)
             Elasticity        = el_lithospheric_mantle,
         ),
         # Name              = "SubLithosphericMantle",
-        SetMaterialParams(;
-            Phase             = 4,
-            Density           = PT_Density(; ρ0=3.3e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
-            Conductivity      = K_mantle,
-            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
-            Elasticity        = el_sublithospheric_mantle,
-        ),
+        # SetMaterialParams(;
+        #     Phase             = 4,
+        #     Density           = PT_Density(; ρ0=3.3e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
+        #     HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
+        #     Conductivity      = K_mantle,
+        #     RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
+        #     CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
+        #     Elasticity        = el_sublithospheric_mantle,
+        # ),
         # Name              = "Plume",
         SetMaterialParams(;
-            Phase             = 5,
+            Phase             = 4,
             Density           = PT_Density(; ρ0=3.3e3-50, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
             Conductivity      = K_mantle,
@@ -111,7 +111,7 @@ function init_rheologies(; is_plastic = true)
         ),
         # Name              = "StickyAir",
         SetMaterialParams(;
-            Phase             = 6,
+            Phase             = 5,
             Density           = ConstantDensity(; ρ=1e3),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
@@ -144,13 +144,13 @@ function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
                 @cell phases[ip, i, j] = 3.0
 
             elseif 0e0 > depth 
-                @cell phases[ip, i, j] = 6.0
+                @cell phases[ip, i, j] = 5.0
 
             end
 
             # plume - rectangular
             if ((x - Lx * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
-                JustRelax.@cell phases[ip, i, j] = 5.0
+                JustRelax.@cell phases[ip, i, j] = 4.0
             end
         end
         return nothing

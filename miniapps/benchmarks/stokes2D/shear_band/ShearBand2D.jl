@@ -1,7 +1,7 @@
 using CUDA
 CUDA.allowscalar(false)
 
-using GeoParams, GLMakie, CellArrays#, CSV, DataFrames
+using Printf, GeoParams, GLMakie, CellArrays, CSV, DataFrames
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
@@ -53,18 +53,16 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     G0      = 1.0           # elastic shear modulus
     Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
     εbg     = 1.0           # background strain-rate
-    η_reg   = 8e-3          # regularisation "viscosity"
-    # η_reg   = 1.25e-2       # regularisation "viscosity"
+    η_reg   = 1.25e-2       # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
-    # dt      *= 0.1
-    el_bg   = ConstantElasticity(; G=G0, ν=0.4)
-    el_inc  = ConstantElasticity(; G=Gi, ν=0.4)
+    el_bg   = ConstantElasticity(; G=G0, ν=0.5)
+    el_inc  = ConstantElasticity(; G=Gi, ν=0.5)
     visc    = LinearViscous(; η=η0) 
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ, 
         η_vp = η_reg,
-        Ψ    = 3,
+        Ψ    = 0.0,
     ) 
     rheology = (
         # Low density phase
@@ -72,7 +70,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            # CompositeRheology = CompositeRheology((visc, el_bg)),
             CompositeRheology = CompositeRheology((visc, el_bg, pl)),
             Elasticity        = el_bg,
 
@@ -81,7 +78,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            # CompositeRheology = CompositeRheology((visc, el_inc)),
             CompositeRheology = CompositeRheology((visc, el_inc, pl)),
             Elasticity        = el_inc,
         ),
@@ -122,17 +118,16 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # ----------------------------------------------------
 
     # Time loop
-    t, it      = 0.0, 0
-    tmax       = 3.5
-    τII        = Float64[]
-    sol        = Float64[]
-    ttot       = Float64[]
-    iterations = Int64[]
+    t, it = 0.0, 0
+    tmax  = 3.5
+    τII   = Float64[]
+    sol   = Float64[]
+    ttot  = Float64[]
 
     while t < tmax
 
         # Stokes solver ----------------
-        λ, iters = solve!(
+        solve!(
             stokes,
             pt_stokes,
             di,
@@ -166,45 +161,40 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         th    = 0:pi/50:3*pi;
         xunit = @. 0.1 * cos(th) + 0.5;
         yunit = @. 0.1 * sin(th) + 0.5;
-
+        cmap  = :batlow
         fig   = Figure(resolution = (1600, 1600), title = "t = $t")
         ax1   = Axis(fig[1,1], aspect = 1, title = "τII")
         ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
         ax3   = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
         ax4   = Axis(fig[2,2], aspect = 1)
-        heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
-        # heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
-        heatmap!(ax3, xci..., Array(λ) , colormap=:batlow)
+        heatmap!(ax1, xci..., Array(stokes.τ.II)        , colormap = cmap)
+        heatmap!(ax2, xci..., Array(η_vep)              , colormap = cmap)
+        heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = cmap)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-        lines!(ax4, ttot, τII, color = :black) 
-        lines!(ax4, ttot, sol, color = :red) 
+        lines!(ax4,  ttot,   τII, color = :black) 
+        lines!(ax4,  ttot,   sol, color = :red) 
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)
 
     end
 
-    # df = DataFrame(
-    #     t = ttot,
-    #     τII = τII,
-    #     sol = sol,
-    #     iterations = iterations
-    # )
+    df = DataFrame(
+        t   = ttot,
+        τII = τII,
+        sol = sol,
+    )
 
-    # CSV.write(joinpath(figdir, "data_$(nx).csv"), df)
+    CSV.write(joinpath(figdir, "data_$(nx).csv"), df)
 
     return nothing
 end
 
-N      = 128
-# N      = parse(Int, ARGS[1]) 
-n      = N + 2
+n      = 128 + 2
 nx     = n - 2
 ny     = n - 2
-figdir = "ShearBand2D/ShearBand_center_volumetric_$n"
-# figdir = "ShearBand2D/ShearBand_vertex_volumetric_$n"
-igg  = if !(JustRelax.MPI.Initialized())
+figdir = "ShearBand2D/ShearBand_regDP_$n"
+igg    = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
 else
     igg

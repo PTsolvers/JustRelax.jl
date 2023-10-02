@@ -92,24 +92,24 @@ end
 @parallel_indices (i, j) function init_T!(T, z)
     depth = -z[j]
 
-    # (depth - 15e3) because we have 15km of sticky air
+    # (depth) because we have 15km of sticky air
     if depth < 0e0
-        T[i, j]  = 0.0
+        T[i, j]  = 273e0
 
-    elseif 0e0 ≤ (depth - 15e3) < 35e3
+    elseif 0e0 ≤ (depth) < 35e3
         dTdZ    = (923-273)/35e3
         offset  = 273e0
-        T[i, j] = (depth - 15e3) * dTdZ + offset
+        T[i, j] = (depth) * dTdZ + offset
     
-    elseif 110e3 > (depth - 15e3) ≥ 35e3
+    elseif 110e3 > (depth) ≥ 35e3
         dTdZ    = (1492-923)/75e3
         offset  = 923
-        T[i, j] = (depth - 15e3 - 35e3) * dTdZ + offset
+        T[i, j] = (depth - 35e3) * dTdZ + offset
 
-    elseif (depth - 15e3) ≥ 110e3 
+    elseif (depth) ≥ 110e3 
         dTdZ    = (1837 - 1492)/590e3
         offset  = 1492e0
-        T[i, j] = (depth - 15e3 - 110e3) * dTdZ + offset
+        T[i, j] = (depth - 110e3) * dTdZ + offset
 
     end
     
@@ -175,7 +175,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.75 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -199,7 +199,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
     # Rheology
-    η                = @ones(ni...)
+    η                = @zeros(ni...)
     η_vep            = similar(η)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (@idx ni) compute_viscosity!(
@@ -233,8 +233,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         fig = Figure(resolution = (1200, 900))
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        lines!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-        lines!(ax2, Array(log10.(η[:])), Y./1e3)
+        scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
+        scatter!(ax2, Array(log10.(η[:])), Y./1e3)
         ylims!(ax1, minimum(xvi[2])./1e3, 0)
         ylims!(ax2, minimum(xvi[2])./1e3, 0)
         hideydecorations!(ax2)
@@ -256,7 +256,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
+    while it < 50 # run only for 5 Myrs
+        # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
@@ -369,11 +370,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             idxv     = particles.index.data[:];
 
             # Make Makie figure
-            fig = Figure(resolution = (1000, 1600), title = "t = $t")
+            fig = Figure(resolution = (900, 900), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
-            ax3 = Axis(fig[3,1], aspect = ar, title = "log10(εII)")
-            ax4 = Axis(fig[4,1], aspect = ar, title = "log10(η)")
+            ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
+            ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
             h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
             # Plot particles phase
@@ -387,8 +388,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             hidexdecorations!(ax3)
             Colorbar(fig[1,2], h1)
             Colorbar(fig[2,2], h2)
-            Colorbar(fig[3,2], h3)      
-            Colorbar(fig[4,2], h4)
+            Colorbar(fig[1,4], h3)
+            Colorbar(fig[2,4], h4)
             linkaxes!(ax1, ax2, ax3, ax4)
             save(joinpath(figdir, "$(it).png"), fig)
             fig
@@ -406,7 +407,7 @@ end
 figdir   = "Plume2D"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 64
+n        = 128
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

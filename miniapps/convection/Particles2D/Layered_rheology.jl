@@ -125,7 +125,7 @@ function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
-        @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
+        @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
             JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
@@ -143,7 +143,7 @@ function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
             elseif depth > 90e3
                 @cell phases[ip, i, j] = 3.0
 
-            elseif 0e0 > depth 
+            elseif depth < 0e0 
                 @cell phases[ip, i, j] = 5.0
 
             end

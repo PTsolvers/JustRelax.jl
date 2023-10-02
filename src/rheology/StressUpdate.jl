@@ -32,15 +32,7 @@ function _compute_τ_nonlinear!(
     dτij = if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
         dτ_pl, λ[idx...] = compute_dτ_pl(
-            τij,
-            dτij,
-            τy,
-            τII_trial,
-            ηij,
-            λ[idx...],
-            η_reg,
-            ηve,
-            volume,
+            τij, dτij, τy, τII_trial, ηij, λ[idx...], η_reg, ηve, volume
         )
         dτ_pl
 

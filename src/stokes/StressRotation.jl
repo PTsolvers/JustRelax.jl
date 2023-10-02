@@ -2,17 +2,16 @@ using StaticArrays
 
 ## Stress Rotation on the particles
 
-@parallel_indices (i, j) function compute_vorticity!(vorticity, Vx, Vy, _dx, _dy)
-    dx(A) = _d_xa(A, i, j, _dx)
-    dy(A) = _d_ya(A, i, j, _dy)
+@parallel_indices (I...) function compute_vorticity!(vorticity, Vx, Vy, _dx, _dy)
+    dx(A) = _d_xa(A, I..., _dx)
+    dy(A) = _d_ya(A, I..., _dy)
 
-    vorticity[i, j] = 0.5 * (dx(Vy) - dy(Vx))
+    vorticity[I...] = 0.5 * (dx(Vy) - dy(Vx))
 
     return nothing
 end
 
 @parallel_indices (i, j) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
-    cell = i, j
 
     for ip in JustRelax.cellaxes(index)
         !@cell(index[ip, cell...]) && continue # no particle in this location
@@ -31,10 +30,9 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function rotate_stress_particles_roation_matrix!(
+@parallel_indices (cell...) function rotate_stress_particles_roation_matrix!(
     xx, yy, xy, ω, index, dt
 )
-    cell = i, j
 
     for ip in JustRelax.cellaxes(index)
         !@cell(index[ip, cell...]) && continue # no particle in this location

@@ -142,26 +142,28 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     ni           = nx, ny           # number of cells
     li           = lx, ly           # domain length in x- and y-
     di           = @. li / ni       # grid step in x- and -y
-    origin       = 0.0, -ly + 15e3  # origin coordinates (15km f sticky air layer)
+    origin       = 0.0, -ly + 15e3*0  # origin coordinates (15km f sticky air layer)
     xci, xvi     = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies(; is_plastic = true)
+    rheology_nopl= init_rheologies(; is_plastic = false)
     κ            = (10 / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
     
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 1
+    nxcell, max_xcell, min_xcell = 20, 40, 5
     particles = init_particles_cellarrays(
         nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases      = init_particle_fields_cellarrays(particles, Val(3))
-    particle_args    = (pT, pPhases)
+    pT, pPhases      = init_particle_fields_cellarrays(particles, Val(2))
+    τxx_p, τyy_p, τxy_p, ω_p = init_particle_fields_cellarrays(particles, Val(4))
+    particle_args    = (pT, pPhases, τxx_p, τyy_p, τxy_p, ω_p)
 
     # Elliptical temperature anomaly 
     xc_anomaly       = lx/2   # origin of thermal anomaly
@@ -176,7 +178,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.5 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.75 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -242,13 +244,16 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         fig
     end
 
+    vorticity = @zeros(ni...)
+
+    vertex_buffer = @zeros(ni.+1...)
     T_buffer    = @zeros(ni.+1) 
     Told_buffer = similar(T_buffer)
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
     grid2particle!(pT, xvi, T_buffer, particles.coords)
-
+    
     local Vx_v, Vy_v
     if save_vtk 
         Vx_v = @zeros(ni.+1...)
@@ -256,7 +261,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while it < 1 #2 # run only for 5 Myrs
+    while it < 250 # run only for 5 Myrs
         # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
 
         # Update buoyancy and viscosity -
@@ -279,16 +284,27 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             phase_ratios,
             rheology,
             args,
-            Inf,
+            dt,
             igg;
             iterMax=50e3,
             nout=1e3,
             viscosity_cutoff=(1e18, 1e24)
         )
+        @parallel (@idx ni) compute_vorticity!(vorticity, @velocity(stokes)..., inv.(di)...)
         @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
+        # interpolate stress to particles
+        for (dst, src) in zip((τxx_p, τyy_p, τxy_p, ω_p), @tensor_center(stokes.τ))
+            @parallel center2vertex!(vertex_buffer, src)
+            @views vertex_buffer[1, :] .= vertex_buffer[2, :]
+            @views vertex_buffer[2, :] .= vertex_buffer[end-1, :]
+            @views vertex_buffer[:, 1] .= vertex_buffer[:, 2]
+            @views vertex_buffer[:, 2] .= vertex_buffer[:, end-1]
+            grid2particle!(dst, xvi, vertex_buffer, particles.coords)
+        end
+        
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles.coords)
         @views T_buffer[:, end]      .= 273.0
@@ -327,12 +343,18 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
+        stress_particles = (τxx_p, τyy_p, τxy_p, ω_p)
+        @parallel (@idx ni) JustRelax.Stokes2D.rotate_stress_particles_jaumann!(stress_particles..., particles.index, dt)
+        
+        for (src, dst) in zip(stress_particles, @tensor_center(stokes.τ))
+            particle2grid!(dst, src, xvi, particles.coords)
+        end
         
         @show it += 1
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 10) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if save_vtk 
@@ -370,11 +392,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             idxv     = particles.index.data[:];
 
             # Make Makie figure
-            fig = Figure(resolution = (1000, 1600), title = "t = $t")
+            fig = Figure(resolution = (900, 900), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
-            ax3 = Axis(fig[3,1], aspect = ar, title = "log10(εII)")
-            ax4 = Axis(fig[4,1], aspect = ar, title = "log10(η)")
+            ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
+            ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
             h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
             # Plot particles phase
@@ -388,8 +410,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             hidexdecorations!(ax3)
             Colorbar(fig[1,2], h1)
             Colorbar(fig[2,2], h2)
-            Colorbar(fig[3,2], h3)
-            Colorbar(fig[4,2], h4)
+            Colorbar(fig[1,4], h3)
+            Colorbar(fig[2,4], h4)
             linkaxes!(ax1, ax2, ax3, ax4)
             save(joinpath(figdir, "$(it).png"), fig)
             fig

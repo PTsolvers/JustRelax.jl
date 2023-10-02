@@ -37,20 +37,15 @@ function detect_arsg_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
     end
 end
 
-function multi_copyto!(dst::NTuple{N,T}, src::NTuple{N,T}) where {N,T}
-    ni_src = detect_arsg_size(src)
-    ni_dst = detect_arsg_size(dst)
-    @assert ni_src == ni_dst
-    @parallel (@idx ni_src) multi_copy!(dst, src)
-
-    return nothing
-end
-
 @parallel_indices (I...) function multi_copy!(
     dst::NTuple{N,T}, src::NTuple{N,T}
 ) where {N,T}
-    @inbounds unrolled_copy!(dst, src, I...)
-
+    ntuple(Val(N)) do k
+        Base.@_inline_meta
+        if all(I .≤ size(dst[k]))
+            @inbounds dst[k][I...] = src[k][I...]
+        end
+    end
     return nothing
 end
 

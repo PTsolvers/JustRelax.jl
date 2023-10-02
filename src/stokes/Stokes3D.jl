@@ -393,7 +393,7 @@ function JustRelax.solve!(
     ϵ = pt_stokes.ϵ
     # geometry
     _di = @. 1 / di
-    ni = nx, ny, nz = size(stokes.P)
+    ni = size(stokes.P)
 
     # errors
     err = Inf
@@ -453,7 +453,9 @@ function JustRelax.solve!(
             # if boo
 
             # Update buoyancy
-            # @parallel (@idx ni) compute_ρg!(ρg[end], phase_ratios.center, rheology, args)
+            # @parallel (@idx ni) compute_ρg!(
+            #     ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P)
+            # )
 
             ν = 1e-3
             @parallel (@idx ni) compute_viscosity!(
@@ -482,13 +484,18 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
             )
 
-            # @parallel center2vertex!(
-            #     stokes.τ.yz, stokes.τ.xz, stokes.τ.xy, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c
-            # )
-
-            @parallel (@idx ni .+ 1) compute_τ_vertex!(
-                @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
+            @parallel (@idx ni .+ 1) center2vertex!(
+                stokes.τ.yz,
+                stokes.τ.xz,
+                stokes.τ.xy,
+                stokes.τ.yz_c,
+                stokes.τ.xz_c,
+                stokes.τ.xy_c,
             )
+
+            # @parallel (@idx ni .+ 1) compute_τ_vertex!(
+            #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
+            # )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -536,19 +543,25 @@ function JustRelax.solve!(
     end
 
     av_time = wtime0 / (iter - 1) # average time per iteration
-    update_τ_o!(stokes) # copy τ into τ_o
+    if !isinf(dt)
+        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        @parallel (@idx ni) multi_copy!(
+            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+        )
+    end
 
-    return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_Rz=norm_Rz,
-        norm_∇V=norm_∇V,
-        time=wtime0,
-        av_time=av_time,
-    )
+    # return (
+    #     iter=iter,
+    #     err_evo1=err_evo1,
+    #     err_evo2=err_evo2,
+    #     norm_Rx=norm_Rx,
+    #     norm_Ry=norm_Ry,
+    #     norm_Rz=norm_Rz,
+    #     norm_∇V=norm_∇V,
+    #     time=wtime0,
+    #     av_time=av_time,
+    # )
+    return λ
 end
 
 end # END OF MODULE

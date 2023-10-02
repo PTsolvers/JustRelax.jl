@@ -507,19 +507,12 @@ function JustRelax.solve!(
     sizehint!(err_evo2, Int(iterMax))
 
     # solver loop
+    @copy stokes.P0 stokes.P
     wtime0 = 0.0
     λ = @zeros(ni...)
-    to = TimerOutput()
     η0 = deepcopy(η)
     do_visc = true
     GC.enable(false)
-
-    if !isinf(dt)
-        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        @parallel (@idx ni) multi_copy!(
-            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-        )
-    end
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
@@ -646,6 +639,13 @@ function JustRelax.solve!(
     end
 
     GC.enable(true)
+
+    if !isinf(dt)
+        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        @parallel (@idx ni) multi_copy!(
+            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+        )
+    end
 
     # return (
     #     iter=iter,

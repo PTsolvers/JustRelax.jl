@@ -530,17 +530,17 @@ function JustRelax.solve!(
             )
 
             # if rem(iter, 5) == 0
-            # @timeit to "ρg" @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+            #   @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
             # end
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            if rem(iter, nout) == 0
-                @copy η0 η
-            end
-            if do_visc
+            # if rem(iter, nout) == 0
+            #     @copy η0 η
+            # end
+            # if do_visc
                 ν = 1e-2
                 @parallel (@idx ni) compute_viscosity!(
                     η,
@@ -551,7 +551,7 @@ function JustRelax.solve!(
                     rheology,
                     viscosity_cutoff,
                 )
-            end
+            # end
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 

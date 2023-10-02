@@ -507,18 +507,18 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
             )
 
-            @parallel (@idx ni .+ 1) center2vertex!(
-                stokes.τ.yz,
-                stokes.τ.xz,
-                stokes.τ.xy,
-                stokes.τ.yz_c,
-                stokes.τ.xz_c,
-                stokes.τ.xy_c,
-            )
-
-            # @parallel (@idx ni .+ 1) compute_τ_vertex!(
-            #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
+            # @parallel (@idx ni .+ 1) center2vertex!(
+            #     stokes.τ.yz,
+            #     stokes.τ.xz,
+            #     stokes.τ.xy,
+            #     stokes.τ.yz_c,
+            #     stokes.τ.xz_c,
+            #     stokes.τ.xy_c,
             # )
+
+            @parallel (@idx ni .+ 1) compute_τ_vertex!(
+                @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
+            )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(

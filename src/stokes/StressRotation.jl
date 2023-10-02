@@ -11,7 +11,7 @@ using StaticArrays
     return nothing
 end
 
-@parallel_indices (i, j) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
+@parallel_indices (cel...) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
 
     for ip in JustRelax.cellaxes(index)
         !@cell(index[ip, cell...]) && continue # no particle in this location

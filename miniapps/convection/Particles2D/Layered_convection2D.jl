@@ -142,7 +142,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     ni           = nx, ny           # number of cells
     li           = lx, ly           # domain length in x- and y-
     di           = @. li / ni       # grid step in x- and -y
-    origin       = 0.0, -ly + 15e3*0  # origin coordinates (15km f sticky air layer)
+    origin       = 0.0, -ly + 0* 25e3  # origin coordinates (15km f sticky air layer)
     xci, xvi     = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
@@ -394,7 +394,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             # Make Makie figure
             fig = Figure(resolution = (900, 900), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
+            ax2 = Axis(fig[2,1], aspect = ar, title = "Phase")
             ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
@@ -424,12 +424,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
-
 # (Path)/folder where output data and figures are stored
 figdir   = "Plume2D"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 64
+n        = 128
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

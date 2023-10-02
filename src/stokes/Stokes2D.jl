@@ -488,8 +488,8 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
-    update_halo!(ητ)
+    # compute_maxloc!(ητ, η; window=(1,1))
+    # update_halo!(ητ)
     # end
 
     # errors
@@ -516,7 +516,7 @@ function JustRelax.solve!(
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            compute_maxloc!(ητ, η)
+            compute_maxloc!(ητ, η, window=(1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -557,8 +557,8 @@ function JustRelax.solve!(
                     viscosity_cutoff,
                 )
             end
-            compute_maxloc!(ητ, η)
-            update_halo!(ητ)
+            # compute_maxloc!(ητ, η)
+            # update_halo!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),

@@ -382,7 +382,6 @@ function JustRelax.solve!(
     iterMax=10e3,
     nout=500,
     b_width=(4, 4, 4),
-    viscosity_cutoff=(1e18, 1e24),
     verbose=true,
     viscosity_cutoff=(-Inf, Inf),
 ) where {A,B,C,D,T,N}

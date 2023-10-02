@@ -50,7 +50,6 @@ end
 
 # check if plasticity is active
 @inline isyielding(is_pl, τII_trial, τy) = is_pl && τII_trial > τy
-@inline isyielding(is_pl, τII_trial, τy) = is_pl && τII_trial > τy
 
 @inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + muladd(ηij, _Gdt, 1.0))
 

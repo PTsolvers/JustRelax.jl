@@ -234,105 +234,6 @@ end
 
 # Single phase visco-elasto-plastic flow
 
-# @parallel_indices (i, j) function compute_τ_nonlinear!(
-#     τxx::AbstractArray{T,2},
-#     τyy,
-#     τxy,
-#     τII,
-#     τxx_old,
-#     τyy_old,
-#     τxyv_old,
-#     εxx,
-#     εyy,
-#     εxyv,
-#     P,
-#     η,
-#     η_vep,
-#     λ,
-#     rheology,
-#     dt,
-#     θ_dτ,
-# ) where {T}
-#     I = i, j
-
-#     # numerics
-#     ηij = η[I...]
-#     _Gdt = inv(get_G(rheology[1]) * dt)
-#     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
-
-#     # get plastic paremeters (if any...)
-#     is_pl, C, sinϕ, η_reg = plastic_params(rheology[1])
-#     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
-
-#     τ = τxx, τyy, τxy
-#     τ_old = τxx_old, τyy_old, τxyv_old
-#     ε = εxx, εyy, εxyv
-
-#     _compute_τ_nonlinear!(
-#         τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
-#     )
-
-#     return nothing
-# end
-
-# # multi phase visco-elasto-plastic flow, where phases are defined in the cell center
-# @parallel_indices (i, j) function compute_τ_nonlinear!(
-#     τxx::AbstractArray{T,2},
-#     τyy,
-#     τxy,
-#     τII,
-#     τxx_old,
-#     τyy_old,
-#     τxyv_old,
-#     εxx,
-#     εyy,
-#     εxyv,
-#     P,
-#     η,
-#     η_vep,
-#     λ,
-#     phase_ratios,
-#     rheology,
-#     dt,
-#     θ_dτ,
-# ) where {T}
-#     I = i, j
-
-#     # numerics
-#     ηij = @inbounds η[I...]
-#     phase = @inbounds phase_ratios[I...]
-#     G = fn_ratio(get_G, rheology, phase)
-#     _Gdτ  = inv(ηij * θ_dτ)
-#     _Gdt = inv(G * dt)
-#     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdτ)
-
-#     # get plastic paremeters (if any...)
-#     is_pl, C, sinϕ, η_reg = plastic_params_phase(rheology, phase)
-
-#     plastic_parameters = (; is_pl, C, sinϕ, η_reg)
-
-#     τ = τxx, τyy, τxy
-#     τ_old = τxx_old, τyy_old, τxyv_old
-#     ε = εxx, εyy, εxyv
-
-#     _compute_τ_nonlinear!(
-#         τ,
-#         τII,
-#         τ_old,
-#         ε,
-#         P,
-#         ηij,
-#         η_vep,
-#         λ,
-#         dτ_r,
-#         _Gdt,
-#         plastic_parameters,
-#         I...,
-#     )
-
-#     return nothing
-# end
-
 @parallel_indices (I...) function compute_τ_nonlinear!(
     τ,     # shear @ centers
     τII,
@@ -367,9 +268,10 @@ end
 @parallel_indices (I...) function compute_τ_nonlinear!(
     τ,     # @ cell centers
     τII,
-    τ_old, # @ vertices
+    τ_old, # @ cell centers
     ε,     # @ vertices
     P,
+    θ,
     η,
     η_vep,
     λ,
@@ -393,6 +295,7 @@ end
     _compute_τ_nonlinear!(
         τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
+    θ[I...] = P[I...]  + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
 
     return nothing
 end

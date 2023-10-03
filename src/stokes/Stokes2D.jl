@@ -509,10 +509,11 @@ function JustRelax.solve!(
     # solver loop
     @copy stokes.P0 stokes.P
     wtime0 = 0.0
+    θ = @zeros(ni...)
     λ = @zeros(ni...)
     η0 = deepcopy(η)
     do_visc = true
-    GC.enable(false)
+    # GC.enable(false)
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
@@ -526,7 +527,7 @@ function JustRelax.solve!(
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
-                ητ,
+                η,
                 rheology,
                 phase_ratios.center,
                 dt,
@@ -564,6 +565,7 @@ function JustRelax.solve!(
                 @tensor_center(stokes.τ_o),
                 @strain(stokes),
                 stokes.P,
+                θ,
                 η,
                 η_vep,
                 λ,
@@ -585,7 +587,7 @@ function JustRelax.solve!(
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
-                    stokes.P,
+                    θ,
                     @stress(stokes)...,
                     ηdτ,
                     ρg...,
@@ -604,7 +606,7 @@ function JustRelax.solve!(
             er_η < 1e-3 && (do_visc = false)
             # @show er_η
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx, stokes.R.Ry, θ, @stress(stokes)..., ρg..., _di...
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (
@@ -636,7 +638,9 @@ function JustRelax.solve!(
         end
     end
 
-    GC.enable(true)
+    stokes.P .= θ
+
+    # GC.enable(true)
 
     if !isinf(dt)
         @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -780,7 +784,7 @@ function JustRelax.solve!(
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
-
+    
     if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
         update_τ_o!(stokes)
         @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)

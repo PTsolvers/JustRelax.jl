@@ -441,10 +441,10 @@ function JustRelax.solve!(
 
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
-
+    θ = @zeros(ni...)
+    
     # solver loop
     wtime0 = 0.0
-    boo = false
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
@@ -462,7 +462,7 @@ function JustRelax.solve!(
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
-                ητ,
+                η,
                 rheology,
                 phase_ratios.center,
                 dt,
@@ -498,6 +498,7 @@ function JustRelax.solve!(
                 @tensor_center(stokes.τ_o),
                 @strain(stokes),
                 stokes.P,
+                θ,
                 η,
                 η_vep,
                 λ,
@@ -507,24 +508,24 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
             )
 
-            # @parallel (@idx ni .+ 1) center2vertex!(
-            #     stokes.τ.yz,
-            #     stokes.τ.xz,
-            #     stokes.τ.xy,
-            #     stokes.τ.yz_c,
-            #     stokes.τ.xz_c,
-            #     stokes.τ.xy_c,
-            # )
-
-            @parallel (@idx ni .+ 1) compute_τ_vertex!(
-                @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
+            @parallel (@idx ni .+ 1) center2vertex!(
+                stokes.τ.yz,
+                stokes.τ.xz,
+                stokes.τ.xy,
+                stokes.τ.yz_c,
+                stokes.τ.xz_c,
+                stokes.τ.xy_c,
             )
+
+            # @parallel (@idx ni .+ 1) compute_τ_vertex!(
+            #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
+            # )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     @residuals(stokes.R)...,
-                    stokes.P,
+                    θ,
                     ρg...,
                     @stress(stokes)...,
                     ητ,
@@ -535,6 +536,8 @@ function JustRelax.solve!(
             end
             flow_bcs!(stokes, flow_bc)
         end
+        
+        stokes.P .= θ
 
         iter += 1
         if iter % nout == 0 && iter > 1

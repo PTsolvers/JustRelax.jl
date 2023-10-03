@@ -26,7 +26,8 @@ function _compute_τ_nonlinear!(
     end
     # get plastic paremeters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
-    τy = C * cosϕ + P[idx...] * sinϕ
+    τy = C + P[idx...] * sinϕ
+    # τy = C * cosϕ + P[idx...] * sinϕ
 
     dτij = if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
@@ -34,7 +35,6 @@ function _compute_τ_nonlinear!(
             τij, dτij, τy, τII_trial, ηij, λ[idx...], η_reg, dτ_r, volume
         )
         dτ_pl
-
     else
         dτij
     end
@@ -68,8 +68,8 @@ function compute_dτ_pl(
     # yield function
     F = τII_trial - τy
     # Plastic multiplier
-    ν = 1e-2
-    λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(dτ_r * ηij + η_reg + volume)
+    ν = 0.2
+    λ = (1-ν) * λ0 + ν * (F > 0.0) * F * inv(dτ_r * ηij + η_reg + volume)
     λ_τII = λ * 0.5 * inv(τII_trial)
 
     dτ_pl = ntuple(Val(N)) do i
@@ -78,7 +78,8 @@ function compute_dτ_pl(
         λdQdτ = (τij[i] + dτij[i]) * λ_τII
         # corrected stress: dτ_r * (-(τij[i] - τij_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij[i] - λdQdτ))
         # NOTE: dτij[i] already contains the non-plastic stress increment 
-        dτij[i] - dτ_r * 2.0 * ηij * λdQdτ
+        # dτij[i] - dτ_r * 2.0 * ηij * λdQdτ
+        muladd(-dτ_r * 2.0, ηij * λdQdτ, dτij[i])
     end
     return dτ_pl, λ
 end

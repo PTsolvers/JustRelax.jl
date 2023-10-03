@@ -586,13 +586,7 @@ function JustRelax.solve!(
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
-                    @velocity(stokes)...,
-                    θ,
-                    @stress(stokes)...,
-                    ηdτ,
-                    ρg...,
-                    ητ,
-                    _di...,
+                    @velocity(stokes)..., θ, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
                 )
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
@@ -784,7 +778,7 @@ function JustRelax.solve!(
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
-    
+
     if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
         update_τ_o!(stokes)
         @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)

@@ -68,8 +68,8 @@ function compute_dτ_pl(
     # yield function
     F = τII_trial - τy
     # Plastic multiplier
-    ν = 0.01
-    λ = (1-ν) * λ0 + ν * (F > 0.0) * F * inv(dτ_r * ηij + η_reg + volume)
+    ν = 0.05
+    λ = (1 - ν) * λ0 + ν * (F > 0.0) * F * inv(dτ_r * ηij + η_reg + volume)
     λ_τII = λ * 0.5 * inv(τII_trial)
 
     dτ_pl = ntuple(Val(N)) do i

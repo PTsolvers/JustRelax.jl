@@ -442,7 +442,7 @@ function JustRelax.solve!(
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
     θ = @zeros(ni...)
-    
+
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -536,7 +536,7 @@ function JustRelax.solve!(
             end
             flow_bcs!(stokes, flow_bc)
         end
-        
+
         stokes.P .= θ
 
         iter += 1

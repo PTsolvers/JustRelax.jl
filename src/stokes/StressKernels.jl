@@ -295,7 +295,7 @@ end
     _compute_τ_nonlinear!(
         τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
-    θ[I...] = P[I...]  + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+    θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
 
     return nothing
 end

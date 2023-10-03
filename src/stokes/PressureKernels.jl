@@ -40,9 +40,21 @@ function _compute_P!(P, ∇V, η, r, θ_dτ)
     return RP, P
 end
 
+# function _compute_P!(P, P0, ∇V, η, K, dt, r, θ_dτ)
+#     _Kdt = inv(K * dt)
+#     RP = muladd(-(P - P0), _Kdt, -∇V)
+#     P += RP / (1.0 / (r / θ_dτ * η) + _Kdt)
+#     return RP, P
+# end
+
 function _compute_P!(P, P0, ∇V, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
+    c = r / θ_dτ * η
     RP = muladd(-(P - P0), _Kdt, -∇V)
-    P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
+    P += RP * c
+
+    # P = (-∇V + P0 * _Kdt + P * inv(c)) * inv(inv(c) + _Kdt)
+    # RP = muladd(-(P - P0), _Kdt, -∇V)
+
     return RP, P
 end

@@ -542,7 +542,7 @@ function JustRelax.solve!(
             end
             if do_visc
                 ν = 1e-2
-                @timeit to "viscosity" compute_viscosity!(
+                compute_viscosity!(
                     η,
                     ν,
                     phase_ratios.center,

@@ -42,7 +42,7 @@ using ..JustRelax
 using CUDA, AMDGPU
 using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
-using GeoParams, LinearAlgebra, Printf, TimerOutputs
+using GeoParams, LinearAlgebra, Printf
 
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax:
@@ -509,7 +509,6 @@ function JustRelax.solve!(
     # solver loop
     wtime0 = 0.0
     λ = @zeros(ni...)
-    to = TimerOutput()
     η0 = deepcopy(η)
     do_visc = true
     GC.enable(false)
@@ -530,9 +529,9 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            # if rem(iter, 5) == 0
-            # @timeit to "ρg" @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
-            # end
+            if rem(iter, 5) == 0
+                @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+            end
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -635,7 +634,6 @@ function JustRelax.solve!(
         norm_Ry=norm_Ry,
         norm_∇V=norm_∇V,
     )
-    return to
 end
 
 function JustRelax.solve!(

@@ -180,13 +180,22 @@ end
     quote
         Base.@_inline_meta
         η = 0.0
-        Base.@nexprs $N i -> (
+        # Base.@nexprs $N i -> begin
+        #     η += if iszero(ratio[i])
+        #         0.0
+        #     else
+        #         inv(compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args)) * ratio[i]
+        #     end
+        # end
+        # inv(η)
+
+        Base.@nexprs $N i -> begin
             η += if iszero(ratio[i])
                 0.0
             else
-                inv(compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args)) * ratio[i]
+                compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args) * ratio[i]
             end
-        )
-        inv(η)
+        end
+        η
     end
 end

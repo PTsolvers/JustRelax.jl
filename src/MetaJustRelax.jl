@@ -19,14 +19,14 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         if !isconst(Main, :PTArray)
             eval(:(const PTArray = CUDA.CuArray{$T,$N,CUDA.Mem.DeviceBuffer}))
         end
-    
+
     elseif model.device == :AMDGPU
         eval(:(@init_parallel_stencil(AMDGPU, $T, $N)))
         Base.eval(Main, Meta.parse("using AMDGPU"))
         if !isconst(Main, :PTArray)
             eval(:(const PTArray = AMDGPU.ROCArray{$T,$N,AMDGPU.Runtime.Mem.HIPBuffer}))
         end
-        
+
     else
         @eval begin
             @init_parallel_stencil(Threads, $T, $N)
@@ -34,7 +34,6 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
                 const PTArray = Array{$T,$N}
             end
         end
-
     end
 
     # CREATE ARRAY STRUCTS

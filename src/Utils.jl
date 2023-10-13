@@ -292,7 +292,7 @@ Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` a
 function compute_maxloc!(B, A; window=(1, 1, 1))
     ni = size(A)
 
-    @parallel_indices (I...) function _maxloc!(B, A, window) 
+    @parallel_indices (I...) function _maxloc!(B, A, window)
         B[I...] = _maxloc_window_clamped(A, I..., window...)
         return nothing
     end
@@ -442,9 +442,11 @@ function maximum_mpi(A)
     return MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD)
 end
 
-for (f1,f2) in zip((:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum))
+for (f1, f2) in zip(
+    (:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum)
+)
     @eval begin
         $f1(A::ROCArray) = $f2(Array(A))
         $f1(A) = $f2(A)
-    end 
+    end
 end

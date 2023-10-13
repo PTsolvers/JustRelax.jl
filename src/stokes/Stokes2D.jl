@@ -39,7 +39,7 @@ module Stokes2D
 
 using ImplicitGlobalGrid
 using ..JustRelax
-using CUDA
+using CUDA, AMDGPU
 using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
 using GeoParams, LinearAlgebra, Printf, TimerOutputs

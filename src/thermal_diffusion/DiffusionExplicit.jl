@@ -21,7 +21,7 @@ using ParallelStencil.FiniteDifferences1D
 using JustRelax
 using LinearAlgebra
 using Printf
-using CUDA
+using CUDA, AMDGPU
 
 import JustRelax:
     ThermalParameters, solve!, assign!, thermal_boundary_conditions!, update_T!
@@ -155,7 +155,7 @@ module ThermalDiffusion2D
 using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
 using JustRelax
-using CUDA
+using CUDA, AMDGPU
 using GeoParams
 
 import JustRelax: ThermalParameters, solve!, assign!, thermal_boundary_conditions!
@@ -511,7 +511,7 @@ using ParallelStencil.FiniteDifferences3D
 using JustRelax
 using MPI
 using Printf
-using CUDA
+using CUDA, AMDGPU
 using GeoParams
 
 import JustRelax:

@@ -291,44 +291,13 @@ Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` a
 """
 function compute_maxloc!(B, A; window=(1, 1, 1))
     ni = size(A)
-    width_x, width_y, width_z = window
 
-    @parallel_indices (i, j) function _maxloc!(
-        B::T, A::T
-    ) where {T<:AbstractArray{<:Number,2}}
-        B[i, j] = _maxloc_window_clamped(A, i, j, width_x, width_y)
+    @parallel_indices (I...) function _maxloc!(B, A, window) 
+        B[I...] = _maxloc_window_clamped(A, I..., window...)
         return nothing
     end
 
-    @parallel_indices (i, j, k) function _maxloc!(
-        B::T, A::T
-    ) where {T<:AbstractArray{<:Number,3}}
-        B[i, j, k] = _maxloc_window_clamped(A, i, j, k, width_x, width_y, width_z)
-        return nothing
-    end
-
-    @parallel (@idx ni) _maxloc!(B, A)
-end
-
-function _compute_maxloc!(B, A, window)
-    I = indices(window)
-
-    if all(I .<= size(A))
-        B[I...] = JustRelax._maxloc_window_clamped(A, I..., window...)
-    end
-
-    return nothing
-end
-
-function compute_maxloc!(
-    B::CuArray{T1,N,T2}, A::CuArray{T1,N,T2}; window=ntuple(i -> 1, Val(N))
-) where {T1,T2,N}
-    nx, ny = size(A)
-    ntx, nty = 32, 32
-    blkx, blky = ceil(Int, nx / ntx), ceil(Int, ny / nty)
-    CUDA.@sync begin
-        @cuda threads = (ntx, nty) blocks = (blkx, blky) _compute_maxloc!(B, A, window)
-    end
+    @parallel (@idx ni) _maxloc!(B, A, window)
     return nothing
 end
 
@@ -404,7 +373,7 @@ Compute the time step `dt` for the velocity field `S.V` and the diffusive maximu
 
 @inline function compute_dt(V::NTuple, di, dt_diff)
     n = inv(length(V) + 0.1)
-    dt_adv = mapreduce(x -> x[1] * inv(maximum(abs.(x[2]))), min, zip(di, V)) * n
+    dt_adv = mapreduce(x -> x[1] * inv(maximum_mpi(abs.(x[2]))), min, zip(di, V)) * n
     return min(dt_diff, dt_adv)
 end
 """
@@ -454,21 +423,28 @@ end
 # MPI reductions 
 
 function mean_mpi(A)
-    mean_l = mean(A)
+    mean_l = _mean(A)
     return MPI.Allreduce(mean_l, MPI.SUM, MPI.COMM_WORLD) / MPI.Comm_size(MPI.COMM_WORLD)
 end
 
 function norm_mpi(A)
-    sum2_l = sum(A .^ 2)
+    sum2_l = _sum(A .^ 2)
     return sqrt(MPI.Allreduce(sum2_l, MPI.SUM, MPI.COMM_WORLD))
 end
 
 function minimum_mpi(A)
-    min_l = minimum(A)
+    min_l = _minimum(A)
     return MPI.Allreduce(min_l, MPI.MIN, MPI.COMM_WORLD)
 end
 
 function maximum_mpi(A)
-    max_l = maximum(A)
+    max_l = _maximum(A)
     return MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD)
+end
+
+for (f1,f2) in zip((:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum))
+    @eval begin
+        $f1(A::ROCArray) = $f2(Array(A))
+        $f1(A) = $f2(A)
+    end 
 end

@@ -100,7 +100,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -344,7 +344,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -379,7 +379,7 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_viscosity!(
                 η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff
             )
-            compute_maxloc!(ητ, η)
+            compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -488,7 +488,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -552,7 +552,7 @@ function JustRelax.solve!(
                     viscosity_cutoff,
                 )
             end
-            compute_maxloc!(ητ, η)
+            compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -665,7 +665,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 

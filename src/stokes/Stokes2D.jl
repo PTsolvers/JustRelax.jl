@@ -222,7 +222,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η; window=(1, 1, 1))
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 

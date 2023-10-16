@@ -7,19 +7,26 @@ struct PS_Setup{B,C}
 end
 
 function environment!(model::PS_Setup{T,N}) where {T,N}
-    gpu = model.device == :gpu ? true : false
 
     # call appropriate FD module
     Base.eval(@__MODULE__, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
     Base.eval(Main, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
 
     # start ParallelStencil
-    if model.device == :gpu
+    if model.device == :CUDA
         eval(:(@init_parallel_stencil(CUDA, $T, $N)))
         Base.eval(Main, Meta.parse("using CUDA"))
         if !isconst(Main, :PTArray)
             eval(:(const PTArray = CUDA.CuArray{$T,$N,CUDA.Mem.DeviceBuffer}))
         end
+
+    elseif model.device == :AMDGPU
+        eval(:(@init_parallel_stencil(AMDGPU, $T, $N)))
+        Base.eval(Main, Meta.parse("using AMDGPU"))
+        if !isconst(Main, :PTArray)
+            eval(:(const PTArray = AMDGPU.ROCArray{$T,$N,AMDGPU.Runtime.Mem.HIPBuffer}))
+        end
+
     else
         @eval begin
             @init_parallel_stencil(Threads, $T, $N)

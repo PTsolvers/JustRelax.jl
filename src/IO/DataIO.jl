@@ -3,7 +3,7 @@ module DataIO
 using WriteVTK
 using HDF5
 using MPI
-using CUDA
+using CUDA, AMDGPU
 
 import ..JustRelax: Geometry
 

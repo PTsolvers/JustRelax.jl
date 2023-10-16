@@ -10,6 +10,7 @@ end
 
 _tocpu(x) = x
 _tocpu(x::T) where {T<:CuArray} = Array(x)
+_tocpu(x::T) where {T<:ROCArray} = Array(x)
 
 """
     checkpointing(dst, stokes, T, η, time)

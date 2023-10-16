@@ -39,10 +39,10 @@ module Stokes2D
 
 using ImplicitGlobalGrid
 using ..JustRelax
-using CUDA
+using CUDA, AMDGPU
 using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
-using GeoParams, LinearAlgebra, Printf, TimerOutputs
+using GeoParams, LinearAlgebra, Printf
 
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax:
@@ -100,7 +100,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -222,7 +222,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η; window=(1, 1, 1))
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -344,7 +344,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -379,7 +379,7 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_viscosity!(
                 η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff
             )
-            compute_maxloc!(ητ, η)
+            compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -488,7 +488,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -509,7 +509,6 @@ function JustRelax.solve!(
     # solver loop
     wtime0 = 0.0
     λ = @zeros(ni...)
-    to = TimerOutput()
     η0 = deepcopy(η)
     do_visc = true
     GC.enable(false)
@@ -530,9 +529,9 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            # if rem(iter, 5) == 0
-            # @timeit to "ρg" @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
-            # end
+            if rem(iter, 5) == 0
+                @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+            end
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -543,7 +542,7 @@ function JustRelax.solve!(
             end
             if do_visc
                 ν = 1e-2
-                @timeit to "viscosity" compute_viscosity!(
+                compute_viscosity!(
                     η,
                     ν,
                     phase_ratios.center,
@@ -553,7 +552,7 @@ function JustRelax.solve!(
                     viscosity_cutoff,
                 )
             end
-            compute_maxloc!(ητ, η)
+            compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -635,7 +634,6 @@ function JustRelax.solve!(
         norm_Ry=norm_Ry,
         norm_∇V=norm_∇V,
     )
-    return to
 end
 
 function JustRelax.solve!(
@@ -667,7 +665,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 

@@ -41,7 +41,7 @@ using ImplicitGlobalGrid
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 using JustRelax
-using CUDA
+using CUDA, AMDGPU
 using LinearAlgebra
 using Printf
 using GeoParams

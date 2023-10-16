@@ -505,7 +505,7 @@ function JustRelax.solve!(
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            compute_maxloc!(ητ, η)
+            compute_maxloc!(ητ, η, window=(1,1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -536,7 +536,6 @@ function JustRelax.solve!(
             end
             # if do_visc
             ν = 1e-2
-            "viscosity"
             compute_viscosity!(
                 η,
                 ν,

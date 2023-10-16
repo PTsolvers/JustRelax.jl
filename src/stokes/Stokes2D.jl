@@ -505,7 +505,7 @@ function JustRelax.solve!(
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            compute_maxloc!(ητ, η, window=(1,1))
+            compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)

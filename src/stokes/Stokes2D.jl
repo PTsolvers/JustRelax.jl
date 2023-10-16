@@ -536,7 +536,8 @@ function JustRelax.solve!(
             end
             # if do_visc
             ν = 1e-2
-            @timeit to "viscosity" compute_viscosity!(
+            "viscosity"
+            compute_viscosity!(
                 η,
                 ν,
                 phase_ratios.center,
@@ -545,7 +546,6 @@ function JustRelax.solve!(
                 rheology,
                 viscosity_cutoff,
             )
-            end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -564,7 +564,7 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            
+
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)..., θ, @stress(stokes)..., ηdτ, ρg..., ητ, _di...

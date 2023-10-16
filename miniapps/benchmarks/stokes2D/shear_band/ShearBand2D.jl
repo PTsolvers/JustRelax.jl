@@ -123,12 +123,11 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     τII        = Float64[]
     sol        = Float64[]
     ttot       = Float64[]
-    iterations = Int64[]
 
     while t < tmax
 
         # Stokes solver ----------------
-        _, iters = solve!(
+        solve!(
             stokes,
             pt_stokes,
             di,
@@ -161,7 +160,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
-        push!(iterations, iters)
 
         println("it = $it; t = $t \n")
 
@@ -194,7 +192,7 @@ N      = 128
 n      = N + 2
 nx     = n - 2
 ny     = n - 2
-figdir = "results"
+figdir = "ShearBands2D"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
 else

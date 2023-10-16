@@ -87,6 +87,11 @@ function elastic_buildup(;
             verbose=true,
         )
 
+        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        @parallel (@idx ni) multi_copy!(
+            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+        )
+
         t  += dt
         it += 1
         println("Iteration $it => t = $(t/kyr) kyrs")

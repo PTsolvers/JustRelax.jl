@@ -56,6 +56,7 @@ end
             τ_xy τ_yy
         ]
 
+        # this could be fully unrolled in 2D
         τr = R * τ * R'
 
         @cell xx[ip, cell...] = τr[1, 1]
@@ -68,13 +69,8 @@ end
 
 ## Stress Rotation on the grid
 
-@parallel_indices (i, j) function rotate_stress!(V, τ::NTuple{3,T}, _di, dt) where {T}
-    @inbounds rotate_stress!(V, τ, (i, j), _di, dt)
-    return nothing
-end
-
-@parallel_indices (i, j, k) function rotate_stress!(V, τ::NTuple{6,T}, _di, dt) where {T}
-    @inbounds rotate_stress!(V, τ, (i, j, k), _di, dt)
+@parallel_indices (I...) function rotate_stress!(V, τ::NTuple{3,T}, _di, dt) where {T}
+    @inbounds rotate_stress!(V, τ, tuple(I...), _di, dt)
     return nothing
 end
 

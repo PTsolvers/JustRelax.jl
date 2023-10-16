@@ -41,53 +41,36 @@ end
 @parallel_indices (i, j, k) function center2vertex!(
     vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy
 )
-    nx, ny, nz = size(center_xz)
+    i1, j1, k1 = (i, j, k) .+ 1
+    nx, ny, nz = size(center_yz)
 
-    #! format: off
-    Base.@propagate_inbounds @inline function clamp_idx(i, j, k)
-        i = clamp(i, 1, nx)
-        j = clamp(j, 1, ny)
-        k = clamp(k, 1, nz)
-        i, j, k
+    if i ≤ nx && 1 < j1 ≤ ny && 1 < k1 ≤ nz
+        vertex_yz[i, j1, k1] =
+            0.25 * (
+                center_yz[i, j, k] +
+                center_yz[i, j1, k] +
+                center_yz[i, j, k1] +
+                center_yz[i, j1, k1]
+            )
     end
-    #! format: on
-
-    @inbounds begin
-        if i ≤ size(vertex_yz, 1) &&
-            (1 < j < size(vertex_yz, 2)) &&
-            (1 < k < size(vertex_yz, 3))
-            vertex_yz[i, j, k] =
-                0.25 * (
-                    center_yz[clamp_idx(i, j - 1, k - 1)...] +
-                    center_yz[clamp_idx(i, j, k - 1)...] +
-                    center_yz[clamp_idx(i, j - 1, k)...] +
-                    center_yz[clamp_idx(i, j, k)...]
-                )
-        end
-        if (1 < i < size(vertex_xz, 1)) &&
-            j ≤ size(vertex_xz, 2) &&
-            (1 < k < size(vertex_xz, 3))
-            vertex_xz[i, j, k] =
-                0.25 * (
-                    center_xz[clamp_idx(i - 1, j, k - 1)...] +
-                    center_xz[clamp_idx(i, j, k - 1)...] +
-                    center_xz[clamp_idx(i - 1, j, k)...] +
-                    center_xz[clamp_idx(i, j, k)...]
-                )
-        end
-        if (1 < i < size(vertex_xy, 1)) &&
-            (1 < j < size(vertex_xy, 2)) &&
-            k ≤ size(vertex_xy, 3)
-            vertex_xy[i, j, k] =
-                0.25 * (
-                    center_xy[clamp_idx(i - 1, j - 1, k)...] +
-                    center_xy[clamp_idx(i, j - 1, k)...] +
-                    center_xy[clamp_idx(i - 1, j, k)...] +
-                    center_xy[clamp_idx(i, j, k)...]
-                )
-        end
+    if 1 < i1 ≤ nx && j ≤ ny && 1 < k1 ≤ nz
+        vertex_xz[i1, j, k1] =
+            0.25 * (
+                center_xz[i, j, k] +
+                center_xz[i1, j, k] +
+                center_xz[i, j, k1] +
+                center_xz[i1, j, k1]
+            )
     end
-
+    if 1 < i1 ≤ nx && 1 < j1 ≤ ny && k ≤ nz
+        vertex_xy[i1, j1, k] =
+            0.25 * (
+                center_xy[i, j, k] +
+                center_xy[i1, j, k] +
+                center_xy[i, j1, k] +
+                center_xy[i1, j1, k]
+            )
+    end
     return nothing
 end
 

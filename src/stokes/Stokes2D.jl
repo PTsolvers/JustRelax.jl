@@ -184,8 +184,6 @@ function JustRelax.solve!(
         end
     end
 
-    update_τ_o!(stokes)
-
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -298,11 +296,6 @@ function JustRelax.solve!(
         if igg.me == 0 && err ≤ ϵ
             println("Pseudo-transient iterations converged in $iter iterations")
         end
-    end
-
-    if !isinf(dt) # if dt is inf, then we are in the non-elastic case
-        update_τ_o!(stokes)
-        # @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
     end
 
     return (
@@ -443,11 +436,6 @@ function JustRelax.solve!(
         end
     end
 
-    if !isinf(dt) # if dt is inf, then we are in the non-elastic case
-        update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
-    end
-
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -543,21 +531,21 @@ function JustRelax.solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            # if rem(iter, nout) == 0
-            #     @copy η0 η
-            # end
-            # # if do_visc
-            # ν = 1e0
-            # @timeit to "viscosity" compute_viscosity!(
-            #     η,
-            #     ν,
-            #     phase_ratios.center,
-            #     @strain(stokes)...,
-            #     args,
-            #     rheology,
-            #     viscosity_cutoff,
-            # )
-            # end
+            if rem(iter, nout) == 0
+                @copy η0 η
+            end
+            # if do_visc
+            ν = 1e-2
+            @timeit to "viscosity" compute_viscosity!(
+                η,
+                ν,
+                phase_ratios.center,
+                @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
+            )
+            end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -576,14 +564,7 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-
-            # @parallel (@idx ni) compute_τ_vertex!(
-            #     stokes.τ.xy,
-            #     stokes.ε.xy,
-            #     η_vep,
-            #     pt_stokes.θ_dτ,
-            # )
-
+            
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)..., θ, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
@@ -634,24 +615,14 @@ function JustRelax.solve!(
 
     stokes.P .= θ
 
-    # GC.enable(true)
-
-    if !isinf(dt)
-        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        @parallel (@idx ni) multi_copy!(
-            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-        )
-    end
-
-    # return (
-    #     iter=iter,
-    #     err_evo1=err_evo1,
-    #     err_evo2=err_evo2,
-    #     norm_Rx=norm_Rx,
-    #     norm_Ry=norm_Ry,
-    #     norm_∇V=norm_∇V,
-    # )
-    return λ, iter
+    return (
+        iter=iter,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_∇V=norm_∇V,
+    )
 end
 
 function JustRelax.solve!(
@@ -777,11 +748,6 @@ function JustRelax.solve!(
         if igg.me == 0 && err ≤ ϵ
             println("Pseudo-transient iterations converged in $iter iterations")
         end
-    end
-
-    if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
-        update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
     end
 
     return (

@@ -119,6 +119,11 @@ function multiple_elastic_buildup(;
             finalize_MPI = false,
         )
 
+        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        @parallel (@idx ni) multi_copy!(
+            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+        )
+
         push!(av_err, mean(@. abs(av_τyy - sol_τyy) / sol_τyy))
     end
 

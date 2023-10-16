@@ -475,22 +475,22 @@ function JustRelax.solve!(
             )
 
             # Update buoyancy
-            # @parallel (@idx ni) compute_ρg!(
-            #     ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P)
-            # )
+            @parallel (@idx ni) compute_ρg!(
+                ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P)
+            )
 
             # Update viscosity
-            # ν = 1e-2
-            # @parallel (@idx ni) compute_viscosity!(
-            #     η,
-            #     ν,
-            #     phase_ratios.center,
-            #     @strain(stokes)...,
-            #     args,
-            #     rheology,
-            #     viscosity_cutoff,
-            # )
-            # end
+            ν = 1e-2
+            @parallel (@idx ni) compute_viscosity!(
+                η,
+                ν,
+                phase_ratios.center,
+                @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
+            )
+            
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -569,25 +569,20 @@ function JustRelax.solve!(
     end
 
     av_time = wtime0 / (iter - 1) # average time per iteration
-    if !isinf(dt)
-        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        @parallel (@idx ni) multi_copy!(
-            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-        )
-    end
 
-    # return (
-    #     iter=iter,
-    #     err_evo1=err_evo1,
-    #     err_evo2=err_evo2,
-    #     norm_Rx=norm_Rx,
-    #     norm_Ry=norm_Ry,
-    #     norm_Rz=norm_Rz,
-    #     norm_∇V=norm_∇V,
-    #     time=wtime0,
-    #     av_time=av_time,
-    # )
-    return λ
+    stokes.P .= θ
+
+    return (
+        iter=iter,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_Rz=norm_Rz,
+        norm_∇V=norm_∇V,
+        time=wtime0,
+        av_time=av_time,
+    )
 end
 
 end # END OF MODULE

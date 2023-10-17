@@ -223,7 +223,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         vtk_dir      = figdir*"\\vtk"
         !isdir(vtk_dir) && mkpath(vtk_dir)
     end
-    !isdir(figdir)  && mkpath(figdir)
+    !isdir(figdir) && mkpath(figdir)
     # ----------------------------------------------------
 
     # Plot initial T and η profiles
@@ -417,4 +417,4 @@ else
 end
 
 # run main script
-# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);

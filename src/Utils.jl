@@ -38,8 +38,13 @@ function detect_arsg_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
 end
 
 @parallel_indices (I...) function multi_copy!(
+@parallel_indices (I...) function multi_copy!(
     dst::NTuple{N,T}, src::NTuple{N,T}
 ) where {N,T}
+    ntuple(Val(N)) do k
+        Base.@_inline_meta
+        if all(I .≤ size(dst[k]))
+            @inbounds dst[k][I...] = src[k][I...]
     ntuple(Val(N)) do k
         Base.@_inline_meta
         if all(I .≤ size(dst[k]))
@@ -309,15 +314,16 @@ Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` a
 function compute_maxloc!(B, A; window=(1, 1, 1))
     ni = size(A)
 
-    @parallel_indices (I...) function _maxloc!(B, A)
-        B[I...] = _maxloc_window(A, I..., window...)
+    @parallel_indices (I...) function _maxloc!(B, A, window)
+        B[I...] = _maxloc_window_clamped(A, I..., window...)
         return nothing
     end
 
-    @parallel (@idx ni) _maxloc!(B, A)
+    @parallel (@idx ni) _maxloc!(B, A, window)
+    return nothing
 end
 
-@inline function _maxloc_window(A, I, J, width_x, width_y)
+@inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
     nx, ny = size(A)
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)
@@ -389,7 +395,7 @@ Compute the time step `dt` for the velocity field `S.V` and the diffusive maximu
 
 @inline function compute_dt(V::NTuple, di, dt_diff)
     n = inv(length(V) + 0.1)
-    dt_adv = mapreduce(x -> x[1] * inv(maximum(abs.(x[2]))), min, zip(di, V)) * n
+    dt_adv = mapreduce(x -> x[1] * inv(maximum_mpi(abs.(x[2]))), min, zip(di, V)) * n
     return min(dt_diff, dt_adv)
 end
 """
@@ -442,21 +448,30 @@ end
 # MPI reductions 
 
 function mean_mpi(A)
-    mean_l = mean(A)
+    mean_l = _mean(A)
     return MPI.Allreduce(mean_l, MPI.SUM, MPI.COMM_WORLD) / MPI.Comm_size(MPI.COMM_WORLD)
 end
 
 function norm_mpi(A)
-    sum2_l = sum(A .^ 2)
+    sum2_l = _sum(A .^ 2)
     return sqrt(MPI.Allreduce(sum2_l, MPI.SUM, MPI.COMM_WORLD))
 end
 
 function minimum_mpi(A)
-    min_l = minimum(A)
+    min_l = _minimum(A)
     return MPI.Allreduce(min_l, MPI.MIN, MPI.COMM_WORLD)
 end
 
 function maximum_mpi(A)
-    max_l = maximum(A)
+    max_l = _maximum(A)
     return MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD)
+end
+
+for (f1, f2) in zip(
+    (:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum)
+)
+    @eval begin
+        $f1(A::ROCArray) = $f2(Array(A))
+        $f1(A) = $f2(A)
+    end
 end

@@ -6,7 +6,7 @@ using ImplicitGlobalGrid
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 using JustRelax
-using CUDA
+using CUDA, AMDGPU
 using LinearAlgebra
 using Printf
 using GeoParams
@@ -94,6 +94,9 @@ function JustRelax.solve!(
     # @parallel (1:size(ητ, 2), 1:size(ητ, 3)) free_slip_x!(ητ)
     # @parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
     # @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
+    # @parallel (1:size(ητ, 2), 1:size(ητ, 3)) free_slip_x!(ητ)
+    # @parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
+    # @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
 
     # errors
     err = 2 * ϵ
@@ -111,6 +114,7 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel compute_P!(
                 stokes.P,
                 stokes.P0,
@@ -124,8 +128,12 @@ function JustRelax.solve!(
             )
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
             @parallel (@idx ni .+ 1) compute_τ!(
+                @stress(stokes)...,
+                @tensor(stokes.τ_o)...,
+                @strain(stokes)...,
                 @stress(stokes)...,
                 @tensor(stokes.τ_o)...,
                 @strain(stokes)...,
@@ -137,10 +145,13 @@ function JustRelax.solve!(
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
+                    @velocity(stokes)...,
                     stokes.R.Rx,
                     stokes.R.Ry,
                     stokes.R.Rz,
                     stokes.P,
+                    ρg...,
+                    @stress(stokes)...,
                     ρg...,
                     @stress(stokes)...,
                     ητ,
@@ -407,12 +418,21 @@ function JustRelax.solve!(
 
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
+    θ = @zeros(ni...)
 
     # solver loop
     wtime0 = 0.0
-    boo = false
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
+            # ~preconditioner
+            ητ = deepcopy(η)
+            compute_maxloc!(ητ, η)
+            update_halo!(ητ)
+            # @hide_communication b_width begin # communication/computation overlap
+            #     @parallel compute_maxloc!(ητ, η)
+            #     update_halo!(ητ)
+            # end
+
             # ~preconditioner
             ητ = deepcopy(η)
             compute_maxloc!(ητ, η)
@@ -440,23 +460,13 @@ function JustRelax.solve!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
 
-            # Update viscosity
-            # ν = iter ≥ nout ? 0.05 : 0.0
-            # ν = iter ≥ nout ? 0.05 : 0.0
-            # ν = 1e-2
-            # ν = (iter, 1000) == 0 ? 0.5 : 1.0
-            # if err < 1e-3 && !boo
-            #     boo = true
-            #     println("Going non-linear at iteration $iter")
-            # end
-            # if boo
-
             # Update buoyancy
-            # @parallel (@idx ni) compute_ρg!(
-            #     ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P)
-            # )
+            @parallel (@idx ni) compute_ρg!(
+                ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P)
+            )
 
-            ν = 1e-3
+            # Update viscosity
+            ν = 1e-2
             @parallel (@idx ni) compute_viscosity!(
                 η,
                 ν,
@@ -466,18 +476,23 @@ function JustRelax.solve!(
                 rheology,
                 viscosity_cutoff,
             )
-            # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
+                @tensor_center(stokes.τ),
                 @tensor_center(stokes.τ),
                 stokes.τ.II,
                 @tensor_center(stokes.τ_o),
                 @strain(stokes),
+                @tensor_center(stokes.τ_o),
+                @strain(stokes),
                 stokes.P,
+                θ,
                 η,
                 η_vep,
                 λ,
+                λ,
                 phase_ratios.center,
+                tupleize(rheology), # needs to be a tuple
                 tupleize(rheology), # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
@@ -491,7 +506,18 @@ function JustRelax.solve!(
                 stokes.τ.xz_c,
                 stokes.τ.xy_c,
             )
+            @parallel (@idx ni .+ 1) center2vertex!(
+                stokes.τ.yz,
+                stokes.τ.xz,
+                stokes.τ.xy,
+                stokes.τ.yz_c,
+                stokes.τ.xz_c,
+                stokes.τ.xy_c,
+            )
 
+            # @parallel (@idx ni .+ 1) compute_τ_vertex!(
+            #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
+            # )
             # @parallel (@idx ni .+ 1) compute_τ_vertex!(
             #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
             # )
@@ -500,7 +526,7 @@ function JustRelax.solve!(
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     @residuals(stokes.R)...,
-                    stokes.P,
+                    θ,
                     ρg...,
                     @stress(stokes)...,
                     ητ,
@@ -510,7 +536,10 @@ function JustRelax.solve!(
                 update_halo!(@velocity(stokes)...)
             end
             flow_bcs!(stokes, flow_bc)
+            flow_bcs!(stokes, flow_bc)
         end
+
+        stokes.P .= θ
 
         iter += 1
         if iter % nout == 0 && iter > 1
@@ -542,25 +571,20 @@ function JustRelax.solve!(
     end
 
     av_time = wtime0 / (iter - 1) # average time per iteration
-    if !isinf(dt)
-        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        @parallel (@idx ni) multi_copy!(
-            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-        )
-    end
 
-    # return (
-    #     iter=iter,
-    #     err_evo1=err_evo1,
-    #     err_evo2=err_evo2,
-    #     norm_Rx=norm_Rx,
-    #     norm_Ry=norm_Ry,
-    #     norm_Rz=norm_Rz,
-    #     norm_∇V=norm_∇V,
-    #     time=wtime0,
-    #     av_time=av_time,
-    # )
-    return λ
+    stokes.P .= θ
+
+    return (
+        iter=iter,
+        err_evo1=err_evo1,
+        err_evo2=err_evo2,
+        norm_Rx=norm_Rx,
+        norm_Ry=norm_Ry,
+        norm_Rz=norm_Rz,
+        norm_∇V=norm_∇V,
+        time=wtime0,
+        av_time=av_time,
+    )
 end
 
 end # END OF MODULE

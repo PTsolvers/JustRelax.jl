@@ -5,7 +5,7 @@ using Reexport
 @reexport using ImplicitGlobalGrid
 using LinearAlgebra
 using Printf
-using CUDA
+using CUDA, AMDGPU
 using MPI
 using GeoParams
 using HDF5

@@ -39,10 +39,10 @@ module Stokes2D
 
 using ImplicitGlobalGrid
 using ..JustRelax
-using CUDA
+using CUDA, AMDGPU
 using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
-using GeoParams, LinearAlgebra, Printf, TimerOutputs
+using GeoParams, LinearAlgebra, Printf
 
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax: tensor_invariant!, compute_τ_nonlinear!
@@ -100,7 +100,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -184,8 +184,6 @@ function JustRelax.solve!(
         end
     end
 
-    update_τ_o!(stokes)
-
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -222,7 +220,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η; window=(1, 1, 1))
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -300,11 +298,6 @@ function JustRelax.solve!(
         end
     end
 
-    if !isinf(dt) # if dt is inf, then we are in the non-elastic case
-        update_τ_o!(stokes)
-        # @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
-    end
-
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -344,7 +337,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -379,7 +372,7 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_viscosity!(
                 η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff
             )
-            compute_maxloc!(ητ, η)
+            compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -443,11 +436,6 @@ function JustRelax.solve!(
         end
     end
 
-    if !isinf(dt) # if dt is inf, then we are in the non-elastic case
-        update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
-    end
-
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -487,6 +475,10 @@ function JustRelax.solve!(
 
     # ~preconditioner
     ητ = deepcopy(η)
+    # @hide_communication b_width begin # communication/computation overlap
+    compute_maxloc!(ητ, η; window=(1, 1))
+    update_halo!(ητ)
+    # end
 
     # errors
     err = 2 * ϵ
@@ -504,15 +496,17 @@ function JustRelax.solve!(
 
     # solver loop
     @copy stokes.P0 stokes.P
+    @copy stokes.P0 stokes.P
     wtime0 = 0.0
+    θ = @zeros(ni...)
     λ = @zeros(ni...)
     η0 = deepcopy(η)
     do_visc = true
-    GC.enable(false)
+    # GC.enable(false)
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            compute_maxloc!(ητ, η, window=(1, 1))
+            compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -530,9 +524,9 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            # if rem(iter, 5) == 0
-            # @timeit to "ρg" @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
-            # end
+            if rem(iter, 5) == 0
+                @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+            end
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -556,13 +550,18 @@ function JustRelax.solve!(
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
+                @tensor_center(stokes.τ),
                 stokes.τ.II,
                 @tensor_center(stokes.τ_o),
                 @strain(stokes),
+                @tensor_center(stokes.τ_o),
+                @strain(stokes),
                 stokes.P,
+                θ,
                 η,
                 η_vep,
                 λ,
+                phase_ratios.center,
                 phase_ratios.center,
                 tupleize(rheology), # needs to be a tuple
                 dt,
@@ -571,22 +570,9 @@ function JustRelax.solve!(
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
 
-            # @parallel (@idx ni) compute_τ_vertex!(
-            #     stokes.τ.xy,
-            #     stokes.ε.xy,
-            #     η_vep,
-            #     pt_stokes.θ_dτ,
-            # )
-
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
-                    @velocity(stokes)...,
-                    stokes.P,
-                    @stress(stokes)...,
-                    ηdτ,
-                    ρg...,
-                    ητ,
-                    _di...,
+                    @velocity(stokes)..., θ, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
                 )
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
@@ -600,7 +586,7 @@ function JustRelax.solve!(
             er_η < 1e-3 && (do_visc = false)
             # @show er_η
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx, stokes.R.Ry, θ, @stress(stokes)..., ρg..., _di...
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (
@@ -632,14 +618,7 @@ function JustRelax.solve!(
         end
     end
 
-    GC.enable(true)
-
-    if !isinf(dt)
-        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        @parallel (@idx ni) multi_copy!(
-            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-        )
-    end
+    stokes.P .= θ
 
     return (
         iter=iter,
@@ -680,7 +659,7 @@ function JustRelax.solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η)
+    compute_maxloc!(ητ, η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -776,11 +755,6 @@ function JustRelax.solve!(
         if igg.me == 0 && err ≤ ϵ
             println("Pseudo-transient iterations converged in $iter iterations")
         end
-    end
-
-    if !isinf(dt) # if dt is inf, then we are in the non-elastic case 
-        update_τ_o!(stokes)
-        @parallel (@idx ni) rotate_stress!(@velocity(stokes), @tensor(stokes.τ_o), _di, dt)
     end
 
     return (

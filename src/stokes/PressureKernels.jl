@@ -2,11 +2,13 @@
 
 ## Incompressible 
 @parallel_indices (I...) function compute_P!(P, RP, ∇V, η, r, θ_dτ)
+@parallel_indices (I...) function compute_P!(P, RP, ∇V, η, r, θ_dτ)
     RP[I...], P[I...] = _compute_P!(P[I...], ∇V[I...], η[I...], r, θ_dτ)
     return nothing
 end
 
 ## Compressible 
+@parallel_indices (I...) function compute_P!(P, P0, RP, ∇V, η, K, dt, r, θ_dτ)
 @parallel_indices (I...) function compute_P!(P, P0, RP, ∇V, η, K, dt, r, θ_dτ)
     RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], η[I...], K[I...], dt, r, θ_dτ
@@ -19,11 +21,17 @@ end
 @parallel_indices (I...) function compute_P!(
     P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ
 ) where {N}
+@parallel_indices (I...) function compute_P!(
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ
+) where {N}
     K = get_Kb(rheology, phase[I...])
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
 
+@parallel_indices (I...) function compute_P!(
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ
+) where {N,C<:JustRelax.CellArray}
 @parallel_indices (I...) function compute_P!(
     P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ
 ) where {N,C<:JustRelax.CellArray}

@@ -10,7 +10,6 @@ macro idx(args...)
     end
 end
 
-@inline _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
 @inline _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
 
 """
@@ -38,13 +37,8 @@ function detect_arsg_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
 end
 
 @parallel_indices (I...) function multi_copy!(
-@parallel_indices (I...) function multi_copy!(
     dst::NTuple{N,T}, src::NTuple{N,T}
 ) where {N,T}
-    ntuple(Val(N)) do k
-        Base.@_inline_meta
-        if all(I .≤ size(dst[k]))
-            @inbounds dst[k][I...] = src[k][I...]
     ntuple(Val(N)) do k
         Base.@_inline_meta
         if all(I .≤ size(dst[k]))
@@ -428,7 +422,7 @@ end
 @inline tupleize(v::Tuple) = v
 
 # Delta function
-@inline allzero(x::Vararg{T,N}) where {T,N}= all(x->x==0, x)
+@inline allzero(x::Vararg{T,N}) where {T,N} = all(x -> x == 0, x)
 
 """
     continuation_log(x_new, x_old, ν)
@@ -436,7 +430,7 @@ end
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """
 # @inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
-@inline continuation_log(x_new, x_old, ν) = muladd((1 - ν), x_old,  ν * x_new) # (1 - ν) * x_old + ν * x_new
+@inline continuation_log(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
 
 # Others
 

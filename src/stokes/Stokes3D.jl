@@ -24,8 +24,7 @@ include("VelocityKernels.jl")
 
 export solve!, pureshear_bc!
 rotate_stress_particles_jaumann!,
-rotate_stress_particles_roation_matrix!,
-compute_vorticity!,
+rotate_stress_particles_roation_matrix!, compute_vorticity!,
 @parallel function update_τ_o!(
     τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o, τxx, τyy, τzz, τxy, τxz, τyz
 )
@@ -91,12 +90,6 @@ function JustRelax.solve!(
     ητ = deepcopy(η)
     compute_maxloc!(ητ, η)
     update_halo!(ητ)
-    # @parallel (1:size(ητ, 2), 1:size(ητ, 3)) free_slip_x!(ητ)
-    # @parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
-    # @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
-    # @parallel (1:size(ητ, 2), 1:size(ητ, 3)) free_slip_x!(ητ)
-    # @parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
-    # @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
 
     # errors
     err = 2 * ϵ
@@ -114,7 +107,6 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel compute_P!(
                 stokes.P,
                 stokes.P0,
@@ -127,7 +119,6 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
             )
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
             @parallel (@idx ni .+ 1) compute_τ!(

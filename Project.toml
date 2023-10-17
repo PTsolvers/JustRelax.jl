@@ -1,6 +1,6 @@
 name = "JustRelax"
 uuid = "34418575-392d-4e26-8c6d-96b0910afa06"
-authors = ["Patrick Sanan <patrick.sanan@gmail.com>, Albert De Montserrat <albertdemontserratnavarro@erdw.ethz.ch>"]
+authors = ["Albert De Montserrat <albertdemontserratnavarro@erdw.ethz.ch>", Patrick Sanan <patrick.sanan@gmail.com>]
 version = "0.1.0"
 
 [deps]
@@ -21,6 +21,17 @@ WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
 [compat]
 julia = "1.9"
+AMDGPU = "0.5.4"
+CUDA = "4.4.1"
+CellArrays = "0.1.3"
+GeoParams = "0.5.0"
+HDF5 = "0.17.1"
+ImplicitGlobalGrid = "0.13.0"
+MPI = "0.20.14"
+ParallelStencil = "0.9.0 ⚲"
+Reexport = "1.2.2"
+StaticArrays = "1.6.5"
+WriteVTK = "1.18.0"
 
 [extras]
 CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"

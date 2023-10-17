@@ -550,10 +550,7 @@ function JustRelax.solve!(
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
-                @tensor_center(stokes.τ),
                 stokes.τ.II,
-                @tensor_center(stokes.τ_o),
-                @strain(stokes),
                 @tensor_center(stokes.τ_o),
                 @strain(stokes),
                 stokes.P,
@@ -561,7 +558,6 @@ function JustRelax.solve!(
                 η,
                 η_vep,
                 λ,
-                phase_ratios.center,
                 phase_ratios.center,
                 tupleize(rheology), # needs to be a tuple
                 dt,

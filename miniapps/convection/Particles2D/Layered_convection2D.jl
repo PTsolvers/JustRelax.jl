@@ -1,9 +1,6 @@
-# using CUDA
-# CUDA.allowscalar(false) # for safety
+using CUDA
+CUDA.allowscalar(false) # for safety
 
-# NOTE: For now, need to use a specific brand of JustPIC.jl
-# type `] add https://github.com/JuliaGeodynamics/JustPIC.jl.git#adm-rework` 
-# in the REPL to install it
 using JustRelax, JustRelax.DataIO, JustPIC
 import JustRelax.@cell
 
@@ -16,7 +13,7 @@ model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
@@ -92,24 +89,24 @@ end
 @parallel_indices (i, j) function init_T!(T, z)
     depth = -z[j]
 
-    # (depth) because we have 15km of sticky air
+    # (depth - 15e3) because we have 15km of sticky air
     if depth < 0e0
-        T[i, j]  = 273e0
+        T[i + 1, j] = 273e0
 
     elseif 0e0 ≤ (depth) < 35e3
-        dTdZ    = (923-273)/35e3
-        offset  = 273e0
-        T[i, j] = (depth) * dTdZ + offset
+        dTdZ        = (923-273)/35e3
+        offset      = 273e0
+        T[i + 1, j] = (depth) * dTdZ + offset
     
     elseif 110e3 > (depth) ≥ 35e3
-        dTdZ    = (1492-923)/75e3
-        offset  = 923
-        T[i, j] = (depth - 35e3) * dTdZ + offset
+        dTdZ        = (1492-923)/75e3
+        offset      = 923
+        T[i + 1, j] = (depth - 35e3) * dTdZ + offset
 
     elseif (depth) ≥ 110e3 
-        dTdZ    = (1837 - 1492)/590e3
-        offset  = 1492e0
-        T[i, j] = (depth - 110e3) * dTdZ + offset
+        dTdZ        = (1837 - 1492)/590e3
+        offset      = 1492e0
+        T[i + 1, j] = (depth - 110e3) * dTdZ + offset
 
     end
     
@@ -121,15 +118,17 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            depth   = abs(y[j])
-            dTdZ    = (2047 - 2017) / 50e3
-            offset  = 2017
-            T[i, j] = (depth - 585e3) * dTdZ + offset
+            depth       = abs(y[j])
+            dTdZ        = (2047 - 2017) / 50e3
+            offset      = 2017
+            T[i + 1, j] = (depth - 585e3) * dTdZ + offset
         end
         return nothing
     end
-
-    @parallel _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    ni = length.(xvi)
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    
+    return nothing
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
@@ -142,7 +141,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     ni           = nx, ny           # number of cells
     li           = lx, ly           # domain length in x- and y-
     di           = @. li / ni       # grid step in x- and -y
-    origin       = 0.0, -ly + 15e3  # origin coordinates (15km f sticky air layer)
+    origin       = 0.0, -ly         # origin coordinates (15km f sticky air layer)
     xci, xvi     = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
@@ -185,7 +184,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         periodicity  = (left = false, right = false, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
-    @parallel init_T!(thermal.T, xvi[2])
+    @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2])
     thermal_bcs!(thermal.T, thermal_bc)
    
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
@@ -200,11 +199,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Rheology
     η                = @zeros(ni...)
-    η_vep            = similar(η)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    @parallel (@idx ni) compute_viscosity!(
+    compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e16, 1e24)
     )
+    η_vep            = copy(η)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -223,7 +222,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         vtk_dir      = figdir*"\\vtk"
         !isdir(vtk_dir) && mkpath(vtk_dir)
     end
-    !isdir(figdir)  && mkpath(figdir)
+    !isdir(figdir) && mkpath(figdir)
     # ----------------------------------------------------
 
     # Plot initial T and η profiles
@@ -279,7 +278,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             phase_ratios,
             rheology,
             args,
-            dt,
+            Inf,
             igg;
             iterMax=50e3,
             nout=1e3,
@@ -321,7 +320,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
             copyinn_x!(dst, src)
         end
-        grid2particle!(pT, xvi, T_buffer, Told_buffer, particles.coords)
+        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles.coords)
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)

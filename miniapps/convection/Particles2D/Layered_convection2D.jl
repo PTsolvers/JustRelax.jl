@@ -9,7 +9,7 @@ import JustRelax.@cell
 # set_backend("CUDA_Float64_2D")
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2)
+model = PS_Setup(:CUDA, Float64, 2)
 environment!(model)
 
 # Load script dependencies
@@ -200,14 +200,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # Rheology
     η                = @zeros(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    compute_viscosity!(
+    @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e16, 1e24)
     )
     η_vep            = copy(η)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
     )
 
     # Boundary conditions
@@ -220,9 +220,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # if it does not exist, make folder where figures are stored
     if save_vtk
         vtk_dir      = figdir*"\\vtk"
-        !isdir(vtk_dir) && mkpath(vtk_dir)
+        take(vtk_dir)
     end
-    !isdir(figdir) && mkpath(figdir)
+    take(figdir)
     # ----------------------------------------------------
 
     # Plot initial T and η profiles
@@ -416,4 +416,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
+# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);

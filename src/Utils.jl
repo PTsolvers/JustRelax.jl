@@ -426,6 +426,13 @@ end
 @inline allzero(x::Vararg{T,N}) where {T,N} = all(x -> x == 0, x)
 
 """
+    take(fldr::String)
+
+Create folder `fldr` if it does not exist.
+"""
+take(fldr::String) = !isdir(fldr) && mkpath(fldr)
+
+"""
     continuation_log(x_new, x_old, ν)
 
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`

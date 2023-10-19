@@ -118,69 +118,6 @@ end
     end
 end
 
-# # ParallelStencil launch kernel for 2D
-# @parallel_indices (i, j) function phase_ratios_center(
-#     ratio_centers, px, py, xc, yc, di, phases
-# )
-#     I = i, j
-
-#     w = phase_ratio_weights(
-#         px[I...], py[I...], phases[I...], xc[i], yc[j], di, JustRelax.nphases(ratio_centers)
-#     )
-
-#     for k in 1:numphases(ratio_centers)
-#         JustRelax.@cell ratio_centers[k, I...] = w[k]
-#     end
-#     return nothing
-# end
-
-# function phase_ratio_weights(
-#     pxi::SVector{N1,T}, pyi::SVector{N1,T}, ph::SVector{N1,T}, cell_center, di, ::Val{NC}
-# ) where {N1,NC,T}
-#     if @generated
-#         quote
-#             Base.@_inline_meta
-#             # Initiaze phase ratio weights (note: can't use ntuple() here because of the @generated function)
-#             Base.@nexprs $NC i -> w_i = zero($T)
-#             w = Base.@ncall $NC tuple w
-
-#             # initialie sum of weights
-#             sumw = zero($T)
-#             Base.@nexprs $N1 i -> begin
-#                 # bilinear weight (1-(xᵢ-xc)/dx)*(1-(yᵢ-yc)/dy)
-#                 x = bilinear_weight(cell_center, (pxi[i], pyi[i]), di)
-#                 sumw += x # reduce
-#                 ph_local = ph[i]
-#                 # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
-#                 Base.@nexprs $NC j -> tmp_j = w[j] + x * δ(ph_local, j)
-#                 w = Base.@ncall $NC tuple tmp
-#             end
-
-#             # return phase ratios weights w = sum(w * δij(i, phase)) / sum(w)
-#             _sumw = inv(sum(w))
-#             Base.@nexprs $NC i -> w_i = w[i] * _sumw
-#             w = Base.@ncall $NC tuple w
-#             return w
-#         end
-#     else
-#         # Initiaze phase ratio weights (note: can't use ntuple() here because of the @generated function)
-#         w = ntuple(_ -> zero(T), Val(NC))
-#         # initialie sum of weights
-#         sumw = zero(T)
-
-#         for i in eachindex(pxi)
-#             # bilinear weight (1-(xᵢ-xc)/dx)*(1-(yᵢ-yc)/dy)
-#             x = @inline bilinear_weight(cell_center, (pxi[i], pyi[i]), di)
-#             sumw += x # reduce
-#             ph_local = ph[i]
-#             # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
-#             w = w .+ x .* ntuple(j -> δ(ph_local, j), Val(NC))
-#         end
-#         w = w .* inv(sum(w))
-#         return w
-#     end
-# end
-
 # ParallelStencil launch kernel for 2D
 @parallel_indices (I...) function phase_ratios_center(
     ratio_centers, pxi::NTuple{N,T1}, xci::NTuple{N,T2}, di::NTuple{N,T3}, phases

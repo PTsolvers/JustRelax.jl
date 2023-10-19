@@ -174,6 +174,23 @@ end
     return local_args
 end
 
+# @generated function compute_phase_viscosity_εII(
+#     rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio, εII, args
+# ) where {N}
+#     quote
+#         Base.@_inline_meta
+#         η = 0.0
+#         Base.@nexprs $N i -> (
+#             η += if iszero(ratio[i])
+#                 0.0
+#             else
+#                 inv(compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args)) * ratio[i]
+#             end
+#         )
+#         inv(η)
+#     end
+# end
+
 @generated function compute_phase_viscosity_εII(
     rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio, εII, args
 ) where {N}
@@ -184,9 +201,9 @@ end
             η += if iszero(ratio[i])
                 0.0
             else
-                inv(compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args)) * ratio[i]
+                compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args) * ratio[i]
             end
         )
-        inv(η)
+        η
     end
 end

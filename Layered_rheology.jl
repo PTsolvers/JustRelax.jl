@@ -64,8 +64,8 @@ function init_rheologies(; is_plastic = true)
             Density           = PT_Density(; ρ0=2.75e3, β=β_upper_crust, T0=0.0, α = 3.5e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
             Conductivity      = K_crust,
-            # CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
-            CompositeRheology = CompositeRheology((LinearViscous(;η = 1e21),)),
+            CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
+            # CompositeRheology = CompositeRheology((LinearViscous(;η = 1e21),)),
             Elasticity        = el_upper_crust,
             Gravity           = ConstantGravity(; g=9.81),
         ),
@@ -129,26 +129,27 @@ function init_phases!(phases, particles, Lx, Ly; d=650e3, r=50e3)
             x = JustRelax.@cell px[ip, I...]
             y = JustRelax.@cell py[ip, I...]
             depth = -(JustRelax.@cell pz[ip, I...])
+
             if 0e0 ≤ depth ≤ 21e3
                 @cell phases[ip, I...] = 1.0
 
             elseif 35e3 ≥ depth > 21e3
-                @cell phases[ip, I...] = 1.0 #2.0
+                @cell phases[ip, I...] = 2.0
 
             elseif 90e3 ≥ depth > 35e3
-                @cell phases[ip, I...] = 1.0 #3.0
+                @cell phases[ip, I...] = 3.0
 
             elseif depth > 90e3
-                @cell phases[ip, I...] = 1.0 #3.0
+                @cell phases[ip, I...] = 3.0
 
             elseif 0e0 > depth 
-                @cell phases[ip, I...] = 1.0 #5.0
+                @cell phases[ip, I...] = 5.0
 
             end
 
             # plume - rectangular
             if ((x - Lx * 0.5)^2 ≤ r^2) && ((y - Ly * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
-                JustRelax.@cell phases[ip, I...] = 1.0 #4.0
+                JustRelax.@cell phases[ip, I...] = 4.0
             end
         end
         return nothing

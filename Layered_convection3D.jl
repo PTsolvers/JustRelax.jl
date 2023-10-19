@@ -12,7 +12,8 @@ import JustRelax.@cell
 # set_backend("CUDA_Float64_2D")
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:gpu, Float64, 3)
+model = PS_Setup(:CUDA, Float64, 3)
+# model = PS_Setup(:Threads, Float64, 3)
 environment!(model)
 
 # Load script dependencies
@@ -23,7 +24,6 @@ include("Layered_rheology.jl")
 
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-@inline create_dir(dir) = !isdir(dir) && mkpath(dir)
 
 @inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
@@ -101,20 +101,20 @@ end
     if depth < 0e0
         T[I...]  = 273.0
 
-    elseif 0e0 ≤ (depth - 15e3) < 35e3
+    elseif 0e0 ≤ (depth) < 35e3
         dTdZ    = (923-273)/35e3
         offset  = 273e0
-        T[I...] = (depth - 15e3) * dTdZ + offset
+        T[I...] = (depth) * dTdZ + offset
     
-    elseif 110e3 > (depth - 15e3) ≥ 35e3
+    elseif 110e3 > (depth) ≥ 35e3
         dTdZ    = (1492-923)/75e3
         offset  = 923
-        T[I...] = (depth - 15e3 - 35e3) * dTdZ + offset
+        T[I...] = (depth - 35e3) * dTdZ + offset
 
-    elseif (depth - 15e3) ≥ 110e3 
+    elseif (depth) ≥ 110e3 
         dTdZ    = (1837 - 1492)/590e3
         offset  = 1492e0
-        T[I...] = (depth - 15e3 - 110e3) * dTdZ + offset
+        T[I...] = (depth - 110e3) * dTdZ + offset
 
     end
     
@@ -140,7 +140,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false)
+function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
 
     # Physical domain ------------------------------------
     lz            = 700e3                # domain length in z
@@ -148,7 +148,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false
     ni            = nx, ny, nz           # number of cells
     li            = lx, ly, lz           # domain length
     di            = @. li / ni           # grid steps
-    origin        = 0.0, 0.0, -lz + 15e3 # origin coordinates (15km of sticky air layer)
+    origin        = 0.0, 0.0, -lz        # origin coordinates (15km of sticky air layer)
     xci, xvi      = lazy_grid(
         di, 
         li, 
@@ -187,7 +187,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √3.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.5 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -214,7 +214,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false
     η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e16, 1e24)
+        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
     )
     η_vep            = deepcopy(η)
 
@@ -232,11 +232,11 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false
 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
-    if save_vtk
+    if do_vtk
         vtk_dir      = figdir*"\\vtk"
-        create_dir(vtk_dir)
+        take(vtk_dir)
     end
-    create_dir(figdir)
+    take(figdir)
     # ----------------------------------------------------
 
     # Plot initial T and η profiles
@@ -258,7 +258,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false
     grid2particle!(pT, xvi, thermal.T, particles.coords)
 
     local Vx_v, Vy_v, Vz_v
-    if save_vtk 
+    if do_vtk 
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
         Vz_v = @zeros(ni.+1...)
@@ -274,7 +274,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false
         @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
  
         # Stokes solver ----------------
-        JustRelax.Stokes3D.solve!(
+        solve!(
             stokes,
             pt_stokes,
             di,
@@ -287,12 +287,12 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false
             args,
             Inf,
             igg;
-            iterMax          = 10e3,
+            iterMax          = 100e3,
             nout             = 1e3,
             viscosity_cutoff = (1e18, 1e24)
         );
         @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
-        dt   = compute_dt(stokes, di, dt_diff)
+        dt   = compute_dt(stokes, di, dt_diff) / 2
         # ------------------------------
 
         # interpolate fields from particle to grid vertices
@@ -322,7 +322,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false
         # advect particles in memory
         shuffle_particles!(particles, xvi, particle_args)        
         # interpolate fields from grid vertices to particles
-        grid2particle!(pT, xvi, thermal.T, thermal.Told, particles.coords)
+        grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles.coords)
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
@@ -333,67 +333,59 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", save_vtk =false
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 1) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
-            # if save_vtk 
-            #     JustRelax.velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-            #     data_v = (; 
-            #         T   = Array(thermal.T[2:end-1, :]),
-            #         τxy = Array(stokes.τ.xy),
-            #         εxy = Array(stokes.ε.xy),
-            #         Vx  = Array(Vx_v),
-            #         Vy  = Array(Vy_v),
-            #     )
-            #     data_c = (; 
-            #         P   = Array(stokes.P),
-            #         τxx = Array(stokes.τ.xx),
-            #         τyy = Array(stokes.τ.yy),
-            #         εxx = Array(stokes.ε.xx),
-            #         εyy = Array(stokes.ε.yy),
-            #         η   = Array(η),
-            #     )
-            #     save_vtk(
-            #         joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-            #         xvi,
-            #         xci, 
-            #         data_v, 
-            #         data_c
-            #     )
-            # end
+            if do_vtk 
+                JustRelax.velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+                data_v = (; 
+                    T   = Array(thermal.T),
+                    τxy = Array(stokes.τ.xy),
+                    εxy = Array(stokes.ε.xy),
+                    Vx  = Array(Vx_v),
+                    Vy  = Array(Vy_v),
+                )
+                data_c = (; 
+                    Tc  = Array(thermal.Tc),
+                    P   = Array(stokes.P),
+                    τxx = Array(stokes.τ.xx),
+                    τyy = Array(stokes.τ.yy),
+                    εxx = Array(stokes.ε.xx),
+                    εyy = Array(stokes.ε.yy),
+                    η   = Array(log10.(η)),
+                )
+                save_vtk(
+                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                    xvi,
+                    xci, 
+                    data_v, 
+                    data_c
+                )
+            end
 
-            # # Make particles plottable
-            # p        = particles.coords
-            # ppx, ppy = p
-            # pxv      = ppx.data[:]./1e3
-            # pyv      = ppy.data[:]./1e3
-            # pzv      = ppz.data[:]./1e3
-            # clr      = pPhases.data[:]
-            # idxv     = particles.index.data[:];
-
-            xz_slice = div(ny, 2) |> Int
+            xz_slice = ny >>> 1
             # Make Makie figure
             fig = Figure(resolution = (1400, 1800), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
             ax2 = Axis(fig[2,1], aspect = ar, title = "τII [MPa]")
-            ax3 = Axis(fig[1,2], aspect = ar, title = "log10(εII)")
-            ax4 = Axis(fig[2,2], aspect = ar, title = "log10(η)")
+            ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
+            ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
             h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[:, xz_slice, :]) , colormap=:batlow)
             # Plot particles phase
-            h2  = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.τ.II[:, xz_slice, :])./1e6) , colormap=:batlow) 
+            h2  = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II[:, xz_slice, :]./1e6) , colormap=:batlow) 
             # Plot 2nd invariant of strain rate
             h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II[:, xz_slice, :])) , colormap=:batlow) 
             # Plot effective viscosity
             h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep[:, xz_slice, :])) , colormap=:batlow)
             hideydecorations!(ax3)
             hideydecorations!(ax4)
-            # Colorbar(fig[1,2], h1)
-            # Colorbar(fig[2,2], h2)
-            # Colorbar(fig[3,2], h3)
-            # Colorbar(fig[4,2], h4)
-            # linkaxes!(ax1, ax2, ax3, ax4)
-            # save(joinpath(figdir, "$(it).png"), fig)
+            Colorbar(fig[1,2], h1)
+            Colorbar(fig[2,2], h2)
+            Colorbar(fig[1,4], h3)
+            Colorbar(fig[2,4], h4)
+            linkaxes!(ax1, ax2, ax3, ax4)
+            save(joinpath(figdir, "$(it).png"), fig)
             fig
         end
         # ------------------------------
@@ -406,31 +398,17 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "Plume3D"
-save_vtk = false # set to true to generate VTK files for ParaView
+do_vtk   = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 66
-nx       = n - 2
-ny       = n - 2
-nz       = n - 2
+n        = 128
+nx       = n # - 2
+ny       = n # - 2
+nz       = n # - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 0; init_MPI= true)...)
 else
     igg
 end
-# save script metada
-# @edit metadata(@__DIR__, "Layered_convection2D.jl", joinpath(figdir, "metadata"))
 
-# # run main script
-# main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
-
-# # Make particles plottable
-# p        = particles.coords
-# ppx, ppy, ppz = p
-# pxv      = ppx.data[:]./1e3
-# pyv      = ppy.data[:]./1e3
-# pzv      = ppz.data[:]./1e3
-# clr      = pPhases.data[:];
-# idxv     = particles.index.data[:];
-
-# scatter(Array(pxv[idxv]), Array(pyv[idxv]), Array(pzv[idxv]), color=Array(clr[idxv]))
+figdir   = "Plume3D_$n"
+main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);

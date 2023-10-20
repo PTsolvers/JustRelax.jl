@@ -382,7 +382,7 @@ nx       = n
 ny       = n
 nz       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 0; init_MPI= true)...)
+    IGG(init_global_grid(nx, ny, nz; init_MPI= true)...)
 else
     igg
 end

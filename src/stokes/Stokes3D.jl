@@ -452,9 +452,7 @@ function JustRelax.solve!(
             )
 
             # Update buoyancy
-            @parallel (@idx ni) compute_ρg!(
-                ρg[3], phase_ratios.center, rheology, args
-            )
+            @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
 
             # Update viscosity
             ν = 1e-2
@@ -492,7 +490,7 @@ function JustRelax.solve!(
                 stokes.τ.xz_c,
                 stokes.τ.xy_c,
             )
-          
+
             # @parallel (@idx ni .+ 1) compute_τ_vertex!(
             #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
             # )

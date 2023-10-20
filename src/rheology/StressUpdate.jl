@@ -71,7 +71,7 @@ function compute_dτ_pl(
     F = τII_trial - τy
     # Plastic multiplier
     ν = 0.5
-    λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(ηij * dτ_r  + η_reg + volume)
+    λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(ηij * dτ_r + η_reg + volume)
     λ_τII = λ * 0.5 * inv(τII_trial)
 
     dτ_pl = ntuple(Val(N)) do i

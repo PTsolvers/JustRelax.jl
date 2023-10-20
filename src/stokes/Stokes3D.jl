@@ -1,38 +1,3 @@
-## DIMENSION AGNOSTIC ELASTIC KERNELS
-
-@parallel function elastic_iter_params!(
-    dτ_Rho::AbstractArray,
-    Gdτ::AbstractArray,
-    ητ::AbstractArray,
-    Vpdτ::T,
-    G::T,
-    dt::M,
-    Re::T,
-    r::T,
-    max_li::T,
-) where {T,M}
-    @all(dτ_Rho) = Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (G * dt)))
-    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
-    return nothing
-end
-
-@parallel function elastic_iter_params!(
-    dτ_Rho::AbstractArray,
-    Gdτ::AbstractArray,
-    ητ::AbstractArray,
-    Vpdτ::T,
-    G::AbstractArray,
-    dt::M,
-    Re::T,
-    r::T,
-    max_li::T,
-) where {T,M}
-    @all(dτ_Rho) =
-        Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (@all(G) * dt)))
-    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
-    return nothing
-end
-
 ## 3D ELASTICITY MODULE
 
 module Stokes3D
@@ -46,18 +11,20 @@ using LinearAlgebra
 using Printf
 using GeoParams
 
-import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor, pureshear_bc!
+import JustRelax: PTArray, Velocity, SymmetricTensor, pureshear_bc!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
+import JustRelax: tensor_invariant!, compute_τ_nonlinear!, compute_τ_vertex!, compute_τ!
 import JustRelax: compute_maxloc!, solve!
 import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi
 
-export solve!, pureshear_bc!
-
+include("StressRotation.jl")
 include("PressureKernels.jl")
-include("StressKernels.jl")
 include("VelocityKernels.jl")
 
+export solve!, pureshear_bc!
+rotate_stress_particles_jaumann!,
+rotate_stress_particles_roation_matrix!, compute_vorticity!,
 @parallel function update_τ_o!(
     τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o, τxx, τyy, τzz, τxy, τxz, τyz
 )
@@ -123,9 +90,6 @@ function JustRelax.solve!(
     ητ = deepcopy(η)
     compute_maxloc!(ητ, η)
     update_halo!(ητ)
-    # @parallel (1:size(ητ, 2), 1:size(ητ, 3)) free_slip_x!(ητ)
-    # @parallel (1:size(ητ, 1), 1:size(ητ, 3)) free_slip_y!(ητ)
-    # @parallel (1:size(ητ, 1), 1:size(ητ, 2)) free_slip_z!(ητ)
 
     # errors
     err = 2 * ϵ
@@ -298,8 +262,8 @@ function JustRelax.solve!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
 
-            # Update buoyancy
-            @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
+            # # Update buoyancy
+            # @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
 
             ν = 1e-3
             @parallel (@idx ni) compute_viscosity!(
@@ -319,9 +283,7 @@ function JustRelax.solve!(
                 @strain(stokes),
                 stokes.P,
                 η,
-                η_vep,
-                λ,
-                rheology, # needs to be a tuple
+                @ones(ni...),
                 dt,
                 pt_stokes.θ_dτ,
             )
@@ -462,7 +424,7 @@ function JustRelax.solve!(
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
-                η,
+                ητ,
                 rheology,
                 phase_ratios.center,
                 dt,
@@ -475,9 +437,7 @@ function JustRelax.solve!(
             )
 
             # Update buoyancy
-            @parallel (@idx ni) compute_ρg!(
-                ρg[3], phase_ratios.center, rheology, (T=thermal.T, P=stokes.P)
-            )
+            @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
 
             # Update viscosity
             ν = 1e-2

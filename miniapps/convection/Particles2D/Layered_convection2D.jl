@@ -1,5 +1,5 @@
-# using CUDA
-# CUDA.allowscalar(false) # for safety
+using CUDA
+CUDA.allowscalar(false) # for safety
 
 using JustRelax, JustRelax.DataIO, JustPIC
 import JustRelax.@cell
@@ -9,12 +9,11 @@ import JustRelax.@cell
 # set_backend("CUDA_Float64_2D")
 
 # setup ParallelStencil.jl environment
-# model = PS_Setup(:CUDA, Float64, 2)
-model = PS_Setup(:Threads, Float64, 2)
+model = PS_Setup(:CUDA, Float64, 2)
 environment!(model)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
@@ -90,7 +89,7 @@ end
 @parallel_indices (i, j) function init_T!(T, z)
     depth = -z[j]
 
-    # (depth) because we have 15km of sticky air
+    # (depth - 15e3) because we have 15km of sticky air
     if depth < 0e0
         T[i + 1, j] = 273e0
 
@@ -201,14 +200,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # Rheology
     η                = @zeros(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    compute_viscosity!(
+    @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e16, 1e24)
     )
     η_vep            = copy(η)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
     )
 
     # Boundary conditions
@@ -221,9 +220,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # if it does not exist, make folder where figures are stored
     if save_vtk
         vtk_dir      = figdir*"\\vtk"
-        !isdir(vtk_dir) && mkpath(vtk_dir)
+        take(vtk_dir)
     end
-    !isdir(figdir) && mkpath(figdir)
+    take(figdir)
     # ----------------------------------------------------
 
     # Plot initial T and η profiles
@@ -261,7 +260,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        compute_viscosity!(
+        @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
         )
         @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
@@ -407,7 +406,7 @@ end
 figdir   = "Plume2D"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 128
+n        = 64
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -417,4 +416,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
+# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);

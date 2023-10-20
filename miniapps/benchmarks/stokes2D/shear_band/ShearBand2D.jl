@@ -100,7 +100,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # Rheology
     η         = @ones(ni...)
     η_vep     = similar(η) # effective visco-elasto-plastic viscosity
-    compute_viscosity!(
+    @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
     )
 

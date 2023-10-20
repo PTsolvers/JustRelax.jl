@@ -45,6 +45,7 @@ using ParallelStencil.FiniteDifferences2D
 using GeoParams, LinearAlgebra, Printf
 
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
+import JustRelax: tensor_invariant!, compute_τ_nonlinear!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
@@ -58,8 +59,7 @@ include("StressKernels.jl")
 export solve!,
     rotate_stress_particles_jaumann!,
     rotate_stress_particles_roation_matrix!,
-    compute_vorticity!,
-    tensor_invariant!
+    compute_vorticity!
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
     τxx, τyy, τxy, τxy_c = stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ.xy_c
@@ -376,10 +376,10 @@ function JustRelax.solve!(
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
-                @tensor_center(stokes.τ)...,
+                @tensor_center(stokes.τ),
                 stokes.τ.II,
-                @tensor(stokes.τ_o)...,
-                @strain(stokes)...,
+                @tensor(stokes.τ_o),
+                @strain(stokes),
                 stokes.P,
                 η,
                 η_vep,
@@ -496,6 +496,7 @@ function JustRelax.solve!(
 
     # solver loop
     @copy stokes.P0 stokes.P
+    @copy stokes.P0 stokes.P
     wtime0 = 0.0
     θ = @zeros(ni...)
     λ = @zeros(ni...)
@@ -515,7 +516,7 @@ function JustRelax.solve!(
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
-                η,
+                ητ,
                 rheology,
                 phase_ratios.center,
                 dt,
@@ -534,17 +535,18 @@ function JustRelax.solve!(
             if rem(iter, nout) == 0
                 @copy η0 η
             end
-            # if do_visc
-            ν = 1e-2
-            compute_viscosity!(
-                η,
-                ν,
-                phase_ratios.center,
-                @strain(stokes)...,
-                args,
-                rheology,
-                viscosity_cutoff,
-            )
+            if do_visc
+                ν = 1e-2
+                @parallel (@idx ni) compute_viscosity!(
+                    η,
+                    ν,
+                    phase_ratios.center,
+                    @strain(stokes)...,
+                    args,
+                    rheology,
+                    viscosity_cutoff,
+                )
+            end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -686,12 +688,14 @@ function JustRelax.solve!(
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-            @parallel (@idx ni) compute_ρg!(ρg[2], ϕ, rheology, (T=thermal.Tc, P=stokes.P))
+            @parallel (@idx ni) compute_ρg!(
+                ρg[end], ϕ, rheology, (T=thermal.Tc, P=stokes.P)
+            )
             @parallel (@idx ni) compute_τ_gp!(
-                @tensor_center(stokes.τ)...,
+                @tensor_center(stokes.τ),
                 stokes.τ.II,
-                @tensor(stokes.τ_o)...,
-                @strain(stokes)...,
+                @tensor(stokes.τ_o),
+                @strain(stokes),
                 η,
                 η_vep,
                 thermal.T,

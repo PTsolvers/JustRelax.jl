@@ -26,8 +26,7 @@ function _compute_τ_nonlinear!(
     end
     # get plastic paremeters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
-    τy = C + P[idx...] * sinϕ
-    # τy = C * cosϕ + P[idx...] * sinϕ
+    τy = C * cosϕ + P[idx...] * sinϕ
 
     dτij = if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
@@ -35,6 +34,7 @@ function _compute_τ_nonlinear!(
             τij, dτij, τy, τII_trial, ηij, λ[idx...], η_reg, dτ_r, volume
         )
         dτ_pl
+
     else
         dτij
     end
@@ -50,14 +50,16 @@ end
 # check if plasticity is active
 @inline isyielding(is_pl, τII_trial, τy) = is_pl && τII_trial > τy
 
-@inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + ηij * _Gdt + 1.0)
+@inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + muladd(ηij, _Gdt, 1.0))
 
 function compute_stress_increment_and_trial(
     τij::NTuple{N,T}, τij_o::NTuple{N,T}, ηij, εij::NTuple{N,T}, _Gdt, dτ_r
 ) where {N,T}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-        @inbounds dτ_r * (-(τij[i] - τij_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * εij[i])
+        @inbounds dτ_r * muladd(
+            2.0 * ηij, εij[i], muladd(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i])
+        )
     end
     return dτij, second_invariant((τij .+ dτij)...)
 end
@@ -68,17 +70,15 @@ function compute_dτ_pl(
     # yield function
     F = τII_trial - τy
     # Plastic multiplier
-    ν = 0.05
-    λ = (1 - ν) * λ0 + ν * (F > 0.0) * F * inv(dτ_r * ηij + η_reg + volume)
+    ν = 0.5
+    λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(ηij * dτ_r + η_reg + volume)
     λ_τII = λ * 0.5 * inv(τII_trial)
 
     dτ_pl = ntuple(Val(N)) do i
         Base.@_inline_meta
         # derivatives of the plastic potential
         λdQdτ = (τij[i] + dτij[i]) * λ_τII
-        # corrected stress: dτ_r * (-(τij[i] - τij_o[i]) * ηij * _Gdt - τij[i] + 2.0 * ηij * (εij[i] - λdQdτ))
-        # NOTE: dτij[i] already contains the non-plastic stress increment 
-        # dτij[i] - dτ_r * 2.0 * ηij * λdQdτ
+        # corrected stress
         muladd(-dτ_r * 2.0, ηij * λdQdτ, dτij[i])
     end
     return dτ_pl, λ

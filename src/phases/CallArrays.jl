@@ -9,14 +9,14 @@ Base.@propagate_inbounds @inline function Base.getindex(
     x::CellArray{SVector{Nv,T},N1,N2,T}, I::Vararg{Int,N}
 ) where {Nv,N,N1,N2,T}
     idx_cell = cart2ind(x.dims, I...)
-    return SVector{Nv,T}(x.data[idx_cell, i, 1] for i in 1:Nv)
+    return SVector{Nv,T}(@inbounds x.data[idx_cell, i, 1] for i in 1:Nv)
 end
 
 Base.@propagate_inbounds @inline function Base.getindex(
     x::CPUCellArray{SVector{Nv,T},N1,N2,T}, I::Vararg{Int,N}
 ) where {Nv,N,N1,N2,T}
     idx_cell = cart2ind(x.dims, I...)
-    return SVector{Nv,T}(x.data[1, i, idx_cell] for i in 1:Nv)
+    return SVector{Nv,T}(@inbounds x.data[1, i, idx_cell] for i in 1:Nv)
 end
 
 Base.@propagate_inbounds @inline function setindex!(
@@ -45,6 +45,7 @@ Base.@propagate_inbounds @inline function element(
 ) where {T_elem,N,Nc,D}
     return viewelement(A, i, icell...)
 end
+
 Base.@propagate_inbounds @inline function element(
     A::CellArray, i::T, j::T, icell::Vararg{Int,Nc}
 ) where {Nc,T<:Int}
@@ -97,6 +98,7 @@ end
 Base.@propagate_inbounds @inline function _setelement!(A::Array, x, idx::Int, icell::Int)
     return (A[1, idx, icell] = x)
 end
+
 Base.@propagate_inbounds @inline function _setelement!(A, x, idx::Int, icell::Int)
     return (A[icell, idx, 1] = x)
 end
@@ -107,7 +109,6 @@ end
     cart2ind(A)
 
 Return the linear index of a `n`-dimensional array corresponding to the cartesian indices `I`
-
 """
 @inline function cart2ind(n::NTuple{N1,Int}, I::Vararg{Int,N2}) where {N1,N2}
     return LinearIndices(n)[CartesianIndex(I...)]
@@ -120,8 +121,9 @@ end
 ## Fallbacks
 import Base: getindex, setindex!
 
-@inline element(A::Union{Array,CuArray,ROCArray}, I::Vararg{Int,N}) where {N} =
-    getindex(A, I...)
+@inline function element(A::Union{Array,CuArray,ROCArray}, I::Vararg{Int,N}) where {N}
+    return getindex(A, I...)
+end
 @inline function setelement!(
     A::Union{Array,CuArray,ROCArray}, x::Number, I::Vararg{Int,N}
 ) where {N}
@@ -140,6 +142,7 @@ macro cell(ex)
 end
 
 @inline _get(ex) = Expr(:call, element, ex.args...)
+
 @inline function _set(ex)
     return Expr(
         :call, setelement!, ex.args[1].args[1], ex.args[2], ex.args[1].args[2:end]...

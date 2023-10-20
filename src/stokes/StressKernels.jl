@@ -70,6 +70,23 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function compute_τ_vertex!(
+    τxy::AbstractArray{T,2}, εxy, η, θ_dτ
+) where {T}
+    @inline av(A) = _av_a(A, i, j)
+
+    # Shear components
+    if all((i, j) .< size(τxy) .- 1)
+        I = i + 1, j + 1
+        av_η_ij = av(η)
+        denominator = inv(θ_dτ + 1.0)
+
+        τxy[I...] += (-τxy[I...] + 2.0 * av_η_ij * εxy[I...]) * denominator
+    end
+
+    return nothing
+end
+
 @parallel_indices (i, j, k) function compute_τ!(
     τxx,
     τyy,
@@ -164,7 +181,7 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_τ_vertex!(
-    τyz, τxz, τxy, τyz_o, τxz_o, τxy_o, εyz, εxz, εxy, η, G, dt, θ_dτ
+    τyz, τxz, τxy, εyz, εxz, εxy, ηvep, θ_dτ
 )
     harm_xy(A) = _harm_xyi(A, i, j, k)
     harm_xz(A) = _harm_xzi(A, i, j, k)
@@ -177,20 +194,26 @@ end
     @inbounds begin
         # Compute τ_xy
         if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
-            η_ij = harm_xy(η)
+            η_ij = harm_xy(ηvep)
+            denominator = inv(θ_dτ + 1.0)
+            τxy[i, j, k] += (-get(τxy) + 2.0 * η_ij * get(εxy)) * denominator
             denominator = inv(θ_dτ + 1.0)
             τxy[i, j, k] += (-get(τxy) + 2.0 * η_ij * get(εxy)) * denominator
         end
 
         # Compute τ_xz
         if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
-            η_ij = harm_xz(η)
+            η_ij = harm_xz(ηvep)
+            denominator = inv(θ_dτ + 1.0)
+            τxz[i, j, k] += (-get(τxz) + 2.0 * η_ij * get(εxz)) * denominator
             denominator = inv(θ_dτ + 1.0)
             τxz[i, j, k] += (-get(τxz) + 2.0 * η_ij * get(εxz)) * denominator
         end
         # Compute τ_yz
         if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
-            η_ij = harm_yz(η)
+            η_ij = harm_yz(ηvep)
+            denominator = inv(θ_dτ + 1.0)
+            τyz[i, j, k] += (-get(τyz) + 2.0 * η_ij * get(εyz)) * denominator
             denominator = inv(θ_dτ + 1.0)
             τyz[i, j, k] += (-get(τyz) + 2.0 * η_ij * get(εyz)) * denominator
         end
@@ -309,7 +332,6 @@ end
 end
 
 @parallel_indices (I...) function tensor_invariant!(II, xx, yy, xyv)
-
     # convinience closure
     @inline gather(A) = _gather(A, I...)
 

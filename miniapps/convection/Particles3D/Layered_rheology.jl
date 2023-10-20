@@ -66,7 +66,6 @@ function init_rheologies(; is_plastic = true)
             Conductivity      = K_crust,
             CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
             Elasticity        = el_upper_crust,
-            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             Gravity           = ConstantGravity(; g=9.81),
         ),
         # Name              = "LowerCrust",
@@ -75,7 +74,6 @@ function init_rheologies(; is_plastic = true)
             Density           = PT_Density(; ρ0=3e3, β=β_lower_crust, T0=0.0, α = 3.5e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
             Conductivity      = K_crust,
-            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
             Elasticity        = el_lower_crust,
         ),
@@ -85,11 +83,10 @@ function init_rheologies(; is_plastic = true)
             Density           = PT_Density(; ρ0=3.3e3, β=β_lithospheric_mantle, T0=0.0, α = 3e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
             Conductivity      = K_mantle,
-            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, el_lithospheric_mantle, pl)),
             Elasticity        = el_lithospheric_mantle,
         ),
-        # Name              = "SubLithosphericMantle",
+        # # Name              = "SubLithosphericMantle",
         # SetMaterialParams(;
         #     Phase             = 4,
         #     Density           = PT_Density(; ρ0=3.3e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
@@ -105,7 +102,6 @@ function init_rheologies(; is_plastic = true)
             Density           = PT_Density(; ρ0=3.3e3-50, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
             Conductivity      = K_mantle,
-            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
             Elasticity        = el_sublithospheric_mantle,
         ),
@@ -114,47 +110,49 @@ function init_rheologies(; is_plastic = true)
             Phase             = 5,
             Density           = ConstantDensity(; ρ=1e3),
             HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
-            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             Conductivity      = ConstantConductivity(; k=15.0),
             CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
         ),
     )
 end
 
-function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
+function init_phases!(phases, particles, Lx, Ly; d=650e3, r=50e3)
     ni = size(phases)
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
-        @inbounds for ip in JustRelax.cellaxes(phases)
+    @parallel_indices (I...) function init_phases!(phases, px, py, pz, index, r, Lx, Ly)
+        
+        @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+            JustRelax.@cell(index[ip, I...]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j])
+            x = JustRelax.@cell px[ip, I...]
+            y = JustRelax.@cell py[ip, I...]
+            depth = -(JustRelax.@cell pz[ip, I...])
+
             if 0e0 ≤ depth ≤ 21e3
-                @cell phases[ip, i, j] = 1.0
+                @cell phases[ip, I...] = 1.0
 
             elseif 35e3 ≥ depth > 21e3
-                @cell phases[ip, i, j] = 2.0
+                @cell phases[ip, I...] = 2.0
 
             elseif 90e3 ≥ depth > 35e3
-                @cell phases[ip, i, j] = 3.0
+                @cell phases[ip, I...] = 3.0
 
             elseif depth > 90e3
-                @cell phases[ip, i, j] = 3.0
+                @cell phases[ip, I...] = 3.0
 
-            elseif depth < 0e0 
-                @cell phases[ip, i, j] = 5.0
+            elseif 0e0 > depth 
+                @cell phases[ip, I...] = 5.0
 
             end
 
             # plume - rectangular
-            if ((x - Lx * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
-                JustRelax.@cell phases[ip, i, j] = 4.0
+            if ((x - Lx * 0.5)^2 ≤ r^2) && ((y - Ly * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
+                JustRelax.@cell phases[ip, I...] = 4.0
             end
         end
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, Ly)
 end

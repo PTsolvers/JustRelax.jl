@@ -109,7 +109,6 @@ end
     quote
         Base.@_inline_meta
         x = 0.0
-        # Base.@nexprs $N i -> x +=  iszero(ratio[i]) ? 0.0 : fn(rheology[i], args) * ratio[i]
         Base.@nexprs $N i -> x += begin
             r = ratio[i]
             isone(r) && return fn(rheology[i], args) * r
@@ -120,31 +119,34 @@ end
 end
 
 # ParallelStencil launch kernel for 2D
-@parallel_indices (i, j) function phase_ratios_center(
-    ratio_centers, px, py, xc, yc, di, phases
-)
-    I = i, j
+@parallel_indices (I...) function phase_ratios_center(
+    ratio_centers, pxi::NTuple{N,T1}, xci::NTuple{N,T2}, di::NTuple{N,T3}, phases
+) where {N,T1,T2,T3}
 
+    # index corresponding to the cell center
+    cell_center = ntuple(i -> xci[i][I[i]], Val(N))
+    # phase ratios weights (∑w = 1.0)
     w = phase_ratio_weights(
-        px[I...], py[I...], phases[I...], xc[i], yc[j], di, JustRelax.nphases(ratio_centers)
+        getindex.(pxi, I...),
+        phases[I...],
+        cell_center,
+        di,
+        JustRelax.nphases(ratio_centers),
     )
-
+    # update phase ratios array
     for k in 1:numphases(ratio_centers)
         JustRelax.@cell ratio_centers[k, I...] = w[k]
     end
+
     return nothing
 end
 
-@inline δ(i, j) = i == j
-
 function phase_ratio_weights(
-    pxi::SVector{N1,T}, pyi::SVector{N1,T}, ph::SVector{N1,T}, xc, yc, di, ::Val{NC}
-) where {N1,NC,T}
+    pxi::NTuple{NP,C}, ph::SVector{N1,T}, cell_center, di, ::Val{NC}
+) where {N1,NC,NP,T,C}
     if @generated
         quote
             Base.@_inline_meta
-            # wrap cell center coordinates into a tuple
-            cell_center = xc, yc
             # Initiaze phase ratio weights (note: can't use ntuple() here because of the @generated function)
             Base.@nexprs $NC i -> w_i = zero($T)
             w = Base.@ncall $NC tuple w
@@ -153,11 +155,12 @@ function phase_ratio_weights(
             sumw = zero($T)
             Base.@nexprs $N1 i -> begin
                 # bilinear weight (1-(xᵢ-xc)/dx)*(1-(yᵢ-yc)/dy)
-                x = bilinear_weight(cell_center, (pxi[i], pyi[i]), di)
+                x = bilinear_weight(cell_center, getindex.(pxi, i), di)
                 sumw += x # reduce
                 ph_local = ph[i]
                 # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
-                Base.@nexprs $NC j -> tmp_j = w[j] + x * δ(ph_local, j)
+                # Base.@nexprs $NC j -> tmp_j = w[j] + x * δ(Int(ph_local), j)
+                Base.@nexprs $NC j -> tmp_j = w[j] + x * (ph_local == j)
                 w = Base.@ncall $NC tuple tmp
             end
 
@@ -168,8 +171,6 @@ function phase_ratio_weights(
             return w
         end
     else
-        # wrap cell center coordinates into a tuple
-        cell_center = xc, yc
         # Initiaze phase ratio weights (note: can't use ntuple() here because of the @generated function)
         w = ntuple(_ -> zero(T), Val(NC))
         # initialie sum of weights
@@ -177,11 +178,12 @@ function phase_ratio_weights(
 
         for i in eachindex(pxi)
             # bilinear weight (1-(xᵢ-xc)/dx)*(1-(yᵢ-yc)/dy)
-            x = @inline bilinear_weight(cell_center, (pxi[i], pyi[i]), di)
+            x = @inline bilinear_weight(cell_center, getindex.(pxi, i), di)
             sumw += x # reduce
             ph_local = ph[i]
             # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
-            w = w .+ x .* ntuple(j -> δ(ph_local, j), Val(NC))
+            # w = w .+ x .* ntuple(j -> δ(Int(ph_local), j), Val(NC))
+            w = w .+ x .* ntuple(j -> (ph_local == j), Val(NC))
         end
         w = w .* inv(sum(w))
         return w
@@ -195,7 +197,7 @@ end
         Base.@_inline_meta
         val = one($T)
         Base.Cartesian.@nexprs $N i ->
-            @inbounds val *= one($T) - abs(a[i] - b[i]) * inv(di[i])
+            @inbounds val *= muladd(-abs(a[i] - b[i]), inv(di[i]), one($T))
         return val
     end
 end

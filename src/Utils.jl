@@ -1,4 +1,17 @@
 # MACROS
+"""
+    @idx(args...)
+
+Make a linear range from `1` to `args[i]`, with `i ∈ [1, ..., n]`
+"""
+macro idx(args...)
+    return quote
+        _idx($(esc.(args)...))
+    end
+end
+
+@inline _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
+@inline _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
 
 """
     copy(B, A)
@@ -13,9 +26,14 @@ end
 
 multi_copyto!(B::AbstractArray, A::AbstractArray) = copyto!(B, A)
 
-function multi_copyto!(B::NTuple{N,AbstractArray}, A::NTuple{N,AbstractArray}) where {N}
-    for (Bi, Ai) in zip(B, A)
-        copyto!(Bi, Ai)
+function detect_arsg_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
+    ntuple(Val(Dims)) do i
+        Base.@_inline_meta
+        s = ntuple(Val(N)) do j
+            Base.@_inline_meta
+            size(A[j], i)
+        end
+        maximum(s)
     end
 end
 
@@ -29,6 +47,19 @@ end
         end
     end
     return nothing
+end
+
+Base.@propagate_inbounds @generated function unrolled_copy!(
+    dst::NTuple{N,T}, src::NTuple{N,T}, I::Vararg{Int,NI}
+) where {N,NI,T}
+    quote
+        Base.@_inline_meta
+        Base.@nexprs $N n -> begin
+            if all(tuple(I...) .≤ size(dst[n]))
+                dst[n][I...] = src[n][I...]
+            end
+        end
+    end
 end
 
 """
@@ -257,20 +288,6 @@ macro allocate(ni...)
     return esc(:(PTArray(undef, $(ni...))))
 end
 
-"""
-    @idx(args...)
-
-Make a linear range from `1` to `args[i]`, with `i ∈ [1, ..., n]`
-"""
-macro idx(args...)
-    return quote
-        _idx(tuple($(esc.(args)...))...)
-    end
-end
-
-@inline Base.@pure _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
-@inline Base.@pure _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
-
 function indices(::NTuple{3,T}) where {T}
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
@@ -306,10 +323,11 @@ end
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)
     x = -Inf
-    for i in I_range
-        ii = clamp(i, 1, nx)
-        for j in J_range
-            jj = clamp(j, 1, ny)
+
+    for j in J_range
+        jj = clamp(j, 1, ny) # handle boundary cells
+        for i in I_range
+            ii = clamp(i, 1, nx) # handle boundary cells
             Aij = A[ii, jj]
             if Aij > x
                 x = Aij
@@ -325,12 +343,13 @@ end
     J_range = (J - width_y):(J + width_y)
     K_range = (K - width_z):(K + width_z)
     x = -Inf
-    for i in I_range
-        ii = clamp(i, 1, nx)
+
+    for k in K_range
+        kk = clamp(k, 1, nz) # handle boundary cells
         for j in J_range
-            jj = clamp(j, 1, ny)
-            for k in K_range
-                kk = clamp(k, 1, nz)
+            jj = clamp(j, 1, ny) # handle boundary cells
+            for i in I_range
+                ii = clamp(i, 1, nx) # handle boundary cells
                 Aijk = A[ii, jj, kk]
                 if Aijk > x
                     x = Aijk
@@ -405,13 +424,23 @@ end
 @inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v
 
+# Delta function
+@inline allzero(x::Vararg{T,N}) where {T,N} = all(x -> x == 0, x)
+
+"""
+    take(fldr::String)
+
+Create folder `fldr` if it does not exist.
+"""
+take(fldr::String) = !isdir(fldr) && mkpath(fldr)
+
 """
     continuation_log(x_new, x_old, ν)
 
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """
 # @inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
-@inline continuation_log(x_new, x_old, ν) = (1 - ν) * x_old + ν * x_new
+@inline continuation_log(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
 
 # Others
 

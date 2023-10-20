@@ -213,7 +213,7 @@ n            = 64 + 2
 nx = ny = nz = n - 2
 figdir       = "ShearBand3D"
 igg          = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
+    IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
 else
     igg
 end

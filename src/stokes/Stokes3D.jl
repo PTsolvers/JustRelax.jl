@@ -418,7 +418,6 @@ function JustRelax.solve!(
             #     update_halo!(ητ)
             # end
 
-
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel (@idx ni) compute_P!(
                 stokes.P,

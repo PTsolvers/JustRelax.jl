@@ -65,7 +65,6 @@ function init_rheologies(; is_plastic = true)
             HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
             Conductivity      = K_crust,
             CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
-            # CompositeRheology = CompositeRheology((LinearViscous(;η = 1e21),)),
             Elasticity        = el_upper_crust,
             Gravity           = ConstantGravity(; g=9.81),
         ),

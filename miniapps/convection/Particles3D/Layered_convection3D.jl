@@ -1,9 +1,3 @@
-# using CUDA
-# CUDA.allowscalar(false) # for safety
-
-# NOTE: For now, need to use a specific brand of JustPIC.jl
-# type `] add https://github.com/JuliaGeodynamics/JustPIC.jl.git#adm-rework` 
-# in the REPL to install it
 using JustRelax, JustRelax.DataIO, JustPIC
 import JustRelax.@cell
 
@@ -12,8 +6,7 @@ import JustRelax.@cell
 # set_backend("CUDA_Float64_2D")
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:CUDA, Float64, 3)
-# model = PS_Setup(:Threads, Float64, 3)
+model = PS_Setup(:CUDA, Float64, 3) # or (:Threads, Float64, 3) or (:AMDGPU, Float64, 3)
 environment!(model)
 
 # Load script dependencies
@@ -22,9 +15,7 @@ using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
 
-
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
 @inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
 @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
@@ -71,16 +62,6 @@ function velocity_grids(xci, xvi, di)
     return grid_vx, grid_vy, grid_vz
 end
 
-function copyinn_x!(A, B)
-
-    @parallel function f_x(A, B)
-        @all(A) = @inn_x(B)
-        return nothing
-    end
-
-    @parallel f_x(A, B)
-end
-
 import ParallelStencil.INDICES
 const idx_k = INDICES[3]
 macro all_k(A)
@@ -97,7 +78,6 @@ end
 @parallel_indices (I...) function init_T!(T, z)
     depth = -z[I[3]]
 
-    # (depth - 15e3) because we have 15km of sticky air
     if depth < 0e0
         T[I...]  = 273.0
 
@@ -136,7 +116,6 @@ function rectangular_perturbation!(T, xc, yc, zc, r, xvi)
 
     @parallel _rectangular_perturbation!(T, xc, yc, zc, r, xvi...)
 end
-
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -396,19 +375,18 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
-
-# (Path)/folder where output data and figures are stored
 do_vtk   = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
 n        = 128
-nx       = n # - 2
-ny       = n # - 2
-nz       = n # - 2
+nx       = n
+ny       = n
+nz       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 0; init_MPI= true)...)
 else
     igg
 end
 
+# (Path)/folder where output data and figures are stored
 figdir   = "Plume3D_$n"
 main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);

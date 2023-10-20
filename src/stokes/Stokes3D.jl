@@ -125,9 +125,6 @@ function JustRelax.solve!(
                 @stress(stokes)...,
                 @tensor(stokes.τ_o)...,
                 @strain(stokes)...,
-                @stress(stokes)...,
-                @tensor(stokes.τ_o)...,
-                @strain(stokes)...,
                 η,
                 G,
                 dt,
@@ -136,13 +133,10 @@ function JustRelax.solve!(
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
-                    @velocity(stokes)...,
                     stokes.R.Rx,
                     stokes.R.Ry,
                     stokes.R.Rz,
                     stokes.P,
-                    ρg...,
-                    @stress(stokes)...,
                     ρg...,
                     @stress(stokes)...,
                     ητ,
@@ -424,14 +418,6 @@ function JustRelax.solve!(
             #     update_halo!(ητ)
             # end
 
-            # ~preconditioner
-            ητ = deepcopy(η)
-            compute_maxloc!(ητ, η)
-            update_halo!(ητ)
-            # @hide_communication b_width begin # communication/computation overlap
-            #     @parallel compute_maxloc!(ητ, η)
-            #     update_halo!(ητ)
-            # end
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel (@idx ni) compute_P!(

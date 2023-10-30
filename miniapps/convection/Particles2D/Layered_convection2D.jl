@@ -86,8 +86,8 @@ end
 end
 
 # Initial thermal profile
-@parallel_indices (i, j) function init_T!(T, z)
-    depth = -z[j]
+@parallel_indices (i, j) function init_T!(T, y, thick_air)
+    depth = -y[j] - thick_air
 
     # (depth - 15e3) because we have 15km of sticky air
     if depth < 0e0
@@ -114,11 +114,11 @@ end
 end
 
 # Thermal rectangular perturbation
-function rectangular_perturbation!(T, xc, yc, r, xvi)
+function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air)
 
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
-        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            depth       = abs(y[j])
+        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc - thick_air)^2 ≤ r^2)
+            depth       = -y[j] - thick_air
             dTdZ        = (2047 - 2017) / 50e3
             offset      = 2017
             T[i + 1, j] = (depth - 585e3) * dTdZ + offset
@@ -136,21 +136,22 @@ end
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Physical domain ------------------------------------
-    ly           = 700e3            # domain length in y
-    lx           = ly * ar          # domain length in x
-    ni           = nx, ny           # number of cells
-    li           = lx, ly           # domain length in x- and y-
-    di           = @. li / ni       # grid step in x- and -y
-    origin       = 0.0, -ly         # origin coordinates (15km f sticky air layer)
+    thick_air    = 10e3              # thickness of sticky air layer
+    ly           = 700e3 + thick_air # domain length in y
+    lx           = ly * ar           # domain length in x
+    ni           = nx, ny            # number of cells
+    li           = lx, ly            # domain length in x- and y-
+    di           = @. li / ni        # grid step in x- and -y
+    origin       = 0.0, -ly          # origin coordinates (15km f sticky air layer)
     xci, xvi     = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies(; is_plastic = true)
-    κ            = (10 / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0))
+    κ            = (4 / (rheology[4].HeatCapacity[1].cp * rheology[4].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
-    
+
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
     particles = init_particles_cellarrays(
@@ -163,10 +164,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     particle_args    = (pT, pPhases)
 
     # Elliptical temperature anomaly 
-    xc_anomaly       = lx/2   # origin of thermal anomaly
-    yc_anomaly       = -610e3 # origin of thermal anomaly
-    r_anomaly        = 25e3   # radius of perturbation
-    init_phases!(pPhases, particles, lx; d=abs(yc_anomaly), r=r_anomaly)
+    xc_anomaly       = lx/2    # origin of thermal anomaly
+    yc_anomaly       = -610e3  # origin of thermal anomaly
+    r_anomaly        = 25e3    # radius of perturbation
+    init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly, thick_air)
     phase_ratios     = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
     # ----------------------------------------------------
@@ -174,7 +175,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.1 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.25 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -184,10 +185,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         periodicity  = (left = false, right = false, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
-    @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2])
+    @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], thick_air)
     thermal_bcs!(thermal.T, thermal_bc)
    
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
+    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air)
     @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
    
@@ -207,7 +208,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-3 / √2.1
     )
 
     # Boundary conditions
@@ -280,7 +281,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             args,
             Inf,
             igg;
-            iterMax=50e3,
+            iterMax = 150e3,
             nout=1e3,
             viscosity_cutoff=(1e18, 1e24)
         )
@@ -406,7 +407,7 @@ end
 figdir   = "Plume2D"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 64
+n        = 256
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -416,4 +417,4 @@ else
 end
 
 # run main script
-# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);

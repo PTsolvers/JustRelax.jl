@@ -89,17 +89,6 @@ function init_rheologies(; is_plastic = true)
             CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, el_lithospheric_mantle, pl)),
             Elasticity        = el_lithospheric_mantle,
         ),
-        # Name              = "SubLithosphericMantle",
-        # SetMaterialParams(;
-        #     Phase             = 4,
-        #     Density           = PT_Density(; ρ0=3.3e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
-        #     HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
-        #     Conductivity      = K_mantle,
-        #     RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-        #     CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
-        #     Elasticity        = el_sublithospheric_mantle,
-        # ),
-        # Name              = "Plume",
         SetMaterialParams(;
             Phase             = 4,
             Density           = PT_Density(; ρ0=3.3e3-50, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
@@ -112,16 +101,16 @@ function init_rheologies(; is_plastic = true)
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase             = 5,
-            Density           = ConstantDensity(; ρ=1e3),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
+            Density           = ConstantDensity(; ρ=1e3), # water density
+            HeatCapacity      = ConstantHeatCapacity(; cp=3e3),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            Conductivity      = ConstantConductivity(; k=15.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
+            Conductivity      = ConstantConductivity(; k=1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e19),)),
         ),
     )
 end
 
-function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
+function init_phases!(phases, particles, Lx, d, r, thick_air)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
@@ -130,7 +119,7 @@ function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
             JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
             x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j])
+            depth = -(JustRelax.@cell py[ip, i, j]) - thick_air
             if 0e0 ≤ depth ≤ 21e3
                 @cell phases[ip, i, j] = 1.0
 
@@ -149,7 +138,7 @@ function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
             end
 
             # plume - rectangular
-            if ((x - Lx * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
+            if ((x - Lx * 0.5)^2 ≤ r^2) && (((JustRelax.@cell py[ip, i, j]) - d - thick_air)^2 ≤ r^2)
                 JustRelax.@cell phases[ip, i, j] = 4.0
             end
         end

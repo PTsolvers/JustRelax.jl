@@ -18,7 +18,6 @@ using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
 
-
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 @inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
@@ -61,16 +60,6 @@ function velocity_grids(xci, xvi, di)
     grid_vy = xVy, xvi[2]
 
     return grid_vx, grid_vy
-end
-
-function copyinn_x!(A, B)
-
-    @parallel function f_x(A, B)
-        @all(A) = @inn_x(B)
-        return nothing
-    end
-
-    @parallel f_x(A, B)
 end
 
 import ParallelStencil.INDICES

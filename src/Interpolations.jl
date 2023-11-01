@@ -78,18 +78,18 @@ end
 
 ## 2D 
 
-function velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=false)
+function velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=true)
     ni = size(Vx_v)
     if !ghost_nodes
         @parallel (@idx ni) Vx2vertex_noghost!(Vx_v, Vx)
         @parallel (@idx ni) Vy2vertex_noghost!(Vy_v, Vy)
     else
-        @parallel (@idx ni) Vx2vertex_ghost!(Vx_v, Vx)
-        @parallel (@idx ni) Vy2vertex_ghost!(Vy_v, Vy)
+        @parallel (@idx ni) Vx2vertex_LinP!(Vx_v, Vx)
+        @parallel (@idx ni) Vy2vertex_LinP!(Vy_v, Vy)
     end
 end
 
-function velocity2vertex(Vx, Vy, nv_x, nv_y; ghost_nodes=false)
+function velocity2vertex(Vx, Vy, nv_x, nv_y; ghost_nodes=true)
     Vx_v = @allocate(nv_x, nv_y)
     Vy_v = @allocate(nv_x, nv_y)
 
@@ -97,8 +97,8 @@ function velocity2vertex(Vx, Vy, nv_x, nv_y; ghost_nodes=false)
         @parallel (@idx ni) Vx2vertex_noghost!(Vx_v, Vx)
         @parallel (@idx ni) Vy2vertex_noghost!(Vy_v, Vy)
     else
-        @parallel (@idx ni) Vx2vertex_ghost!(Vx_v, Vx)
-        @parallel (@idx ni) Vy2vertex_ghost!(Vy_v, Vy)
+        @parallel (@idx ni) Vx2vertex_LinP!(Vx_v, Vx)
+        @parallel (@idx ni) Vy2vertex_LinP!(Vy_v, Vy)
     end
 end
 
@@ -139,6 +139,52 @@ end
 @parallel_indices (i, j) function Vy2vertex_ghost!(V, Vy)
     @inline av(A) = _av_xa(A, i, j)
     V[i, j] = av(Vy)
+
+    return nothing
+end
+
+@parallel_indices (i, j) function Vx2vertex_LinP!(V, Vx)
+    @inline av(A, B) = (A + B) * 0.5
+
+    nx, ny = size(Vx)
+
+    iSW, jSW = clamp(i - 1, 1, nx), clamp(j, 1, ny)
+    iS, jS = clamp(i, 1, nx), clamp(j, 1, ny)
+    iSE, jSE = clamp(i + 1, 1, nx), clamp(j, 1, ny)
+
+    iNE, jNE = clamp(i + 1, 1, nx), clamp(j + 1, 1, ny)
+    iN, jN = clamp(i, 1, nx), clamp(j + 1, 1, ny)
+    iNW, jNW = clamp(i - 1, 1, nx), clamp(j + 1, 1, ny)
+
+    V_SW = av(Vx[iSW, jSW], Vx[iS, jS])
+    V_SE = av(Vx[iS, jS], Vx[iSE, jSE])
+    V_NW = av(Vx[iNW, jNW], Vx[iN, jN])
+    V_NE = av(Vx[iN, jN], Vx[iNE, jNE])
+
+    V[i, j] = 0.25 * (V_SW + V_SE + V_NW + V_NE)
+
+    return nothing
+end
+
+@parallel_indices (i, j) function Vy2vertex_LinP!(V, Vy)
+    @inline av(A, B) = (A + B) * 0.5
+
+    nx, ny = size(Vy)
+
+    iSW, jSW = clamp(i, 1, nx), clamp(j - 1, 1, ny)
+    iW, jW = clamp(i, 1, nx), clamp(j, 1, ny)
+    iSE, jSE = clamp(i, 1, nx), clamp(j + 1, 1, ny)
+
+    iNE, jNE = clamp(i + 1, 1, nx), clamp(j - 1, 1, ny)
+    iE, jE = clamp(i + 1, 1, nx), clamp(j, 1, ny)
+    iNW, jNW = clamp(i + 1, 1, nx), clamp(j + 1, 1, ny)
+
+    V_SW = av(Vy[iSW, jSW], Vy[iW, jW])
+    V_SE = av(Vy[iW, jW], Vy[iSE, jSE])
+    V_NW = av(Vy[iNW, jNW], Vy[iE, jE])
+    V_NE = av(Vy[iE, jE], Vy[iNE, jNE])
+
+    V[i, j] = 0.25 * (V_SW + V_SE + V_NW + V_NE)
 
     return nothing
 end

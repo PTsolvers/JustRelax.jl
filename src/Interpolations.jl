@@ -145,21 +145,21 @@ end
 
 @parallel_indices (i, j) function Vx2vertex_LinP!(V, Vx)
     @inline av(A, B) = (A + B) * 0.5
-    
-    nx, ny = size(Vx)
-    
-    iSW, jSW = clamp(i-1, 1, nx), clamp(j, 1, ny)
-    iS , jS  = clamp(i,   1, nx), clamp(j, 1, ny)
-    iSE, jSE = clamp(i+1, 1, nx), clamp(j, 1, ny)
 
-    iNE, jNE = clamp(i+1, 1, nx), clamp(j+1, 1, ny)
-    iN , jN  = clamp(i,   1, nx), clamp(j+1, 1, ny)
-    iNW, jNW = clamp(i-1, 1, nx), clamp(j+1, 1, ny)
-    
+    nx, ny = size(Vx)
+
+    iSW, jSW = clamp(i - 1, 1, nx), clamp(j, 1, ny)
+    iS, jS = clamp(i, 1, nx), clamp(j, 1, ny)
+    iSE, jSE = clamp(i + 1, 1, nx), clamp(j, 1, ny)
+
+    iNE, jNE = clamp(i + 1, 1, nx), clamp(j + 1, 1, ny)
+    iN, jN = clamp(i, 1, nx), clamp(j + 1, 1, ny)
+    iNW, jNW = clamp(i - 1, 1, nx), clamp(j + 1, 1, ny)
+
     V_SW = av(Vx[iSW, jSW], Vx[iS, jS])
-    V_SE = av(Vx[iS, jS]  , Vx[iSE, jSE])
-    V_NW = av(Vx[iNW, jNW], Vx[iN , jN])
-    V_NE = av(Vx[iN , jN] , Vx[iNE, jNE])
+    V_SE = av(Vx[iS, jS], Vx[iSE, jSE])
+    V_NW = av(Vx[iNW, jNW], Vx[iN, jN])
+    V_NE = av(Vx[iN, jN], Vx[iNE, jNE])
 
     V[i, j] = 0.25 * (V_SW + V_SE + V_NW + V_NE)
 
@@ -168,21 +168,21 @@ end
 
 @parallel_indices (i, j) function Vy2vertex_LinP!(V, Vy)
     @inline av(A, B) = (A + B) * 0.5
-    
-    nx, ny = size(Vy)
-    
-    iSW, jSW = clamp(i, 1, nx), clamp(j-1, 1, ny)
-    iW , jW  = clamp(i, 1, nx), clamp(j  , 1, ny)
-    iSE, jSE = clamp(i, 1, nx), clamp(j+1, 1, ny)
 
-    iNE, jNE = clamp(i+1, 1, nx), clamp(j-1, 1, ny)
-    iE , jE  = clamp(i+1, 1, nx), clamp(j  , 1, ny)
-    iNW, jNW = clamp(i+1, 1, nx), clamp(j+1, 1, ny)
-    
-    V_SW = av(Vy[iSW, jSW], Vy[iW , jW])
-    V_SE = av(Vy[iW , jW]  , Vy[iSE, jSE])
-    V_NW = av(Vy[iNW, jNW], Vy[iE , jE])
-    V_NE = av(Vy[iE , jE] , Vy[iNE, jNE])
+    nx, ny = size(Vy)
+
+    iSW, jSW = clamp(i, 1, nx), clamp(j - 1, 1, ny)
+    iW, jW = clamp(i, 1, nx), clamp(j, 1, ny)
+    iSE, jSE = clamp(i, 1, nx), clamp(j + 1, 1, ny)
+
+    iNE, jNE = clamp(i + 1, 1, nx), clamp(j - 1, 1, ny)
+    iE, jE = clamp(i + 1, 1, nx), clamp(j, 1, ny)
+    iNW, jNW = clamp(i + 1, 1, nx), clamp(j + 1, 1, ny)
+
+    V_SW = av(Vy[iSW, jSW], Vy[iW, jW])
+    V_SE = av(Vy[iW, jW], Vy[iSE, jSE])
+    V_NW = av(Vy[iNW, jNW], Vy[iE, jE])
+    V_NE = av(Vy[iE, jE], Vy[iNE, jNE])
 
     V[i, j] = 0.25 * (V_SW + V_SE + V_NW + V_NE)
 

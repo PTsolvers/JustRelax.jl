@@ -130,6 +130,10 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         include(joinpath(@__DIR__, "Interpolations.jl"))
         export vertex2center!, center2vertex!, temperature2center!
+
+        include(joinpath(@__DIR__, "advection/weno5.jl"))
+        export WENO5, WENO_advection!
+
     end
 
     # conditional submodule load

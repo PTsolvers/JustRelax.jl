@@ -22,7 +22,7 @@ end
         τ_yy = @cell yy[ip, cell...]
         τ_xy = @cell xy[ip, cell...]
 
-        tmp = τ_xy * ω_xy * 2.0
+        cte = τ_xy * ω_xy * 2.0
         @cell xx[ip, cell...] = muladd(dt, cte, τ_xx)
         @cell yy[ip, cell...] = muladd(dt, cte, τ_yy)
         @cell xy[ip, cell...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
@@ -31,7 +31,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function rotate_stress_particles_roation_matrix!(
+@parallel_indices (i, j) function rotate_stress_particles_rotation_matrix!(
     xx, yy, xy, ω, index, dt
 )
     cell = i, j

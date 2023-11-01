@@ -382,27 +382,53 @@ end
 @parallel_indices (I...) function rotate_stress_grid_rotation_matrix!(
     xx_o, yy_o, xy_o, xx, yy, xy, ω, dt
 )
+
     τ_xx = xx[I...]
     τ_yy = yy[I...]
     τ_xy = xy[I...]
-    θ = dt * ω[I...]
-    sinθ, cosθ = sincos(θ)
-
-    R = @SMatrix [
-        cosθ -sinθ
-        sinθ cosθ
-    ]
-
-    τ = @SMatrix [
-        τ_xx τ_xy
-        τ_xy τ_yy
-    ]
-
-    # this could be fully unrolled in 2D
-    τr = R * τ * R'
-    xx_o[I...] = τr[1, 1]
-    yy_o[I...] = τr[2, 2]
-    xy_o[I...] = τr[1, 2]
+    ω_xy =  ω[I...]
+    τ    = τ_xx, τ_yy, τ_xy
+    xx_o[I...], yy_o[I...], xy_o[I...] = rotate_elastic_stress2D(ω_xy, τ, dt)
 
     return nothing
+end
+
+@parallel_indices (I...) function rotate_stress_grid_rotation_matrix!(
+    xx_o, yy_o, zz_o, yz_o, xz_o, xy_o, xx, yy, zz, yz, xz, xy, ωyz, ωxz, ωxy, dt
+)
+    # stress components
+    τ_xx = xx[I...]
+    τ_yy = yy[I...]
+    τ_zz = zz[I...]
+    τ_yz = yz[I...]
+    τ_xz = xz[I...]
+    τ_xy = xy[I...]
+    # vorticity
+    ω_yz = ωyz[I...]
+    ω_xz = ωxz[I...]
+    ω_xy = ωxy[I...]
+    # organize stress and vorticity components
+    τ    = τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy
+    ω    = ω_yz, ω_xz, ω_xy
+    # rotate stress
+    xx_o[I...], yy_o[I...], zz_o[I...], yz_o[I...], xz_o[I...], xy_o[I...] = 
+        rotate_elastic_stress3D(ω, τ, dt)
+
+    return nothing
+end
+
+struct Vorticity{T}
+    yz::Union{T, Nothing}
+    xz::Union{T, Nothing}
+    xy::T
+
+    function Vorticity(ni::Vararg{T, 2}) where {T}
+        xy = @zeros(ni...)
+        return new{typeof(xy)}(nothing, nothing, xy)
+    end
+
+    function Vorticity(ni::Vararg{T, 3}) where {T}
+        yz, xz, xy = @zeros(ni...)
+        return new{typeof(xy)}(yz, xz, xy)
+    end
 end

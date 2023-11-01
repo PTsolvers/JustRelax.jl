@@ -1,5 +1,8 @@
 using MuladdMacro, Adapt
 
+## Weno5 advection scheme. Implemantation based on the implementation of
+# https://gmd.copernicus.org/preprints/gmd-2023-189/
+
 abstract type AbstractWENO end
 
 """

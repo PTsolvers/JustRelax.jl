@@ -263,6 +263,8 @@ function WENO_advection!(u, Vxi, weno, di, dt)
 
     @parallel (1:nx, 1:ny) weno_f!(weno.ut, weno, nx, ny)
     @parallel (1:nx, 1:ny) weno_step3!(u, weno, Vxi, _di, ni, dt, one_third, two_thirds)
+    
+    return nothing
 end
 
 @parallel_indices (i, j) function weno_step1!(weno, u, Vxi, _di, ni, dt)

@@ -2,8 +2,15 @@
 """
     @idx(args...)
 
-Make a linear range from `1` to `args[i]`, with `i ∈ [1, ..., n]`
+Create a Cartesian product of linear ranges from `1` to `args[i]`.
+
+# Example
+```julia-repl
+In [7]: @idx 3, 4
+(1:3, 1:4)
+```
 """
+
 macro idx(args...)
     return quote
         _idx($(esc.(args)...))
@@ -16,7 +23,12 @@ end
 """
     copy(B, A)
 
-Convinience macro to copy data from the array `A` into array `B`
+# Arguments
+- `B`: The destination array where the data will be copied to.
+- `A`: The source array from which the data will be copied.
+
+# Description
+The `copy` function copies the contents of array `A` into array `B`. Both `A` and `B` should be arrays of the same type and have the same dimensions. The function does not return any value as it modifies array `B` in place.
 """
 macro copy(B, A)
     return quote
@@ -304,7 +316,12 @@ end
 """
     maxloc!(B, A; window)
 
-Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` and store the result in `B`.
+Compute the maximum value of `A` within a specified window and store the result in `B`.
+
+# Arguments
+- `B`: The output array where the maximum values will be stored.
+- `A`: The input array from which the maximum values will be computed.
+- `window`: A tuple specifying the dimensions of the window within which the maximum is computed. Defaults to `(1, 1, 1)`.    
 """
 function compute_maxloc!(B, A; window=(1, 1, 1))
     ni = size(A)
@@ -430,16 +447,35 @@ end
 """
     take(fldr::String)
 
-Create folder `fldr` if it does not exist.
+    
+# Arguments
+- `fldr`: The path of the directory to ensure exists.
+
+# Description
+The `take` function checks if a directory specified by `fldr` exists. If it does not exist, the function creates it. This is useful for ensuring that a directory is available before writing files to it or reading files from it.
+        
 """
 take(fldr::String) = !isdir(fldr) && mkpath(fldr)
+
+# """
+#     continuation_log(x_new, x_old, ν)
+
+# Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
+# """
+# @inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
 
 """
     continuation_log(x_new, x_old, ν)
 
-Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
+# Arguments
+- `x_new`: The new value.
+- `x_old`: The old value.
+- `ν`: The damping parameter.
+
+# Description
+The `continuation_log` function performs a continuation step by computing a weighted average of `x_old` and `x_new` using the damping parameter `ν`. The function uses the `muladd` function to compute `(1 - ν) * x_old + ν * x_new`, which represents a step from `x_old` towards `x_new` scaled by `ν`.
+
 """
-# @inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
 @inline continuation_log(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
 
 # Others

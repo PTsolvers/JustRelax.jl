@@ -143,6 +143,19 @@ end
     return nothing
 end
 
+"""
+    Vx2vertex_LinP!(V, Vx)
+
+Interpolate the x-component of a vector field from cell centers to vertices using linear interpolation in a structured grid.
+
+# Arguments
+- `V`: The output array where the interpolated values will be stored.
+- `Vx`: The input array representing the x-component of the vector field at cell centers.
+
+# Description
+The function first calculates the indices of the southwest (SW), southeast (SE), northwest (NW), and northeast (NE) corners of the cell for each vertex. It then calculates the average value of `Vx` at each corner using the `av` function, which calculates the average of two values. Finally, it calculates the value at the vertex by averaging the values at the four corners and stores the result in `V`.
+
+"""
 @parallel_indices (i, j) function Vx2vertex_LinP!(V, Vx)
     @inline av(A, B) = (A + B) * 0.5
 
@@ -166,6 +179,19 @@ end
     return nothing
 end
 
+"""
+    Vy2vertex_LinP!(V, Vx)
+
+Interpolate the x-component of a vector field from cell centers to vertices using linear interpolation in a structured grid.
+
+# Arguments
+- `V`: The output array where the interpolated values will be stored.
+- `Vy`: The input array representing the y-component of the vector field at cell centers.
+
+# Description
+The function first calculates the indices of the southwest (SW), southeast (SE), northwest (NW), and northeast (NE) corners of the cell for each vertex. It then calculates the average value of `Vx` at each corner using the `av` function, which calculates the average of two values. Finally, it calculates the value at the vertex by averaging the values at the four corners and stores the result in `V`.
+
+"""
 @parallel_indices (i, j) function Vy2vertex_LinP!(V, Vy)
     @inline av(A, B) = (A + B) * 0.5
 

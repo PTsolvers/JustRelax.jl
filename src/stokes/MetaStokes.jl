@@ -205,6 +205,24 @@ function make_stokes_struct!()
             end
         end
     end
+
+    @eval begin
+        struct Vorticity{T}
+            yz::Union{T, Nothing}
+            xz::Union{T, Nothing}
+            xy::T
+        
+            function Vorticity(ni::Vararg{T, 2}) where {T}
+                xy = @zeros(ni...)
+                return new{typeof(xy)}(nothing, nothing, xy)
+            end
+        
+            function Vorticity(ni::Vararg{T, 3}) where {T}
+                yz, xz, xy = @zeros(ni...)
+                return new{typeof(xy)}(yz, xz, xy)
+            end
+        end
+    end
 end
 
 function make_PTstokes_struct!()

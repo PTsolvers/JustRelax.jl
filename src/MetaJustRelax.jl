@@ -61,6 +61,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             compute_pt_thermal_arrays!,
             AbstractStokesModel,
             AbstractElasticModel,
+            Vorticity,
             Viscous,
             ViscoElastic,
             ViscoElastoPlastic,
@@ -133,6 +134,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         include(joinpath(@__DIR__, "advection/weno5.jl"))
         export WENO5, WENO_advection!
+
+        include(joinpath(@__DIR__, "stokes/StressRotation.jl"))
+        export rotate_elastic_stress!
     end
 
     # conditional submodule load

@@ -6,10 +6,100 @@ using StaticArrays
     dx(A) = _d_xa(A, i, j, _dx)
     dy(A) = _d_ya(A, i, j, _dy)
 
-    vorticity[i, j] = 0.5 * (dx(Vy) - dy(Vx))
+    vorticity[i, j] = 0.5 * (dy(Vx) - dx(Vy))
 
     return nothing
 end
+
+## WENO GRID --------
+function rotate_elastic_stress!(stokes, vorticity, Vx_c, Vy_c, Vx_v, Vy_v, weno, di, dt)
+
+    ni = size(Vx_c)
+    advect_stress!(stokes, Vx_c, Vy_c, Vx_v, Vy_v, weno, di, dt) 
+
+    @parallel (@idx ni .+ 1) compute_vorticity!(vorticity.xy, @velocity(stokes)..., inv.(di)...)
+
+    xx_v, yy_v = @zeros(ni.+1...), @zeros(ni.+1...)
+    xx_o_v, yy_o_v = @zeros(ni.+1...), @zeros(ni.+1...)
+    @parallel center2vertex!(xx_v, stokes.τ.xx)
+    @parallel center2vertex!(yy_v, stokes.τ.yy)
+
+    @parallel (@idx ni .+ 1) rotate_stress_centers_jaumann!(
+        xx_o_v, yy_o_v, stokes.τ_o.xy, xx_v, yy_v, stokes.τ.xy, vorticity.xy, dt
+    )
+
+    @parallel vertex2center!(stokes.τ_o.xx, xx_o_v)
+    @parallel vertex2center!(stokes.τ_o.yy, yy_o_v)
+
+    return nothing
+end
+
+
+function advect_stress!(stokes, Vx_c, Vy_c, Vx_v, Vy_v, weno, di, dt) 
+    @parallel vertex2center!(Vx_c, Vx_v)
+    @parallel vertex2center!(Vy_c, Vy_v)
+
+    WENO_advection!(stokes.τ.xx, (Vx_c, Vy_c), weno, di, dt)
+    WENO_advection!(stokes.τ.yy, (Vx_c, Vy_c), weno, di, dt)
+    WENO_advection!(stokes.τ.xy, (Vx_v, Vy_v), weno, di, dt)
+
+    return nothing
+end
+
+@parallel_indices (I...) function rotate_stress_centers_jaumann!(xx_o, yy_o, xy_o, xx, yy, xy, ω, dt)
+    ω_xy =  ω[I...]
+    τ_xx = xx[I...]
+    τ_yy = yy[I...]
+    τ_xy = xy[I...]
+
+    cte = τ_xy * ω_xy * 2.0
+    xx_o[I...] = muladd(dt, cte, τ_xx)
+    yy_o[I...] = muladd(dt, cte, τ_yy)
+    xy_o[I...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
+  
+    return nothing
+end
+
+
+@parallel_indices (I...) function rotate_stress_grid_rotation_matrix!(
+    xx_o, yy_o, xy_o, xx, yy, xy, ω, dt
+)
+    τ_xx = xx[I...]
+    τ_yy = yy[I...]
+    τ_xy = xy[I...]
+    ω_xy =  ω[I...]
+    τ    = τ_xx, τ_yy, τ_xy
+    xx_o[I...], yy_o[I...], xy_o[I...] = rotate_elastic_stress2D(ω_xy, τ, dt)
+
+    return nothing
+end
+
+@parallel_indices (I...) function rotate_stress_grid_rotation_matrix!(
+    xx_o, yy_o, zz_o, yz_o, xz_o, xy_o, xx, yy, zz, yz, xz, xy, ωyz, ωxz, ωxy, dt
+)
+    # stress components
+    τ_xx = xx[I...]
+    τ_yy = yy[I...]
+    τ_zz = zz[I...]
+    τ_yz = yz[I...]
+    τ_xz = xz[I...]
+    τ_xy = xy[I...]
+    # vorticity
+    ω_yz = ωyz[I...]
+    ω_xz = ωxz[I...]
+    ω_xy = ωxy[I...]
+    # organize stress and vorticity components
+    τ    = τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy
+    ω    = ω_yz, ω_xz, ω_xy
+    # rotate stress
+    xx_o[I...], yy_o[I...], zz_o[I...], yz_o[I...], xz_o[I...], xy_o[I...] = 
+        rotate_elastic_stress3D(ω, τ, dt)
+
+    return nothing
+end
+
+
+### PARTICLES -------
 
 @parallel_indices (i, j) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
     cell = i, j

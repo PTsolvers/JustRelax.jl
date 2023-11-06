@@ -355,6 +355,7 @@ function JustRelax.solve!(
     # solver loop
     wtime0 = 0.0
     λ = @zeros(ni...)
+    θ = @zeros(ni...)
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -381,6 +382,7 @@ function JustRelax.solve!(
                 @tensor(stokes.τ_o),
                 @strain(stokes),
                 stokes.P,
+                θ,
                 η,
                 η_vep,
                 λ,
@@ -435,6 +437,8 @@ function JustRelax.solve!(
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
+
+    stokes.P .= θ
 
     return (
         iter=iter,

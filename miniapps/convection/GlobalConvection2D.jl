@@ -1,7 +1,7 @@
 using JustRelax
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:gpu, Float64, 2)
+model = PS_Setup(:threads, Float64, 2)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
@@ -164,7 +164,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1.0 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.8 / √2.1)
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
     for _ in 1:2
@@ -176,7 +176,10 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     η               = @ones(ni...)
     depth           = PTArray([y for x in xci[1], y in xci[2]])
     args            = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
-    @parallel (@idx ni) compute_viscosity!(η, 1, 1e-15, args, rheology)
+    viscosity_cutoff = 1e18, 1e23
+    @parallel (@idx ni) compute_viscosity!(
+        η, 1.0, @strain(stokes)..., args, rheology, viscosity_cutoff 
+    )
     η_vep           = deepcopy(η)
     # Boundary conditions
     flow_bcs = FlowBoundaryConditions(; 
@@ -220,12 +223,13 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
             ρg,
             η,
             η_vep,
-            rheology_plastic,
+            rheology,
             args,
             dt,
             igg;
-            iterMax=250e3,
+            iterMax=50e3,
             nout=1e3,
+            viscosity_cutoff = viscosity_cutoff
         );
         dt = compute_dt(stokes, di, dt_diff, igg)
         # ------------------------------

@@ -79,7 +79,7 @@ end
 # --------------------------------------------------------------------------------
 # BEGIN MAIN SCRIPT
 # --------------------------------------------------------------------------------
-function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :random)
+function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
     
     # initialize MPI
     igg = IGG(init_global_grid(nx, ny, 0; init_MPI = JustRelax.MPI.Initialized() ? false : true)...) 

@@ -321,7 +321,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         @views T_buffer[:, 1]        .= maximum(thermal.T)
         @views thermal.T[2:end-1, :] .= T_buffer
         temperature2center!(thermal)
-
+        @show extrema(thermal.T)
         # Thermal solver ---------------
         heatdiffusion_PT!(
             thermal,
@@ -338,7 +338,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             verbose = true,
         )
         # ------------------------------
-
+        @show extrema(thermal.T)
         # Advection --------------------
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2/3)

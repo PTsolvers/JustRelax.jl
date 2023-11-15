@@ -8,14 +8,17 @@
     @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
+        # cache
+        ε = εxx[I...], εyy[I...]
+
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = allzero(εxx[I...], εyy[I...]) * 1e-15
+        εII_0 = allzero(ε...) * 1e-15
 
         # argument fields at local index
         args_ij = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        εij = εII_0 + εxx[I...], -εII_0 + εyy[I...], gather(εxyv)
+        εij = εII_0 + ε[1], -εII_0 + ε[1], gather(εxyv)
         εII = second_invariant(εij...)
 
         # compute and update stress viscosity
@@ -52,8 +55,11 @@ end
     @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
+        # cache
+        ε = εxx[I...], εyy[I...]
+
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = allzero(εxx[I...], εyy[I...]) * 1e-18
+        εII_0 = allzero(ε...) * 1e-18
 
         # argument fields at local index
         args_ij = local_viscosity_args(args, I...)
@@ -62,7 +68,7 @@ end
         ratio_ij = ratios_center[I...]
 
         # compute second invariant of strain rate tensor
-        εij = εII_0 + εxx[I...], -εII_0 + εyy[I...], gather(εxyv)
+        εij = εII_0 + ε[1], -εII_0 + ε[1], gather(εxyv)
         εII = second_invariant(εij...)
 
         # compute and update stress viscosity
@@ -86,14 +92,15 @@ end
     @inline gather_xy(A) = _gather_xy(A, I...)
 
     @inbounds begin
+        εij_normal = εxx[I...], εyy[I...], εzz[I...]
+
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = allzero(εxx[I...], εyy[I...], εzz[I...]) * 1e-18
+        εII_0 = allzero(εij_normal...) * 1e-18
 
         # # argument fields at local index
         args_ijk = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        εij_normal = εxx[I...], εyy[I...], εzz[I...]
         εij_normal = εij_normal .+ (εII_0, -εII_0 * 0.5, -εII_0 * 0.5)
         εij_shear = gather_yz(εyzv), gather_xz(εxzv), gather_xy(εxyv)
         εij = (εij_normal..., εij_shear...)
@@ -135,9 +142,11 @@ end
     @inline gather_xy(A) = _gather_xy(A, I...)
 
     @inbounds begin
-        # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = allzero(εxx[I...], εyy[I...], εzz[I...]) * 1e-18
+        εij_normal = εxx[I...], εyy[I...], εzz[I...]
 
+        # we need strain rate not to be zero, otherwise we get NaNs
+        εII_0 = allzero(εij_normal...) * 1e-18
+        
         # # argument fields at local index
         args_ijk = local_viscosity_args(args, I...)
 
@@ -145,7 +154,6 @@ end
         ratio_ijk = ratios_center[I...]
 
         # compute second invariant of strain rate tensor
-        εij_normal = εxx[I...], εyy[I...], εzz[I...]
         εij_normal = εij_normal .+ (εII_0, -εII_0 * 0.5, -εII_0 * 0.5)
         εij_shear = gather_yz(εyzv), gather_xz(εxzv), gather_xy(εxyv)
         εij = (εij_normal..., εij_shear...)

@@ -2,17 +2,17 @@
 const T2 = AbstractArray{T,2} where {T}
 
 # finite differences
-@inline _d_xa(A::T, i, j, _dx) where {T<:T2} = (A[i + 1, j] - A[i, j]) * _dx
-@inline _d_ya(A::T, i, j, _dy) where {T<:T2} = (A[i, j + 1] - A[i, j]) * _dy
-@inline _d_xi(A::T, i, j, _dx) where {T<:T2} = (A[i + 1, j + 1] - A[i, j + 1]) * _dx
-@inline _d_yi(A::T, i, j, _dy) where {T<:T2} = (A[i + 1, j + 1] - A[i + 1, j]) * _dy
+@inline _d_xa(A::T, i, j, _dx) where {T<:T2} = (-A[i, j] + A[i + 1, j]) * _dx
+@inline _d_ya(A::T, i, j, _dy) where {T<:T2} = (-A[i, j] + A[i, j + 1]) * _dy
+@inline _d_xi(A::T, i, j, _dx) where {T<:T2} = (-A[i, j + 1] + A[i + 1, j + 1]) * _dx
+@inline _d_yi(A::T, i, j, _dy) where {T<:T2} = (-A[i + 1, j] + A[i + 1, j + 1]) * _dy
 # averages
 @inline _av(A::T, i, j) where {T<:T2} = 0.25 * mysum(A, (i + 1):(i + 2), (j + 1):(j + 2))
 @inline _av_a(A::T, i, j) where {T<:T2} = 0.25 * mysum(A, (i):(i + 1), (j):(j + 1))
-@inline _av_xa(A::T, i, j) where {T<:T2} = (A[i + 1, j] + A[i, j]) * 0.5
-@inline _av_ya(A::T, i, j) where {T<:T2} = (A[i, j + 1] + A[i, j]) * 0.5
-@inline _av_xi(A::T, i, j) where {T<:T2} = (A[i + 1, j + 1] + A[i, j + 1]) * 0.5
-@inline _av_yi(A::T, i, j) where {T<:T2} = (A[i + 1, j + 1] + A[i + 1, j]) * 0.5
+@inline _av_xa(A::T, i, j) where {T<:T2} = (A[i, j] + A[i + 1, j]) * 0.5
+@inline _av_ya(A::T, i, j) where {T<:T2} = (A[i, j] + A[i, j + 1]) * 0.5
+@inline _av_xi(A::T, i, j) where {T<:T2} = (A[i, j + 1], A[i + 1, j + 1]) * 0.5
+@inline _av_yi(A::T, i, j) where {T<:T2} = (A[i + 1, j], A[i + 1, j + 1]) * 0.5
 # harmonic averages
 @inline function _harm(A::T, i, j) where {T<:T2}
     return eltype(A)(4) * mysum(inv, A, (i + 1):(i + 2), (j + 1):(j + 2))
@@ -32,38 +32,38 @@ end
 const T3 = AbstractArray{T,3} where {T}
 
 # finite differences
-@inline _d_xa(A::T, i, j, k, _dx) where {T<:T3} = (A[i + 1, j, k] - A[i, j, k]) * _dx
-@inline _d_ya(A::T, i, j, k, _dy) where {T<:T3} = (A[i, j + 1, k] - A[i, j, k]) * _dy
-@inline _d_za(A::T, i, j, k, _dz) where {T<:T3} = (A[i, j, k + 1] - A[i, j, k]) * _dz
+@inline _d_xa(A::T, i, j, k, _dx) where {T<:T3} = (-A[i, j, k] + A[i + 1, j, k]) * _dx
+@inline _d_ya(A::T, i, j, k, _dy) where {T<:T3} = (-A[i, j, k] + A[i, j + 1, k]) * _dy
+@inline _d_za(A::T, i, j, k, _dz) where {T<:T3} = (-A[i, j, k] + A[i, j, k + 1]) * _dz
 @inline function _d_xi(A::T, i, j, k, _dx) where {T<:T3}
-    return (A[i + 1, j + 1, k + 1] - A[i, j + 1, k + 1]) * _dx
+    return (-A[i, j + 1, k + 1] + A[i + 1, j + 1, k + 1]) * _dx
 end
 @inline function _d_yi(A::T, i, j, k, _dy) where {T<:T3}
-    return (A[i + 1, j + 1, k + 1] - A[i + 1, j, k + 1]) * _dy
+    return (-A[i + 1, j, k + 1] + A[i + 1, j + 1, k + 1]) * _dy
 end
 @inline function _d_zi(A::T, i, j, k, _dz) where {T<:T3}
-    return (A[i + 1, j + 1, k + 1] - A[i + 1, j + 1, k]) * _dz
+    return (-A[i + 1, j + 1, k] + A[i + 1, j + 1, k + 1]) * _dz
 end
 # averages
-@inline _av(A::T, i, j, k) where {T<:T3} = 0.125 * mysum(A, i:(i + 1), j:(j + 1), k:(k + 1))
-@inline _av_x(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i + 1, j, k] + A[i, j, k])
-@inline _av_y(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i, j + 1, k] + A[i, j, k])
-@inline _av_z(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i, j, k + 1] + A[i, j, k])
-@inline _av_xy(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:(j + 1), k:k)
-@inline _av_xz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:j, k:(k + 1))
-@inline _av_yz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:i, j:(j + 1), k:(k + 1))
+@inline _av(A::T, i, j, k)     where {T<:T3} = 0.125 * mysum(A, i:(i + 1), j:(j + 1), k:(k + 1))
+@inline _av_x(A::T, i, j, k)   where {T<:T3} = 0.5 * (A[i, j, k] + A[i + 1, j, k])
+@inline _av_y(A::T, i, j, k)   where {T<:T3} = 0.5 * (A[i, j, k] + A[i, j + 1, k])
+@inline _av_z(A::T, i, j, k)   where {T<:T3} = 0.5 * (A[i, j, k] + A[i, j, k + 1])
+@inline _av_xy(A::T, i, j, k)  where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:(j + 1), k:k)
+@inline _av_xz(A::T, i, j, k)  where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:j, k:(k + 1))
+@inline _av_yz(A::T, i, j, k)  where {T<:T3} = 0.25 * mysum(A, i:i, j:(j + 1), k:(k + 1))
 @inline _av_xyi(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, (i - 1):i, (j - 1):j, k:k)
 @inline _av_xzi(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, (i - 1):i, j:j, (k - 1):k)
 @inline _av_yzi(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:i, (j - 1):j, (k - 1):k)
 # harmonic averages
 @inline function _harm_x(A::T, i, j, k) where {T<:T3}
-    return eltype(A)(2) * inv(inv(A[i + 1, j, k]) + inv(A[i, j, k]))
+    return eltype(A)(2) * inv(inv(A[i, j, k]) + inv(A[i + 1, j, k]))
 end
 @inline function _harm_y(A::T, i, j, k) where {T<:T3}
-    return eltype(A)(2) * inv(inv(A[i, j + 1, k]) + inv(A[i, j, k]))
+    return eltype(A)(2) * inv(inv(A[i, j, k]) + inv(A[i, j + 1, k]))
 end
 @inline function _harm_z(A::T, i, j, k) where {T<:T3}
-    return eltype(A)(2) * inv(inv(A[i, j, k + 1]) + inv(A[i, j, k]))
+    return eltype(A)(2) * inv(inv(A[i, j, k]) + inv(A[i, j, k + 1]))
 end
 @inline function _harm_xy(A::T, i, j, k) where {T<:T3}
     return eltype(A)(4) * inv(mysum(A, i:(i + 1), j:(j + 1), k:k))
@@ -97,9 +97,9 @@ end
 @inline _current(A::T, i, j, k) where {T<:T3} = A[i, j, k]
 
 ## Because mysum(::generator) does not work inside CUDA kernels...
-mysum(A, ranges::Vararg{T,N}) where {T,N} = mysum(identity, A, ranges...)
+@inline mysum(A, ranges::Vararg{T,N}) where {T,N} = mysum(identity, A, ranges...)
 
-function mysum(f::F, A, ranges_i) where {F<:Function}
+@inline function mysum(f::F, A, ranges_i) where {F<:Function}
     s = 0.0
     for i in ranges_i
         s += f(A[i])
@@ -107,7 +107,7 @@ function mysum(f::F, A, ranges_i) where {F<:Function}
     return s
 end
 
-function mysum(f::F, A, ranges_i, ranges_j) where {F<:Function}
+@inline function mysum(f::F, A, ranges_i, ranges_j) where {F<:Function}
     s = 0.0
     for i in ranges_i, j in ranges_j
         s += f(A[i, j])
@@ -115,7 +115,7 @@ function mysum(f::F, A, ranges_i, ranges_j) where {F<:Function}
     return s
 end
 
-function mysum(f::F, A, ranges_i, ranges_j, ranges_k) where {F<:Function}
+@inline function mysum(f::F, A, ranges_i, ranges_j, ranges_k) where {F<:Function}
     s = 0.0
     for i in ranges_i, j in ranges_j, k in ranges_k
         s += f(A[i, j, k])

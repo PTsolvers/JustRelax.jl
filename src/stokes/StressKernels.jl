@@ -14,7 +14,7 @@
     # Shear components
     if all((i, j) .< size(τxy) .- 1)
         τxy[i + 1, j + 1] +=
-            (-τxy[i + 1, j + 1] + 2.0 * @av(η) * εxy[i + 1, j + 1]) * denominator
+            (-τxy[i + 1, j + 1] + 2.0 * av(η) * εxy[i + 1, j + 1]) * denominator
     end
 
     return nothing

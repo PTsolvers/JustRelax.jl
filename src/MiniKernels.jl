@@ -45,13 +45,13 @@ end
     return (-A[i + 1, j + 1, k] + A[i + 1, j + 1, k + 1]) * _dz
 end
 # averages
-@inline _av(A::T, i, j, k)     where {T<:T3} = 0.125 * mysum(A, i:(i + 1), j:(j + 1), k:(k + 1))
-@inline _av_x(A::T, i, j, k)   where {T<:T3} = 0.5 * (A[i, j, k] + A[i + 1, j, k])
-@inline _av_y(A::T, i, j, k)   where {T<:T3} = 0.5 * (A[i, j, k] + A[i, j + 1, k])
-@inline _av_z(A::T, i, j, k)   where {T<:T3} = 0.5 * (A[i, j, k] + A[i, j, k + 1])
-@inline _av_xy(A::T, i, j, k)  where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:(j + 1), k:k)
-@inline _av_xz(A::T, i, j, k)  where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:j, k:(k + 1))
-@inline _av_yz(A::T, i, j, k)  where {T<:T3} = 0.25 * mysum(A, i:i, j:(j + 1), k:(k + 1))
+@inline _av(A::T, i, j, k) where {T<:T3} = 0.125 * mysum(A, i:(i + 1), j:(j + 1), k:(k + 1))
+@inline _av_x(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i, j, k] + A[i + 1, j, k])
+@inline _av_y(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i, j, k] + A[i, j + 1, k])
+@inline _av_z(A::T, i, j, k) where {T<:T3} = 0.5 * (A[i, j, k] + A[i, j, k + 1])
+@inline _av_xy(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:(j + 1), k:k)
+@inline _av_xz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:(i + 1), j:j, k:(k + 1))
+@inline _av_yz(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:i, j:(j + 1), k:(k + 1))
 @inline _av_xyi(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, (i - 1):i, (j - 1):j, k:k)
 @inline _av_xzi(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, (i - 1):i, j:j, (k - 1):k)
 @inline _av_yzi(A::T, i, j, k) where {T<:T3} = 0.25 * mysum(A, i:i, (j - 1):j, (k - 1):k)

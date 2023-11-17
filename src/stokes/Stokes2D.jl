@@ -525,7 +525,7 @@ function JustRelax.solve!(
                 θ_dτ,
                 )
                 
-            @views stokes.P[:, end] .= args.pressure_top 
+            @views stokes.P[:, end-2:end] .= args.pressure_top 
 
             minP = minimum_mpi(stokes.P)
             minP < 0.0 && (stokes.P .+= abs(minP))

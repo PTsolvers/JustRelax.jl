@@ -527,8 +527,8 @@ function JustRelax.solve!(
                 
             @views stokes.P[args.sticky_air] .= args.pressure_top 
 
-            # minP = minimum_mpi(stokes.P)
-            # minP < 0.0 && (stokes.P .+= abs(minP))
+            minP = minimum_mpi(stokes.P)
+            minP < 0.0 && (stokes.P .+= abs(minP))
 
             if rem(iter, 5) == 0
                 @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)

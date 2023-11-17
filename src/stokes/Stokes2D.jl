@@ -511,8 +511,7 @@ function JustRelax.solve!(
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
-            @views stokes.P[:, end] .= args.pressure_top 
-
+            
             @parallel (@idx ni) compute_P!(
                 stokes.P,
                 stokes.P0,
@@ -524,8 +523,10 @@ function JustRelax.solve!(
                 dt,
                 r,
                 θ_dτ,
-            )
-
+                )
+                
+            @views stokes.P[:, end-5:end] .= args.pressure_top 
+            
             if rem(iter, 5) == 0
                 @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
             end

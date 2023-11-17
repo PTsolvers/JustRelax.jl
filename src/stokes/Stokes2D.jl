@@ -511,6 +511,8 @@ function JustRelax.solve!(
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
+            @views stokes.P[:, end] .= args.pressure_top 
+
             @parallel (@idx ni) compute_P!(
                 stokes.P,
                 stokes.P0,

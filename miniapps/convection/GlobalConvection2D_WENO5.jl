@@ -1,7 +1,7 @@
 using JustRelax
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:gpu, Float64, 2)
+model = PS_Setup(:threads, Float64, 2)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
@@ -79,11 +79,8 @@ end
 # --------------------------------------------------------------------------------
 # BEGIN MAIN SCRIPT
 # --------------------------------------------------------------------------------
-function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :random)
+function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
     
-    # initialize MPI
-    igg = IGG(init_global_grid(nx, ny, 0; init_MPI = JustRelax.MPI.Initialized() ? false : true)...) 
-
     # Physical domain ------------------------------------
     ly       = 2890e3
     lx       = ly * ar
@@ -92,6 +89,10 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     li       = lx, ly                           # domain length in x- and y-
     di       = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    # ----------------------------------------------------
+
+    # Weno model -----------------------------------------
+    weno = WENO5(ni= ni .+ 1, method=Val{2}()) # ni.+1 for Temp
     # ----------------------------------------------------
 
     # create rheology struct
@@ -164,7 +165,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1.0 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.8 / √2.1)
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
     for _ in 1:2
@@ -173,11 +174,20 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     end
 
     # Rheology
-    η               = @ones(ni...)
-    depth           = PTArray([y for x in xci[1], y in xci[2]])
-    args            = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
-    @parallel (@idx ni) compute_viscosity!(η, 1, 1e-15, args, rheology)
+    η        = @ones(ni...)
+    depth    = PTArray([y for x in xci[1], y in xci[2]])
+    args     = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
+    η_cutoff = 1e18, 1e23
+    @parallel (@idx ni) compute_viscosity!(
+        η, 1.0, @strain(stokes)..., args, rheology, η_cutoff 
+    )
     η_vep           = deepcopy(η)
+
+    # PT coefficients for thermal diffusion
+    pt_thermal       = PTThermalCoeffs(
+        rheology, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
+    )
+
     # Boundary conditions
     flow_bcs = FlowBoundaryConditions(; 
         free_slip   = (left = true, right=true, top=true, bot=true),
@@ -206,12 +216,22 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
         fig
     end
 
+    # WENO arrays
+    T_WENO  = @zeros(ni.+1) 
+    Vx_v    = @zeros(ni.+1...)
+    Vy_v    = @zeros(ni.+1...)
+
     # Time loop
     t, it = 0.0, 0
     local iters
     while (t / (1e6 * 3600 * 24 * 365.25)) < 4.5e3
         # Stokes solver ----------------
         args = (; T = thermal.Tc, P = stokes.P, depth = depth, dt=Inf)
+        @parallel (@idx ni) compute_ρg!(ρg[2], rheology, args)
+        @parallel (@idx ni) compute_viscosity!(
+            η, 1.0, @strain(stokes)..., args, rheology, η_cutoff
+        )
+
         iters = solve!(
             stokes,
             pt_stokes,
@@ -220,27 +240,36 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
             ρg,
             η,
             η_vep,
-            rheology_plastic,
+            rheology,
             args,
             dt,
             igg;
-            iterMax=250e3,
+            iterMax=50e3,
             nout=1e3,
+            viscosity_cutoff = η_cutoff
         );
         dt = compute_dt(stokes, di, dt_diff, igg)
         # ------------------------------
 
         # Thermal solver ---------------
-        args_T = (; P=stokes.P)
-        solve!(
+        heatdiffusion_PT!(
             thermal,
+            pt_thermal,
             thermal_bc,
-            stokes,
             rheology,
-            args_T,
-            di,
-            dt 
+            args,
+            dt,
+            di;
+            igg     = igg,
+            iterMax = 10e3,
+            nout    = 1e2,
+            verbose = true,
         )
+        # Weno advection
+        T_WENO .= @views thermal.T[2:end-1, :]
+        JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
+        @views thermal.T[2:end-1, :] .= T_WENO
         # ------------------------------
 
         it += 1
@@ -279,14 +308,15 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     return (ni=ni, xci=xci, li=li, di=di), thermal
 end
 
-function run()
-    figdir = "figs2D_test"
-    ar     = 8 # aspect ratio
-    n      = 128
-    nx     = n*ar - 2
-    ny     = n - 2
-
-    thermal_convection2D(; figdir=figdir, ar=ar,nx=nx, ny=ny);
+figdir = "figs2D_test_weno"
+ar     = 8 # aspect ratio
+n      = 128
+nx     = n*ar - 2
+ny     = n - 2
+igg    = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 0; init_MPI= true)...)
+else
+    igg
 end
 
-run()
+thermal_convection2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny);

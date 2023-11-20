@@ -263,6 +263,7 @@ end
     τ_old, # shear @ centers
     ε,     # shear @ vertices
     P,
+    θ,
     η,
     η_vep,
     λ,
@@ -277,12 +278,16 @@ end
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     # get plastic paremeters (if any...)
-    is_pl, C, sinϕ, η_reg = plastic_params(rheology[1])
-    plastic_parameters = (; is_pl, C, sinϕ, η_reg)
+    is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, 1)
+    # plastic volumetric change K*dt*sinϕ*sinψ
+    K = get_bulkmodulus(rheology[1])
+    volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ
+    plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
         τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
+    θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
 
     return nothing
 end

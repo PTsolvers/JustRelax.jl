@@ -1,7 +1,7 @@
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:gpu, Float64, 3)
+model = PS_Setup(:threads, Float64, 3)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions

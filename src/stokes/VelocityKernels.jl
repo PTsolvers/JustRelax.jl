@@ -113,6 +113,30 @@ end
     return nothing
 end
 
+# with free surface stabilization
+@parallel_indices (i, j) function compute_V!(
+    Vx::AbstractArray{T,2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy, _dt
+) where {T}
+    d_xi(A) = _d_xi(A, i, j, _dx)
+    d_yi(A) = _d_yi(A, i, j, _dy)
+    d_xa(A) = _d_xa(A, i, j, _dx)
+    d_ya(A) = _d_ya(A, i, j, _dy)
+    av_xa(A) = _av_xa(A, i, j)
+    av_ya(A) = _av_ya(A, i, j)
+    harm_xa(A) = _av_xa(A, i, j)
+    harm_ya(A) = _av_ya(A, i, j)
+
+    if all((i, j) .< size(Vx) .- 1)
+        Vx[i + 1, j + 1] +=
+            (-d_xa(P) + d_xa(τxx) + d_yi(τxy) - av_xa(ρgx) + Vx[i + 1, j + 1] * d_xa(ρgy) * _dt) * ηdτ / av_xa(ητ)
+    end
+    if all((i, j) .< size(Vy) .- 1)
+        Vy[i + 1, j + 1] +=
+            (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy) + Vy[i + 1, j + 1] * d_ya(ρgy) * _dt) * ηdτ / av_ya(ητ)
+    end
+    return nothing
+end
+
 @parallel_indices (i, j, k) function compute_V!(
     Vx::AbstractArray{T,3},
     Vy,
@@ -193,6 +217,27 @@ end
         end
         if all((i, j) .≤ size(Ry))
             Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
+        end
+    end
+    return nothing
+end
+
+@parallel_indices (i, j) function compute_Res!(
+    Rx::AbstractArray{T,2}, Ry, Vx, Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, _dt
+) where {T}
+    @inline d_xa(A) = _d_xa(A, i, j, _dx)
+    @inline d_ya(A) = _d_ya(A, i, j, _dy)
+    @inline d_xi(A) = _d_xi(A, i, j, _dx)
+    @inline d_yi(A) = _d_yi(A, i, j, _dy)
+    @inline av_xa(A) = _av_xa(A, i, j)
+    @inline av_ya(A) = _av_ya(A, i, j)
+
+    @inbounds begin
+        if all((i, j) .≤ size(Rx))
+            Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx) + Vx[i + 1, j + 1] * d_xa(ρgy) * _dt
+        end
+        if all((i, j) .≤ size(Ry))
+            Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + Vy[i + 1, j + 1] * d_ya(ρgy) * _dt
         end
     end
     return nothing

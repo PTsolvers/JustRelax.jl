@@ -127,7 +127,6 @@ end
     harm_ya(A) = _av_ya(A, i, j)
 
     nx, ny = size(ρgy)
-    # dt = 0.0
 
     if all((i, j) .< size(Vx) .- 1)
         Vx[i + 1, j + 1] +=
@@ -266,7 +265,6 @@ end
     @inline av_ya(A) = _av_ya(A, i, j)
 
     nx, ny = size(ρgy)
-
     @inbounds begin
         if all((i, j) .≤ size(Rx))
             Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)

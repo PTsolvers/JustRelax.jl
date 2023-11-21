@@ -93,7 +93,6 @@ function JustRelax.solve!(
 ) where {A,B,C,D,T}
 
     # unpack
-    _dt = inv(dt)
     _dx, _dy = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
@@ -139,7 +138,7 @@ function JustRelax.solve!(
                     ρg...,
                     ητ,
                     _di...,
-                    _dt
+                    dt,
                 )
                 update_halo!(@velocity(stokes)...)
             end
@@ -149,7 +148,14 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, @velocity(stokes)..., stokes.P, @stress(stokes)..., ρg..., _di..., _dt
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             Vmin, Vmax = extrema(stokes.V.Vx)
             Pmin, Pmax = extrema(stokes.P)
@@ -214,7 +220,6 @@ function JustRelax.solve!(
 ) where {A,B,C,D,T}
 
     # unpack
-    _dt = inv(dt)
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
@@ -264,7 +269,7 @@ function JustRelax.solve!(
                     ρg...,
                     ητ,
                     _di...,
-                    _dt
+                    dt,
                 )
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
@@ -275,7 +280,14 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, @velocity(stokes)..., stokes.P, @stress(stokes)..., ρg..., _di..., _dt
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
@@ -333,7 +345,6 @@ function JustRelax.solve!(
 ) where {A,B,C,D,T}
 
     # unpack
-    _dt = inv(dt)
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
@@ -405,7 +416,7 @@ function JustRelax.solve!(
                     ρg...,
                     ητ,
                     _di...,
-                    _dt
+                    dt,
                 )
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
@@ -416,7 +427,14 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, @velocity(stokes)..., stokes.P, @stress(stokes)..., ρg..., _di..., _dt
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
 
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
@@ -479,7 +497,7 @@ function JustRelax.solve!(
 ) where {A,B,C,D,T}
 
     # unpack
-    _dt = inv(dt)
+
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
@@ -586,7 +604,7 @@ function JustRelax.solve!(
                     ρg...,
                     ητ,
                     _di...,
-                    _dt
+                    dt,
                 )
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
@@ -600,7 +618,14 @@ function JustRelax.solve!(
             er_η < 1e-3 && (do_visc = false)
             # @show er_η
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, @velocity(stokes)..., stokes.P, @stress(stokes)..., ρg..., _di..., _dt
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (
@@ -667,7 +692,7 @@ function JustRelax.solve!(
 ) where {A,B,C,D,N,T}
 
     # unpack
-    _dt = inv(dt)
+
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
@@ -735,7 +760,7 @@ function JustRelax.solve!(
                     ρg...,
                     ητ,
                     _di...,
-                    _dt
+                    dt,
                 )
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
@@ -746,7 +771,14 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, @velocity(stokes)..., stokes.P, @stress(stokes)..., ρg..., _di..., _dt
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])

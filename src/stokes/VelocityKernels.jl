@@ -115,7 +115,7 @@ end
 
 # with free surface stabilization
 @parallel_indices (i, j) function compute_V!(
-    Vx::AbstractArray{T,2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy, _dt
+    Vx::AbstractArray{T,2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy, dt
 ) where {T}
     d_xi(A) = _d_xi(A, i, j, _dx)
     d_yi(A) = _d_yi(A, i, j, _dy)
@@ -126,13 +126,46 @@ end
     harm_xa(A) = _av_xa(A, i, j)
     harm_ya(A) = _av_ya(A, i, j)
 
+    nx, ny = size(ρgy)
+    # dt = 0.0
+
     if all((i, j) .< size(Vx) .- 1)
         Vx[i + 1, j + 1] +=
-            (-d_xa(P) + d_xa(τxx) + d_yi(τxy) - av_xa(ρgx) + Vx[i + 1, j + 1] * d_xa(ρgy) * _dt) * ηdτ / av_xa(ητ)
+            (-d_xa(P) + d_xa(τxx) + d_yi(τxy) - av_xa(ρgx)) * ηdτ / av_xa(ητ)
     end
     if all((i, j) .< size(Vy) .- 1)
+        # Interpolate Vx into Vy node
+        Vx_left = Vx[i, j + 1] + Vx[i, j + 2]
+        Vx_right = Vx[i + 1, j + 1] + Vx[i + 1, j + 2]
+        Vxᵢⱼ = 0.25 * (Vx_left + Vx_right)
+        # Vertical velocity
+        Vyᵢⱼ = Vy[i + 1, j + 1]
+        # Get necessary buoyancy forces
+        i_W, i_E = max(i, 1), min(i, nx)
+        ρg_W = ρgy[i_W, j], ρgy[i_W, min(j + 1, ny)]
+        ρg_C = ρgy[i, max(j - 1, 1)],
+        ρgy[i, j], ρgy[i, min(j + 1, ny)],
+        ρgy[i, min(j + 2, ny)]
+        ρg_E = ρgy[i_E, j], ρgy[i_E, min(j + 1, ny)]
+        ρgᵢⱼ = (ρg_C[3] + ρg_C[2]) * 0.5
+        # Compute advected buoyancy
+        ρg_advected =
+            (
+                (Vxᵢⱼ > 0) * (ρgᵢⱼ - (ρg_W[2] + ρg_W[1]) * 0.5) +
+                (Vxᵢⱼ < 0) * ((ρg_E[2] + ρg_E[1]) * 0.5 - ρgᵢⱼ)
+            ) *
+            Vxᵢⱼ *
+            _dx +
+            (
+                (Vyᵢⱼ > 0) * (ρgᵢⱼ - (ρg_C[2] + ρg_C[1]) * 0.5) +
+                (Vyᵢⱼ < 0) * ((ρg_C[4] + ρg_C[3]) * 0.5 - ρgᵢⱼ)
+            ) *
+            Vyᵢⱼ *
+            _dy
+
         Vy[i + 1, j + 1] +=
-            (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy) + Vy[i + 1, j + 1] * d_ya(ρgy) * _dt) * ηdτ / av_ya(ητ)
+            (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy) + ρg_advected * dt) * ηdτ /
+            av_ya(ητ)
     end
     return nothing
 end
@@ -223,7 +256,7 @@ end
 end
 
 @parallel_indices (i, j) function compute_Res!(
-    Rx::AbstractArray{T,2}, Ry, Vx, Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, _dt
+    Rx::AbstractArray{T,2}, Ry, Vx, Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
 ) where {T}
     @inline d_xa(A) = _d_xa(A, i, j, _dx)
     @inline d_ya(A) = _d_ya(A, i, j, _dy)
@@ -232,12 +265,42 @@ end
     @inline av_xa(A) = _av_xa(A, i, j)
     @inline av_ya(A) = _av_ya(A, i, j)
 
+    nx, ny = size(ρgy)
+
     @inbounds begin
         if all((i, j) .≤ size(Rx))
-            Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx) + Vx[i + 1, j + 1] * d_xa(ρgy) * _dt
+            Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
         end
         if all((i, j) .≤ size(Ry))
-            Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + Vy[i + 1, j + 1] * d_ya(ρgy) * _dt
+            # Interpolate Vx into Vy node
+            Vx_left = Vx[i, j + 1] + Vx[i, j + 2]
+            Vx_right = Vx[i + 1, j + 1] + Vx[i + 1, j + 2]
+            Vxᵢⱼ = 0.25 * (Vx_left + Vx_right)
+            # Vertical velocity
+            Vyᵢⱼ = Vy[i + 1, j + 1]
+            # Get necessary buoyancy forces
+            i_W, i_E = max(i, 1), min(i, nx)
+            ρg_W = ρgy[i_W, j], ρgy[i_W, min(j + 1, ny)]
+            ρg_C = ρgy[i, max(j - 1, 1)],
+            ρgy[i, j], ρgy[i, min(j + 1, ny)],
+            ρgy[i, min(j + 2, ny)]
+            ρg_E = ρgy[i_E, j], ρgy[i_E, min(j + 1, ny)]
+            ρgᵢⱼ = (ρg_C[3] + ρg_C[2]) * 0.5
+            # # Compute advected buoyancy
+            ρg_advected =
+                (
+                    (Vxᵢⱼ > 0) * (ρgᵢⱼ - (ρg_W[2] + ρg_W[1]) * 0.5) +
+                    (Vxᵢⱼ < 0) * ((ρg_E[2] + ρg_E[1]) * 0.5 - ρgᵢⱼ)
+                ) *
+                Vxᵢⱼ *
+                _dx +
+                (
+                    (Vyᵢⱼ > 0) * (ρgᵢⱼ - (ρg_C[2] + ρg_C[1]) * 0.5) +
+                    (Vyᵢⱼ < 0) * ((ρg_C[4] + ρg_C[3]) * 0.5 - ρgᵢⱼ)
+                ) *
+                Vyᵢⱼ *
+                _dy
+            Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + ρg_advected * dt
         end
     end
     return nothing

@@ -5,7 +5,7 @@ using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
-model  = PS_Setup(:gpu, Float64, 2)
+model  = PS_Setup(:CUDA, Float64, 2)
 environment!(model)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
@@ -111,7 +111,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     )
     stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
     stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
-    
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)

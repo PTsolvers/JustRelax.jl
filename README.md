@@ -43,3 +43,42 @@ We include several miniapps, each designed to solve a well-specified benchmark p
 JustRelax.jl is used in the following applications:
 
   * TODO link to all applications using the package here (crucial for early development)
+
+## Installation
+
+JustRelax.jl is not yet registered (we are in the process), however it can be installed by cloning the repository. If you have navigated the terminal to the directory you cloned JustRelax.jl, you can test the package by running the following commands:
+
+```julia
+using JustRelax
+julia> ] 
+  pkg> activate .
+  pkg> instantiate
+  pkg> test JustRelax
+```
+The test will take a while, so grab a coffee or tea. 
+
+## Usage
+
+The package relies on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) for the particle in cell method. Depending on where you want to run JustRelax.jl (CPU or GPU) you will need to specify the Backend. Run this command in the REPL and restart Julia:
+
+```julia
+  set_backend("Threads_Float64_2D")       #running on the CPU
+  set_backend("CUDA_Float64_2D")          #running on an NVIDIA GPU
+  set_backend("AMDGPU_Float64_2D")        #running on an AMD GPU
+```
+After you have run your desired line and restarted Julia, there should be a file called `LocalPreferences.toml` in the directory together with your `Project.toml` and `Manifest.toml`. This file contains the information about the backend you want to use. If you want to change the backend, you can run the command again. 
+
+
+As stated above, the parallelisation is done using ParallelStencil.jl. Therefore, JustRelax.jl has as an environment already setup with which you can specify the dimension of your problem (2D or 3D) and the backend (CPU or GPU). The following commands are available:
+
+```julia
+  model = PS_Setup(:Threads, Float64, 2)  #running on the CPU in 2D
+  environment!(model)
+
+  model = PS_Setup(:CUDA, Float64, 2)     #running on an NVIDIA GPU in 2D
+  environment!(model)
+
+  model = PS_Setup(:AMDGPU, Float64, 2)   #running on an AMD GPU in 2D
+  environment!(model)
+```
+

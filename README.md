@@ -86,6 +86,8 @@ As stated above, the parallelisation is done using ParallelStencil.jl. Therefore
 
 This example benchmark test displays how the package can be used to simulate shear bands. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl). 
 
+The `CUDA.allowscalar(false)` is needed to avoid the use of scalar values in the code which would run slowly on a CPU and is disallowed on GPU systems such as HPC clusters. 
+
 ```julia
 using CUDA
 CUDA.allowscalar(false)
@@ -93,7 +95,7 @@ CUDA.allowscalar(false)
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
 ```
-The `CUDA.allowscalar(false)` is needed to avoid the use of scalar values in the code which would run slowly on a CPU and is disallowed on GPU systems such as HPC clusters. 
+Setup of environment and general solution for the benchmark test.
 
 ```julia
 # setup ParallelStencil.jl environment
@@ -104,7 +106,7 @@ environment!(model)
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 ```
-Setup of environment and general solution for the benchmark test. 
+The function `init_phases!` initializes the phases within cell arrays. The function is parallelized with `@parallel_indices (i,j) ` and `@parallel (JustRelax.@idx ni)`. In this case, this is the only function that needs to be taylored to the specific problem, everything else is handled by `JustRelax.jl` itself. 
 
 ```julia
 
@@ -129,9 +131,7 @@ function init_phases!(phase_ratios, xci, radius)
     @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
 end
 ```
-
-The function `init_phases!` initializes the phases within cell arrays. The function is parallelized with `@parallel_indices (i,j) ` and `@parallel (JustRelax.@idx ni)`. In this case, this is the only function that needs to be taylored to the specific problem, everything else is handled by `JustRelax.jl` itself. 
-
+Initialisation of the physical domain and the grid. As `JustRelax.jl` is utilising [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl), the grid can be `MPIAWARE` through setting the grid steps in x- and y- direction to ` di = @. li / (nx_g(),ny_g())`. This makes it a global grid and the grid steps are automatically distributed over the MPI processes. 
 
 ```julia
 
@@ -148,7 +148,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     dt       = Inf 
 ```
-Initialisation of the physical domain and the grid. As `JustRelax.jl` is utilising [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl), the grid can be `MPIAWARE` through setting the grid steps in x- and y- direction to ` di = @. li / (nx_g(),ny_g())`. This makes it a global grid and the grid steps are automatically distributed over the MPI processes. 
+Initialisation of the Rheology utilising [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). The Rheology can be taylored to the specific problem with different creep laws and material parameters (see [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) or the miniapps in the [convection folder](miniapps/convection).
 
 ```julia
     # Physical properties using GeoParams ----------------
@@ -189,7 +189,7 @@ Initialisation of the physical domain and the grid. As `JustRelax.jl` is utilisi
         ),
     )
 ```
-Initialisation of the Rheology utilising [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). The Rheology can be taylored to the specific problem with different creep laws and material parameters (see [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) or the miniapps in the [convection folder](miniapps/convection).
+Initialisation of the Stokes arrays and the necesseary allocations. The rheology is computed with `compute_viscosity!` which is a function from `JustRelax.jl` and computes the viscosity according to the strain rate and the phase ratios.
 
 ```julia
     # Initialize phase ratios -------------------------------
@@ -213,7 +213,7 @@ Initialisation of the Rheology utilising [GeoParams.jl](https://github.com/Julia
         η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
     )
 ```
-Initialisation of the Stokes arrays and the necesseary allocations. The rheology is computed with `compute_viscosity!` which is a function from `JustRelax.jl` and computes the viscosity according to the strain rate and the phase ratios.
+Apply the velocity boundery conditions, in this case a pure shear flow. 
 
 ```julia
     # Boundary conditions
@@ -225,7 +225,7 @@ Initialisation of the Stokes arrays and the necesseary allocations. The rheology
     stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 ```
-Apply the velocity boundery conditions, in this case a pure shear flow. 
+Pseudo-transient Stokes solver and visualisation of the results. The visualisation is done with [GLMakie.jl](https://github.com/MakieOrg/Makie.jl). 
 
 ```julia    
     # IO ------------------------------------------------
@@ -305,8 +305,6 @@ Apply the velocity boundery conditions, in this case a pure shear flow.
 end
 
 ```
-Pseudo-transient Stokes solver and visualisation of the results. The visualisation is done with [GLMakie.jl](https://github.com/MakieOrg/Makie.jl). 
-
 For the initial setup, you will need to specify the number of nodes in x- and y- direction `nx` and `ny` as well as the directory where the figures are stored `figdir`. The initialisation of the global grid is done with `igg = IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)`. The `init_MPI = true` is needed to initialise the MPI environment.
 
 ```julia

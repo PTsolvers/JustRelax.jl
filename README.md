@@ -82,3 +82,19 @@ As stated above, the parallelisation is done using ParallelStencil.jl. Therefore
   environment!(model)
 ```
 
+## Miniapps
+
+Currenlty there are 3 convection miniapps with particles and 3 corresponding miniapps without. The miniapps with particles are:
+
+  * [Layered_convection2D.jl](miniapps/convection/Particles2D/Layered_convection2D.jl)
+  * [Layered_convection3D.jl](miniapps/convection/Particles3D/Layered_convection3D.jl)
+  * [WENO_convection2D.jl](miniapps/convection/Particles2D/WENO_convection2D.jl)
+
+The miniapps without particles are:
+  * [GlobalConvection2D_Upwind.jl](miniapps/convection/GlobalConvection2D_Upwind.jl)
+  * [GlobalConvection3D_Upwind.jl](miniapps/convection/GlobalConvection3D_Upwind.jl)
+  * [GlobalConvection2D_WENO5.jl](miniapps/convection/GlobalConvection2D_WENO5.jl)
+
+  ## Benchmarks
+
+  We got multiple benchmark tests for Stokes in 2D and 3D as well as thermal diffusion. The benchmarks are updated to be up to date to the current Solvers and version. The benchmarks can be found in the [Benchmarks](miniapps/benchmarks).

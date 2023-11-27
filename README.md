@@ -88,7 +88,7 @@ Currenlty there are 3 convection miniapps with particles and 3 corresponding min
 
   * [Layered_convection2D.jl](miniapps/convection/Particles2D/Layered_convection2D.jl)
   * [Layered_convection3D.jl](miniapps/convection/Particles3D/Layered_convection3D.jl)
-  * [WENO_convection2D.jl](miniapps/convection/Particles2D/WENO_convection2D.jl)
+  * [WENO_convection2D.jl](miniapps/convection/WENO5/WENO_convection2D.jl)
 
 The miniapps without particles are:
   * [GlobalConvection2D_Upwind.jl](miniapps/convection/GlobalConvection2D_Upwind.jl)

@@ -57,7 +57,7 @@ julia> ]
 ```
 The test will take a while, so grab a :coffee: or :tea:
 
-## Shear Band 2D example
+## Example: shear band localisation (2D)
 
 ![ShearBand2D](miniapps/benchmarks/stokes2D/shear_band/movies/DP_nx2058_2D.gif)
 

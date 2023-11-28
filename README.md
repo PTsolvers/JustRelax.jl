@@ -1,10 +1,13 @@
 # JustRelax.jl
 
 ![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212423.svg)](https://doi.org/10.5281/zenodo.10212423)
+
 
 :warning: This Package is still under active development. The benchmarks and miniapps are working and provide the user with an insight into the capabilities of the package. However, the API is still subject to change. :warning: 
 
 Need to solve a very large multi-physics problem on a GPU cluster? Just Relax!
+
 
 Pseudo-transient accelerated iterative solvers, ready for extreme-scale, multi-GPU computation.
 

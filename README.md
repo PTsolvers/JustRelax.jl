@@ -60,31 +60,6 @@ julia> ]
 ```
 The test will take a while, so grab a :coffee: or :tea:
 
-## Usage
-
-For the advection of physical fields, this package relies on the Particles-In-Cell method implemented in [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). Depending whether you want to run `JustRelax.jl` on CPU(s) or GPU(s) you will need to specify the backend by running the appropriate command in the REPL and restarting the Julia session:
-
-```julia
-  set_backend("Threads_Float64_2D") # running on the CPU
-  set_backend("CUDA_Float64_2D")    # running on an NVIDIA GPU
-  set_backend("AMDGPU_Float64_2D")  # running on an AMD GPU
-```
-Afterwards, there should be a `LocalPreferences.toml` in the main directory, together with your `Project.toml` and `Manifest.toml`. This file contains the information about the backend you want to use. If you want to change the backend, you can run the command again. `Threads_Float64_2D` is The default backend.
-
-As stated above, the code is parallelised with ParallelStencil.jl. Therefore, `JustRelax.jl` needs to set up the environment with the device architecture (CPU/GPU), default FP precission, and model dimension (2D or 3D). The `PS_setup` variables are `PS_Setup(device, precission, dimensions)`. 
-
-```julia
-  model = PS_Setup(:Threads, Float64, 2)  #running on the CPU in 2D
-  environment!(model)
-
-  model = PS_Setup(:CUDA, Float64, 2)     #running on an NVIDIA GPU in 2D
-  environment!(model)
-
-  model = PS_Setup(:AMDGPU, Float64, 2)   #running on an AMD GPU in 2D
-  environment!(model)
-```
-If you therefore want to run a 3D code, change the `dimensions` to 3 in the commands above.
-
 ## Shear Band 2D example
 
 ![ShearBand2D](miniapps/benchmarks/stokes2D/shear_band/movies/DP_nx2058_2D.gif)
@@ -127,8 +102,32 @@ function init_phases!(phase_ratios, xci, radius)
 
     @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
 end
-
 ```
+
+
+As stated above, the code is parallelised with ParallelStencil.jl. Therefore, `JustRelax.jl` needs to set up the environment with the device architecture (CPU/GPU), default FP precission, and model dimension (2D or 3D). The `PS_setup` variables are `PS_Setup(device, precission, dimensions)`. 
+
+```julia
+  model = PS_Setup(:Threads, Float64, 2)  #running on the CPU in 2D
+  environment!(model)
+
+  model = PS_Setup(:CUDA, Float64, 2)     #running on an NVIDIA GPU in 2D
+  environment!(model)
+
+  model = PS_Setup(:AMDGPU, Float64, 2)   #running on an AMD GPU in 2D
+  environment!(model)
+```
+If you therefore want to run a 3D code, change the `dimensions` to 3 in the commands above. 
+
+For this specific example we use particles to define the material phases, for which we rely on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). As in `JustRelax.jl`, we need to set up the environmenf of `JustPIC.jl`. This can be done by running the appropriate command in the REPL and restarting the Julia session:
+
+```julia
+  set_backend("Threads_Float64_2D") # running on the CPU
+  set_backend("CUDA_Float64_2D")    # running on an NVIDIA GPU
+  set_backend("AMDGPU_Float64_2D")  # running on an AMD GPU
+```
+After restarting Julia, there should be a file called `LocalPreferences.toml` in the directory together with your `Project.toml` and `Manifest.toml`. This file contains the information about the backend to use. To change the backend further, simply run the command again. The backend defaults to `Threads_Float64_2D`
+
 For the initial setup, you will need to specify the number of nodes in x- and y- direction `nx` and `ny` as well as the directory where the figures are stored `figdir`. The initialisation of the global grid is done with `igg = IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)`. The `init_MPI = true` is needed to initialise the MPI environment.
 
 ```julia
@@ -313,4 +312,4 @@ The miniapps without particles are:
 
 ## Benchmarks
 
-We got multiple benchmark tests for Stokes in 2D and 3D as well as thermal diffusion. The benchmarks are updated to be up to date to the current solvers and version. The benchmarks can be found in the [Benchmarks](miniapps/benchmarks).
+Current (Stokes 2D-3D, thermal diffusion) and future benchmarks can be found in the [Benchmarks](miniapps/benchmarks).

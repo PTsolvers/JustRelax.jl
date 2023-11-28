@@ -123,7 +123,7 @@ For this specific example we use particles to define the material phases, for wh
 ```
 After restarting Julia, there should be a file called `LocalPreferences.toml` in the directory together with your `Project.toml` and `Manifest.toml`. This file contains the information about the backend to use. To change the backend further, simply run the command again. The backend defaults to `Threads_Float64_2D`
 
-For the initial setup, you will need to specify the number of nodes in x- and y- direction `nx` and `ny` as well as the directory where the figures are stored `figdir`. The initialisation of the global grid is done with `igg = IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)`. The `init_MPI = true` is needed to initialise the MPI environment.
+For the initial setup, you will need to specify the number of nodes in x- and y- direction `nx` and `ny` as well as the directory where the figures are stored (`figdir`). The initialisation of the global grid and MPI environment is done with `igg = IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)`:
 
 ```julia
 N      = 128
@@ -131,11 +131,7 @@ n      = N + 2
 nx     = n - 2
 ny     = n - 2
 figdir = "ShearBands2D"
-igg  = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
-else
-    igg
-end
+igg    = IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
 ```
 
 Initialisation of the physical domain and the grid. As `JustRelax.jl` relies on [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl), the grid can be `MPIAWARE` through setting the grid steps in x- and y- direction to ` di = @. li / (nx_g(),ny_g())`. This makes it a global grid and the grid steps are automatically distributed over the MPI processes. 

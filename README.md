@@ -26,11 +26,10 @@ The package relies on other packages as building blocks and parallelisation tool
 
 The package serves several purposes:
 
-  * It reduces code duplication between several applications, e.g. [PseudoTransientStokes.jl](https://github.com/PTsolvers/PseudoTransientStokes.jl). 
   * It provides a collection of solvers to be used in quickly developing new applications
   * It provides some standardization so that application codes can
 
-     - more easily "add more physics" through the use of [GeoParams.jl]((https://github.com/JuliaGeodynamics/GeoParams.jl))
+     - more easily handle local material propoerties through the use of [GeoParams.jl]((https://github.com/JuliaGeodynamics/GeoParams.jl))
      - more easily switch between a psuedo-transient solver and another solver (e.g. an explicit thermal solvers)
 
   * It provides a place to describe performance benchmarks for the solver routines
@@ -42,10 +41,6 @@ We include several miniapps, each designed to solve a well-specified benchmark p
   - bases on which to build more full-featured application codes
   - cases for reference and performance tests
 
-
-`JustRelax.jl` is used in the following applications:
-
-  * :tools: TODO link to all applications using the package here (crucial for early development)
 
 ## Installation
 
@@ -62,17 +57,17 @@ The test will take a while, so grab a coffee or tea.
 
 ## Usage
 
-The package relies on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) for the particle in cell method. Depending on where you want to run `JustRelax.jl` (CPU or GPU) you will need to specify the Backend. Run this command in the REPL and restart Julia:
+For the advection of physical fields, this package relies on the Particles-In-Cell method implemented in [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). Depending on where you want to run `JustRelax.jl` (CPU or GPU) you will need to specify the Backend. Run this command in the REPL and restart Julia:
 
 ```julia
   set_backend("Threads_Float64_2D")       #running on the CPU
   set_backend("CUDA_Float64_2D")          #running on an NVIDIA GPU
   set_backend("AMDGPU_Float64_2D")        #running on an AMD GPU
 ```
-After you have run your desired line and restarted Julia, there should be a file called `LocalPreferences.toml` in the directory together with your `Project.toml` and `Manifest.toml`. This file contains the information about the backend you want to use. If you want to change the backend, you can run the command again. 
+After you have run your desired line and restarted Julia, there should be a file called `LocalPreferences.toml` in the directory together with your `Project.toml` and `Manifest.toml`. This file contains the information about the backend you want to use. If you want to change the backend, you can run the command again. The default backend is `Threads_Float64_2D`.
 
 
-As stated above, the parallelisation is done using ParallelStencil.jl. Therefore, `JustRelax.jl` has as an environment already setup with which you can specify the dimension of your problem (2D or 3D) and the backend (CPU or GPU). The following commands are available:
+As stated above, the parallelisation is done using ParallelStencil.jl. Therefore, `JustRelax.jl` has as an environment already setup with which you can specify the dimension of your problem (2D or 3D) and the backend (CPU or GPU). The `PS_setup` variables are `PS_Setup(device, precission, dimensions)`. If you therefore want to run a 3D code, change the `dimensions` to 3 in the available commands below.
 
 ```julia
   model = PS_Setup(:Threads, Float64, 2)  #running on the CPU in 2D
@@ -89,7 +84,9 @@ As stated above, the parallelisation is done using ParallelStencil.jl. Therefore
 
 This example benchmark test displays how the package can be used to simulate shear bands. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl). 
 
-The `CUDA.allowscalar(false)` is needed to avoid the use of scalar values in the code which would run slowly on a CPU and is disallowed on GPU systems such as HPC clusters. 
+![ShearBand2D](miniapps/benchmarks/stokes2D/shear_band/movies/DP_nx2058_2D.gif)
+
+The `CUDA.allowscalar(false)` disallows scalar indexing. This could be regarded as a safety measure, as the scalar indexing would run super slow on the CPU with CUDA and will actually crash with AMD. 
 
 ```julia
 using CUDA
@@ -97,10 +94,7 @@ CUDA.allowscalar(false)
 
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
-```
-Setup of environment and general solution for the benchmark test.
 
-```julia
 # setup ParallelStencil.jl environment
 model  = PS_Setup(:CUDA, Float64, 2)
 environment!(model)
@@ -109,7 +103,7 @@ environment!(model)
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 ```
-The function `init_phases!` initializes the phases within cell arrays. The function is parallelized with `@parallel_indices (i,j) ` and `@parallel (JustRelax.@idx ni)`. In this case, this is the only function that needs to be taylored to the specific problem, everything else is handled by `JustRelax.jl` itself. 
+The function `init_phases!` initializes the phases within cell arrays. The function is parallelized with the `@parallel_indices` macro from [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl). In this case, this is the only function that needs to be taylored to the specific problem, everything else is handled by `JustRelax.jl` itself. 
 
 ```julia
 
@@ -118,7 +112,7 @@ function init_phases!(phase_ratios, xci, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5
     
-    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y)
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
         x, y = xc[i], yc[j]
         if ((x-o_x)^2 + (y-o_y)^2) > radius^2
             JustRelax.@cell phases[1, i, j] = 1.0
@@ -131,10 +125,10 @@ function init_phases!(phase_ratios, xci, radius)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
+    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
 end
 ```
-Initialisation of the physical domain and the grid. As `JustRelax.jl` is utilising [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl), the grid can be `MPIAWARE` through setting the grid steps in x- and y- direction to ` di = @. li / (nx_g(),ny_g())`. This makes it a global grid and the grid steps are automatically distributed over the MPI processes. 
+Initialisation of the physical domain and the grid. As `JustRelax.jl` relies on [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl), the grid can be `MPIAWARE` through setting the grid steps in x- and y- direction to ` di = @. li / (nx_g(),ny_g())`. This makes it a global grid and the grid steps are automatically distributed over the MPI processes. 
 
 ```julia
 
@@ -151,7 +145,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     dt       = Inf 
 ```
-Initialisation of the Rheology utilising [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). The Rheology can be taylored to the specific problem with different creep laws and material parameters (see [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) or the miniapps in the [convection folder](miniapps/convection).
+Initialisation of the rheology with [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). The rheology can be taylored to the specific problem with different creep laws and material parameters (see [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) or the miniapps in the [convection folder](miniapps/convection).
 
 ```julia
     # Physical properties using GeoParams ----------------
@@ -172,9 +166,9 @@ Initialisation of the Rheology utilising [GeoParams.jl](https://github.com/Julia
         ϕ    = ϕ, 
         η_vp = η_reg,
         Ψ    = 0,
-    ) 
+    ) # Duretz, T., Räss, L., de Borst, R., & Hageman, T. (2023). A comparison of plasticity regularization approaches for geodynamic modeling. Geochemistry, Geophysics, Geosystems, 24, e2022GC010675. https://doi.org/10.1029/2022GC010675
     rheology = (
-        # Low density phase
+        # Matrix phase
         SetMaterialParams(;
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
@@ -183,7 +177,7 @@ Initialisation of the Rheology utilising [GeoParams.jl](https://github.com/Julia
             Elasticity        = el_bg,
 
         ),
-        # High density phase
+        # Inclusion phase
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
@@ -203,7 +197,8 @@ Initialisation of the Stokes arrays and the necesseary allocations. The rheology
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1) 
+    #PT coefficients after Räss, L., Utkin, I., Duretz, T., Omlin, S., and Podladchikov, Y. Y.: Assessing the robustness and scalability of the accelerated pseudo-transient method, Geosci. Model Dev., 15, 5757–5786, https://doi.org/10.5194/gmd-15-5757-2022, 2022.
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
@@ -267,12 +262,11 @@ Pseudo-transient Stokes solver and visualisation of the results. The visualisati
         @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         push!(τII, maximum(stokes.τ.xx))
 
-        if !isinf(dt)
-            @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-            @parallel (@idx ni) multi_copy!(
-                @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-            )
-        end
+        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        @parallel (@idx ni) multi_copy!(
+            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+        )
+
 
         it += 1
         t  += dt

@@ -29,7 +29,6 @@ The package serves several purposes:
      - more easily handle local material properties through the use of [GeoParams.jl]((https://github.com/JuliaGeodynamics/GeoParams.jl))
      - more easily switch between a pseudo-transient solver and another solvers (e.g. an explicit thermal solvers)
 
-  * It provides a place to describe performance benchmarks for the solver routines
   * It provides a natural repository for contributions of new solvers for use by the larger community 
 
 We provide several miniapps, each designed to solve a well-specified benchmark problem, in order to provide
@@ -101,8 +100,7 @@ function init_phases!(phase_ratios, xci, radius)
 end
 ```
 
-
-As stated above, the code is parallelised with ParallelStencil.jl. Therefore, `JustRelax.jl` needs to set up the environment with the device architecture (CPU/GPU), default FP precision, and model dimension (2D or 3D). The `PS_setup` variables are `PS_Setup(device, precision, dimensions)`. 
+JustRelax allows to setup a model environment `PS_Setup` (and interplay with the underlying ParallelStencil package) to specify the dimension of the problem (2D or 3D) and the backend (CPU or GPU). The `PS_setup` functions takes `device`, `precision` and `dimensions` as argument:
 
 ```julia
   model = PS_Setup(:Threads, Float64, 2)  #running on the CPU in 2D

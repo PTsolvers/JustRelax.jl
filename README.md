@@ -10,8 +10,6 @@
 
 Need to solve a very large multi-physics problem on many GPUs in parallel? Just Relax!
 
-
-
 `JustRelax.jl` is a collection of accelerated iterative pseudo-transient solvers using MPI and multiple CPU or GPU backends. It's part of the [PTSolvers organisation](https://ptsolvers.github.io) and
 developed within the [GPU4GEO project](https://www.pasc-ch.org/projects/2021-2024/gpu4geo/). Current publications, outreach and news can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
 
@@ -28,16 +26,16 @@ The package serves several purposes:
   * It provides a collection of solvers to be used in quickly developing new applications
   * It provides some standardization so that application codes can
 
-     - more easily handle local material propoerties through the use of [GeoParams.jl]((https://github.com/JuliaGeodynamics/GeoParams.jl))
-     - more easily switch between a psuedo-transient solver and another solvers (e.g. an explicit thermal solvers)
+     - more easily handle local material properties through the use of [GeoParams.jl]((https://github.com/JuliaGeodynamics/GeoParams.jl))
+     - more easily switch between a pseudo-transient solver and another solvers (e.g. an explicit thermal solvers)
 
   * It provides a place to describe performance benchmarks for the solver routines
   * It provides a natural repository for contributions of new solvers for use by the larger community 
 
 We provide several miniapps, each designed to solve a well-specified benchmark problem, in order to provide
 
-  - examples of usage in high-performance computing,
-  - bases on which to build more full-featured application codes
+  - examples of usage in high-performance computing
+  - basis on which to build more full-featured application codes
   - cases for reference and performance tests
 
 
@@ -66,7 +64,6 @@ The test will take a while, so grab a :coffee: or :tea:
 
 This example benchmark test displays how the package can be used to simulate shear bands. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl). 
 
-
 ```julia
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
@@ -79,7 +76,7 @@ environment!(model)
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 ```
-The function `init_phases!` initializes the phases within cell arrays. The function is parallelized with the `@parallel_indices` macro from [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl). In this case, this is the only function that needs to be taylored to the specific problem, everything else is handled by `JustRelax.jl` itself. 
+The function `init_phases!` initializes the phases within cell arrays. The function is parallelized with the `@parallel_indices` macro from [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl). In this case, this is the only function that needs to be tailored to the specific problem, everything else is handled by `JustRelax.jl` itself. 
 
 ```julia
 # Initialize phases on the particles
@@ -105,7 +102,7 @@ end
 ```
 
 
-As stated above, the code is parallelised with ParallelStencil.jl. Therefore, `JustRelax.jl` needs to set up the environment with the device architecture (CPU/GPU), default FP precission, and model dimension (2D or 3D). The `PS_setup` variables are `PS_Setup(device, precission, dimensions)`. 
+As stated above, the code is parallelised with ParallelStencil.jl. Therefore, `JustRelax.jl` needs to set up the environment with the device architecture (CPU/GPU), default FP precision, and model dimension (2D or 3D). The `PS_setup` variables are `PS_Setup(device, precision, dimensions)`. 
 
 ```julia
   model = PS_Setup(:Threads, Float64, 2)  #running on the CPU in 2D
@@ -119,7 +116,7 @@ As stated above, the code is parallelised with ParallelStencil.jl. Therefore, `J
 ```
 If you therefore want to run a 3D code, change the `dimensions` to 3 in the commands above. 
 
-For this specific example we use particles to define the material phases, for which we rely on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). As in `JustRelax.jl`, we need to set up the environmenf of `JustPIC.jl`. This can be done by running the appropriate command in the REPL and restarting the Julia session:
+For this specific example we use particles to define the material phases, for which we rely on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). As in `JustRelax.jl`, we need to set up the environment of `JustPIC.jl`. This can be done by running the appropriate command in the REPL and restarting the Julia session:
 
 ```julia
   set_backend("Threads_Float64_2D") # running on the CPU
@@ -156,7 +153,7 @@ origin   = 0.0, 0.0     # origin coordinates
 xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
 dt       = Inf 
 ```
-Initialisation of the rheology with [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). The rheology can be taylored to the specific problem with different creep laws and material parameters (see [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) or the miniapps in the [convection folder](miniapps/convection).
+Initialisation of the rheology with [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). The rheology can be tailored to the specific problem with different creep laws and material parameters (see [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) or the miniapps in the [convection folder](miniapps/convection).
 
 ```julia
 # Physical properties using GeoParams ----------------
@@ -177,7 +174,7 @@ pl      = DruckerPrager_regularised(;  # non-regularized plasticity
     ϕ    = ϕ, 
     η_vp = η_reg,
     Ψ    = 0,
-) # viscoplasticity model from e.g. Duretz, T., Räss, L., de Borst, R., & Hageman, T. (2023). A comparison of plasticity regularizationapproaches for geodynamic modeling. Geochemistry, Geophysics, Geosystems, 24, e2022GC010675. https://doi.org/101029/2022GC010675
+) # viscoplasticity model from e.g. Duretz, T., Räss, L., de Borst, R., & Hageman, T. (2023). A comparison of plasticity regularization approaches for geodynamic modeling. Geochemistry, Geophysics, Geosystems, 24, e2022GC010675. https://doi.org/101029/2022GC010675
 rheology = (
     # Matrix phase
     SetMaterialParams(;
@@ -196,7 +193,7 @@ rheology = (
     ),
 )
 ```
-Initialisation of the Stokes arrays and the necesseary allocations. The rheology is computed with `compute_viscosity!` which is a function from `JustRelax.jl` and computes the viscosity according to the strain rate and the phase ratios.
+Initialisation of the Stokes arrays and the necessary allocations. The rheology is computed with `compute_viscosity!` which is a function from `JustRelax.jl` and computes the viscosity according to the strain rate and the phase ratios.
 
 ```julia
 # Initialize phase ratios -------------------------------
@@ -233,7 +230,7 @@ flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 Pseudo-transient Stokes solver and visualisation of the results. The visualisation is done with [GLMakie.jl](https://github.com/MakieOrg/Makie.jl). 
 
 ```julia    
-# if it does not exist, make folder where figures are stored
+# if it does not exist, make a folder where figures are stored
 take(figdir)
 
 # Time loop
@@ -299,7 +296,7 @@ end
 
 ## Miniapps
 
-Currenlty there are 3 convection miniapps with particles and 3 corresponding miniapps without. The miniapps with particles are:
+Currently there are 3 convection miniapps with particles and 3 corresponding miniapps without. The miniapps with particles are:
 
   * [Layered_convection2D.jl](miniapps/convection/Particles2D/Layered_convection2D.jl)
   * [Layered_convection3D.jl](miniapps/convection/Particles3D/Layered_convection3D.jl)

@@ -4,17 +4,16 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212423.svg)](https://doi.org/10.5281/zenodo.10212423)
 
 
-:warning: This Package is still under active development. The benchmarks and miniapps are working and provide the user with an insight into the capabilities of the package. However, the API is still subject to change. :warning: 
+:warning: This Package is still under active development
+- The API is still subject to change.  
+- The benchmarks and miniapps are working and provide the user with an insight into the capabilities of the package. 
 
-Need to solve a very large multi-physics problem on a GPU cluster? Just Relax!
+Need to solve a very large multi-physics problem on many GPUs in parallel? Just Relax!
 
 
-Pseudo-transient accelerated iterative solvers, ready for extreme-scale, multi-GPU computation.
 
-`JustRelax.jl` is a collection of pseudo-transient relaxation solvers
-for multi-physics problems on regular, staggered, parallel grids,
-using MPI and multiple CPU or GPU backends. It's part of the [PTSolvers project](https://ptsolvers.github.io) and
-the [GPU4GEO project](https://www.pasc-ch.org/projects/2021-2024/gpu4geo/). Current publications, outreach and news can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
+`JustRelax.jl` is a collection of accelerated iterative pseudo-transient solvers using MPI and multiple CPU or GPU backends. It's part of the [PTSolvers organisation](https://ptsolvers.github.io) and
+developed within the [GPU4GEO project](https://www.pasc-ch.org/projects/2021-2024/gpu4geo/). Current publications, outreach and news can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
 
 The package relies on other packages as building blocks and parallelisation tools:
 
@@ -30,14 +29,14 @@ The package serves several purposes:
   * It provides some standardization so that application codes can
 
      - more easily handle local material propoerties through the use of [GeoParams.jl]((https://github.com/JuliaGeodynamics/GeoParams.jl))
-     - more easily switch between a psuedo-transient solver and another solver (e.g. an explicit thermal solvers)
+     - more easily switch between a psuedo-transient solver and another solvers (e.g. an explicit thermal solvers)
 
   * It provides a place to describe performance benchmarks for the solver routines
-  * It provides a natural location for contributions of new solvers for use by the larger community
+  * It provides a natural repository for contributions of new solvers for use by the larger community 
 
-We include several miniapps, each designed to solve a well-specified benchmark problem, in order to provide
+We provide several miniapps, each designed to solve a well-specified benchmark problem, in order to provide
 
-  - examples of high-performance usage,
+  - examples of usage in high-performance computing,
   - bases on which to build more full-featured application codes
   - cases for reference and performance tests
 

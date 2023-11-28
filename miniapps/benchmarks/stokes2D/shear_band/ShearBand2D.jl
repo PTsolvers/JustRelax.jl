@@ -149,12 +149,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         push!(τII, maximum(stokes.τ.xx))
 
-        if !isinf(dt)
-            @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-            @parallel (@idx ni) multi_copy!(
-                @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-            )
-        end
+        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        @parallel (@idx ni) multi_copy!(
+            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+        )
 
         it += 1
         t  += dt

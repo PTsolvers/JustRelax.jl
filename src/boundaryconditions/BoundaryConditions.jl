@@ -297,6 +297,12 @@ end
     return nothing
 end
 
+@parallel_indices (ix) function zero_y!(A::AbstractArray{eltype(PTArray),2})
+    A[ix, 1] = 0.0
+    A[ix, end] = 0.0
+    return nothing
+end
+
 function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{2,T}}, Vx, Vy) where {T}
     freeslip_x, freeslip_y = freeslip
     n = max(size(Vx, 1), size(Vy, 2))

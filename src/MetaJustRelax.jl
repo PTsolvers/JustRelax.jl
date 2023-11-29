@@ -42,13 +42,20 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     ## Stokes
     make_residual_struct!(N) # residuals
     make_stokes_struct!() # Arrays for Stokes solver
-    make_PTstokes_struct!()
+    make_PTstokes_struct!() # numeric parameter for stokes
+    ## Two Phase Flow
+    make_pressure_struct!() # pressure
+    make_P_residual_struct!() # residuals for pressure
+    make_TPF_struct!() # Arrays for two phase flow solver
+    make_PTTPF_struct!() # numeric parameter for two phase flow
+    make_TPF_parameter_struct!() # background and initial parameters
     ## thermal diffusion
     make_thermal_arrays!(N) # Arrays for Thermal Diffusion solver
     make_PTthermal_struct!() # PT Thermal Diffusion coefficients
 
     # includes and exports
     @eval begin
+<<<<<<< HEAD
         export USE_GPU,
             PTArray,
             Velocity,
@@ -56,6 +63,11 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             Residual,
             StokesArrays,
             PTStokesCoeffs,
+            TPF_Pressure,
+            P_Residual,
+            TPFArrays,
+            PTTPFCoeffs,
+            PTTPFParams
             ThermalArrays,
             PTThermalCoeffs,
             compute_pt_thermal_arrays!,
@@ -103,10 +115,12 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             free_slip_y!,
             free_slip_z!,
             apply_free_slip!
+            zero_y!
 
         include(joinpath(@__DIR__, "phases/phases.jl"))
         export PhaseRatio, fn_ratio, phase_ratios_center
 
+<<<<<<< HEAD
         include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
         export compute_ρg!
 
@@ -120,6 +134,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export solve!
 
         include(joinpath(@__DIR__, "stokes/Stokes3D.jl"))
+        export solve!
+
+        include(joinpath(@__DIR__, "two_phase_flow/PT.jl"))
         export solve!
 
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionExplicit.jl"))
@@ -139,7 +156,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     module_names = if N === 1
         (Symbol("ThermalDiffusion$(N)D"),)
     elseif N === 2
-        (Symbol("Stokes$(N)D"), Symbol("ThermalDiffusion$(N)D"))
+
+        (Symbol("Stokes$(N)D"), Symbol("ThermalDiffusion$(N)D"),Symbol("TwoPhaseFlow$(N)D"))
+
     else
         (Symbol("Stokes$(N)D"), Symbol("ThermalDiffusion$(N)D"))
     end

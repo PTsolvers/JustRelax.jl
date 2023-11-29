@@ -67,6 +67,8 @@ export PS_Setup, environment!, ps_reset!
 
 include("thermal_diffusion/MetaDiffusion.jl")
 
+include("two_phase_flow/MetaTPF.jl")
+
 include("thermal_diffusion/Rheology.jl")
 
 include("IO/DataIO.jl")

@@ -51,6 +51,8 @@ using Pkg; Pkg.add("https://github.com/PTsolvers/JustRelax.jl.git")
 ```julia
 using JustRelax
 julia> ] 
+  pkg> test JustRelax
+julia> ] 
   pkg> activate .
   pkg> instantiate
   pkg> test JustRelax

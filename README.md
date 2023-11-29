@@ -52,10 +52,6 @@ using Pkg; Pkg.add("https://github.com/PTsolvers/JustRelax.jl.git")
 using JustRelax
 julia> ] 
   pkg> test JustRelax
-julia> ] 
-  pkg> activate .
-  pkg> instantiate
-  pkg> test JustRelax
 ```
 The test will take a while, so grab a :coffee: or :tea:
 
@@ -63,7 +59,7 @@ The test will take a while, so grab a :coffee: or :tea:
 
 ![ShearBand2D](miniapps/benchmarks/stokes2D/shear_band/movies/DP_nx2058_2D.gif)
 
-This example example displays how the package can be used to simulate shear band localisation. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl). 
+This example displays how the package can be used to simulate shear band localisation. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl). 
 
 ```julia
 using GeoParams, GLMakie, CellArrays

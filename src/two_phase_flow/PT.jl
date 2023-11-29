@@ -3,12 +3,6 @@
 # DOI:  https://doi.org/10.1017/9781316534243
 # The structure of the code is based on the ParallelStencil miniapp HydroMech2D.jl 8ab11d5cdd3bc28e64e389db3a674fc8c16e66e6
 
-## DIMENSION AGNOSTIC KERNELS
-@parallel function compute_maxloc!(A::AbstractArray, B::AbstractArray)
-    @inn(A) = @maxloc(B)
-    return nothing
-end
-
 #=
 @parallel function hyd_pressure!(
     Pt::AbstractArray{T,2},
@@ -78,7 +72,7 @@ end
 end
 =#
 
-## 2D STOKES MODULE
+## 2D TPF MODULE
 
 module TwoPhaseFlow2D
 
@@ -89,9 +83,11 @@ using LinearAlgebra
 using CUDA
 using Printf
 
-import JustRelax: stress, compute_iter_params!, compute_phys_params!, PTArray, Velocity, SymmetricTensor
+import JustRelax: stress,strain, compute_iter_params!, compute_phys_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax: Residual, TPF_Pressure, P_Residual, TPFArrays, PTTPFCoeffs, PTTPFParams, AbstractStokesModel, Viscous
 import JustRelax: compute_maxloc!, solve!
+
+import ..Stokes2D: compute_strain_rate!, compute_τ!, compute_dV!, compute_V!
 
 export solve!
 
@@ -105,19 +101,19 @@ export solve!
     dPt::AbstractArray{T,2},
     dPe::AbstractArray{T,2},
     Pe::AbstractArray{T,2},
-    Vx::AbstractArray{T,2},
-    Vy::AbstractArray{T,2},
+    εxx::AbstractArray{T,2},
+    εyy::AbstractArray{T,2},
     qDx::AbstractArray{T,2},
     qDy::AbstractArray{T,2},
     Gdτ::AbstractArray{T,2},
     η_φ::AbstractArray{T,2},
     Betadτ::AbstractArray{T,2},
     r::T,
-    dx::T,
-    dy::T,
+    _dx::T,
+    _dy::T,
 ) where {T}
-    @all(RPt) = @d_xa(Vx) * dx + @d_ya(Vy) * dy + @all(Pe) * @all(η_φ)
-    @all(RPe) = @d_xa(qDx) * dx + @d_ya(qDy) * dy - @all(Pe) * @all(η_φ)
+    @all(RPt) = @all(εxx) + @all(εyy) + @all(Pe) * @all(η_φ)
+    @all(RPe) = @d_xa(qDx) * _dx + @d_ya(qDy) * _dy - @all(Pe) * @all(η_φ)
     @all(dPt) = - r * @all(Gdτ) * @all(RPt)
     @all(dPe) = 1.0 / (@all(Betadτ) + @all(η_φ)) * @all(RPe) # used to make Pe update rule implicite
     return nothing
@@ -134,46 +130,7 @@ end
     return nothing
 end
 
-@parallel function compute_τ!(
-    τxx::AbstractArray{T,2},
-    τyy::AbstractArray{T,2},
-    τxy::AbstractArray{T,2},
-    Vx::AbstractArray{T,2},
-    Vy::AbstractArray{T,2},
-    η::AbstractArray{T,2},
-    Gdτ::AbstractArray{T,2},
-    dx::T,
-    dy::T,
-) where {T}
-    @all(τxx) = (@all(τxx) + 2.0 * @all(Gdτ) * @d_xa(Vx) * dx) / (@all(Gdτ) / @all(η) + 1.0)
-    @all(τyy) = (@all(τyy) + 2.0 * @all(Gdτ) * @d_ya(Vy) * dy) / (@all(Gdτ) / @all(η) + 1.0)
-    @all(τxy) =
-        (@all(τxy) + 2.0 * @harm(Gdτ) * (0.5 * (@d_yi(Vx) * dy + @d_xi(Vy) * dx))) /
-        (@harm(Gdτ) / @harm(η) + 1.0)
-    return nothing
-end
-
-@parallel function compute_dV!(
-    Rx::AbstractArray{T,2},
-    Ry::AbstractArray{T,2},
-    dVx::AbstractArray{T,2},
-    dVy::AbstractArray{T,2},
-    Pt::AbstractArray{T,2},
-    τxx::AbstractArray{T,2},
-    τyy::AbstractArray{T,2},
-    τxy::AbstractArray{T,2},
-    Rhodτ_M::AbstractArray{T,2},
-    ρg::Nothing,
-    dx::T,
-    dy::T,
-) where {T}
-    @all(Rx) = @d_xi(τxx) * dx + @d_ya(τxy) * dy - @d_xi(Pt) * dx
-    @all(Ry) = @d_yi(τyy) * dy + @d_xa(τxy) * dx - @d_yi(Pt) * dy
-    @all(dVx) = @harm_xi(Rhodτ_M) * @all(Rx)
-    @all(dVy) = @harm_yi(Rhodτ_M) * @all(Ry)
-    return nothing
-end
-
+#= In Stokes.jl av_yi(ρg) used????
 @parallel function compute_dV!(
     Rx::AbstractArray{T,2},
     Ry::AbstractArray{T,2},
@@ -185,15 +142,16 @@ end
     τxy::AbstractArray{T,2},
     Rhodτ_M::AbstractArray{T,2},
     ρg::AbstractArray{T,2},
-    dx::T,
-    dy::T,
+    _dx::T,
+    _dy::T,
 ) where {T}
-    @all(Rx) = @d_xi(τxx) * dx + @d_ya(τxy) * dy - @d_xi(Pt) * dx
-    @all(Ry) = @d_yi(τyy) * dy + @d_xa(τxy) * dx - @d_yi(Pt) * dy - @harm_yi(ρg)
+    @all(Rx) = @d_xi(τxx) * _dx + @d_ya(τxy) * _dy - @d_xi(Pt) * _dx
+    @all(Ry) = @d_yi(τyy) * _dy + @d_xa(τxy) * _dx - @d_yi(Pt) * _dy - @harm_yi(ρg)
     @all(dVx) = @harm_xi(Rhodτ_M) * @all(Rx)
     @all(dVy) = @harm_yi(Rhodτ_M) * @all(Ry)
     return nothing
 end
+=#
 
 @parallel function compute_dqD!(
     RqDx::AbstractArray{T,2},
@@ -209,35 +167,13 @@ end
     ρsg::AbstractArray{T,2},
     ρm::AbstractArray{T,2},
     ρfg::T,
-    dx::T,
-    dy::T,
+    _dx::T,
+    _dy::T,
 ) where {T}
-    @all(RqDx) = - @inn(qDx) * @harm_xi(k_ηf) + @d_xi(Pe) * dx -  @d_xi(Pt) * dx
-    @all(RqDy) = - @inn(qDy) * @harm_yi(k_ηf) + @d_yi(Pe) * dy -  @d_yi(Pt) * dy - ρfg #+ @harm_yi(ρm)#+ (@harm_yi(ρsg)-ρfg) + @harm_yi(ρm)
+    @all(RqDx) = - @inn(qDx) * @harm_xi(k_ηf) + @d_xi(Pe) * _dx -  @d_xi(Pt) * _dx
+    @all(RqDy) = - @inn(qDy) * @harm_yi(k_ηf) + @d_yi(Pe) * _dy -  @d_yi(Pt) * _dy - ρfg #+ @harm_yi(ρm)#+ (@harm_yi(ρsg)-ρfg) + @harm_yi(ρm)
     @all(dqDx) = @harm_xi(k_ηfτ) * @all(RqDx)
     @all(dqDy) = @harm_yi(k_ηfτ) * @all(RqDy)
-    return nothing
-end
-
-@parallel function compute_V!(
-    Vx::AbstractArray{T,2},
-    Vy::AbstractArray{T,2},
-    dVx::AbstractArray{T,2},
-    dVy::AbstractArray{T,2},
-) where {T}
-    @inn(Vx) = @inn(Vx) + @all(dVx)
-    @inn(Vy) = @inn(Vy) + @all(dVy)
-    return nothing
-end
-
-@parallel function compute_qD!(
-    qDx::AbstractArray{T,2},
-    qDy::AbstractArray{T,2},
-    dqDx::AbstractArray{T,2},
-    dqDy::AbstractArray{T,2},
-) where {T}
-    @inn(qDx) = @inn(qDx) + @all(dqDx)
-    @inn(qDy) = @inn(qDy) + @all(dqDy)
     return nothing
 end
 
@@ -262,7 +198,8 @@ function solve!(
 ) where {A,B,C,D,E,F,G,T}
 
     # unpack
-    dx, dy = 1 / di[1], 1 / di[2]
+    dx, dy = di
+    _dx, _dy = inv.(di)
 
     # TPFArrays
     Vx, Vy, qDx, qDy =  TPF.V.Vx, TPF.V.Vy, TPF.qD.Vx, TPF.qD.Vy
@@ -272,6 +209,7 @@ function solve!(
     dPt, dPe = TPF.dP.Pt, TPF.dP.Pe
     RPt, RPe = TPF.RP.RPt, TPF.RP.RPe
     τxx, τyy, τxy = stress(TPF)
+    εxx, εyy, εxy = strain(stokes)
     φ, η_φ, k_ηf, k_ηfτ, ρtg = TPF.φ, TPF.η_φ, TPF.k_ηf, TPF.k_ηfτ, TPF.ρtg
     #k_ηfτ = TPF.k_ηfτ
 
@@ -321,15 +259,16 @@ function solve!(
                 r,
                 min_li
             )
-            @parallel compute_RP!(RPt, RPe, dPt, dPe, Pe, Vx, Vy, qDx, qDy, Gdτ, η_φ, Betadτ, r, dx, dy)
+            @parallel compute_strain_rate!(εxx, εyy, εxy, Vx, Vy, _dx, _dy)
+            @parallel compute_RP!(RPt, RPe, dPt, dPe, Pe, εxx, εyy, qDx, qDy, Gdτ, η_φ, Betadτ, r, _dx, _dy)
             @parallel compute_P!(Pt, Pe, dPt, dPe)
             @parallel (1:size(Pe, 1)) zero_y!(Pe)
-            # Add boundary condition for Pe zero on top and bottom
-            @parallel compute_τ!(τxx, τyy, τxy, Vx, Vy, ηs, Gdτ, dx, dy)
-            @parallel compute_dV!(Rx, Ry, dVx, dVy, Pt, τxx, τyy, τxy, Rhodτ_M, ρtg, dx, dy)
-            @parallel compute_dqD!(RqDx, RqDy, dqDx, dqDy, qDx, qDy, Pe, Pt, k_ηf, k_ηfτ, ρsg, ρm, ρfg, dx, dy)
-            @parallel compute_V!(Vx, Vy, dVx, dVy)
-            @parallel compute_qD!(qDx, qDy, dqDx, dqDy)
+            # Add boundary condition for Pe, zero on top and bottom
+            @parallel compute_τ!(τxx, τyy, τxy, Vx, Vy, ηs, Gdτ, _dx, _dy)
+            @parallel compute_dV!(Rx, Ry, dVx, dVy, Pt, τxx, τyy, τxy, Rhodτ_M, ρtg, _dx, _dy)
+            @parallel compute_dqD!(RqDx, RqDy, dqDx, dqDy, qDx, qDy, Pe, Pt, k_ηf, k_ηfτ, ρsg, ρm, ρfg, _dx, _dy)
+            @parallel compute_V!(Vx, Vy, dVx, dVy) # Solid velocity
+            @parallel compute_V!(qDx, qDy, dqDx, dqDy) # Fluid velocity
 
             # free slip boundary conditions
             apply_free_slip!(freeslip, Vx, Vy)
@@ -380,4 +319,4 @@ function solve!(
     )
 end
 
-end
+end # END OF MODULE

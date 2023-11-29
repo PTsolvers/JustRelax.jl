@@ -63,7 +63,7 @@ The test will take a while, so grab a :coffee: or :tea:
 
 ![ShearBand2D](miniapps/benchmarks/stokes2D/shear_band/movies/DP_nx2058_2D.gif)
 
-This example benchmark test displays how the package can be used to simulate shear bands. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl). 
+This example example displays how the package can be used to simulate shear band localisation. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl). 
 
 ```julia
 using GeoParams, GLMakie, CellArrays

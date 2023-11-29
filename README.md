@@ -46,7 +46,7 @@ We provide several miniapps, each designed to solve a well-specified benchmark p
 using Pkg; Pkg.add("https://github.com/PTsolvers/JustRelax.jl.git")
 ```
 
- If you have navigated the terminal to the directory you cloned `JustRelax.jl`, you can test the package by running the following commands:
+After installation, you can test the package by running the following commands:
 
 ```julia
 using JustRelax

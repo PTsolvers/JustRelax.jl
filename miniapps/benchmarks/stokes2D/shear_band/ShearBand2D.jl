@@ -1,11 +1,9 @@
-using CUDA
-CUDA.allowscalar(false)
-
+JustRelax.CUDA.allowscalar(false)
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
-model  = PS_Setup(:CUDA, Float64, 2)
+model  = PS_Setup(:Threads, Float64, 2)
 environment!(model)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------

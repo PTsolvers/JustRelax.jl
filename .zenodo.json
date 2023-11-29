@@ -1,0 +1,27 @@
+{
+  "metadata": {
+      "funding": [
+      {
+        "award": {
+          "acronym": "MAGMA",
+          "id": "00k4n6c32::771143",
+          "identifiers": [
+            {
+              "identifier": "https://cordis.europa.eu/projects/771143",
+              "scheme": "url"
+            }
+          ],
+          "number": "771143",
+          "program": "H2020",
+          "title": {
+            "en": "Melting And Geodynamic Models of Ascent"
+          }
+        },
+        "funder": {
+          "id": "00k4n6c32",
+          "name": "European Commission"
+        }
+      }
+    ]
+  }
+}

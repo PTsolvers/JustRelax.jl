@@ -24,7 +24,6 @@
       },
       {
         "award": {
-          "acronym": "GPU4GEO",
           "identifiers": [
             {
               "identifier": "https://www.pasc-ch.org/projects/2021-2024/gpu4geo/",
@@ -32,13 +31,13 @@
             }
           ],
           "number": "c23",
-          "program": "Platform for Advanced Scientific Computing (PASC)",
           "title": {
             "en": "GPU4GEO - Frontier GPU multi-physics solvers"
           }
         },
         "funder": {
-          "name": "Swiss University Conference and the Swiss Council of Federal Institutes of Technology"
+          "id": "05a28rw58",
+          "name": "ETH Zurich"
         }
       }
     ]

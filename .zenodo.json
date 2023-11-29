@@ -1,6 +1,6 @@
 {
   "metadata": {
-      "funding": [
+    "funding": [
       {
         "award": {
           "acronym": "MAGMA",
@@ -21,7 +21,26 @@
           "id": "00k4n6c32",
           "name": "European Commission"
         }
-      }
+      },
+      {
+        "award": {
+          "acronym": "GPU4GEO",
+          "identifiers": [
+            {
+              "identifier": "https://www.pasc-ch.org/projects/2021-2024/gpu4geo/",
+              "scheme": "url"
+            }
+          ],
+          "number": "c23",
+          "program": "Platform for Advanced Scientific Computing (PASC)",
+          "title": {
+            "en": "GPU4GEO - Frontier GPU multi-physics solvers"
+          }
+        },
+        "funder": {
+          "name": "Swiss University Conference and the Swiss Council of Federal Institutes of Technology"
+        }
+      },
     ]
   }
 }

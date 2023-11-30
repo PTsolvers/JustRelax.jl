@@ -1,11 +1,11 @@
-# using CUDA
-# CUDA.allowscalar(false)
+using CUDA
+CUDA.allowscalar(false)
 
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
-model  = PS_Setup(:Threads, Float64, 2)
+model  = PS_Setup(:CUDA, Float64, 2)
 environment!(model)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
@@ -87,13 +87,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e4), )),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e2), )),
         ),
         # weak balls
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e-4), )),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e-2), )),
         ),
     )
 
@@ -101,17 +101,23 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     x_inc = @. (0.0 ,  0.2, -0.3, -0.4,  0.0, -0.3, 0.4 , 0.3 , 0.35, -0.1) * 1 + lx/2
     y_inc = @. (0.0 ,  0.4,  0.4, -0.3, -0.2,  0.2, -0.2, -0.4, 0.2 , -0.4) * 1 + ly/2
     r_inc = @. (0.08, 0.09, 0.05, 0.08, 0.08,  0.1, 0.07, 0.08, 0.07, 0.07) * 1
-    # η_inc = (ηi.s, ηi.w, ηi.w, ηi.s, ηi.w, ηi.s, ηi.w, ηi.s, ηi.s, ηi.w)
     phase_inc = (1, 2, 2, 1, 2, 1, 2, 1, 1, 2)
 
     # Initialize phase ratios -------------------------------
     phase_ratios = PhaseRatio(ni, length(rheology))
     init_phases!(phase_ratios, xci, x_inc, y_inc, r_inc, phase_inc)
+    
+    phase_ratios_v = PhaseRatio(ni.+1, length(rheology))
+    init_phases!(phase_ratios_v, xvi, x_inc, y_inc, r_inc, phase_inc)
+    pv = [argmax(p) for p in Array(phase_ratios_v.center)]
+    ηv = @ones(ni .+ 1)
+    @views ηv[pv .== 2] .= 1e2
+    @views ηv[pv .== 3] .= 1e-2
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.99 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-7,  CFL = 0.9 / √2.1)
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
@@ -119,19 +125,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     
     # Rheology
     η         = @ones(ni...)
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
-    )
-    η_vep     = deepcopy(η) # effective visco-elasto-plastic viscosity
-    ηv = @zeros(ni .+ 1)
-    for ism in 1:5 # *********** nsm --> 1
-        @parallel center2vertex!(ηv, η)
-        @parallel vertex2center!(η, ηv)
-    end
-    # for ism in 1:10 # *********** nsm --> 1
-    #     @parallel smooth!(η_vep, η, 1.0)
-    #     η_vep, η =  η, η_vep
-    # end
+    # @parallel (@idx ni) compute_viscosity!(
+    #     η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
+    # )
+    η_vep     = similar(η) # effective visco-elasto-plastic viscosity
+    @parallel vertex2center!(η, ηv)
+
 
     # Boundary conditions
     flow_bcs     = FlowBoundaryConditions(; 
@@ -145,6 +144,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # if it does not exist, make folder where figures are stored
     take(figdir)
     # ----------------------------------------------------
+
     # Stokes solver ----------------
     solve!(
         stokes,
@@ -160,7 +160,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         Inf,
         igg;
         verbose          = true,
-        iterMax          = 150e3,
+        iterMax          = 500e3,
         nout             = 1e3,
         viscosity_cutoff = (-Inf, Inf)
     )
@@ -177,10 +177,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     fig
     # save(joinpath(figdir, "$(it).png"), fig)
 
-    # return nothing
 end
 
-n      = 80 #160
+n      = 160
 nx     = n
 ny     = n
 figdir = "Inclusions2D"
@@ -190,3 +189,4 @@ else
     igg
 end
 fig = main(igg; figdir = figdir, nx = nx, ny = ny)
+

@@ -452,7 +452,7 @@ end
 
 ## With phase ratios 
 
-function JustRelax.solve!(
+    function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
     pt_stokes::PTStokesCoeffs,
     di::NTuple{2,T},
@@ -528,29 +528,29 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            if rem(iter, 5) == 0
-                @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
-            end
+            # if rem(iter, 5) == 0
+            #     @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+            # end
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            if rem(iter, nout) == 0
-                @copy η0 η
-            end
-            if do_visc
-                ν = 1e-2
-                @parallel (@idx ni) compute_viscosity!(
-                    η,
-                    ν,
-                    phase_ratios.center,
-                    @strain(stokes)...,
-                    args,
-                    rheology,
-                    viscosity_cutoff,
-                )
-            end
+            # if rem(iter, nout) == 0
+            #     @copy η0 η
+            # end
+            # if do_visc
+            #     ν = 1e-2
+            #     @parallel (@idx ni) compute_viscosity!(
+            #         η,
+            #         ν,
+            #         phase_ratios.center,
+            #         @strain(stokes)...,
+            #         args,
+            #         rheology,
+            #         viscosity_cutoff,
+            #     )
+            # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),

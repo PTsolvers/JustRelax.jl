@@ -10,7 +10,7 @@ environment!(model)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 # Initialize phases on the particles
-function init_phases!(phase_ratios, x_inc, y_inc, r_inc, phase_inc)
+function init_phases!(phase_ratios, xci, x_inc, y_inc, r_inc, phase_inc)
     ni      = size(phase_ratios.center)
     
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, x_inc, y_inc, r_inc, phase_inc)
@@ -105,14 +105,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     phase_inc = (1, 2, 2, 1, 2, 1, 2, 1, 1, 2)
 
     # Initialize phase ratios -------------------------------
-    radius       = 0.1
     phase_ratios = PhaseRatio(ni, length(rheology))
-    init_phases!(phase_ratios, x_inc, y_inc, r_inc, phase_inc)
+    init_phases!(phase_ratios, xci, x_inc, y_inc, r_inc, phase_inc)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.99 / √2.1)
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
@@ -120,104 +119,74 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     
     # Rheology
     η         = @ones(ni...)
-    η_vep     = similar(η) # effective visco-elasto-plastic viscosity
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
     )
-
-    for ism in 1:1 # *********** nsm --> 1
-        @parallel smooth!(η_vep, η, 1.0)
-        η_vep, η =  η, η_vep
+    η_vep     = deepcopy(η) # effective visco-elasto-plastic viscosity
+    ηv = @zeros(ni .+ 1)
+    for ism in 1:5 # *********** nsm --> 1
+        @parallel center2vertex!(ηv, η)
+        @parallel vertex2center!(η, ηv)
     end
+    # for ism in 1:10 # *********** nsm --> 1
+    #     @parallel smooth!(η_vep, η, 1.0)
+    #     η_vep, η =  η, η_vep
+    # end
 
     # Boundary conditions
     flow_bcs     = FlowBoundaryConditions(; 
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
-    stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
+    stokes.V.Vx .= PTArray([-(x-lx/2)*εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray([ (y-ly/2)*εbg for _ in 1:nx+2, y in xvi[2]])
     
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     take(figdir)
     # ----------------------------------------------------
+    # Stokes solver ----------------
+    solve!(
+        stokes,
+        pt_stokes,
+        di,
+        flow_bcs,
+        ρg,
+        η,
+        η_vep,
+        phase_ratios,
+        rheology,
+        args,
+        Inf,
+        igg;
+        verbose          = true,
+        iterMax          = 150e3,
+        nout             = 1e3,
+        viscosity_cutoff = (-Inf, Inf)
+    )
+    @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
 
-    # Time loop
-    t, it      = 0.0, 0
-    tmax       = 3.5
-    τII        = Float64[]
-    sol        = Float64[]
-    ttot       = Float64[]
+    # visualisation
+    fig   = Figure(resolution = (1600, 900))
+    ax1   = Axis(fig[1,1], aspect = 1, title = "Pressure")
+    ax2   = Axis(fig[1,3], aspect = 1, title = "η")
+    h1 = heatmap!(ax1, xci..., Array(stokes.P)  , colormap=:inferno, colorrange=(-3, 3))
+    h2 = heatmap!(ax2, xci..., Array(log10.(η)) , colormap=:grayC)
+    Colorbar(fig[1, 2], h1, height = Relative(0.75))
+    Colorbar(fig[1, 4], h2, height = Relative(0.75))
+    fig
+    # save(joinpath(figdir, "$(it).png"), fig)
 
-    while t < tmax
-
-        # Stokes solver ----------------
-        solve!(
-            stokes,
-            pt_stokes,
-            di,
-            flow_bcs,
-            ρg,
-            η,
-            η_vep,
-            phase_ratios,
-            rheology,
-            args,
-            Inf,
-            igg;
-            verbose          = true,
-            iterMax          = 150e3,
-            nout             = 1e3,
-            viscosity_cutoff = (-Inf, Inf)
-        )
-        @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
-        push!(τII, maximum(stokes.τ.xx))
-
-        it += 1
-        t  += dt
-
-        push!(sol, solution(εbg, t, G0, η0))
-        push!(ttot, t)
-
-        println("it = $it; t = $t \n")
-
-        # visualisation
-        th    = 0:pi/50:3*pi;
-        xunit = @. radius * cos(th) + 0.5;
-        yunit = @. radius * sin(th) + 0.5;
-
-        fig   = Figure(resolution = (1600, 1600), title = "t = $t")
-        ax1   = Axis(fig[1,1], aspect = 1, title = "τII")
-        ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
-        ax3   = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
-        ax4   = Axis(fig[2,2], aspect = 1)
-        heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
-        heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
-        lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-        lines!(ax4, ttot, τII, color = :black) 
-        lines!(ax4, ttot, sol, color = :red) 
-        hidexdecorations!(ax1)
-        hidexdecorations!(ax3)
-        save(joinpath(figdir, "$(it).png"), fig)
-
-    end
-
-    return nothing
+    # return nothing
 end
 
-N      = 128
-n      = N + 2
-nx     = n - 2
-ny     = n - 2
-figdir = "ShearBands2D"
+n      = 80 #160
+nx     = n
+ny     = n
+figdir = "Inclusions2D"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
 else
     igg
 end
-# main(igg; figdir = figdir, nx = nx, ny = ny);
-
-
-# p = [argmax(p)   for p in phase_ratios.center]
+fig = main(igg; figdir = figdir, nx = nx, ny = ny)

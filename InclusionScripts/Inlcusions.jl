@@ -87,13 +87,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e2), )),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e3), )),
         ),
         # weak balls
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e-2), )),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e-3), )),
         ),
     )
 
@@ -111,13 +111,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     init_phases!(phase_ratios_v, xvi, x_inc, y_inc, r_inc, phase_inc)
     pv = [argmax(p) for p in Array(phase_ratios_v.center)]
     ηv = @ones(ni .+ 1)
-    @views ηv[pv .== 2] .= 1e2
-    @views ηv[pv .== 3] .= 1e-2
+    @views ηv[pv .== 2] .= 1e3
+    @views ηv[pv .== 3] .= 1e-3
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-7,  CFL = 0.9 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-5,  CFL = 0.9 / √2.1)
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)

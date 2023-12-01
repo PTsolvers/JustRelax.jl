@@ -19,7 +19,7 @@ function runtests()
         println("")
         println("Running tests from $f")
         try
-            run(`$exename -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
+            run(`$exename --startup-file=no $(joinpath(testdir, f))`)
         catch ex
             nfail += 1
         end

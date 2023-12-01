@@ -120,7 +120,7 @@ function solCx(
             η,
             G,
             K,
-            Inf,
+            0.1,
             igg;
             iterMax = 500e3,
             nout    = 5e3,

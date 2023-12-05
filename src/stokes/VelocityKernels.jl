@@ -128,7 +128,6 @@ end
 
     nx, ny = size(ρgy)
 
-    
     if all((i, j) .< size(Vx) .- 1)
         Vx[i + 1, j + 1] +=
             (-d_xa(P) + d_xa(τxx) + d_yi(τxy) - av_xa(ρgx)) * ηdτ / av_xa(ητ)
@@ -141,15 +140,10 @@ end
         # Vertical velocity
         Vyᵢⱼ = Vy[i + 1, j + 1]
         # Get necessary buoyancy forces
-        i_W, i_E = max(i-1, 1), min(i+1, nx)
-        j_N = min(j+1, ny)
+        i_W, i_E = max(i - 1, 1), min(i + 1, nx)
+        j_N = min(j + 1, ny)
         ρg_stencil = (
-            ρgy[i_W, j  ],
-            ρgy[i  , j  ],
-            ρgy[i_E, j  ],
-            ρgy[i_W, j_N],
-            ρgy[i  , j_N],
-            ρgy[i_E, j_N],
+            ρgy[i_W, j], ρgy[i, j], ρgy[i_E, j], ρgy[i_W, j_N], ρgy[i, j_N], ρgy[i_E, j_N]
         )
         ρg_W = (ρg_stencil[1] + ρg_stencil[2] + ρg_stencil[4] + ρg_stencil[5]) * 0.25
         ρg_E = (ρg_stencil[2] + ρg_stencil[3] + ρg_stencil[5] + ρg_stencil[6]) * 0.25
@@ -160,9 +154,10 @@ end
         ∂ρg∂y = (ρg_N - ρg_S) * _dy
         # correction term
         ρg_correction = (Vxᵢⱼ * ∂ρg∂x + Vyᵢⱼ * ∂ρg∂y) * θ * dt
-       
+
         Vy[i + 1, j + 1] +=
-            (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy) + ρg_correction) * ηdτ / av_ya(ητ)     
+            (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy) + ρg_correction) * ηdτ /
+            av_ya(ητ)
     end
 
     return nothing
@@ -271,18 +266,19 @@ end
         if all((i, j) .≤ size(Ry))
             θ = 1.0
             # Interpolate Vx into Vy node
-            Vxᵢⱼ = 0.25 * (Vx[i, j + 1] + Vx[i + 1, j + 1] + Vx[i, j + 2] + Vx[i + 1, j + 2])
+            Vxᵢⱼ =
+                0.25 * (Vx[i, j + 1] + Vx[i + 1, j + 1] + Vx[i, j + 2] + Vx[i + 1, j + 2])
             # Vertical velocity
             Vyᵢⱼ = Vy[i + 1, j + 1]
             # Get necessary buoyancy forces
-            i_W, i_E = max(i-1, 1), min(i+1, nx)
-            j_N = min(j+1, ny)
+            i_W, i_E = max(i - 1, 1), min(i + 1, nx)
+            j_N = min(j + 1, ny)
             ρg_stencil = (
-                ρgy[i_W, j  ],
-                ρgy[i  , j  ],
-                ρgy[i_E, j  ],
+                ρgy[i_W, j],
+                ρgy[i, j],
+                ρgy[i_E, j],
                 ρgy[i_W, j_N],
-                ρgy[i  , j_N],
+                ρgy[i, j_N],
                 ρgy[i_E, j_N],
             )
             ρg_W = (ρg_stencil[1] + ρg_stencil[2] + ρg_stencil[4] + ρg_stencil[5]) * 0.25

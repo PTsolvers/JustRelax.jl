@@ -55,7 +55,6 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
     # includes and exports
     @eval begin
-<<<<<<< HEAD
         export USE_GPU,
             PTArray,
             Velocity,
@@ -120,7 +119,6 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         include(joinpath(@__DIR__, "phases/phases.jl"))
         export PhaseRatio, fn_ratio, phase_ratios_center
 
-<<<<<<< HEAD
         include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
         export compute_ρg!
 

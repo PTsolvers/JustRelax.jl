@@ -3,6 +3,15 @@
 # DOI:  https://doi.org/10.1017/9781316534243
 # The structure of the code is based on the ParallelStencil miniapp HydroMech2D.jl 8ab11d5cdd3bc28e64e389db3a674fc8c16e66e6
 
+<<<<<<< HEAD
+=======
+## DIMENSION AGNOSTIC KERNELS
+@parallel function compute_maxloc!(A::AbstractArray, B::AbstractArray)
+    @inn(A) = @maxloc(B)
+    return nothing
+end
+
+>>>>>>> e73c9771331d58652e55511c9a8877816900db59
 #=
 @parallel function hyd_pressure!(
     Pt::AbstractArray{T,2},

@@ -90,20 +90,20 @@ end
 @parallel_indices (i) function no_slip!(Ax, Ay, bc)
     @inbounds begin
         if bc.bot
-            (i ≤ size(Ay, 1)) && (Ay[i, 1] = 0.0)
-            (1 < i < size(Ax, 1)) && (Ax[i, 2] = Ax[i, 3] / 3)
+            (i ≤ size(Ax, 1)) && (Ax[i, 1] = 0.0)
+            (i ≤ size(Ay, 1)) && (Ay[i, 1] = -Ay[i, 2])
         end
         if bc.top
-            (i ≤ size(Ay, 1)) && (Ay[i, end] = 0.0)
-            (1 < i < size(Ax, 1)) && (Ax[i, end - 1] = Ax[i, end - 2] / 3)
+            (i ≤ size(Ax, 1)) && (Ax[i, end] = 0.0)
+            (i ≤ size(Ay, 1)) && (Ay[i, end] = -Ay[i, end - 1])
         end
         if bc.left
-            (i ≤ size(Ax, 2)) && (Ax[1, i] = 0.0)
-            (1 < i < size(Ay, 2)) && (Ay[2, i] = Ay[3, i] / 3)
+            (i ≤ size(Ay, 2)) && (Ay[1, i] = 0.0)
+            (i ≤ size(Ax, 2)) && (Ax[1, i] = -Ax[2, i])
         end
         if bc.right
-            (i ≤ size(Ax, 2)) && (Ax[end, i] = 0.0)
-            (1 < i < size(Ay, 2)) && (Ay[end - 1, i] = Ay[end - 2, i] / 3)
+            (i ≤ size(Ay, 2)) && (Ay[end, i] = 0.0)
+            (i ≤ size(Ax, 2)) && (Ax[end, i] = -Ax[end - 1, i])
         end
     end
     return nothing

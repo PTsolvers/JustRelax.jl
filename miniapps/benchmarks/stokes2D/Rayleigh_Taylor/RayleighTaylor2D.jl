@@ -275,7 +275,6 @@ function RT_2D(igg, nx, ny)
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
-# (Path)/folder where output data and figures are stored
 n        = 128
 nx       = n
 ny       = n

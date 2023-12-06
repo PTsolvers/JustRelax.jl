@@ -149,7 +149,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
         println("it = $it; t = $t \n")
 
-        fig = Figure(; resolution=(1600, 1600), title="t = $t")
+        fig = Figure(; size=(1600, 1600), title="t = $t")
         ax1 = Axis(fig[1, 1]; aspect=1, title="τII")
         ax2 = Axis(fig[2, 1]; aspect=1, title="Pressure")
         lines!(ax1, ttot, τII ./ 1e6; color=:black, label="τII")

@@ -13,13 +13,13 @@ solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 function init_phases!(phase_ratios, xci, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5
-    
+
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
         x, y = xc[i], yc[j]
         if ((x-o_x)^2 + (y-o_y)^2) > radius^2
             JustRelax.@cell phases[1, i, j] = 1.0
             JustRelax.@cell phases[2, i, j] = 0.0
-        
+
         else
             JustRelax.@cell phases[1, i, j] = 0.0
             JustRelax.@cell phases[2, i, j] = 1.0
@@ -41,7 +41,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     di       = @. li / ni   # grid step in x- and -y
     origin   = 0.0, 0.0     # origin coordinates
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    dt       = Inf 
+    dt       = Inf
 
     # Physical properties using GeoParams ----------------
     τ_y     = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
@@ -55,13 +55,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     el_bg   = ConstantElasticity(; G=G0, Kb=4)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4)
-    visc    = LinearViscous(; η=η0) 
+    visc    = LinearViscous(; η=η0)
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
-        ϕ    = ϕ, 
+        ϕ    = ϕ,
         η_vp = η_reg,
         Ψ    = 0,
-    ) 
+    )
     rheology = (
         # Low density phase
         SetMaterialParams(;
@@ -94,7 +94,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
     args      = (; T = @zeros(ni...), P = stokes.P, dt = dt)
-    
+
     # Rheology
     η         = @ones(ni...)
     η_vep     = similar(η) # effective visco-elasto-plastic viscosity
@@ -103,7 +103,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     )
 
     # Boundary conditions
-    flow_bcs     = FlowBoundaryConditions(; 
+    flow_bcs     = FlowBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
@@ -165,7 +165,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         xunit = @. radius * cos(th) + 0.5;
         yunit = @. radius * sin(th) + 0.5;
 
-        fig   = Figure(resolution = (1600, 1600), title = "t = $t")
+        fig   = Figure(size = (1600, 1600), title = "t = $t")
         ax1   = Axis(fig[1,1], aspect = 1, title = "τII")
         ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
         ax3   = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
@@ -174,8 +174,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-        lines!(ax4, ttot, τII, color = :black) 
-        lines!(ax4, ttot, sol, color = :red) 
+        lines!(ax4, ttot, τII, color = :black)
+        lines!(ax4, ttot, sol, color = :red)
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)

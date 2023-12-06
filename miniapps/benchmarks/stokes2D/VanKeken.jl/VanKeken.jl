@@ -16,7 +16,7 @@ const λ = 0.9142
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 
-@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
+@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
 @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
 @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
@@ -29,8 +29,8 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
 
     inject = @fill(false, nx, ny, eltype=Bool) # true if injection in given cell is required
     index  = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool) # array that says if there's a particle in a given memory location
-    
-    @parallel_indices (i, j) function fill_coords_index(px, py, index)    
+
+    @parallel_indices (i, j) function fill_coords_index(px, py, index)
         # lower-left corner of the cell
         x0, y0 = x[i], y[j]
         # fill index array
@@ -42,7 +42,7 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
         return nothing
     end
 
-    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)    
+    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)
 
     return Particles(
         (px, py), index, inject, nxcell, max_xcell, min_xcell, np, (nx, ny)
@@ -75,7 +75,7 @@ end
 # Initialize phases on the particles
 function init_phases!(phases, particles)
     ni = size(phases)
-    
+
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
         @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
             # quick escape
@@ -110,7 +110,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     di       = @. li / ni   # grid step in x- and -y
     origin   = 0.0, 0.0     # origin coordinates
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    dt       = Inf 
+    dt       = Inf
 
     # Physical properties using GeoParams ----------------
     rheology = (
@@ -154,7 +154,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     args                 = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
     @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
-    
+
     # Rheology
     η                    = @ones(ni...)
     η_vep                = similar(η) # effective visco-elasto-plastic viscosity
@@ -163,7 +163,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     )
 
     # Boundary conditions
-    flow_bcs             = FlowBoundaryConditions(; 
+    flow_bcs             = FlowBoundaryConditions(;
         free_slip = (left = true, right=true, top=false, bot=false),
         no_slip   = (left = false, right=false, top=true, bot=true),
     )
@@ -239,7 +239,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
 
         # Plotting ---------------------
         if it == 1 || rem(it, 1000) == 0 || t >= tmax
-            fig = Figure(resolution = (1000, 1000), title = "t = $t")
+            fig = Figure(size = (1000, 1000), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = 1/λ, title = "t=$t")
             heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :oleron)
             save( joinpath(figdir, "$(it).png"), fig)

@@ -13,7 +13,7 @@ function solCx_solution(geometry; η_left=1, η_right=1e6)
     xv_y = [xc for xc in xci, _ in yvi] # for vy
     yv_y = [yc for _ in xci, yc in yvi] # for vy
 
-    # analytical solution 
+    # analytical solution
     ps = similar(xc) # @ centers
     vxs = similar(xv_x) # @ vertices
     vys = similar(xv_y) # @ vertices
@@ -32,7 +32,7 @@ end
 
 function solcx_error(geometry, stokes::StokesArrays; order=2)
     Li(A, B; order=2) = norm(A .- B, order)
-    
+
     solk     = solCx_solution(geometry)
     gridsize = reduce(*, geometry.di)
     L2_vx    = Li(stokes.V.Vx[:, 2:(end - 1)], PTArray(solk.vx); order=order) * gridsize
@@ -43,7 +43,7 @@ function solcx_error(geometry, stokes::StokesArrays; order=2)
 end
 
 function plot_solCx(geometry, stokes::StokesArrays, ρ; cmap=:vik, fun=heatmap!)
-    f = Figure(; resolution=(3000, 1800), fontsize=28)
+    f = Figure(; size=(3000, 1800), fontsize=28)
 
     #Density
     ax1 = Axis(f[1, 1]; aspect=1)
@@ -83,7 +83,7 @@ function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
     solc = solCx_solution(geometry; η_right=Δη)
 
     # Plot
-    f   = Figure(; resolution=(1200, 1000), fontsize=20)
+    f   = Figure(; size=(1200, 1000), fontsize=20)
 
     # ROW 1: PRESSURE
     # Numerical pressure
@@ -230,4 +230,3 @@ end
 
 err1(A::AbstractArray, B::AbstractArray) = @. abs(A - B)
 err2(A::AbstractArray, B::AbstractArray) = @. √(((A - B)^2))
-

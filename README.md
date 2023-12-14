@@ -1,12 +1,12 @@
 # JustRelax.jl
 
 ![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212423.svg)](https://doi.org/10.5281/zenodo.10212422)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
 
 
 :warning: This Package is still under active development
-- The API is still subject to change.  
-- The benchmarks and miniapps are working and provide the user with an insight into the capabilities of the package. 
+- The API is still subject to change.
+- The benchmarks and miniapps are working and provide the user with an insight into the capabilities of the package.
 
 Need to solve a very large multi-physics problem on many GPUs in parallel? Just Relax!
 
@@ -29,7 +29,7 @@ The package serves several purposes:
      - more easily handle local material properties through the use of [GeoParams.jl]((https://github.com/JuliaGeodynamics/GeoParams.jl))
      - more easily switch between a pseudo-transient solver and another solvers (e.g. an explicit thermal solvers)
 
-  * It provides a natural repository for contributions of new solvers for use by the larger community 
+  * It provides a natural repository for contributions of new solvers for use by the larger community
 
 We provide several miniapps, each designed to solve a well-specified benchmark problem, in order to provide
 
@@ -50,7 +50,7 @@ After installation, you can test the package by running the following commands:
 
 ```julia
 using JustRelax
-julia> ] 
+julia> ]
   pkg> test JustRelax
 ```
 The test will take a while, so grab a :coffee: or :tea:
@@ -59,7 +59,7 @@ The test will take a while, so grab a :coffee: or :tea:
 
 ![ShearBand2D](miniapps/benchmarks/stokes2D/shear_band/movies/DP_nx2058_2D.gif)
 
-This example displays how the package can be used to simulate shear band localisation. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl). 
+This example displays how the package can be used to simulate shear band localisation. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl).
 
 ```julia
 using GeoParams, GLMakie, CellArrays
@@ -73,20 +73,20 @@ environment!(model)
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 ```
-The function `init_phases!` initializes the phases within cell arrays. The function is parallelized with the `@parallel_indices` macro from [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl). In this case, this is the only function that needs to be tailored to the specific problem, everything else is handled by `JustRelax.jl` itself. 
+The function `init_phases!` initializes the phases within cell arrays. The function is parallelized with the `@parallel_indices` macro from [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl). In this case, this is the only function that needs to be tailored to the specific problem, everything else is handled by `JustRelax.jl` itself.
 
 ```julia
 # Initialize phases on the particles
 function init_phases!(phase_ratios, xci, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5
-    
+
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
         x, y = xc[i], yc[j]
         if ((x-o_x)^2 + (y-o_y)^2) > radius^2
             JustRelax.@cell phases[1, i, j] = 1.0
             JustRelax.@cell phases[2, i, j] = 0.0
-        
+
         else
             JustRelax.@cell phases[1, i, j] = 0.0
             JustRelax.@cell phases[2, i, j] = 1.0
@@ -110,7 +110,7 @@ JustRelax allows to setup a model environment `PS_Setup` (and interplay with the
   model = PS_Setup(:AMDGPU, Float64, 2)   #running on an AMD GPU in 2D
   environment!(model)
 ```
-If you therefore want to run a 3D code, change the `dimensions` to 3 in the commands above. 
+If you therefore want to run a 3D code, change the `dimensions` to 3 in the commands above.
 
 For this specific example we use particles to define the material phases, for which we rely on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). As in `JustRelax.jl`, we need to set up the environment of `JustPIC.jl`. This can be done by running the appropriate command in the REPL and restarting the Julia session:
 
@@ -132,7 +132,7 @@ figdir = "ShearBands2D"
 igg    = IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
 ```
 
-Initialisation of the physical domain and the grid. As `JustRelax.jl` relies on [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl), the grid can be `MPIAWARE` through setting the grid steps in x- and y- direction to ` di = @. li / (nx_g(),ny_g())`. This makes it a global grid and the grid steps are automatically distributed over the MPI processes. 
+Initialisation of the physical domain and the grid. As `JustRelax.jl` relies on [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl), the grid can be `MPIAWARE` through setting the grid steps in x- and y- direction to ` di = @. li / (nx_g(),ny_g())`. This makes it a global grid and the grid steps are automatically distributed over the MPI processes.
 
 ```julia
 # Physical domain ------------------------------------
@@ -143,7 +143,7 @@ li       = lx, ly       # domain length in x- and y-
 di       = @. li / ni   # grid step in x- and -y
 origin   = 0.0, 0.0     # origin coordinates
 xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-dt       = Inf 
+dt       = Inf
 ```
 Initialisation of the rheology with [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). The rheology can be tailored to the specific problem with different creep laws and material parameters (see [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) or the miniapps in the [convection folder](miniapps/convection).
 
@@ -160,10 +160,10 @@ Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
 dt      = η0/G0/4.0     # assumes Maxwell time of 4
 el_bg   = ConstantElasticity(; G=G0, Kb=4)
 el_inc  = ConstantElasticity(; G=Gi, Kb=4)
-visc    = LinearViscous(; η=η0) 
+visc    = LinearViscous(; η=η0)
 pl      = DruckerPrager_regularised(;  # non-regularized plasticity
     C    = C,
-    ϕ    = ϕ, 
+    ϕ    = ϕ,
     η_vp = η_reg,
     Ψ    = 0,
 ) # viscoplasticity model from e.g. Duretz, T., Räss, L., de Borst, R., & Hageman, T. (2023). A comparison of plasticity regularization approaches for geodynamic modeling. Geochemistry, Geophysics, Geosystems, 24, e2022GC010675. https://doi.org/101029/2022GC010675
@@ -195,7 +195,7 @@ init_phases!(phase_ratios, xci, radius)
 # STOKES ---------------------------------------------
 # Allocate arrays needed for every Stokes problem
 stokes    = StokesArrays(ni, ViscoElastic)
-pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1) 
+pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1)
 # PT coefficients after Räss, L., Utkin, I., Duretz, T., Omlin, S., and Podladchikov, Y. Y.: Assessing the robustness and scalability of the accelerated pseudo-transient method, Geosci. Model Dev., 15, 5757–5786, https://doi.org/10.5194/gmd-15-5757-2022, 2022.
 # Buoyancy forces
 ρg        = @zeros(ni...), @zeros(ni...)
@@ -211,7 +211,7 @@ args      = (; T = @zeros(ni...), P = stokes.P, dt = dt)
 Define pure shear velocity boundary conditions
 ```julia
 # Boundary conditions
-flow_bcs     = FlowBoundaryConditions(; 
+flow_bcs     = FlowBoundaryConditions(;
     free_slip = (left = true, right = true, top = true, bot = true),
     no_slip   = (left = false, right = false, top = false, bot=false),
 )
@@ -219,9 +219,9 @@ stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
 stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
 flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 ```
-Pseudo-transient Stokes solver and visualisation of the results. The visualisation is done with [GLMakie.jl](https://github.com/MakieOrg/Makie.jl). 
+Pseudo-transient Stokes solver and visualisation of the results. The visualisation is done with [GLMakie.jl](https://github.com/MakieOrg/Makie.jl).
 
-```julia    
+```julia
 # if it does not exist, make a folder where figures are stored
 take(figdir)
 
@@ -262,9 +262,9 @@ while t < tmax
     t  += dt
     push!(sol, solution(εbg, t, G0, η0))
     push!(ttot, t)
-    
+
     println("it = $it; t = $t \n")
-    
+
     # visualisation
     th    = 0:pi/50:3*pi;
     xunit = @. radius * cos(th) + 0.5;
@@ -278,8 +278,8 @@ while t < tmax
     heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
     heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
     lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-    lines!(ax4, ttot, τII, color = :black) 
-    lines!(ax4, ttot, sol, color = :red) 
+    lines!(ax4, ttot, τII, color = :black)
+    lines!(ax4, ttot, sol, color = :red)
     hidexdecorations!(ax1)
     hidexdecorations!(ax3)
     save(joinpath(figdir, "$(it).png"), fig)

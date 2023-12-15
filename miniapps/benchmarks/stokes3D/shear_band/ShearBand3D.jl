@@ -1,11 +1,10 @@
-using CUDA
-CUDA.allowscalar(false)
+JustRelax.CUDA.allowscalar(false)
 
 using Printf, GeoParams, GLMakie, CellArrays, CSV, DataFrames
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
-model  = PS_Setup(:gpu, Float64, 3)
+model  = PS_Setup(:Threads, Float64, 3)
 environment!(model)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
@@ -112,7 +111,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     stokes.V.Vx .= PTArray([ x*εbg/2 for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
     stokes.V.Vy .= PTArray([ y*εbg/2 for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
     stokes.V.Vz .= PTArray([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
-    
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)

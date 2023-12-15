@@ -1,11 +1,9 @@
-using CUDA
-CUDA.allowscalar(false)
-
+JustRelax.CUDA.allowscalar(false)
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
-model  = PS_Setup(:gpu, Float64, 2)
+model  = PS_Setup(:Threads, Float64, 2)
 environment!(model)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
@@ -16,7 +14,7 @@ function init_phases!(phase_ratios, xci, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5
     
-    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y)
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
         x, y = xc[i], yc[j]
         if ((x-o_x)^2 + (y-o_y)^2) > radius^2
             JustRelax.@cell phases[1, i, j] = 1.0
@@ -29,7 +27,7 @@ function init_phases!(phase_ratios, xci, radius)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
+    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -111,7 +109,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     )
     stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
     stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
-    
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)
@@ -148,12 +147,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         push!(τII, maximum(stokes.τ.xx))
 
-        if !isinf(dt)
-            @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-            @parallel (@idx ni) multi_copy!(
-                @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-            )
-        end
+        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        @parallel (@idx ni) multi_copy!(
+            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+        )
 
         it += 1
         t  += dt

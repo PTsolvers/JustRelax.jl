@@ -4,7 +4,7 @@ environment!(model)
 
 @testset "CellArrays 2D" begin
     ni = 5, 5
-    A  = @fill(false, ni..., celldims=(2,), eltype=Bool) 
+    A  = JustRelax.@fill(false, ni..., celldims=(2,), eltype=Bool) 
 
     @test @cell(A[1, 1, 1]) === false
     @test (@allocated @cell A[1, 1, 1]) == 0

@@ -121,12 +121,11 @@ end
 ## Fallbacks
 import Base: getindex, setindex!
 
-@inline function element(A::Union{Array,CuArray,ROCArray}, I::Vararg{Int,N}) where {N}
+@inline function element(A::AbstractArray, I::Vararg{Int,N}) where {N}
     return getindex(A, I...)
 end
-@inline function setelement!(
-    A::Union{Array,CuArray,ROCArray}, x::Number, I::Vararg{Int,N}
-) where {N}
+
+@inline function setelement!(A::AbstractArray, x::Number, I::Vararg{Int,N}) where {N}
     return setindex!(A, x, I...)
 end
 

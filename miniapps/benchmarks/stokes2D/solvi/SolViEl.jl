@@ -9,7 +9,7 @@ include("vizSolVi.jl")
 end
 
 function _viscosity!(η, xci, yci, rc, ηi, cx, cy)
-    for i in 1:length(xci), j in 1:length(yci)
+    for i in eachindex(xci), j in eachindex(yci)
         if rc < sqrt((xci[i] - cx)^2 + (yci[j] - cy)^2)
             η[i, j] = ηi
         end

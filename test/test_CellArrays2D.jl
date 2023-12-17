@@ -14,6 +14,6 @@ environment!(model)
     @test (@allocated @cell A[1, 1, 1] = true) == 0
 
     @test A[1, 1] == SA[true, false]
-    allocs = check_allocs(getA, (typeof(A), Int64, Int64))
+    allocs = check_allocs(getindex, (typeof(A), Int64, Int64))
     @test isempty(allocs)
 end

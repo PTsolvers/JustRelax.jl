@@ -14,15 +14,17 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
     # start ParallelStencil
     if model.device == :CUDA
+        eval(:(using CUDA))
         eval(:(@init_parallel_stencil(CUDA, $T, $N)))
-        Base.eval(Main, Meta.parse("using CUDA"))
+        # Base.eval(Main, Meta.parse("using CUDA"))
         if !isconst(Main, :PTArray)
             eval(:(const PTArray = CUDA.CuArray{$T,$N,CUDA.Mem.DeviceBuffer}))
         end
 
     elseif model.device == :AMDGPU
+        eval(:(using AMDGPU))
         eval(:(@init_parallel_stencil(AMDGPU, $T, $N)))
-        Base.eval(Main, Meta.parse("using AMDGPU"))
+        # Base.eval(Main, Meta.parse("using AMDGPU"))
         if !isconst(Main, :PTArray)
             eval(:(const PTArray = AMDGPU.ROCArray{$T,$N,AMDGPU.Runtime.Mem.HIPBuffer}))
         end

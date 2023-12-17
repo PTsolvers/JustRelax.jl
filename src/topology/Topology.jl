@@ -24,7 +24,7 @@ struct Geometry{nDim}
     ) where {nDim,T}
         Li = Float64.(li)
         di = Li ./ ni
-        xci, xvi = lazy_grid(di, Li; origin=origin)
+        xci, xvi = lazy_grid(di, Li, ni; origin=origin)
         return new{nDim}(ni, Li, max(Li...), di, xci, xvi)
     end
 end

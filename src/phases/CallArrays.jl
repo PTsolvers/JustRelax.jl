@@ -24,8 +24,7 @@ Base.@propagate_inbounds @inline function setindex!(
 ) where {N}
     Base.@propagate_inbounds @inline f(A::Array, x, cell, idx) = A[1, cell, idx] = x
     Base.@propagate_inbounds @inline f(A, x, cell, idx) = A[idx, cell, 1] = x
-
-    n = A.dims
+    
     idx = LinearIndices(n)[CartesianIndex(I...)]
 
     return f(A.data, x, cell, idx)
@@ -116,17 +115,6 @@ end
 @inline cart2ind(ni::T, nj::T, i::T, j::T) where {T<:Int} = cart2ind((ni, nj), i, j)
 @inline function cart2ind(ni::T, nj::T, nk::T, i::T, j::T, k::T) where {T<:Int}
     return cart2ind((ni, nj, nk), i, j, k)
-end
-
-## Fallbacks
-import Base: getindex, setindex!
-
-@inline function element(A::AbstractArray, I::Vararg{Int,N}) where {N}
-    return getindex(A, I...)
-end
-
-@inline function setelement!(A::AbstractArray, x::Number, I::Vararg{Int,N}) where {N}
-    return setindex!(A, x, I...)
 end
 
 ## Convinience macros

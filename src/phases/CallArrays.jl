@@ -125,9 +125,7 @@ import Base: getindex, setindex!
     return getindex(A, I...)
 end
 
-@inline function setelement!(
-    A::AbstractArray, x::Number, I::Vararg{Int,N}
-) where {N}
+@inline function setelement!(A::AbstractArray, x::Number, I::Vararg{Int,N}) where {N}
     return setindex!(A, x, I...)
 end
 

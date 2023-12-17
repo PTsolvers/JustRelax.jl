@@ -68,7 +68,7 @@ function solCx(
     ni        = nx, ny # number of nodes in x- and y-
     li        = lx, ly # domain length in x- and y-
     origin    = zero(nx), zero(ny)
-    igg       = IGG(init_global_grid(nx, ny, 0; init_MPI=init_MPI)...) #init MPI
+    igg       = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
     di        = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     xci, xvi  = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
     g         = 1

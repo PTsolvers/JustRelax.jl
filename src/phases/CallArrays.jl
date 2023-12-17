@@ -24,7 +24,7 @@ Base.@propagate_inbounds @inline function setindex!(
 ) where {N}
     Base.@propagate_inbounds @inline f(A::Array, x, cell, idx) = A[1, cell, idx] = x
     Base.@propagate_inbounds @inline f(A, x, cell, idx) = A[idx, cell, 1] = x
-    
+
     idx = LinearIndices(n)[CartesianIndex(I...)]
 
     return f(A.data, x, cell, idx)

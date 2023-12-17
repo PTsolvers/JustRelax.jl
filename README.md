@@ -1,7 +1,7 @@
 # JustRelax.jl
 
 ![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212423.svg)](https://doi.org/10.5281/zenodo.10212422)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
 
 
 :warning: This Package is still under active development

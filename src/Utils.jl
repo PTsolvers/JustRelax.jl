@@ -475,7 +475,7 @@ for (f1, f2) in zip(
     (:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum)
 )
     @eval begin
-        $f1(A::ROCArray) = $f2(Array(A))
+        $f1(A::AbstractArray) = $f2(Array(A))
         $f1(A) = $f2(A)
     end
 end

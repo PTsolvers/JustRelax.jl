@@ -7,9 +7,13 @@ backend = "CUDA_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
 # set_backend(backend) # run this on the REPL to switch backend
 
 # setup ParallelStencil.jl environment
-device = occursin("CUDA", JustPIC.backend) ? :gpu : :cpu
-model  = PS_Setup(device, Float64, 2)
-environment!(model)
+@static if occursin("CUDA", JustPIC.backend) 
+    model  = PS_Setup(:CUDA, Float64, 2)
+    environment!(model)
+else
+    model  = PS_Setup(:Threads, Float64, 2)
+    environment!(model)
+end
 
 # x-length of the domain
 const λ = 0.9142
@@ -142,7 +146,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     particle_args        = (pPhases, )
     init_phases!(pPhases, particles)
     phase_ratios         = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
+    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -158,15 +162,15 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     # Rheology
     η                    = @ones(ni...)
     η_vep                = similar(η) # effective visco-elasto-plastic viscosity
-    compute_viscosity!(
-        η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
+    @parallel (@idx ni) compute_viscosity!(
+        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
 
     # Boundary conditions
     flow_bcs             = FlowBoundaryConditions(; 
-        free_slip = (left = true, right=true, top=false, bot=false),
-        no_slip   = (left = false, right=false, top=true, bot=true),
-    )
+        free_slip = (left =  true, right =  true, top = false, bot = false),
+        no_slip   = (left = false, right = false, top =  true, bot =  true),
+    ) 
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -188,11 +192,11 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     while t < tmax
 
         # Update buoyancy
-        @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
         # ------------------------------
 
         # Stokes solver ----------------
-        to = solve!(
+        solve!(
             stokes,
             pt_stokes,
             di,
@@ -207,10 +211,9 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
             igg;
             iterMax          = 10e3,
             nout             = 50,
-            viscosity_cutoff = -Inf, Inf
+            viscosity_cutoff = (-Inf, Inf)
         )
-        @show to
-        dt = compute_dt(stokes, di) / 10
+        dt = compute_dt(stokes, di) / 1
         # ------------------------------
 
         # Compute U rms ---------------
@@ -232,7 +235,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
         # inject && break
         inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
+        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
 
         @show it += 1
         t        += dt

@@ -213,7 +213,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
             nout             = 50,
             viscosity_cutoff = (-Inf, Inf)
         )
-        dt = compute_dt(stokes, di) / 1
+        dt = compute_dt(stokes, di) / 10
         # ------------------------------
 
         # Compute U rms ---------------

@@ -3,7 +3,7 @@
 function init_rheologies(; is_plastic = true, is_TP_Conductivity=true)
 
     # Dislocation and Diffusion creep
-    Matrix            = DislocationCreep(A=3.20e-20, n=3.0, E=154e3, V=276e3,  r=0.0, R=8.3145)
+    Matrix            = DislocationCreep(A=3.20e-20, n=3.0, E=276e3, V=6e-6,  r=0.0, R=8.3145)
     Inclusion         = DislocationCreep(A=3.16e-26, n=3.3, E=186e3, V=6e-6,  r=0.0, R=8.3145)
 
     # Elasticity

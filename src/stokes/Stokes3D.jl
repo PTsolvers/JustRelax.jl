@@ -380,7 +380,9 @@ function JustRelax.solve!(
     b_width=(4, 4, 4),
     verbose=true,
     viscosity_cutoff=(-Inf, Inf),
-) where {A,B,C,D,T,N}
+    do_buoyancy::Val{BUOYANCY} = Val(true),
+    do_viscosity::Val{VISCOSITY} = Val(true)
+) where {A,B,C,D,T,N,BUOYANCY,VISCOSITY}
 
     ## UNPACK
 
@@ -437,19 +439,23 @@ function JustRelax.solve!(
             )
 
             # Update buoyancy
-            @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
-
+            if BUOYANCY
+                @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
+            end
+            
             # Update viscosity
-            ν = 1e-2
-            @parallel (@idx ni) compute_viscosity!(
-                η,
-                ν,
-                phase_ratios.center,
-                @strain(stokes)...,
-                args,
-                rheology,
-                viscosity_cutoff,
-            )
+            if VISCOSITY
+                ν = 1e-2
+                @parallel (@idx ni) compute_viscosity!(
+                    η,
+                    ν,
+                    phase_ratios.center,
+                    @strain(stokes)...,
+                    args,
+                    rheology,
+                    viscosity_cutoff,
+                )
+            end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),

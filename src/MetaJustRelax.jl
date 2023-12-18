@@ -14,17 +14,17 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
     # start ParallelStencil
     if model.device == :CUDA
-        eval(:(using CUDA))
+        # eval(:(using CUDA))
+        Base.eval(Main, Meta.parse("using CUDA"))
         eval(:(@init_parallel_stencil(CUDA, $T, $N)))
-        # Base.eval(Main, Meta.parse("using CUDA"))
         if !isconst(Main, :PTArray)
             eval(:(const PTArray = CUDA.CuArray{$T,$N,CUDA.Mem.DeviceBuffer}))
         end
 
     elseif model.device == :AMDGPU
-        eval(:(using AMDGPU))
+        # eval(:(using AMDGPU))
+        Base.eval(Main, Meta.parse("using AMDGPU"))
         eval(:(@init_parallel_stencil(AMDGPU, $T, $N)))
-        # Base.eval(Main, Meta.parse("using AMDGPU"))
         if !isconst(Main, :PTArray)
             eval(:(const PTArray = AMDGPU.ROCArray{$T,$N,AMDGPU.Runtime.Mem.HIPBuffer}))
         end
@@ -108,6 +108,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         include(joinpath(@__DIR__, "phases/phases.jl"))
         export PhaseRatio, fn_ratio, phase_ratios_center
+        
+        include(joinpath(@__DIR__, "phases/utils.jl"))
+        export velocity_grids, init_particle_fields, init_particle_fields_cellarrays, init_particles
 
         include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
         export compute_ρg!
@@ -117,6 +120,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         include(joinpath(@__DIR__, "stokes/StressKernels.jl"))
         export tensor_invariant!
+
+        include(joinpath(@__DIR__, "stokes/PressureKernels.jl"))
+        export init_P!
 
         include(joinpath(@__DIR__, "stokes/Stokes2D.jl"))
         export solve!

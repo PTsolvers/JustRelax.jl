@@ -10,6 +10,7 @@ using GeoParams
 using HDF5
 using CellArrays
 using StaticArrays
+using JustPIC
 
 function solve!() end
 

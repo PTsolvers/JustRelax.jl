@@ -46,3 +46,9 @@ function _compute_P!(P, P0, ∇V, η, K, dt, r, θ_dτ)
     P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
     return RP, P
 end
+
+# Initial pressure profile - not accurate
+@parallel_indices (I...) function init_P!(P, ρg, z)
+    P[I...] = abs(ρg[I...] * z[I[end]]) * <(z[I[end]], 0.0)
+    return nothing
+end

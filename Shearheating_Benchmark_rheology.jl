@@ -3,8 +3,10 @@
 function init_rheologies(; is_plastic = true, is_TP_Conductivity=true)
 
     # Dislocation and Diffusion creep
-    Matrix            = DislocationCreep(A=3.20e-20, n=3.0, E=276e3, V=6e-6,  r=0.0, R=8.3145)
-    Inclusion         = DislocationCreep(A=3.16e-26, n=3.3, E=186e3, V=6e-6,  r=0.0, R=8.3145)
+    Matrix            = LinearViscous(η=1e23)
+    Inclusion         = LinearViscous(η=1e22)
+    # Matrix            = DislocationCreep(A=3.20e-20, n=3.0, E=276e3, V=6e-6,  r=0.0, R=8.3145)
+    # Inclusion         = DislocationCreep(A=3.16e-26, n=3.3, E=186e3, V=6e-6,  r=0.0, R=8.3145)
 
     # Elasticity
     el_Matrix              = SetConstantElasticity(; G=25e9, ν=0.5)

@@ -1,5 +1,5 @@
-#MWE Shearheating
-
+# Benchmark of Duretz et al. 2014
+# http://dx.doi.org/10.1002/2014GL060438
 using CUDA
 CUDA.allowscalar(false) # for safety
 
@@ -16,9 +16,10 @@ environment!(model)
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CellArrays
+using GLMakie
 
 # Load file with all the rheology configurations
-include("Shearheating_Benchmark_rheology.jl")
+include("Shearheating_rheology.jl")
 
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -134,32 +135,6 @@ function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air)
 end
 
 
-function dirichlet_velocities_pureshear!(Vx, Vy, v_extension, xvi)
-    lx = abs(reduce(-, extrema(xvi[1])))
-    ly = abs(reduce(-, extrema(xvi[2])))
-    xv, yv = xvi
-    # v_extension /= lx / 2
-
-    @parallel_indices (i, j) function pure_shear_x!(Vx)
-        xi = xv[i]
-        Vx[i, j + 1] = v_extension * (xi - lx * 0.5) / (lx/2)/2
-        # Vx[i, j + 1] = v_extension * (xi - lx * 0.5) / 2
-        return nothing
-    end
-
-    @parallel_indices (i, j) function pure_shear_y!(Vy)
-        yi = abs(yv[j])
-        Vy[i + 1, j] = v_extension * yi /ly
-        return nothing
-    end
-
-    nx, ny = size(Vx)
-    @parallel (1:nx, 1:(ny - 2)) pure_shear_x!(Vx)
-    nx, ny = size(Vy)
-    @parallel (1:(nx - 2), 1:ny) pure_shear_y!(Vy)
-
-    return nothing
-end
 
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
@@ -177,7 +152,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology     = init_rheologies(; is_plastic = true, is_TP_Conductivity=false)
+    rheology     = init_rheologies(; is_TP_Conductivity=false)
     κ            = (4 / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
@@ -333,7 +308,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
           temperature2center!(thermal)
 
           @parallel (@idx ni) compute_SH!(
-            thermal.H,
+            thermal.shear_heating,
             @tensor_center(stokes.τ),
             @tensor_center(stokes.τ_o),
             @strain(stokes),
@@ -459,10 +434,3 @@ igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
-
-
-f(A, n, ε, E, T) =  (2^((1-n)/n)) / (3^((1+n)/2/n)) * A^(-inv(n)) * ε^(inv(n)-1) * exp(E/(n * 8.3145 * T))
-f(A, n, ε, E, T) =  2 / 3 * A^(-inv(n)) * ε^(inv(n)-1) * exp(E/(n * 8.3145 * T))
-
-f(3.2e-20, 3, 1e-16, 276e3, 400 + 273)
-f(3.16e-20, 3.3, 1e-16, 186e3, 400 + 273)

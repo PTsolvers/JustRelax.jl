@@ -15,7 +15,7 @@ model = PS_Setup(:Threads, Float64, 2)
 environment!(model)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, SpecialFunctions, CellArrays
+using Printf, LinearAlgebra, GeoParams, CellArrays
 
 # Load file with all the rheology configurations
 include("Shearheating_Benchmark_rheology.jl")
@@ -195,18 +195,18 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Elliptical temperature anomaly
     xc_anomaly       = lx/2    # origin of thermal anomaly
-    yc_anomaly       = 39e3  # origin of thermal anomaly
+    yc_anomaly       = 40e3  # origin of thermal anomaly
+    # yc_anomaly       = 39e3  # origin of thermal anomaly
     r_anomaly        = 3e3    # radius of perturbation
     init_phases!(pPhases, particles, lx/2, yc_anomaly, r_anomaly)
     phase_ratios     = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
-
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.25 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -234,7 +234,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     η                = @zeros(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e16, 1e24)
+        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
     η_vep            = copy(η)
 
@@ -243,15 +243,17 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-3 / √2.1
     )
 
-    εbg              = 5e-14
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left = true, right=true, top=true, bot=true),
         periodicity  = (left = false, right = false, top = false, bot = false),
     )
     ## Compression and not extension - fix this
-    stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray([ -y*εbg for _ in 1:nx+2, y in xvi[2]])
+    εbg              = 5e-14
+    # εbg              = 1e-16
+    stokes.V.Vx .= PTArray([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
+    # stokes.V.Vy .= PTArray([ (ly - abs(y) -ly/2) * εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 
     # IO ----- -------------------------------------------
@@ -297,7 +299,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
           # Update buoyancy and viscosity -
           args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
           @parallel (@idx ni) compute_viscosity!(
-              η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
+              η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
           )
           @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
           # ------------------------------
@@ -316,9 +318,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
               args,
               Inf,
               igg;
-              iterMax = 150e3,
+              iterMax = 75e3,
               nout=1e3,
-              viscosity_cutoff=(1e18, 1e24)
+              viscosity_cutoff=(-Inf, Inf)
           )
           @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
           dt   = compute_dt(stokes, di, dt_diff)
@@ -449,7 +451,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 figdir   = "Benchmark_Duretz_etal_2014"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 32
+n        = 128
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -457,3 +459,10 @@ igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
+
+
+f(A, n, ε, E, T) =  (2^((1-n)/n)) / (3^((1+n)/2/n)) * A^(-inv(n)) * ε^(inv(n)-1) * exp(E/(n * 8.3145 * T))
+f(A, n, ε, E, T) =  2 / 3 * A^(-inv(n)) * ε^(inv(n)-1) * exp(E/(n * 8.3145 * T))
+
+f(3.2e-20, 3, 1e-16, 276e3, 400 + 273)
+f(3.16e-20, 3.3, 1e-16, 186e3, 400 + 273)

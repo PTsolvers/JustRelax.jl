@@ -60,7 +60,7 @@ end
     return compute_phase(compute_heatcapacity, rheology, phase, args) * ρ
 end
 
-## 3D KERNELS 
+## 3D KERNELS
 
 @parallel_indices (i, j, k) function compute_flux!(
     qTx::AbstractArray{_T,3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
@@ -168,7 +168,19 @@ end
 end
 
 @parallel_indices (I...) function update_T!(
-    T::AbstractArray{_T,3}, Told, qTx, qTy, qTz, H, ρCp, dτ_ρ, _dt, _dx, _dy, _dz
+    T::AbstractArray{_T,3},
+    Told,
+    qTx,
+    qTy,
+    qTz,
+    H,
+    shear_heating,
+    ρCp,
+    dτ_ρ,
+    _dt,
+    _dx,
+    _dy,
+    _dz,
 ) where {_T}
     av(A) = _av(A, I...)
     d_xa(A) = _d_xa(A, I..., _dx)
@@ -180,7 +192,9 @@ end
         av(dτ_ρ) * (
             (-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) -
             av(ρCp) * (T[I1...] - Told[I1...]) * _dt
-        ) + av(H)
+        ) +
+        av(H) +
+        av(shear_heating)
 
     return nothing
 end
@@ -192,6 +206,7 @@ end
     qTy,
     qTz,
     H,
+    shear_heating,
     rheology,
     phase,
     dτ_ρ,
@@ -216,13 +231,27 @@ end
         T_ijk +
         av(dτ_ρ) * (
             (-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) -
-            compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt + av(H)
+            compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt +
+            av(H) +
+            av(shear_heating)
         )
     return nothing
 end
 
 @parallel_indices (i, j, k) function check_res!(
-    ResT::AbstractArray{_T,3}, T, Told, qTx2, qTy2, qTz2, H, ρCp, _dt, _dx, _dy, _dz
+    ResT::AbstractArray{_T,3},
+    T,
+    Told,
+    qTx2,
+    qTy2,
+    qTz2,
+    H,
+    shear_heating,
+    ρCp,
+    _dt,
+    _dx,
+    _dy,
+    _dz,
 ) where {_T}
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
@@ -233,7 +262,8 @@ end
 
     ResT[i, j, k] =
         -av(ρCp) * (T[I...] - Told[I...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
-        av(H)
+        av(H) +
+        av(shear_heating)
 
     return nothing
 end
@@ -246,6 +276,7 @@ end
     qTy2,
     qTz2,
     H,
+    shear_heating,
     rheology,
     phase,
     _dt,
@@ -266,7 +297,9 @@ end
 
     ResT[i, j, k] =
         -compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt -
-        (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) + av(H)
+        (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
+        av(H) +
+        av(shear_heating)
 
     return nothing
 end
@@ -396,7 +429,7 @@ end
 end
 
 @parallel_indices (i, j) function update_T!(
-    T::AbstractArray{_T,2}, Told, qTx, qTy, H, ρCp, dτ_ρ, _dt, _dx, _dy
+    T::AbstractArray{_T,2}, Told, qTx, qTy, H, shear_heating, ρCp, dτ_ρ, _dt, _dx, _dy
 ) where {_T}
     nx, ny = size(ρCp)
 
@@ -416,7 +449,9 @@ end
     T[i + 1, j + 1] +=
         av(dτ_ρ) * (
             (-(d_xa(qTx) + d_ya(qTy))) -
-            av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt + av(H)
+            av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt +
+            av(H) +
+            av(shear_heating)
         )
     return nothing
 end
@@ -427,6 +462,7 @@ end
     qTx,
     qTy,
     H,
+    shear_heating,
     rheology,
     phase,
     dτ_ρ,
@@ -458,13 +494,16 @@ end
         ) * 0.25
 
     T[i + 1, j + 1] +=
-        av(dτ_ρ) *
-        ((-(d_xa(qTx) + d_ya(qTy))) - ρCp * (T_ij - Told[i + 1, j + 1]) * _dt + av(H))
+        av(dτ_ρ) * (
+            (-(d_xa(qTx) + d_ya(qTy))) - ρCp * (T_ij - Told[i + 1, j + 1]) * _dt +
+            av(H) +
+            av(shear_heating)
+        )
     return nothing
 end
 
 @parallel_indices (i, j) function check_res!(
-    ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, H, ρCp, _dt, _dx, _dy
+    ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, H, shear_heating, ρCp, _dt, _dx, _dy
 ) where {_T}
     nx, ny = size(ρCp)
 
@@ -483,12 +522,26 @@ end
 
     ResT[i, j] =
         -av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt -
-        (d_xa(qTx2) + d_ya(qTy2)) + av(H)
+        (d_xa(qTx2) + d_ya(qTy2)) +
+        av(H) +
+        av(shear_heating)
     return nothing
 end
 
 @parallel_indices (i, j) function check_res!(
-    ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, H, rheology, phase, _dt, _dx, _dy, args
+    ResT::AbstractArray{_T,2},
+    T,
+    Told,
+    qTx2,
+    qTy2,
+    H,
+    shear_heating,
+    rheology,
+    phase,
+    _dt,
+    _dx,
+    _dy,
+    args,
 ) where {_T}
     nx, ny = size(args.P)
 
@@ -514,7 +567,8 @@ end
 
     ResT[i, j] =
         -ρCp * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
-        av(H)
+        av(H) +
+        av(shear_heating)
     return nothing
 end
 
@@ -540,6 +594,7 @@ function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
         thermal.Told,
         @qT(thermal)...,
         thermal.H,
+        thermal.shear_heating,
         ρCp,
         pt_thermal.dτ_ρ,
         _dt,
@@ -555,6 +610,7 @@ function update_T(
         thermal.Told,
         @qT(thermal)...,
         thermal.H,
+        thermal.shear_heating,
         rheology,
         phase,
         pt_thermal.dτ_ρ,
@@ -571,6 +627,7 @@ function update_T(igg, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
         thermal.Told,
         @qT(thermal)...,
         thermal.H,
+        thermal.shear_heating,
         ρCp,
         pt_thermal.dτ_ρ,
         _dt,
@@ -588,6 +645,7 @@ function update_T(igg, b_width, thermal, rheology, phase, pt_thermal, _dt, _di, 
         thermal.Told,
         @qT(thermal)...,
         thermal.H,
+        thermal.shear_heating,
         rheology,
         phase,
         pt_thermal.dτ_ρ,
@@ -627,7 +685,7 @@ function heatdiffusion_PT!(
     ni = size(thermal.Tc)
     @copy thermal.Told thermal.T
 
-    # errors 
+    # errors
     iter_count = Int64[]
     norm_ResT = Float64[]
     sizehint!(iter_count, Int(iterMax))
@@ -660,6 +718,7 @@ function heatdiffusion_PT!(
                     thermal.Told,
                     @qT2(thermal)...,
                     thermal.H,
+                    thermal.shear_heating,
                     ρCp,
                     _dt,
                     _di...,
@@ -718,7 +777,7 @@ function heatdiffusion_PT!(
     @copy thermal.Told thermal.T
     update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
 
-    # errors 
+    # errors
     iter_count = Int64[]
     norm_ResT = Float64[]
     sizehint!(iter_count, Int(iterMax))
@@ -760,6 +819,7 @@ function heatdiffusion_PT!(
                     thermal.Told,
                     @qT2(thermal)...,
                     thermal.H,
+                    thermal.shear_heating,
                     rheology,
                     phases,
                     _dt,

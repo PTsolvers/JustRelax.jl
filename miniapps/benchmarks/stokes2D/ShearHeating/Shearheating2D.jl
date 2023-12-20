@@ -88,53 +88,6 @@ end
     return nothing
 end
 
-# Initial thermal profile
-@parallel_indices (i, j) function init_T!(T, y, thick_air)
-    depth = -y[j] - thick_air
-
-    # (depth - 15e3) because we have 15km of sticky air
-    if depth < 0e0
-        T[i + 1, j] = 273e0
-
-    elseif 0e0 ≤ (depth) < 35e3
-        dTdZ        = (923-273)/35e3
-        offset      = 273e0
-        T[i + 1, j] = (depth) * dTdZ + offset
-
-    elseif 110e3 > (depth) ≥ 35e3
-        dTdZ        = (1492-923)/75e3
-        offset      = 923
-        T[i + 1, j] = (depth - 35e3) * dTdZ + offset
-
-    elseif (depth) ≥ 110e3
-        dTdZ        = (1837 - 1492)/590e3
-        offset      = 1492e0
-        T[i + 1, j] = (depth - 110e3) * dTdZ + offset
-
-    end
-
-    return nothing
-end
-
-# Thermal rectangular perturbation
-function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air)
-
-    @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
-        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc - thick_air)^2 ≤ r^2)
-            depth       = -y[j] - thick_air
-            dTdZ        = (2047 - 2017) / 50e3
-            offset      = 2017
-            T[i + 1, j] = (depth - 585e3) * dTdZ + offset
-        end
-        return nothing
-    end
-    ni = length.(xvi)
-    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
-
-    return nothing
-end
-
-
 
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
@@ -190,12 +143,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         no_flux      = (left = true, right = true, top = false, bot = false),
         periodicity  = (left = false, right = false, top = false, bot = false),
     )
-    # initialize thermal profile - Half space cooling
-    # @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], thick_air)
+
+    # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
     thermal_bcs!(thermal.T, thermal_bc)
 
-    # rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air)
     @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
 
@@ -228,7 +180,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # εbg              = 1e-16
     stokes.V.Vx .= PTArray([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
     stokes.V.Vy .= PTArray([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
-    # stokes.V.Vy .= PTArray([ (ly - abs(y) -ly/2) * εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 
     # IO ----- -------------------------------------------
@@ -270,7 +221,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while it < 10 # run only for 5 Myrs
+    while it < 10
           # Update buoyancy and viscosity -
           args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
           @parallel (@idx ni) compute_viscosity!(

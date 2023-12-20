@@ -2,9 +2,7 @@
 
 function init_rheologies(; is_TP_Conductivity=true)
 
-    # Dislocation and Diffusion creep
-    # Matrix            = LinearViscous(η=1e23)
-    # Inclusion         = LinearViscous(η=1e22)
+    # Dislocation creep
     Matrix        = DislocationCreep(A=3.20e-20, n=3.0, E=276e3, V=0e0,  r=0.0, R=8.3145)
     Inclusion     = DislocationCreep(A=3.16e-26, n=3.3, E=186e3, V=0e0,  r=0.0, R=8.3145)
 
@@ -17,7 +15,7 @@ function init_rheologies(; is_TP_Conductivity=true)
             d = 0.0,
         )
     else
-        K_Matrix = ConstantConductivity(k = 2.5)
+        ConstantConductivity(k = 2.5)
     end
 
     K_Inclusion = if is_TP_Conductivity

@@ -1,8 +1,5 @@
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
-using CUDA
-CUDA.allowscalar(false) # for safety
-
 using JustRelax, JustRelax.DataIO, JustPIC
 import JustRelax.@cell
 
@@ -153,10 +150,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Buoyancy forces
     ρg               = @zeros(ni...), @zeros(ni...)
-    for _ in 1:1
-        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
-        @parallel init_P!(stokes.P, ρg[2], xci[2])
-    end
+
+    @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
+    @parallel init_P!(stokes.P, ρg[2], xci[2])
+
     # Rheology
     η                = @zeros(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
@@ -177,7 +174,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     )
     ## Compression and not extension - fix this
     εbg              = 5e-14
-    # εbg              = 1e-16
     stokes.V.Vx .= PTArray([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
     stokes.V.Vy .= PTArray([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -258,7 +254,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
           @views thermal.T[2:end-1, :] .= T_buffer
           temperature2center!(thermal)
 
-          @parallel (@idx ni) compute_SH!(
+          @parallel (@idx ni) compute_shear_heating(
             thermal.shear_heating,
             @tensor_center(stokes.τ),
             @tensor_center(stokes.τ_o),

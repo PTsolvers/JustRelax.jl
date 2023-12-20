@@ -47,7 +47,7 @@ end
     time       = 100e6 * yr
     Ths        = Tmin + (Tm -Tmin) * erf((zᵢ)*0.5/(κ*time)^0.5)
     T[i, j, k] = min(Tᵢ, Ths)
-    return 
+    return
 end
 
 
@@ -66,9 +66,9 @@ end
 function random_perturbation!(T, δT, xbox, ybox, zbox, xvi)
 
     @parallel_indices (i, j, k) function _random_perturbation!(T, δT, xbox, ybox, zbox, x, y, z)
-        inbox = 
-            (xbox[1] ≤ x[i] ≤ xbox[2]) && 
-            (ybox[1] ≤ y[j] ≤ ybox[2]) && 
+        inbox =
+            (xbox[1] ≤ x[i] ≤ xbox[2]) &&
+            (ybox[1] ≤ y[j] ≤ ybox[2]) &&
             (abs(zbox[1]) ≤ abs(z[k]) ≤ abs(zbox[2]))
         @inbounds if inbox
             δTi         = δT * (rand() - 0.5) # random perturbation within ±δT [%]
@@ -76,16 +76,16 @@ function random_perturbation!(T, δT, xbox, ybox, zbox, xvi)
         end
         return nothing
     end
-    
+
     @parallel (@idx size(T)) _random_perturbation!(T, δT, xbox, ybox, zbox, xvi...)
 end
 
 Rayleigh_number(ρ, α, ΔT, κ, η0) = ρ * 9.81 * α * ΔT * 2890e3^3 * inv(κ * η0)
 
 function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", thermal_perturbation = :random)
-    
+
     # initialize MPI
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = JustRelax.MPI.Initialized() ? false : true)...) 
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = JustRelax.MPI.Initialized() ? false : true)...)
 
     # Physical domain ------------------------------------
     lz       = 2890e3
@@ -135,11 +135,11 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     κ            = (rheology.Conductivity[1].k / (rheology.HeatCapacity[1].cp * rheology.Density[1].ρ0)).val
     dt = dt_diff = min(di...)^2 / κ / 3.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
-    
+
     # TEMPERATURE PROFILE --------------------------------
     thermal    = ThermalArrays(ni)
-    thermal_bc = TemperatureBoundaryConditions(; 
-        no_flux     = (left = true, right = true, top = false, bot = false, front=true, back=true), 
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux     = (left = true, right = true, top = false, bot = false, front=true, back=true),
         periodicity = (left = false, right = false, top = false, bot = false, front=false, back=false),
     )
     # initialize thermal profile - Half space cooling
@@ -150,7 +150,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     # thermal.T  .= 1600.0
     @parallel init_T!(thermal.T, xvi[3], κ, Tm, Tp, Tmin, Tmax)
     thermal_bcs!(thermal.T, thermal_bc)
-    # Elliptical temperature anomaly 
+    # Elliptical temperature anomaly
     if thermal_perturbation == :random
         δT          = 5.0              # thermal perturbation (in %)
         random_perturbation!(thermal.T, δT, (lx*1/8, lx*7/8), (ly*1/8, ly*7/8), (-2000e3, -2600e3), xvi)
@@ -187,7 +187,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     )
     η_vep           = deepcopy(η)
     # Boundary conditions
-    flow_bcs = FlowBoundaryConditions(; 
+    flow_bcs = FlowBoundaryConditions(;
         free_slip   = (left=true , right=true , top=true , bot=true , front=true , back=true ),
         no_slip     = (left=false, right=false, top=false, bot=false, front=false, back=false),
         periodicity = (left=false, right=false, top=false, bot=false, front=false, back=false),
@@ -205,7 +205,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     fig0 = let
         Zv  = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
         Z   = [z for x in xci[1], y in xci[2], z in xci[3]][:]
-        fig = Figure(resolution = (1200, 900))
+        fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         scatter!(ax1, Array(thermal.T[:]), Zv./1e3)
@@ -255,7 +255,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
             rheology,
             args,
             di,
-            dt 
+            dt
         )
         # ------------------------------
 
@@ -271,14 +271,14 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         if it == 1 || rem(it, 5) == 0
             slice_j = Int(ny ÷ 2)
 
-            fig = Figure(resolution = (1000, 1000), title = "t = $t")
+            fig = Figure(size = (1000, 1000), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vz [m/s]")
             ax3 = Axis(fig[3,1], aspect = ar, title = "τII [MPa]")
             ax4 = Axis(fig[4,1], aspect = ar, title = "log10(η)")
             h1 = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:,slice_j,:]) , colormap=:batlow)
             h2 = heatmap!(ax2, xci[1].*1e-3, xvi[3].*1e-3, Array(stokes.V.Vz[:,slice_j,:]) , colormap=:batlow)
-            h3 = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(stokes.τ.II[:,slice_j,:].*1e-6) , colormap=:batlow) 
+            h3 = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(stokes.τ.II[:,slice_j,:].*1e-6) , colormap=:batlow)
             h4 = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:,slice_j,:])) , colormap=:batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
@@ -289,8 +289,8 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
             Colorbar(fig[4,2], h4)
             fig
             save(joinpath(figdir, "$(it).png"), fig)
-            
-            # save vtk time series 
+
+            # save vtk time series
             data_c = (; Temperature = Array(thermal.Tc),  TauII = Array(stokes.τ.II), Density=Array(ρg[3]./9.81))
             JustRelax.DataIO.append!(data_series, data_c, it, t)
         end

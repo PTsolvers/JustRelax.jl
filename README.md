@@ -269,7 +269,7 @@ while t < tmax
     th    = 0:pi/50:3*pi;
     xunit = @. radius * cos(th) + 0.5;
     yunit = @. radius * sin(th) + 0.5;
-    fig   = Figure(resolution = (1600, 1600), title = "t = $t")
+    fig   = Figure(size = (1600, 1600), title = "t = $t")
     ax1   = Axis(fig[1,1], aspect = 1, title = "τII")
     ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
     ax3   = Axis(fig[1,2], aspect = 1, title = "log10(εII)")

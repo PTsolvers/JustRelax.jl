@@ -60,7 +60,7 @@ function plot(stokes::StokesArrays, geometry; cmap=:vik)
 
     islice = geometry.ni[1] ÷ 2
 
-    f = Figure(; resolution=(2600, 900), fontsize=20)
+    f = Figure(; size=(2600, 900), fontsize=20)
 
     # Pressure
     ax = Axis(f[1, 1]; title="Pressure numeric")

@@ -14,6 +14,7 @@ function make_thermal_arrays!(ndim)
             $(flux1...)
             $(flux2...)
             H::_T # source terms
+            shear_heating::_T # shear heating terms
             ResT::_T
 
             function ThermalArrays(ni::NTuple{1,Integer})
@@ -33,13 +34,16 @@ function make_thermal_arrays!(ndim)
                 Told = @zeros(nx + 3, ny + 1)
                 Tc = @zeros(ni...)
                 H = @zeros(ni...)
+                shear_heating = @zeros(ni...)
                 dT_dt = @zeros(nx + 1, ny - 1)
                 qTx = @zeros(nx + 2, ny - 1)
                 qTy = @zeros(nx + 1, ny)
                 qTx2 = @zeros(nx + 2, ny - 1)
                 qTy2 = @zeros(nx + 1, ny)
                 ResT = @zeros(nx + 1, ny - 1)
-                return new{typeof(T)}(T, Tc, ΔT, Told, dT_dt, qTx, qTy, qTx2, qTy2, H, ResT)
+                return new{typeof(T)}(
+                    T, Tc, ΔT, Told, dT_dt, qTx, qTy, qTx2, qTy2, H, shear_heating, ResT
+                )
             end
 
             function ThermalArrays(ni::NTuple{3,Integer})
@@ -47,6 +51,7 @@ function make_thermal_arrays!(ndim)
                 T, ΔT, Told = @zeros(ni .+ 1...), @zeros(ni .+ 1...), @zeros(ni .+ 1...)
                 Tc = @zeros(ni...)
                 H = @zeros(ni...)
+                shear_heating = @zeros(ni...)
                 dT_dt = @zeros(ni .- 1)
                 qTx = @zeros(nx, ny - 1, nz - 1)
                 qTy = @zeros(nx - 1, ny, nz - 1)
@@ -56,7 +61,20 @@ function make_thermal_arrays!(ndim)
                 qTz2 = @zeros(nx - 1, ny - 1, nz)
                 ResT = @zeros((ni .- 1)...)
                 return new{typeof(T)}(
-                    T, Tc, ΔT, Told, dT_dt, qTx, qTy, qTz, qTx2, qTy2, qTz2, H, ResT
+                    T,
+                    Tc,
+                    ΔT,
+                    Told,
+                    dT_dt,
+                    qTx,
+                    qTy,
+                    qTz,
+                    qTx2,
+                    qTy2,
+                    qTz2,
+                    H,
+                    shear_heating,
+                    ResT,
                 )
             end
         end

@@ -15,7 +15,7 @@ function solkz_solution(geometry)
     xv_y = [xc for xc in xci, _ in yvi] # for vy
     yv_y = [yc for _ in xci, yc in yvi] # for vy
 
-    # analytical solution 
+    # analytical solution
     ps = similar(xc) # @ centers
     vxs = similar(xv_x) # @ vertices
     vys = similar(xv_y) # @ vertices
@@ -46,7 +46,7 @@ function Li_error(geometry, stokes::StokesArrays; order=2)
 end
 
 function plot_solkz(geometry, ρ, stokes::StokesArrays; cmap=:vik)
-    f = Figure(; resolution=(3000, 1800), fontsize=28)
+    f = Figure(; size=(3000, 1800), fontsize=28)
 
     #Ddensity
     ax1 = Axis(f[1, 1]; aspect=1)
@@ -90,7 +90,7 @@ function plot_solKz_error(geometry, stokes::StokesArrays; cmap=:vik)
     solk = solkz_solution(geometry)
 
     # Plot
-    f = Figure(; resolution=(1200, 1000), fontsize=20)
+    f = Figure(; size=(1200, 1000), fontsize=20)
 
     # ROW 1: PRESSURE
     # Numerical pressure

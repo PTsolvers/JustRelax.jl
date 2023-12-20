@@ -1,4 +1,4 @@
-@parallel_indices (I...) function compute_shear_heating(
+@parallel_indices (I...) function compute_shear_heating!(
     shear_heating, τ::NTuple{N,T}, τ_old::NTuple{N,T}, ε::NTuple{N,T}, rheology, dt
 ) where {N,T}
     _Gdt = inv(fn_ratio(get_G, rheology) * dt)
@@ -8,7 +8,7 @@
     return nothing
 end
 
-@parallel_indices (I...) function compute_shear_heating(
+@parallel_indices (I...) function compute_shear_heating!(
     shear_heating,
     τ::NTuple{N,T},
     τ_old::NTuple{N,T},

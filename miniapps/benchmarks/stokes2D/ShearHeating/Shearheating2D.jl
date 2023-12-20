@@ -254,7 +254,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
           @views thermal.T[2:end-1, :] .= T_buffer
           temperature2center!(thermal)
 
-          @parallel (@idx ni) compute_shear_heating(
+          @parallel (@idx ni) compute_shear_heating!(
             thermal.shear_heating,
             @tensor_center(stokes.τ),
             @tensor_center(stokes.τ_o),

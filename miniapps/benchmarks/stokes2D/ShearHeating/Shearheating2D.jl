@@ -221,7 +221,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while it < 10
+    while it < 100
           # Update buoyancy and viscosity -
           args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
           @parallel (@idx ni) compute_viscosity!(
@@ -344,12 +344,12 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
               # Make Makie figure
               fig = Figure(size = (900, 900), title = "t = $t")
-              ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+              ax1 = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
               ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
               ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
               ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
               # Plot temperature
-              h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
+              h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:].-273.0) , colormap=:batlow)
               # Plot particles phase
               h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
               # Plot 2nd invariant of strain rate
@@ -385,3 +385,5 @@ igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
+
+main2D(igg; ar=ar, ny=ny, nx=nx, figdir=figdir, save_vtk=save_vtk)

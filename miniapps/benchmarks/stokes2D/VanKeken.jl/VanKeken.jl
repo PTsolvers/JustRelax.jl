@@ -7,16 +7,20 @@ backend = "CUDA_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
 # set_backend(backend) # run this on the REPL to switch backend
 
 # setup ParallelStencil.jl environment
-device = occursin("CUDA", JustPIC.backend) ? :gpu : :cpu
-model  = PS_Setup(device, Float64, 2)
-environment!(model)
+@static if occursin("CUDA", JustPIC.backend) 
+    model  = PS_Setup(:CUDA, Float64, 2)
+    environment!(model)
+else
+    model  = PS_Setup(:Threads, Float64, 2)
+    environment!(model)
+end
 
 # x-length of the domain
 const λ = 0.9142
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 
-@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
+@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
 @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
 @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
@@ -29,8 +33,8 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
 
     inject = @fill(false, nx, ny, eltype=Bool) # true if injection in given cell is required
     index  = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool) # array that says if there's a particle in a given memory location
-    
-    @parallel_indices (i, j) function fill_coords_index(px, py, index)    
+
+    @parallel_indices (i, j) function fill_coords_index(px, py, index)
         # lower-left corner of the cell
         x0, y0 = x[i], y[j]
         # fill index array
@@ -42,7 +46,7 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
         return nothing
     end
 
-    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)    
+    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)
 
     return Particles(
         (px, py), index, inject, nxcell, max_xcell, min_xcell, np, (nx, ny)
@@ -75,7 +79,7 @@ end
 # Initialize phases on the particles
 function init_phases!(phases, particles)
     ni = size(phases)
-    
+
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
         @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
             # quick escape
@@ -110,7 +114,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     di       = @. li / ni   # grid step in x- and -y
     origin   = 0.0, 0.0     # origin coordinates
     xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    dt       = Inf 
+    dt       = Inf
 
     # Physical properties using GeoParams ----------------
     rheology = (
@@ -142,7 +146,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     particle_args        = (pPhases, )
     init_phases!(pPhases, particles)
     phase_ratios         = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
+    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -154,19 +158,19 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     args                 = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
     @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
-    
+
     # Rheology
     η                    = @ones(ni...)
     η_vep                = similar(η) # effective visco-elasto-plastic viscosity
-    compute_viscosity!(
-        η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
+    @parallel (@idx ni) compute_viscosity!(
+        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
 
     # Boundary conditions
     flow_bcs             = FlowBoundaryConditions(; 
-        free_slip = (left = true, right=true, top=false, bot=false),
-        no_slip   = (left = false, right=false, top=true, bot=true),
-    )
+        free_slip = (left =  true, right =  true, top = false, bot = false),
+        no_slip   = (left = false, right = false, top =  true, bot =  true),
+    ) 
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -188,11 +192,11 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     while t < tmax
 
         # Update buoyancy
-        @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
         # ------------------------------
 
         # Stokes solver ----------------
-        to = solve!(
+        solve!(
             stokes,
             pt_stokes,
             di,
@@ -207,9 +211,8 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
             igg;
             iterMax          = 10e3,
             nout             = 50,
-            viscosity_cutoff = -Inf, Inf
+            viscosity_cutoff = (-Inf, Inf)
         )
-        @show to
         dt = compute_dt(stokes, di) / 10
         # ------------------------------
 
@@ -232,14 +235,14 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
         # inject && break
         inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)
+        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
 
         @show it += 1
         t        += dt
 
         # Plotting ---------------------
         if it == 1 || rem(it, 1000) == 0 || t >= tmax
-            fig = Figure(resolution = (1000, 1000), title = "t = $t")
+            fig = Figure(size = (1000, 1000), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = 1/λ, title = "t=$t")
             heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :oleron)
             save( joinpath(figdir, "$(it).png"), fig)
@@ -259,7 +262,7 @@ n      = 128 + 2
 nx     = n - 2
 ny     = n - 2
 igg  = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end

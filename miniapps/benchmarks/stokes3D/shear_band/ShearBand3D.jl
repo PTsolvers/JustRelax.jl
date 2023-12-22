@@ -14,13 +14,13 @@ solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 function init_phases!(phase_ratios, xci, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5, 0.5
-    
+
     @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
         x, y, z = xc[i], yc[j], zc[k]
         if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
             JustRelax.@cell phases[1, i, j, k] = 1.0
             JustRelax.@cell phases[2, i, j, k] = 0.0
-        
+
         else
             JustRelax.@cell phases[1, i, j, k] = 0.0
             JustRelax.@cell phases[2, i, j, k] = 1.0
@@ -42,7 +42,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     di          = @. li / ni      # grid step in x- and -y
     origin      = 0.0, 0.0, 0.0   # origin coordinates
     xci, xvi    = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    dt          = Inf 
+    dt          = Inf
 
     # Physical properties using GeoParams ----------------
     τ_y         = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
@@ -57,13 +57,13 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
     el_inc      = ConstantElasticity(; G=Gi, ν=0.5)
-    visc        = LinearViscous(; η=η0) 
+    visc        = LinearViscous(; η=η0)
     pl          = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
-        ϕ    = ϕ, 
+        ϕ    = ϕ,
         η_vp = η_reg,
         Ψ    = 0.0,
-    ) 
+    )
     rheology    = (
         # Low density phase
         SetMaterialParams(;
@@ -161,7 +161,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         println("it = $it; t = $t \n")
 
         data_v = (;)
-        data_c = (; 
+        data_c = (;
             τII = Array(stokes.τ.II),
             εII = Array(stokes.ε.II),
             logεII = Array(log10.(stokes.ε.II)),
@@ -170,13 +170,13 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         save_vtk(
             joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
             xvi,
-            xci, 
-            data_v, 
+            xci,
+            data_v,
             data_c
         )
 
         # visualisation
-        fig     = Figure(resolution = (1600, 1600), title = "t = $t")
+        fig     = Figure(size = (1600, 1600), title = "t = $t")
         ax1     = Axis3(fig[1,1], aspect =  (1, 1, 1), title = "τII")
         ax2     = Axis3(fig[2,1], aspect =  (1, 1, 1), title = "η_vep")
         ax3     = Axis3(fig[1,2], aspect =  (1, 1, 1), title = "log10(εxy)")
@@ -184,8 +184,8 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         volume!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
         volume!(ax2, xci..., Array(η_vep) , colormap=:batlow)
         volume!(ax3, xci..., Array(log10.(stokes.ε.xy)) , colormap=:batlow)
-        lines!(ax4, ttot, τII, color = :black) 
-        lines!(ax4, ttot, sol, color = :red) 
+        lines!(ax4, ttot, τII, color = :black)
+        lines!(ax4, ttot, sol, color = :red)
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         for ax in (ax1, ax2, ax3)
@@ -194,7 +194,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             zlims!(ax, (0, 1))
         end
         save(joinpath(figdir, "$(it).png"), fig)
-    
+
     end
 
     df = DataFrame(

@@ -136,6 +136,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionPT.jl"))
         export heatdiffusion_PT!
 
+        include(joinpath(@__DIR__, "thermal_diffusion/Shearheating.jl"))
+        export compute_shear_heating!
+
         include(joinpath(@__DIR__, "Interpolations.jl"))
         export vertex2center!, center2vertex!, temperature2center!
 

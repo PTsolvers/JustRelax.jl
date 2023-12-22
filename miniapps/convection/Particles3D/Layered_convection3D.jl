@@ -16,7 +16,7 @@ using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 include("Layered_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
+@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
 @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
 @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
@@ -26,8 +26,8 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, z, dx, dy
     np         = max_xcell * ncells
     px, py, pz = ntuple(_ -> @fill(NaN, ni..., celldims=(max_xcell,)) , Val(3))
     inject     = @fill(false, ni..., eltype=Bool)
-    index      = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool) 
-    
+    index      = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool)
+
     @parallel_indices (i, j, k) function fill_coords_index(px, py, pz, index)
         @inline r()= rand(0.05:1e-5:0.95)
         I          = i, j, k
@@ -43,7 +43,7 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, z, dx, dy
         return nothing
     end
 
-    @parallel (@idx ni) fill_coords_index(px, py, pz, index)    
+    @parallel (@idx ni) fill_coords_index(px, py, pz, index)
 
     return Particles(
         (px, py, pz), index, inject, nxcell, max_xcell, min_xcell, np, ni
@@ -85,19 +85,19 @@ end
         dTdZ    = (923-273)/35e3
         offset  = 273e0
         T[I...] = (depth) * dTdZ + offset
-    
+
     elseif 110e3 > (depth) ≥ 35e3
         dTdZ    = (1492-923)/75e3
         offset  = 923
         T[I...] = (depth - 35e3) * dTdZ + offset
 
-    elseif (depth) ≥ 110e3 
+    elseif (depth) ≥ 110e3
         dTdZ    = (1837 - 1492)/590e3
         offset  = 1492e0
         T[I...] = (depth - 110e3) * dTdZ + offset
 
     end
-    
+
     return nothing
 end
 
@@ -129,9 +129,9 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     di            = @. li / ni           # grid steps
     origin        = 0.0, 0.0, -lz        # origin coordinates (15km of sticky air layer)
     xci, xvi      = lazy_grid(
-        di, 
-        li, 
-        ni; 
+        di,
+        li,
+        ni;
         origin = origin
     ) # nodes at the center and vertices of the cells
     # ----------------------------------------------------
@@ -141,7 +141,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     κ            = (10 / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^3 / κ / 3.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
-    
+
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 20, 1
     particles                    = init_particles_cellarrays(
@@ -153,7 +153,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     pT, pPhases                 = init_particle_fields_cellarrays(particles, Val(2))
     particle_args               = (pT, pPhases)
 
-    # Elliptical temperature anomaly 
+    # Elliptical temperature anomaly
     xc_anomaly       = lx/2   # origin of thermal anomaly
     yc_anomaly       = ly/2   # origin of thermal anomaly
     zc_anomaly       = -610e3 # origin of thermal anomaly
@@ -171,18 +171,18 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
 
     # TEMPERATURE PROFILE --------------------------------
     thermal          = ThermalArrays(ni)
-    thermal_bc       = TemperatureBoundaryConditions(; 
-        no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true), 
+    thermal_bc       = TemperatureBoundaryConditions(;
+        no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
         periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
     # initialize thermal profile - Half space cooling
     @parallel init_T!(thermal.T, xvi[3])
     thermal_bcs!(thermal.T, thermal_bc)
-   
+
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, xvi)
     @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
-   
+
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(3))
     for _ in 1:1
@@ -203,7 +203,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     )
 
     # Boundary conditions
-    flow_bcs         = FlowBoundaryConditions(; 
+    flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left = true , right = true , top = true , bot = true , front = true , back = true ),
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
         periodicity  = (left = false, right = false, top = false, bot = false, front = false, back = false),
@@ -222,7 +222,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     fig = let
         Zv  = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
         Z   = [z for x in xci[1], y in xci[2], z in xci[3]][:]
-        fig = Figure(resolution = (1200, 900))
+        fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         lines!(ax1, Array(thermal.T[:]), Zv./1e3)
@@ -237,7 +237,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     grid2particle!(pT, xvi, thermal.T, particles.coords)
 
     local Vx_v, Vy_v, Vz_v
-    if do_vtk 
+    if do_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
         Vz_v = @zeros(ni.+1...)
@@ -251,7 +251,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
         )
         @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
- 
+
         # Stokes solver ----------------
         solve!(
             stokes,
@@ -299,7 +299,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, grid_vz, dt, 2 / 3)
         # advect particles in memory
-        shuffle_particles!(particles, xvi, particle_args)        
+        shuffle_particles!(particles, xvi, particle_args)
         # interpolate fields from grid vertices to particles
         grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles.coords)
         # check if we need to inject particles
@@ -307,7 +307,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
-        
+
         @show it += 1
         t        += dt
 
@@ -315,16 +315,16 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         if it == 1 || rem(it, 1) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
-            if do_vtk 
+            if do_vtk
                 JustRelax.velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-                data_v = (; 
+                data_v = (;
                     T   = Array(thermal.T),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
                     Vx  = Array(Vx_v),
                     Vy  = Array(Vy_v),
                 )
-                data_c = (; 
+                data_c = (;
                     Tc  = Array(thermal.Tc),
                     P   = Array(stokes.P),
                     τxx = Array(stokes.τ.xx),
@@ -336,15 +336,15 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
-                    xci, 
-                    data_v, 
+                    xci,
+                    data_v,
                     data_c
                 )
             end
 
             xz_slice = ny >>> 1
             # Make Makie figure
-            fig = Figure(resolution = (1400, 1800), title = "t = $t")
+            fig = Figure(size = (1400, 1800), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
             ax2 = Axis(fig[2,1], aspect = ar, title = "τII [MPa]")
             ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
@@ -352,9 +352,9 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             # Plot temperature
             h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[:, xz_slice, :]) , colormap=:batlow)
             # Plot particles phase
-            h2  = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II[:, xz_slice, :]./1e6) , colormap=:batlow) 
+            h2  = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II[:, xz_slice, :]./1e6) , colormap=:batlow)
             # Plot 2nd invariant of strain rate
-            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II[:, xz_slice, :])) , colormap=:batlow) 
+            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II[:, xz_slice, :])) , colormap=:batlow)
             # Plot effective viscosity
             h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep[:, xz_slice, :])) , colormap=:batlow)
             hideydecorations!(ax3)

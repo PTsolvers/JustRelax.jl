@@ -48,7 +48,7 @@ end
     time    = 100e6 * yr
     Ths     = Tmin + (Tm -Tmin) * erf((zᵢ)*0.5/(κ*time)^0.5)
     T[i, j] = min(Tᵢ, Ths)
-    return 
+    return
 end
 
 function circular_perturbation!(T, δT, xc, yc, r, xvi)
@@ -72,7 +72,7 @@ function random_perturbation!(T, δT, xbox, ybox, xvi)
         end
         return nothing
     end
-    
+
     @parallel (@idx size(T)) _random_perturbation!(T, δT, xbox, ybox, xvi...)
 end
 
@@ -80,7 +80,7 @@ end
 # BEGIN MAIN SCRIPT
 # --------------------------------------------------------------------------------
 function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
-    
+
     # Physical domain ------------------------------------
     ly       = 2890e3
     lx       = ly * ar
@@ -132,11 +132,11 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     κ            = (rheology.Conductivity[1].k / (rheology.HeatCapacity[1].cp * rheology.Density[1].ρ0)).val
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
-    
+
     # TEMPERATURE PROFILE --------------------------------
     thermal    = ThermalArrays(ni)
-    thermal_bc = TemperatureBoundaryConditions(; 
-        no_flux     = (left = true, right = true, top = false, bot = false), 
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux     = (left = true, right = true, top = false, bot = false),
         periodicity = (left = false, right = false, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
@@ -146,7 +146,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     Tmin, Tmax  = 300.0, 3.5e3
     @parallel init_T!(thermal.T, xvi[2], κ, Tm, Tp, Tmin, Tmax)
     thermal_bcs!(thermal.T, thermal_bc)
-    # Temperature anomaly 
+    # Temperature anomaly
     if thermal_perturbation == :random
         δT          = 5.0               # thermal perturbation (in %)
         random_perturbation!(thermal.T, δT, (lx*1/8, lx*7/8), (-2000e3, -2600e3), xvi)
@@ -179,7 +179,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     args     = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
     η_cutoff = 1e18, 1e23
     @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, @strain(stokes)..., args, rheology, η_cutoff 
+        η, 1.0, @strain(stokes)..., args, rheology, η_cutoff
     )
     η_vep           = deepcopy(η)
 
@@ -189,7 +189,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     )
 
     # Boundary conditions
-    flow_bcs = FlowBoundaryConditions(; 
+    flow_bcs = FlowBoundaryConditions(;
         free_slip   = (left = true, right=true, top=true, bot=true),
         periodicity = (left = false, right = false, top = false, bot = false),
     )
@@ -204,7 +204,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     fig0 = let
         Yv = [y for x in xvi[1], y in xvi[2]][:]
         Y =  [y for x in xci[1], y in xci[2]][:]
-        fig = Figure(resolution = (1200, 900))
+        fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         lines!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
@@ -217,7 +217,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     end
 
     # WENO arrays
-    T_WENO  = @zeros(ni.+1) 
+    T_WENO  = @zeros(ni.+1)
     Vx_v    = @zeros(ni.+1...)
     Vy_v    = @zeros(ni.+1...)
 
@@ -282,14 +282,14 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
 
         # Plotting ---------------------
         if it == 1 || rem(it, 10) == 0
-            fig = Figure(resolution = (1000, 1000), title = "t = $t")
+            fig = Figure(size = (1000, 1000), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
             ax3 = Axis(fig[3,1], aspect = ar, title = "τII [MPa]")
             ax4 = Axis(fig[4,1], aspect = ar, title = "log10(η)")
             h1 = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T) , colormap=:batlow)
             h2 = heatmap!(ax2, xci[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
-            h3 = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II.*1e-6) , colormap=:batlow) 
+            h3 = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II.*1e-6) , colormap=:batlow)
             h4 = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)

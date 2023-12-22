@@ -42,11 +42,14 @@ environment!(model)
         periodicity=(left=false, right=false, top=false, bot=false),
     )
     flow_bcs!(bcs, Vx, Vy)
-    @test @views Vx[1, :] == Vx[end, :] == Vy[:, 1] == Vy[:, end]
-    @test @views Vx[:, 2] ≈ Vx[:, 3] / 3
-    @test @views Vx[:, end-1] ≈ Vx[:, end - 2] / 3
-    @test @views Vy[2, :] ≈ Vy[3, :] / 3
-    @test @views Vy[end-1, :] ≈ Vy[end - 2, :] / 3
+    @test sum(!iszero(Vx[1  , i]) for i in axes(Vx,2)) == 0
+    @test sum(!iszero(Vx[end, i]) for i in axes(Vx,2)) == 0
+    @test sum(!iszero(Vy[i,   1]) for i in axes(Vy,1)) == 0
+    @test sum(!iszero(Vy[i,   1]) for i in axes(Vy,1)) == 0
+    @test @views Vy[1, :]   == -Vy[2, :]
+    @test @views Vy[end, :] == -Vy[end - 1, :]
+    @test @views Vx[:, 1]   == -Vx[:, 2]
+    @test @views Vx[:, end] == -Vx[:, end - 1]
 
     # test with StokesArrays
     # periodicity

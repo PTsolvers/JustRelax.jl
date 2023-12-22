@@ -49,12 +49,12 @@ function solvi_solution(geometry, η0, ηi, εbg, rc)
     xv_y = [xc for xc in xci, _ in yvi] .- (xci[end] - xci[1]) / 2 # for vy
     yv_y = [yc for _ in xci, yc in yvi] .- (yvi[end] - yvi[1]) / 2 # for vy
 
-    # pressure analytical solution 
+    # pressure analytical solution
     ps, = _solvi_solution(xc, yc; ηm=η0, ηc=ηi, ε=εbg, rc=rc)
-    # x-velocity analytical solution 
+    # x-velocity analytical solution
     _, va = _solvi_solution(xv_x, yv_x; ηm=η0, ηc=ηi, ε=εbg, rc=rc)
     vxs = real.(va)
-    # y-velocity analytical solution 
+    # y-velocity analytical solution
     _, va = _solvi_solution(xv_y, yv_y; ηm=η0, ηc=ηi, ε=εbg, rc=rc)
     vys = imag.(va)
 
@@ -86,7 +86,7 @@ function plot_solVi_error(geometry, stokes::StokesArrays, Δη, εbg, rc)
     θ = LinRange(0, 2π, 100)
     ix, iy = @.(rc * cos(θ) + cx), @.(rc * sin(θ) + cy)
 
-    f = Figure(; resolution=(1200, 1200), fontsize=20)
+    f = Figure(; size=(1200, 1200), fontsize=20)
 
     # Pressure plots
     ax1 = Axis(f[1, 1]; title="P numeric", aspect=1)

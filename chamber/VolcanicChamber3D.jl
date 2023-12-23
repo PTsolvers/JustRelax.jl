@@ -2,11 +2,11 @@ using JustRelax, JustRelax.DataIO, JustPIC
 import JustRelax.@cell
 
 ## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
-# set_backend("Threads_Float64_2D")
-# set_backend("CUDA_Float64_2D")
+# set_backend("Threads_Float64_3D")
+# set_backend("CUDA_Float64_3D")
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:CUDA, Float64, 3) # or (:Threads, Float64, 3) or (:AMDGPU, Float64, 3)
+model = PS_Setup(:Threads, Float64, 3) # or (:Threads, Float64, 3) or (:AMDGPU, Float64, 3)
 environment!(model)
 
 # Load script dependencies
@@ -107,6 +107,10 @@ function Chamber3D(igg, nx, ny, nz; figdir="figs3D", do_vtk =false)
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
         periodicity  = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
+
+    εbg = 1e-15 # background strain rate
+    stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)] .= PTArray([εbg * (x - lx) for x in xvi[1], y in xci[2], z in xci[3]])
+    stokes.V.Vz[2:(end - 1), 2:(end - 1), :] .= PTArray([εbg * abs(z) for x in xci[1], y in xci[2], z in xvi[3]])
 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -280,7 +284,7 @@ end
 
 do_vtk   = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 64
+n        = 32
 nx       = n
 ny       = n
 nz       = n
@@ -292,43 +296,4 @@ end
 
 # # (Path)/folder where output data and figures are stored
 figdir   = "Chamber3D_$n"
-Chamber3D(igg, nx, ny, nz; figdir = figdir, do_vtk = do_vtk);
-
-# # Make particles plottable
-# ppx, ppy, ppz = particles.coords;
-# pxv      = Array(ppx.data[:]./1e3);
-# pyv      = Array(ppy.data[:]./1e3);
-# pzv      = Array(ppz.data[:]./1e3);
-# clr      = Array(pPhases.data[:]);
-# clrT     = Array(pT.data[:]);
-# idxv     = Array(particles.index.data[:]);
-
-# xz_slice = ny >>> 1
-
-# X   = [x for x in xvi[1], z in xvi[3]][:]
-# Z   = [z for x in xvi[1], z in xvi[3]][:]
-# Tv  = Array(thermal.T[:, xz_slice, :])[:]
-# Tv[Tv .< 900] .= NaN
-# # heatmap(xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, xz_slice, :]))
-
-# scatter(pxv[idxv], pzv[idxv], color=clr[idxv])
-# scatter!(X.*1e-3, Z.*1e-3, color=Tv, marker =:diamond)
-
-
-# scatter!(Array(thermal.T[:]), Zv./1e3)
-
-#  # Plot initial T and η profiles
-#  fig = let
-#     Zv  = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-#     Z   = [z for x in xci[1], y in xci[2], z in xci[3]][:]
-#     fig = Figure(resolution = (1200, 900))
-#     ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-#     ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-#     scatter!(ax1, Array(thermal.T[:]), Zv./1e3)
-#     scatter!(ax2, Array(log10.(η[:])), Z./1e3)
-#     ylims!(ax1, minimum(xvi[3])./1e3, 0)
-#     ylims!(ax2, minimum(xvi[3])./1e3, 0)
-#     hideydecorations!(ax2)
-#     save(joinpath(figdir, "initial_profile.png"), fig)
-#     fig
-# end
+# Chamber3D(igg, nx, ny, nz; figdir = figdir, do_vtk = do_vtk);

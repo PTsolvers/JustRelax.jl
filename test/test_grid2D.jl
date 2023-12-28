@@ -23,7 +23,7 @@ environment!(model)
     grid   = Geometry(ni, li; origin = origin) 
 
     @test grid.origin == origin
-    for i in 1:3
+    for i in 1:2
         # test grid at the vertices
         @test grid.xvi[i][1] == origin[i]
         # test grid at the cell centers

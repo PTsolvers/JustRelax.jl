@@ -33,7 +33,7 @@ function _x_g(idx::Integer, dxi::GGNumber, nxi::GGNumber)
         end # It must not be (nx_g()-1)*dx as the distance between the local problems (1*dx) must also be taken into account!
         if (xi < 0)
             xi = xi + @nx_g() * dxi
-        end 
+        end
     end
     return xi
 end

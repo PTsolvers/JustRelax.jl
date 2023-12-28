@@ -97,13 +97,14 @@ end
 function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
     
     # Physical domain ------------------------------------
-    ly       = 500e3
-    lx       = ly * ar
-    origin   = 0.0, -ly                         # origin coordinates
-    ni       = nx, ny                           # number of cells
-    li       = lx, ly                           # domain length in x- and y-
-    di       = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    ly           = 500e3
+    lx           = ly * ar
+    origin       = 0.0, -ly                         # origin coordinates
+    ni           = nx, ny                           # number of cells
+    li           = lx, ly                           # domain length in x- and y-
+    di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = origin) 
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------

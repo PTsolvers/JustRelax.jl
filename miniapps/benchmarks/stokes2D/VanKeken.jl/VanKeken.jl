@@ -107,14 +107,15 @@ end
 function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
 
     # Physical domain ------------------------------------
-    ly       = 1            # domain length in y
-    lx       = ly           # domain length in x
-    ni       = nx, ny       # number of cells
-    li       = lx, ly       # domain length in x- and y-
-    di       = @. li / ni   # grid step in x- and -y
-    origin   = 0.0, 0.0     # origin coordinates
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    dt       = Inf
+    ly           = 1            # domain length in y
+    lx           = ly           # domain length in x
+    ni           = nx, ny       # number of cells
+    li           = lx, ly       # domain length in x- and y-
+    di           = @. li / ni   # grid step in x- and -y
+    origin       = 0.0, 0.0     # origin coordinates
+    grid         = Geometry(ni, li; origin = origin) 
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    dt           = Inf
 
     # Physical properties using GeoParams ----------------
     rheology = (

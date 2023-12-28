@@ -29,13 +29,14 @@ function elastic_buildup(;
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni        = nx, ny # number of nodes in x- and y-
-    li        = lx, ly  # domain length in x- and y-
-    di        = @. li / ni # grid step in x- and -y
-    igg       = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) # init MPI
-    origin    = 0.0, 0.0
-    xci, xvi  = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-
+    ni           = nx, ny # number of nodes in x- and y-
+    li           = lx, ly  # domain length in x- and y-
+    di           = @. li / ni # grid step in x- and -y
+    igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) # init MPI
+    origin       = 0.0, 0.0
+    grid         = Geometry(ni, li; origin = origin) 
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+ 
     ## (Physical) Time domain and discretization
     yr        = 365.25 * 3600 * 24
     kyr       = 1e3 * yr

@@ -85,13 +85,14 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     igg = IGG(init_global_grid(nx, ny, 0; init_MPI = JustRelax.MPI.Initialized() ? false : true)...)
 
     # Physical domain ------------------------------------
-    ly       = 2890e3
-    lx       = ly * ar
-    origin   = 0.0, -ly                         # origin coordinates
-    ni       = nx, ny                           # number of cells
-    li       = lx, ly                           # domain length in x- and y-
-    di       = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    ly           = 2890e3
+    lx           = ly * ar
+    origin       = 0.0, -ly                         # origin coordinates
+    ni           = nx, ny                           # number of cells
+    li           = lx, ly                           # domain length in x- and y-
+    di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = origin) 
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # create rheology struct

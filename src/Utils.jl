@@ -424,7 +424,17 @@ end
 @inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v
 
-# Delta function
+"""
+    allzero(x::Vararg{T,N}) where {T,N}
+
+Check if all elements in `x` are zero.
+
+# Arguments
+- `x::Vararg{T,N}`: The input array.
+
+# Returns
+- `Bool`: `true` if all elements in `x` are zero, `false` otherwise.
+"""
 @inline allzero(x::Vararg{T,N}) where {T,N} = all(x -> x == 0, x)
 
 """
@@ -444,6 +454,15 @@ Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping par
 
 # Others
 
+"""
+    assign!(B::AbstractArray{T,N}, A::AbstractArray{T,N}) where {T,N}
+
+Assigns the values of array `A` to array `B` in parallel.
+
+# Arguments
+- `B::AbstractArray{T,N}`: The destination array.
+- `A::AbstractArray{T,N}`: The source array.
+"""
 @parallel function assign!(B::AbstractArray{T,N}, A::AbstractArray{T,N}) where {T,N}
     @all(B) = @all(A)
     return nothing

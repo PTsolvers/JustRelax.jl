@@ -59,40 +59,41 @@ function solVi3D(;
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni = nx, ny, nz # number of nodes in x- and y-
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
-    li = (lx, ly, lz)  # domain length in x- and y-
-    origin = zero(nx), zero(ny), zero(nz)
-    di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    ni           = nx, ny, nz # number of nodes in x- and y-
+    igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    li           = (lx, ly, lz)  # domain length in x- and y-
+    origin       = zero(nx), zero(ny), zero(nz)
+    di           = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = origin) 
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time
-    Δt = 1   # physical time step
+    Δt   = 1 # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √3)
 
     ## Setup-specific parameters and fields
-    ξ = 1.0 # Maxwell relaxation time
+    ξ  = 1.0 # Maxwell relaxation time
     η0 = 1.0 # matrix viscosity
     ηi = Δη # inclusion viscosity
-    G = 1.0 # elastic shear modulus
+    G  = 1.0 # elastic shear modulus
     # dt = η0 / (G * ξ)
     dt = Inf
-    η = viscosity(ni, di, li, rc, η0, ηi)
+    η  = viscosity(ni, di, li, rc, η0, ηi)
     Gc = @fill(G, ni...)
     Kb = @fill(Inf, ni...)
 
     ## Boundary conditions
     pureshear_bc!(stokes, di, li, εbg)
     flow_bcs = FlowBoundaryConditions(;
-        free_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
-        no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
-        periodicity=(
+        free_slip   = (left=false, right=false, top=false, bot=false, back=false, front=false),
+        no_slip     = (left=false, right=false, top=false, bot=false, back=false, front=false),
+        periodicity = (
             left=false, right=false, top=false, bot=false, back=false, front=false
         ),
     )

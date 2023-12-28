@@ -43,11 +43,13 @@ function diffusion_3D(;
     dt       = 50 * kyr # physical time step
 
     # Physical domain
-    ni       = (nx, ny, nz)
-    li       = (lx, ly, lz)  # domain length in x- and y-
-    di       = @. li / ni # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=(0, 0, -lz)) # nodes at the center and vertices of the cells
-    igg      = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    ni           = (nx, ny, nz)
+    li           = (lx, ly, lz)  # domain length in x- and y-
+    di           = @. li / ni # grid step in x- and -y
+    origin       = 0, 0, -lz # nodes at the center and vertices of the cells
+    igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    grid         = Geometry(ni, li; origin = origin) 
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Define the thermal parameters with GeoParams
     rheology = SetMaterialParams(;

@@ -128,12 +128,8 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     li            = lx, ly, lz           # domain length
     di            = @. li / ni           # grid steps
     origin        = 0.0, 0.0, -lz        # origin coordinates (15km of sticky air layer)
-    xci, xvi      = lazy_grid(
-        di,
-        li,
-        ni;
-        origin = origin
-    ) # nodes at the center and vertices of the cells
+    grid         = Geometry(ni, li; origin = origin) 
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------

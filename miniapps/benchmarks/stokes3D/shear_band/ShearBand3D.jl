@@ -36,13 +36,13 @@ end
 function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
     # Physical domain ------------------------------------
-    lx =ly = lz = 1e0             # domain length in y
-    ni          = nx, ny, nz      # number of cells
-    li          = lx, ly, lz      # domain length in x- and y-
-    di          = @. li / ni      # grid step in x- and -y
-    origin      = 0.0, 0.0, 0.0   # origin coordinates
-    xci, xvi    = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    dt          = Inf
+    lx =ly = lz  = 1e0             # domain length in y
+    ni           = nx, ny, nz      # number of cells
+    li           = lx, ly, lz      # domain length in x- and y-
+    di           = @. li / ni      # grid step in x- and -y
+    origin       = 0.0, 0.0, 0.0   # origin coordinates
+    grid         = Geometry(ni, li; origin = origin) 
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells    dt          = Inf
 
     # Physical properties using GeoParams ----------------
     τ_y         = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)

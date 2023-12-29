@@ -3,7 +3,7 @@ using JustRelax, GeoParams
 using GLMakie
 
 # setup ParallelStencil.jl environment
-dimension = 3 # 2 | 3 
+dimension = 2 # 2 | 3
 device = :cpu # :cpu | :gpu
 precision = Float64
 model = PS_Setup(device, precision, dimension)
@@ -33,12 +33,12 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 end
 
 function diffusion_2D(; 
-    nx  = 32, 
-    ny  = 32, 
+    nx  = 32,
+    ny  = 32,
     lx  = 100e3,
-    ly  = 100e3, 
-    ρ0  = 3.3e3, 
-    Cp0 = 1.2e3, 
+    ly  = 100e3,
+    ρ0  = 3.3e3,
+    Cp0 = 1.2e3,
     K0  = 3.0
 )
     kyr      = 1e3 * 3600 * 24 * 365.25
@@ -89,6 +89,40 @@ function diffusion_2D(;
     center_perturbation = lx/2, -ly/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
 
+    # # Plot initial T and η profiles
+    # let
+    #     Yv  = [y for x in xvi[1], y in xvi[2]][:]
+    #     fig = Figure(size = (1200, 900))
+    #     ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
+    #     scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
+    #     ylims!(ax1, minimum(xvi[2])./1e3, 0)
+    #     rank = igg.me
+    #     # println("rank $rank => $(extrema(xvi[2])./1e3)")
+    #     save("initial_profile_rank_$(rank).png", fig)
+    #     fig
+    # end
+
+    # Time loop
+    t  = 0.0
+    it = 0
+    # nt = Int(ceil(ttot / dt))
+    while it < 10
+        heatdiffusion_PT!(
+            thermal,
+            pt_thermal,
+            thermal_bc,
+            rheology,
+            args,
+            dt,
+            di;
+            igg=igg,
+            b_width=(4, 4, 1),
+        )
+
+        t  += dt
+        it += 1
+    end
+
     # Plot initial T and η profiles
     let
         Yv  = [y for x in xvi[1], y in xvi[2]][:]
@@ -102,27 +136,8 @@ function diffusion_2D(;
         fig
     end
 
-    # Time loop
-    t  = 0.0
-    it = 0
-    nt = Int(ceil(ttot / dt))
-    while it < nt
-        heatdiffusion_PT!(
-            thermal,
-            pt_thermal,
-            thermal_bc,
-            rheology,
-            args,
-            dt,
-            di,
-        )
-
-        t  += dt
-        it += 1
-    end
-
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), thermal
+    # return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), thermal
 end
 
-n = 12
+n   = 32
 diffusion_2D(; nx=n, ny=n)

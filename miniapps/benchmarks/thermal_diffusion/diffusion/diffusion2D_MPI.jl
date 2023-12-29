@@ -89,39 +89,11 @@ function diffusion_2D(;
     center_perturbation = lx/2, -ly/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
 
-    # # Plot initial T and η profiles
-    # let
-    #     Yv  = [y for x in xvi[1], y in xvi[2]][:]
-    #     fig = Figure(size = (1200, 900))
-    #     ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-    #     scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-    #     ylims!(ax1, minimum(xvi[2])./1e3, 0)
-    #     rank = igg.me
-    #     # println("rank $rank => $(extrema(xvi[2])./1e3)")
-    #     save("initial_profile_rank_$(rank).png", fig)
-    #     fig
-    # end
-
-    # Time loop
-    t  = 0.0
-    it = 0
-    # nt = Int(ceil(ttot / dt))
-    while it < 10
-        heatdiffusion_PT!(
-            thermal,
-            pt_thermal,
-            thermal_bc,
-            rheology,
-            args,
-            dt,
-            di;
-            igg=igg,
-            b_width=(4, 4, 1),
-        )
-
-        t  += dt
-        it += 1
-    end
+    # global array
+    nx_v = ((nx + 2) - 2) * igg.dims[1]
+    ny_v = ((ny + 1) - 2) * igg.dims[2]
+    T_v  = zeros(nx_v, ny_v)
+    T_nohalo = zeros((nx + 2)-2, (ny + 1)-2)
 
     # Plot initial T and η profiles
     let
@@ -136,7 +108,36 @@ function diffusion_2D(;
         fig
     end
 
-    # return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), thermal
+    # Time loop
+    t  = 0.0
+    it = 0
+    while it < 10
+        heatdiffusion_PT!(
+            thermal,
+            pt_thermal,
+            thermal_bc,
+            rheology,
+            args,
+            dt,
+            di;
+            igg=igg,
+            b_width=(4, 4, 1),
+        )
+
+        @views T_nohalo .= Array(thermal.T[2:end-2, 2:end-1]) # Copy data to CPU removing the halo
+        gather!(T_nohalo, T_v)   
+        
+        if igg.me == 0
+            fig, = heatmap(T_v)
+            save("temperature_it_($it).png", fig)
+            println("\n SAVED TEMPERATURE \n")
+        end
+
+        t  += dt
+        it += 1
+    end
+
+    return nothing
 end
 
 n   = 32

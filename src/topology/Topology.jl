@@ -34,8 +34,11 @@ struct Geometry{nDim,T}
     function Geometry(
         ni::NTuple{nDim,Integer}, li::NTuple{nDim,T}; origin=ntuple(_ -> 0.0, Val(nDim))
     ) where {nDim,T}
+        f_g = (nx_g, ny_g, nz_g)
+        ni_g = ntuple(i -> f_g[i](), Val(nDim))
         Li = Float64.(li)
-        di = Li ./ ni
+        di = Li ./ ni_g
+
         xci, xvi = lazy_grid(di, ni; origin=origin)
         grid_v = velocity_grids(xci, xvi, di)
         return new{nDim,T}(ni, Li, origin, max(Li...), di, xci, xvi, grid_v)
@@ -49,6 +52,7 @@ function lazy_grid(di::NTuple{N,T1}, ni; origin=ntuple(_ -> zero(T1), Val(N))) w
     xci = ntuple(Val(N)) do i
         Base.@_inline_meta
         rank_origin = f_g[i](1, di[i], ni[i])
+
         local_origin = rank_origin + origin[i]
         rank_end = f_g[i](ni[i], di[i], ni[i])
         local_end = rank_end + origin[i]
@@ -58,9 +62,11 @@ function lazy_grid(di::NTuple{N,T1}, ni; origin=ntuple(_ -> zero(T1), Val(N))) w
 
     # nodes at the vertices of the grid cells
     xvi = ntuple(Val(N)) do i
+        # println("potato")
         Base.@_inline_meta
         rank_origin = f_g[i](1, di[i], ni[i])
         local_origin = rank_origin + origin[i]
+
         rank_end = f_g[i](ni[i] + 1, di[i], ni[i])
         local_end = rank_end + origin[i]
 

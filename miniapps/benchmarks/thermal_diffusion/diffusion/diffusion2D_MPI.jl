@@ -1,10 +1,11 @@
 # using CairoMakie
 using JustRelax, GeoParams
 using GLMakie
+using CUDA
 
 # setup ParallelStencil.jl environment
 dimension = 2 # 2 | 3
-device = :cpu # :cpu | :gpu
+device = :CUDA # :cpu | :CUDA | :AMDGPU
 precision = Float64
 model = PS_Setup(device, precision, dimension)
 environment!(model)
@@ -20,19 +21,19 @@ environment!(model)
     return nothing
 end
 
-function elliptical_perturbation!(T, δT, xc, yc, r, xvi)                                                               
-                                                                                                                           
-    @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)                                
-        @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2                                                          
-            T[i, j]  += δT                                                                                            
-        end                                                                                                            
-        return nothing                                                                                                 
-    end                                                                                                                
-                                                                                                                       
-    @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)                                                      
+function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
+
+    @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
+        @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
+            T[i, j]  += δT
+        end
+        return nothing
+    end
+
+    @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
-function diffusion_2D(; 
+function diffusion_2D(;
     nx  = 32,
     ny  = 32,
     lx  = 100e3,
@@ -53,9 +54,9 @@ function diffusion_2D(;
     origin       = 0.0, -ly
     igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=true)...) #init MPI
     di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    
+
     # Define the thermal parameters with GeoParams
     rheology = SetMaterialParams(;
         Phase        = 1,
@@ -77,8 +78,8 @@ function diffusion_2D(;
     ρCp        = @. Cp * ρ
 
     pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li)
-    thermal_bc = TemperatureBoundaryConditions(; 
-        no_flux = (left = true, right = true, top = false, bot = false), 
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = false, bot = false),
     )
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2], ly)
     # update_halo!(thermal.T)
@@ -125,8 +126,8 @@ function diffusion_2D(;
         )
 
         @views T_nohalo .= Array(thermal.T[2:end-2, 2:end-1]) # Copy data to CPU removing the halo
-        gather!(T_nohalo, T_v)   
-        
+        gather!(T_nohalo, T_v)
+
         if igg.me == 0
             fig, = heatmap(T_v)
             save("temperature_it_($it).png", fig)

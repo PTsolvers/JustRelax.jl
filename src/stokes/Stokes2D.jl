@@ -73,7 +73,7 @@ function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C
     return nothing
 end
 
-## 2D VISCO-ELASTIC STOKES SOLVER 
+## 2D VISCO-ELASTIC STOKES SOLVER
 
 # viscous solver
 function JustRelax.solve!(
@@ -140,9 +140,10 @@ function JustRelax.solve!(
                     _dx,
                     _dy,
                 )
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end
-            flow_bcs!(stokes, flow_bcs)
+            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -263,10 +264,12 @@ function JustRelax.solve!(
                     ητ,
                     _di...,
                 )
+                # free slip boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # free slip boundary conditions
-            flow_bcs!(stokes, flow_bcs)
+            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -402,10 +405,12 @@ function JustRelax.solve!(
                     ητ,
                     _di...,
                 )
+                # apply boundary conditions boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # apply boundary conditions boundary conditions
-            flow_bcs!(stokes, flow_bcs)
+            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -450,7 +455,7 @@ function JustRelax.solve!(
     )
 end
 
-## With phase ratios 
+## With phase ratios
 
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
@@ -574,10 +579,12 @@ function JustRelax.solve!(
                 @parallel compute_V!(
                     @velocity(stokes)..., θ, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
                 )
+                # apply boundary conditions boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # apply boundary conditions boundary conditions
-            flow_bcs!(stokes, flow_bcs)
+            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -721,10 +728,12 @@ function JustRelax.solve!(
                     ητ,
                     _di...,
                 )
+                # apply boundary conditions boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # apply boundary conditions boundary conditions
-            flow_bcs!(stokes, flow_bcs)
+            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1

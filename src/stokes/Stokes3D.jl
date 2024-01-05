@@ -41,7 +41,7 @@ function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,3}) where {A,B,C
     @parallel update_τ_o!(@tensor(stokes.τ_o)..., @stress(stokes)...)
 end
 
-## BOUNDARY CONDITIONS 
+## BOUNDARY CONDITIONS
 
 function JustRelax.pureshear_bc!(
     stokes::StokesArrays, di::NTuple{3,T}, li::NTuple{3,T}, εbg
@@ -61,7 +61,7 @@ function JustRelax.pureshear_bc!(
     ])
 end
 
-## 3D VISCO-ELASTIC STOKES SOLVER 
+## 3D VISCO-ELASTIC STOKES SOLVER
 
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
@@ -143,10 +143,11 @@ function JustRelax.solve!(
                     pt_stokes.ηdτ,
                     _di...,
                 )
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
 
-            flow_bcs!(stokes, flow_bcs)
+            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -194,7 +195,7 @@ function JustRelax.solve!(
     )
 end
 
-## 3D VISCO-ELASTO-PLASTIC STOKES SOLVER WITH GeoParams.jl 
+## 3D VISCO-ELASTO-PLASTIC STOKES SOLVER WITH GeoParams.jl
 
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
@@ -311,9 +312,10 @@ function JustRelax.solve!(
                     pt_stokes.ηdτ,
                     _di...,
                 )
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
-            flow_bcs!(stokes, flow_bcs)
+            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -491,9 +493,10 @@ function JustRelax.solve!(
                     pt_stokes.ηdτ,
                     _di...,
                 )
+                flow_bcs!(stokes, flow_bc)
                 update_halo!(@velocity(stokes)...)
             end
-            flow_bcs!(stokes, flow_bc)
+            # flow_bcs!(stokes, flow_bc)
         end
 
         stokes.P .= θ

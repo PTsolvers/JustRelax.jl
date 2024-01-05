@@ -1,5 +1,5 @@
 using CUDA
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
@@ -129,6 +129,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     τII_nohalo = zeros(nx-2, ny-2)
     η_vep_nohalo = zeros(nx-2, ny-2)
     εII_nohalo = zeros(nx-2, ny-2)
+    xci_v = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v)
+    xvi_v = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1)
 
     # Time loop
     t, it      = 0.0, 0
@@ -187,30 +189,51 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
 
+        let
+            fig2  = Figure(size = (1600, 1600), title = "t = $t")
+            ax1   = Axis(fig2[1,1], aspect = 1, title = "τII")
+            ax2   = Axis(fig2[2,1], aspect = 1, title = "η_vep")
+            ax3   = Axis(fig2[1,2], aspect = 1, title = "log10(εII)")
+            ax4   = Axis(fig2[2,2], aspect = 1)
+            heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
+            heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
+            heatmap!(ax3, xci..., Array(log10.(stokes.V.Vx)) , colormap=:batlow)
+            # heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
+            lines!(ax4, ttot, τII, color = :black)
+            lines!(ax4, ttot, sol, color = :red)
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax3)
+            rank = igg.me
+            save(joinpath(figdir, "MPI_rank_$(rank)_it$(it).png"), fig2)
+        end
+
         if igg.me == 0
             fig   = Figure(size = (1600, 1600), title = "t = $t")
             ax1   = Axis(fig[1,1], aspect = 1, title = "τII")
             ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
             ax3   = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
             ax4   = Axis(fig[2,2], aspect = 1)
-            heatmap!(ax1, xci..., Array(τII_v) , colormap=:batlow)
-            heatmap!(ax2, xci..., Array(log10.(η_vep_v)) , colormap=:batlow)
-            heatmap!(ax3, xci..., Array(log10.(εII_v)) , colormap=:batlow)
-            lines!(ax2, xunit*0.5, yunit*0.5, color = :black, linewidth = 5)
+            heatmap!(ax1, xci_v..., Array(τII_v) , colormap=:batlow)
+            heatmap!(ax2, xci_v..., Array(log10.(η_vep_v)) , colormap=:batlow)
+            heatmap!(ax3, xci_v..., Array(log10.(εII_v)) , colormap=:batlow)
+            lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
             lines!(ax4, ttot, τII, color = :black)
             lines!(ax4, ttot, sol, color = :red)
             hidexdecorations!(ax1)
             hidexdecorations!(ax3)
             save(joinpath(figdir, "MPI_$(it).png"), fig)
+
         end
     end
 
     return nothing
+
 end
 
 N      = 128
 n      = N + 2
-nx     = n - 2
+nx     = 67 - 2
 ny     = n - 2
 figdir = "ShearBands2D"
 igg  = if !(JustRelax.MPI.Initialized())

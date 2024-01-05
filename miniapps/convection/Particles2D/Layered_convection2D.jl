@@ -140,7 +140,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     li           = lx, ly            # domain length in x- and y-
     di           = @. li / ni        # grid step in x- and -y
     origin       = 0.0, -ly          # origin coordinates (15km f sticky air layer)
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
@@ -214,7 +214,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         free_slip    = (left = true, right=true, top=true, bot=true),
         periodicity  = (left = false, right = false, top = false, bot = false),
     )
-
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
     if save_vtk

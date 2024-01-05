@@ -9,15 +9,15 @@ function solKz_viscosity(xci, ni, di; B=log(1e6))
     y     = @zeros(ni...)
     y     = PTArray([yci for _ in xc, yci in yc])
     η     = @zeros(ni...)
-    
+
     _viscosity(y, B) = exp(B * y)
 
     @parallel function viscosity(η, y, B)
-    
+
         @all(η) = _viscosity(@all(y), B)
         return nothing
     end
-    
+
     # compute viscosity
     @parallel viscosity(η, y, B)
 
@@ -30,15 +30,15 @@ function solKz_density(xci, ni, di)
     x      = PTArray([xci for xci in xc, _ in yc])
     y      = PTArray([yci for _ in xc, yci in yc])
     ρ      = @zeros(ni...)
-    
+
     _density(x, y) = -sin(2 * y) * cos(3 * π * x)
-    
+
     @parallel function density(ρ, x, y)
-    
+
         @all(ρ) = _density(@all(x), @all(y))
         return nothing
     end
-    
+
     # compute density
     @parallel density(ρ, x, y)
 
@@ -58,7 +58,7 @@ function solKz(;
     origin       = zero(nx), zero(ny)
     igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
     di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     g            = 1 # gravity
 
@@ -85,6 +85,8 @@ function solKz(;
     flow_bcs  = FlowBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true)
     )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # Physical time loop
     t = 0.0

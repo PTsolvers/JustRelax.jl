@@ -128,7 +128,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     li            = lx, ly, lz           # domain length
     di            = @. li / ni           # grid steps
     origin        = 0.0, 0.0, -lz        # origin coordinates (15km of sticky air layer)
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
@@ -204,6 +204,8 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
         periodicity  = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored

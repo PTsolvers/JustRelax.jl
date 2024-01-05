@@ -15,15 +15,15 @@ function solCx_viscosity(xci, ni, di; Δη=1e6)
     # make grid array (will be eaten by GC)
     x      = PTArray([xci for xci in xc, _ in yc])
     η      = @zeros(ni...)
-    
+
     _viscosity(x, Δη) = ifelse(x ≤ 0.5, 1e0, Δη)
 
     @parallel function viscosity(η, x)
-       
+
         @all(η) = _viscosity(@all(x), Δη)
         return nothing
     end
-    
+
     # compute viscosity
     @parallel viscosity(η, x)
 
@@ -40,7 +40,7 @@ function solCx_density(xci, ni, di)
     _density(x, y) = -sin(π * y) * cos(π * x)
 
     @parallel function density(ρ, x, y)
-       
+
         @all(ρ) = _density(@all(x), @all(y))
         return nothing
     end
@@ -70,7 +70,7 @@ function solCx(
     origin       = zero(nx), zero(ny)
     igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
     di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     g            = 1
 
@@ -108,6 +108,9 @@ function solCx(
     flow_bcs = FlowBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot= true)
     )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
+
     # Physical time loop
     t = 0.0
     local iters

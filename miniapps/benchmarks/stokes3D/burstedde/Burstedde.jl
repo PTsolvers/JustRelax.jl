@@ -186,7 +186,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     origin       = zero(nx), zero(ny), zero(nz)
     igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
     di           = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
@@ -201,7 +201,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
 
     ## Setup-specific parameters and fields
     β  = 10.0
-    η  = viscosity(xci, di, β) # add reference 
+    η  = viscosity(xci, di, β) # add reference
     ρg = body_forces(xci, η, β) # => ρ*(gx, gy, gz)
     dt = Inf
     G  = @fill(Inf, ni...)
@@ -217,6 +217,8 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     )
     # impose analytical velociity at the boundaries of the domain
     velocity!(stokes, xci, xvi, di)
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
 
     # Physical time loop
     t = 0.0

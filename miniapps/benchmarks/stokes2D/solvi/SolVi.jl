@@ -27,7 +27,7 @@ function solvi_viscosity(ni, di, li, rc, η0, ηi)
         ) for ix in 1:ni[1], iy in 1:ni[2]
     ]
     η[Rad2 .< rc] .= ηi
-    
+
     return η
 end
 
@@ -51,7 +51,7 @@ function solVi(;
     origin       = zero(nx), zero(ny)
     igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
     di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
@@ -78,7 +78,8 @@ function solVi(;
     flow_bcs  = FlowBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true)
     )
-    flow_bcs!(stokes, flow_bcs, di)
+    flow_bcs!(stokes,flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # Physical time loop
     t = 0.0

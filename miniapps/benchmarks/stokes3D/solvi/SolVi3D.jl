@@ -64,7 +64,7 @@ function solVi3D(;
     li           = (lx, ly, lz)  # domain length in x- and y-
     origin       = zero(nx), zero(ny), zero(nz)
     di           = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
@@ -97,6 +97,8 @@ function solVi3D(;
             left=false, right=false, top=false, bot=false, back=false, front=false
         ),
     )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
 
     ## Body forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))

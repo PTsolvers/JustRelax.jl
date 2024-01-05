@@ -34,9 +34,9 @@ function elastic_buildup(;
     di           = @. li / ni # grid step in x- and -y
     igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) # init MPI
     origin       = 0.0, 0.0
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
- 
+
     ## (Physical) Time domain and discretization
     yr        = 365.25 * 3600 * 24
     kyr       = 1e3 * yr
@@ -60,12 +60,13 @@ function elastic_buildup(;
         free_slip = (left = true, right = true, top = true, bot = true)
     )
     flow_bcs!(stokes, flow_bcs)
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # Physical time loop
     t         = 0.0
     it        = 0
     ρg        = @zeros(ni...), @ones(size(stokes.P)) .* g
-    av_τyy    = Float64[] 
+    av_τyy    = Float64[]
     sol_τyy   = Float64[]
     tt        = Float64[]
     local iters

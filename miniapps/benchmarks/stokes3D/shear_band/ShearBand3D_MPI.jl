@@ -115,7 +115,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     stokes.V.Vy .= PTArray([ y*εbg/2 for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
     stokes.V.Vz .= PTArray([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
 
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored

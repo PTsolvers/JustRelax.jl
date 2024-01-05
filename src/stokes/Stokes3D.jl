@@ -24,7 +24,7 @@ include("VelocityKernels.jl")
 
 export solve!, pureshear_bc!
 rotate_stress_particles_jaumann!,
-rotate_stress_particles_roation_matrix!, compute_vorticity!,
+rotate_stress_particles_rotation_matrix!, compute_vorticity!,
 @parallel function update_τ_o!(
     τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o, τxx, τyy, τzz, τxy, τxz, τyz
 )

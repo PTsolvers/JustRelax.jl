@@ -31,7 +31,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function rotate_stress_particles_roation_matrix!(
+@parallel_indices (i, j) function rotate_stress_particles_rotation_matrix!(
     xx, yy, xy, ω, index, dt
 )
     cell = i, j

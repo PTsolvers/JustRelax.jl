@@ -16,7 +16,7 @@ nx, ny = 64, 64
 finalize_MPI = false
 
 # :single for a single run model with nx, ny resolution
-# :multiple for grid sensitivy error plot
+# :multiple for grid sensitivity error plot
 runtype = :single
 
 if benchmark == :solcx

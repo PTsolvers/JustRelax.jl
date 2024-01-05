@@ -1,8 +1,8 @@
 struct PS_Setup{B,C}
     device::Symbol
 
-    function PS_Setup(device::Symbol, precission::DataType, nDim::Integer)
-        return new{precission,nDim}(device)
+    function PS_Setup(device::Symbol, precision::DataType, nDim::Integer)
+        return new{precision,nDim}(device)
     end
 end
 

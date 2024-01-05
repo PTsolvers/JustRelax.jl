@@ -58,7 +58,7 @@ include("StressKernels.jl")
 
 export solve!,
     rotate_stress_particles_jaumann!,
-    rotate_stress_particles_roation_matrix!,
+    rotate_stress_particles_rotation_matrix!,
     compute_vorticity!
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}

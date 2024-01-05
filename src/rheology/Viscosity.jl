@@ -4,7 +4,7 @@
     η, ν, εxx, εyy, εxyv, args, rheology, cutoff
 )
 
-    # convinience closure
+    # convenience closure
     @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
@@ -51,7 +51,7 @@ end
     η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
 )
 
-    # convinience closure
+    # convenience closure
     @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
@@ -86,7 +86,7 @@ end
     η, ν, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
 )
 
-    # convinience closures
+    # convenience closures
     @inline gather_yz(A) = _gather_yz(A, I...)
     @inline gather_xz(A) = _gather_xz(A, I...)
     @inline gather_xy(A) = _gather_xy(A, I...)
@@ -136,7 +136,7 @@ end
     η, ν, ratios_center, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
 )
 
-    # convinience closures
+    # convenience closures
     @inline gather_yz(A) = _gather_yz(A, I...)
     @inline gather_xz(A) = _gather_xz(A, I...)
     @inline gather_xy(A) = _gather_xy(A, I...)

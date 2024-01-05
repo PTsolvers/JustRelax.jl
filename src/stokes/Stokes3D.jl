@@ -143,11 +143,10 @@ function JustRelax.solve!(
                     pt_stokes.ηdτ,
                     _di...,
                 )
+                # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
-
-            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -312,10 +311,10 @@ function JustRelax.solve!(
                     pt_stokes.ηdτ,
                     _di...,
                 )
+                # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
-            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -493,10 +492,10 @@ function JustRelax.solve!(
                     pt_stokes.ηdτ,
                     _di...,
                 )
+                # apply boundary conditions
                 flow_bcs!(stokes, flow_bc)
                 update_halo!(@velocity(stokes)...)
             end
-            # flow_bcs!(stokes, flow_bc)
         end
 
         stokes.P .= θ

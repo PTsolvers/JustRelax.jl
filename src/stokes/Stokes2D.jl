@@ -140,10 +140,10 @@ function JustRelax.solve!(
                     _dx,
                     _dy,
                 )
+                # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end
-            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -268,8 +268,6 @@ function JustRelax.solve!(
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
-            # free slip boundary conditions
-            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -405,12 +403,10 @@ function JustRelax.solve!(
                     ητ,
                     _di...,
                 )
-                # apply boundary conditions boundary conditions
+                # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
-            # apply boundary conditions boundary conditions
-            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -574,17 +570,17 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            update_halo!(stokes.τ.xy, stokes.τ.xy_c, stokes.τ.xx, stokes.τ.yy)
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)..., θ, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
                 )
-                # apply boundary conditions boundary conditions
+                # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
-            # apply boundary conditions boundary conditions
-            # flow_bcs!(stokes, flow_bcs)
+
         end
 
         iter += 1

@@ -4,7 +4,7 @@ using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
 dimension = 2 # 2 | 3
-device = :CUDA # :cpu | :CUDA | :AMDGPU
+device = :cpu # :cpu | :CUDA | :AMDGPU
 precision = Float64
 model = PS_Setup(device, precision, dimension)
 environment!(model)
@@ -114,6 +114,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
     stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -233,7 +234,7 @@ end
 
 N      = 128
 n      = N + 2
-nx     = 67 - 2
+nx     = n - 2 # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
 ny     = n - 2
 figdir = "ShearBands2D"
 igg  = if !(JustRelax.MPI.Initialized())

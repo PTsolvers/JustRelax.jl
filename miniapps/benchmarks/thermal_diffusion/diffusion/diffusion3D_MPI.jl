@@ -1,22 +1,20 @@
 using JustRelax, GeoParams
 using GLMakie
-using CUDA
 
 # setup ParallelStencil.jl environment
 dimension = 3 # 2 | 3
-device = :CUDA # :cpu | :CUDA | :AMDGPU
+device = :cpu # :cpu | :CUDA | :AMDGPU
 precision = Float64
 model = PS_Setup(device, precision, dimension)
 environment!(model)
 
-
-@parallel_indices (i, j, k) function init_T!(T, z)
-    if z[k] == maximum(z)
+@parallel_indices (i, j, k) function init_T!(T, z, lz)
+    if z[k] ≥ 0.0
         T[i, j, k] = 300.0
-    elseif z[k] == minimum(z)
+    elseif z[k] == -lz
         T[i, j, k] = 3500.0
     else
-        T[i, j, k] = z[k] * (1900.0 - 1600.0) / minimum(z) + 1600.0
+        T[i, j, k] = z[k] * (1900.0 - 1600.0) / (-lz) + 1600.0
     end
     return nothing
 end
@@ -57,10 +55,11 @@ function diffusion_3D(;
     li           = (lx, ly, lz)  # domain length in x- and y-
     di           = @. li / ni # grid step in x- and -y
     origin       = 0, 0, -lz # nodes at the center and vertices of the cells
-    igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI, select_device=false)...) # init MPI
     di           = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
+
 
     # Define the thermal parameters with GeoParams
     rheology = SetMaterialParams(;
@@ -91,7 +90,9 @@ function diffusion_3D(;
         periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
 
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])
+    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3], lz)
+
+    # return nothing 
 
     # Add thermal perturbation
     δT                  = 100e0 # thermal perturbation
@@ -99,12 +100,12 @@ function diffusion_3D(;
     center_perturbation = lx/2, ly/2, -lz/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
 
-    # global array
-    nx_v = ((nx + 1) - 2) * igg.dims[1]
-    ny_v = ((ny + 1) - 2) * igg.dims[2]
-    nz_v = ((nz + 1) - 2) * igg.dims[3]
-    T_v  = zeros(nx_v, ny_v, nz_v)
-    T_nohalo = zeros((nx+1)-2, (ny+1)-2, (nz+1)-2)
+    # Visualization global arrays
+    nx_v     = ((nx + 1)-2) * igg.dims[1]
+    ny_v     = ((ny + 1)-2) * igg.dims[2]
+    nz_v     = ((nz + 1)-2) * igg.dims[3]
+    T_v      = zeros(nx_v, ny_v, nz_v)             # plotting is done on the CPU
+    T_nohalo = zeros((nx+1)-2, (ny+1)-2, (nz+1)-2) # plotting is done on the CPU
 
     t  = 0.0
     it = 0
@@ -126,9 +127,9 @@ function diffusion_3D(;
         gather!(T_nohalo, T_v)
 
         if igg.me == 0
-            slice_j = Int(ny ÷ 2)
-            fig, = heatmap(T_v[:,slice_j,:])
-            save("temperature_3D_it_($it).png", fig)
+            slice_j = ny_v >>> 1
+            fig, = heatmap(T_v[:, slice_j, :])
+            save("temperature_3D_it_$it.png", fig)
             println("\n SAVED TEMPERATURE \n")
         end
 
@@ -139,8 +140,10 @@ function diffusion_3D(;
     finalize_global_grid(; finalize_MPI=finalize_MPI)
 
     return nothing
-    # return (ni=ni, xci=xci, li=li, di=di), thermal
 end
 
-n   = 32
+n  = 32
+nx = n
+ny = n
+nz = n
 diffusion_3D(; nx=n, ny=n, nz=n)

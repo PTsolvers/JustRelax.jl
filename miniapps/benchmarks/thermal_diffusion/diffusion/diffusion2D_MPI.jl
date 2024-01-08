@@ -1,11 +1,10 @@
 # using CairoMakie
 using JustRelax, GeoParams
 using GLMakie
-using CUDA
 
 # setup ParallelStencil.jl environment
 dimension = 2 # 2 | 3
-device = :CUDA # :cpu | :CUDA | :AMDGPU
+device = :Threads # :cpu | :CUDA | :AMDGPU
 precision = Float64
 model = PS_Setup(device, precision, dimension)
 environment!(model)
@@ -52,7 +51,7 @@ function diffusion_2D(;
     li           = lx, ly  # domain length in x- and y-
     di           = @. li / ni # grid step in x- and -y
     origin       = 0.0, -ly
-    igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=true)...) #init MPI
+    igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=true, select_device=false)...) #init MPI
     di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -96,19 +95,6 @@ function diffusion_2D(;
     T_v  = zeros(nx_v, ny_v)
     T_nohalo = zeros((nx + 2)-2, (ny + 1)-2)
 
-    # Plot initial T and η profiles
-    let
-        Yv  = [y for x in xvi[1], y in xvi[2]][:]
-        fig = Figure(size = (1200, 900))
-        ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-        scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-        ylims!(ax1, minimum(xvi[2])./1e3, 0)
-        rank = igg.me
-        # println("rank $rank => $(extrema(xvi[2])./1e3)")
-        save("initial_profile_rank_$(rank).png", fig)
-        fig
-    end
-
     # Time loop
     t  = 0.0
     it = 0
@@ -129,9 +115,8 @@ function diffusion_2D(;
         gather!(T_nohalo, T_v)
 
         if igg.me == 0
-            fig, = heatmap(T_v)
-            save("temperature_it_($it).png", fig)
-            println("\n SAVED TEMPERATURE \n")
+            fig, = heatmap(T_v, colorrange=(1500,2000))
+            save("mpi_figs\\temperature_it_$it.png", fig)
         end
 
         t  += dt

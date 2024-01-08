@@ -1,4 +1,4 @@
-# from "Fingerprinting secondary mantle plumes", Cloetingh et al. 2022
+# from Duretz et al. 2014 - http://dx.doi.org/10.1002/2014GL060438
 
 function init_rheologies(; is_TP_Conductivity=true)
 

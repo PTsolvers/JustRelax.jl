@@ -81,7 +81,6 @@ function diffusion_2D(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2], ly)
-    # update_halo!(thermal.T)
 
     # Add thermal perturbation
     δT                  = 100e0 # thermal perturbation

@@ -4,7 +4,7 @@ using GLMakie
 
 # setup ParallelStencil.jl environment
 dimension = 2 # 2 | 3
-device = :Threads # :cpu | :CUDA | :AMDGPU
+device = :cpu # :cpu | :CUDA | :AMDGPU
 precision = Float64
 model = PS_Setup(device, precision, dimension)
 environment!(model)

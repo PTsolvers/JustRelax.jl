@@ -1,5 +1,5 @@
 using CUDA
-using Printf, GeoParams, CairoMakie, CellArrays
+using Printf, GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
 
 
@@ -123,17 +123,17 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     # ----------------------------------------------------
 
     # global array
-    nx_v = (nx - 2) * igg.dims[1]
-    ny_v = (ny - 2) * igg.dims[2]
-    nz_v = (nz - 2) * igg.dims[3]
-    τII_v  = zeros(nx_v, ny_v, nz_v)
-    η_vep_v = zeros(nx_v, ny_v, nz_v)
-    εII_v  = zeros(nx_v, ny_v, nz_v)
-    τII_nohalo = zeros(nx-2, ny-2, nz-2)
+    nx_v         = (nx - 2) * igg.dims[1]
+    ny_v         = (ny - 2) * igg.dims[2]
+    nz_v         = (nz - 2) * igg.dims[3]
+    τII_v        = zeros(nx_v, ny_v, nz_v)
+    η_vep_v      = zeros(nx_v, ny_v, nz_v)
+    εII_v        = zeros(nx_v, ny_v, nz_v)
+    τII_nohalo   = zeros(nx-2, ny-2, nz-2)
     η_vep_nohalo = zeros(nx-2, ny-2, nz-2)
-    εII_nohalo = zeros(nx-2, ny-2, nz-2)
-    xci_v = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
-    xvi_v = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1), LinRange(0, 1, nz_v+1)
+    εII_nohalo   = zeros(nx-2, ny-2, nz-2)
+    xci_v        = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
+    xvi_v        = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1), LinRange(0, 1, nz_v+1)
 
     # Time loop
     t, it = 0.0, 0
@@ -157,7 +157,8 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             args,
             dt,
             igg;
-            iterMax          = 150e3,
+            verbose          = false,
+            iterMax          = 75e3,
             nout             = 1e3,
             viscosity_cutoff = (-Inf, Inf)
         )
@@ -179,9 +180,9 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         println("it = $it; t = $t \n")
 
         # MPI
-        @views τII_nohalo .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         @views η_vep_nohalo .= Array(η_vep[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        @views εII_nohalo .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         gather!(τII_nohalo, τII_v)
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
@@ -192,7 +193,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         yunit = @. radius * sin(th) + 0.5;
 
         if igg.me == 0
-            slice_j = Int(ny ÷ 2)
+            slice_j = ny_v >>> 1
             fig   = Figure(size = (1600, 1600), title = "t = $t")
             ax1   = Axis(fig[1,1], aspect = 1, title = "τII")
             ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
@@ -218,8 +219,10 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n            = 32 + 2
-nx = ny = nz = n - 2 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
+n            = 16
+nx = n
+ny = n 
+nz = 30 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
 figdir       = "ShearBand3D"
 igg          = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)

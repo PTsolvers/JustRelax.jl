@@ -370,7 +370,7 @@ function JustRelax.solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            ν = 0.01
+            ν = 1e-2
             @parallel (@idx ni) compute_viscosity!(
                 η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff
             )
@@ -393,6 +393,8 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            update_halo!(stokes.τ.xy)
+
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
@@ -570,7 +572,7 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            update_halo!(stokes.τ.xy, stokes.τ.xy_c, stokes.τ.xx, stokes.τ.yy)
+            update_halo!(stokes.τ.xy)
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -586,7 +588,6 @@ function JustRelax.solve!(
         if iter % nout == 0 && iter > 1
             er_η = norm_mpi(@.(log10(η) - log10(η0)))
             er_η < 1e-3 && (do_visc = false)
-            # @show er_η
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx, stokes.R.Ry, θ, @stress(stokes)..., ρg..., _di...
             )

@@ -26,7 +26,7 @@ end
     η = clamp(η * correction, cutoff...)
 end
 
-# HELPER FUNCTIONS ---------------------------------------------------------------
+# HELPER FUNCTIONS ---------------------
 const idx_k = ParallelStencil.INDICES[3]
 macro all_k(A)
     esc(:($A[$idx_k]))

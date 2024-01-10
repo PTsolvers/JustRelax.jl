@@ -321,7 +321,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, figdir="figs3D", save_vtk =false)
                 slice_j = ny >>> 1
                 fig     = Figure(size = (1200, 1200), title = "t = $t")
                 ax1     = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-                ax2     = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
+                ax2     = Axis(fig[2,1], aspect = ar, title = "Shear heating [W/m3]")
                 ax3     = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
                 ax4     = Axis(fig[2,3], aspect = ar, title = "log10(η)")
                 # Plot temperature

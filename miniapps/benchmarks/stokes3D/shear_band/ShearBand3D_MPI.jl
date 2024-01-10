@@ -1,7 +1,5 @@
-using CUDA
 using Printf, GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
-
 
 # setup ParallelStencil.jl environment
 dimension = 3 # 2 | 3
@@ -177,11 +175,11 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
 
-        println("it = $it; t = $t \n")
+        igg.me == 0 && println("it = $it; t = $t \n")
 
         # MPI
         @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        @views η_vep_nohalo .= Array(η_vep[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views η_vep_nohalo .= Array(η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
         @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         gather!(τII_nohalo, τII_v)
         gather!(η_vep_nohalo, η_vep_v)
@@ -194,24 +192,19 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
         if igg.me == 0
             slice_j = ny_v >>> 1
-            fig   = Figure(size = (1600, 1600), title = "t = $t")
-            ax1   = Axis(fig[1,1], aspect = 1, title = "τII")
-            ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
-            ax3   = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
-            ax4   = Axis(fig[2,2], aspect = 1)
-            heatmap!(ax1, xci_v[1], xci_v[3], Array(τII_v[:,slice_j,:]) , colormap=:batlow)
-            heatmap!(ax2, xci_v[1], xci_v[3], Array(log10.(η_vep_v)[:,slice_j,:]) , colormap=:batlow)
-            heatmap!(ax3, xci_v[1], xci_v[3], Array(log10.(εII_v)[:,slice_j,:]) , colormap=:batlow)
+            fig     = Figure(size = (1600, 1600), title = "t = $t")
+            ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
+            ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
+            ax3     = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
+            ax4     = Axis(fig[2,2], aspect = 1)
+            heatmap!(ax1, xci_v[1], xci_v[3], Array(τII_v[:, slice_j, :]) , colormap=:batlow)
+            heatmap!(ax2, xci_v[1], xci_v[3], Array(log10.(η_vep_v)[:, slice_j, :]) , colormap=:batlow)
+            heatmap!(ax3, xci_v[1], xci_v[3], Array(log10.(εII_v)[:, slice_j, :]) , colormap=:batlow)
             lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
             lines!(ax4, ttot, τII, color = :black)
             lines!(ax4, ttot, sol, color = :red)
             hidexdecorations!(ax1)
             hidexdecorations!(ax3)
-            # for ax in (ax1, ax2, ax3)
-            # xlims!(ax, (0, 1))
-            # ylims!(ax, (0, 1))
-            # zlims!(ax, (0, 1))
-            # end
             save(joinpath(figdir, "MPI_3D_$(it).png"), fig)
         end
     end
@@ -219,13 +212,13 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n            = 16
-nx = n
-ny = n 
-nz = 30 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
-figdir       = "ShearBand3D"
-igg          = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
+n      = 16
+nx     = n
+ny     = n 
+nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
+figdir = "ShearBand3D"
+igg    = if !(JustRelax.MPI.Initialized())
+    IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)
 else
     igg
 end

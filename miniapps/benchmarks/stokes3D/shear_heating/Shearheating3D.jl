@@ -77,8 +77,6 @@ end
     @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
     return nothing
 end
-
-
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -117,22 +115,21 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, figdir="figs3D", save_vtk =false)
     xc_anomaly       = lx/2   # origin of thermal anomaly
     yc_anomaly       = ly/2   # origin of thermal anomaly
     zc_anomaly       = 40e3  # origin of thermal anomaly
-    # yc_anomaly       = 39e3  # origin of thermal anomaly
     r_anomaly        = 3e3    # radius of perturbation
-    init_phases!(pPhases, particles, lx/2, ly/2, zc_anomaly, r_anomaly)
+    init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
     phase_ratios     = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √3.1)
+    stokes    = StokesArrays(ni, ViscoElastic)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal          = ThermalArrays(ni)
-    thermal_bc       = TemperatureBoundaryConditions(;
+    thermal         = ThermalArrays(ni)
+    thermal_bc      = TemperatureBoundaryConditions(;
         no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
         periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
@@ -187,7 +184,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, figdir="figs3D", save_vtk =false)
     # ----------------------------------------------------
 
     # Plot initial T and η profiles
-    fig0 = let
+    let # let block to avoid polluting the global namespace
         Zv  = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
         Z   = [z for x in xci[1], y in xci[2], z in xci[3]][:]
         fig = Figure(size = (1200, 900))
@@ -199,7 +196,6 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, figdir="figs3D", save_vtk =false)
         ylims!(ax2, minimum(xvi[3])./1e3, 0)
         hideydecorations!(ax2)
         save(joinpath(figdir, "initial_profile.png"), fig)
-        fig
     end
 
     grid2particle!(pT, xvi, thermal.T, particles.coords)
@@ -214,7 +210,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, figdir="figs3D", save_vtk =false)
     t, it = 0.0, 0
     while it < 1
             # Update buoyancy and viscosity -
-            args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+            args = (; T = thermal.Tc, P = stokes.P,  dt = Inf)
             @parallel (@idx ni) compute_viscosity!(
                 η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
             )
@@ -321,31 +317,21 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, figdir="figs3D", save_vtk =false)
                     )
                 end
 
-                slice_j  = ny >>> 1
-                # Make particles plottable
-                p        = particles.coords
-                ppx, ppy, ppz = p
-                pxv      = ppx.data[:]./1e3
-                pyv      = ppy.data[:]./1e3
-                pzv      = ppz.data[:]./1e3
-                clr      = pPhases.data[:]
-                idxv     = particles.index.data[:];
-
                 # Make Makie figure
-                fig = Figure(size = (1200, 1200), title = "t = $t")
-                ax1 = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-                ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
-                ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
-                ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+                slice_j = ny >>> 1
+                fig     = Figure(size = (1200, 1200), title = "t = $t")
+                ax1     = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+                ax2     = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
+                ax3     = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
+                ax4     = Axis(fig[2,3], aspect = ar, title = "log10(η)")
                 # Plot temperature
-                h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, slice_j, :].-273.0) , colormap=:batlow)
+                h1      = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, slice_j, :].-273.0) , colormap=:batlow)
                 # Plot particles phase
-                h2  = heatmap!(ax2, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.shear_heating[:, slice_j, :]) , colormap=:batlow)
-                # h2  = scatter!(ax2, Array(pxv[idxv]), Array(pzv[idxv]), color=Array(clr[idxv]))
+                h2      = heatmap!(ax2, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.shear_heating[:, slice_j, :]) , colormap=:batlow)
                 # Plot 2nd invariant of strain rate
-                h3  = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
+                h3      = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
                 # Plot effective viscosity
-                h4  = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:, slice_j, :])) , colormap=:batlow)
+                h4      = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:, slice_j, :])) , colormap=:batlow)
                 hidexdecorations!(ax1)
                 hidexdecorations!(ax2)
                 hidexdecorations!(ax3)
@@ -354,7 +340,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, figdir="figs3D", save_vtk =false)
                 Colorbar(fig[1,4], h3)
                 Colorbar(fig[2,4], h4)
                 linkaxes!(ax1, ax2, ax3, ax4)
-                # save(joinpath(figdir, "$(it).png"), fig)
+                save(joinpath(figdir, "$(it).png"), fig)
                 fig
             end
             # ------------------------------
@@ -366,7 +352,6 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, figdir="figs3D", save_vtk =false)
 
 figdir   = "3D_Benchmark_Duretz_etal_2014"
 save_vtk = false # set to true to generate VTK files for ParaView
-ar       = 1 # aspect ratio
 n        = 64
 nx       = n
 ny       = n
@@ -377,5 +362,5 @@ else
     igg
 end
 
-# main3D(igg; ar=ar, ny=ny, nx=nx, figdir=figdir, save_vtk=save_vtk)
+main3D(igg; ar=ar, ny=ny, nx=nx, figdir=figdir, save_vtk=save_vtk)
  

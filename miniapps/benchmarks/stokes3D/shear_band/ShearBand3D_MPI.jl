@@ -37,7 +37,7 @@ end
 function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
     # Physical domain ------------------------------------
-    lx =ly = lz  = 1e0             # domain length in y
+    lx = ly = lz = 1e0             # domain length in y
     ni           = nx, ny, nz      # number of cells
     li           = lx, ly, lz      # domain length in x- and y-
     di           = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y and z-

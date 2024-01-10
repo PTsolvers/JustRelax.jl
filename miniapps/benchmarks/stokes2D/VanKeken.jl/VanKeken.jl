@@ -11,7 +11,7 @@ backend = "CUDA_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
     model  = PS_Setup(:CUDA, Float64, 2)
     environment!(model)
 else
-    model  = PS_Setup(:Threads, Float64, 2)
+    model  = PS_Setup(:cpu, Float64, 2)
     environment!(model)
 end
 

@@ -6,7 +6,7 @@ import JustRelax.@cell
 # set_backend("CUDA_Float64_2D")
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:Threads, Float64, 2)
+model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 # Load script dependencies

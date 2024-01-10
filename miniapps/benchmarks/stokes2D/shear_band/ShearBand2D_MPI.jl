@@ -169,7 +169,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             @tensor(stokes.τ)
         )
         @parallel (@idx ni) multi_copy!(
-            @tensor_center(stokes.τ_o), 
+            @tensor_center(stokes.τ_o),
             @tensor_center(stokes.τ)
         )
 
@@ -218,12 +218,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 end
 
 N      = 32
-n      = N 
+n      = N
 nx     = n  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
 ny     = n
 figdir = "ShearBands2D"
 igg  = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device=false)...)
 else
     igg
 end

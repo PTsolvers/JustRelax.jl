@@ -352,7 +352,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, figdir="figs3D", save_vtk =false)
 
 figdir   = "3D_Benchmark_Duretz_etal_2014"
 save_vtk = false # set to true to generate VTK files for ParaView
-n        = 64
+n        = 32
 nx       = n
 ny       = n
 nz       = n
@@ -363,4 +363,3 @@ else
 end
 
 main3D(igg; ar=ar, ny=ny, nx=nx, figdir=figdir, save_vtk=save_vtk)
- 

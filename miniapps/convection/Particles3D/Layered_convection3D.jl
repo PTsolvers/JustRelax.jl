@@ -340,7 +340,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                 )
             end
 
-            slice_j = Int(ny ÷ 2)
+            slice_j = ny >>> 1
             # Make Makie figure
             fig = Figure(size = (1400, 1800), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")

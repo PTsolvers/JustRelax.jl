@@ -24,7 +24,7 @@ function _compute_τ_nonlinear!(
     εij_ve = ntuple(Val(N1)) do i
         @inbounds muladd(0.5 * τij_o[i], _Gdt, εij[i])
     end
-    # get plastic paremeters (if any...)
+    # get plastic parameters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
     τy = C * cosϕ + P[idx...] * sinϕ
 
@@ -175,7 +175,7 @@ function cache_tensors(
     # shear components of the strain rate and old-stress tensors
     ε_shear = av_yz(ε[4]), av_xz(ε[5]), av_xy(ε[6])
     # τ_old_shear = av_yz(τ_old[4]), av_xz(τ_old[5]), av_xy(τ_old[6])
-    # cache ij-th components of the tensors into a tuple in Voigt notation 
+    # cache ij-th components of the tensors into a tuple in Voigt notation
     εij = (ε_normal..., ε_shear...)
     # τij_o = (τ_old_normal..., τ_old_shear...)
     τij_o = getindex.(τ_old, idx...)

@@ -15,15 +15,15 @@ function solCx_viscosity(xci, ni, di; Δη=1e6)
     # make grid array (will be eaten by GC)
     x      = PTArray([xci for xci in xc, _ in yc])
     η      = @zeros(ni...)
-    
+
     _viscosity(x, Δη) = ifelse(x ≤ 0.5, 1e0, Δη)
 
     @parallel function viscosity(η, x)
-       
+
         @all(η) = _viscosity(@all(x), Δη)
         return nothing
     end
-    
+
     # compute viscosity
     @parallel viscosity(η, x)
 
@@ -40,7 +40,7 @@ function solCx_density(xci, ni, di)
     _density(x, y) = -sin(π * y) * cos(π * x)
 
     @parallel function density(ρ, x, y)
-       
+
         @all(ρ) = _density(@all(x), @all(y))
         return nothing
     end
@@ -65,13 +65,14 @@ function solCx(
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni        = nx, ny # number of nodes in x- and y-
-    li        = lx, ly # domain length in x- and y-
-    origin    = zero(nx), zero(ny)
-    igg       = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
-    di        = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    xci, xvi  = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    g         = 1
+    ni           = nx, ny # number of nodes in x- and y-
+    li           = lx, ly # domain length in x- and y-
+    origin       = zero(nx), zero(ny)
+    igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
+    di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    g            = 1
 
     ## (Physical) Time domain and discretization
     ttot      = 1 # total simulation time
@@ -95,7 +96,7 @@ function solCx(
     # smooth viscosity jump (otherwise no convergence for Δη > ~15)
     η2        = deepcopy(η)
     for _ in 1:5
-        @hide_communication b_width begin
+        @hide_communication (4, 4, 0) begin
             @parallel smooth!(η2, η, 1.0)
             update_halo!(η2, η)
         end
@@ -107,6 +108,9 @@ function solCx(
     flow_bcs = FlowBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot= true)
     )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
+
     # Physical time loop
     t = 0.0
     local iters

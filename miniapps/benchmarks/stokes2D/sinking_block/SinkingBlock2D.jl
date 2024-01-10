@@ -7,7 +7,7 @@ environment!(model)
 using Printf, LinearAlgebra, GeoParams, GLMakie, JustPIC, CellArrays
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
+@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
 @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
 @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
@@ -18,9 +18,9 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
     np     = max_xcell * ncells
     px, py = ntuple(_ -> @fill(NaN, ni..., celldims=(max_xcell,)) , Val(2))
     inject = @fill(false, nx, ny, eltype=Bool)
-    index  = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool) 
-    
-    @parallel_indices (i, j) function fill_coords_index(px, py, index)    
+    index  = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool)
+
+    @parallel_indices (i, j) function fill_coords_index(px, py, index)
         # lower-left corner of the cell
         x0, y0 = x[i], y[j]
         # fill index array
@@ -32,7 +32,7 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
         return nothing
     end
 
-    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)    
+    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)
 
     return Particles(
         (px, py), index, inject, nxcell, max_xcell, min_xcell, np, (nx, ny)
@@ -53,7 +53,7 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
     end
     ni = length.(xvi)
     @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
-    
+
     return nothing
 end
 
@@ -70,7 +70,7 @@ function init_phases!(phases, particles, xc, yc, r)
             # plume - rectangular
             JustRelax.@cell phases[ip, i, j] = if ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
                 2.0
-            else 
+            else
                 1.0
             end
         end
@@ -95,15 +95,16 @@ end
 # BEGIN MAIN SCRIPT
 # --------------------------------------------------------------------------------
 function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
-    
+
     # Physical domain ------------------------------------
-    ly       = 500e3
-    lx       = ly * ar
-    origin   = 0.0, -ly                         # origin coordinates
-    ni       = nx, ny                           # number of cells
-    li       = lx, ly                           # domain length in x- and y-
-    di       = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    ly           = 500e3
+    lx           = ly * ar
+    origin       = 0.0, -ly                         # origin coordinates
+    ni           = nx, ny                           # number of cells
+    li           = lx, ly                           # domain length in x- and y-
+    di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
@@ -127,7 +128,7 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
     # heat diffusivity
     dt = 1
     # ----------------------------------------------------
-    
+
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 20, 1
     particles = init_particles_cellarrays(
@@ -136,14 +137,14 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
     # temperature
     pPhases,      = init_particle_fields_cellarrays(particles, Val(1))
     particle_args = (pPhases, )
-    # Rectangular density anomaly 
+    # Rectangular density anomaly
     xc_anomaly   =  250e3   # origin of thermal anomaly
     yc_anomaly   = -(ly-400e3) # origin of thermal anomaly
     r_anomaly    =  50e3   # radius of perturbation
     init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
     phase_ratios = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
-    
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(ni, ViscoElastic)
@@ -154,22 +155,24 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     # ----------------------------------------------------
 
-    # Viscosity 
+    # Viscosity
     η        = @ones(ni...)
     args     = (; dt = Inf)
     η_cutoff = -Inf, Inf
     @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, η_cutoff 
+        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, η_cutoff
     )
     η_vep   = deepcopy(η)
     # ----------------------------------------------------
 
     # Boundary conditions
-    flow_bcs = FlowBoundaryConditions(; 
+    flow_bcs = FlowBoundaryConditions(;
         free_slip    = (left =  true, right =  true, top =  true, bot =  true),
         periodicity  = (left = false, right = false, top = false, bot = false),
     )
-    
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
+
     # Stokes solver ----------------
     args = (; T = @ones(ni...), P = stokes.P, dt=Inf)
     solve!(

@@ -2,13 +2,13 @@
 using JustRelax, GeoParams
 
 # setup ParallelStencil.jl environment
-dimension = 3 # 2 | 3 
-device = :cpu # :cpu | :gpu
+dimension = 3 # 2 | 3
+device = :cpu # :cpu | :CUDA | :AMDGPU
 precision = Float64
 model = PS_Setup(device, precision, dimension)
 environment!(model)
 
-# Model size 
+# Model size
 L = 100e3 # [m]
 if dimension === 3
     # include model setup

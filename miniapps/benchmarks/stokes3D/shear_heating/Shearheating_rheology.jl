@@ -1,4 +1,4 @@
-# from "Fingerprinting secondary mantle plumes", Cloetingh et al. 2022
+# from Duretz et al. 2014 - http://dx.doi.org/10.1002/2014GL060438
 
 function init_rheologies(; is_TP_Conductivity=true)
 
@@ -53,25 +53,26 @@ function init_rheologies(; is_TP_Conductivity=true)
     )
 end
 
-function init_phases!(phases, particles, Lx, d, r)
+function init_phases!(phases, particles, Lx, Ly, d, r)
     ni = size(phases)
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx, d)
+    @parallel_indices (I...) function init_phases!(phases, px, py, pz, index, r, Lx, Ly, d)
         @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+            JustRelax.@cell(index[ip, I...]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j])
-            @cell phases[ip, i, j] = 1.0 # matrix
+            x = JustRelax.@cell px[ip, I...]
+            y = JustRelax.@cell py[ip, I...]
+            depth = -(JustRelax.@cell pz[ip, I...])
+            @cell phases[ip, I...] = 1.0 # matrix
 
             # thermal anomaly - circular
-            if ((x - Lx)^2 + (depth - d)^2 ≤ r^2)
-                JustRelax.@cell phases[ip, i, j] = 2.0
+            if ((x - Lx)^2 + (y - Ly)^2 + (depth - d)^2 ≤ r^2)
+                JustRelax.@cell phases[ip, I...] = 2.0
             end
         end
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, d)
+    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, Ly, d)
 end

@@ -58,7 +58,7 @@ include("StressKernels.jl")
 
 export solve!,
     rotate_stress_particles_jaumann!,
-    rotate_stress_particles_roation_matrix!,
+    rotate_stress_particles_rotation_matrix!,
     compute_vorticity!
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
@@ -73,7 +73,7 @@ function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C
     return nothing
 end
 
-## 2D VISCO-ELASTIC STOKES SOLVER 
+## 2D VISCO-ELASTIC STOKES SOLVER
 
 # viscous solver
 function JustRelax.solve!(
@@ -140,9 +140,10 @@ function JustRelax.solve!(
                     _di...,
                     dt,
                 )
+                # apply boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end
-            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -271,10 +272,10 @@ function JustRelax.solve!(
                     _di...,
                     dt,
                 )
+                # free slip boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
-            # free slip boundary conditions
-            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -384,7 +385,7 @@ function JustRelax.solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            ν = 0.01
+            ν = 1e-2
             @parallel (@idx ni) compute_viscosity!(
                 η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff
             )
@@ -407,6 +408,8 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            update_halo!(stokes.τ.xy)
+
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
@@ -418,10 +421,10 @@ function JustRelax.solve!(
                     _di...,
                     dt,
                 )
+                # apply boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
-            # apply boundary conditions boundary conditions
-            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -474,7 +477,7 @@ function JustRelax.solve!(
     )
 end
 
-## With phase ratios 
+## With phase ratios
 
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
@@ -594,6 +597,7 @@ function JustRelax.solve!(
             )
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            update_halo!(stokes.τ.xy)
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -606,17 +610,16 @@ function JustRelax.solve!(
                     _di...,
                     dt,
                 )
+                # apply boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
-            # apply boundary conditions boundary conditions
-            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
         if iter % nout == 0 && iter > 1
             er_η = norm_mpi(@.(log10(η) - log10(η0)))
             er_η < 1e-3 && (do_visc = false)
-            # @show er_η
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,
@@ -762,10 +765,12 @@ function JustRelax.solve!(
                     _di...,
                     dt,
                 )
+                # apply boundary conditions boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
             # apply boundary conditions boundary conditions
-            flow_bcs!(stokes, flow_bcs)
+            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1

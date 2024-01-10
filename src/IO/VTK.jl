@@ -25,8 +25,8 @@ function append!(data_series, data::NamedTuple, time_step, seconds)
     vtk_name = joinpath(data_series.path, "$time_step")
     vtk = vtk_grid(vtk_name, data_series.grid...)
     # add data to vtk file
-    for (name_i, arrary_i) in zip(data_names, data_arrays)
-        vtk[name_i] = Array(arrary_i)
+    for (name_i, array_i) in zip(data_names, data_arrays)
+        vtk[name_i] = Array(array_i)
     end
     # close vtk file
     vtk_save(vtk)
@@ -53,15 +53,15 @@ function save_vtk(fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTupl
         # First block.
         # Variables stores in cell centers
         vtk_grid(vtm, xci...) do vtk
-            for (name_i, arrary_i) in zip(data_names_c, data_arrays_c)
-                vtk[name_i] = Array(arrary_i)
+            for (name_i, array_i) in zip(data_names_c, data_arrays_c)
+                vtk[name_i] = Array(array_i)
             end
         end
         # Second block.
         # Variables stores in cell vertices
         vtk_grid(vtm, xvi...) do vtk
-            for (name_i, arrary_i) in zip(data_names_v, data_arrays_v)
-                vtk[name_i] = Array(arrary_i)
+            for (name_i, array_i) in zip(data_names_v, data_arrays_v)
+                vtk[name_i] = Array(array_i)
             end
         end
     end
@@ -75,8 +75,8 @@ function save_vtk(fname::String, xi, data::NamedTuple)
     data_arrays = values(data)
     # make and save VTK file
     vtk_grid(fname, xi...) do vtk
-        for (name_i, arrary_i) in zip(data_names, data_arrays)
-            vtk[name_i] = Array(arrary_i)
+        for (name_i, array_i) in zip(data_names, data_arrays)
+            vtk[name_i] = Array(array_i)
         end
     end
 

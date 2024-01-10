@@ -7,11 +7,11 @@ backend = "CUDA_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
 # set_backend(backend) # run this on the REPL to switch backend
 
 # setup ParallelStencil.jl environment
-@static if occursin("CUDA", JustPIC.backend) 
+@static if occursin("CUDA", JustPIC.backend)
     model  = PS_Setup(:CUDA, Float64, 2)
     environment!(model)
 else
-    model  = PS_Setup(:Threads, Float64, 2)
+    model  = PS_Setup(:cpu, Float64, 2)
     environment!(model)
 end
 
@@ -107,14 +107,15 @@ end
 function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
 
     # Physical domain ------------------------------------
-    ly       = 1            # domain length in y
-    lx       = ly           # domain length in x
-    ni       = nx, ny       # number of cells
-    li       = lx, ly       # domain length in x- and y-
-    di       = @. li / ni   # grid step in x- and -y
-    origin   = 0.0, 0.0     # origin coordinates
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    dt       = Inf
+    ly           = 1            # domain length in y
+    lx           = ly           # domain length in x
+    ni           = nx, ny       # number of cells
+    li           = lx, ly       # domain length in x- and y-
+    di           = @. li / ni   # grid step in x- and -y
+    origin       = 0.0, 0.0     # origin coordinates
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    dt           = Inf
 
     # Physical properties using GeoParams ----------------
     rheology = (
@@ -167,10 +168,12 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     )
 
     # Boundary conditions
-    flow_bcs             = FlowBoundaryConditions(; 
+    flow_bcs             = FlowBoundaryConditions(;
         free_slip = (left =  true, right =  true, top = false, bot = false),
         no_slip   = (left = false, right = false, top =  true, bot =  true),
-    ) 
+    )
+    flow_bcs!(stokes, flow_bcs)
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored

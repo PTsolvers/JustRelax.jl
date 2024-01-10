@@ -1,10 +1,11 @@
-JustRelax.CUDA.allowscalar(false)
-
-using Printf, GeoParams, GLMakie, CellArrays, CSV, DataFrames
+using Printf, GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
 
 # setup ParallelStencil.jl environment
-model  = PS_Setup(:Threads, Float64, 3)
+dimension = 3 # 2 | 3
+device = :cpu # :cpu | :CUDA | :AMDGPU
+precision = Float64
+model = PS_Setup(device, precision, dimension)
 environment!(model)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
@@ -36,10 +37,10 @@ end
 function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
     # Physical domain ------------------------------------
-    lx =ly = lz  = 1e0             # domain length in y
+    lx = ly = lz = 1e0             # domain length in y
     ni           = nx, ny, nz      # number of cells
     li           = lx, ly, lz      # domain length in x- and y-
-    di           = @. li / ni      # grid step in x- and -y
+    di           = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y and z-
     origin       = 0.0, 0.0, 0.0   # origin coordinates
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells    dt          = Inf
@@ -113,10 +114,24 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     stokes.V.Vz .= PTArray([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)
     # ----------------------------------------------------
+
+    # global array
+    nx_v         = (nx - 2) * igg.dims[1]
+    ny_v         = (ny - 2) * igg.dims[2]
+    nz_v         = (nz - 2) * igg.dims[3]
+    τII_v        = zeros(nx_v, ny_v, nz_v)
+    η_vep_v      = zeros(nx_v, ny_v, nz_v)
+    εII_v        = zeros(nx_v, ny_v, nz_v)
+    τII_nohalo   = zeros(nx-2, ny-2, nz-2)
+    η_vep_nohalo = zeros(nx-2, ny-2, nz-2)
+    εII_nohalo   = zeros(nx-2, ny-2, nz-2)
+    xci_v        = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
+    xvi_v        = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1), LinRange(0, 1, nz_v+1)
 
     # Time loop
     t, it = 0.0, 0
@@ -140,7 +155,8 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             args,
             dt,
             igg;
-            iterMax          = 150e3,
+            verbose          = false,
+            iterMax          = 75e3,
             nout             = 1e3,
             viscosity_cutoff = (-Inf, Inf)
         )
@@ -159,61 +175,50 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
 
-        println("it = $it; t = $t \n")
+        igg.me == 0 && println("it = $it; t = $t \n")
 
-        data_v = (;)
-        data_c = (;
-            τII = Array(stokes.τ.II),
-            εII = Array(stokes.ε.II),
-            logεII = Array(log10.(stokes.ε.II)),
-            η   = Array(η_vep),
-        )
-        save_vtk(
-            joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
-            xvi,
-            xci,
-            data_v,
-            data_c
-        )
+        # MPI
+        @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views η_vep_nohalo .= Array(η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
+        @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        gather!(τII_nohalo, τII_v)
+        gather!(η_vep_nohalo, η_vep_v)
+        gather!(εII_nohalo, εII_v)
 
         # visualisation
-        fig     = Figure(size = (1600, 1600), title = "t = $t")
-        ax1     = Axis3(fig[1,1], aspect =  (1, 1, 1), title = "τII")
-        ax2     = Axis3(fig[2,1], aspect =  (1, 1, 1), title = "η_vep")
-        ax3     = Axis3(fig[1,2], aspect =  (1, 1, 1), title = "log10(εxy)")
-        ax4     = Axis(fig[2,2], aspect = 1)
-        volume!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-        volume!(ax2, xci..., Array(η_vep) , colormap=:batlow)
-        volume!(ax3, xci..., Array(log10.(stokes.ε.xy)) , colormap=:batlow)
-        lines!(ax4, ttot, τII, color = :black)
-        lines!(ax4, ttot, sol, color = :red)
-        hidexdecorations!(ax1)
-        hidexdecorations!(ax3)
-        for ax in (ax1, ax2, ax3)
-            xlims!(ax, (0, 1))
-            ylims!(ax, (0, 1))
-            zlims!(ax, (0, 1))
+        th    = 0:pi/50:3*pi;
+        xunit = @. radius * cos(th) + 0.5;
+        yunit = @. radius * sin(th) + 0.5;
+
+        if igg.me == 0
+            slice_j = ny_v >>> 1
+            fig     = Figure(size = (1600, 1600), title = "t = $t")
+            ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
+            ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
+            ax3     = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
+            ax4     = Axis(fig[2,2], aspect = 1)
+            heatmap!(ax1, xci_v[1], xci_v[3], Array(τII_v[:, slice_j, :]) , colormap=:batlow)
+            heatmap!(ax2, xci_v[1], xci_v[3], Array(log10.(η_vep_v)[:, slice_j, :]) , colormap=:batlow)
+            heatmap!(ax3, xci_v[1], xci_v[3], Array(log10.(εII_v)[:, slice_j, :]) , colormap=:batlow)
+            lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
+            lines!(ax4, ttot, τII, color = :black)
+            lines!(ax4, ttot, sol, color = :red)
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax3)
+            save(joinpath(figdir, "MPI_3D_$(it).png"), fig)
         end
-        save(joinpath(figdir, "$(it).png"), fig)
-
     end
-
-    df = DataFrame(
-        t = ttot,
-        τII = τII,
-        sol = sol,
-    )
-
-    CSV.write(joinpath(figdir, "data_$(nx).csv"), df)
 
     return nothing
 end
 
-n            = 64 + 2
-nx = ny = nz = n - 2
-figdir       = "ShearBand3D"
-igg          = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
+n      = 16
+nx     = n
+ny     = n 
+nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
+figdir = "ShearBand3D"
+igg    = if !(JustRelax.MPI.Initialized())
+    IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)
 else
     igg
 end

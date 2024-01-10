@@ -1,6 +1,3 @@
-using CUDA
-CUDA.allowscalar(false) # for safety
-
 using JustRelax, JustRelax.DataIO, JustPIC
 import JustRelax.@cell
 
@@ -9,11 +6,11 @@ import JustRelax.@cell
 # set_backend("CUDA_Float64_2D")
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:CUDA, Float64, 2)
+model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
+using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
@@ -143,7 +140,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     li           = lx, ly            # domain length in x- and y-
     di           = @. li / ni        # grid step in x- and -y
     origin       = 0.0, -ly          # origin coordinates (15km f sticky air layer)
-    xci, xvi     = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
@@ -216,7 +214,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         free_slip    = (left = true, right=true, top=true, bot=true),
         periodicity  = (left = false, right = false, top = false, bot = false),
     )
-
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
     if save_vtk
@@ -411,7 +410,7 @@ n        = 256
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 0; init_MPI= true)...)
+    IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else
     igg
 end

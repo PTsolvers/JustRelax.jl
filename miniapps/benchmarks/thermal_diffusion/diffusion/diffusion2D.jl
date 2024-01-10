@@ -28,11 +28,13 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     dt       = 50 * kyr # physical time step
 
     # Physical domain
-    ni       = (nx, ny)
-    li       = (lx, ly)  # domain length in x- and y-
-    di       = @. li / ni # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=(0, -ly)) # nodes at the center and vertices of the cells
-
+    ni           = (nx, ny)
+    li           = (lx, ly)  # domain length in x- and y-
+    di           = @. li / ni # grid step in x- and -y
+    origin       = 0, -ly
+    grid         = Geometry(ni, li; origin = origin) 
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    
     # Define the thermal parameters with GeoParams
     rheology = SetMaterialParams(;
         Phase        = 1,

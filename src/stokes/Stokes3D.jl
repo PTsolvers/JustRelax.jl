@@ -212,6 +212,7 @@ function JustRelax.solve!(
     nout=500,
     b_width=(4, 4, 4),
     verbose=true,
+    viscosity_cutoff=(-Inf, Inf),
 ) where {A,B,C,D,T}
 
     # solver related
@@ -238,6 +239,7 @@ function JustRelax.solve!(
     G = get_G(rheology)
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
+    θ = @zeros(ni...)
 
     # solver loop
     wtime0 = 0.0
@@ -269,7 +271,6 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_viscosity!(
                 η,
                 1.0,
-                phase_ratios.center,
                 @strain(stokes)...,
                 args,
                 rheology,
@@ -279,24 +280,27 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
                 stokes.τ.II,
-                @tensor(stokes.τ_o),
+                @tensor_center(stokes.τ_o),
                 @strain(stokes),
                 stokes.P,
+                θ,
                 η,
-                @ones(ni...),
+                η_vep,
+                λ,
+                tupleize(rheology), # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
             )
 
-            @parallel (@idx ni .+ 1) compute_τ_vertex!(
-                @shear(stokes.τ)...,
-                @shear(stokes.τ_o)...,
-                @shear(stokes.ε)...,
-                η_vep,
-                G,
-                dt,
-                pt_stokes.θ_dτ,
+            @parallel (@idx ni .+ 1) center2vertex!(
+                stokes.τ.yz,
+                stokes.τ.xz,
+                stokes.τ.xy,
+                stokes.τ.yz_c,
+                stokes.τ.xz_c,
+                stokes.τ.xy_c,
             )
+            update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -316,6 +320,8 @@ function JustRelax.solve!(
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
         end
+
+        stokes.P .= θ
 
         iter += 1
         if iter % nout == 0 && iter > 1

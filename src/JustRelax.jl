@@ -53,7 +53,7 @@ export _d_xa,
     _harm_yzi,
     _current
 
-include("phases/CallArrays.jl")
+include("phases/CellArrays.jl")
 export @cell, element, setelement!, cellnum, cellaxes, new_empty_cell, setindex!
 
 include("rheology/StressUpdate.jl")

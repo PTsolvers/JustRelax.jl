@@ -476,6 +476,7 @@ function JustRelax.solve!(
                 stokes.τ.xz_c,
                 stokes.τ.xy_c,
             )
+            update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
 
             # @parallel (@idx ni .+ 1) compute_τ_vertex!(
             #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ

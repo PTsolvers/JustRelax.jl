@@ -361,7 +361,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
                 Colorbar(fig[1,4], h3)
                 Colorbar(fig[2,4], h4)
                 linkaxes!(ax1, ax2, ax3, ax4)
-                # save(joinpath(figdir, "$(it).png"), fig)
+                save(joinpath(figdir, "$(it).png"), fig)
                 fig
             end
             # ------------------------------

@@ -277,7 +277,7 @@ end
     _Gdt = inv(get_G(rheology[1]) * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
-    # get plastic paremeters (if any...)
+    # get plastic parameters (if any...)
     is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, 1)
     # plastic volumetric change K*dt*sinϕ*sinψ
     K = get_bulkmodulus(rheology[1])
@@ -313,7 +313,7 @@ end
     phase = @inbounds phase_center[I...]
     _Gdt = inv(fn_ratio(get_G, rheology, phase) * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
-    # get plastic paremeters (if any...)
+    # get plastic parameters (if any...)
     is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, phase)
     # plastic volumetric change K*dt*sinϕ*sinψ
     K = fn_ratio(get_bulkmodulus, rheology, phase)
@@ -328,7 +328,7 @@ end
     return nothing
 end
 
-## Stress invariants 
+## Stress invariants
 @parallel_indices (I...) function tensor_invariant_center!(
     II, tensor::NTuple{N,T}
 ) where {N,T}
@@ -337,7 +337,7 @@ end
 end
 
 @parallel_indices (I...) function tensor_invariant!(II, xx, yy, xyv)
-    # convinience closure
+    # convenience closure
     @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
@@ -350,7 +350,7 @@ end
 
 @parallel_indices (I...) function tensor_invariant!(II, xx, yy, zz, yz, xz, xy)
 
-    # convinience closure
+    # convenience closure
     @inline gather_yz(A) = _gather_yz(A, I...)
     @inline gather_xz(A) = _gather_xz(A, I...)
     @inline gather_xy(A) = _gather_xy(A, I...)

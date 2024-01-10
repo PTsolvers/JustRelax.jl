@@ -71,7 +71,7 @@ function JustRelax.solve!(
     _sqrt_len_RT = 1.0 / sqrt(length(thermal.ResT))
     ϵ = pt_thermal.ϵ
 
-    # errors 
+    # errors
     iter_count = Int64[]
     norm_ResT = Float64[]
 
@@ -128,7 +128,7 @@ function JustRelax.solve!(
     end
 
     if iter < iterMax
-        @printf("Converged in %d iterations witn err = %1.3e \n", iter, err)
+        @printf("Converged in %d iterations with err = %1.3e \n", iter, err)
     else
         println("Model not fully converged")
     end
@@ -908,7 +908,7 @@ function JustRelax.solve!(
     return nothing
 end
 
-# upwind advection 
+# upwind advection
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
@@ -959,7 +959,7 @@ function JustRelax.solve!(
     return nothing
 end
 
-# upwind advection 
+# upwind advection
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,

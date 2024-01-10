@@ -27,7 +27,7 @@ function solvi_viscosity(ni, di, li, rc, η0, ηi)
         ) for ix in 1:ni[1], iy in 1:ni[2]
     ]
     η[Rad2 .< rc] .= ηi
-    
+
     return η
 end
 
@@ -46,12 +46,13 @@ function solVi(;
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni       = (nx, ny) # number of nodes in x- and y-
-    li       = (lx, ly)  # domain length in x- and y-
-    origin   = zero(nx), zero(ny)
-    igg      = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) # init MPI
-    di       = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    ni           = (nx, ny) # number of nodes in x- and y-
+    li           = (lx, ly)  # domain length in x- and y-
+    origin       = zero(nx), zero(ny)
+    igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
+    di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot      = 1 # total simulation time
@@ -77,7 +78,8 @@ function solVi(;
     flow_bcs  = FlowBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true)
     )
-    flow_bcs!(stokes, flow_bcs, di)
+    flow_bcs!(stokes,flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # Physical time loop
     t = 0.0

@@ -180,42 +180,45 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni = (nx, ny, nz) # number of nodes in x- and y-
-    lx = ly = lz = 1e0
-    li = (lx, ly, lz)  # domain length in x- and y-
-    origin = zero(nx), zero(ny), zero(nz)
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
-    di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    ni           = (nx, ny, nz) # number of nodes in x- and y-
+    lx           = ly = lz = 1e0
+    li           = (lx, ly, lz)  # domain length in x- and y-
+    origin       = zero(nx), zero(ny), zero(nz)
+    igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    di           = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total siηlation time
-    Δt = 1   # physical time step
+    Δt   = 1 # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(ni, ViscoElastic)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √3)
 
     ## Setup-specific parameters and fields
-    β = 10.0
-    η = viscosity(xci, di, β) # add reference 
+    β  = 10.0
+    η  = viscosity(xci, di, β) # add reference
     ρg = body_forces(xci, η, β) # => ρ*(gx, gy, gz)
     dt = Inf
-    G = @fill(Inf, ni...)
-    K = @fill(Inf, ni...)
+    G  = @fill(Inf, ni...)
+    K  = @fill(Inf, ni...)
 
     ## Boundary conditions
     flow_bcs = FlowBoundaryConditions(;
-        free_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
-        no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
-        periodicity=(
+        free_slip   = (left=false, right=false, top=false, bot=false, back=false, front=false),
+        no_slip     = (left=false, right=false, top=false, bot=false, back=false, front=false),
+        periodicity = (
             left=false, right=false, top=false, bot=false, back=false, front=false
         ),
     )
     # impose analytical velociity at the boundaries of the domain
     velocity!(stokes, xci, xvi, di)
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
 
     # Physical time loop
     t = 0.0

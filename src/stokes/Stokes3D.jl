@@ -24,7 +24,7 @@ include("VelocityKernels.jl")
 
 export solve!, pureshear_bc!
 rotate_stress_particles_jaumann!,
-rotate_stress_particles_roation_matrix!, compute_vorticity!,
+rotate_stress_particles_rotation_matrix!, compute_vorticity!,
 @parallel function update_τ_o!(
     τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o, τxx, τyy, τzz, τxy, τxz, τyz
 )
@@ -41,7 +41,7 @@ function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,3}) where {A,B,C
     @parallel update_τ_o!(@tensor(stokes.τ_o)..., @stress(stokes)...)
 end
 
-## BOUNDARY CONDITIONS 
+## BOUNDARY CONDITIONS
 
 function JustRelax.pureshear_bc!(
     stokes::StokesArrays, di::NTuple{3,T}, li::NTuple{3,T}, εbg
@@ -61,7 +61,7 @@ function JustRelax.pureshear_bc!(
     ])
 end
 
-## 3D VISCO-ELASTIC STOKES SOLVER 
+## 3D VISCO-ELASTIC STOKES SOLVER
 
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
@@ -143,10 +143,10 @@ function JustRelax.solve!(
                     pt_stokes.ηdτ,
                     _di...,
                 )
+                # apply boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
-
-            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -194,7 +194,7 @@ function JustRelax.solve!(
     )
 end
 
-## 3D VISCO-ELASTO-PLASTIC STOKES SOLVER WITH GeoParams.jl 
+## 3D VISCO-ELASTO-PLASTIC STOKES SOLVER WITH GeoParams.jl
 
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
@@ -311,9 +311,10 @@ function JustRelax.solve!(
                     pt_stokes.ηdτ,
                     _di...,
                 )
+                # apply boundary conditions
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
             end
-            flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
@@ -475,6 +476,7 @@ function JustRelax.solve!(
                 stokes.τ.xz_c,
                 stokes.τ.xy_c,
             )
+            update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
 
             # @parallel (@idx ni .+ 1) compute_τ_vertex!(
             #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
@@ -491,9 +493,10 @@ function JustRelax.solve!(
                     pt_stokes.ηdτ,
                     _di...,
                 )
+                # apply boundary conditions
+                flow_bcs!(stokes, flow_bc)
                 update_halo!(@velocity(stokes)...)
             end
-            flow_bcs!(stokes, flow_bc)
         end
 
         stokes.P .= θ

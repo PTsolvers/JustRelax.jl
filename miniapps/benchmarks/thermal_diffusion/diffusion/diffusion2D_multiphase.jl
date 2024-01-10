@@ -7,13 +7,13 @@ backend = "CUDA_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
 # set_backend(backend) # run this on the REPL to switch backend
 
 # setup ParallelStencil.jl environment
-device = occursin("CUDA", JustPIC.backend) ? :gpu : :cpu
+device = occursin("CUDA", JustPIC.backend) ? :CUDA : :cpu
 model = PS_Setup(device, Float64, 2)
 environment!(model)
 
 import JustRelax.@cell
 
-@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...) 
+@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
 @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
 @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
 @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
@@ -27,9 +27,9 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
     px, py = ntuple(_ -> @fill(NaN, ni..., celldims=(max_xcell,)) , Val(2))
 
     inject = @fill(false, nx, ny, eltype=Bool)
-    index = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool) 
-    
-    @parallel_indices (i, j) function fill_coords_index(px, py, index)    
+    index = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool)
+
+    @parallel_indices (i, j) function fill_coords_index(px, py, index)
         # lower-left corner of the cell
         x0, y0 = x[i], y[j]
         # fill index array
@@ -41,7 +41,7 @@ function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, n
         return nothing
     end
 
-    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)    
+    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)
 
     return Particles(
         (px, py), index, inject, nxcell, max_xcell, min_xcell, np, (nx, ny)
@@ -59,22 +59,22 @@ end
     return nothing
 end
 
-function elliptical_perturbation!(T, δT, xc, yc, r, xvi)                                                               
-                                  
-    @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)                                
-        @inbounds if distance((xc, yc), (x[i], y[i])) ≤ r^2                                                          
-            T[i, j]  += δT                                                                                            
-        end                                                                                                            
-        return nothing                                                                                                 
-    end                                                                                                                
-                                                                                                                       
-    @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)                                                      
+function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
+
+    @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
+        @inbounds if distance((xc, yc), (x[i], y[i])) ≤ r^2
+            T[i, j]  += δT
+        end
+        return nothing
+    end
+
+    @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 function init_phases!(phases, particles, xc, yc, r)
     ni = size(phases)
     center = xc, yc
-    
+
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
         @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
             # quick escape
@@ -84,7 +84,7 @@ function init_phases!(phases, particles, xc, yc, r)
             y = JustRelax.@cell py[ip, i, j]
 
             # plume - rectangular
-            if distance(center, (x, y)) ≤ r^2                                                          
+            if distance(center, (x, y)) ≤ r^2
                 JustRelax.@cell phases[ip, i, j] = 2.0
 
             else
@@ -98,11 +98,11 @@ function init_phases!(phases, particles, xc, yc, r)
 end
 
 @parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
-    
-    args_ij = ntuple_idx(args, I...)
-    H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij) 
 
-    return nothing 
+    args_ij = ntuple_idx(args, I...)
+    H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij)
+
+    return nothing
 end
 
 function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
@@ -112,10 +112,11 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     dt       = 50 * kyr # physical time step
 
     # Physical domain
-    ni       = (nx, ny)
-    li       = (lx, ly)  # domain length in x- and y-
-    di       = @. li / ni # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=(0, -ly)) # nodes at the center and vertices of the cells
+    ni           = (nx, ny)
+    li           = (lx, ly)  # domain length in x- and y-
+    di           = @. li / ni # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = (0, -ly))
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Define the thermal parameters with GeoParams
     rheology = (
@@ -134,15 +135,15 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
             RadioactiveHeat = ConstantRadioactiveHeat(1e-7),
         ),
     )
- 
+
     # fields needed to compute density on the fly
     P          = @zeros(ni...)
     args       = (; P=P)
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal    = ThermalArrays(ni)
-    thermal_bc = TemperatureBoundaryConditions(; 
-        no_flux = (left = true, right = true, top = false, bot = false), 
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = false, bot = false),
     )
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
 

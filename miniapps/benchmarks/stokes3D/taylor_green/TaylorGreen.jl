@@ -105,7 +105,7 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
 
     ## Setup-specific parameters and fields
     β = 10.0
-    η = @ones(ni...) # add reference 
+    η = @ones(ni...) # add reference
     ρg = body_forces(xci) # => ρ*(gx, gy, gz)
     dt = Inf
     Gc = @fill(Inf, ni...)
@@ -119,9 +119,10 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             left=false, right=false, top=false, bot=false, back=false, front=false
         ),
     )
-    # impose analytical velociity at the boundaries of the domain
+    # impose analytical velocity at the boundaries of the domain
     velocity!(stokes, xci, xvi)
-
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
     # Physical time loop
     t = 0.0
 

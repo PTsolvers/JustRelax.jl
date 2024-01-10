@@ -3,7 +3,7 @@ using MPI: MPI
 using GLMakie
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2)
+model = PS_Setup(:cpu, Float64, 2) # :cpu | :CUDA | :AMDGPU
 environment!(model)
 
 # choose benchmark
@@ -16,13 +16,13 @@ nx, ny = 64, 64
 finalize_MPI = false
 
 # :single for a single run model with nx, ny resolution
-# :multiple for grid sensitivy error plot
+# :multiple for grid sensitivity error plot
 runtype = :single
 
 if benchmark == :solcx
     # benchmark reference:
     # Duretz, Thibault, et al. "Discretization errors and free surface stabilization
-    # in the finite difference and marker‐in‐cell method for applied geodynamics: 
+    # in the finite difference and marker‐in‐cell method for applied geodynamics:
     # A numerical study." Geochemistry, Geophysics, Geosystems 12.7 (2011).
     # DOI: 10.1029/2011GC003567
 
@@ -51,7 +51,7 @@ if benchmark == :solcx
 elseif benchmark == :solkz
     # benchmark reference:
     # Duretz, Thibault, et al. "Discretization errors and free surface stabilization
-    # in the finite difference and marker‐in‐cell method for applied geodynamics: 
+    # in the finite difference and marker‐in‐cell method for applied geodynamics:
     # A numerical study." Geochemistry, Geophysics, Geosystems 12.7 (2011).
     # DOI: 10.1029/2011GC003567
 

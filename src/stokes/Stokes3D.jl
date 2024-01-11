@@ -264,18 +264,18 @@ function JustRelax.solve!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
 
-            # # Update buoyancy
-            # @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
+            # Update buoyancy
+            @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
 
-            ν = 1e-3
-            @parallel (@idx ni) compute_viscosity!(
-                η,
-                1.0,
-                @strain(stokes)...,
-                args,
-                rheology,
-                viscosity_cutoff,
-            )
+            # ν = 1e-2
+            # @parallel (@idx ni) compute_viscosity!(
+            #     η,
+            #     ν,
+            #     @strain(stokes)...,
+            #     args,
+            #     rheology,
+            #     viscosity_cutoff,
+            # )
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -302,13 +302,11 @@ function JustRelax.solve!(
             )
             update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
 
-            @hide_communication b_width begin # communication/computation overlap
+            # @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
-                    stokes.R.Rx,
-                    stokes.R.Ry,
-                    stokes.R.Rz,
-                    stokes.P,
+                    @residuals(stokes.R)...,
+                    θ,
                     ρg...,
                     @stress(stokes)...,
                     ητ,
@@ -318,7 +316,7 @@ function JustRelax.solve!(
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
-            end
+            # end
         end
 
         stokes.P .= θ
@@ -396,6 +394,7 @@ function JustRelax.solve!(
     # geometry
     _di = @. 1 / di
     ni = size(stokes.P)
+    ητ = deepcopy(η)
 
     # errors
     err = Inf
@@ -417,7 +416,6 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
-            ητ = deepcopy(η)
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
             # @hide_communication b_width begin # communication/computation overlap

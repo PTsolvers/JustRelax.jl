@@ -317,7 +317,7 @@ n      = 128
 nx     = n*ar - 2
 ny     = n - 2
 igg    = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 0; init_MPI= true)...)
+    IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else
     igg
 end

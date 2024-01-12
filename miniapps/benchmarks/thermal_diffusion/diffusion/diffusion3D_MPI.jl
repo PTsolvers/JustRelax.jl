@@ -119,7 +119,7 @@ function diffusion_3D(;
             rheology,
             args,
             dt,
-            di,;
+            di;
             igg
         )
 

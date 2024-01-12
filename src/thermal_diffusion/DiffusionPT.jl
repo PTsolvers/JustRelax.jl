@@ -658,8 +658,10 @@ function heatdiffusion_PT!(
     wtime0 = 0e0
     err = 2 * ϵ
 
-    println("\n ====================================\n")
-    println("Starting thermal diffusion solver...\n")
+    if !isnothing(igg) && igg.me == 0
+        println("\n ====================================\n")
+        println("Starting thermal diffusion solver...\n")
+    end
 
     while err > ϵ && iter < iterMax
         wtime0 += @elapsed begin
@@ -688,24 +690,24 @@ function heatdiffusion_PT!(
                 )
             end
 
-            err = norm(thermal.ResT) * _sq_len_RT
+            err = norm_mpi(thermal.ResT) * _sq_len_RT
 
-            push!(norm_ResT, err)
-            push!(iter_count, iter)
-
-            if verbose
-                @printf("iter = %d, err = %1.3e \n", iter, err)
+            if igg.me == 0
+                push!(norm_ResT, err)
+                push!(iter_count, iter)
+                if verbose && !isnothing(igg) 
+                    @printf("iter = %d, err = %1.3e \n", iter, err)
+                end
             end
         end
     end
-
-    println("\n ...solver finished in $(round(wtime0, sigdigits=5)) seconds \n")
-    println("====================================\n")
-
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
-
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
+    
+    if !isnothing(igg) && igg.me == 0
+        println("\n ...solver finished in $(round(wtime0, sigdigits=5)) seconds \n")
+        println("====================================\n")
+    end
     return nothing
 end
 
@@ -751,8 +753,10 @@ function heatdiffusion_PT!(
     wtime0 = 0e0
     err = 2 * ϵ
 
-    println("\n ====================================\n")
-    println("Starting thermal diffusion solver...\n")
+    if !isnothing(igg) && igg.me == 0
+        println("\n ====================================\n")
+        println("Starting thermal diffusion solver...\n")
+    end
 
     while err > ϵ && iter < iterMax
         wtime0 += @elapsed begin
@@ -792,22 +796,23 @@ function heatdiffusion_PT!(
                 )
             end
 
-            err = norm(thermal.ResT) * _sq_len_RT
+            err = norm_mpi(thermal.ResT) * _sq_len_RT
 
-            push!(norm_ResT, err)
-            push!(iter_count, iter)
-
-            if verbose
-                @printf("iter = %d, err = %1.3e \n", iter, err)
+            if igg.me == 0
+                push!(norm_ResT, err)
+                push!(iter_count, iter)
+                if verbose && !isnothing(igg) 
+                    @printf("iter = %d, err = %1.3e \n", iter, err)
+                end
             end
         end
     end
-
-    println("\n ...solver finished in $(round(wtime0, sigdigits=5)) seconds \n")
-    println("====================================\n")
-
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
+    if !isnothing(igg) && igg.me == 0
+        println("\n ...solver finished in $(round(wtime0, sigdigits=5)) seconds \n")
+        println("====================================\n")
+    end
     return nothing
 end

@@ -157,8 +157,8 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
         elliptical_perturbation!(thermal.T, δT, xc, yc, zc, r, xvi)
 
     end
-    # @views thermal.T[:, :, 1]   .= Tmax
-    # @views thermal.T[:, :, end] .= Tmin
+    @views thermal.T[:, :, 1]   .= Tmax
+    @views thermal.T[:, :, end] .= Tmin
     update_halo!(thermal.T)
     @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
@@ -191,6 +191,14 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
     update_halo!(@velocity(stokes)...)
     # ----------------------------------------------------
 
+    if igg.me == 0
+        println("ni: $ni")
+        println("xv: $(extrema(xvi[1]))")
+        println("yv: $(extrema(xvi[2]))")
+        println("zv: $(extrema(xvi[3]))")
+        println("Rank $(igg.me) => Vx: $(size(stokes.V.Vx)) Vy: $(size(stokes.V.Vy)) Vz: $(size(stokes.V.Vz))")
+    end
+    return 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
     take(figdir)
@@ -206,7 +214,8 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         scatter!(ax1, Array(thermal.T[:]), Zv./1e3)
-        scatter!(ax2, Array(log10.(η[:])), Z./1e3 )
+        # scatter!(ax2, Array(log10.(η[:])), Z./1e3)
+        scatter!(ax2, Array(ρg[3][:]), Z./1e3)
         ylims!(ax1, -lz / 1e3, 0)
         ylims!(ax2, -lz / 1e3, 0)
         hideydecorations!(ax2)
@@ -307,9 +316,9 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
             args,
             Inf,
             igg;
-            iterMax=50e3,
+            iterMax=5e3,
             # iterMax=150e3,
-            nout=1e3,
+            nout=1e2,
             viscosity_cutoff = (1e18, 1e24)
         );
 
@@ -425,9 +434,9 @@ figdir = "figs3D_test"
 ar     = 1 # aspect ratio
 n      = 16+2
 nx     = n * ar
-ny     = 50#nx
+ny     = n
 nz     = n + n-2
-nz     = ny 
+nz     = n
 igg    = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
 else

@@ -313,8 +313,12 @@ function JustRelax.solve!(
         thermal.qTx, thermal.qTy, thermal.T, thermal_parameters.κ, _dx, _dy
     )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _dx, _dy)
-    @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_boundary_conditions!(thermal_bc, thermal.T)
+
+    @hide_communication (4,4,1) begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
+        update_halo!(thermal.T)
+    end
 
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -348,8 +352,11 @@ function JustRelax.solve!(
         _dx,
         _dy,
     )
-    @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_bcs!(thermal.T, thermal_bc)
+    @hide_communication (4,4,1) begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
+        update_halo!(thermal.T)
+    end
 
     # thermal_boundary_conditions!(thermal_bc, thermal.T)
 
@@ -381,10 +388,11 @@ function JustRelax.solve!(
         thermal.qTx, thermal.qTy, thermal.T, rheology, args, _dx, _dy
     )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _dx, _dy)
-    @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_bcs!(thermal.T, thermal_bc)
-
-    # thermal_boundary_conditions!(thermal_bc, thermal.T)
+    @hide_communication (4,4,1) begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
+        update_halo!(thermal.T)
+    end
 
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -413,8 +421,12 @@ function JustRelax.solve!(
         thermal.qTx, thermal.qTy, thermal.T, rheology, phase_ratios.center, args, _di...
     )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _di...)
-    @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_bcs!(thermal.T, thermal_bc)
+    
+    @hide_communication (4,4,1) begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
+        update_halo!(thermal.T)
+    end
 
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -451,8 +463,11 @@ function JustRelax.solve!(
         _dx,
         _dy,
     )
-    @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_bcs!(thermal.T, thermal_bc)
+    @hide_communication b_width begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
+        update_halo!(thermal.T)
+    end
 
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -490,8 +505,12 @@ function JustRelax.solve!(
         _dx,
         _dy,
     )
-    @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_bcs!(thermal.T, thermal_bc)
+    
+    @hide_communication (4,4,1) begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
+        update_halo!(thermal.T)
+    end
 
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -775,9 +794,9 @@ function JustRelax.solve!(
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _di...)
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
         update_halo!(thermal.T)
     end
-    thermal_bcs!(thermal.T, thermal_bc)
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
@@ -818,8 +837,10 @@ function JustRelax.solve!(
         )
         update_halo!(thermal.T)
     end
-    @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_bcs!(thermal.T, thermal_bc)
+    @hide_communication b_width begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
+    end
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     return nothing
@@ -853,10 +874,10 @@ function JustRelax.solve!(
     # update thermal array
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
         update_halo!(thermal.T)
     end
     # apply boundary conditions
-    thermal_bcs!(thermal.T, thermal_bc)
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
@@ -898,10 +919,10 @@ function JustRelax.solve!(
     # update thermal array
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
         update_halo!(thermal.T)
     end
     # apply boundary conditions
-    thermal_bcs!(thermal.T, thermal_bc)
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
@@ -949,9 +970,9 @@ function JustRelax.solve!(
     # apply boundary conditions
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
         update_halo!(thermal.T)
     end
-    thermal_bcs!(thermal.T, thermal_bc)
 
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -1001,9 +1022,9 @@ function JustRelax.solve!(
     # apply boundary conditions
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
         update_halo!(thermal.T)
     end
-    thermal_bcs!(thermal.T, thermal_bc)
 
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)

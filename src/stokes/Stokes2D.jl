@@ -392,8 +392,10 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            update_halo!(stokes.τ.xy)
+            @hide_communication b_width begin # communication/computation overlap
+                @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+                update_halo!(stokes.τ.xy)
+            end
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -416,23 +418,31 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
             )
-            errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
-            push!(norm_Rx, errs[1])
-            push!(norm_Ry, errs[2])
-            push!(norm_∇V, errs[3])
+            errs = (
+                norm_mpi(stokes.R.Rx) / length(stokes.R.Rx),
+                norm_mpi(stokes.R.Ry) / length(stokes.R.Ry),
+                norm_mpi(stokes.R.RP) / length(stokes.R.RP),
+            )
             err = maximum(errs)
-            push!(err_evo1, err)
-            push!(err_evo2, iter)
-            if igg.me == 0 && ((verbose && err > ϵ) || iter == iterMax)
-                @printf(
-                    "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
-                    iter,
-                    err,
-                    norm_Rx[end],
-                    norm_Ry[end],
-                    norm_∇V[end]
-                )
+            if igg.me == 0
+                push!(norm_Rx, errs[1])
+                push!(norm_Ry, errs[2])
+                push!(norm_∇V, errs[3])
+                push!(err_evo1, err)
+                push!(err_evo2, iter)
+            
+                if (verbose && err > ϵ) || iter == iterMax
+                    @printf(
+                        "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
+                        iter,
+                        err,
+                        norm_Rx[end],
+                        norm_Ry[end],
+                        norm_∇V[end]
+                    )
+                end
             end
+
             isnan(err) && error("NaN(s)")
         end
 
@@ -620,6 +630,8 @@ function JustRelax.solve!(
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
+
+    println("Rank $(igg.me) exiting stokes solver")
 
     stokes.P .= θ
 

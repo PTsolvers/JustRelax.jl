@@ -293,16 +293,14 @@ function JustRelax.solve!(
             )
 
             @parallel (@idx ni .+ 1) center2vertex!(
-                stokes.τ.yz,
-                stokes.τ.xz,
-                stokes.τ.xy,
+                @shear(stokes.τ)...,
                 stokes.τ.yz_c,
                 stokes.τ.xz_c,
                 stokes.τ.xy_c,
             )
-            update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
+            update_halo!(@shear(stokes.τ)...)
 
-            # @hide_communication b_width begin # communication/computation overlap
+            @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     @residuals(stokes.R)...,
@@ -316,7 +314,7 @@ function JustRelax.solve!(
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
-            # end
+            end
         end
 
         stokes.P .= θ
@@ -324,22 +322,29 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
-            push!(norm_Rx, maximum_mpi(abs.(stokes.R.Rx)))
-            push!(norm_Ry, maximum_mpi(abs.(stokes.R.Ry)))
-            push!(norm_Rz, maximum_mpi(abs.(stokes.R.Rz)))
-            push!(norm_∇V, maximum_mpi(abs.(stokes.R.RP)))
-            err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
+            errs = (
+                maximum_mpi(abs.(stokes.R.Rx)),
+                maximum_mpi(abs.(stokes.R.Ry)),
+                maximum_mpi(abs.(stokes.R.Rz)),
+                maximum_mpi(abs.(stokes.R.RP)),
+                )
+            err = max(errs[1], errs[2], errs[3], errs[4])
+            push!(norm_Rx, errs[1])
+            push!(norm_Ry, errs[2])
+            push!(norm_Rz, errs[3])
+            push!(norm_∇V, errs[4])
             push!(err_evo1, err)
             push!(err_evo2, iter)
+
             if igg.me == 0 && (verbose || iter == iterMax)
                 @printf(
                     "iter = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_Rz=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
                     err,
-                    norm_Rx[cont],
-                    norm_Ry[cont],
-                    norm_Rz[cont],
-                    norm_∇V[cont]
+                    errs[1],
+                    errs[2],
+                    errs[3],
+                    errs[4],
                 )
             end
             isnan(err) && error("NaN(s)")
@@ -509,9 +514,9 @@ function JustRelax.solve!(
         if iter % nout == 0 && iter > 1
             cont += 1
             for (norm_Ri, Ri) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R))
-                push!(norm_Ri, maximum(abs.(Ri)))
+                push!(norm_Ri, maximum_mpi(abs.(Ri)))
             end
-            push!(norm_∇V, maximum(abs.(stokes.R.RP)))
+            push!(norm_∇V, maximum_mpi(abs.(stokes.R.RP)))
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)

@@ -204,61 +204,6 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     T_v  = zeros(nx_v, ny_v)
     T_nohalo = zeros((nx + 2)-2, (ny + 1)-2)
 
-    # # Plotting ---------------------
-    # @views T_nohalo .= Array(thermal.T[2:end-2, 2:end-1]) # Copy data to CPU removing the halo
-    # gather!(T_nohalo, T_v)
-
-    # if igg.me == 0
-    #     # if it == 1 || rem(it, 10) == 0
-    #         println("Saving figure...")
-    #         xv_global = LinRange(0, lx / 1e3,  size(T_v, 1))
-    #         yv_global = LinRange(-ly / 1e3, 0, size(T_v, 2))
-    #         fig = Figure(size = (1000, 1000))
-    #         ax  = Axis(fig[1,1], aspect = ar)
-    #         h1 = heatmap!(ax, xv_global,yv_global,T_v, colormap=:batlow)
-    #         Colorbar(fig[1,2], h1, height=100)
-    #         fig, = heatmap(T_v)
-    #         # fig, = heatmap(T_v, colorrange=(1500,2000))
-    #         save( joinpath(figdir, "T_pre.png"), fig)
-    #         println("...saving figure")
-    #     # end
-    # end
-
-    # # Thermal solver ---------------
-    # args_T = (; P=stokes.P)
-    # solve!(
-    #     thermal,
-    #     thermal_bc,
-    #     stokes,
-    #     rheology,
-    #     args_T,
-    #     di,
-    #     dt,
-    # )
-    # # ------------------------------
-
-    # # Plotting ---------------------
-    # @views T_nohalo .= Array(thermal.T[2:end-2, 2:end-1]) # Copy data to CPU removing the halo
-    # gather!(T_nohalo, T_v)
-
-    # if igg.me == 0
-    #     # if it == 1 || rem(it, 10) == 0
-    #         println("Saving figure...")
-    #         xv_global = LinRange(0, lx / 1e3,  size(T_v, 1))
-    #         yv_global = LinRange(-ly / 1e3, 0, size(T_v, 2))
-    #         fig = Figure(size = (1000, 1000))
-    #         ax  = Axis(fig[1,1], aspect = ar)
-    #         h1 = heatmap!(ax, xv_global,yv_global,T_v, colormap=:batlow)
-    #         Colorbar(fig[1,2], h1, height=100)
-    #         fig, = heatmap(T_v)
-    #         # fig, = heatmap(T_v, colorrange=(1500,2000))
-    #         save( joinpath(figdir, "T_post.png"), fig)
-    #         println("...saving figure")
-    #     # end
-    # end
-
-    # return
-
     # Time loop
     t, it = 0.0, 0
     local iters

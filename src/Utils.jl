@@ -310,7 +310,7 @@ function compute_maxloc!(B, A; window=(1, 1, 1))
     ni = size(A)
 
     @parallel_indices (I...) function _maxloc!(B, A, window)
-        B[I...] = _maxloc_window_clamped(A, I..., window...)
+        @inbounds B[I...] = _maxloc_window_clamped(A, I..., window...)
         return nothing
     end
 
@@ -402,7 +402,7 @@ Compute the time step `dt` for the velocity field `S.V` for a regular gridwith g
 The implicit global grid variable `I` implies that the time step is calculated globally and not
 separately on each block.
 """
-@inline compute_dt(S::StokesArrays, di, I::IGG) = compute_dt(@velocity(S), di, Inf, I::IGG)
+@inline compute_dt(S::StokesArrays, di, I::IGG) = compute_dt(@velocity(S), di, Inf, I)
 
 """
     compute_dt(S::StokesArrays, di, dt_diff)
@@ -412,10 +412,10 @@ Compute the time step `dt` for the velocity field `S.V` and the diffusive maximu
 implies that the time step is calculated globally and not separately on each block.
 """
 @inline function compute_dt(S::StokesArrays, di, dt_diff, I::IGG)
-    return compute_dt(@velocity(S), di, dt_diff, I::IGG)
+    return compute_dt(@velocity(S), di, dt_diff, I)
 end
 
-@inline function compute_dt(V::NTuple, di, dt_diff, I::IGG)
+@inline function compute_dt(V::NTuple, di, dt_diff, ::IGG)
     n = inv(length(V) + 0.1)
     dt_adv = mapreduce(x -> x[1] * inv(maximum_mpi(abs.(x[2]))), max, zip(di, V)) * n
     return min(dt_diff, dt_adv)

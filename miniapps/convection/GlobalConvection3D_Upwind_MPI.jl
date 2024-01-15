@@ -1,5 +1,5 @@
 using JustRelax, JustRelax.DataIO
-
+using JLD2
 # setup ParallelStencil.jl environment
 model = PS_Setup(:threads, Float64, 3)
 environment!(model)
@@ -38,11 +38,11 @@ end
 end
 
 # Half-space-cooling model
-@parallel_indices (i, j, k) function init_T!(T, z, κ, Tm, Tp, Tmin, Tmax)
+@parallel_indices (i, j, k) function init_T!(T, z, κ, Tm, Tp, Tmin)
     yr         = 3600*24*365.25
     dTdz       = (Tm-Tp)/2890e3
     zᵢ         = abs(z[k])
-    Tᵢ         = Tp + dTdz*(zᵢ)
+    Tᵢ         = Tp + dTdz * zᵢ
     time       = 100e6 * yr
     Ths        = Tmin + (Tm -Tmin) * erf((zᵢ)*0.5/(κ*time)^0.5)
     T[i, j, k] = min(Tᵢ, Ths)
@@ -98,7 +98,7 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
     creep = CustomRheology(custom_εII, custom_τII, v_args)
 
     # Physical properties using GeoParams ----------------
-    η_reg     = 1e18
+    η_reg     = 1e16
     G0        = 70e9    # shear modulus
     cohesion  = 30e6
     friction  = asind(0.01)
@@ -113,7 +113,8 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
         Density           = PT_Density(; ρ0=3.1e3, β=β, T0=0.0, α = 1.5e-5),
         HeatCapacity      = ConstantHeatCapacity(; cp=1.2e3),
         Conductivity      = ConstantConductivity(; k=3.0),
-        CompositeRheology = CompositeRheology((creep, )),
+        CompositeRheology = CompositeRheology((LinearViscous(;η= 1e201), )),
+        # CompositeRheology = CompositeRheology((creep, )),
         Elasticity        = el,
         Gravity           = ConstantGravity(; g=9.81),
     )
@@ -129,7 +130,8 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
     # )
     # heat diffusivity
     κ            = (rheology.Conductivity[1].k / (rheology.HeatCapacity[1].cp * rheology.Density[1].ρ0)).val
-    dt = dt_diff = min(di...)^2 / κ / 3.01 # diffusive CFL timestep limiter
+    # dt = dt_diff = min(di...)^2 / κ / 3.01 # diffusive CFL timestep limiter
+    dt = dt_diff = 3600 * 24 *365.25 * 100e3
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -143,7 +145,7 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
     Tp          = 1900
     Tm          = Tp + adiabat * 2890
     Tmin, Tmax  = 300.0, 3.5e3
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3], κ, Tm, Tp, Tmin, Tmax)
+    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3], κ, Tm, Tp, Tmin)
     thermal_bcs!(thermal.T, thermal_bc)
     # Elliptical temperature anomaly
     if thermal_perturbation == :random
@@ -151,7 +153,7 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
         random_perturbation!(thermal.T, δT, (lx*1/8, lx*7/8), (ly*1/8, ly*7/8), (-2000e3, -2600e3), xvi)
 
     elseif thermal_perturbation == :circular
-        δT          = 1.0                      # thermal perturbation (in %)
+        δT          = 15.0                      # thermal perturbation (in %)
         xc, yc, zc  = 0.5*lx, 0.5*ly, -0.75*lz  # origin of thermal anomaly
         r           = 150e3                     # radius of perturbation
         elliptical_perturbation!(thermal.T, δT, xc, yc, zc, r, xvi)
@@ -191,14 +193,15 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
     update_halo!(@velocity(stokes)...)
     # ----------------------------------------------------
 
-    if igg.me == 0
-        println("ni: $ni")
-        println("xv: $(extrema(xvi[1]))")
-        println("yv: $(extrema(xvi[2]))")
-        println("zv: $(extrema(xvi[3]))")
-        println("Rank $(igg.me) => Vx: $(size(stokes.V.Vx)) Vy: $(size(stokes.V.Vy)) Vz: $(size(stokes.V.Vz))")
-    end
-    return 
+    # if igg.me == 0
+    #     println("ni: $ni")
+    #     println("xv: $(extrema(xvi[1]))")
+    #     println("yv: $(extrema(xvi[2]))")
+    #     println("zv: $(extrema(xvi[3]))")
+    #     println("Rank $(igg.me) => Vx: $(size(stokes.V.Vx)) Vy: $(size(stokes.V.Vy)) Vz: $(size(stokes.V.Vz))")
+    # end
+    # return 
+
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
     take(figdir)
@@ -219,11 +222,9 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
         ylims!(ax1, -lz / 1e3, 0)
         ylims!(ax2, -lz / 1e3, 0)
         hideydecorations!(ax2)
-        save("initial_profile_rank$(igg.me).png", fig)
+        # save("initial_profile_rank$(igg.me).png", fig)
         fig
     end
-
-    # return nothing 
 
     # global arrays
     ## grid center arrays
@@ -238,7 +239,7 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
     η_vep_nohalo = zeros(nx-2, ny-2, nz-2)
     εII_nohalo   = zeros(nx-2, ny-2, nz-2)
     T_nohalo     = zeros(nx-2, ny-2, nz-2)
-    xci_v        = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
+    xci_v        = LinRange(0, lx, nx_v), LinRange(0, ly, ny_v), LinRange(-lz, 0, nz_v)
 
     # ## grid vertices arrays
     # nx_vv        = nx_v + 1
@@ -251,17 +252,55 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
     # Time loop
     t, it = 0.0, 0
     
+    # # gather MPI arrays for plotting
+    # @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+    # @views η_vep_nohalo .= Array(η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
+    # @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+    # @views T_nohalo     .= Array(thermal.Tc[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+    # gather!(τII_nohalo, τII_v)
+    # gather!(η_vep_nohalo, η_vep_v)
+    # gather!(εII_nohalo, εII_v)
+    # gather!(T_nohalo, T_v)
 
-        # # gather MPI arrays for plotting
-        # @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        # @views η_vep_nohalo .= Array(η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
-        # @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        # @views T_nohalo     .= Array(thermal.Tc[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        # gather!(τII_nohalo, τII_v)
-        # gather!(η_vep_nohalo, η_vep_v)
-        # gather!(εII_nohalo, εII_v)
-        # gather!(T_nohalo, T_v)
 
+    # if igg.me == 0 
+    #     f, = heatmap(T_v[:, nx_v >>> 1, :], colormap=:batlow)
+    #     save("pre_potato_$(igg.me).png", f)
+    # end
+
+    # # Thermal solver ---------------
+    # solve!(
+    #     thermal,
+    #     thermal_bc,
+    #     stokes,
+    #     rheology,
+    #     args,
+    #     di,
+    #     dt
+    # )
+    # # ------------------------------
+    # if igg.me == 0 
+    #     f, = heatmap(T_v[:, nx_v >>> 1, :], colormap=:batlow)
+    #     save("post_potato_$(igg.me).png", f)
+    # end
+
+    # # Plot initial T and η profiles
+    # fig0 = let
+    #     Zv  = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
+    #     Z   = [z for x in xci[1], y in xci[2], z in xci[3]][:]
+    #     fig = Figure(size = (1200, 900))
+    #     ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
+    #     ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
+    #     scatter!(ax1, Array(thermal.T[:]), Zv./1e3)
+    #     scatter!(ax2, Array(log10.(η[:])), Z ./1e3)
+    #     ylims!(ax1, -lz / 1e3, 0)
+    #     ylims!(ax2, -lz / 1e3, 0)
+    #     hideydecorations!(ax2)
+    #     save("profile_rank$(igg.me).png", fig)
+    #     fig
+    # end
+
+    # return 
 
     # # Plotting ---------------------
     # if igg.me == 0 
@@ -297,7 +336,7 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
 
         # Update arguments needed to compute several physical properties
         # e.g. density, viscosity, etc -
-        args = (; T=thermal.Tc, P=stokes.P, depth=depth, dt=Inf)
+        args = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
         @parallel (@idx ni) compute_ρg!(ρg[3], rheology, (T=thermal.Tc, P=stokes.P))
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0,  @strain(stokes)..., args, rheology, (1e18, 1e24)
@@ -316,11 +355,37 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
             args,
             Inf,
             igg;
-            iterMax=5e3,
+            iterMax = 5e3,
             # iterMax=150e3,
-            nout=1e2,
+            nout    = 1e2,
             viscosity_cutoff = (1e18, 1e24)
         );
+        # dt = compute_dt(stokes, di, dt_diff, igg)
+        # ------------------------------
+
+        jldsave("Velocity_$(igg.me).jld2"; 
+            stokes.V.Vx, 
+            stokes.V.Vy, 
+            stokes.V.Vz,
+            stokes.τ.yz,
+            stokes.τ.xz,
+            stokes.τ.xy,
+        )
+
+        break
+        # return 
+
+        # Thermal solver ---------------
+        solve!(
+            thermal,
+            thermal_bc,
+            stokes,
+            rheology,
+            args,
+            di,
+            dt
+        )
+        # ------------------------------
 
         # Plot initial T and η profiles
         fig0 = let
@@ -330,27 +395,13 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
             ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
             ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
             scatter!(ax1, Array(thermal.T[:]), Zv./1e3)
-            scatter!(ax2, Array(log10.(η[:])), Z./1e3 )
+            scatter!(ax2, Array(log10.(η[:])), Z ./1e3)
             ylims!(ax1, -lz / 1e3, 0)
             ylims!(ax2, -lz / 1e3, 0)
             hideydecorations!(ax2)
             save("profile_rank$(igg.me).png", fig)
             fig
         end
-        # dt = compute_dt(stokes, di, dt_diff, igg)
-        # # ------------------------------
-
-        # # Thermal solver ---------------
-        # solve!(
-        #     thermal,
-        #     thermal_bc,
-        #     stokes,
-        #     rheology,
-        #     args,
-        #     di,
-        #     dt
-        # )
-        # # ------------------------------
 
         it += 1
         t += dt
@@ -364,9 +415,10 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
 
         # slice_j = ny >>> 1
 
-        f, = heatmap(stokes.V.Vx[:, nx >>> 1, :], colormap=:batlow)
+        f, = heatmap(stokes.V.Vz[:, nx >>> 1, :], colormap=:batlow)
+        # f, = heatmap(thermal.T[:, nx >>> 1, :], colormap=:batlow)
+        # f, = heatmap(stokes.τ.xz[:, nx >>> 1, :], colormap=:batlow)
         save("potato_$(igg.me).png", f)
-        break
 
         # fig = Figure(size = (1000, 1000), title = "t")
         # ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]")
@@ -422,7 +474,7 @@ function thermal_convection3D(igg; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D",
             end
         # end
         # ------------------------------
-
+        break
     end
     
     finalize_global_grid()
@@ -432,11 +484,12 @@ end
 
 figdir = "figs3D_test"
 ar     = 1 # aspect ratio
-n      = 16+2
+n      = (16+2)
 nx     = n * ar
 ny     = n
+ny     = 34
 nz     = n + n-2
-nz     = n
+nz     = 34
 igg    = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
 else

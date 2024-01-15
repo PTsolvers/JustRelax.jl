@@ -953,7 +953,7 @@ function JustRelax.solve!(
         thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, rheology, args, _di...
     )
     # update thermal array
-    @hide_communication b_width begin # communication/computation overlap
+    # @hide_communication b_width begin # communication/computation overlap
         @parallel advect_T!(
             thermal.dT_dt,
             thermal.qTx,
@@ -965,8 +965,8 @@ function JustRelax.solve!(
             stokes.V.Vz,
             _di...,
         )
-        update_halo!(thermal.T)
-    end
+    #     update_halo!(thermal.T)
+    # end
     # apply boundary conditions
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)

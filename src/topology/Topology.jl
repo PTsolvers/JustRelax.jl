@@ -45,32 +45,29 @@ struct Geometry{nDim,T}
     end
 end
 
-function lazy_grid(di::NTuple{N,T1}, ni; origin=ntuple(_ -> zero(T1), Val(N))) where {N,T1}
+function lazy_grid(di::NTuple{N,T}, ni; origin=ntuple(_ -> zero(T), Val(N))) where {N,T}
     f_g = (x_g, y_g, z_g)
 
     # nodes at the center of the grid cells
     xci = ntuple(Val(N)) do i
         Base.@_inline_meta
         rank_origin = f_g[i](1, di[i], ni[i])
-
         local_origin = rank_origin + origin[i]
         rank_end = f_g[i](ni[i], di[i], ni[i])
         local_end = rank_end + origin[i]
 
-        @inbounds LinRange(local_origin[i] + di[i] / 2, local_end[i] + di[i] / 2, ni[i])
+        LinRange(local_origin[i] + di[i] / 2, local_end[i] + di[i] / 2, ni[i])
     end
 
     # nodes at the vertices of the grid cells
     xvi = ntuple(Val(N)) do i
-        # println("potato")
         Base.@_inline_meta
         rank_origin = f_g[i](1, di[i], ni[i])
         local_origin = rank_origin + origin[i]
-
         rank_end = f_g[i](ni[i] + 1, di[i], ni[i])
         local_end = rank_end + origin[i]
 
-        @inbounds LinRange(local_origin[i], local_end[i], ni[i] + 1)
+        LinRange(local_origin[i], local_end[i], ni[i] + 1)
     end
 
     return xci, xvi

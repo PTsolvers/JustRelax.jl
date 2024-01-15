@@ -196,15 +196,191 @@ end
 
 ## 3D VISCO-ELASTO-PLASTIC STOKES SOLVER WITH GeoParams.jl
 
+# function JustRelax.solve!(
+#     stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
+#     pt_stokes::PTStokesCoeffs,
+#     di::NTuple{3,T},
+#     flow_bcs::FlowBoundaryConditions,
+#     ρg,
+#     η,
+#     η_vep,
+#     rheology::MaterialParams,
+#     args,
+#     dt,
+#     igg::IGG;
+#     iterMax=10e3,
+#     nout=500,
+#     b_width=(4, 4, 4),
+#     verbose=true,
+#     viscosity_cutoff=(-Inf, Inf),
+# ) where {A,B,C,D,T}
+
+#     # solver related
+#     ϵ = pt_stokes.ϵ
+#     # geometry
+#     _di = @. 1 / di
+#     ni = size(stokes.P)
+
+#     # ~preconditioner
+#     ητ = deepcopy(η)
+
+#     # errors
+#     err = 2 * ϵ
+#     iter = 0
+#     cont = 0
+#     err_evo1 = Float64[]
+#     err_evo2 = Int64[]
+#     norm_Rx = Float64[]
+#     norm_Ry = Float64[]
+#     norm_Rz = Float64[]
+#     norm_∇V = Float64[]
+
+#     Kb = get_Kb(rheology)
+#     G = get_G(rheology)
+#     @copy stokes.P0 stokes.P
+#     λ = @zeros(ni...)
+#     θ = @zeros(ni...)
+
+#     # solver loop
+#     wtime0 = 0.0
+#     while iter < 2 || (err > ϵ && iter ≤ iterMax)
+#         wtime0 += @elapsed begin
+#             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+#             @parallel (@idx ni) compute_P!(
+#                 stokes.P,
+#                 stokes.P0,
+#                 stokes.R.RP,
+#                 stokes.∇V,
+#                 # ητ,
+#                 η,
+#                 Kb,
+#                 dt,
+#                 pt_stokes.r,
+#                 pt_stokes.θ_dτ,
+#             )
+#             @parallel (@idx ni) compute_strain_rate!(
+#                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
+#             )
+
+#             # Update buoyancy
+#             @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
+
+#             # ν = 1e-2
+#             # @parallel (@idx ni) compute_viscosity!(
+#             #     η,
+#             #     ν,
+#             #     @strain(stokes)...,
+#             #     args,
+#             #     rheology,
+#             #     viscosity_cutoff,
+#             # )
+#             compute_maxloc!(ητ, η)
+#             update_halo!(ητ)
+
+#             @parallel (@idx ni) compute_τ_nonlinear!(
+#                 @tensor_center(stokes.τ),
+#                 stokes.τ.II,
+#                 @tensor_center(stokes.τ_o),
+#                 @strain(stokes),
+#                 stokes.P,
+#                 θ,
+#                 η,
+#                 η_vep,
+#                 λ,
+#                 tupleize(rheology), # needs to be a tuple
+#                 dt,
+#                 pt_stokes.θ_dτ,
+#             )
+
+#             @parallel (@idx ni .+ 1) center2vertex!(
+#                 @shear(stokes.τ)...,
+#                 stokes.τ.yz_c,
+#                 stokes.τ.xz_c,
+#                 stokes.τ.xy_c,
+#             )
+#             update_halo!(@shear(stokes.τ)...)
+
+#             @hide_communication b_width begin # communication/computation overlap
+#                 @parallel compute_V!(
+#                     @velocity(stokes)...,
+#                     @residuals(stokes.R)...,
+#                     θ,
+#                     ρg...,
+#                     @stress(stokes)...,
+#                     ητ,
+#                     pt_stokes.ηdτ,
+#                     _di...,
+#                 )
+#                 # apply boundary conditions
+#                 flow_bcs!(stokes, flow_bcs)
+#                 update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+#             end
+#         end
+
+#         stokes.P .= θ
+
+#         iter += 1
+#         if iter % nout == 0 && iter > 1
+#             cont += 1
+#             errs = (
+#                 maximum_mpi(abs.(stokes.R.Rx)),
+#                 maximum_mpi(abs.(stokes.R.Ry)),
+#                 maximum_mpi(abs.(stokes.R.Rz)),
+#                 maximum_mpi(abs.(stokes.R.RP)),
+#                 )
+#             err = max(errs[1], errs[2], errs[3], errs[4])
+#             push!(norm_Rx, errs[1])
+#             push!(norm_Ry, errs[2])
+#             push!(norm_Rz, errs[3])
+#             push!(norm_∇V, errs[4])
+#             push!(err_evo1, err)
+#             push!(err_evo2, iter)
+
+#             if igg.me == 0 && (verbose || iter == iterMax)
+#                 @printf(
+#                     "iter = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_Rz=%1.3e, norm_∇V=%1.3e] \n",
+#                     iter,
+#                     err,
+#                     errs[1],
+#                     errs[2],
+#                     errs[3],
+#                     errs[4],
+#                 )
+#             end
+#             isnan(err) && error("NaN(s)")
+#         end
+
+#         if igg.me == 0 && err ≤ ϵ
+#             println("Pseudo-transient iterations converged in $iter iterations")
+#         end
+#     end
+
+#     av_time = wtime0 / (iter - 1) # average time per iteration
+#     update_τ_o!(stokes) # copy τ into τ_o
+
+#     return (
+#         iter=iter,
+#         err_evo1=err_evo1,
+#         err_evo2=err_evo2,
+#         norm_Rx=norm_Rx,
+#         norm_Ry=norm_Ry,
+#         norm_Rz=norm_Rz,
+#         norm_∇V=norm_∇V,
+#         time=wtime0,
+#         av_time=av_time,
+#     )
+# end
+
+# GeoParams and multiple phases
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
-    flow_bcs::FlowBoundaryConditions,
+    flow_bc::FlowBoundaryConditions,
     ρg,
     η,
     η_vep,
-    rheology::MaterialParams,
+    rheology::AbstractMaterialParamsStruct,
     args,
     dt,
     igg::IGG;
@@ -215,17 +391,19 @@ function JustRelax.solve!(
     viscosity_cutoff=(-Inf, Inf),
 ) where {A,B,C,D,T}
 
+    ## UNPACK
+
     # solver related
     ϵ = pt_stokes.ϵ
     # geometry
     _di = @. 1 / di
     ni = size(stokes.P)
-
-    # ~preconditioner
     ητ = deepcopy(η)
+    compute_maxloc!(ητ, η; window=(1, 1, 1))
+    update_halo!(ητ)
 
     # errors
-    err = 2 * ϵ
+    err = Inf
     iter = 0
     cont = 0
     err_evo1 = Float64[]
@@ -235,8 +413,6 @@ function JustRelax.solve!(
     norm_Rz = Float64[]
     norm_∇V = Float64[]
 
-    Kb = get_Kb(rheology)
-    G = get_G(rheology)
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
     θ = @zeros(ni...)
@@ -245,8 +421,13 @@ function JustRelax.solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            compute_maxloc!(ητ, η)
+            # ~preconditioner
+            compute_maxloc!(ητ, η; window=(1, 1, 1))
             update_halo!(ητ)
+            # @hide_communication b_width begin # communication/computation overlap
+            #     @parallel compute_maxloc!(ητ, η)
+            #     update_halo!(ητ)
+            # end
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel (@idx ni) compute_P!(
@@ -255,11 +436,12 @@ function JustRelax.solve!(
                 stokes.R.RP,
                 stokes.∇V,
                 ητ,
-                Kb,
+                get_Kb(rheology),
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
             )
+
             @parallel (@idx ni) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
@@ -267,15 +449,16 @@ function JustRelax.solve!(
             # Update buoyancy
             @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
 
-            # ν = 1e-2
-            # @parallel (@idx ni) compute_viscosity!(
-            #     η,
-            #     ν,
-            #     @strain(stokes)...,
-            #     args,
-            #     rheology,
-            #     viscosity_cutoff,
-            # )
+            # Update viscosity
+            ν = 1e-2
+            @parallel (@idx ni) compute_viscosity!(
+                η,
+                ν,
+                @strain(stokes)...,
+                args,
+                rheology,
+                viscosity_cutoff,
+            )
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -292,15 +475,23 @@ function JustRelax.solve!(
                 pt_stokes.θ_dτ,
             )
 
-            @parallel (@idx ni .+ 1) center2vertex!(
-                @shear(stokes.τ)...,
+            @parallel (@idx ni ) center2vertex!(
+                stokes.τ.yz,
+                stokes.τ.xz,
+                stokes.τ.xy,
                 stokes.τ.yz_c,
                 stokes.τ.xz_c,
                 stokes.τ.xy_c,
             )
-            update_halo!(@shear(stokes.τ)...)
+            update_halo!(stokes.τ.yz)
+            update_halo!(stokes.τ.xz)
+            update_halo!(stokes.τ.xy)
 
-            @hide_communication b_width begin # communication/computation overlap
+            # @parallel (@idx ni .+ 1) compute_τ_vertex!(
+            #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
+            # )
+
+            # @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     @residuals(stokes.R)...,
@@ -312,9 +503,12 @@ function JustRelax.solve!(
                     _di...,
                 )
                 # apply boundary conditions
-                flow_bcs!(stokes, flow_bcs)
-                update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
-            end
+                flow_bcs!(stokes, flow_bc)
+                # update_halo!(@velocity(stokes)...)
+                update_halo!(stokes.V.Vx)
+                update_halo!(stokes.V.Vy)
+                update_halo!(stokes.V.Vz)
+            # end
         end
 
         stokes.P .= θ
@@ -322,29 +516,22 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
-            errs = (
-                maximum_mpi(abs.(stokes.R.Rx)),
-                maximum_mpi(abs.(stokes.R.Ry)),
-                maximum_mpi(abs.(stokes.R.Rz)),
-                maximum_mpi(abs.(stokes.R.RP)),
-                )
-            err = max(errs[1], errs[2], errs[3], errs[4])
-            push!(norm_Rx, errs[1])
-            push!(norm_Ry, errs[2])
-            push!(norm_Rz, errs[3])
-            push!(norm_∇V, errs[4])
+            for (norm_Ri, Ri) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R))
+                push!(norm_Ri, maximum_mpi(abs.(Ri)))
+            end
+            push!(norm_∇V, maximum_mpi(abs.(stokes.R.RP)))
+            err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)
-
             if igg.me == 0 && (verbose || iter == iterMax)
                 @printf(
                     "iter = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_Rz=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
                     err,
-                    errs[1],
-                    errs[2],
-                    errs[3],
-                    errs[4],
+                    norm_Rx[cont],
+                    norm_Ry[cont],
+                    norm_Rz[cont],
+                    norm_∇V[cont]
                 )
             end
             isnan(err) && error("NaN(s)")
@@ -356,7 +543,8 @@ function JustRelax.solve!(
     end
 
     av_time = wtime0 / (iter - 1) # average time per iteration
-    update_τ_o!(stokes) # copy τ into τ_o
+
+    stokes.P .= θ
 
     return (
         iter=iter,

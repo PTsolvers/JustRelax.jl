@@ -44,7 +44,7 @@ end
     i1, j1, k1 = (i, j, k) .+ 1
     nx, ny, nz = size(center_yz)
 
-    if i ≤ nx && 1 < j1 ≤ ny && 1 < k1 ≤ nz
+    if i ≤ nx && j1 ≤ ny && k1 ≤ nz
         vertex_yz[i, j1, k1] =
             0.25 * (
                 center_yz[i, j, k] +
@@ -53,7 +53,7 @@ end
                 center_yz[i, j1, k1]
             )
     end
-    if 1 < i1 ≤ nx && j ≤ ny && 1 < k1 ≤ nz
+    if i1 ≤ nx && j ≤ ny && k1 ≤ nz
         vertex_xz[i1, j, k1] =
             0.25 * (
                 center_xz[i, j, k] +
@@ -62,7 +62,7 @@ end
                 center_xz[i1, j, k1]
             )
     end
-    if 1 < i1 ≤ nx && 1 < j1 ≤ ny && k ≤ nz
+    if i1 ≤ nx && j1 ≤ ny && k ≤ nz
         vertex_xy[i1, j1, k] =
             0.25 * (
                 center_xy[i, j, k] +

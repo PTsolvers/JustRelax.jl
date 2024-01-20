@@ -302,3 +302,6 @@ The miniapps without particles are:
 ## Benchmarks
 
 Current (Stokes 2D-3D, thermal diffusion) and future benchmarks can be found in the [Benchmarks](miniapps/benchmarks).
+
+## Funding
+The development of this package is supported by the [GPU4GEO](https://ptsolvers.github.io/GPU4GEO/) [PASC](https://www.pasc-ch.org) project.

@@ -262,6 +262,7 @@ end
     τII,
     τ_old, # shear @ centers
     ε,     # shear @ vertices
+    ε_pl,  # shear @ vertices
     P,
     θ,
     η,
@@ -285,7 +286,7 @@ end
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
+        τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
     θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
 
@@ -298,6 +299,7 @@ end
     τII,
     τ_old, # @ cell centers
     ε,     # @ vertices
+    ε_pl,     # @ vertices
     P,
     θ,
     η,
@@ -321,7 +323,7 @@ end
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
+        τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
     θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
 

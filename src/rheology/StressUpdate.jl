@@ -88,12 +88,16 @@ function compute_dτ_pl(
     λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(ηij * dτ_r + η_reg + volume)
     λ_τII = λ * 0.5 * inv(τII_trial)
 
-    dτ_pl, λdQdτ = ntuple(Val(N)) do i
+    λdQdτ = ntuple(Val(N)) do i
         Base.@_inline_meta
         # derivatives of the plastic potential
-        λdQdτ = (τij[i] + dτij[i]) * λ_τII
+        (τij[i] + dτij[i]) * λ_τII
+    end
+
+    dτ_pl = ntuple(Val(N)) do i
+        Base.@_inline_meta
         # corrected stress
-        muladd(-dτ_r * 2.0, ηij * λdQdτ, dτij[i])
+        muladd(-dτ_r * 2.0, ηij * λdQdτ[i], dτij[i])
     end
     return dτ_pl, λ, λdQdτ
 end

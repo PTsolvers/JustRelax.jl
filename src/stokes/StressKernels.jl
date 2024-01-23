@@ -263,6 +263,7 @@ end
     τ_old, # @ centers
     ε,     # @ vertices
     ε_pl,  # @ centers
+    EII,   # accumulated plastic strain rate @ centers
     P,
     θ,
     η,
@@ -287,7 +288,7 @@ end
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
+        τ, τII, τ_old, ε, ε_pl, EII, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
 
     # augmented pressure with plastic volumetric strain over pressure
@@ -303,6 +304,7 @@ end
     τ_old,  # @ centers
     ε,      # @ vertices
     ε_pl,   # @ centers
+    EII,   # accumulated plastic strain rate @ centers
     P,
     θ,
     η,
@@ -328,7 +330,7 @@ end
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
+        τ, τII, τ_old, ε, ε_pl, EII, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
     # augmented pressure with plastic volumetric strain over pressure
     @inbounds θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)

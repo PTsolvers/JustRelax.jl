@@ -336,11 +336,19 @@ end
     return nothing
 end
 
+## Accumulate tensor
+@parallel_indices (I...) function accumulate_tensor!(
+    II, tensor::NTuple{N,T}, dt
+) where {N,T}
+    @inbounds II[I...] += second_invariant_staggered(getindex.(tensor, I...)...) * dt
+    return nothing
+end
+
 ## Stress invariants
 @parallel_indices (I...) function tensor_invariant_center!(
     II, tensor::NTuple{N,T}
 ) where {N,T}
-    @inbounds II[I...] = second_invariant_staggered(getindex(tensor, I...)...)
+    @inbounds II[I...] = second_invariant_staggered(getindex.(tensor, I...)...)
     return nothing
 end
 

@@ -120,7 +120,7 @@ function make_stokes_struct!()
             τ::B
             ε::B
             ε_pl::B
-            EII_pl::B
+            EII_pl::T
             τ_o::Union{B,Nothing}
             R::C
 

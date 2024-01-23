@@ -353,6 +353,10 @@ function JustRelax.solve!(
     norm_Ry = Float64[]
     norm_∇V = Float64[]
 
+    for Aij in @tensor_center(stokes.ε_pl)
+        Aij .= 0.0
+    end
+
     # solver loop
     wtime0 = 0.0
     λ = @zeros(ni...)
@@ -515,6 +519,10 @@ function JustRelax.solve!(
     η0 = deepcopy(η)
     do_visc = true
     # GC.enable(false)
+
+    for Aij in @tensor_center(stokes.ε_pl)
+        Aij .= 0.0
+    end
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin

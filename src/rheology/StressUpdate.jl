@@ -207,51 +207,51 @@ end
 ## softening kernels
 
 @inline function soften_cohesion(
-    v::DruckerPrager{T,U,U1,S1,NoSoftening}, ::Any
+    v::DruckerPrager{T,U,U1,S1,NoSoftening}, ::T
 ) where {T,U,U1,S1}
     return v.C.val
 end
 
 @inline function soften_cohesion(
-    v::DruckerPrager_regularised{T,U,U1,U2,S1,NoSoftening}, ::Any
+    v::DruckerPrager_regularised{T,U,U1,U2,S1,NoSoftening}, ::T
 ) where {T,U,U1,U2,S1}
     return v.C.val
 end
 
 @inline function soften_cohesion(
-    v::DruckerPrager{T,U,U1,S1,AbstractSoftening}, EII::T
-) where {T,U,U1,S1}
+    v::DruckerPrager{T,U,U1,S1,S2}, EII::T
+) where {T,U,U1,S1,S2}
     return v.softening_C(v.C.val, EII)
 end
 
 @inline function soften_cohesion(
-    v::DruckerPrager_regularised{T,U,U1,U2,S1,AbstractSoftening}, EII::T
-) where {T,U,U1,U2,S1}
+    v::DruckerPrager_regularised{T,U,U1,U2,S1,S2}, EII::T
+) where {T,U,U1,U2,S1,S2}
     return v.softening_C(v.C.val, EII)
 end
 
 @inline function soften_friction_angle(
-    v::DruckerPrager{T,U,U1,NoSoftening,S2}, ::Any
+    v::DruckerPrager{T,U,U1,NoSoftening,S2}, ::T
 ) where {T,U,U1,S2}
     return (v.sinϕ.val, v.cosϕ.val)
 end
 
 @inline function soften_friction_angle(
-    v::DruckerPrager_regularised{T,U,U1,U2,NoSoftening,S2}, ::Any
+    v::DruckerPrager_regularised{T,U,U1,U2,NoSoftening,S2}, ::T
 ) where {T,U,U1,U2,S2}
     return (v.sinϕ.val, v.cosϕ.val)
 end
 
 @inline function soften_friction_angle(
-    v::DruckerPrager{T,U,U1,AbstractSoftening,S2}, EII::T
-) where {T,U,U1,S2}
+    v::DruckerPrager{T,U,U1,S1,S2}, EII::T
+) where {T,U,U1,S1,S2}
     ϕ = v.softening_ϕ(v.ϕ.val, EII)
     return cosd(ϕ), sind(ϕ)
 end
 
 @inline function soften_friction_angle(
-    v::DruckerPrager_regularised{T,U,U1,U2,AbstractSoftening,S2}, EII::T
-) where {T,U,U1,U2,S2}
+    v::DruckerPrager_regularised{T,U,U1,U2,S1,S2}, EII::T
+) where {T,U,U1,U2,S1,S2}
     ϕ = v.softening_ϕ(v.ϕ.val, EII)
     return cosd(ϕ), sind(ϕ)
 end

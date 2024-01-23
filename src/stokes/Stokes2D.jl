@@ -444,12 +444,10 @@ function JustRelax.solve!(
     end
 
     stokes.P .= θ
-    
+
     # accumulate plastic strain tensor
-    @parallel (@idx ni) accumulate_tensor!(
-        stokes.EII_pl, @tensor_center(stokes.ε_pl), dt
-    )
-    
+    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -631,11 +629,9 @@ function JustRelax.solve!(
     end
 
     stokes.P .= θ
-    
+
     # accumulate plastic strain tensor
-    @parallel (@idx ni) accumulate_tensor!(
-        stokes.EII_pl, @tensor_center(stokes.ε_pl), dt
-    )
+    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
 
     return (
         iter=iter,

@@ -280,15 +280,15 @@ end
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     # get plastic parameters (if any...)
-    is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, 1)
-    
+    is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], 1)
+
     # plastic volumetric change K * dt * sinϕ * sinψ
     K = get_bulkmodulus(rheology[1])
-    volume = isinf(K) * K * dt * sinϕ * sinψ
+    volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, ε_pl, EII, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
+        τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
 
     # augmented pressure with plastic volumetric strain over pressure
@@ -322,15 +322,15 @@ end
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     # get plastic parameters (if any...)
-    is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, phase)
-    
+    is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
+
     # plastic volumetric change K * dt * sinϕ * sinψ
     K = fn_ratio(get_bulkmodulus, rheology, phase)
-    volume = isinf(K) * K * dt * sinϕ * sinψ
+    volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, ε_pl, EII, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
+        τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
     # augmented pressure with plastic volumetric strain over pressure
     @inbounds θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
@@ -342,7 +342,7 @@ end
 @parallel_indices (I...) function accumulate_tensor!(
     II, tensor::NTuple{N,T}, dt
 ) where {N,T}
-    @inbounds II[I...] += second_invariant_staggered(getindex.(tensor, I...)...) * dt
+    @inbounds II[I...] += second_invariant(getindex.(tensor, I...)...) * dt
     return nothing
 end
 

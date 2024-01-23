@@ -5,7 +5,6 @@ function _compute_τ_nonlinear!(
     τ_old::NTuple{N1,T},
     ε::NTuple{N1,T},
     ε_pl::NTuple{N1,T},
-    EII,
     P,
     ηij,
     η_vep,
@@ -44,7 +43,7 @@ function _compute_τ_nonlinear!(
 
     else
         # in this case the plastic strain rate is a tuples of zeros
-        dτij, ntuple(_ -> zero(T), Val(N1))
+        dτij, ntuple(_ -> zero(eltype(T)), Val(N1))
     end
 
     # fill plastic strain rate tensor
@@ -120,47 +119,28 @@ end
 @inline isplastic(x::AbstractPlasticity) = true
 @inline isplastic(x) = false
 
-@inline soften_cohesion(v::DruckerPrager{T, U, U1, S1, NoSoftening}, ::Any) where {T, U, U1, S1} = v.C.val
-@inline soften_cohesion(v::DruckerPrager_regularised{T, U, U1, U2, S1, NoSoftening}, ::Any) where {T, U, U1, U2, S1} = v.C.val
-
-@inline function soften_cohesion(v::DruckerPrager{T, U, U1, S1, AbstractSoftening}, EII::T) where {T, U, U1, S1}
-    v.softening_C(v.C.val, EII)
-end
-
-@inline function soften_cohesion(v::DruckerPrager_regularised{T, U, U1, U2, S1, AbstractSoftening}, EII::T) where {T, U, U1, S1}
-    v.softening_C(v.C.val, EII)
-end
-
-@inline soften_friction_angle(v::DruckerPrager{T, U, U1, NoSoftening, S2}, ::Any) where {T, U, U1, S2} = v.sinϕ.val, v.cosϕ.val
-@inline soften_friction_angle(v::DruckerPrager_regularised{T, U, U1, U2, NoSoftening, S2}, ::Any) where {T, U, U1, U2, S2} = v.sinϕ.val, v.cosϕ.val
-
-@inline function soften_friction_angle(v::DruckerPrager{T, U, U1, S1, AbstractSoftening}, EII::T) where {T, U, U1, S1}
-    ϕ = v.softening_ϕ(v.ϕ.val, EII)
-    return cosd(ϕ), sind(ϕ)
-end
-
-@inline function soften_friction_angle(v::DruckerPrager_regularised{T, U, U1, U2, S1, AbstractSoftening}, EII::T) where {T, U, U1, S1}
-    ϕ = v.softening_ϕ(v.ϕ.val, EII)
-    return cosd(ϕ), sind(ϕ)
-end
-
 @inline plastic_params(v) = plastic_params(v.CompositeRheology[1].elements)
+@inline plastic_params(v, EII) = plastic_params(v.CompositeRheology[1].elements, EII)
 
-@generated function plastic_params(v::NTuple{N,Any}) where {N}
+@generated function plastic_params(v::NTuple{N,Any}, EII) where {N}
     quote
         Base.@_inline_meta
-        Base.@nexprs $N i ->
-            isplastic(v[i]) && return true,
-            v[i].C.val, v[i].sinϕ.val, v[i].cosϕ.val, v[i].sinΨ.val,
-            v[i].η_vp.val
+        Base.@nexprs $N i -> begin
+            vᵢ = v[i]
+            if isplastic(vᵢ)
+                C = soften_cohesion(vᵢ, EII)
+                sinϕ, cosϕ = soften_friction_angle(vᵢ, EII)
+                return (true, C, sinϕ, cosϕ, vᵢ.sinΨ.val, vᵢ.η_vp.val)
+            end
+        end
         (false, 0.0, 0.0, 0.0, 0.0, 0.0)
     end
 end
 
 function plastic_params_phase(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio
+    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio
 ) where {N}
-    data = _plastic_params_phase(rheology, ratio)
+    data = _plastic_params_phase(rheology, EII, ratio)
     # average over phases
     is_pl = false
     C = sinϕ = cosϕ = sinψ = η_reg = 0.0
@@ -177,12 +157,13 @@ function plastic_params_phase(
 end
 
 @generated function _plastic_params_phase(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio
+    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio
 ) where {N}
     quote
         Base.@_inline_meta
         empty_args = false, 0.0, 0.0, 0.0, 0.0, 0.0
-        Base.@nexprs $N i -> a_i = ratio[i] == 0 ? empty_args : plastic_params(rheology[i])
+        Base.@nexprs $N i ->
+            a_i = ratio[i] == 0 ? empty_args : plastic_params(rheology[i], EII)
         Base.@ncall $N tuple a
     end
 end
@@ -197,7 +178,7 @@ function cache_tensors(
     τij = getindex.(τ, idx...)
     τij_o = getindex.(τ_old, idx...)
 
-    return τij, τij_o, εij, ε_plij
+    return τij, τij_o, εij
 end
 
 function cache_tensors(
@@ -216,5 +197,57 @@ function cache_tensors(
     τij_o = getindex.(τ_old, idx...)
     τij = getindex.(τ, idx...)
 
-    return τij, τij_o, εij, ε_plij
+    return τij, τij_o, εij
+end
+
+## softening kernels
+
+@inline function soften_cohesion(
+    v::DruckerPrager{T,U,U1,S1,NoSoftening}, ::Any
+) where {T,U,U1,S1}
+    return v.C.val
+end
+
+@inline function soften_cohesion(
+    v::DruckerPrager_regularised{T,U,U1,U2,S1,NoSoftening}, ::Any
+) where {T,U,U1,U2,S1}
+    return v.C.val
+end
+
+@inline function soften_cohesion(
+    v::DruckerPrager{T,U,U1,S1,AbstractSoftening}, EII::T
+) where {T,U,U1,S1}
+    return v.softening_C(v.C.val, EII)
+end
+
+@inline function soften_cohesion(
+    v::DruckerPrager_regularised{T,U,U1,U2,S1,AbstractSoftening}, EII::T
+) where {T,U,U1,U2,S1}
+    return v.softening_C(v.C.val, EII)
+end
+
+@inline function soften_friction_angle(
+    v::DruckerPrager{T,U,U1,NoSoftening,S2}, ::Any
+) where {T,U,U1,S2}
+    return (v.sinϕ.val, v.cosϕ.val)
+end
+
+@inline function soften_friction_angle(
+    v::DruckerPrager_regularised{T,U,U1,U2,NoSoftening,S2}, ::Any
+) where {T,U,U1,U2,S2}
+    return (v.sinϕ.val, v.cosϕ.val)
+end
+
+@inline function soften_friction_angle(
+    v::DruckerPrager{T,U,U1,AbstractSoftening,S2}, EII::T
+) where {T,U,U1,S2}
+    ϕ = v.softening_ϕ(v.ϕ.val, EII)
+    return cosd(ϕ), sind(ϕ)
+end
+
+@inline function soften_friction_angle(
+    v::DruckerPrager_regularised{T,U,U1,U2,AbstractSoftening,S2}, EII::T
+) where {T,U,U1,U2,S2}
+    ϕ = v.softening_ϕ(v.ϕ.val, EII)
+    return cosd(ϕ), sind(ϕ)
 end

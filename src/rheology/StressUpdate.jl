@@ -50,7 +50,7 @@ function _compute_τ_nonlinear!(
     ntuple(Val(N1)) do i
         Base.@_inline_meta
         λdQdτᵢ = λdQdτ[i]
-        ε_pl[i][idx...] = isinf(λdQdτᵢ) * λdQdτᵢ
+        ε_pl[i][idx...] = !isinf(λdQdτᵢ) * λdQdτᵢ
     end
     # update and correct stress
     τij = τij .+ dτij

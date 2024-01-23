@@ -258,11 +258,11 @@ end
 # Single phase visco-elasto-plastic flow
 
 @parallel_indices (I...) function compute_τ_nonlinear!(
-    τ,     # shear @ centers
-    τII,
-    τ_old, # shear @ centers
-    ε,     # shear @ vertices
-    ε_pl,  # shear @ vertices
+    τ,     # @ centers
+    τII,   # @ centers
+    τ_old, # @ centers
+    ε,     # @ vertices
+    ε_pl,  # @ centers
     P,
     θ,
     η,
@@ -280,14 +280,17 @@ end
 
     # get plastic parameters (if any...)
     is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, 1)
-    # plastic volumetric change K*dt*sinϕ*sinψ
+    
+    # plastic volumetric change K * dt * sinϕ * sinψ
     K = get_bulkmodulus(rheology[1])
-    volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ
+    volume = isinf(K) * K * dt * sinϕ * sinψ
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
         τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
+
+    # augmented pressure with plastic volumetric strain over pressure
     θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
 
     return nothing
@@ -295,11 +298,11 @@ end
 
 # multi phase visco-elasto-plastic flow, where phases are defined in the cell center
 @parallel_indices (I...) function compute_τ_nonlinear!(
-    τ,     # @ cell centers
-    τII,
-    τ_old, # @ cell centers
-    ε,     # @ vertices
-    ε_pl,     # @ vertices
+    τ,      # @ centers
+    τII,    # @ centers
+    τ_old,  # @ centers
+    ε,      # @ vertices
+    ε_pl,   # @ centers
     P,
     θ,
     η,
@@ -315,17 +318,20 @@ end
     phase = @inbounds phase_center[I...]
     _Gdt = inv(fn_ratio(get_G, rheology, phase) * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
+
     # get plastic parameters (if any...)
     is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, phase)
-    # plastic volumetric change K*dt*sinϕ*sinψ
+    
+    # plastic volumetric change K * dt * sinϕ * sinψ
     K = fn_ratio(get_bulkmodulus, rheology, phase)
-    volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ
+    volume = isinf(K) * K * dt * sinϕ * sinψ
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
         τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
-    θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+    # augmented pressure with plastic volumetric strain over pressure
+    @inbounds θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
 
     return nothing
 end
@@ -334,7 +340,7 @@ end
 @parallel_indices (I...) function tensor_invariant_center!(
     II, tensor::NTuple{N,T}
 ) where {N,T}
-    II[I...] = second_invariant_staggered(getindex(tensor, I...)...)
+    @inbounds II[I...] = second_invariant_staggered(getindex(tensor, I...)...)
     return nothing
 end
 
@@ -352,7 +358,7 @@ end
 
 @parallel_indices (I...) function tensor_invariant!(II, xx, yy, zz, yz, xz, xy)
 
-    # convenience closure
+    # convenience closures
     @inline gather_yz(A) = _gather_yz(A, I...)
     @inline gather_xz(A) = _gather_xz(A, I...)
     @inline gather_xy(A) = _gather_xy(A, I...)

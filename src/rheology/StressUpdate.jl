@@ -164,7 +164,7 @@ end
 
 # cache tensors
 function cache_tensors(
-    τ::NTuple{3,Any}, τ_old::NTuple{3,Any}, ε::NTuple{3,Any},idx::Vararg{Integer,2}
+    τ::NTuple{3,Any}, τ_old::NTuple{3,Any}, ε::NTuple{3,Any}, idx::Vararg{Integer,2}
 )
     @inline av_shear(A) = 0.25 * sum(_gather(A, idx...))
 

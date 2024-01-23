@@ -171,7 +171,6 @@ function cache_tensors(
 
     # normal components of the strain rate and old-stress tensors
     ε_normal = ntuple(i -> ε[i][idx...], Val(3))
-    ε_pl_normal = ntuple(i -> ε_pl[i][idx...], Val(3))
     # shear components of the strain rate and old-stress tensors
     ε_shear = av_yz(ε[4]), av_xz(ε[5]), av_xy(ε[6])
     # cache ij-th components of the tensors into a tuple in Voigt notation

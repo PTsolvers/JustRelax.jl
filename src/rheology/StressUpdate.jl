@@ -27,19 +27,32 @@ function _compute_τ_nonlinear!(
     end
     # get plastic parameters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
+
+    # yield stess (GeoParams could be used here...)
     τy = C * cosϕ + P[idx...] * sinϕ
 
+    # check if yielding; if so, compute plastic strain rate (λdQdτ),
+    # plastic stress increment (dτ_pl), and update the plastic
+    # multiplier (λ)
     dτij, λdQdτ = if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
         dτ_pl, λ[idx...], λdQdτ = compute_dτ_pl(
             τij, dτij, τy, τII_trial, ηij, λ[idx...], η_reg, dτ_r, volume
         )
-        dτ_pl
+        dτ_pl, λdQdτ
 
     else
-        dτij
+        # in this case the plastic strain rate is a tuples of zeros
+        dτij, ntuple(_ -> zero(T), Val(N1))
     end
-    ε_pl[idx...] = isinf(λdQdτ) ? 0.0 : λdQdτ
+
+    # fill plastic strain rate tensor
+    ntuple(Val(N1)) do i
+        Base.@_inline_meta
+        λdQdτᵢ = λdQdτ[i]
+        ε_pl[i][idx...] = isinf(λdQdτᵢ) * λdQdτᵢ
+    end
+    # update and correct stress
     τij = τij .+ dτij
     correct_stress!(τ, τij, idx...)
     τII[idx...] = τII_ij = second_invariant(τij...)
@@ -49,7 +62,7 @@ function _compute_τ_nonlinear!(
 end
 
 # check if plasticity is active
-@inline isyielding(is_pl, τII_trial, τy) = is_pl && τII_trial > τy
+@inline isyielding(is_pl, τII_trial, τy) = is_pl * (τII_trial > τy)
 
 @inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + muladd(ηij, _Gdt, 1.0))
 

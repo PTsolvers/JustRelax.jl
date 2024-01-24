@@ -56,7 +56,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     el_bg   = ConstantElasticity(; G=G0, Kb=4)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4)
     visc    = LinearViscous(; η=η0)
-    soft_C  = LinearSoftening((C, C), (0e0, 1e0))
+    soft_C  = LinearSoftening((C/2, C), (0e0, 1e0))
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ,
@@ -193,7 +193,7 @@ end
 n      = 128
 nx     = n
 ny     = n
-figdir = "ShearBands2Dc"
+figdir = "ShearBands2D_softening"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

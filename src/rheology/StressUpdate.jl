@@ -59,8 +59,8 @@ function _compute_τ_nonlinear!(
 end
 
 # fill plastic strain rate tensor
-@generated function update_plastic_strain_rate!(ε_pl::NTuple{N, T}, λdQdτ, idx) where {N,T}
-    quote 
+@generated function update_plastic_strain_rate!(ε_pl::NTuple{N,T}, λdQdτ, idx) where {N,T}
+    quote
         Base.@_inline_meta
         Base.@nexprs $N i -> ε_pl[i][idx...] = !isinf(λdQdτ[i]) * λdQdτ[i]
     end

@@ -62,7 +62,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         ϕ    = ϕ,
         η_vp = η_reg,
         Ψ    = 0,
-        # softening_C = soft_C
+        softening_C = soft_C
     )
     rheology = (
         # Low density phase
@@ -121,7 +121,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Time loop
     t, it      = 0.0, 0
-    tmax       = 3.5
+    tmax       = 5
     τII        = Float64[]
     sol        = Float64[]
     ttot       = Float64[]
@@ -189,10 +189,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     return nothing
 end
 
-N      = 64
-n      = N + 2
-nx     = n - 2
-ny     = n - 2
+n      = 128
+nx     = n
+ny     = n
 figdir = "ShearBands2D_softening"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)

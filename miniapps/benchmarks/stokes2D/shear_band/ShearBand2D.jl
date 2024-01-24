@@ -1,4 +1,3 @@
-JustRelax.CUDA.allowscalar(false)
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
 
@@ -6,7 +5,7 @@ using JustRelax, JustRelax.DataIO
 model  = PS_Setup(:Threads, Float64, 2)
 environment!(model)
 
-# HELPER FUNCTIONS ---------------------------------------------------------------
+# HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
@@ -57,11 +56,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     el_bg   = ConstantElasticity(; G=G0, Kb=4)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4)
     visc    = LinearViscous(; η=η0)
+    soft_C  = LinearSoftening((C, C), (0e0, 1e0))
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ,
         η_vp = η_reg,
         Ψ    = 0,
+        # softening_C = soft_C
     )
     rheology = (
         # Low density phase
@@ -142,8 +143,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             dt,
             igg;
             verbose          = false,
-            iterMax          = 500e3,
-            nout             = 1e3,
+            iterMax          = 50e3,
+            nout             = 1e2,
             viscosity_cutoff = (-Inf, Inf)
         )
         @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
@@ -173,7 +174,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         ax3   = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
         ax4   = Axis(fig[2,2], aspect = 1)
         heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
+        # heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
+        heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
@@ -187,11 +189,11 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     return nothing
 end
 
-N      = 128
+N      = 64
 n      = N + 2
 nx     = n - 2
 ny     = n - 2
-figdir = "ShearBands2D"
+figdir = "ShearBands2D_softening"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

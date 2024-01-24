@@ -47,11 +47,12 @@ function _compute_τ_nonlinear!(
     end
 
     # fill plastic strain rate tensor
-    ntuple(Val(N1)) do i
-        Base.@_inline_meta
-        λdQdτᵢ = λdQdτ[i]
-        ε_pl[i][idx...] = !isinf(λdQdτᵢ) * λdQdτᵢ
-    end
+    # ntuple(Val(N1)) do i
+    #     Base.@_inline_meta
+    #     λdQdτᵢ = λdQdτ[i]
+    #     ε_pl[i][idx...] = !isinf(λdQdτᵢ) * λdQdτᵢ
+    # end
+    update_plastic_strain_rate!(ε_pl, λdQdτ, idx)
     # update and correct stress
     τij = τij .+ dτij
     correct_stress!(τ, τij, idx...)
@@ -59,6 +60,14 @@ function _compute_τ_nonlinear!(
     η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
 
     return nothing
+end
+
+# fill plastic strain rate tensor
+@generated function update_plastic_strain_rate!(ε_pl::NTuple{N, T}, λdQdτ, idx) where {N,T}
+    quote 
+        Base.@_inline_meta
+        Base.@nexprs $N i -> ε_pl[i][idx...] = !isinf(λdQdτ[i]) * λdQdτ[i]
+    end
 end
 
 # check if plasticity is active

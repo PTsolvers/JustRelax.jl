@@ -47,11 +47,7 @@ function _compute_τ_nonlinear!(
     end
 
     # fill plastic strain rate tensor
-    # ntuple(Val(N1)) do i
-    #     Base.@_inline_meta
-    #     λdQdτᵢ = λdQdτ[i]
-    #     ε_pl[i][idx...] = !isinf(λdQdτᵢ) * λdQdτᵢ
-    # end
+
     update_plastic_strain_rate!(ε_pl, λdQdτ, idx)
     # update and correct stress
     τij = τij .+ dτij

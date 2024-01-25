@@ -145,6 +145,18 @@ macro strain(A)
 end
 
 """
+    @strain_plastic(A)
+
+Unpacks the plastic strain rate tensor `ε_pl` from the StokesArrays `A`, where its components are defined in the staggered grid.
+Shear components are unpack following Voigt's notation.
+"""
+macro strain_plastic(A)
+    return quote
+        unpack_tensor_stag(($(esc(A))).ε_pl)
+    end
+end
+
+"""
     @stress(A)
 
 Unpacks the deviatoric stress tensor `τ` from the StokesArrays `A`, where its components are defined in the staggered grid.

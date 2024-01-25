@@ -56,7 +56,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     el_bg   = ConstantElasticity(; G=G0, Kb=4)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4)
     visc    = LinearViscous(; η=η0)
-    soft_C  = LinearSoftening((C, C), (0e0, 1e0))
+    soft_C  = LinearSoftening((C/2, C), (0e0, 1e0))
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ,
@@ -170,12 +170,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
         fig   = Figure(size = (1600, 1600), title = "t = $t")
         ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}", titlesize=35)
-        # ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
         ax2   = Axis(fig[2,1], aspect = 1, title = L"E_{II}", titlesize=35)
         ax3   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize=35)
         ax4   = Axis(fig[2,2], aspect = 1)
         heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-        # heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
         heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
@@ -193,7 +191,7 @@ end
 n      = 128
 nx     = n
 ny     = n
-figdir = "ShearBands2Dc"
+figdir = "ShearBands2D_softening"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

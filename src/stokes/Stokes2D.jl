@@ -368,6 +368,10 @@ function JustRelax.solve!(
     norm_Ry = Float64[]
     norm_∇V = Float64[]
 
+    for Aij in @tensor_center(stokes.ε_pl)
+        Aij .= 0.0
+    end
+
     # solver loop
     wtime0 = 0.0
     λ = @zeros(ni...)
@@ -397,6 +401,8 @@ function JustRelax.solve!(
                 stokes.τ.II,
                 @tensor(stokes.τ_o),
                 @strain(stokes),
+                @tensor_center(stokes.ε_pl),
+                stokes.EII_pl,
                 stokes.P,
                 θ,
                 η,
@@ -467,6 +473,9 @@ function JustRelax.solve!(
 
     stokes.P .= θ
 
+    # accumulate plastic strain tensor
+    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -536,6 +545,10 @@ function JustRelax.solve!(
     do_visc = true
     # GC.enable(false)
 
+    for Aij in @tensor_center(stokes.ε_pl)
+        Aij .= 0.0
+    end
+
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window=(1, 1))
@@ -585,6 +598,8 @@ function JustRelax.solve!(
                 stokes.τ.II,
                 @tensor_center(stokes.τ_o),
                 @strain(stokes),
+                @tensor_center(stokes.ε_pl),
+                stokes.EII_pl,
                 stokes.P,
                 θ,
                 η,
@@ -661,6 +676,9 @@ function JustRelax.solve!(
     end
 
     stokes.P .= θ
+
+    # accumulate plastic strain tensor
+    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
 
     return (
         iter=iter,

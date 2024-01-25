@@ -116,7 +116,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
-    !isdir(figdir) && mkpath(figdir)
+    take(figdir)
     # ----------------------------------------------------
 
     # Time loop

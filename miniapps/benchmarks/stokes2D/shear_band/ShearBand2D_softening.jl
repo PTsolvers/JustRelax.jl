@@ -116,7 +116,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
-    !isdir(figdir) && mkpath(figdir)
+    take(figdir)
     # ----------------------------------------------------
 
     # Time loop
@@ -170,12 +170,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
         fig   = Figure(size = (1600, 1600), title = "t = $t")
         ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}", titlesize=35)
-        # ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
         ax2   = Axis(fig[2,1], aspect = 1, title = L"E_{II}", titlesize=35)
         ax3   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize=35)
         ax4   = Axis(fig[2,2], aspect = 1)
         heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-        # heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
         heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)

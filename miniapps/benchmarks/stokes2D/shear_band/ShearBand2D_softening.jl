@@ -41,7 +41,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     origin       = 0.0, 0.0     # origin coordinates
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    dt           = Inf
 
     # Physical properties using GeoParams ----------------
     τ_y     = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
@@ -53,10 +52,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     εbg     = 1.0           # background strain-rate
     η_reg   = 8e-3          # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
+    dt /= 5
     el_bg   = ConstantElasticity(; G=G0, Kb=4)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4)
     visc    = LinearViscous(; η=η0)
-    soft_C  = LinearSoftening((C/2, C), (0e0, 1e0))
+    # soft_C  = LinearSoftening((C/2, C), (0e0, 2e0))
+    soft_C  = NonLinearSoftening(;ξ₀ = C, Δ=C/2)
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ,
@@ -121,7 +122,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Time loop
     t, it      = 0.0, 0
-    tmax       = 5
+    tmax       = 3.5
     τII        = Float64[]
     sol        = Float64[]
     ttot       = Float64[]
@@ -191,7 +192,7 @@ end
 n      = 128
 nx     = n
 ny     = n
-figdir = "ShearBands2D_softening"
+figdir = "ShearBands2D_lin_softening"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

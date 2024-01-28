@@ -24,7 +24,7 @@ function _compute_τ_nonlinear!(
     # visco-elastic strain rates
     εij_ve = ntuple(Val(N1)) do i
         Base.@_inline_meta
-        muladd(0.5 * τij_o[i], _Gdt, εij[i])
+        fma(0.5 * τij_o[i], _Gdt, εij[i])
     end
     # get plastic parameters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
@@ -51,7 +51,7 @@ function _compute_τ_nonlinear!(
     update_plastic_strain_rate!(ε_pl, λdQdτ, idx)
     # update and correct stress
     correct_stress!(τ, τij .+ dτij, idx...)
-    
+
     τII[idx...] = τII_ij = second_invariant(τij...)
     η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
 
@@ -69,16 +69,14 @@ end
 # check if plasticity is active
 @inline isyielding(is_pl, τII_trial, τy) = is_pl * (τII_trial > τy)
 
-@inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + muladd(ηij, _Gdt, 1.0))
+@inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + fma(ηij, _Gdt, 1.0))
 
 function compute_stress_increment_and_trial(
     τij::NTuple{N,T}, τij_o::NTuple{N,T}, ηij, εij::NTuple{N,T}, _Gdt, dτ_r
 ) where {N,T}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-         dτ_r * muladd(
-            2.0 * ηij, εij[i], muladd(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i])
-        )
+        dτ_r * fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
     end
     return dτij, second_invariant((τij .+ dτij)...)
 end
@@ -102,7 +100,7 @@ function compute_dτ_pl(
     dτ_pl = ntuple(Val(N)) do i
         Base.@_inline_meta
         # corrected stress
-        muladd(-dτ_r * 2.0, ηij * λdQdτ[i], dτij[i])
+        fma(-dτ_r * 2.0, ηij * λdQdτ[i], dτij[i])
     end
     return dτ_pl, λ, λdQdτ
 end
@@ -113,7 +111,7 @@ end
 ) where {N1,N2,T}
     quote
         Base.@_inline_meta
-        Base.@nexprs $N1 i ->  τ[i][idx...] = τij[i]
+        Base.@nexprs $N1 i -> τ[i][idx...] = τij[i]
     end
 end
 

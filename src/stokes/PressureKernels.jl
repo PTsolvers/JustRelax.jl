@@ -42,7 +42,7 @@ end
 
 function _compute_P!(P, P0, ∇V, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
-    RP = muladd(-(P - P0), _Kdt, -∇V)
+    RP = fma(-(P - P0), _Kdt, -∇V)
     P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
     return RP, P
 end

@@ -478,8 +478,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
 
     # Physical Parameters
     geotherm = GeoUnit(30K / km)
-    geotherm_nd = ustrip(Value(geotherm))
-    ΔT = geotherm_nd * (ly - sticky_air) # temperature difference between top and bottom of the domain
+    geotherm = ustrip(Value(geotherm))
+    ΔT = geotherm * (ly - sticky_air) # temperature difference between top and bottom of the domain
     tempoffset = 0.0
     η = MatParam[2].CompositeRheology[1][1].η.val       # viscosity for the Rayleigh number
     Cp0 = MatParam[2].HeatCapacity[1].cp.val              # heat capacity
@@ -582,10 +582,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
     end
 
     grid2particle!(pT, xvi, T_buffer, particles.coords)
-    # p = particles.coords
-    # pp = PTArray([argmax(p) for p in phase_ratios.center]) #if you want to plot it in a heatmap rather than scatter
-    # mask_sticky_air = @zeros(ni.+1...)
-    # @parallel center2vertex!(mask_sticky_air, pp)
     @copy stokes.P0 stokes.P
 
 

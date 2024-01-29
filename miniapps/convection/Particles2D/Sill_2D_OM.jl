@@ -245,7 +245,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while it < 5 # run only for 5 Myrs
+    while it < 150 # run only for 5 Myrs
         # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
 
         # Update buoyancy and viscosity -
@@ -320,7 +320,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
         @parallel (@idx ni) compute_melt_fraction!(
-            ϕ, phase_ratios.center, MatParam, (T=thermal.Tc, P=stokes.P)
+            ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
         )
         @show it += 1
         t        += dt
@@ -365,7 +365,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
             # Make Makie figure
             fig = Figure(size = (900, 900), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(((t/(3600)))) hours)")
+            ax1 = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(round((t/(3600)))) hours)")
             #ax2 = Axis(fig[2,1], aspect = ar, title = "Phase")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Density [kg/m3]")
 
@@ -373,7 +373,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             #ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
             ax3 = Axis(fig[1,3], aspect = ar, title = "Vy [m/s]")
 
-            ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+            #ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+            ax4 = Axis(fig[2,3], aspect = ar, title = "ϕ")
+            
             # Plot temperature
             h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:batlow)
             # Plot particles phase
@@ -389,7 +391,12 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             h3  = heatmap!(ax3, xvi[1], xvi[2], Array(stokes.V.Vy) , colormap=:batlow)
 
             # Plot effective viscosity
-            h4  = heatmap!(ax4, xci[1], xci[2], Array(log10.(η_vep)) , colormap=:batlow)
+            #h4  = heatmap!(ax4, xci[1], xci[2], Array(log10.(η_vep)) , colormap=:batlow)
+            
+            # Plot melt fraction
+            h4  = heatmap!(ax4, xci[1], xci[2], Array(ϕ) , colormap=:batlow)
+            
+
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -414,7 +421,7 @@ end
 figdir   = "Sill_OM"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 64
+n        = 128
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

@@ -56,7 +56,7 @@ function init_rheologies(; is_plastic = true)
         SetMaterialParams(;
             Phase             = 1,
             Density           = PT_Density(; ρ0=2300, β=β_rhy, T0=0.0, α = 3.5e-5),
-            HeatCapacity      = ConstantHeatCapacity(),
+            HeatCapacity      = ConstantHeatCapacity(cp=1200J/kg/K),
             Conductivity      = K_crust,
             #CompositeRheology = CompositeRheology((linear_viscosity_rhy, el_rhy)),
             CompositeRheology = CompositeRheology((linear_viscosity_rhy,)),

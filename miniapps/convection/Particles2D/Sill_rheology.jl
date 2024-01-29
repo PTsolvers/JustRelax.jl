@@ -4,14 +4,13 @@ function init_rheologies(; is_plastic = true)
 
     # Dislocation and Diffusion creep
     # disl_upper_crust            = DislocationCreep(A=5.07e-18, n=2.3, E=154e3, V=6e-6,  r=0.0, R=8.3145)
-    linear_viscosity_rhy            = LinearViscous(; η=1e11)
-    linear_viscosity_bas            = LinearViscous(; η=1e2)
+    linear_viscosity_rhy            = LinearViscous(; η=1e13*1e3)
+    linear_viscosity_bas            = LinearViscous(; η=1e5*1e3)
     # Elasticity
     el_rhy              = SetConstantElasticity(; G=25e9, ν=0.5)
     el_bas              = SetConstantElasticity(; G=25e9, ν=0.5)
     β_rhy               = inv(get_Kb(el_rhy))
     β_bas               = inv(get_Kb(el_bas))
-
 
     # Physical properties using GeoParams ----------------
     η_reg     = 1e2
@@ -35,42 +34,48 @@ function init_rheologies(; is_plastic = true)
     end
 
     # crust
-    K_crust = TP_Conductivity(;
-        a = 0.64,
-        b = 807e0,
-        c = 0.77,
-        d = 0.00004*1e-6,
-    )
-
-    K_mantle = TP_Conductivity(;
-        a = 0.73,
-        b = 1293e0,
-        c = 0.77,
-        d = 0.00004*1e-6,
-    )
+    #K_crust = TP_Conductivity(;
+    #    a = 0.64,
+    #    b = 807e0,
+    #    c = 0.77,
+    #    d = 0.00004*1e-6,
+    #)
+    K_crust  = ConstantConductivity()
+    K_mantle = ConstantConductivity()
+    #K_mantle = TP_Conductivity(;
+    #    a = 0.73,
+    #    b = 1293e0,
+    #    c = 0.77,
+    #    d = 0.00004*1e-6,
+    #)
+#
 
     # Define rheolgy struct
     rheology = (
         # Name              = "Rhyolite",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = PT_Density(; ρ0=2.75e3, β=β_rhy, T0=0.0, α = 3.5e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
+            Density           = PT_Density(; ρ0=2300, β=β_rhy, T0=0.0, α = 3.5e-5),
+            HeatCapacity      = ConstantHeatCapacity(),
             Conductivity      = K_crust,
-            CompositeRheology = CompositeRheology((linear_viscosity_rhy, el_rhy, pl_crust)),
-            Elasticity        = el_rhy,
-            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
+            #CompositeRheology = CompositeRheology((linear_viscosity_rhy, el_rhy)),
+            CompositeRheology = CompositeRheology((linear_viscosity_rhy,)),
+            
+            #Elasticity        = el_rhy,
+            Melting           = MeltingParam_Caricchi(),
             Gravity           = ConstantGravity(; g=9.81),
         ),
         # Name              = "Basaltic_Sill",
         SetMaterialParams(;
             Phase             = 2,
-            Density           = PT_Density(; ρ0=3e3, β=β_bas, T0=0.0, α = 3.5e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
+            Density           = PT_Density(; ρ0=2800, β=β_bas, T0=0.0, α = 3.5e-5),
+            HeatCapacity      = ConstantHeatCapacity(),
             Conductivity      = K_crust,
-            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             CompositeRheology = CompositeRheology((linear_viscosity_bas,)),
-            Elasticity        = el_bas,
+            Melting           = MeltingParam_Caricchi(),
+
+            #CompositeRheology = CompositeRheology((linear_viscosity_bas, el_bas)),
+            #Elasticity        = el_bas,
         ),
 
     )

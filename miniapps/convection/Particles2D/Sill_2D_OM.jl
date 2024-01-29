@@ -103,6 +103,21 @@ end
     return nothing
 end
 
+ @parallel_indices (i, j) function compute_melt_fraction!(ϕ, rheology, args)
+    ϕ[i, j] = compute_meltfraction(rheology, ntuple_idx(args, i, j))
+    return nothing
+end
+
+@parallel_indices (I...) function compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
+args_ijk = ntuple_idx(args, I...)
+ϕ[I...] = compute_melt_frac(rheology, args_ijk, phase_ratios[I...])
+return nothing
+end
+
+@inline function compute_melt_frac(rheology, args, phase_ratios)
+    return GeoParams.compute_meltfraction_ratio(phase_ratios, rheology, args)
+end
+
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -176,6 +191,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e2, 1e11)
     )
     η_vep            = copy(η)
+    ϕ                = similar(η)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -303,7 +319,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
-
+        @parallel (@idx ni) compute_melt_fraction!(
+            ϕ, phase_ratios.center, MatParam, (T=thermal.Tc, P=stokes.P)
+        )
         @show it += 1
         t        += dt
 
@@ -350,8 +368,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(((t/(3600)))) hours)")
             #ax2 = Axis(fig[2,1], aspect = ar, title = "Phase")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Density [kg/m3]")
-            
-            
+
+
             #ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
             ax3 = Axis(fig[1,3], aspect = ar, title = "Vy [m/s]")
 
@@ -361,7 +379,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             # Plot particles phase
             #h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
             #h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
-            
+
             h2  = heatmap!(ax2, xci[1], xci[2], Array(ρg[2]./10.0) , colormap=:batlow)
 
             # Plot 2nd invariant of strain rate

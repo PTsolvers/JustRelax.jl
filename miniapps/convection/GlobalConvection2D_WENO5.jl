@@ -1,4 +1,6 @@
 using JustRelax
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:threads, Float64, 2)

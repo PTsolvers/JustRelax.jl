@@ -5,6 +5,8 @@ import JustRelax.@cell
 ## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
 # set_backend("Threads_Float64_2D")
 # set_backend("CUDA_Float64_2D")
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)

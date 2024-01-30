@@ -1,6 +1,8 @@
 using LinearAlgebra, CairoMakie
 using JustRelax
 using MPI: MPI
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 3)
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 3)

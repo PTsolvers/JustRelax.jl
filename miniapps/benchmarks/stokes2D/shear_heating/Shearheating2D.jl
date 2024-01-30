@@ -7,6 +7,8 @@ import JustRelax.@cell
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 using JustPIC
 using JustPIC._2D
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)

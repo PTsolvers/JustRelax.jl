@@ -3,6 +3,8 @@ CUDA.allowscalar(false) # for safety
 
 using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 ## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -10,7 +12,7 @@ using JustPIC
 using JustPIC._2D
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:CUDA, Float64, 2)
+model = PS_Setup(:Threads, Float64, 2)
 environment!(model)
 
 # Load script dependencies

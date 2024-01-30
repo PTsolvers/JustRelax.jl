@@ -1,9 +1,9 @@
-using CUDA
-CUDA.allowscalar(false)
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
 using JustRelax, JustRelax.DataIO, JustPIC, CSV, DataFrames
-backend = "CUDA_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
+backend = "Threads_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
 # set_backend(backend) # run this on the REPL to switch backend
 
 # setup ParallelStencil.jl environment

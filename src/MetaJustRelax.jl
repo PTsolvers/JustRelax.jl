@@ -12,6 +12,8 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     Base.eval(@__MODULE__, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
     Base.eval(Main, Meta.parse("using ParallelStencil.FiniteDifferences$(N)D"))
 
+    @eval const model_dims = $N
+
     # start ParallelStencil
     if model.device == :CUDA
         eval(:(using CUDA))
@@ -21,6 +23,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             eval(:(const PTArray = CUDA.CuArray{$T,$N,CUDA.Mem.DeviceBuffer}))
         end
 
+        # this is patchy, but it works for ParallelStencil 1.11
+        @eval const backend = :CUDA
+
     elseif model.device == :AMDGPU
         eval(:(using AMDGPU))
         eval(:(@init_parallel_stencil(AMDGPU, $T, $N)))
@@ -29,12 +34,16 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             eval(:(const PTArray = AMDGPU.ROCArray{$T,$N,AMDGPU.Runtime.Mem.HIPBuffer}))
         end
 
+        # this is patchy, but it works for ParallelStencil 1.11
+        @eval const backend = :AMDGPU
+
     else
         @eval begin
             @init_parallel_stencil(Threads, $T, $N)
             if !isconst(Main, :PTArray)
                 const PTArray = Array{$T,$N}
             end
+            const backend = :Threads
         end
     end
 

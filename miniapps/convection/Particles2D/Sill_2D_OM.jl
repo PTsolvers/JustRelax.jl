@@ -188,7 +188,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     η                = @zeros(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e2, 1e11)
+        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
     η_vep            = copy(η)
     ϕ                = similar(η)
@@ -251,7 +251,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         @parallel (@idx ni) compute_viscosity!(
-            η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e2, 1e11)
+            η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
         )
         @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
         # ------------------------------
@@ -272,7 +272,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             igg;
             iterMax = 150e3,
             nout=1e3,
-            viscosity_cutoff=(1e2, 1e11)
+            viscosity_cutoff=(-Inf, Inf)
         )
         @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
@@ -375,7 +375,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
             #ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             ax4 = Axis(fig[2,3], aspect = ar, title = "ϕ")
-            
+
             # Plot temperature
             h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:batlow)
             # Plot particles phase
@@ -392,10 +392,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
             # Plot effective viscosity
             #h4  = heatmap!(ax4, xci[1], xci[2], Array(log10.(η_vep)) , colormap=:batlow)
-            
+
             # Plot melt fraction
             h4  = heatmap!(ax4, xci[1], xci[2], Array(ϕ) , colormap=:batlow)
-            
+
 
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)

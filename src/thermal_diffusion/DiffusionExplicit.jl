@@ -25,9 +25,11 @@ using CUDA, AMDGPU
 
 import JustRelax:
     ThermalParameters, solve!, assign!, thermal_boundary_conditions!, update_T!
-import JustRelax: ThermalArrays, PTThermalCoeffs
+import JustRelax: ThermalArrays, PTThermalCoeffs, backend
 
 export solve!
+
+@eval @init_parallel_stencil($backend, Float64, 1)
 
 ## KERNELS
 
@@ -159,9 +161,11 @@ using CUDA, AMDGPU
 using GeoParams
 
 import JustRelax: ThermalParameters, solve!, assign!, thermal_boundary_conditions!
-import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity
+import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity, backend
 
 export solve!
+
+@eval @init_parallel_stencil($backend, Float64, 2)
 
 ## KERNELS
 
@@ -516,9 +520,11 @@ using GeoParams
 
 import JustRelax:
     IGG, ThermalParameters, solve!, assign!, norm_mpi, thermal_boundary_conditions!
-import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity
+import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity, backend
 
 export solve!
+
+@eval @init_parallel_stencil($backend, Float64, 3)
 
 ## KERNELS
 

@@ -2,6 +2,7 @@ push!(LOAD_PATH, "..")
 
 using Test
 using JustRelax
+using ParallelStencil
 
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)

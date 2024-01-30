@@ -1,6 +1,4 @@
 using JustRelax
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:threads, Float64, 2)
@@ -37,7 +35,7 @@ macro all_j(A)
 end
 
 @parallel function init_P!(P, ρg, z)
-    @all(P) = @all(ρg)*abs(@all_j(z))
+    @all(P) = @all(ρg) * abs(@all_j(z))
     return nothing
 end
 
@@ -81,10 +79,7 @@ end
 # --------------------------------------------------------------------------------
 # BEGIN MAIN SCRIPT
 # --------------------------------------------------------------------------------
-function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
-
-    # initialize MPI
-    igg = IGG(init_global_grid(nx, ny, 0; init_MPI = JustRelax.MPI.Initialized() ? false : true)...)
+function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
 
     # Physical domain ------------------------------------
     ly           = 2890e3
@@ -95,6 +90,10 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    # ----------------------------------------------------
+
+    # Weno model -----------------------------------------
+    weno = WENO5(ni = ni .+ 1, method = Val(2)) # ni.+1 for Temp
     # ----------------------------------------------------
 
     # create rheology struct
@@ -161,6 +160,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     end
     @views thermal.T[:, 1]   .= Tmax
     @views thermal.T[:, end] .= Tmin
+    update_halo!(thermal.T)
     @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
 
@@ -176,50 +176,74 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     end
 
     # Rheology
-    η               = @ones(ni...)
-    depth           = PTArray([y for x in xci[1], y in xci[2]])
-    args            = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
-    viscosity_cutoff = 1e18, 1e23
+    η        = @ones(ni...)
+    depth    = PTArray([y for x in xci[1], y in xci[2]])
+    args     = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
+    η_cutoff = 1e18, 1e23
     @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, @strain(stokes)..., args, rheology, viscosity_cutoff
+        η, 1.0, @strain(stokes)..., args, rheology, η_cutoff
     )
     η_vep           = deepcopy(η)
+
+    # PT coefficients for thermal diffusion
+    pt_thermal       = PTThermalCoeffs(
+        rheology, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
+    )
+
     # Boundary conditions
     flow_bcs = FlowBoundaryConditions(;
-        free_slip   = (left = true, right=true, top=true, bot=true),
+        free_slip   = (left = true , right = true , top = true , bot = true),
         periodicity = (left = false, right = false, top = false, bot = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
     # ----------------------------------------------------
 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
-    !isdir(figdir) && mkpath(figdir)
+    take(figdir)
     # ----------------------------------------------------
 
-    # Plot initial T and η profiles
-    fig0 = let
-        Yv = [y for x in xvi[1], y in xvi[2]][:]
-        Y =  [y for x in xci[1], y in xci[2]][:]
-        fig = Figure(size = (1200, 900))
-        ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-        ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        lines!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-        lines!(ax2, Array(log10.(η[:])), Y./1e3)
-        ylims!(ax1, -2890, 0)
-        ylims!(ax2, -2890, 0)
-        hideydecorations!(ax2)
-        save(joinpath(figdir, "initial_profile.png"), fig)
-        fig
-    end
+    # # Plot initial T and η profiles
+    # fig0 = let
+    #     Yv = [y for x in xvi[1], y in xvi[2]][:]
+    #     Y =  [y for x in xci[1], y in xci[2]][:]
+    #     fig = Figure(size = (1200, 900))
+    #     ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
+    #     ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
+    #     lines!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
+    #     lines!(ax2, Array(log10.(η[:])), Y./1e3)
+    #     ylims!(ax1, -2890, 0)
+    #     ylims!(ax2, -2890, 0)
+    #     hideydecorations!(ax2)
+    #     save(joinpath(figdir, "initial_profile.png"), fig)
+    #     fig
+    # end
+
+    # WENO arrays
+    T_WENO  = @zeros(ni.+1)
+    Vx_v    = @zeros(ni.+1...)
+    Vy_v    = @zeros(ni.+1...)
+    
+    # global array
+    nx_v = ((nx + 2) - 2) * igg.dims[1]
+    ny_v = ((ny + 1) - 2) * igg.dims[2]
+    T_v  = zeros(nx_v, ny_v)
+    T_nohalo = zeros((nx + 2)-2, (ny + 1)-2)
 
     # Time loop
     t, it = 0.0, 0
     local iters
+    igg.me == 0 && println("Starting model")
     while (t / (1e6 * 3600 * 24 * 365.25)) < 4.5e3
         # Stokes solver ----------------
         args = (; T = thermal.Tc, P = stokes.P, depth = depth, dt=Inf)
+        @parallel (@idx ni) compute_ρg!(ρg[2], rheology, args)
+        @parallel (@idx ni) compute_viscosity!(
+            η, 1.0, @strain(stokes)..., args, rheology, η_cutoff
+        )
+
+        igg.me == 0 && println("Starting stokes solver...")
         iters = solve!(
             stokes,
             pt_stokes,
@@ -234,68 +258,85 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
             igg;
             iterMax=50e3,
             nout=1e3,
-            viscosity_cutoff = viscosity_cutoff
+            viscosity_cutoff = η_cutoff
         );
         dt = compute_dt(stokes, di, dt_diff, igg)
+        println("Rank $(igg.me) ...stokes solver finished")
         # ------------------------------
 
         # Thermal solver ---------------
-        args_T = (; P=stokes.P)
-        solve!(
+        igg.me == 0 && println("Starting thermal solver...")
+        heatdiffusion_PT!(
             thermal,
+            pt_thermal,
             thermal_bc,
-            stokes,
             rheology,
-            args_T,
-            di,
-            dt
+            args,
+            dt,
+            di;
+            igg     = igg,
+            iterMax = 10e3,
+            nout    = 1e2,
+            verbose = true,
         )
+        igg.me == 0 && println("...thermal solver finished")
+        # Weno advection
+        T_WENO .= @views thermal.T[2:end-1, :]
+        JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        update_halo!(Vx_v, Vy_v)
+        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
+        update_halo!(T_WENO)
+        @views thermal.T[2:end-1, :] .= T_WENO
+        update_halo!(thermal.T)
         # ------------------------------
 
+        return
         it += 1
         t += dt
 
-        println("\n")
-        println("Time step number $it")
-        println("   time = $(t/(1e6 * 3600 * 24 *365.25)) Myrs, dt = $(dt/(1e6 * 3600 * 24 *365.25)) Myrs")
-        println("\n")
-
-        # Plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
-            fig = Figure(size = (1000, 1000), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
-            ax3 = Axis(fig[3,1], aspect = ar, title = "τII [MPa]")
-            ax4 = Axis(fig[4,1], aspect = ar, title = "log10(η)")
-            h1 = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T) , colormap=:batlow)
-            h2 = heatmap!(ax2, xci[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
-            h3 = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II.*1e-6) , colormap=:batlow)
-            h4 = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:batlow)
-            hidexdecorations!(ax1)
-            hidexdecorations!(ax2)
-            hidexdecorations!(ax3)
-            Colorbar(fig[1,2], h1, height=100)
-            Colorbar(fig[2,2], h2, height=100)
-            Colorbar(fig[3,2], h3, height=100)
-            Colorbar(fig[4,2], h4, height=100)
-            save( joinpath(figdir, "$(it).png"), fig)
-            fig
+        if igg.me == 0
+            println("\n")
+            println("Time step number $it")
+            println("   time = $(t/(1e6 * 3600 * 24 *365.25)) Myrs, dt = $(dt/(1e6 * 3600 * 24 *365.25)) Myrs")
+            println("\n")
         end
-        # ------------------------------
+        @views T_nohalo .= Array(thermal.T[2:end-2, 2:end-1]) # Copy data to CPU removing the halo
+        gather!(T_nohalo, T_v)
+
+        if igg.me == 0
+            if it == 1 || rem(it, 10) == 0
+                println("Saving figure...")
+                xv_global = LinRange(0, lx / 1e3,  size(T_v, 1))
+                yv_global = LinRange(-ly / 1e3, 0, size(T_v, 2))
+                fig = Figure(size = (1000, 1000), title = "t = $t")
+                ax  = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+                h1 = heatmap!(ax, xv_global,yv_global,T_v, colormap=:batlow)
+                Colorbar(fig[1,2], h1, height=100)
+                fig, = heatmap(T_v, colorrange=(1500,2000))
+                save( joinpath(figdir, "$(it).png"), fig)
+                println("...saving figure")
+            end
+        end
 
     end
 
-    return (ni=ni, xci=xci, li=li, di=di), thermal
+    finalize_global_grid()
+
+    return nothing
 end
 
-function run()
-    figdir = "figs2D_test"
-    ar     = 8 # aspect ratio
-    n      = 128
-    nx     = n*ar - 2
-    ny     = n - 2
-
-    thermal_convection2D(; figdir=figdir, ar=ar,nx=nx, ny=ny);
+figdir = "figs2D_test_weno_mpi"
+ar     = 8 # aspect ratio
+n      = 32
+nx     = n*ar - 2
+ny     = n - 2
+thermal_perturbation = :circular
+igg    = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI= true, select_device=false)...)
+else
+    igg
 end
+# thermal_convection2D(igg; figdir=figdir, ar=ar,nx=nx, ny=ny, thermal_perturbation=thermal_perturbation);
 
-run()
+
+# mpiexec.exe -np 4 julia --startup-file=no --project=. .\miniapps\convection\GlobalConvection2D_Upwind_MPI.jl

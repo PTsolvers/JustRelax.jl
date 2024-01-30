@@ -1,6 +1,8 @@
 using CUDA
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 # setup ParallelStencil.jl environment
 dimension = 2 # 2 | 3

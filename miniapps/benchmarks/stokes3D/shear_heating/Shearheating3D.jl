@@ -2,7 +2,8 @@
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.DataIO, JustPIC
 import JustRelax.@cell
-using CUDA
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 3)
 
 ## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
 # set_backend("Threads_Float64_3D")

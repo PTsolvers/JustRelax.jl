@@ -1,5 +1,7 @@
 # using CairoMakie
 using JustRelax, GeoParams
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 3)
 
 # setup ParallelStencil.jl environment
 dimension = 3 # 2 | 3

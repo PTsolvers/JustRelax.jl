@@ -1,15 +1,14 @@
-using CUDA
-CUDA.allowscalar(false) # for safety
-
 using JustRelax, JustRelax.DataIO, JustPIC
 import JustRelax.@cell
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 ## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
 # set_backend("Threads_Float64_2D")
 # set_backend("CUDA_Float64_2D")
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:CUDA, Float64, 2)
+model = PS_Setup(:Threads, Float64, 2)
 environment!(model)
 
 # Load script dependencies

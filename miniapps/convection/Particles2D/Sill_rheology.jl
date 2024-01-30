@@ -4,8 +4,8 @@ function init_rheologies(; is_plastic = true)
 
     # Dislocation and Diffusion creep
     # disl_upper_crust            = DislocationCreep(A=5.07e-18, n=2.3, E=154e3, V=6e-6,  r=0.0, R=8.3145)
-    linear_viscosity_rhy            = LinearViscous(; η=1e13*1e3)
-    linear_viscosity_bas            = LinearViscous(; η=1e5*1e3)
+    linear_viscosity_rhy            = LinearViscous(; η=1e13)
+    linear_viscosity_bas            = LinearViscous(; η=1e5)
     # Elasticity
     el_rhy              = SetConstantElasticity(; G=25e9, ν=0.5)
     el_bas              = SetConstantElasticity(; G=25e9, ν=0.5)
@@ -60,7 +60,7 @@ function init_rheologies(; is_plastic = true)
             Conductivity      = K_crust,
             #CompositeRheology = CompositeRheology((linear_viscosity_rhy, el_rhy)),
             CompositeRheology = CompositeRheology((linear_viscosity_rhy,)),
-            
+
             #Elasticity        = el_rhy,
             Melting           = MeltingParam_Caricchi(),
             Gravity           = ConstantGravity(; g=9.81),
@@ -104,4 +104,44 @@ function init_phases!(phases, particles)
     end
 
     @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index)
+end
+
+
+# function init_phases!(phases, xci)
+#     ni     = size(phases)
+#         @parallel_indices (i,j) function init_phases!(phases, x, y)
+#             depth = -y[j]
+#             @inbounds if 0e0 < depth ≤ 0.250e3
+#                 phases[i,j] = 1.0
+#             end
+
+#             if 0.075e3 < depth ≤ 0.175e3
+#                 phases[i,j] = 2.0
+#             end
+#             return nothing
+#         end
+
+#     @parallel (JustRelax.@idx ni) init_phases!(phases, xci...)
+# end
+
+
+function init_phases!(phase_ratios, xci)
+    ni      = size(phase_ratios.center)
+
+    @parallel_indices (i, j) function init_phases!(phases, x, y)
+    depth = -y[j]
+        if 0e0 < depth ≤ 0.250e3
+            JustRelax.@cell phases[1, i, j] = 1.0
+            JustRelax.@cell phases[2, i, j] = 0.0
+
+        end
+        if 0.075e3 < depth ≤ 0.175e3
+            JustRelax.@cell phases[1, i, j] = 0.0
+            JustRelax.@cell phases[2, i, j] = 1.0
+
+        end
+        return nothing
+    end
+
+    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci...)
 end

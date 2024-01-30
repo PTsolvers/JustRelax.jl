@@ -106,25 +106,6 @@ function init_phases!(phases, particles)
     @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index)
 end
 
-
-# function init_phases!(phases, xci)
-#     ni     = size(phases)
-#         @parallel_indices (i,j) function init_phases!(phases, x, y)
-#             depth = -y[j]
-#             @inbounds if 0e0 < depth ≤ 0.250e3
-#                 phases[i,j] = 1.0
-#             end
-
-#             if 0.075e3 < depth ≤ 0.175e3
-#                 phases[i,j] = 2.0
-#             end
-#             return nothing
-#         end
-
-#     @parallel (JustRelax.@idx ni) init_phases!(phases, xci...)
-# end
-
-
 function init_phases!(phase_ratios, xci)
     ni      = size(phase_ratios.center)
 

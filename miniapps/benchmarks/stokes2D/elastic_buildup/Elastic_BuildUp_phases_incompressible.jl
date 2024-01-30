@@ -1,5 +1,5 @@
-using CUDA
-CUDA.allowscalar(false)
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO

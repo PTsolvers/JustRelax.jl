@@ -1,4 +1,6 @@
 using JustRelax, JustRelax.DataIO
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 3)
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:threads, Float64, 3)

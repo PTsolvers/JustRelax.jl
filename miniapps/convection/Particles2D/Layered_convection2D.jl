@@ -1,9 +1,10 @@
-using JustRelax, JustRelax.DataIO, JustPIC
+using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
 
 ## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
-# set_backend("Threads_Float64_2D")
-# set_backend("CUDA_Float64_2D")
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+using JustPIC
+using JustPIC._2D
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 2)
@@ -22,32 +23,6 @@ include("Layered_rheology.jl")
 @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
 @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
 
-function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, nx, ny)
-    ni     = nx, ny
-    ncells = nx * ny
-    np     = max_xcell * ncells
-    px, py = ntuple(_ -> @fill(NaN, ni..., celldims=(max_xcell,)) , Val(2))
-    inject = @fill(false, nx, ny, eltype=Bool)
-    index  = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool)
-
-    @parallel_indices (i, j) function fill_coords_index(px, py, index)
-        # lower-left corner of the cell
-        x0, y0 = x[i], y[j]
-        # fill index array
-        for l in 1:nxcell
-            JustRelax.@cell px[l, i, j]    = x0 + dx * rand(0.05:1e-5:0.95)
-            JustRelax.@cell py[l, i, j]    = y0 + dy * rand(0.05:1e-5:0.95)
-            JustRelax.@cell index[l, i, j] = true
-        end
-        return nothing
-    end
-
-    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)
-
-    return Particles(
-        (px, py), index, inject, nxcell, max_xcell, min_xcell, np, (nx, ny)
-    )
-end
 
 # Velocity helper grids for the particle advection
 function velocity_grids(xci, xvi, di)
@@ -152,8 +127,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
-    particles = init_particles_cellarrays(
-        nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
+    particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)

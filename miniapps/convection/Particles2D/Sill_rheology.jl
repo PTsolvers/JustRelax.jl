@@ -4,9 +4,9 @@ function init_rheologies(; is_plastic = true)
 
     # Dislocation and Diffusion creep
     # disl_upper_crust            = DislocationCreep(A=5.07e-18, n=2.3, E=154e3, V=6e-6,  r=0.0, R=8.3145)
-    linear_viscosity_rhy            = LinearViscous(; η=1e13)
-    linear_viscosity_bas            = LinearViscous(; η=1e5)
-    # Elasticity
+    linear_viscosity_rhy            = LinearMeltViscosity(A = -8.1590, B = 2.4050e+04K, T0 = -430.9606K,η0=1e5Pa*s)
+    # linear_viscosity_rhy            = LinearViscous(; η=1e13)
+    linear_viscosity_bas            = LinearMeltViscosity(A = -9.6012, B = 1.3374e+04K, T0 = 307.8043K, η0=1e5Pa*s)
     el_rhy              = SetConstantElasticity(; G=25e9, ν=0.5)
     el_bas              = SetConstantElasticity(; G=25e9, ν=0.5)
     β_rhy               = inv(get_Kb(el_rhy))
@@ -62,7 +62,8 @@ function init_rheologies(; is_plastic = true)
             CompositeRheology = CompositeRheology((linear_viscosity_rhy,)),
 
             #Elasticity        = el_rhy,
-            Melting           = MeltingParam_Caricchi(),
+            # Melting           = MeltingParam_Caricchi(),
+            Melting           = MeltingParam_Smooth3rdOrder(a=3043.0,b=-10552.0,c=12204.9,d=-4709.0),
             Gravity           = ConstantGravity(; g=9.81),
         ),
         # Name              = "Basaltic_Sill",
@@ -72,7 +73,8 @@ function init_rheologies(; is_plastic = true)
             HeatCapacity      = ConstantHeatCapacity(),
             Conductivity      = K_crust,
             CompositeRheology = CompositeRheology((linear_viscosity_bas,)),
-            Melting           = MeltingParam_Caricchi(),
+            # Melting           = MeltingParam_Caricchi(),
+            Melting           = MeltingParam_Smooth3rdOrder(),
 
             #CompositeRheology = CompositeRheology((linear_viscosity_bas, el_bas)),
             #Elasticity        = el_bas,
@@ -104,25 +106,4 @@ function init_phases!(phases, particles)
     end
 
     @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index)
-end
-
-function init_phases!(phase_ratios, xci)
-    ni      = size(phase_ratios.center)
-
-    @parallel_indices (i, j) function init_phases!(phases, x, y)
-    depth = -y[j]
-        if 0e0 < depth ≤ 0.250e3
-            JustRelax.@cell phases[1, i, j] = 1.0
-            JustRelax.@cell phases[2, i, j] = 0.0
-
-        end
-        if 0.075e3 < depth ≤ 0.175e3
-            JustRelax.@cell phases[1, i, j] = 0.0
-            JustRelax.@cell phases[2, i, j] = 1.0
-
-        end
-        return nothing
-    end
-
-    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci...)
 end

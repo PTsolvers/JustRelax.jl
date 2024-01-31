@@ -1,10 +1,11 @@
 using JustRelax, JustRelax.DataIO, JustPIC, JustPIC._2D
 import JustRelax.@cell
-
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 ## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 # setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2)
+model = PS_Setup(:Threads, Float64, 2)
 environment!(model)
 
 # Load script dependencies
@@ -58,10 +59,7 @@ end
 @parallel_indices (i, j) function init_T!(T, y, x)
     depth = y[j]
 
-    # (depth - 15e3) because we have 15km of sticky air
-   # if 0e0 ≤ (depth) < 0.26e3
-        T[i + 1 , j] = 273e0 + 600e0
-   # end
+    T[i + 1 , j] = 273e0 + 600e0
 
     if (-0.175e3 < depth ≤  -0.075e3)
         T[i + 1, j] = 273e0 + 1200e0
@@ -117,7 +115,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -167,7 +165,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-1*1e-3 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-2*1e-3 / √2.1
     )
 
     # Boundary conditions
@@ -186,6 +184,21 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     take(figdir)
     # ----------------------------------------------------
+    #do an initial diffusion step to smooth out the initial temperature profile
+    heatdiffusion_PT!(
+        thermal,
+        pt_thermal,
+        thermal_bc,
+        rheology,
+        args,
+        dt,
+        di;
+        igg     = igg,
+        phase   = phase_ratios,
+        iterMax = 100e3,
+        nout    = 1e2,
+        verbose = true,
+    )
 
     # Plot initial T and η profiles
     let
@@ -217,7 +230,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while it < 150 # run only for 5 Myrs
+
+
+    while it < 1 # run only for 5 Myrs
         # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
 
         # Update buoyancy and viscosity -
@@ -256,6 +271,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles.coords)
        # @views T_buffer[:, end]      .= 273.0
+        @views T_buffer[:, end]      .= minimum(T_buffer)
         @views thermal.T[2:end-1, :] .= T_buffer
         temperature2center!(thermal)
 
@@ -270,7 +286,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             di;
             igg     = igg,
             phase   = phase_ratios,
-            iterMax = 10e3,
+            iterMax = 100e3,
             nout    = 1e2,
             verbose = true,
         )
@@ -393,7 +409,7 @@ end
 figdir   = "Sill_OM"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 128
+n        = 64
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

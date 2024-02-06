@@ -1,9 +1,9 @@
 using JustRelax, JustRelax.DataIO
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+@init_parallel_stencil(Threads, Float64, 3) #or (CUDA, Float64, 3) or (AMDGPU, Float64, 3)
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:threads, Float64, 3)
+model = PS_Setup(:Threads, Float64, 3) #or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions

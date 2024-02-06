@@ -1,51 +1,27 @@
-using Printf, LinearAlgebra, GeoParams, SpecialFunctions, CellArrays, StaticArrays, JustPIC
+using Printf, LinearAlgebra, GeoParams, SpecialFunctions, CellArrays, StaticArrays
 using JustRelax
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
-backend = "Threads_Float64_2D" # options: "CUDA_Float64_2D" "Threads_Float64_2D"
-# set_backend(backend) # run this on the REPL to switch backend
+@init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+
+using JustPIC
+using JustPIC._2D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
-device = occursin("CUDA", JustPIC.backend) ? :CUDA : :cpu
-model = PS_Setup(device, Float64, 2)
+model = PS_Setup(:Threads, Float64, 2)  #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 environment!(model)
 
 import JustRelax.@cell
 
-@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
-@inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
-@inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
-@inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
+# @inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
+# @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
+# @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
+# @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
 
 distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
-
-function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, nx, ny)
-    ni = nx, ny
-    ncells = nx * ny
-    np = max_xcell * ncells
-    px, py = ntuple(_ -> @fill(NaN, ni..., celldims=(max_xcell,)) , Val(2))
-
-    inject = @fill(false, nx, ny, eltype=Bool)
-    index = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool)
-
-    @parallel_indices (i, j) function fill_coords_index(px, py, index)
-        # lower-left corner of the cell
-        x0, y0 = x[i], y[j]
-        # fill index array
-        for l in 1:nxcell
-            JustRelax.@cell px[l, i, j] = x0 + dx * rand(0.05:1e-5: 0.95)
-            JustRelax.@cell py[l, i, j] = y0 + dy * rand(0.05:1e-5: 0.95)
-            JustRelax.@cell index[l, i, j] = true
-        end
-        return nothing
-    end
-
-    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)
-
-    return Particles(
-        (px, py), index, inject, nxcell, max_xcell, min_xcell, np, (nx, ny)
-    )
-end
 
 @parallel_indices (i, j) function init_T!(T, z)
     if z[j] == maximum(z)
@@ -155,11 +131,11 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1
-    particles = init_particles_cellarrays(
-        nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
+    particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
     # temperature
-    pPhases,     = init_particle_fields_cellarrays(particles, Val(1))
+    pPhases,     = init_cell_arrays(particles, Val(1))
     init_phases!(pPhases, particles, center_perturbation..., r)
     phase_ratios = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, particles.coords..., xci..., di, pPhases)

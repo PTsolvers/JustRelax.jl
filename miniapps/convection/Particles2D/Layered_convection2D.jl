@@ -23,17 +23,6 @@ include("Layered_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
-# Velocity helper grids for the particle advection
-function velocity_grids(xci, xvi, di)
-    dx, dy  = di
-    yVx     = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2])+2)
-    xVy     = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1])+2)
-    grid_vx = xvi[1], yVx
-    grid_vy = xVy, xvi[2]
-
-    return grid_vx, grid_vy
-end
-
 function copyinn_x!(A, B)
 
     @parallel function f_x(A, B)

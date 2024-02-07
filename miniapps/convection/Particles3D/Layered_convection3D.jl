@@ -20,19 +20,7 @@ using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
 
-# ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-# Velocity helper grids for the particle advection
-function velocity_grids(xci, xvi, di)
-    xghost  = ntuple(Val(3)) do i
-        LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i])+2)
-    end
-    grid_vx = xvi[1]   , xghost[2], xghost[3]
-    grid_vy = xghost[1], xvi[2]   , xghost[3]
-    grid_vz = xghost[1], xghost[2], xvi[3]
-
-    return grid_vx, grid_vy, grid_vz
-end
+## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
 import ParallelStencil.INDICES
 const idx_k = INDICES[3]

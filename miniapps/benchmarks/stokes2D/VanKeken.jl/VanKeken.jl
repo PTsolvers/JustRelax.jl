@@ -19,18 +19,6 @@ environment!(model)
 const λ = 0.9142
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
-
-# Define velocity grids with ghost nodes (for particle interpolations of the velocity field)
-function velocity_grids(xci, xvi, di)
-    dx, dy  = di
-    yVx     = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2])+2)
-    xVy     = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1])+2)
-    grid_vx = xvi[1], yVx
-    grid_vy = xVy, xvi[2]
-
-    return grid_vx, grid_vy
-end
-
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
 macro all_j(A)

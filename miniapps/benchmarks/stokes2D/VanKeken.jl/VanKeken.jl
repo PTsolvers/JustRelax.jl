@@ -20,11 +20,6 @@ const λ = 0.9142
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 
-# @inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
-# @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
-# @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
-# @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
-
 # Define velocity grids with ghost nodes (for particle interpolations of the velocity field)
 function velocity_grids(xci, xvi, di)
     dx, dy  = di

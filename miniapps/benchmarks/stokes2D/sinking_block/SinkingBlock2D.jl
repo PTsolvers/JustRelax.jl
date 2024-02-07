@@ -15,11 +15,7 @@ environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 
-# ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-# @inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
-# @inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
-# @inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
-# @inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
+## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
 # Thermal rectangular perturbation
 function rectangular_perturbation!(T, xc, yc, r, xvi)

@@ -9,16 +9,16 @@
     return nothing
 end
 
-function elliptical_perturbation!(T, δT, xc, yc, r, xvi)                                                               
-                                                                                                                           
-    @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)                                
-        @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2                                                          
-            T[i, j]  += δT                                                                                            
-        end                                                                                                            
-        return nothing                                                                                                 
-    end                                                                                                                
-                                                                                                                       
-    @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)                                                      
+function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
+
+    @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
+        @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
+            T[i, j]  += δT
+        end
+        return nothing
+    end
+
+    @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, K0=3.0)
@@ -32,14 +32,14 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     li           = (lx, ly)  # domain length in x- and y-
     di           = @. li / ni # grid step in x- and -y
     origin       = 0, -ly
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    
+
     # Define the thermal parameters with GeoParams
     rheology = SetMaterialParams(;
         Phase        = 1,
         Density      = PT_Density(; ρ0=3.1e3, β=0.0, T0=0.0, α = 1.5e-5),
-        HeatCapacity = ConstantHeatCapacity(; cp=Cp0),
+        HeatCapacity = ConstantHeatCapacity(; Cp=Cp0),
         Conductivity = ConstantConductivity(; k=K0),
     )
     # fields needed to compute density on the fly
@@ -56,8 +56,8 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     ρCp        = @. Cp * ρ
 
     pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li)
-    thermal_bc = TemperatureBoundaryConditions(; 
-        no_flux = (left = true, right = true, top = false, bot = false), 
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = false, bot = false),
     )
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
 

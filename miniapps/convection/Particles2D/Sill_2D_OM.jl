@@ -110,7 +110,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases      = init_particle(particles, Val(3))
+    pT, pPhases      = init_cell_arrays(particles, Val(3))
     particle_args    = (pT, pPhases)
 
     # initialize phases

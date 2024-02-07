@@ -1,16 +1,18 @@
+using JustRelax, JustRelax.DataIO
+import JustRelax.@cell
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
- using JustPIC
- using JustPIC._2D
- # Threads is the default backend,
- # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
- # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
- const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+using JustPIC
+using JustPIC._2D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
- # setup ParallelStencil.jl environment
- model = PS_Setup(:Threads, Float64, 2)
- environment!(model)
+# setup ParallelStencil.jl environment
+model = PS_Setup(:cpu, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
+environment!(model)
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays

@@ -55,7 +55,8 @@ function init_rheologies(; is_plastic = true)
         # Name              = "Rhyolite",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = PT_Density(; ρ0=2300, β=β_rhy, T0=0.0, α = 3.5e-5),
+            Density           = MeltDependent_Density(ρmelt=T_Density(ρ0=2300kg / m^3)),
+            # Density           = PT_Density(; ρ0=2300, β=β_rhy, T0=0.0, α = 3.5e-5),
             HeatCapacity      = ConstantHeatCapacity(cp=1200J/kg/K),
             Conductivity      = K_crust,
             #CompositeRheology = CompositeRheology((linear_viscosity_rhy, el_rhy)),
@@ -69,7 +70,8 @@ function init_rheologies(; is_plastic = true)
         # Name              = "Basaltic_Sill",
         SetMaterialParams(;
             Phase             = 2,
-            Density           = PT_Density(; ρ0=2800, β=β_bas, T0=0.0, α = 3.5e-5),
+            Density           = MeltDependent_Density(ρmelt=T_Density(ρ0=2800kg / m^3)),
+            # Density           = PT_Density(; ρ0=2800, β=β_bas, T0=0.0, α = 3.5e-5),
             HeatCapacity      = ConstantHeatCapacity(),
             Conductivity      = K_crust,
             CompositeRheology = CompositeRheology((linear_viscosity_bas,)),

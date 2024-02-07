@@ -21,17 +21,6 @@ include("Sill_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
-# Velocity helper grids for the particle advection
-function velocity_grids(xci, xvi, di)
-    dx, dy  = di
-    yVx     = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2])+2)
-    xVy     = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1])+2)
-    grid_vx = xvi[1], yVx
-    grid_vy = xVy, xvi[2]
-
-    return grid_vx, grid_vy
-end
-
 function copyinn_x!(A, B)
 
     @parallel function f_x(A, B)
@@ -295,7 +284,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
         # advect particles in memory
-        shuffle_particles!(particles, xvi, particle_args) # move_particles!(particles, xvi, particle_args) # add this as soon as the negative index is fixed - speeds up the code
+        move_particles!(particles, xvi, particle_args)
         # interpolate fields from grid vertices to particles
         for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
             copyinn_x!(dst, src)

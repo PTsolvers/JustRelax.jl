@@ -96,7 +96,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies(; is_plastic = false)
-    κ            = (4 / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0))
+    # κ            = (4 / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ))
+    κ            = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
+    # κ            = (4 / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 / 100 # diffusive CFL timestep limiter
    # dt = dt_diff/10
     @show dt
@@ -137,21 +139,26 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
+    #melt fraction
+    ϕ                = @zeros(ni...)
+    @parallel (@idx ni) compute_melt_fraction!(
+        ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
+    )
 
     # Buoyancy forces
     ρg               = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
-        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
+        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P, ϕ= ϕ))
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
     # Rheology
     η                = @zeros(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf, ϕ=ϕ)
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
     η_vep            = copy(η)
-    ϕ                = similar(η)
+    # ϕ                = similar(η)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -174,21 +181,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     take(figdir)
     # ----------------------------------------------------
-    #do an initial diffusion step to smooth out the initial temperature profile
-    heatdiffusion_PT!(
-        thermal,
-        pt_thermal,
-        thermal_bc,
-        rheology,
-        args,
-        dt,
-        di;
-        igg     = igg,
-        phase   = phase_ratios,
-        iterMax = 100e3,
-        nout    = 1e2,
-        verbose = true,
-    )
 
     # Plot initial T and η profiles
     let
@@ -222,11 +214,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     t, it = 0.0, 0
 
 
-    while it < 1 # run only for 5 Myrs
+    while it < 10 # run only for 5 Myrs
         # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf, ϕ= ϕ)
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
         )
@@ -253,9 +245,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         )
         @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
-        if it<2
-            dt = dt/10000
-        end
+
         # ------------------------------
 
         # interpolate fields from particle to grid vertices
@@ -396,7 +386,7 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "Sill_OM"
+figdir   = "testing_density_struct"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
 n        = 64

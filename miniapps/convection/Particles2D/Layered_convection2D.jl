@@ -109,7 +109,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies(; is_plastic = true)
-    κ            = (4 / (rheology[4].HeatCapacity[1].cp * rheology[4].Density[1].ρ0))
+    κ            = (4 / (rheology[4].HeatCapacity[1].Cp * rheology[4].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 

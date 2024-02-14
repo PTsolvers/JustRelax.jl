@@ -1,14 +1,17 @@
-using JustRelax, JustRelax.DataIO, JustPIC
+using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
-## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
-# set_backend("Threads_Float64_2D")
-# set_backend("CUDA_Float64_2D")
+using JustPIC
+using JustPIC._3D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:Threads, Float64, 3) # or (:Threads, Float64, 3) or (:AMDGPU, Float64, 3)
+model = PS_Setup(:Threads, Float64, 3) # or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
 environment!(model)
 
 # Load script dependencies
@@ -18,51 +21,6 @@ using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 include("Layered_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
-@inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
-@inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
-@inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
-
-function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, z, dx, dy, dz, ni::NTuple{3, Int})
-    ncells     = prod(ni)
-    np         = max_xcell * ncells
-    px, py, pz = ntuple(_ -> @fill(NaN, ni..., celldims=(max_xcell,)) , Val(3))
-    inject     = @fill(false, ni..., eltype=Bool)
-    index      = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool)
-
-    @parallel_indices (i, j, k) function fill_coords_index(px, py, pz, index)
-        @inline r()= rand(0.05:1e-5:0.95)
-        I          = i, j, k
-        # lower-left corner of the cell
-        x0, y0, z0 = x[i], y[j], z[k]
-        # fill index array
-        for l in 1:nxcell
-            JustRelax.@cell px[l, I...]    = x0 + dx * r()
-            JustRelax.@cell py[l, I...]    = y0 + dy * r()
-            JustRelax.@cell pz[l, I...]    = z0 + dz * r()
-            JustRelax.@cell index[l, I...] = true
-        end
-        return nothing
-    end
-
-    @parallel (@idx ni) fill_coords_index(px, py, pz, index)
-
-    return Particles(
-        (px, py, pz), index, inject, nxcell, max_xcell, min_xcell, np, ni
-    )
-end
-
-# Velocity helper grids for the particle advection
-function velocity_grids(xci, xvi, di)
-    xghost  = ntuple(Val(3)) do i
-        LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i])+2)
-    end
-    grid_vx = xvi[1]   , xghost[2], xghost[3]
-    grid_vy = xghost[1], xvi[2]   , xghost[3]
-    grid_vz = xghost[1], xghost[2], xvi[3]
-
-    return grid_vx, grid_vy, grid_vz
-end
 
 import ParallelStencil.INDICES
 const idx_k = INDICES[3]
@@ -142,13 +100,13 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 20, 1
-    particles                    = init_particles_cellarrays(
-        nxcell, max_xcell, min_xcell, xvi..., di..., ni
+    particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
     # velocity grids
     grid_vx, grid_vy, grid_vz   = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases                 = init_particle_fields_cellarrays(particles, Val(2))
+    pT, pPhases                 = init_cell_arrays(particles, Val(2))
     particle_args               = (pT, pPhases)
 
     # Elliptical temperature anomaly
@@ -234,7 +192,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         fig
     end
 
-    grid2particle!(pT, xvi, thermal.T, particles.coords)
+    grid2particle!(pT, xvi, thermal.T, particles)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
@@ -275,7 +233,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         # ------------------------------
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, xvi, particles.coords)
+        particle2grid!(thermal.T, pT, xvi, particles)
         temperature2center!(thermal)
 
         # Thermal solver ---------------
@@ -299,9 +257,9 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, grid_vz, dt, 2 / 3)
         # advect particles in memory
-        shuffle_particles!(particles, xvi, particle_args)
+        move_particles!(particles, xvi, particle_args)
         # interpolate fields from grid vertices to particles
-        grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles.coords)
+        grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles)
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)

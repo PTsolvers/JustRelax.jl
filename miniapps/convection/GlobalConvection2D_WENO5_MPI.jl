@@ -1,7 +1,9 @@
 using JustRelax
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:threads, Float64, 2)
+model = PS_Setup(:Threads, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
@@ -224,7 +226,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     T_WENO  = @zeros(ni.+1)
     Vx_v    = @zeros(ni.+1...)
     Vy_v    = @zeros(ni.+1...)
-    
+
     # global array
     nx_v = ((nx + 2) - 2) * igg.dims[1]
     ny_v = ((ny + 1) - 2) * igg.dims[2]

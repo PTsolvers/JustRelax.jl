@@ -117,7 +117,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         Name              = "Mantle",
         Phase             = 1,
         Density           = PT_Density(; ρ0=3.1e3, β=β, T0=0.0, α = 1.5e-5),
-        HeatCapacity      = ConstantHeatCapacity(; cp=1.2e3),
+        HeatCapacity      = ConstantHeatCapacity(; Cp=1.2e3),
         Conductivity      = ConstantConductivity(; k=3.0),
         CompositeRheology = CompositeRheology((creep, el, )),
         Elasticity        = el,
@@ -127,14 +127,14 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         Name              = "Mantle",
         Phase             = 1,
         Density           = PT_Density(; ρ0=3.5e3, β=β, T0=0.0, α = 1.5e-5),
-        HeatCapacity      = ConstantHeatCapacity(; cp=1.2e3),
+        HeatCapacity      = ConstantHeatCapacity(; Cp=1.2e3),
         Conductivity      = ConstantConductivity(; k=3.0),
         CompositeRheology = CompositeRheology((creep, el, pl)),
         Elasticity        = el,
         Gravity           = ConstantGravity(; g=9.81),
     )
     # heat diffusivity
-    κ            = (rheology.Conductivity[1].k / (rheology.HeatCapacity[1].cp * rheology.Density[1].ρ0)).val
+    κ            = (rheology.Conductivity[1].k / (rheology.HeatCapacity[1].Cp * rheology.Density[1].ρ0)).val
     dt = dt_diff = min(di...)^2 / κ / 3.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 

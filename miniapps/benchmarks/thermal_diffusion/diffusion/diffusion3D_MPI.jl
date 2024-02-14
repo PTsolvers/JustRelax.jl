@@ -67,7 +67,7 @@ function diffusion_3D(;
     rheology = SetMaterialParams(;
         Phase        = 1,
         Density      = PT_Density(; ρ0=3.1e3, β=0.0, T0=0.0, α = 1.5e-5),
-        HeatCapacity = ConstantHeatCapacity(; cp=Cp0),
+        HeatCapacity = ConstantHeatCapacity(; Cp=Cp0),
         Conductivity = ConstantConductivity(; k=K0),
     )
 

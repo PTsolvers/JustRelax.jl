@@ -20,6 +20,7 @@ import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi, backend
 
 @eval @init_parallel_stencil($backend, Float64, 3)
 
+include("../rheology/GeoParams.jl")
 include("StressRotation.jl")
 include("PressureKernels.jl")
 include("VelocityKernels.jl")
@@ -237,7 +238,7 @@ function JustRelax.solve!(
     norm_∇V = Float64[]
 
     Kb = get_Kb(rheology)
-    G = get_G(rheology)
+    G = get_shear_modulus(rheology)
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
 

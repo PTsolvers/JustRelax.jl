@@ -53,6 +53,7 @@ import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi, backend
 
 @eval @init_parallel_stencil($backend, Float64, 2)
 
+include("../rheology/GeoParams.jl")
 include("StressRotation.jl")
 include("PressureKernels.jl")
 include("VelocityKernels.jl")

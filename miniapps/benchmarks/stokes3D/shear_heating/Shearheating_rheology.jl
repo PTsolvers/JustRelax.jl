@@ -35,7 +35,7 @@ function init_rheologies(; is_TP_Conductivity=true)
         SetMaterialParams(;
             Phase             = 1,
             Density           = ConstantDensity(ρ = 2700),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1050.0),
+            HeatCapacity      = ConstantHeatCapacity(; Cp=1050.0),
             Conductivity      = K_Matrix,
             ShearHeat         = ConstantShearheating(1.0NoUnits),
             CompositeRheology = CompositeRheology((Matrix, )),
@@ -45,7 +45,7 @@ function init_rheologies(; is_TP_Conductivity=true)
         SetMaterialParams(;
             Phase             = 2,
             Density           = ConstantDensity(ρ = 2700),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1050.0),
+            HeatCapacity      = ConstantHeatCapacity(; Cp=1050.0),
             Conductivity      = K_Inclusion,
             ShearHeat         = ConstantShearheating(1.0NoUnits),
             CompositeRheology = CompositeRheology((Inclusion, )),

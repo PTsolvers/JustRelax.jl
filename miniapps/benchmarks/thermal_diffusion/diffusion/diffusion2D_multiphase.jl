@@ -94,14 +94,14 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
         SetMaterialParams(;
             Phase           = 1,
             Density         = PT_Density(; ρ0=3e3, β=0.0, T0=0.0, α = 1.5e-5),
-            HeatCapacity    = ConstantHeatCapacity(; cp=Cp0),
+            HeatCapacity    = ConstantHeatCapacity(; Cp=Cp0),
             Conductivity    = ConstantConductivity(; k=K0),
             RadioactiveHeat = ConstantRadioactiveHeat(1e-6),
         ),
         SetMaterialParams(;
             Phase           = 1,
             Density         = PT_Density(; ρ0=3.3e3, β=0.0, T0=0.0, α = 1.5e-5),
-            HeatCapacity    = ConstantHeatCapacity(; cp=Cp0),
+            HeatCapacity    = ConstantHeatCapacity(; Cp=Cp0),
             Conductivity    = ConstantConductivity(; k=K0),
             RadioactiveHeat = ConstantRadioactiveHeat(1e-7),
         ),

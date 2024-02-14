@@ -19,7 +19,7 @@ end
 @parallel_indices (I...) function compute_P!(
     P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ
 ) where {N}
-    K = get_Kb(rheology, phase[I...])
+    K = get_bulk_modulus(rheology, phase[I...])
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
@@ -27,7 +27,7 @@ end
 @parallel_indices (I...) function compute_P!(
     P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ
 ) where {N,C<:JustRelax.CellArray}
-    K = fn_ratio(get_Kb, rheology, phase_ratio[I...])
+    K = fn_ratio(get_bulk_modulus, rheology, phase_ratio[I...])
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end

@@ -461,8 +461,11 @@ take(fldr::String) = !isdir(fldr) && mkpath(fldr)
 
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """
-# @inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
-@inline continuation_log(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
+@inline function continuation_log(x_new::T, x_old::T, ν) where {T}
+    x_cont = exp((1 - ν) * log(x_old) + ν * log(x_new))
+    return isnan(x_cont) ? 0.0 : x_cont
+end
+# @inline continuation_log(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
 
 # Others
 

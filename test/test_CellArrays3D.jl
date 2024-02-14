@@ -1,5 +1,8 @@
 
 using Test, StaticArrays, AllocCheck, JustRelax
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 3)
+
 model = PS_Setup(:Threads, Float64, 3)
 environment!(model)
 

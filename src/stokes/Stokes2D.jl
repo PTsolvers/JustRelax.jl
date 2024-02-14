@@ -41,7 +41,7 @@ using ImplicitGlobalGrid
 using ..JustRelax
 using CUDA, AMDGPU
 using ParallelStencil
-using ParallelStencil.FiniteDifferences2D
+# using ParallelStencil.FiniteDifferences2D
 using GeoParams, LinearAlgebra, Printf
 
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
@@ -49,7 +49,9 @@ import JustRelax: tensor_invariant!, compute_τ_nonlinear!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
-import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi
+import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi, backend
+
+@eval @init_parallel_stencil($backend, Float64, 2)
 
 include("StressRotation.jl")
 include("PressureKernels.jl")

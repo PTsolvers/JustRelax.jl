@@ -1,5 +1,7 @@
 using JustRelax, GeoParams
 using GLMakie
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64, 3) or (AMDGPU, Float64, 3)
 
 # setup ParallelStencil.jl environment
 dimension = 3 # 2 | 3
@@ -92,7 +94,7 @@ function diffusion_3D(;
 
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3], lz)
 
-    # return nothing 
+    # return nothing
 
     # Add thermal perturbation
     δT                  = 100e0 # thermal perturbation

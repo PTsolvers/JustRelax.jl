@@ -16,7 +16,9 @@ import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: tensor_invariant!, compute_τ_nonlinear!, compute_τ_vertex!, compute_τ!
 import JustRelax: compute_maxloc!, solve!
-import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi
+import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi, backend
+
+@eval @init_parallel_stencil($backend, Float64, 3)
 
 include("StressRotation.jl")
 include("PressureKernels.jl")

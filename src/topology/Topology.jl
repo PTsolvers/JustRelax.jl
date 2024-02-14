@@ -41,7 +41,7 @@ struct Geometry{nDim,T}
 
         xci, xvi = lazy_grid(di, ni; origin=origin)
         grid_v = velocity_grids(xci, xvi, di)
-        return new{nDim,T}(ni, Li, origin, max(Li...), di, xci, xvi, grid_v)
+        return new{nDim,Float64}(ni, Li, origin, max(Li...), di, xci, xvi, grid_v)
     end
 end
 

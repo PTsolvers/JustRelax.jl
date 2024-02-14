@@ -276,14 +276,14 @@ end
 
     # numerics
     ηij = η[I...]
-    _Gdt = inv(get_G(rheology[1]) * dt)
+    _Gdt = inv(get_shear_modulus(rheology[1]) * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     # get plastic parameters (if any...)
     is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], 1)
 
     # plastic volumetric change K * dt * sinϕ * sinψ
-    K = get_bulkmodulus(rheology[1])
+    K = get_bulk_modulus(rheology[1])
     volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
@@ -318,14 +318,14 @@ end
     # numerics
     ηij = @inbounds η[I...]
     phase = @inbounds phase_center[I...]
-    _Gdt = inv(fn_ratio(get_G, rheology, phase) * dt)
+    _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     # get plastic parameters (if any...)
     is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
 
     # plastic volumetric change K * dt * sinϕ * sinψ
-    K = fn_ratio(get_bulkmodulus, rheology, phase)
+    K = fn_ratio(get_bulk_modulus, rheology, phase)
     volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 

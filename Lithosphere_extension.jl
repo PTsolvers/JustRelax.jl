@@ -1,7 +1,17 @@
-using JustRelax, JustRelax.DataIO, JustPIC
+using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-model = PS_Setup(:Threads, Float64, 2)            # initialize parallel stencil in 2D
+using JustPIC
+using JustPIC._2D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+
+# setup ParallelStencil.jl environment
+model = PS_Setup(:cpu, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 environment!(model)
 
 using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
@@ -12,10 +22,6 @@ using WriteVTK
 
 # -----------------------------------------------------------------------------------------
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
-@inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
-@inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
-@inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
 
 function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, nx, ny)
     ni     = nx, ny
@@ -400,7 +406,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         SetMaterialParams(;
             Phase   = 1,
             Density  = PT_Density(ρ0=2700kg/m^3, β=β_rock/Pa),
-            HeatCapacity = ConstantHeatCapacity(cp=1050J/kg/K),
+            HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=3.0Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
             ShearHeat         = ConstantShearheating(1.0NoUnits),
@@ -413,7 +419,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         SetMaterialParams(;
             Phase   = 2,
             Density  = PT_Density(ρ0=2600kg/m^3, β=β_magma/Pa),
-            HeatCapacity = ConstantHeatCapacity(cp=1050J/kg/K),
+            HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=1.5Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
             ShearHeat         = ConstantShearheating(0.0NoUnits),
@@ -426,7 +432,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         SetMaterialParams(;
             Phase   = 3,
             Density  = PT_Density(ρ0=2600kg/m^3, β=β_magma/Pa),
-            HeatCapacity = ConstantHeatCapacity(cp=1050J/kg/K),
+            HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=1.5Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
             ShearHeat         = ConstantShearheating(0.0NoUnits),
@@ -439,7 +445,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         SetMaterialParams(;
             Phase   = 4,
             Density   = ConstantDensity(ρ=10kg/m^3,),
-            HeatCapacity = ConstantHeatCapacity(cp=1000J/kg/K),
+            HeatCapacity = ConstantHeatCapacity(Cp=1000J/kg/K),
             Conductivity = ConstantConductivity(k=15Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=0.0J/kg),
             ShearHeat         = ConstantShearheating(0.0NoUnits),
@@ -450,15 +456,15 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
     #----------------------------------------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 5 # nxcell = initial number of particles per cell; max_cell = maximum particles accepted in a cell; min_xcell = minimum number of particles in a cell
-    particles = init_particles_cellarrays(
-        nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+    nxcell, max_xcell, min_xcell = 20, 40, 1
+    particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases = init_particle_fields_cellarrays(particles, Val(3))
-    particle_args = (pT, pPhases)
+    pT, pPhases      = init_cell_arrays(particles, Val(3))
+    particle_args    = (pT, pPhases)
 
     xc = lx/2
     yc = -ly/3  # origin of thermal anomaly
@@ -482,7 +488,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
     ΔT = geotherm * (ly - sticky_air) # temperature difference between top and bottom of the domain
     tempoffset = 0.0
     η = MatParam[2].CompositeRheology[1][1].η.val       # viscosity for the Rayleigh number
-    Cp0 = MatParam[2].HeatCapacity[1].cp.val              # heat capacity
+    Cp0 = MatParam[2].HeatCapacity[1].Cp.val              # heat capacity
     ρ0 = MatParam[2].Density[1].ρ0.val                   # reference Density
     k0 = MatParam[2].Conductivity[1]              # Conductivity
     G = MatParam[1].Elasticity[1].G.val                 # Shear Modulus
@@ -581,7 +587,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         copyinn_x!(dst, src)
     end
 
-    grid2particle!(pT, xvi, T_buffer, particles.coords)
+    grid2particle!(pT, xvi, T_buffer, particles)
     @copy stokes.P0 stokes.P
 
 
@@ -617,7 +623,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
 
     while it < 1 #nt
 
-        particle2grid!(T_buffer, pT, xvi, particles.coords)
+        particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end] .= 273.0
         @views thermal.T[2:end-1, :] .= T_buffer
         temperature2center!(thermal)
@@ -645,7 +651,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         # if it == 114
         #     conduit_gradient_TBuffer!(T_buffer, offset, xc_conduit, -yc_conduit, r_conduit, xvi)
         #     open_conduit!(pPhases, particles, xc_conduit, yc_conduit, r_conduit)
-        #     grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles.coords)
+        #     grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
         # end
 
         # @views T_buffer[:, end] .= nondimensionalize(0.0C, CharDim)
@@ -725,7 +731,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         # advect particles in memory
         shuffle_particles!(particles, xvi, particle_args)
         # JustPIC.clean_particles!(particles, xvi, particle_args)
-        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles.coords)
+        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)

@@ -96,7 +96,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies(; is_plastic = false)
-    κ            = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
+    κ            = (4 / (compute_heatcapacity(rheology[1].HeatCapacity[1].Cp) * rheology[1].Density[1].ρ))
     # κ            = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 / 100 # diffusive CFL timestep limiter
    # dt = dt_diff/10
@@ -151,7 +151,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
     # Rheology
-    η                = @zeros(ni...)
+    η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf, ϕ=ϕ)
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
@@ -213,9 +213,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     t, it = 0.0, 0
 
 
-    while it < 10 # run only for 5 Myrs
-        # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
-
+    while it < 10
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf, ϕ= ϕ)
         @parallel (@idx ni) compute_viscosity!(

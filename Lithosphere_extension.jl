@@ -23,44 +23,6 @@ using WriteVTK
 # -----------------------------------------------------------------------------------------
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
-function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, nx, ny)
-    ni     = nx, ny
-    ncells = nx * ny
-    np     = max_xcell * ncells
-    px, py = ntuple(_ -> @fill(NaN, ni..., celldims=(max_xcell,)) , Val(2))
-    inject = @fill(false, nx, ny, eltype=Bool)
-    index  = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool)
-
-    @parallel_indices (i, j) function fill_coords_index(px, py, index)
-        # lower-left corner of the cell
-        x0, y0 = x[i], y[j]
-        # fill index array
-        for l in 1:nxcell
-            JustRelax.@cell px[l, i, j]    = x0 + dx * rand(0.05:1e-5:0.95)
-            JustRelax.@cell py[l, i, j]    = y0 + dy * rand(0.05:1e-5:0.95)
-            JustRelax.@cell index[l, i, j] = true
-        end
-        return nothing
-    end
-
-    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)
-
-    return Particles(
-        (px, py), index, inject, nxcell, max_xcell, min_xcell, np, (nx, ny)
-    )
-end
-
-# Velocity helper grids for the particle advection
-function velocity_grids(xci, xvi, di)
-    dx, dy  = di
-    yVx     = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2])+2)
-    xVy     = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1])+2)
-    grid_vx = xvi[1], yVx
-    grid_vy = xVy, xvi[2]
-
-    return grid_vx, grid_vy
-end
-
 function copyinn_x!(A, B)
 
     @parallel function f_x(A, B)
@@ -483,7 +445,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
 
     # Physical Parameters
-    geotherm = GeoUnit(30K / km)
+    geotherm = GeoUnit(0.03K / m)
     geotherm = ustrip(Value(geotherm))
     ΔT = geotherm * (ly - sticky_air) # temperature difference between top and bottom of the domain
     tempoffset = 0.0
@@ -696,15 +658,15 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         # ------------------------------
         @show dt
 
-        @parallel (@idx ni) compute_shear_heating!(
-            thermal.shear_heating,
-            @tensor_center(stokes.τ),
-            @tensor_center(stokes.τ_o),
-            @strain(stokes),
-            phase_ratios.center,
-            MatParam, # needs to be a tuple
-            dt,
-        )
+        # @parallel (@idx ni) compute_shear_heating!(
+        #     thermal.shear_heating,
+        #     @tensor_center(stokes.τ),
+        #     @tensor_center(stokes.τ_o),
+        #     @strain(stokes),
+        #     phase_ratios.center,
+        #     MatParam, # needs to be a tuple
+        #     dt,
+        # )
         # Thermal solver ---------------
         heatdiffusion_PT!(
             thermal,

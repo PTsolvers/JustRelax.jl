@@ -27,6 +27,9 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     ttot     = 1 * Myr # total simulation time
     dt       = 50 * kyr # physical time step
 
+    init_mpi = JustRelax.MPI.Initialized() ? false : true
+    igg    = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+
     # Physical domain
     ni           = (nx, ny)
     li           = (lx, ly)  # domain length in x- and y-

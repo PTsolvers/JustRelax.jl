@@ -1,3 +1,6 @@
+push!(LOAD_PATH, "..")
+
+using Test
 using Printf, LinearAlgebra, GeoParams, SpecialFunctions, CellArrays, StaticArrays
 using JustRelax
 using ParallelStencil
@@ -170,7 +173,12 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
         t  += dt
     end
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), thermal
+    return thermal
 end
 
-diffusion_2D()
+@testset "Diffusion_2D_Multiphase" begin
+    thermal = diffusion_2D()
+    @test thermal.T[Int(ceil(size(thermal.T)[1]/2)), Int(ceil(size(thermal.T)[2]/2))] ≈ 1819.2297931741878 atol=1e-6
+    @test thermal.Tc[Int(ceil(size(thermal.Tc)[1]/2)), Int(ceil(size(thermal.Tc)[2]/2))] ≈ 1824.3532934301472 atol=1e-6
+
+end

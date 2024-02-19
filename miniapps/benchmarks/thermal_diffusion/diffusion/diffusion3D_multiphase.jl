@@ -1,14 +1,20 @@
-using GeoParams, CellArrays
-using JustRelax, JustRelax.DataIO
+using Printf, LinearAlgebra, GeoParams, CellArrays, StaticArrays
+using JustRelax
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64, 3) or (AMDGPU, Float64, 3)
+@init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+
+using JustPIC
+using JustPIC._3D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
-dimension = 3 # 2 | 3
-device = :cpu # :cpu | :CUDA | :AMDGPU
-precision = Float64
-model = PS_Setup(device, precision, dimension)
+model = PS_Setup(:Threads, Float64, 3)  #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 environment!(model)
+
+import JustRelax.@cell
 
 @parallel_indices (i, j, k) function init_T!(T, z)
     if z[k] == maximum(z)
@@ -31,6 +37,33 @@ function elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi)
     end
 
     @parallel _elliptical_perturbation!(T, xvi...)
+end
+
+function init_phases!(phases, particles, xc, yc, zc, r)
+    ni = size(phases)
+    center = xc, yc, zc
+
+    @parallel_indices (I...) function init_phases!(phases, px, py, pz, index, center, r)
+        @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
+            # quick escape
+            JustRelax.@cell(index[ip, I...]) == 0 && continue
+
+            x = JustRelax.@cell px[ip, I...]
+            y = JustRelax.@cell py[ip, I...]
+            z = JustRelax.@cell pz[ip, I...]
+
+            # plume - rectangular
+            if (((x - center[1]))^2 + ((y - center[2]))^2 + ((z - center[3]))^2) ≤ r^2
+                JustRelax.@cell phases[ip, I...] = 2.0
+
+            else
+                JustRelax.@cell phases[ip, I...] = 1.0
+            end
+        end
+        return nothing
+    end
+
+    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
 end
 
 function diffusion_3D(;
@@ -62,11 +95,21 @@ function diffusion_3D(;
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Define the thermal parameters with GeoParams
-    rheology = SetMaterialParams(;
-        Phase        = 1,
-        Density      = PT_Density(; ρ0=3.1e3, β=0.0, T0=0.0, α = 1.5e-5),
-        HeatCapacity = ConstantHeatCapacity(; Cp=Cp0),
-        Conductivity = ConstantConductivity(; k=K0),
+    rheology = (
+        SetMaterialParams(;
+            Phase           = 1,
+            Density         = PT_Density(; ρ0=3e3, β=0.0, T0=0.0, α = 1.5e-5),
+            HeatCapacity    = ConstantHeatCapacity(; Cp=Cp0),
+            Conductivity    = ConstantConductivity(; k=K0),
+            RadioactiveHeat = ConstantRadioactiveHeat(1e-6),
+        ),
+        SetMaterialParams(;
+            Phase           = 2,
+            Density         = PT_Density(; ρ0=3.3e3, β=0.0, T0=0.0, α = 1.5e-5),
+            HeatCapacity    = ConstantHeatCapacity(; Cp=Cp0),
+            Conductivity    = ConstantConductivity(; k=K0),
+            RadioactiveHeat = ConstantRadioactiveHeat(1e-7),
+        ),
     )
 
     # fields needed to compute density on the fly
@@ -84,7 +127,6 @@ function diffusion_3D(;
     ρCp        = @. Cp * ρ
 
     # Boundary conditions
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
         periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
@@ -97,6 +139,22 @@ function diffusion_3D(;
     r                   = 10e3 # thermal perturbation radius
     center_perturbation = lx/2, ly/2, -lz/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
+
+    # Initialize particles -------------------------------
+    nxcell, max_xcell, min_xcell = 20, 20, 1
+    particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni
+    )
+    # temperature
+    pPhases,     = init_cell_arrays(particles, Val(1))
+    init_phases!(pPhases, particles, center_perturbation..., r)
+    phase_ratios = PhaseRatio(ni, length(rheology))
+    @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, pPhases)
+    # ----------------------------------------------------
+
+    # PT coefficients for thermal diffusion
+    args       = (; P=P, T=thermal.Tc)
+    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
 
     t  = 0.0
     it = 0
@@ -111,8 +169,12 @@ function diffusion_3D(;
             rheology,
             args,
             dt,
-            di,;
-            igg
+            di;
+            igg     = igg,
+            phase   = phase_ratios,
+            iterMax = 10e3,
+            nout    = 1e2,
+            verbose = true,
         )
 
         t  += dt
@@ -123,3 +185,5 @@ function diffusion_3D(;
 
     return (ni=ni, xci=xci, li=li, di=di), thermal
 end
+
+diffusion_3D()

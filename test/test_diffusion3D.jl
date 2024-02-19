@@ -1,15 +1,16 @@
+push!(LOAD_PATH, "..")
+
+using Test
 using GeoParams, CellArrays
 using JustRelax, JustRelax.DataIO
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64, 3) or (AMDGPU, Float64, 3)
+@init_parallel_stencil(Threads, Float64, 3)
 
 # setup ParallelStencil.jl environment
-dimension = 3 # 2 | 3
-device = :cpu # :cpu | :CUDA | :AMDGPU
-precision = Float64
-model = PS_Setup(device, precision, dimension)
+model  = PS_Setup(:Threads, Float64, 3)
 environment!(model)
 
+# HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j, k) function init_T!(T, z)
     if z[k] == maximum(z)
         T[i, j, k] = 300.0
@@ -49,7 +50,7 @@ function diffusion_3D(;
 
     kyr      = 1e3 * 3600 * 24 * 365.25
     Myr      = 1e6 * 3600 * 24 * 365.25
-    ttot     = 10 * Myr # total simulation time
+    ttot     = 1 * Myr # total simulation time
     dt       = 50 * kyr # physical time step
 
     # Physical domain
@@ -121,5 +122,12 @@ function diffusion_3D(;
 
     finalize_global_grid(; finalize_MPI=finalize_MPI)
 
-    return (ni=ni, xci=xci, li=li, di=di), thermal
+    return thermal
+end
+
+@testset "Diffusion_3D" begin
+    thermal = diffusion_3D()
+    @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1804.4383108701202 atol=1e-6
+    @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1803.340632183192 atol=1e-6
+
 end

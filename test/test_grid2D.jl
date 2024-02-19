@@ -3,7 +3,7 @@ using Test, JustRelax
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
-@testset begin
+@testset "Grid2D" begin
     n      = 4 # number of cells
     nx     = n
     ny     = n
@@ -20,7 +20,7 @@ environment!(model)
     dy     = ly / ny_g() # grid step in y
     di     = dx, dy      # grid step in x- and y
     origin = 0.0, -ly    # origin coordinates (15km f sticky air layer)
-    grid   = Geometry(ni, li; origin = origin) 
+    grid   = Geometry(ni, li; origin = origin)
 
     @test grid.origin == origin
     for i in 1:2

@@ -23,6 +23,6 @@ function check_convergence_case1()
     return passed
 end
 
-@testset begin
+@testset "solcx" begin
     @test check_convergence_case1()
 end

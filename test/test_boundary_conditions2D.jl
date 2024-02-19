@@ -6,7 +6,7 @@ using ParallelStencil
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 
-@testset begin
+@testset "Boundary Conditions" begin
     # periodicity
     n = 5 # number of elements
     Vx, Vy = @rand(n + 1, n + 2), @rand(n + 2, n + 1)

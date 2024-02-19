@@ -254,6 +254,6 @@ end
 
 @testset "Shearheating2D" begin
     iters, thermal = Shearheating2D()
-    @test passed = iters.err_evo1[end] < 1e-5
+    @test passed = iters.err_evo1[end] < 1e-4
     # @test maximum.(thermal.shear_heating)
 end

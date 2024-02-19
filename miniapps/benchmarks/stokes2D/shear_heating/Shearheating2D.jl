@@ -119,7 +119,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology
-    η                = @zeros(ni...)
+    η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)

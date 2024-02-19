@@ -22,6 +22,7 @@ import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi, backend
 
 include("../rheology/GeoParams.jl")
 include("StressRotation.jl")
+include("StressKernels.jl")
 include("PressureKernels.jl")
 include("VelocityKernels.jl")
 
@@ -460,6 +461,8 @@ function JustRelax.solve!(
                 stokes.τ.II,
                 @tensor_center(stokes.τ_o),
                 @strain(stokes),
+                @tensor_center(stokes.ε_pl),
+                stokes.EII_pl,
                 stokes.P,
                 θ,
                 η,

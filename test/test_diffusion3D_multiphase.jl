@@ -146,7 +146,7 @@ function diffusion_3D(;
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 20, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
     # temperature
     pPhases,     = init_cell_arrays(particles, Val(1))

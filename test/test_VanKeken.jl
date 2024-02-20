@@ -90,6 +90,7 @@ function VanKeken2D(ny=32, nx=32)
         ),
         # High density phase
         SetMaterialParams(;
+            Phase             = 2,
             Density           = ConstantDensity(; ρ = 2),
             Gravity           = ConstantGravity(; g = 1),
             CompositeRheology = CompositeRheology((LinearViscous(;η = 1e0),)),

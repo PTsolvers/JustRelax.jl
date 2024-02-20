@@ -14,7 +14,6 @@ using GeoParams
 import JustRelax: PTArray, Velocity, SymmetricTensor, pureshear_bc!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
-import JustRelax: tensor_invariant!, compute_τ_nonlinear!, compute_τ_vertex!, compute_τ!
 import JustRelax: compute_maxloc!, solve!
 import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi, backend
 
@@ -22,9 +21,9 @@ import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi, backend
 
 include("../rheology/GeoParams.jl")
 include("StressRotation.jl")
-include("StressKernels.jl")
 include("PressureKernels.jl")
 include("VelocityKernels.jl")
+include("StressKernels.jl")
 
 export solve!, pureshear_bc!
 rotate_stress_particles_jaumann!,

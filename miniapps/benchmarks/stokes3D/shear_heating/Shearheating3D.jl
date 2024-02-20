@@ -39,7 +39,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", save_vtk =false)
+function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =false)
 
     # Physical domain ------------------------------------
     lx           = 70e3           # domain length in x
@@ -135,7 +135,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", save_vtk =f
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
-    if save_vtk
+    if do_vtk
         vtk_dir      = figdir*"\\vtk"
         take(vtk_dir)
     end
@@ -160,7 +160,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", save_vtk =f
     grid2particle!(pT, xvi, thermal.T, particles)
 
     local Vx_v, Vy_v, Vz_v
-    if save_vtk
+    if do_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
         Vz_v = @zeros(ni.+1...)
@@ -249,7 +249,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", save_vtk =f
             if it == 1 || rem(it, 10) == 0
                 checkpointing(figdir, stokes, thermal.T, η, t)
 
-                if save_vtk
+                if do_vtk
                     JustRelax.velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                     data_v = (;
                         T   = Array(thermal.T),
@@ -267,7 +267,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", save_vtk =f
                         εyy = Array(stokes.ε.yy),
                         η   = Array(log10.(η)),
                     )
-                    save_vtk(
+                    do_vtk(
                         joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                         xvi,
                         xci,
@@ -310,7 +310,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", save_vtk =f
   end
 
 figdir   = "3D_Benchmark_Duretz_etal_2014"
-save_vtk = false # set to true to generate VTK files for ParaView
+do_vtk = false # set to true to generate VTK files for ParaView
 n        = 32
 nx       = n
 ny       = n
@@ -321,4 +321,4 @@ else
     igg
 end
 
-main3D(igg; ar=ar, ny=ny, nx=nx, nz=nz,figdir=figdir, save_vtk=save_vtk)
+main3D(igg; ar=ar, ny=ny, nx=nx, nz=nz,figdir=figdir, do_vtk=do_vtk)

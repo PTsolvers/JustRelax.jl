@@ -190,7 +190,10 @@ function diffusion_3D(;
 end
 
 @testset "Diffusion_3D_multiphase" begin
-    thermal = diffusion_3D()
+    nx           = 32;
+    ny           = 32;
+    nz           = 32;
+    thermal = diffusion_3D(nx = nx, ny = ny, nz = nz)
     @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1806.97632271141 atol=1e-6
     @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1806.5563380774538 atol=1e-6
 

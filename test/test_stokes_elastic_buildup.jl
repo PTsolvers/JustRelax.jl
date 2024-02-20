@@ -41,6 +41,6 @@ function check_convergence_case1()
     return err ≤ 5e-3
 end
 
-@testset begin
+@testset "Elastic Build-Up" begin
     @test check_convergence_case1()
 end

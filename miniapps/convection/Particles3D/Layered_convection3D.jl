@@ -291,7 +291,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                     εyy = Array(stokes.ε.yy),
                     η   = Array(log10.(η)),
                 )
-                save_vtk(
+                do_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
                     xci,

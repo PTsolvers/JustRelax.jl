@@ -241,6 +241,7 @@ function JustRelax.solve!(
     G = get_shear_modulus(rheology)
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
+    θ = @zeros(ni...)
 
     # solver loop
     wtime0 = 0.0
@@ -284,9 +285,14 @@ function JustRelax.solve!(
                 stokes.τ.II,
                 @tensor(stokes.τ_o),
                 @strain(stokes),
+                @tensor_center(stokes.ε_pl),
+                stokes.EII_pl,
                 stokes.P,
+                θ,
                 η,
                 @ones(ni...),
+                λ,
+                tupleize(rheology), # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
             )

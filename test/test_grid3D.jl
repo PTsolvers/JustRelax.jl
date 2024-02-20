@@ -3,7 +3,7 @@ using Test, JustRelax
 model = PS_Setup(:cpu, Float64, 3)
 environment!(model)
 
-@testset begin
+@testset "Grid3D" begin
     n            = 4 # number of cells
     nx = ny = nz = n
     igg          = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -19,7 +19,7 @@ environment!(model)
     dz           = lz / nz_g()    # grid step in y
     di           = dx, dy, dz     # grid step in x- and y
     origin       = 0.0, 0.0, -lz  # origin coordinates (15km f sticky air layer)
-    grid         = Geometry(ni, li; origin = origin) 
+    grid         = Geometry(ni, li; origin = origin)
 
     @test grid.origin == origin
     for i in 1:3
@@ -33,4 +33,3 @@ environment!(model)
     @test grid.grid_v[2][1][1] == origin[1] - di[2]/2
     @test grid.grid_v[3][1][1] == origin[1] - di[3]/2
 end
-

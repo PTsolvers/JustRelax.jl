@@ -43,6 +43,6 @@ function check_convergence_case1()
     return passed
 end
 
-@testset begin
+@testset "solvi3D" begin
     @test check_convergence_case1()
 end

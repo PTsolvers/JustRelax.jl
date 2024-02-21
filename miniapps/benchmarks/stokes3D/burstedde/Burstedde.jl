@@ -239,6 +239,7 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             iterMax=10e3,
             nout=1e3,
             b_width=(4, 4, 4),
+            verbose = false,
         )
         t += Δt
     end

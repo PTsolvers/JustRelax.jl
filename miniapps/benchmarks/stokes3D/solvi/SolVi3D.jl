@@ -108,7 +108,7 @@ function solVi3D(;
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, Kb, Gc, dt, igg; iterMax=5000, nout=100
+            stokes, pt_stokes, di, flow_bcs, ρg, η, Kb, Gc, dt, igg; iterMax=5000, nout=100, verbose=false,
         )
         t += Δt
     end

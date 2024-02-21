@@ -1,6 +1,6 @@
 push!(LOAD_PATH, "..")
 
-using Test
+using Test, Suppressor
 using JustRelax
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)

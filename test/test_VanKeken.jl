@@ -1,5 +1,5 @@
 push!(LOAD_PATH, "..")
-using Test
+using Test, Suppressor
 
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -211,7 +211,9 @@ end
 
 
 @testset "VanKeken" begin
-    iters, Urms = VanKeken2D()
-    @test passed = iters.err_evo1[end] < 1e-4
-    @test maximum(Urms) ≈ 0.006467433778939805 atol=1e-4
+    @suppress begin
+        iters, Urms = VanKeken2D()
+        @test passed = iters.err_evo1[end] < 1e-4
+        @test maximum(Urms) ≈ 0.006467433778939805 atol=1e-4
+    end
 end

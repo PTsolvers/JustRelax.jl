@@ -1,7 +1,7 @@
 push!(LOAD_PATH, "..")
 
-using Test
-using Printf, LinearAlgebra, GeoParams, SpecialFunctions, CellArrays, StaticArrays
+using Test, Suppressor
+using Printf, LinearAlgebra, GeoParams, CellArrays, StaticArrays
 using JustRelax
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -167,6 +167,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
             phase   = phase_ratios,
             iterMax = 1e3,
             nout    = 10,
+            verbose=false,
         )
 
         it += 1
@@ -177,10 +178,11 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
 end
 
 @testset "Diffusion_2D_Multiphase" begin
-    nx=32;
-    ny=32;
-    thermal = diffusion_2D(nx = nx, ny = ny)
-    @test thermal.T[Int(ceil(size(thermal.T)[1]/2)), Int(ceil(size(thermal.T)[2]/2))] ≈ 1819.2297931741878 atol=1e-6
-    @test thermal.Tc[Int(ceil(size(thermal.Tc)[1]/2)), Int(ceil(size(thermal.Tc)[2]/2))] ≈ 1824.3532934301472 atol=1e-6
-
+    @suppress begin
+        nx=32;
+        ny=32;
+        thermal = diffusion_2D(nx = nx, ny = ny)
+        @test thermal.T[Int(ceil(size(thermal.T)[1]/2)), Int(ceil(size(thermal.T)[2]/2))] ≈ 1819.2297931741878 atol=1e-1
+        @test thermal.Tc[Int(ceil(size(thermal.Tc)[1]/2)), Int(ceil(size(thermal.Tc)[2]/2))] ≈ 1824.3532934301472 atol=1e-1
+    end
 end

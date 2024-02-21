@@ -1,6 +1,6 @@
 push!(LOAD_PATH, "..")
 
-using Test
+using Test, Suppressor
 using JustRelax
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -178,7 +178,8 @@ function Sinking_Block2D()
         igg;
         iterMax=150e3,
         nout=1e3,
-        viscosity_cutoff = η_cutoff
+        viscosity_cutoff = η_cutoff,
+        verbose = false,
     );
     dt = compute_dt(stokes, di, igg)
     # ------------------------------
@@ -196,8 +197,9 @@ function Sinking_Block2D()
 end
 
 @testset "Sinking_Block2D" begin
-    iters, velocity = Sinking_Block2D()
-    @test passed = iters.err_evo1[end] < 1e-5
-    @test maximum(velocity) ≈ 4.841885609356093e-10 atol = 1e-6
-
+    @suppress begin
+        iters, velocity = Sinking_Block2D()
+        @test passed = iters.err_evo1[end] < 1e-5
+        @test maximum(velocity) ≈ 4.841885609356093e-10 atol = 1e-6
+    end
 end

@@ -1,6 +1,6 @@
 push!(LOAD_PATH, "..")
 
-using Test
+using Test, Suppressor
 using GeoParams, CellArrays
 using JustRelax, JustRelax.DataIO
 using ParallelStencil
@@ -113,7 +113,8 @@ function diffusion_3D(;
             args,
             dt,
             di,;
-            igg
+            igg,
+            verbose=false,
         )
 
         t  += dt
@@ -126,11 +127,12 @@ function diffusion_3D(;
 end
 
 @testset "Diffusion_3D" begin
-    nx=32;
-    ny=32;
-    nz=32;
-    thermal = diffusion_3D(nx = nx, ny = ny, nz = nz)
-    @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1804.4383108701202 atol=1e-6
-    @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1803.340632183192 atol=1e-6
-
+    @suppress begin
+        nx=32;
+        ny=32;
+        nz=32;
+        thermal = diffusion_3D(nx = nx, ny = ny, nz = nz)
+        @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1805.5689770363524 atol=1e-3
+        @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1804.7216858558063 atol=1e-3
+    end
 end

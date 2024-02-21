@@ -1,6 +1,6 @@
 push!(LOAD_PATH, "..")
 
-using Test
+using Test, Suppressor
 using GeoParams, CellArrays
 using JustRelax, JustRelax.DataIO
 using ParallelStencil
@@ -181,9 +181,10 @@ function ShearBand2D()
 end
 
 @testset "NonLinearSoftening_ShearBand2D" begin
-    iters, τII, sol = ShearBand2D()
-    @test passed = iters.err_evo1[end] < 1e-6
-    @test τII[end] ≈ 1.4835946498759345 atol = 1e-6
-    @test sol[end] ≈ 1.942550720691521 atol = 1e-6
-
+    @suppress begin
+        iters, τII, sol = ShearBand2D()
+        @test passed = iters.err_evo1[end] < 1e-6
+        @test τII[end] ≈ 1.4835946498759345 atol = 1e-6
+        @test sol[end] ≈ 1.942550720691521 atol = 1e-6
+    end
 end

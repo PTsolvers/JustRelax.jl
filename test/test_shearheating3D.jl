@@ -1,5 +1,5 @@
 push!(LOAD_PATH, "..")
-using Test
+using Test, Suppressor
 
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
@@ -168,7 +168,8 @@ function Shearheating3D(nx=32, ny=32, nz=32)
                 igg;
                 iterMax = 100e3,
                 nout=1e3,
-                viscosity_cutoff=(-Inf, Inf)
+                viscosity_cutoff=(-Inf, Inf),
+                verbose=false,
             )
             @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
             dt   = compute_dt(stokes, di, dt_diff)
@@ -201,7 +202,7 @@ function Shearheating3D(nx=32, ny=32, nz=32)
                 phase   = phase_ratios,
                 iterMax = 10e3,
                 nout    = 1e2,
-                verbose = true,
+                verbose = false,
             )
             # ------------------------------
 
@@ -232,7 +233,9 @@ function Shearheating3D(nx=32, ny=32, nz=32)
 end
 
 @testset "Shearheating3D" begin
-    iters, thermal = Shearheating3D()
-    @test passed = iters.err_evo1[end] < 1e-4
+    @suppress begin
+        iters, thermal = Shearheating3D()
+        @test passed = iters.err_evo1[end] < 1e-4
     # @test maximum.(thermal.shear_heating)
+    end
 end

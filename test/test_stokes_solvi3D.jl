@@ -1,6 +1,6 @@
 push!(LOAD_PATH, "..")
 
-using Test
+using Test, Suppressor
 using JustRelax
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
@@ -44,5 +44,7 @@ function check_convergence_case1()
 end
 
 @testset "solvi3D" begin
-    @test check_convergence_case1()
+    @suppress begin
+        @test check_convergence_case1()
+    end
 end

@@ -1,21 +1,23 @@
+using CUDA
+CUDA.allowscalar(false)
 using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+@init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
 using JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
+model = PS_Setup(:CUDA, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 environment!(model)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays, WriteVTK
 
 # Load file with all the rheology configurations
 include("Sill_rheology.jl")
@@ -51,11 +53,11 @@ end
 
     T[i + 1 , j] = 273e0 + 600e0
 
-    if (-0.175e3 < depth ≤  -0.075e3)
+    if (-0.09e3 < depth ≤  -0.03e3)
         T[i + 1, j] = 273e0 + 1200e0
     end
 
-    if  (-0.15e3 < depth ≤  -0.12e3 ) && (200 < x[i] ≤  250)
+    if  (-0.06e3 < depth ≤  -0.05e3 ) && (50 < x[i] ≤  60)
         T[i + 1, j] = 273e0 + 1300e0
     end
 
@@ -63,7 +65,7 @@ end
     return nothing
 end
 
- @parallel_indices (i, j) function compute_melt_fraction!(ϕ, rheology, args)
+@parallel_indices (i, j) function compute_melt_fraction!(ϕ, rheology, args)
     ϕ[i, j] = compute_meltfraction(rheology, ntuple_idx(args, i, j))
     return nothing
 end
@@ -81,11 +83,11 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-# function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
+function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
     # Physical domain ------------------------------------
-    ly           = 0.25e3            # domain length in y
-    lx           = 0.5e3             # domain length in x
+    ly           = 0.125e3            # domain length in y
+    lx           = 0.125e3             # domain length in x
     ni           = nx, ny            # number of cells
     li           = lx, ly            # domain length in x- and y-
     di           = @. li / ni        # grid step in x- and -y
@@ -98,7 +100,8 @@ end
     rheology     = init_rheologies(; is_plastic = false)
     κ            = (4 / (compute_heatcapacity(rheology[1].HeatCapacity[1].Cp) * rheology[1].Density[1].ρ))
     # κ            = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
-    dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 / 100 # diffusive CFL timestep limiter
+    dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
+    # dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 / 100 # diffusive CFL timestep limiter
    # dt = dt_diff/10
     @show dt
     # ----------------------------------------------------
@@ -174,8 +177,8 @@ end
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
-    if save_vtk
-        vtk_dir      = figdir*"\\vtk"
+    if do_save_vtk
+        vtk_dir      = joinpath(figdir,"vtk")
         take(vtk_dir)
     end
     take(figdir)
@@ -205,7 +208,7 @@ end
     grid2particle!(pT, xvi, T_buffer, particles)
 
     local Vx_v, Vy_v
-    if save_vtk
+    if do_save_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
     end
@@ -213,7 +216,7 @@ end
     t, it = 0.0, 0
 
 
-    while it < 10
+    while it < 100e3
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf, ϕ= ϕ)
         @parallel (@idx ni) compute_viscosity!(
@@ -238,7 +241,8 @@ end
             igg;
             iterMax = 150e3,
             nout=1e3,
-            viscosity_cutoff=(-Inf, Inf)
+            viscosity_cutoff=(-Inf, Inf),
+            verbose = true,
         )
         @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
@@ -291,10 +295,10 @@ end
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 50) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
-            if save_vtk
+            if do_save_vtk
                 JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
                     T   = Array(thermal.T[2:end-1, :]),
@@ -310,13 +314,15 @@ end
                     εxx = Array(stokes.ε.xx),
                     εyy = Array(stokes.ε.yy),
                     η   = Array(η),
+                    ϕ   = Array(ϕ),
+                    ρg  = Array(ρg[2]),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
                     xci,
                     data_v,
-                    data_c
+                    data_c,
                 )
             end
 
@@ -330,24 +336,24 @@ end
 
             # Make Makie figure
             fig = Figure(size = (900, 900), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(round((t/(3600)))) hours)")
-            #ax2 = Axis(fig[2,1], aspect = ar, title = "Phase")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "Density [kg/m3]")
+            ax1 = Axis(fig[1,1], aspect = DataAspect(), title = "T [C]  (t=$(round((t/(3600)))) hours)")
+            #ax2 = Axis(fig[2,1], aspect = DataAspect(), title = "Phase")
+            ax2 = Axis(fig[2,1], aspect = DataAspect(), title = "Density [kg/m3]")
 
 
-            #ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
-            ax3 = Axis(fig[1,3], aspect = ar, title = "Vy [m/s]")
+            #ax3 = Axis(fig[1,3], aspect = DataAspect(), title = "log10(εII)")
+            ax3 = Axis(fig[1,3], aspect = DataAspect(), title = "Vy [m/s]")
 
-            #ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
-            ax4 = Axis(fig[2,3], aspect = ar, title = "ϕ")
+            #ax4 = Axis(fig[2,3], aspect = DataAspect(), title = "log10(η)")
+            ax4 = Axis(fig[2,3], aspect = DataAspect(), title = "ϕ")
 
             # Plot temperature
-            h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:batlow)
+            h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:lipari, colorrange=(700, 1200))
             # Plot particles phase
             #h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
             #h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
 
-            h2  = heatmap!(ax2, xci[1], xci[2], Array(ρg[2]./10.0) , colormap=:batlow)
+            h2  = heatmap!(ax2, xci[1], xci[2], Array(ρg[2]./10.0) , colormap=:batlowW, colorrange=(2650, 2820))
 
             # Plot 2nd invariant of strain rate
             #h3  = heatmap!(ax3, xci[1], xci[2], Array(log10.(stokes.ε.II)) , colormap=:batlow)
@@ -359,7 +365,7 @@ end
             #h4  = heatmap!(ax4, xci[1], xci[2], Array(log10.(η_vep)) , colormap=:batlow)
 
             # Plot melt fraction
-            h4  = heatmap!(ax4, xci[1], xci[2], Array(ϕ) , colormap=:batlow)
+            h4  = heatmap!(ax4, xci[1], xci[2], Array(ϕ) , colormap=:lipari)
 
 
             hidexdecorations!(ax1)
@@ -383,10 +389,11 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "testing_density_struct"
-save_vtk = false # set to true to generate VTK files for ParaView
+figdir   = "125x125m_overnight_run_320_100e3its"
+# figdir   = "test_JP"
+do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 64
+n        = 320
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -396,4 +403,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_save_vtk = do_save_vtk);

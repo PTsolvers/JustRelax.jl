@@ -57,7 +57,7 @@ end
         T[i + 1, j] = 273e0 + 1200e0
     end
 
-    if  (-0.06e3 < depth ≤  -0.05e3 ) && (50 < x[i] ≤  60)
+    if  (-0.06e3 < depth ≤  -0.05e3 ) && (120 < x[i] ≤  130)
         T[i + 1, j] = 273e0 + 1300e0
     end
 
@@ -87,7 +87,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
     # Physical domain ------------------------------------
     ly           = 0.125e3            # domain length in y
-    lx           = 0.125e3             # domain length in x
+    lx           = 0.25e3             # domain length in x
     ni           = nx, ny            # number of cells
     li           = lx, ly            # domain length in x- and y-
     di           = @. li / ni        # grid step in x- and -y
@@ -216,7 +216,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     t, it = 0.0, 0
 
 
-    while it < 100e3
+    while it < 30e3
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf, ϕ= ϕ)
         @parallel (@idx ni) compute_viscosity!(
@@ -306,6 +306,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
                     εxy = Array(stokes.ε.xy),
                     Vx  = Array(Vx_v),
                     Vy  = Array(Vy_v),
+                    Velocity = (Vx,Vy)
                 )
                 data_c = (;
                     P   = Array(stokes.P),
@@ -315,7 +316,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
                     εyy = Array(stokes.ε.yy),
                     η   = Array(η),
                     ϕ   = Array(ϕ),
-                    ρg  = Array(ρg[2]),
+                    ρ  = Array(ρg[2]./10),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -335,17 +336,55 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
             idxv     = particles.index.data[:];
 
             # Make Makie figure
-            fig = Figure(size = (900, 900), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = DataAspect(), title = "T [C]  (t=$(round((t/(3600)))) hours)")
+            fig = Figure(size = (2000, 1000), title = "t = $t", )
+            ax0 = Axis(
+                fig[1, 1:2];
+                aspect=ar,
+                title="t=$(round((t/(3600)))) hours",
+                titlesize=50,
+                height=0.0,
+            )
+            ax0.ylabelvisible = false
+            ax0.xlabelvisible = false
+            ax0.xgridvisible = false
+            ax0.ygridvisible = false
+            ax0.xticksvisible = false
+            ax0.yticksvisible = false
+            ax0.yminorticksvisible = false
+            ax0.xminorticksvisible = false
+            ax0.xgridcolor = :white
+            ax0.ygridcolor = :white
+            ax0.ytickcolor = :white
+            ax0.xtickcolor = :white
+            ax0.yticklabelcolor = :white
+            ax0.xticklabelcolor = :white
+            ax0.yticklabelsize = 0
+            ax0.xticklabelsize = 0
+            ax0.xlabelcolor = :white
+            ax0.ylabelcolor = :white
+
+            ax1 = Axis( fig[2, 1][1, 1], aspect = DataAspect(), title = L"T \;[\mathrm{C}]",  titlesize=40,
+            yticklabelsize=25,
+            xticklabelsize=25,
+            xlabelsize=25,)
             #ax2 = Axis(fig[2,1], aspect = DataAspect(), title = "Phase")
-            ax2 = Axis(fig[2,1], aspect = DataAspect(), title = "Density [kg/m3]")
+            ax2 = Axis(fig[2, 2][1, 1], aspect = DataAspect(), title = L"Density \;[\mathrm{kg/m}^{3}]", titlesize=40,
+                    yticklabelsize=25,
+                    xticklabelsize=25,
+                    xlabelsize=25,)
 
 
             #ax3 = Axis(fig[1,3], aspect = DataAspect(), title = "log10(εII)")
-            ax3 = Axis(fig[1,3], aspect = DataAspect(), title = "Vy [m/s]")
+            ax3 = Axis(fig[3, 1][1, 1], aspect = DataAspect(), title = L"Vy \;[\mathrm{m/s}]", titlesize=40,
+                    yticklabelsize=25,
+                    xticklabelsize=25,
+                    xlabelsize=25,)
 
             #ax4 = Axis(fig[2,3], aspect = DataAspect(), title = "log10(η)")
-            ax4 = Axis(fig[2,3], aspect = DataAspect(), title = "ϕ")
+            ax4 = Axis(fig[3, 2][1, 1], aspect = DataAspect(), title = L"\phi", titlesize=40,
+                    yticklabelsize=25,
+                    xticklabelsize=25,
+                    xlabelsize=25,)
 
             # Plot temperature
             h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:lipari, colorrange=(700, 1200))
@@ -370,14 +409,29 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
-            hidexdecorations!(ax3)
-            Colorbar(fig[1,2], h1)
-            Colorbar(fig[2,2], h2)
-            Colorbar(fig[1,4], h3)
-            Colorbar(fig[2,4], h4)
+            hideydecorations!(ax2)
+            hideydecorations!(ax4)
+            Colorbar(fig[2, 1][1, 2], h1, height = Relative(4/4), ticklabelsize=25, ticksize=15)
+            Colorbar(fig[2, 2][1, 2], h2, height = Relative(4/4), ticklabelsize=25, ticksize=15)
+            Colorbar(fig[3, 1][1, 2], h3, height = Relative(4/4), ticklabelsize=25, ticksize=15)
+            Colorbar(fig[3, 2][1, 2], h4, height = Relative(4/4), ticklabelsize=25, ticksize=15)
             linkaxes!(ax1, ax2, ax3, ax4)
             save(joinpath(figdir, "$(it).png"), fig)
             fig
+
+            let
+                fig = Figure(size = (2000, 1000), title = "t = $t")
+                ax1 = Axis(fig[1,1], aspect = DataAspect(), title = "T [C]  (t=$(round((t/(3600)))) hours)",  titlesize=40,
+                yticklabelsize=25,
+                xticklabelsize=25,
+                xlabelsize=25,)
+                 # Plot temperature
+                h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:lipari, colorrange=(700, 1200))
+                Colorbar(fig[1,2], h1, height = Relative(4/4), ticklabelsize=25, ticksize=15)
+                save(joinpath(figdir, "Temperature_$(it).png"), fig)
+                fig
+            end
+
         end
         # ------------------------------
 
@@ -389,7 +443,7 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "125x125m_overnight_run_320_100e3its"
+figdir   = "2nd_overnight_run_320_20e3its"
 # figdir   = "test_JP"
 do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio

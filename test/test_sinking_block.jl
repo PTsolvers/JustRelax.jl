@@ -200,6 +200,6 @@ end
     @suppress begin
         iters, velocity = Sinking_Block2D()
         @test passed = iters.err_evo1[end] < 1e-5
-        @test maximum(velocity) ≈ 4.841885609356093e-10 atol = 1e-6
+        @test maximum(velocity) ≈ 4.841885609356093e-10 rtol = 1e-6
     end
 end

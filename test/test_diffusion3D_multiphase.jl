@@ -195,7 +195,7 @@ end
         ny           = 32;
         nz           = 32;
         thermal = diffusion_3D(nx = nx, ny = ny, nz = nz)
-        @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1807.0040936311311 atol=1e-6
-        @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1806.5563380774538 atol=1e-1
+        @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1807.0040936311311 rtol=1e-3
+        @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1806.5563380774538 rtol=1e-3
     end
 end

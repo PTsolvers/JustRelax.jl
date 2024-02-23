@@ -214,6 +214,6 @@ end
     @suppress begin
         iters, Urms = VanKeken2D()
         @test passed = iters.err_evo1[end] < 1e-4
-        @test maximum(Urms) ≈ 0.006467433778939805 atol=1e-4
+        @test maximum(Urms) ≈ 0.006467433778939805 rtol=1e-4
     end
 end

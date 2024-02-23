@@ -168,7 +168,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
         )
 
-        @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -216,7 +216,7 @@ end
 
 n      = 16
 nx     = n
-ny     = n 
+ny     = n
 nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
 figdir = "ShearBand3D"
 igg    = if !(JustRelax.MPI.Initialized())

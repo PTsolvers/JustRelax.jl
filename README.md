@@ -250,7 +250,7 @@ while t < tmax
         viscosity_cutoff = (-Inf, Inf)
     )
     # Compute second invariant of the strain rate tensor
-    @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+    @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
     push!(τII, maximum(stokes.τ.xx))
     # Update old stresses
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))

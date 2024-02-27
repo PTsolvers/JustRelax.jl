@@ -171,7 +171,7 @@ function Shearheating3D(nx=32, ny=32, nz=32)
                 viscosity_cutoff=(-Inf, Inf),
                 verbose=false,
             )
-            @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+            @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
             dt   = compute_dt(stokes, di, dt_diff)
             # ------------------------------
 

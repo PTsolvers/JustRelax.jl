@@ -1,6 +1,7 @@
 ## GeoParams
 
 # include("Rheology.jl")
+include("../rheology/GeoParams.jl")
 
 @inline get_phase(x::PhaseRatio) = x.center
 @inline get_phase(x) = x
@@ -620,44 +621,6 @@ function update_T(
     )
 end
 
-function update_T(igg, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
-    # @hide_communication b_width begin # communication/computation overlap
-    @parallel update_range(ni...) update_T!(
-        thermal.T,
-        thermal.Told,
-        @qT(thermal)...,
-        thermal.H,
-        thermal.shear_heating,
-        ρCp,
-        pt_thermal.dτ_ρ,
-        _dt,
-        _di...,
-    )
-    update_halo!(thermal.T)
-    # end
-    return nothing
-end
-
-function update_T(igg, b_width, thermal, rheology, phase, pt_thermal, _dt, _di, ni, args)
-    # @hide_communication b_width begin # communication/computation overlap
-    @parallel update_range(ni...) update_T!(
-        thermal.T,
-        thermal.Told,
-        @qT(thermal)...,
-        thermal.H,
-        thermal.shear_heating,
-        rheology,
-        phase,
-        pt_thermal.dτ_ρ,
-        _dt,
-        _di...,
-        args,
-    )
-    update_halo!(thermal.T)
-    # end
-    return nothing
-end
-
 """
     heatdiffusion_PT!(thermal, pt_thermal, K, ρCp, dt, di; iterMax, nout, verbose)
 
@@ -704,8 +667,9 @@ function heatdiffusion_PT!(
             @parallel flux_range(ni...) compute_flux!(
                 @qT(thermal)..., @qT2(thermal)..., thermal.T, K, pt_thermal.θr_dτ, _di...
             )
-            update_T(igg, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
+            update_T(nothing, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
             thermal_bcs!(thermal.T, thermal_bc)
+            update_halo!(thermal.T)
         end
 
         iter += 1
@@ -804,9 +768,10 @@ function heatdiffusion_PT!(
                 args,
             )
             update_T(
-                igg, b_width, thermal, rheology, phases, pt_thermal, _dt, _di, ni, args
+                nothing, b_width, thermal, rheology, phases, pt_thermal, _dt, _di, ni, args
             )
             thermal_bcs!(thermal.T, thermal_bc)
+            update_halo!(thermal.T)
         end
 
         iter += 1

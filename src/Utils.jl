@@ -16,7 +16,7 @@ end
 """
     copy(B, A)
 
-Convinience macro to copy data from the array `A` into array `B`
+convenience macro to copy data from the array `A` into array `B`
 """
 macro copy(B, A)
     return quote
@@ -65,7 +65,7 @@ end
 """
     @add(I, args...)
 
-Add `I` to the scalars in `args`    
+Add `I` to the scalars in `args`
 """
 macro add(I, args...)
     quote
@@ -141,6 +141,18 @@ Shear components are unpack following Voigt's notation.
 macro strain(A)
     return quote
         unpack_tensor_stag(($(esc(A))).ε)
+    end
+end
+
+"""
+    @strain_plastic(A)
+
+Unpacks the plastic strain rate tensor `ε_pl` from the StokesArrays `A`, where its components are defined in the staggered grid.
+Shear components are unpack following Voigt's notation.
+"""
+macro strain_plastic(A)
+    return quote
+        unpack_tensor_stag(($(esc(A))).ε_pl)
     end
 end
 
@@ -385,7 +397,7 @@ Compute the time step `dt` for the velocity field `S.V` for a regular grid with 
 """
     compute_dt(S::StokesArrays, di, dt_diff)
 
-Compute the time step `dt` for the velocity field `S.V` and the diffusive maximum time step 
+Compute the time step `dt` for the velocity field `S.V` and the diffusive maximum time step
 `dt_diff` for a regular gridwith grid spacing `di`.
 """
 @inline compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(@velocity(S), di, dt_diff)
@@ -400,14 +412,14 @@ end
 
 Compute the time step `dt` for the velocity field `S.V` for a regular gridwith grid spacing `di`.
 The implicit global grid variable `I` implies that the time step is calculated globally and not
-separately on each block.   
+separately on each block.
 """
 @inline compute_dt(S::StokesArrays, di, I::IGG) = compute_dt(@velocity(S), di, Inf, I::IGG)
 
 """
     compute_dt(S::StokesArrays, di, dt_diff)
 
-Compute the time step `dt` for the velocity field `S.V` and the diffusive maximum time step 
+Compute the time step `dt` for the velocity field `S.V` and the diffusive maximum time step
 `dt_diff` for a regular gridwith grid spacing `di`. The implicit global grid variable `I`
 implies that the time step is calculated globally and not separately on each block.
 """
@@ -424,7 +436,17 @@ end
 @inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v
 
-# Delta function
+"""
+    allzero(x::Vararg{T,N}) where {T,N}
+
+Check if all elements in `x` are zero.
+
+# Arguments
+- `x::Vararg{T,N}`: The input array.
+
+# Returns
+- `Bool`: `true` if all elements in `x` are zero, `false` otherwise.
+"""
 @inline allzero(x::Vararg{T,N}) where {T,N} = all(x -> x == 0, x)
 
 """
@@ -439,17 +461,29 @@ take(fldr::String) = !isdir(fldr) && mkpath(fldr)
 
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """
-# @inline continuation_log(x_new, x_old, ν) = exp((1 - ν) * log(x_old) + ν * log(x_new))
-@inline continuation_log(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
+@inline function continuation_log(x_new::T, x_old::T, ν) where {T}
+    x_cont = exp((1 - ν) * log(x_old) + ν * log(x_new))
+    return isnan(x_cont) ? 0.0 : x_cont
+end
+# @inline continuation_log(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
 
 # Others
 
+"""
+    assign!(B::AbstractArray{T,N}, A::AbstractArray{T,N}) where {T,N}
+
+Assigns the values of array `A` to array `B` in parallel.
+
+# Arguments
+- `B::AbstractArray{T,N}`: The destination array.
+- `A::AbstractArray{T,N}`: The source array.
+"""
 @parallel function assign!(B::AbstractArray{T,N}, A::AbstractArray{T,N}) where {T,N}
     @all(B) = @all(A)
     return nothing
 end
 
-# MPI reductions 
+# MPI reductions
 
 function mean_mpi(A)
     mean_l = _mean(A)

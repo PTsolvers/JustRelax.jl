@@ -1,7 +1,7 @@
-push!(LOAD_PATH, "..")
-
 using Test
 using JustRelax
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)

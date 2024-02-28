@@ -1,6 +1,8 @@
 using LinearAlgebra, CairoMakie
 using JustRelax
 using MPI: MPI
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 3)
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:cpu, Float64, 3)
@@ -28,11 +30,11 @@ if benchmark == :taylorGreen
 
     # run benchmark
     geometry, stokes, iters = taylorGreen(;
-        nx=nx,
-        ny=ny,
-        nz=nz,
-        init_MPI=MPI.Initialized() ? false : true,
-        finalize_MPI=finalize_MPI,
+        nx           = nx,
+        ny           = ny,
+        nz           = nz,
+        init_MPI     = MPI.Initialized() ? false : true,
+        finalize_MPI = finalize_MPI,
     )
 
     # plot results
@@ -51,11 +53,11 @@ elseif benchmark == :Burstedde
 
     # run benchmark
     geometry, stokes, iters = burstedde(;
-        nx=nx,
-        ny=ny,
-        nz=nz,
-        init_MPI=MPI.Initialized() ? false : true,
-        finalize_MPI=finalize_MPI,
+        nx           = nx,
+        ny           = ny,
+        nz           = nz,
+        init_MPI     = MPI.Initialized() ? false : true,
+        finalize_MPI = finalize_MPI,
     )
 
     # plot results
@@ -73,24 +75,24 @@ elseif benchmark == :solvi
     include("solvi/solVi3D.jl") # need to call this again if we switch from gpu <-/-> cpu
 
     # model specific parameters
-    Δη = 1e-3 # viscosity ratio between matrix and inclusion
-    rc = 1e0 # radius of the inclusion
-    εbg = 1e0 # background strain rate
+    Δη         = 1e-3 # viscosity ratio between matrix and inclusion
+    rc         = 1e0 # radius of the inclusion
+    εbg        = 1e0 # background strain rate
     lx, ly, lz = 1e1, 1e1, 1e1 # domain siye in x and y directions
 
     # run model
     geometry, stokes, iters = solVi3D(;
-        Δη=Δη,
-        nx=nx,
-        ny=ny,
-        nz=nz,
-        lx=lx,
-        ly=ly,
-        lz=lz,
-        rc=rc,
-        εbg=εbg,
-        init_MPI=MPI.Initialized() ? false : true,
-        finalize_MPI=finalize_MPI,
+        Δη           = Δη,
+        nx           = nx,
+        ny           = ny,
+        nz           = nz,
+        lx           = lx,
+        ly           = ly,
+        lz           = lz,
+        rc           = rc,
+        εbg          = εbg,
+        init_MPI     = MPI.Initialized() ? false : true,
+        finalize_MPI = finalize_MPI,
     )
     # plot results
     f = plot(stokes, geometry, rc; cmap=:vik)

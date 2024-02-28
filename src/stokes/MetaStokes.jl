@@ -119,6 +119,8 @@ function make_stokes_struct!()
             ∇V::T
             τ::B
             ε::B
+            ε_pl::B
+            EII_pl::T
             τ_o::Union{B,Nothing}
             R::C
 
@@ -131,10 +133,12 @@ function make_stokes_struct!()
                 V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1], ni[2] + 2)))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
+                ε_pl = SymmetricTensor(ni)
+                EII_pl = @zeros(ni...)
                 R = Residual(((ni[1] - 1, ni[2]), (ni[1], ni[2] - 1)), ni)
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
-                    P, P0, V, ∇V, τ, ε, nothing, R
+                    P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, nothing, R
                 )
             end
 
@@ -147,10 +151,12 @@ function make_stokes_struct!()
                 V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1] + 2, ni[2] + 1)))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
+                ε_pl = SymmetricTensor(ni)
+                EII_pl = @zeros(ni...)
                 R = Residual(((ni[1] - 1, ni[2]), (ni[1], ni[2] - 1), ni))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
-                    P, P0, V, ∇V, τ, ε, deepcopy(τ), R
+                    P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, deepcopy(τ), R
                 )
             end
 
@@ -167,6 +173,8 @@ function make_stokes_struct!()
                 ))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
+                ε_pl = SymmetricTensor(ni)
+                EII_pl = @zeros(ni...)
                 R = Residual((
                     (ni[1] - 1, ni[2] - 2, ni[3] - 2),
                     (ni[1] - 2, ni[2] - 1, ni[3] - 2),
@@ -175,7 +183,7 @@ function make_stokes_struct!()
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
-                    P, P0, V, ∇V, τ, ε, nothing, R
+                    P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, nothing, R
                 )
             end
 
@@ -192,6 +200,8 @@ function make_stokes_struct!()
                 ))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
+                ε_pl = SymmetricTensor(ni)
+                EII_pl = @zeros(ni...)
                 R = Residual((
                     (ni[1] - 1, ni[2], ni[3]),
                     (ni[1], ni[2] - 1, ni[3]),
@@ -200,7 +210,7 @@ function make_stokes_struct!()
                 ))
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
-                    P, P0, V, ∇V, τ, ε, deepcopy(τ), R
+                    P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, deepcopy(τ), R
                 )
             end
         end
@@ -213,7 +223,7 @@ function make_PTstokes_struct!()
             CFL::T
             ϵ::T # PT tolerance
             Re::T # Reynolds Number
-            r::T # 
+            r::T #
             Vpdτ::T
             θ_dτ::T
             ηdτ::T

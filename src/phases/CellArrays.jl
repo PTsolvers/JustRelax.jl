@@ -117,7 +117,7 @@ end
     return cart2ind((ni, nj, nk), i, j, k)
 end
 
-## Convinience macros
+## convenience macros
 
 macro cell(ex)
     ex = if ex.head === (:(=))

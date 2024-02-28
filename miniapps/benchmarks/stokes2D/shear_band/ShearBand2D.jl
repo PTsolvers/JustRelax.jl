@@ -1,12 +1,13 @@
-JustRelax.CUDA.allowscalar(false)
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 # setup ParallelStencil.jl environment
 model  = PS_Setup(:Threads, Float64, 2)
 environment!(model)
 
-# HELPER FUNCTIONS ---------------------------------------------------------------
+# HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
@@ -34,14 +35,15 @@ end
 function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Physical domain ------------------------------------
-    ly       = 1e0          # domain length in y
-    lx       = ly           # domain length in x
-    ni       = nx, ny       # number of cells
-    li       = lx, ly       # domain length in x- and y-
-    di       = @. li / ni   # grid step in x- and -y
-    origin   = 0.0, 0.0     # origin coordinates
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    dt       = Inf
+    ly           = 1e0          # domain length in y
+    lx           = ly           # domain length in x
+    ni           = nx, ny       # number of cells
+    li           = lx, ly       # domain length in x- and y-
+    di           = @. li / ni   # grid step in x- and -y
+    origin       = 0.0, 0.0     # origin coordinates
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    dt           = Inf
 
     # Physical properties using GeoParams ----------------
     τ_y     = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
@@ -56,11 +58,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     el_bg   = ConstantElasticity(; G=G0, Kb=4)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4)
     visc    = LinearViscous(; η=η0)
+    soft_C  = LinearSoftening((C, C), (0e0, 1e0))
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ,
         η_vp = η_reg,
         Ψ    = 0,
+        softening_C = soft_C
     )
     rheology = (
         # Low density phase
@@ -110,15 +114,16 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
     stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
-    !isdir(figdir) && mkpath(figdir)
+    take(figdir)
     # ----------------------------------------------------
 
     # Time loop
     t, it      = 0.0, 0
-    tmax       = 3.5
+    tmax       = 5
     τII        = Float64[]
     sol        = Float64[]
     ttot       = Float64[]
@@ -140,8 +145,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             dt,
             igg;
             verbose          = false,
-            iterMax          = 500e3,
-            nout             = 1e3,
+            iterMax          = 50e3,
+            nout             = 1e2,
             viscosity_cutoff = (-Inf, Inf)
         )
         @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
@@ -166,12 +171,14 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         yunit = @. radius * sin(th) + 0.5;
 
         fig   = Figure(size = (1600, 1600), title = "t = $t")
-        ax1   = Axis(fig[1,1], aspect = 1, title = "τII")
-        ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
-        ax3   = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
+        ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}", titlesize=35)
+        # ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
+        ax2   = Axis(fig[2,1], aspect = 1, title = L"E_{II}", titlesize=35)
+        ax3   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize=35)
         ax4   = Axis(fig[2,2], aspect = 1)
         heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
+        # heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
+        heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
@@ -185,11 +192,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     return nothing
 end
 
-N      = 128
-n      = N + 2
-nx     = n - 2
-ny     = n - 2
-figdir = "ShearBands2D"
+n      = 128
+nx     = n
+ny     = n
+figdir = "ShearBands2Dc"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

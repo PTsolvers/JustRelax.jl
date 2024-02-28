@@ -1,7 +1,9 @@
 using JustRelax, JustRelax.DataIO
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 3) #or (CUDA, Float64, 3) or (AMDGPU, Float64, 3)
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:threads, Float64, 3)
+model = PS_Setup(:Threads, Float64, 3) #or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
@@ -115,7 +117,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         Name              = "Mantle",
         Phase             = 1,
         Density           = PT_Density(; ρ0=3.1e3, β=β, T0=0.0, α = 1.5e-5),
-        HeatCapacity      = ConstantHeatCapacity(; cp=1.2e3),
+        HeatCapacity      = ConstantHeatCapacity(; Cp=1.2e3),
         Conductivity      = ConstantConductivity(; k=3.0),
         CompositeRheology = CompositeRheology((creep, el, )),
         Elasticity        = el,
@@ -125,14 +127,14 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         Name              = "Mantle",
         Phase             = 1,
         Density           = PT_Density(; ρ0=3.5e3, β=β, T0=0.0, α = 1.5e-5),
-        HeatCapacity      = ConstantHeatCapacity(; cp=1.2e3),
+        HeatCapacity      = ConstantHeatCapacity(; Cp=1.2e3),
         Conductivity      = ConstantConductivity(; k=3.0),
         CompositeRheology = CompositeRheology((creep, el, pl)),
         Elasticity        = el,
         Gravity           = ConstantGravity(; g=9.81),
     )
     # heat diffusivity
-    κ            = (rheology.Conductivity[1].k / (rheology.HeatCapacity[1].cp * rheology.Density[1].ρ0)).val
+    κ            = (rheology.Conductivity[1].k / (rheology.HeatCapacity[1].Cp * rheology.Density[1].ρ0)).val
     dt = dt_diff = min(di...)^2 / κ / 3.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -192,6 +194,8 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         no_slip     = (left=false, right=false, top=false, bot=false, front=false, back=false),
         periodicity = (left=false, right=false, top=false, bot=false, front=false, back=false),
     )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
     # ----------------------------------------------------
 
     # IO -------------------------------------------------

@@ -23,15 +23,15 @@ end
         τ_xy = @cell xy[ip, cell...]
 
         tmp = τ_xy * ω_xy * 2.0
-        @cell xx[ip, cell...] = muladd(dt, cte, τ_xx)
-        @cell yy[ip, cell...] = muladd(dt, cte, τ_yy)
-        @cell xy[ip, cell...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
+        @cell xx[ip, cell...] = fma(dt, cte, τ_xx)
+        @cell yy[ip, cell...] = fma(dt, cte, τ_yy)
+        @cell xy[ip, cell...] = fma(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
     end
 
     return nothing
 end
 
-@parallel_indices (i, j) function rotate_stress_particles_roation_matrix!(
+@parallel_indices (i, j) function rotate_stress_particles_rotation_matrix!(
     xx, yy, xy, ω, index, dt
 )
     cell = i, j
@@ -134,7 +134,7 @@ Base.@propagate_inbounds function rotate_stress!(
 
     ## 3) Update stress
     for k in 1:N
-        τ[k][idx...] = muladd(τij_adv[k] * 0, dt, τr_voigt[k])
+        τ[k][idx...] = fma(τij_adv[k] * 0, dt, τr_voigt[k])
     end
     return nothing
 end

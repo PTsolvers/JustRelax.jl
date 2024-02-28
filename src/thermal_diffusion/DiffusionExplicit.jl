@@ -25,9 +25,11 @@ using CUDA, AMDGPU
 
 import JustRelax:
     ThermalParameters, solve!, assign!, thermal_boundary_conditions!, update_T!
-import JustRelax: ThermalArrays, PTThermalCoeffs
+import JustRelax: ThermalArrays, PTThermalCoeffs, backend
 
 export solve!
+
+@eval @init_parallel_stencil($backend, Float64, 1)
 
 ## KERNELS
 
@@ -71,7 +73,7 @@ function JustRelax.solve!(
     _sqrt_len_RT = 1.0 / sqrt(length(thermal.ResT))
     ϵ = pt_thermal.ϵ
 
-    # errors 
+    # errors
     iter_count = Int64[]
     norm_ResT = Float64[]
 
@@ -128,7 +130,7 @@ function JustRelax.solve!(
     end
 
     if iter < iterMax
-        @printf("Converged in %d iterations witn err = %1.3e \n", iter, err)
+        @printf("Converged in %d iterations with err = %1.3e \n", iter, err)
     else
         println("Model not fully converged")
     end
@@ -159,9 +161,11 @@ using CUDA, AMDGPU
 using GeoParams
 
 import JustRelax: ThermalParameters, solve!, assign!, thermal_boundary_conditions!
-import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity
+import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity, backend
 
 export solve!
+
+@eval @init_parallel_stencil($backend, Float64, 2)
 
 ## KERNELS
 
@@ -516,9 +520,11 @@ using GeoParams
 
 import JustRelax:
     IGG, ThermalParameters, solve!, assign!, norm_mpi, thermal_boundary_conditions!
-import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity
+import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity, backend
 
 export solve!
+
+@eval @init_parallel_stencil($backend, Float64, 3)
 
 ## KERNELS
 
@@ -908,7 +914,7 @@ function JustRelax.solve!(
     return nothing
 end
 
-# upwind advection 
+# upwind advection
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
@@ -959,7 +965,7 @@ function JustRelax.solve!(
     return nothing
 end
 
-# upwind advection 
+# upwind advection
 function JustRelax.solve!(
     thermal::ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,

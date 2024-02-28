@@ -1,12 +1,17 @@
-using JustRelax, JustRelax.DataIO, JustPIC
+using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 3)
 
-## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
-# set_backend("Threads_Float64_2D")
-# set_backend("CUDA_Float64_2D")
+using JustPIC
+using JustPIC._3D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:CUDA, Float64, 3) # or (:Threads, Float64, 3) or (:AMDGPU, Float64, 3)
+model = PS_Setup(:Threads, Float64, 3) # or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
 environment!(model)
 
 # Load script dependencies
@@ -16,51 +21,6 @@ using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 include("Layered_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
-@inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
-@inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
-@inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
-
-function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, z, dx, dy, dz, ni::NTuple{3, Int})
-    ncells     = prod(ni)
-    np         = max_xcell * ncells
-    px, py, pz = ntuple(_ -> @fill(NaN, ni..., celldims=(max_xcell,)) , Val(3))
-    inject     = @fill(false, ni..., eltype=Bool)
-    index      = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool)
-
-    @parallel_indices (i, j, k) function fill_coords_index(px, py, pz, index)
-        @inline r()= rand(0.05:1e-5:0.95)
-        I          = i, j, k
-        # lower-left corner of the cell
-        x0, y0, z0 = x[i], y[j], z[k]
-        # fill index array
-        for l in 1:nxcell
-            JustRelax.@cell px[l, I...]    = x0 + dx * r()
-            JustRelax.@cell py[l, I...]    = y0 + dy * r()
-            JustRelax.@cell pz[l, I...]    = z0 + dz * r()
-            JustRelax.@cell index[l, I...] = true
-        end
-        return nothing
-    end
-
-    @parallel (@idx ni) fill_coords_index(px, py, pz, index)
-
-    return Particles(
-        (px, py, pz), index, inject, nxcell, max_xcell, min_xcell, np, ni
-    )
-end
-
-# Velocity helper grids for the particle advection
-function velocity_grids(xci, xvi, di)
-    xghost  = ntuple(Val(3)) do i
-        LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i])+2)
-    end
-    grid_vx = xvi[1]   , xghost[2], xghost[3]
-    grid_vy = xghost[1], xvi[2]   , xghost[3]
-    grid_vz = xghost[1], xghost[2], xvi[3]
-
-    return grid_vx, grid_vy, grid_vz
-end
 
 import ParallelStencil.INDICES
 const idx_k = INDICES[3]
@@ -128,29 +88,25 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     li            = lx, ly, lz           # domain length
     di            = @. li / ni           # grid steps
     origin        = 0.0, 0.0, -lz        # origin coordinates (15km of sticky air layer)
-    xci, xvi      = lazy_grid(
-        di,
-        li,
-        ni;
-        origin = origin
-    ) # nodes at the center and vertices of the cells
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies(; is_plastic = true)
-    κ            = (10 / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0))
+    κ            = (10 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^3 / κ / 3.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 20, 1
-    particles                    = init_particles_cellarrays(
-        nxcell, max_xcell, min_xcell, xvi..., di..., ni
+    particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
     # velocity grids
     grid_vx, grid_vy, grid_vz   = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases                 = init_particle_fields_cellarrays(particles, Val(2))
+    pT, pPhases                 = init_cell_arrays(particles, Val(2))
     particle_args               = (pT, pPhases)
 
     # Elliptical temperature anomaly
@@ -208,6 +164,8 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
         periodicity  = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -234,7 +192,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         fig
     end
 
-    grid2particle!(pT, xvi, thermal.T, particles.coords)
+    grid2particle!(pT, xvi, thermal.T, particles)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
@@ -275,7 +233,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         # ------------------------------
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, xvi, particles.coords)
+        particle2grid!(thermal.T, pT, xvi, particles)
         temperature2center!(thermal)
 
         # Thermal solver ---------------
@@ -299,9 +257,9 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, grid_vz, dt, 2 / 3)
         # advect particles in memory
-        shuffle_particles!(particles, xvi, particle_args)
+        move_particles!(particles, xvi, particle_args)
         # interpolate fields from grid vertices to particles
-        grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles.coords)
+        grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles)
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
@@ -342,7 +300,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                 )
             end
 
-            xz_slice = ny >>> 1
+            slice_j = ny >>> 1
             # Make Makie figure
             fig = Figure(size = (1400, 1800), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
@@ -350,13 +308,13 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[:, xz_slice, :]) , colormap=:batlow)
+            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, slice_j, :]) , colormap=:batlow)
             # Plot particles phase
-            h2  = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II[:, xz_slice, :]./1e6) , colormap=:batlow)
+            h2  = heatmap!(ax2, xci[1].*1e-3, xci[3].*1e-3, Array(stokes.τ.II[:, slice_j, :].*1-e6) , colormap=:batlow)
             # Plot 2nd invariant of strain rate
-            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II[:, xz_slice, :])) , colormap=:batlow)
+            h3  = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
             # Plot effective viscosity
-            h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep[:, xz_slice, :])) , colormap=:batlow)
+            h4  = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:, slice_j, :])) , colormap=:batlow)
             hideydecorations!(ax3)
             hideydecorations!(ax4)
             Colorbar(fig[1,2], h1)

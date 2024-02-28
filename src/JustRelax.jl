@@ -15,7 +15,7 @@ using JustPIC
 function solve!() end
 
 include("topology/Topology.jl")
-export IGG, lazy_grid, Geometry
+export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g
 
 include("MiniKernels.jl")
 export _d_xa,
@@ -54,7 +54,7 @@ export _d_xa,
     _harm_yzi,
     _current
 
-include("phases/CallArrays.jl")
+include("phases/CellArrays.jl")
 export @cell, element, setelement!, cellnum, cellaxes, new_empty_cell, setindex!
 
 include("rheology/StressUpdate.jl")

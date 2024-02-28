@@ -24,18 +24,18 @@ function init_rheologies(; is_plastic = true)
     η_reg     = 1e16
     cohesion  = 3e6
     friction  = asind(0.2)
-    pl_crust  = if is_plastic 
+    pl_crust  = if is_plastic
         DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     else
         DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     end
     friction  = asind(0.3)
-    pl        = if is_plastic 
+    pl        = if is_plastic
         DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     else
         DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     end
-    pl_wz     = if is_plastic 
+    pl_wz     = if is_plastic
         DruckerPrager_regularised(; C = 2e6, ϕ=2.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     else
         DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
@@ -62,7 +62,7 @@ function init_rheologies(; is_plastic = true)
         SetMaterialParams(;
             Phase             = 1,
             Density           = PT_Density(; ρ0=2.75e3, β=β_upper_crust, T0=0.0, α = 3.5e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
+            HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2),
             Conductivity      = K_crust,
             CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
             Elasticity        = el_upper_crust,
@@ -72,7 +72,7 @@ function init_rheologies(; is_plastic = true)
         SetMaterialParams(;
             Phase             = 2,
             Density           = PT_Density(; ρ0=3e3, β=β_lower_crust, T0=0.0, α = 3.5e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=7.5e2),
+            HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2),
             Conductivity      = K_crust,
             CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
             Elasticity        = el_lower_crust,
@@ -81,7 +81,7 @@ function init_rheologies(; is_plastic = true)
         SetMaterialParams(;
             Phase             = 3,
             Density           = PT_Density(; ρ0=3.3e3, β=β_lithospheric_mantle, T0=0.0, α = 3e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
+            HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3),
             Conductivity      = K_mantle,
             CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, el_lithospheric_mantle, pl)),
             Elasticity        = el_lithospheric_mantle,
@@ -90,7 +90,7 @@ function init_rheologies(; is_plastic = true)
         # SetMaterialParams(;
         #     Phase             = 4,
         #     Density           = PT_Density(; ρ0=3.3e3, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
-        #     HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
+        #     HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3),
         #     Conductivity      = K_mantle,
         #     RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
         #     CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
@@ -100,7 +100,7 @@ function init_rheologies(; is_plastic = true)
         SetMaterialParams(;
             Phase             = 4,
             Density           = PT_Density(; ρ0=3.3e3-50, β=β_sublithospheric_mantle, T0=0.0, α = 3e-5),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
+            HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3),
             Conductivity      = K_mantle,
             CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
             Elasticity        = el_sublithospheric_mantle,
@@ -109,7 +109,7 @@ function init_rheologies(; is_plastic = true)
         SetMaterialParams(;
             Phase             = 5,
             Density           = ConstantDensity(; ρ=1e3),
-            HeatCapacity      = ConstantHeatCapacity(; cp=1.25e3),
+            HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3),
             Conductivity      = ConstantConductivity(; k=15.0),
             CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
         ),
@@ -120,7 +120,7 @@ function init_phases!(phases, particles, Lx, Ly; d=650e3, r=50e3)
     ni = size(phases)
 
     @parallel_indices (I...) function init_phases!(phases, px, py, pz, index, r, Lx, Ly)
-        
+
         @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
             # quick escape
             JustRelax.@cell(index[ip, I...]) == 0 && continue
@@ -141,7 +141,7 @@ function init_phases!(phases, particles, Lx, Ly; d=650e3, r=50e3)
             elseif depth > 90e3
                 @cell phases[ip, I...] = 3.0
 
-            elseif 0e0 > depth 
+            elseif 0e0 > depth
                 @cell phases[ip, I...] = 5.0
 
             end

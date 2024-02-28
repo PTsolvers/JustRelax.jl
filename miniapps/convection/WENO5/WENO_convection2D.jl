@@ -1,15 +1,18 @@
 using CUDA
 CUDA.allowscalar(false) # for safety
 
-using JustRelax, JustRelax.DataIO, JustPIC
+using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 ## NOTE: need to run one of the lines below if one wishes to switch from one backend to another
-# set_backend("Threads_Float64_2D")
-# set_backend("CUDA_Float64_2D")
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+using JustPIC
+using JustPIC._2D
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:CUDA, Float64, 2)
+model = PS_Setup(:Threads, Float64, 2)
 environment!(model)
 
 # Load script dependencies
@@ -19,48 +22,6 @@ using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
 include("Layered_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-@inline init_particle_fields(particles) = @zeros(size(particles.coords[1])...)
-@inline init_particle_fields(particles, nfields) = tuple([zeros(particles.coords[1]) for i in 1:nfields]...)
-@inline init_particle_fields(particles, ::Val{N}) where N = ntuple(_ -> @zeros(size(particles.coords[1])...) , Val(N))
-@inline init_particle_fields_cellarrays(particles, ::Val{N}) where N = ntuple(_ -> @fill(0.0, size(particles.coords[1])..., celldims=(cellsize(particles.index))), Val(N))
-
-function init_particles_cellarrays(nxcell, max_xcell, min_xcell, x, y, dx, dy, nx, ny)
-    ni     = nx, ny
-    ncells = nx * ny
-    np     = max_xcell * ncells
-    px, py = ntuple(_ -> @fill(NaN, ni..., celldims=(max_xcell,)) , Val(2))
-    inject = @fill(false, nx, ny, eltype=Bool)
-    index  = @fill(false, ni..., celldims=(max_xcell,), eltype=Bool)
-
-    @parallel_indices (i, j) function fill_coords_index(px, py, index)
-        # lower-left corner of the cell
-        x0, y0 = x[i], y[j]
-        # fill index array
-        for l in 1:nxcell
-            JustRelax.@cell px[l, i, j]    = x0 + dx * rand(0.05:1e-5:0.95)
-            JustRelax.@cell py[l, i, j]    = y0 + dy * rand(0.05:1e-5:0.95)
-            JustRelax.@cell index[l, i, j] = true
-        end
-        return nothing
-    end
-
-    @parallel (1:nx, 1:ny) fill_coords_index(px, py, index)
-
-    return Particles(
-        (px, py), index, inject, nxcell, max_xcell, min_xcell, np, (nx, ny)
-    )
-end
-
-# Velocity helper grids for the particle advection
-function velocity_grids(xci, xvi, di)
-    dx, dy  = di
-    yVx     = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2])+2)
-    xVy     = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1])+2)
-    grid_vx = xvi[1], yVx
-    grid_vy = xVy, xvi[2]
-
-    return grid_vx, grid_vy
-end
 
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
@@ -136,7 +97,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies(; is_plastic = true)
-    κ            = (10 / (rheology[1].HeatCapacity[1].cp * rheology[1].Density[1].ρ0))
+    κ            = (10 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -146,13 +107,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
-    particles = init_particles_cellarrays(
-        nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
+    particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases      = init_particle_fields_cellarrays(particles, Val(3))
+    pT, pPhases      = init_cell_arrays(particles, Val(3))
     particle_args    = (pT, pPhases)
 
     # Elliptical temperature anomaly
@@ -297,7 +258,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
         # advect particles in memory
-        shuffle_particles!(particles, xvi, particle_args)
+        move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, tuple(), tuple(), xvi)

@@ -1,7 +1,9 @@
 using JustRelax
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:threads, Float64, 2)
+model = PS_Setup(:Threads, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
@@ -82,13 +84,14 @@ end
 function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
 
     # Physical domain ------------------------------------
-    ly       = 2890e3
-    lx       = ly * ar
-    origin   = 0.0, -ly                         # origin coordinates
-    ni       = nx, ny                           # number of cells
-    li       = lx, ly                           # domain length in x- and y-
-    di       = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    ly           = 2890e3
+    lx           = ly * ar
+    origin       = 0.0, -ly                         # origin coordinates
+    ni           = nx, ny                           # number of cells
+    li           = lx, ly                           # domain length in x- and y-
+    di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Weno model -----------------------------------------
@@ -112,7 +115,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
         Name              = "Mantle",
         Phase             = 1,
         Density           = PT_Density(; ρ0=3.1e3, β=β, T0=0.0, α = 1.5e-5),
-        HeatCapacity      = ConstantHeatCapacity(; cp=1.2e3),
+        HeatCapacity      = ConstantHeatCapacity(; Cp=1.2e3),
         Conductivity      = ConstantConductivity(; k=3.0),
         CompositeRheology = CompositeRheology((creep, el, )),
         Elasticity        = el,
@@ -122,14 +125,14 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
         Name              = "Mantle",
         Phase             = 1,
         Density           = PT_Density(; ρ0=3.5e3, β=β, T0=0.0, α = 1.5e-5),
-        HeatCapacity      = ConstantHeatCapacity(; cp=1.2e3),
+        HeatCapacity      = ConstantHeatCapacity(; Cp=1.2e3),
         Conductivity      = ConstantConductivity(; k=3.0),
         CompositeRheology = CompositeRheology((creep, el, pl)),
         Elasticity        = el,
         Gravity           = ConstantGravity(; g=9.81),
     )
     # heat diffusivity
-    κ            = (rheology.Conductivity[1].k / (rheology.HeatCapacity[1].cp * rheology.Density[1].ρ0)).val
+    κ            = (rheology.Conductivity[1].k / (rheology.HeatCapacity[1].Cp * rheology.Density[1].ρ0)).val
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -193,6 +196,8 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
         free_slip   = (left = true, right=true, top=true, bot=true),
         periodicity = (left = false, right = false, top = false, bot = false),
     )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
     # ----------------------------------------------------
 
     # IO -------------------------------------------------

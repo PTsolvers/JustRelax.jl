@@ -43,17 +43,19 @@ function diffusion_3D(;
     dt       = 50 * kyr # physical time step
 
     # Physical domain
-    ni       = (nx, ny, nz)
-    li       = (lx, ly, lz)  # domain length in x- and y-
-    di       = @. li / ni # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=(0, 0, -lz)) # nodes at the center and vertices of the cells
-    igg      = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    ni           = (nx, ny, nz)
+    li           = (lx, ly, lz)  # domain length in x- and y-
+    di           = @. li / ni # grid step in x- and -y
+    origin       = 0, 0, -lz # nodes at the center and vertices of the cells
+    igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Define the thermal parameters with GeoParams
     rheology = SetMaterialParams(;
         Phase        = 1,
         Density      = PT_Density(; ρ0=3.1e3, β=0.0, T0=0.0, α = 1.5e-5),
-        HeatCapacity = ConstantHeatCapacity(; cp=Cp0),
+        HeatCapacity = ConstantHeatCapacity(; Cp=Cp0),
         Conductivity = ConstantConductivity(; k=K0),
     )
 
@@ -73,8 +75,8 @@ function diffusion_3D(;
 
     # Boundary conditions
     pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
-    thermal_bc = TemperatureBoundaryConditions(; 
-        no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true), 
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
         periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
 
@@ -102,7 +104,7 @@ function diffusion_3D(;
             di,;
             igg
         )
-       
+
         t  += dt
         it += 1
     end

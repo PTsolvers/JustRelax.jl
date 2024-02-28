@@ -1,5 +1,5 @@
-using CUDA
-CUDA.allowscalar(false)
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
@@ -29,22 +29,23 @@ end
 function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Physical domain ------------------------------------
-    ly = 1e0          # domain length in y
-    lx = ly           # domain length in x
-    ni = nx, ny       # number of cells
-    li = lx, ly       # domain length in x- and y-
-    di = @. li / ni   # grid step in x- and -y
-    origin = 0.0, 0.0     # origin coordinates
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-    dt = Inf
+    ly           = 1e0          # domain length in y
+    lx           = ly           # domain length in x
+    ni           = nx, ny       # number of cells
+    li           = lx, ly       # domain length in x- and y-
+    di           = @. li / ni   # grid step in x- and -y
+    origin       = 0.0, 0.0     # origin coordinates
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    dt           = Inf
 
     # Physical properties using GeoParams ----------------
-    η0 = 1e22           # viscosity
-    G0 = 10^10           # elastic shear modulus
-    εbg = 1e-14           # background strain-rate
-    dt = 1e11
-    el_bg = SetConstantElasticity(; G=G0, ν=0.5)
-    visc = LinearViscous(; η=η0)
+    η0       = 1e22           # viscosity
+    G0       = 10^10           # elastic shear modulus
+    εbg      = 1e-14           # background strain-rate
+    dt       = 1e11
+    el_bg    = SetConstantElasticity(; G=G0, ν=0.5)
+    visc     = LinearViscous(; η=η0)
     rheology = (
         # Low density phase
         SetMaterialParams(;
@@ -57,22 +58,22 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     )
 
     # Initialize phase ratios -------------------------------
-    radius = 0.1
+    radius       = 0.1
     phase_ratios = PhaseRatio(ni, length(rheology))
     init_phases!(phase_ratios, xci, radius)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(ni, ViscoElastic)
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, CFL=0.75 / √2.1)
 
     # Buoyancy forces
-    ρg = @zeros(ni...), @zeros(ni...)
+    ρg     = @zeros(ni...), @zeros(ni...)
     ρg[2] .= rheology[1].Density[1].ρ.val .* rheology[1].Gravity[1].g.val
-    args = (; T=@zeros(ni...), P=stokes.P, dt=dt)
+    args   = (; T=@zeros(ni...), P=stokes.P, dt=dt)
 
     # Rheology
-    η = @ones(ni...)
+    η     = @ones(ni...)
     η_vep = similar(η) # effective visco-elasto-plastic viscosity
     @parallel (@idx ni) compute_viscosity!(
         η,
@@ -94,6 +95,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     stokes.V.Vx .= PTArray([x * εbg for x in xvi[1], _ in 1:(ny + 2)])
     stokes.V.Vy .= PTArray([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)
@@ -101,11 +103,11 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Time loop
     t, it = 0.0, 0
-    tmax = 1.0e13
-    τII = Float64[0.0]
-    sol = Float64[0.0]
-    ttot = Float64[0.0]
-    P = Float64[0.0]
+    tmax  = 1.0e13
+    τII   = Float64[0.0]
+    sol   = Float64[0.0]
+    ttot  = Float64[0.0]
+    P     = Float64[0.0]
 
     while t < tmax
 
@@ -163,8 +165,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     return nothing
 end
 
-N = 32
-n = N + 2
+N  = 32
+n  = N + 2
 nx = n - 2
 ny = n - 2
 figdir = "ElasticBuildUp_incompressible"

@@ -4,6 +4,7 @@ function _compute_τ_nonlinear!(
     τII,
     τ_old::NTuple{N1,T},
     ε::NTuple{N1,T},
+    ε_pl::NTuple{N1,T},
     P,
     ηij,
     η_vep,
@@ -22,44 +23,60 @@ function _compute_τ_nonlinear!(
 
     # visco-elastic strain rates
     εij_ve = ntuple(Val(N1)) do i
-        @inbounds muladd(0.5 * τij_o[i], _Gdt, εij[i])
+        Base.@_inline_meta
+        fma(0.5 * τij_o[i], _Gdt, εij[i])
     end
-    # get plastic paremeters (if any...)
+    # get plastic parameters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
+
+    # yield stess (GeoParams could be used here...)
     τy = C * cosϕ + P[idx...] * sinϕ
 
-    dτij = if isyielding(is_pl, τII_trial, τy)
+    # check if yielding; if so, compute plastic strain rate (λdQdτ),
+    # plastic stress increment (dτ_pl), and update the plastic
+    # multiplier (λ)
+    dτij, λdQdτ = if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
-        dτ_pl, λ[idx...] = compute_dτ_pl(
+        dτ_pl, λ[idx...], λdQdτ = compute_dτ_pl(
             τij, dτij, τy, τII_trial, ηij, λ[idx...], η_reg, dτ_r, volume
         )
-        dτ_pl
+        dτ_pl, λdQdτ
 
     else
-        dτij
+        # in this case the plastic strain rate is a tuples of zeros
+        dτij, ntuple(_ -> zero(eltype(T)), Val(N1))
     end
 
-    τij = τij .+ dτij
-    correct_stress!(τ, τij, idx...)
+    # fill plastic strain rate tensor
+    update_plastic_strain_rate!(ε_pl, λdQdτ, idx)
+    # update and correct stress
+    correct_stress!(τ, τij .+ dτij, idx...)
+
     τII[idx...] = τII_ij = second_invariant(τij...)
     η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
 
     return nothing
 end
 
-# check if plasticity is active
-@inline isyielding(is_pl, τII_trial, τy) = is_pl && τII_trial > τy
+# fill plastic strain rate tensor
+@generated function update_plastic_strain_rate!(ε_pl::NTuple{N,T}, λdQdτ, idx) where {N,T}
+    quote
+        Base.@_inline_meta
+        Base.@nexprs $N i -> ε_pl[i][idx...] = !isinf(λdQdτ[i]) * λdQdτ[i]
+    end
+end
 
-@inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + muladd(ηij, _Gdt, 1.0))
+# check if plasticity is active
+@inline isyielding(is_pl, τII_trial, τy) = is_pl * (τII_trial > τy)
+
+@inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + fma(ηij, _Gdt, 1.0))
 
 function compute_stress_increment_and_trial(
     τij::NTuple{N,T}, τij_o::NTuple{N,T}, ηij, εij::NTuple{N,T}, _Gdt, dτ_r
 ) where {N,T}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-        @inbounds dτ_r * muladd(
-            2.0 * ηij, εij[i], muladd(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i])
-        )
+        dτ_r * fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
     end
     return dτij, second_invariant((τij .+ dτij)...)
 end
@@ -74,14 +91,18 @@ function compute_dτ_pl(
     λ = ν * λ0 + (1 - ν) * (F > 0.0) * F * inv(ηij * dτ_r + η_reg + volume)
     λ_τII = λ * 0.5 * inv(τII_trial)
 
-    dτ_pl = ntuple(Val(N)) do i
+    λdQdτ = ntuple(Val(N)) do i
         Base.@_inline_meta
         # derivatives of the plastic potential
-        λdQdτ = (τij[i] + dτij[i]) * λ_τII
-        # corrected stress
-        muladd(-dτ_r * 2.0, ηij * λdQdτ, dτij[i])
+        (τij[i] + dτij[i]) * λ_τII
     end
-    return dτ_pl, λ
+
+    dτ_pl = ntuple(Val(N)) do i
+        Base.@_inline_meta
+        # corrected stress
+        fma(-dτ_r * 2.0, ηij * λdQdτ[i], dτij[i])
+    end
+    return dτ_pl, λ, λdQdτ
 end
 
 # update the global arrays τ::NTuple{N, AbstractArray} with the local τij::NTuple{3, Float64} at indices idx::Vararg{Integer, N}
@@ -90,7 +111,7 @@ end
 ) where {N1,N2,T}
     quote
         Base.@_inline_meta
-        Base.@nexprs $N1 i -> @inbounds τ[i][idx...] = τij[i]
+        Base.@nexprs $N1 i -> τ[i][idx...] = τij[i]
     end
 end
 
@@ -106,22 +127,27 @@ end
 @inline isplastic(x) = false
 
 @inline plastic_params(v) = plastic_params(v.CompositeRheology[1].elements)
+@inline plastic_params(v, EII) = plastic_params(v.CompositeRheology[1].elements, EII)
 
-@generated function plastic_params(v::NTuple{N,Any}) where {N}
+@generated function plastic_params(v::NTuple{N,Any}, EII) where {N}
     quote
         Base.@_inline_meta
-        Base.@nexprs $N i ->
-            isplastic(v[i]) && return true,
-            v[i].C.val, v[i].sinϕ.val, v[i].cosϕ.val, v[i].sinΨ.val,
-            v[i].η_vp.val
+        Base.@nexprs $N i -> begin
+            vᵢ = v[i]
+            if isplastic(vᵢ)
+                C = soften_cohesion(vᵢ, EII)
+                sinϕ, cosϕ = soften_friction_angle(vᵢ, EII)
+                return (true, C, sinϕ, cosϕ, vᵢ.sinΨ.val, vᵢ.η_vp.val)
+            end
+        end
         (false, 0.0, 0.0, 0.0, 0.0, 0.0)
     end
 end
 
 function plastic_params_phase(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio
+    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio
 ) where {N}
-    data = _plastic_params_phase(rheology, ratio)
+    data = _plastic_params_phase(rheology, EII, ratio)
     # average over phases
     is_pl = false
     C = sinϕ = cosϕ = sinψ = η_reg = 0.0
@@ -138,12 +164,13 @@ function plastic_params_phase(
 end
 
 @generated function _plastic_params_phase(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio
+    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio
 ) where {N}
     quote
         Base.@_inline_meta
         empty_args = false, 0.0, 0.0, 0.0, 0.0, 0.0
-        Base.@nexprs $N i -> a_i = ratio[i] == 0 ? empty_args : plastic_params(rheology[i])
+        Base.@nexprs $N i ->
+            a_i = ratio[i] == 0 ? empty_args : plastic_params(rheology[i], EII)
         Base.@ncall $N tuple a
     end
 end
@@ -155,7 +182,6 @@ function cache_tensors(
     @inline av_shear(A) = 0.25 * sum(_gather(A, idx...))
 
     εij = ε[1][idx...], ε[2][idx...], av_shear(ε[3])
-    # τij_o = τ_old[1][idx...], τ_old[2][idx...], av_shear(τ_old[3])
     τij = getindex.(τ, idx...)
     τij_o = getindex.(τ_old, idx...)
 
@@ -171,15 +197,64 @@ function cache_tensors(
 
     # normal components of the strain rate and old-stress tensors
     ε_normal = ntuple(i -> ε[i][idx...], Val(3))
-    # τ_old_normal = ntuple(i -> τ_old[i][idx...], Val3)
     # shear components of the strain rate and old-stress tensors
     ε_shear = av_yz(ε[4]), av_xz(ε[5]), av_xy(ε[6])
-    # τ_old_shear = av_yz(τ_old[4]), av_xz(τ_old[5]), av_xy(τ_old[6])
-    # cache ij-th components of the tensors into a tuple in Voigt notation 
+    # cache ij-th components of the tensors into a tuple in Voigt notation
     εij = (ε_normal..., ε_shear...)
-    # τij_o = (τ_old_normal..., τ_old_shear...)
     τij_o = getindex.(τ_old, idx...)
     τij = getindex.(τ, idx...)
 
     return τij, τij_o, εij
+end
+
+## softening kernels
+
+@inline function soften_cohesion(
+    v::DruckerPrager{T,U,U1,S1,NoSoftening}, ::T
+) where {T,U,U1,S1}
+    return v.C.val
+end
+
+@inline function soften_cohesion(
+    v::DruckerPrager_regularised{T,U,U1,U2,S1,NoSoftening}, ::T
+) where {T,U,U1,U2,S1}
+    return v.C.val
+end
+
+@inline function soften_cohesion(
+    v::DruckerPrager{T,U,U1,S1,S2}, EII::T
+) where {T,U,U1,S1,S2}
+    return v.softening_C(EII, v.C.val)
+end
+
+@inline function soften_cohesion(
+    v::DruckerPrager_regularised{T,U,U1,U2,S1,S2}, EII::T
+) where {T,U,U1,U2,S1,S2}
+    return v.softening_C(EII, v.C.val)
+end
+
+@inline function soften_friction_angle(
+    v::DruckerPrager{T,U,U1,NoSoftening,S2}, ::T
+) where {T,U,U1,S2}
+    return (v.sinϕ.val, v.cosϕ.val)
+end
+
+@inline function soften_friction_angle(
+    v::DruckerPrager_regularised{T,U,U1,U2,NoSoftening,S2}, ::T
+) where {T,U,U1,U2,S2}
+    return (v.sinϕ.val, v.cosϕ.val)
+end
+
+@inline function soften_friction_angle(
+    v::DruckerPrager{T,U,U1,S1,S2}, EII::T
+) where {T,U,U1,S1,S2}
+    ϕ = v.softening_ϕ(EII, v.ϕ.val)
+    return sincosd(ϕ)
+end
+
+@inline function soften_friction_angle(
+    v::DruckerPrager_regularised{T,U,U1,U2,S1,S2}, EII::T
+) where {T,U,U1,U2,S1,S2}
+    ϕ = v.softening_ϕ(EII, v.ϕ.val)
+    return sincosd(ϕ)
 end

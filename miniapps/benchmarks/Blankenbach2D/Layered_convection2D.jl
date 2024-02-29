@@ -23,6 +23,10 @@ include("Layered_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
+function mean(A)
+    B = sum(A)/length(A)
+end
+
 function copyinn_x!(A, B)
 
     @parallel function f_x(A, B)
@@ -100,11 +104,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies()
     κ            = (rheology[1].Conductivity[1].k / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
-    dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
+    dt = dt_diff = 0.5 * min(di...)^2 / κ / 4.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 5
+    nxcell, max_xcell, min_xcell = 40, 80, 15
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
@@ -126,7 +130,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.25 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.75 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -215,14 +219,16 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
+    nit = 5e3
     Urms = Float64[]
+    Nu_top = zeros(Int64(nit))
     trms = Float64[]
 
     # Buffer arrays to compute velocity rms
     Vx_v  = @zeros(ni.+1...)
     Vy_v  = @zeros(ni.+1...)
 
-    while it <= 5e3 # run only for 5 Myrs
+    while it <= nit # run only for 5 Myrs
         # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
 
         # Update buoyancy and viscosity -
@@ -257,7 +263,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]      .= 273.0
+        @views T_buffer[:, end]      .= 273.0        
+        @views T_buffer[:, 1]        .= 1273.0
         @views thermal.T[2:end-1, :] .= T_buffer
         temperature2center!(thermal)
 
@@ -279,6 +286,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         # ------------------------------
 
         # Advection --------------------
+        # check if we need to inject particles
+        inject = check_injection(particles)
+        inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
+        # update phase ratios
+        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)        
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
         # advect particles in memory
@@ -287,18 +299,15 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
             copyinn_x!(dst, src)
         end
-        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
-        # check if we need to inject particles
-        inject = check_injection(particles)
-        inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
-        # update phase ratios
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)        
         
+        Nu_top[it+1] = -ly / (1273.0*lx) * mean(( thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1]) / di[2])
+
         # Compute U rms ---------------
         Urms_it = let
             JustRelax.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
-            sum(Vx_v.^2) * prod(di) |> sqrt
+            sqrt(sum(Vx_v.^2) * prod(di)) * ((-ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )
         end
         push!(Urms, Urms_it)
         push!(trms, t)
@@ -406,7 +415,7 @@ end
 figdir   = "Blankenbach"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 51
+n        = 101
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

@@ -17,11 +17,41 @@ environment!(model)
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 
-# Load file with all the rheology configurations
-include("Layered_rheology.jl")
-
-
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
+
+function init_rheologies()
+
+    # Define rheolgy struct
+    rheology = (
+        # Name              = "UpperCrust",
+        SetMaterialParams(;
+            Phase             = 1,
+            Density           = PT_Density(; ρ0=4000.0,α = 2.5e-5, β = 0.0),
+            HeatCapacity      = ConstantHeatCapacity(; Cp=1250.0),
+            Conductivity      = ConstantConductivity(;k=5.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1.0e21),)),
+            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
+            Gravity           = ConstantGravity(; g=10.0),
+        ),        
+    )
+end
+
+function init_phases!(phases, particles, Lx, d, r, thick_air)
+    ni = size(phases)
+
+    @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
+        @inbounds for ip in JustRelax.cellaxes(phases)
+            # quick escape
+            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+
+            @cell phases[ip, i, j] = 1.0
+
+        end
+        return nothing
+    end
+
+    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
+end
 
 function mean(A)
     B = sum(A)/length(A)
@@ -75,7 +105,7 @@ function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air)
 
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc - thick_air)^2 ≤ r^2)            
-            T[i + 1, j] += 100.0
+            T[i + 1, j] += 20.0
         end
         return nothing
     end
@@ -218,7 +248,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         Vy_v = @zeros(ni.+1...)
     end
     # Time loop
-    t, it = 0.0, 0
+    t, it = 0.0, 1
     nit = 5e3
     Urms = Float64[]
     Nu_top = zeros(Int64(nit))
@@ -230,6 +260,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     while it <= nit # run only for 5 Myrs
         # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
+
+        @show it
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
@@ -299,22 +331,22 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
             copyinn_x!(dst, src)
         end
-        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)        
-        
-        Nu_top[it+1] = -ly / (1273.0*lx) * mean(( thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1]) / di[2])
+        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)                
+
+        Nu_top[it] = - (ly / (1273.0*lx)) * mean(( thermal.T[2:end-1,end] .- thermal.T[2:end-1,end-1]) ./ di[2])
 
         # Compute U rms ---------------
         Urms_it = let
             JustRelax.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
-            sqrt(sum(Vx_v.^2) * prod(di)) * ((-ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )
+            sqrt(sum(Vx_v.^2) * prod(di)) * ((ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )
         end
         push!(Urms, Urms_it)
         push!(trms, t)
         # ------------------------------
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 100) == 0
+        if it == 1 || rem(it, 100) == 0 || it == nit
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if save_vtk
@@ -377,33 +409,35 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             save(joinpath(figdir, "$(it).png"), fig)
             fig
 
-            let
-                Yv  = [y for x in xvi[1], y in xvi[2]][:]
-                Y   = [y for x in xci[1], y in xci[2]][:]
-                fig3 = Figure(size = (1200, 900))
-                ax31 = Axis(fig3[1,1], aspect = 2/3, title = "T")
-                ax32 = Axis(fig3[1,2], aspect = 2/3, title = "log10(η)")
-                scatter!(ax31, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-                scatter!(ax32, Array(log10.(η[:])), Y./1e3)
-                ylims!(ax31, minimum(xvi[2])./1e3, 0)
-                xlims!(ax31,273.0, 1273.0)
-                ylims!(ax32, minimum(xvi[2])./1e3, 0)
-                hideydecorations!(ax32)
-                save(joinpath(figdir, "T_profile_$(it).png"), fig3)
-                fig3
-            end        
+            #let
+            #    Yv  = [y for x in xvi[1], y in xvi[2]][:]
+            #    Y   = [y for x in xci[1], y in xci[2]][:]
+            #    fig3 = Figure(size = (1200, 900))
+            #    ax31 = Axis(fig3[1,1], aspect = 2/3, title = "T")
+            #    ax32 = Axis(fig3[1,2], aspect = 2/3, title = "log10(η)")
+            #    scatter!(ax31, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
+            #    scatter!(ax32, Array(log10.(η[:])), Y./1e3)
+            #    ylims!(ax31, minimum(xvi[2])./1e3, 0)
+            #    xlims!(ax31,273.0, 1273.0)
+            #    ylims!(ax32, minimum(xvi[2])./1e3, 0)
+            #    hideydecorations!(ax32)
+            #    save(joinpath(figdir, "T_profile_$(it).png"), fig3)
+            #    fig3
+            #end        
         end
-
-        @show it += 1
-        t        += dt
+        
+        it      +=  1
+        t       +=  dt
         # ------------------------------
 
     end
 
-    fig2 = Figure(size = (900, 900), title = "V_RMS")
-    ax21 = Axis(fig2[1,1], aspect = ar, title = "V_{RMS}")
+    fig2 = Figure(size = (900, 1200), title = "Time Series")
+    ax21 = Axis(fig2[1,1], aspect = 3, title = "V_{RMS}")
+    ax22 = Axis(fig2[2,1], aspect = 3, title = "Nu_{top}")
     l1 = lines!(ax21,trms,Urms)
-    save(joinpath(figdir, "V_RMS.png"), fig2)
+    l2 = lines!(ax22,trms,Nu_top)
+    save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
     fig2
 
     return nothing
@@ -415,7 +449,7 @@ end
 figdir   = "Blankenbach"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 101
+n        = 51
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

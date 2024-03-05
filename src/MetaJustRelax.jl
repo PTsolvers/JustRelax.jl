@@ -139,6 +139,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionPT.jl"))
         export heatdiffusion_PT!
 
+        include(joinpath(@__DIR__, "particles/subgrid_diffusion.jl"))
+        export SubgridDiffusionArrays, @subgrid_diffusion!
+
         include(joinpath(@__DIR__, "thermal_diffusion/Shearheating.jl"))
         export compute_shear_heating!
 

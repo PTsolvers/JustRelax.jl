@@ -124,14 +124,14 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         include(joinpath(@__DIR__, "rheology/Viscosity.jl"))
         export compute_viscosity!
 
-        include(joinpath(@__DIR__, "stokes/StressKernels.jl"))
-        export tensor_invariant!
+        # include(joinpath(@__DIR__, "stokes/StressKernels.jl"))
+        # export tensor_invariant!
 
         include(joinpath(@__DIR__, "stokes/Stokes2D.jl"))
-        export solve!
+        export solve!, tensor_invariant!
 
         include(joinpath(@__DIR__, "stokes/Stokes3D.jl"))
-        export solve!
+        export solve!, tensor_invariant!
 
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionExplicit.jl"))
         export ThermalParameters
@@ -140,7 +140,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export heatdiffusion_PT!
 
         include(joinpath(@__DIR__, "particles/subgrid_diffusion.jl"))
-        export SubgridDiffusionArrays, @subgrid_diffusion!
+        export subgrid_characteristic_time!
 
         include(joinpath(@__DIR__, "thermal_diffusion/Shearheating.jl"))
         export compute_shear_heating!

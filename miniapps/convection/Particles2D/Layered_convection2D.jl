@@ -96,7 +96,7 @@ end
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # Physical domain ------------------------------------
-    thick_air    = 10e3              # thickness of sticky air layer
+    thick_air    = 0                 # thickness of sticky air layer
     ly           = 700e3 + thick_air # domain length in y
     lx           = ly * ar           # domain length in x
     ni           = nx, ny            # number of cells
@@ -114,14 +114,15 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 1
-    particles = init_particles(
+    nxcell, max_xcell, min_xcell = 25, 30, 8
+    particles        = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
+    subgrid_arrays   = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases      = init_cell_arrays(particles, Val(3))
+    pT, pPhases      = init_cell_arrays(particles, Val(2))
     particle_args    = (pT, pPhases)
 
     # Elliptical temperature anomaly
@@ -136,7 +137,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.25 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.75 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -148,7 +149,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # initialize thermal profile - Half space cooling
     @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], thick_air)
     thermal_bcs!(thermal.T, thermal_bc)
-
+    Tbot = thermal.T[1, 1]
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air)
     @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
@@ -169,7 +170,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-3 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-2 / √2.1
     )
 
     # Boundary conditions
@@ -206,6 +207,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     T_buffer    = @zeros(ni.+1)
     Told_buffer = similar(T_buffer)
+    dt₀         = similar(stokes.P)
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
@@ -218,9 +220,15 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while it < 50 # run only for 5 Myrs
-        # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
+    while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
 
+        # interpolate fields from particle to grid vertices
+        particle2grid!(T_buffer, pT, xvi, particles)
+        @views T_buffer[:, end]      .= 273.0
+        @views T_buffer[:, 1]        .= Tbot
+        @views thermal.T[2:end-1, :] .= T_buffer
+        temperature2center!(thermal)
+ 
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         @parallel (@idx ni) compute_viscosity!(
@@ -251,12 +259,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]      .= 273.0
-        @views thermal.T[2:end-1, :] .= T_buffer
-        temperature2center!(thermal)
-
         # Thermal solver ---------------
         heatdiffusion_PT!(
             thermal,
@@ -272,6 +274,16 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             nout    = 1e2,
             verbose = true,
         )
+        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+            copyinn_x!(dst, src)
+        end
+        subgrid_characteristic_time!(
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+        )
+        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+        subgrid_diffusion!(
+            pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, particles, xvi,  di, dt
+        )
         # ------------------------------
 
         # Advection --------------------
@@ -279,11 +291,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-        # interpolate fields from grid vertices to particles
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
-        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
@@ -294,7 +301,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 1) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if save_vtk
@@ -329,6 +336,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             pxv      = ppx.data[:]./1e3
             pyv      = ppy.data[:]./1e3
             clr      = pPhases.data[:]
+            clr      = pT.data[:]
             idxv     = particles.index.data[:];
 
             # Make Makie figure
@@ -364,12 +372,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
-
 # (Path)/folder where output data and figures are stored
 figdir   = "Plume2D"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 256
+n        = 128
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -380,3 +387,4 @@ end
 
 # run main script
 main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
+

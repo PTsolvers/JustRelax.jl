@@ -1,5 +1,5 @@
 using Test
-using JustRelax
+using JustRelax, JustRelax.DataIO
 using WriteVTK, LightXML, Printf
 
 @testset "Paraview collection" begin

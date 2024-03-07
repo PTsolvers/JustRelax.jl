@@ -1,6 +1,6 @@
 module DataIO
 
-using WriteVTK
+using WriteVTK, LightXML, Printf
 using HDF5
 using MPI
 using CUDA, AMDGPU
@@ -14,8 +14,13 @@ export save_hdf5, checkpointing, metadata
 include("VTK.jl")
 
 export VTKDataSeries, append!, save_vtk
-
 export metadata
+
+include("PVD.jl")
+
+export make_paraview_collection
+export metadata
+
 
 """
     metadata(src, file, dst)

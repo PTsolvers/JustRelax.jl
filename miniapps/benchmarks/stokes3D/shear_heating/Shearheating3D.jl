@@ -194,7 +194,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                 nout=1e3,
                 viscosity_cutoff=(-Inf, Inf)
             )
-            @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+            @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
             dt   = compute_dt(stokes, di, dt_diff)
             # ------------------------------
 

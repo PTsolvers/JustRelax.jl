@@ -168,7 +168,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
         )
 
-        @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1

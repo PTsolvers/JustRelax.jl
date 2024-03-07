@@ -17,41 +17,10 @@ environment!(model)
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 
+# Load file with all the rheology configurations
+include("Blankenbach_Rheology.jl")
+
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-function init_rheologies()
-
-    # Define rheolgy struct
-    rheology = (
-        # Name              = "UpperCrust",
-        SetMaterialParams(;
-            Phase             = 1,
-            Density           = PT_Density(; ρ0=4000.0,α = 2.5e-5, β = 0.0),
-            HeatCapacity      = ConstantHeatCapacity(; Cp=1250.0),
-            Conductivity      = ConstantConductivity(;k=5.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1.0e21),)),
-            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            Gravity           = ConstantGravity(; g=10.0),
-        ),        
-    )
-end
-
-function init_phases!(phases, particles, Lx, d, r, thick_air)
-    ni = size(phases)
-
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
-        @inbounds for ip in JustRelax.cellaxes(phases)
-            # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
-
-            @cell phases[ip, i, j] = 1.0
-
-        end
-        return nothing
-    end
-
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
-end
 
 function mean(A)
     B = sum(A)/length(A)
@@ -138,15 +107,16 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 40, 80, 15
+    nxcell, max_xcell, min_xcell = 25, 30, 8
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
+    subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases      = init_cell_arrays(particles, Val(3))
-    particle_args    = (pT, pPhases)
+    pT, pT0, pPhases      = init_cell_arrays(particles, Val(3))
+    particle_args    = (pT, pT0, pPhases)
 
     # Elliptical temperature anomaly
     xc_anomaly       = 0.0    # origin of thermal anomaly
@@ -210,7 +180,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
-    # IO ----- -------------------------------------------
+
+    # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     if save_vtk
         vtk_dir      = figdir*"\\vtk"
@@ -237,10 +208,12 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     T_buffer    = @zeros(ni.+1)
     Told_buffer = similar(T_buffer)
+    dt₀ = similar(stokes.P)
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
     grid2particle!(pT, xvi, T_buffer, particles)
+    pT0.data .= pT.data
 
     local Vx_v, Vy_v
     if save_vtk
@@ -249,19 +222,23 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 1
-    nit = 5e3
+    nit = 1e1
     Urms = Float64[]
-    Nu_top = zeros(Int64(nit))
+    Nu_top = Float64[]
     trms = Float64[]
 
     # Buffer arrays to compute velocity rms
     Vx_v  = @zeros(ni.+1...)
     Vy_v  = @zeros(ni.+1...)
 
-    while it <= nit # run only for 5 Myrs
-        # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
-
+    while it <= nit
         @show it
+        # interpolate fields from particle to grid vertices
+        particle2grid!(T_buffer, pT, xvi, particles)
+        @views T_buffer[:, end]      .= 273.0        
+        @views T_buffer[:, 1]        .= 1273.0
+        @views thermal.T[2:end-1, :] .= T_buffer
+        temperature2center!(thermal)
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
@@ -285,20 +262,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             args,
             Inf,
             igg;
-            iterMax = 150e3,
-            nout=1e3,
-            viscosity_cutoff=(1e18, 1e24)
+            iterMax          = 150e3,
+            nout             = 50,
+            viscosity_cutoff = (1e18, 1e24),
+            verbose          = false
         )
         @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
-
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]      .= 273.0        
-        @views T_buffer[:, 1]        .= 1273.0
-        @views thermal.T[2:end-1, :] .= T_buffer
-        temperature2center!(thermal)
 
         # Thermal solver ---------------
         heatdiffusion_PT!(
@@ -312,34 +283,43 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             igg     = igg,
             phase   = phase_ratios,
             iterMax = 10e3,
-            nout    = 1e2,
-            verbose = true,
+            nout    = 50,
+            verbose = false,
+        )
+        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+            copyinn_x!(dst, src)
+        end
+        subgrid_characteristic_time!(
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+        )
+        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+        subgrid_diffusion!(
+            pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, particles, xvi,  di, dt
         )
         # ------------------------------
 
         # Advection --------------------
-        # check if we need to inject particles
-        inject = check_injection(particles)
-        inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
-        # update phase ratios
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)        
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
+        # clean_particles!(particles, xvi, particle_args)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-        # interpolate fields from grid vertices to particles
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
-        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)                
-
-        Nu_top[it] = - (ly / (1273.0*lx)) * mean(( thermal.T[2:end-1,end] .- thermal.T[2:end-1,end-1]) ./ di[2])
+        clean_particles!(particles, xvi, particle_args)
+        # check if we need to inject particles
+        inject = check_injection(particles)
+        # inject && break
+        inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        # update phase ratios
+        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)        
+      
+        Nu_it = -ly / (1000.0*lx) * mean( ((thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1]) ./ di[2]) .*di[1]) 
+        push!(Nu_top, Nu_it)
 
         # Compute U rms ---------------
         Urms_it = let
             JustRelax.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
-            sqrt(sum(Vx_v.^2) * prod(di)) * ((ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )
+            sqrt(sum( (Vx_v.^2 ./ly ./lx) .* prod(di)) / lx /ly) * ((ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )
         end
         push!(Urms, Urms_it)
         push!(trms, t)
@@ -388,7 +368,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
             ax3 = Axis(fig[1,3], aspect = ar, title = "Vx [m/s]")
-            ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+            ax4 = Axis(fig[2,3], aspect = ar, title = "T [K]")
             #
             h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:lajolla, colorrange=(273,1273) )
             # 
@@ -396,7 +376,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             # 
             h3  = heatmap!(ax3, xvi[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vx) , colormap=:batlow)
             # 
-            h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(273,1273))
+            h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(273,1273), markersize=3)    
             #h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)) , colormap=:batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
@@ -409,21 +389,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             save(joinpath(figdir, "$(it).png"), fig)
             fig
 
-            #let
-            #    Yv  = [y for x in xvi[1], y in xvi[2]][:]
-            #    Y   = [y for x in xci[1], y in xci[2]][:]
-            #    fig3 = Figure(size = (1200, 900))
-            #    ax31 = Axis(fig3[1,1], aspect = 2/3, title = "T")
-            #    ax32 = Axis(fig3[1,2], aspect = 2/3, title = "log10(η)")
-            #    scatter!(ax31, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-            #    scatter!(ax32, Array(log10.(η[:])), Y./1e3)
-            #    ylims!(ax31, minimum(xvi[2])./1e3, 0)
-            #    xlims!(ax31,273.0, 1273.0)
-            #    ylims!(ax32, minimum(xvi[2])./1e3, 0)
-            #    hideydecorations!(ax32)
-            #    save(joinpath(figdir, "T_profile_$(it).png"), fig3)
-            #    fig3
-            #end        
         end
         
         it      +=  1
@@ -437,21 +402,22 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     ax22 = Axis(fig2[2,1], aspect = 3, title = "Nu_{top}")
     l1 = lines!(ax21,trms,Urms)
     l2 = lines!(ax22,trms,Nu_top)
+    hideydecorations!(ax21)
     save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
     fig2
+    @show Urms[nit] Nu_top[nit]
 
     return nothing
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
-
 # (Path)/folder where output data and figures are stored
-figdir   = "Blankenbach"
+figdir   = "Blankenbach_subgrid"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 51
-nx       = n*ar - 2
-ny       = n - 2
+n        = 64
+nx       = n
+ny       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else

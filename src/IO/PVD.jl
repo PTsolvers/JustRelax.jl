@@ -1,5 +1,5 @@
 """
-    make_paraview_collection(; dir=pwd(), pvd_name=nothing, files=nothing, file_extension = ".vts", time = nothing)
+    make_paraview_collection(; dir=pwd(), pvd_name=nothing, files=nothing, file_extension = ".vtm", time = nothing)
 
 In case one has a list of `*.vtk` files, this routine creates a `*.pvd` file that can be opened in Paraview.
 This is useful if you previously saved vtk files but didnt save it as a collection in the code itself.

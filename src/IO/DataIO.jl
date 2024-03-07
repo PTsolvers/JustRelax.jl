@@ -21,7 +21,6 @@ include("PVD.jl")
 export make_paraview_collection
 export metadata
 
-
 """
     metadata(src, file, dst)
 

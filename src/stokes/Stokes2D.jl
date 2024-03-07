@@ -55,6 +55,7 @@ import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi, backend
 
 include("../rheology/GeoParams.jl")
 include("StressRotation.jl")
+include("StressKernels.jl")
 include("PressureKernels.jl")
 include("VelocityKernels.jl")
 include("StressKernels.jl")
@@ -62,7 +63,8 @@ include("StressKernels.jl")
 export solve!,
     rotate_stress_particles_jaumann!,
     rotate_stress_particles_rotation_matrix!,
-    compute_vorticity!
+    compute_vorticity!,
+    tensor_invariant!
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
     τxx, τyy, τxy, τxy_c = stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ.xy_c

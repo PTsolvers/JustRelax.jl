@@ -12,7 +12,9 @@ Optional options
 - `file_extension`:  file extension of the vtk files. Default is `.vtm` but all `vt*` work.
 - `time`:  Vector of the timesteps; if not specified, pseudo time steps are assigned.
 """
-function make_paraview_collection(; dir=pwd(), pvd_name=nothing, files=nothing, file_extension = ".vtm", time = nothing)
+function make_paraview_collection(;
+    dir=pwd(), pvd_name=nothing, files=nothing, file_extension=".vtm", time=nothing
+)
 
     # if no files are given, use all vtm files in the directory
     curdir = pwd()
@@ -52,7 +54,9 @@ Inputs are:
 - `time`: Vector of time steps corresponding to the `files` vector.
 """
 
-function make_paraview_collection(pvd_name::String, files::Vector{String}, time::Vector{String})
+function make_paraview_collection(
+    pvd_name::String, files::Vector{String}, time::Vector{String}
+)
     # Check that the arrays have the same length
     @assert length(time) == length(files)
 

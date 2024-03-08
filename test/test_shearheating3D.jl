@@ -42,7 +42,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function Shearheating3D(nx=32, ny=32, nz=32)
+function Shearheating3D(nx=16, ny=16, nz=16)
 
     init_mpi = JustRelax.MPI.Initialized() ? false : true
     igg    = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi)...)

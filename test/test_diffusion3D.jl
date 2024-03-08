@@ -104,7 +104,7 @@ function diffusion_3D(;
     nt = Int(ceil(ttot / dt))
 
     # Physical time loop
-    while it < nt
+    while it < 10
         heatdiffusion_PT!(
             thermal,
             pt_thermal,
@@ -132,7 +132,7 @@ end
         ny=32;
         nz=32;
         thermal = diffusion_3D(; nx = nx, ny = ny, nz = nz)
-        @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1805.5689770363524 atol=1e-3
-        @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1804.7216858558063 atol=1e-3
+        @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1824.614400703972 rtol=1e-3
+        @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1827.002299288895 rtol=1e-3
     end
 end

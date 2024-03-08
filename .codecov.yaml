@@ -7,4 +7,6 @@ coverage:
       default:
         informational: true
     changes: false
-comment: false
+comment:
+     layout: "condensed_header, condensed_files, condensed_footer" # add "condensed_" to "header", "files" and "footer"
+      hide_project_coverage: TRUE # set to true

@@ -232,7 +232,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D")
             nout=1e3,
             viscosity_cutoff=(1e18, 1e24)
         )
-        @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        # @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
@@ -368,12 +368,12 @@ ar          =   1 # aspect ratio
 n           =   51
 nx          =   n
 ny          =   n
-nit         =   1e2
+nit         =   3e3
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 0; init_MPI= true)...)
+    IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else
     igg
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit;
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit)

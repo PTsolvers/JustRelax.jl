@@ -99,7 +99,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies()
     κ            = (rheology[1].Conductivity[1].k / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
-    dt = dt_diff = 0.5 * min(di...)^2 / κ / 4.01 # diffusive CFL timestep limiter
+    dt = dt_diff = 0.9 * min(di...)^2 / κ / 4.0 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -227,7 +227,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     Vy_v  = @zeros(ni.+1...)
 
     while it <= nit
-        @show it
+        @show it        
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end]      .= 273.0        
@@ -323,6 +323,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         end
         push!(Urms, Urms_it)
         push!(trms, t)
+        @show trms[it]./(1e6*(365.25*24*60*60))
         # -------------------------------------------
 
         # Data I/O and plotting ---------------------
@@ -398,13 +399,18 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     end
 
     # Plot initial T and η profiles
+    Tmean   =   @zeros(ny+1)
     let
+        for j = 1:(ny+1)
+            Tmean[j] = sum(thermal.T[2:end-1,j])/(nx+1)
+        end
         Yv  = [y for x in xvi[1], y in xvi[2]][:]
         Y   = [y for x in xci[1], y in xci[2]][:]
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
+        #scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
+        lines!(ax1, Tmean, xvi[2]./1e3)
         scatter!(ax2, Array(log10.(η[:])), Y./1e3)
         ylims!(ax1, minimum(xvi[2])./1e3, 0)
         ylims!(ax2, minimum(xvi[2])./1e3, 0)
@@ -416,8 +422,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     fig2 = Figure(size = (900, 1200), title = "Time Series")
     ax21 = Axis(fig2[1,1], aspect = 3, title = "V_{RMS}")
     ax22 = Axis(fig2[2,1], aspect = 3, title = "Nu_{top}")
-    l1 = lines!(ax21,trms,Urms)
-    l2 = lines!(ax22,trms,Nu_top)
+    l1 = lines!(ax21,trms./(1e6*(365.25*24*60*60)),Urms)
+    l2 = lines!(ax22,trms./(1e6*(365.25*24*60*60)),Nu_top)
     hidexdecorations!(ax21)
     save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
     fig2
@@ -433,10 +439,10 @@ end
 figdir      =   "Blankenbach_subgrid"
 save_vtk    =   false # set to true to generate VTK files for ParaView
 ar          =   1 # aspect ratio
-n           =   64
+n           =   51
 nx          =   n
 ny          =   n
-nit         =   5e3
+nit         =   3e3
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else

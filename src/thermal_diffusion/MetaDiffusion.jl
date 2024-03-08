@@ -188,7 +188,7 @@ function make_PTthermal_struct!()
         ) where {N}
             args_ij = (; T=args.T[Idx...], P=args.P[Idx...])
             phase_ij = phase[Idx...]
-            ρCp = JustRelax.compute_ρCp(rheology, phase_ij, args_ij)
+            ρCp = compute_ρCp(rheology, phase_ij, args_ij)
             _K = inv(fn_ratio(compute_conductivity, rheology, phase_ij, args_ij))
 
             _Re = inv(π + √(π * π + ρCp * max_lxyz^2 * _K * _dt)) # Numerical Reynolds number
@@ -203,7 +203,7 @@ function make_PTthermal_struct!()
         ) where {N}
             args_ij = (; T=args.T[Idx...], P=args.P[Idx...])
 
-            ρCp = JustRelax.compute_ρCp(rheology, args_ij)
+            ρCp = compute_ρCp(rheology, args_ij)
             _K = inv(compute_conductivity(rheology, args_ij))
 
             _Re = inv(π + √(π * π + ρCp * max_lxyz^2 * _K * _dt)) # Numerical Reynolds number

@@ -22,10 +22,6 @@ include("Blankenbach_Rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
-function mean(A)
-    B = sum(A)/length(A)
-end
-
 function copyinn_x!(A, B)
 
     @parallel function f_x(A, B)
@@ -86,7 +82,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
+function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk =false)
 
     # Physical domain ------------------------------------
     thick_air    = 0                    # thickness of sticky air layer
@@ -103,7 +99,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies()
     κ            = (rheology[1].Conductivity[1].k / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
-    dt = dt_diff = 0.5 * min(di...)^2 / κ / 4.01 # diffusive CFL timestep limiter
+    dt = dt_diff = 0.9 * min(di...)^2 / κ / 4.0 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -161,8 +157,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Rheology
     η                = @ones(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    
+    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)    
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, 1e25)
     )
@@ -222,7 +217,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     end
     # Time loop
     t, it = 0.0, 1
-    nit = 1e1
+    # nit = 1e1
     Urms = Float64[]
     Nu_top = Float64[]
     trms = Float64[]
@@ -232,7 +227,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     Vy_v  = @zeros(ni.+1...)
 
     while it <= nit
-        @show it
+        @show it        
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end]      .= 273.0        
@@ -267,7 +262,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             viscosity_cutoff = (1e18, 1e24),
             verbose          = false
         )
-        @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        # @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
@@ -312,18 +307,24 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)        
       
-        Nu_it = -ly / (1000.0*lx) * mean( ((thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1]) ./ di[2]) .*di[1]) 
+        # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----
+        Nu_it   =   (ly / (1000.0*lx)) * 
+            sum( ((abs.(thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1])) ./ di[2]) .*di[1])             
         push!(Nu_top, Nu_it)
+        # -------------------------------------------
 
-        # Compute U rms ---------------
+        # Compute U rms -----------------------------
+        # U₍ᵣₘₛ₎ = H*ρ₀*c₍ₚ₎/k * √ 1/H/L * ∫∫ (vx²+vz²) dx dz
         Urms_it = let
             JustRelax.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
-            sqrt(sum( (Vx_v.^2 ./ly ./lx) .* prod(di)) / lx /ly) * ((ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )
+            sqrt( sum( Vx_v.^2 .* prod(di)) / lx /ly ) * 
+                ((ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )
         end
         push!(Urms, Urms_it)
         push!(trms, t)
-        # ------------------------------
+        @show trms[it]./(1e6*(365.25*24*60*60))
+        # -------------------------------------------
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 100) == 0 || it == nit
@@ -397,27 +398,51 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     end
 
+    # Plot initial T and η profiles
+    Tmean   =   @zeros(ny+1)
+    let
+        for j = 1:(ny+1)
+            Tmean[j] = sum(thermal.T[2:end-1,j])/(nx+1)
+        end
+        Yv  = [y for x in xvi[1], y in xvi[2]][:]
+        Y   = [y for x in xci[1], y in xci[2]][:]
+        fig = Figure(size = (1200, 900))
+        ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
+        ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
+        #scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
+        lines!(ax1, Tmean, xvi[2]./1e3)
+        scatter!(ax2, Array(log10.(η[:])), Y./1e3)
+        ylims!(ax1, minimum(xvi[2])./1e3, 0)
+        ylims!(ax2, minimum(xvi[2])./1e3, 0)
+        hideydecorations!(ax2)
+        save(joinpath(figdir, "T_profile_$(it).png"), fig)
+        fig
+    end
+
     fig2 = Figure(size = (900, 1200), title = "Time Series")
     ax21 = Axis(fig2[1,1], aspect = 3, title = "V_{RMS}")
     ax22 = Axis(fig2[2,1], aspect = 3, title = "Nu_{top}")
-    l1 = lines!(ax21,trms,Urms)
-    l2 = lines!(ax22,trms,Nu_top)
-    hideydecorations!(ax21)
+    l1 = lines!(ax21,trms./(1e6*(365.25*24*60*60)),Urms)
+    l2 = lines!(ax22,trms./(1e6*(365.25*24*60*60)),Nu_top)
+    hidexdecorations!(ax21)
     save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
     fig2
-    @show Urms[nit] Nu_top[nit]
+
+    @show Urms[Int64(nit)] 
+    @show Nu_top[Int64(nit)]
 
     return nothing
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-figdir   = "Blankenbach_subgrid"
-save_vtk = false # set to true to generate VTK files for ParaView
-ar       = 1 # aspect ratio
-n        = 64
-nx       = n
-ny       = n
+figdir      =   "Blankenbach_subgrid"
+save_vtk    =   false # set to true to generate VTK files for ParaView
+ar          =   1 # aspect ratio
+n           =   51
+nx          =   n
+ny          =   n
+nit         =   3e3
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else
@@ -425,4 +450,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, save_vtk = save_vtk);

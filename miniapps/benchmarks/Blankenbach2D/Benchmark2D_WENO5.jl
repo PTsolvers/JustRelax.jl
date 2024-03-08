@@ -15,7 +15,7 @@ model = PS_Setup(:Threads, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Floa
 environment!(model)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
 
 # Load file with all the rheology configurations
 include("Blankenbach_Rheology.jl")
@@ -72,7 +72,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk =false)
+function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D")
 
     # Physical domain ------------------------------------
     thick_air    = 0                    # thickness of sticky air layer
@@ -89,7 +89,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies()
     κ            = (rheology[1].Conductivity[1].k / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
-    dt = dt_diff = 0.5 * min(di...)^2 / κ / 4.01 # diffusive CFL timestep limiter
+    dt = dt_diff = 0.9 * min(di...)^2 / κ / 4.0 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Weno model -----------------------------------------
@@ -99,7 +99,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
 #    subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -120,7 +120,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.75 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -159,7 +159,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-3 / √2.1
     )
 
     # Boundary conditions
@@ -167,15 +167,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         free_slip    = (left = true, right=true, top=true, bot=true),
         periodicity  = (left = false, right = false, top = false, bot = false),
     )
-#    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-#    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # IO ------------------------------------------------
-    # if it does not exist, make folder where figures are stored
-    if save_vtk
-        vtk_dir      = figdir*"\\vtk"
-        take(vtk_dir)
-    end
     take(figdir)
     # ----------------------------------------------------
 
@@ -197,11 +192,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
 
     # WENO arrays
     T_WENO  = @zeros(ni.+1)
-    local Vx_v, Vy_v
-    if save_vtk
-        Vx_v = @zeros(ni.+1...)
-        Vy_v = @zeros(ni.+1...)
-    end
     # Time loop
     t, it = 0.0, 1
     # nit = 1e1
@@ -242,7 +232,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             nout=1e3,
             viscosity_cutoff=(1e18, 1e24)
         )
-        # @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
@@ -296,37 +286,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         end
         push!(Urms, Urms_it)
         push!(trms, t)
+        @show trms[it]./(1e6*(365.25*24*60*60))
         # -------------------------------------------
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 100) == 0 || it == nit
             checkpointing(figdir, stokes, thermal.T, η, t)
 
-            if save_vtk
-                JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-                data_v = (;
-                    T   = Array(thermal.T[2:end-1, :]),
-                    τxy = Array(stokes.τ.xy),
-                    εxy = Array(stokes.ε.xy),
-                    Vx  = Array(Vx_v),
-                    Vy  = Array(Vy_v),
-                )
-                data_c = (;
-                    P   = Array(stokes.P),
-                    τxx = Array(stokes.τ.xx),
-                    τyy = Array(stokes.τ.yy),
-                    εxx = Array(stokes.ε.xx),
-                    εyy = Array(stokes.ε.yy),
-                    η   = Array(η),
-                )
-                save_vtk(
-                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                    xvi,
-                    xci,
-                    data_v,
-                    data_c
-                )
-            end
             # Make Makie figure
             fig = Figure(size = (900, 900), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
@@ -360,13 +326,18 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     end
 
     # Plot initial T and η profiles
+    Tmean   =   @zeros(ny+1)
     let
+        for j = 1:(ny+1)
+            Tmean[j] = sum(thermal.T[2:end-1,j])/(nx+1)
+        end
         Yv  = [y for x in xvi[1], y in xvi[2]][:]
         Y   = [y for x in xci[1], y in xci[2]][:]
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
+        #scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
+        lines!(ax1, Tmean, xvi[2]./1e3)
         scatter!(ax2, Array(log10.(η[:])), Y./1e3)
         ylims!(ax1, minimum(xvi[2])./1e3, 0)
         ylims!(ax2, minimum(xvi[2])./1e3, 0)
@@ -378,8 +349,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     fig2 = Figure(size = (900, 1200), title = "Time Series")
     ax21 = Axis(fig2[1,1], aspect = 3, title = "V_{RMS}")
     ax22 = Axis(fig2[2,1], aspect = 3, title = "Nu_{top}")
-    l1 = lines!(ax21,trms,Urms)
-    l2 = lines!(ax22,trms,Nu_top)
+    l1 = lines!(ax21,trms./(1e6*(365.25*24*60*60)),Urms)
+    l2 = lines!(ax22,trms./(1e6*(365.25*24*60*60)),Nu_top)
     hidexdecorations!(ax21)
     save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
     fig2
@@ -392,18 +363,17 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-figdir      =   "Blankenbach_subgrid"
-save_vtk    =   false # set to true to generate VTK files for ParaView
+figdir      =   "Blankenbach_WENO"
 ar          =   1 # aspect ratio
-n           =   64
+n           =   51
 nx          =   n
 ny          =   n
-nit         =   5e3
+nit         =   1e2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
+    IGG(init_global_grid(nx, ny, 0; init_MPI= true)...)
 else
     igg
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, save_vtk = save_vtk);
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit;

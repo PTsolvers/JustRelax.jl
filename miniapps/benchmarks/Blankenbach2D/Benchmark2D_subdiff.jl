@@ -389,9 +389,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             linkaxes!(ax1, ax2, ax3, ax4)
             save(joinpath(figdir, "$(it).png"), fig)
             fig
-
         end
-        
         it      +=  1
         t       +=  dt
         # ------------------------------

@@ -92,7 +92,7 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     origin = zero(nx), zero(ny), zero(nz)
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
     grid         = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells    dt          = Inf
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total simulation time

@@ -93,7 +93,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
+function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Physical domain ------------------------------------
     thick_air    = 0                 # thickness of sticky air layer
@@ -182,7 +182,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     update_halo!(stokes.V.Vx, stokes.V.Vy)
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
-    if save_vtk
+    if do_vtk
         vtk_dir      = figdir*"\\vtk"
         take(vtk_dir)
     end
@@ -214,7 +214,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     grid2particle!(pT, xvi, T_buffer, particles)
 
     local Vx_v, Vy_v
-    if save_vtk
+    if do_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
     end
@@ -304,7 +304,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
         if it == 1 || rem(it, 1) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
-            if save_vtk
+            if do_vtk
                 JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
                     T   = Array(thermal.T[2:end-1, :]),
@@ -321,7 +321,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
                     εyy = Array(stokes.ε.yy),
                     η   = Array(η),
                 )
-                save_vtk(
+                do_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
                     xci,
@@ -374,7 +374,7 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir   = "Plume2D"
-save_vtk = false # set to true to generate VTK files for ParaView
+do_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
 n        = 128
 nx       = n*ar - 2
@@ -386,5 +386,5 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, save_vtk = save_vtk);
 
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);

@@ -512,7 +512,6 @@ function JustRelax.solve!(
 
     # solver loop
     @copy stokes.P0 stokes.P
-    @copy stokes.P0 stokes.P
     wtime0 = 0.0
     θ = @zeros(ni...)
     λ = @zeros(ni...)

@@ -304,7 +304,7 @@ end
     τ_old,  # @ centers
     ε,      # @ vertices
     ε_pl,   # @ centers
-    EII,   # accumulated plastic strain rate @ centers
+    EII,    # accumulated plastic strain rate @ centers
     P,
     θ,
     η,

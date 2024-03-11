@@ -377,7 +377,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             l1 = lines!(ax21,trms,log10.(Urms))
             l2 = lines!(ax22,trms,log10.(Nu_top))
             save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
-            # fig2
         end
         it      +=  1
         t       +=  dt

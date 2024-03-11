@@ -219,8 +219,10 @@ onto the pre-allocated `Vx_d`, `Vy_d`, `Vz_d` 3D arrays located at the grid vert
 """
 function velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
     # infer size of grid
-    nx, ny, nz = size(Vx)
-    nv_x, nv_y, nv_z = nx - 1, ny - 2, nz - 2
+    nx1, ny1, nz1 = size(Vx)
+    nx2, ny2, nz2 = size(Vy)
+    nx3, ny3, nz3 = size(Vz)
+    nv_x, nv_y, nv_z = max(nx1, nx2, nx3), max(ny1, ny2, ny3), max(nz1, nz2, nz3)
     # interpolate to cell vertices
     @parallel (@idx nv_x nv_y nv_z) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
 
@@ -228,11 +230,28 @@ function velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
 end
 
 @parallel_indices (i, j, k) function _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
-    @inbounds begin
+    i1, j1, k1 = (i, j, k) .+ 1
+    # if all((i, j1, k1) .≤ size(Vx_v))
+    #     Vx_v[i, j1, k1] =
+    #         0.25 * (Vx[i, j, k] + Vx[i, j + 1, k] + Vx[i, j, k + 1] + Vx[i, j + 1, k + 1])
+    # end
+    # if all((i1, j, k1) .≤ size(Vy_v))
+    #     Vy_v[i1, j, k1] =
+    #         0.25 * (Vy[i, j, k] + Vy[i + 1, j, k] + Vy[i, j, k + 1] + Vy[i + 1, j, k + 1])
+    # end
+    # if all((i1, j1, k) .≤ size(Vz_v))
+    #     Vz_v[i1, j1, k] =
+    #         0.25 * (Vz[i, j, k] + Vz[i, j + 1, k] + Vz[i + 1, j, k] + Vz[i + 1, j + 1, k])
+    # end
+    if all((i, j, k) .≤ size(Vx_v))
         Vx_v[i, j, k] =
             0.25 * (Vx[i, j, k] + Vx[i, j + 1, k] + Vx[i, j, k + 1] + Vx[i, j + 1, k + 1])
+    end
+    if all((i, j, k) .≤ size(Vy_v))
         Vy_v[i, j, k] =
             0.25 * (Vy[i, j, k] + Vy[i + 1, j, k] + Vy[i, j, k + 1] + Vy[i + 1, j, k + 1])
+    end
+    if all((i, j, k) .≤ size(Vz_v))
         Vz_v[i, j, k] =
             0.25 * (Vz[i, j, k] + Vz[i, j + 1, k] + Vz[i + 1, j, k] + Vz[i + 1, j + 1, k])
     end

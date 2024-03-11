@@ -41,13 +41,18 @@ function append!(data_series, data::NamedTuple, time_step, seconds)
     return nothing
 end
 
-function save_vtk(fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTuple)
+function save_vtk(fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTuple, velocity::NTuple{N, T}) where {N, T}
 
     # unpack data names and arrays
     data_names_v = string.(keys(data_v))
     data_arrays_v = values(data_v)
     data_names_c = string.(keys(data_c))
     data_arrays_c = values(data_c)
+
+    velocity_field = rand(N, size(first(velocity))...)
+    for (i, v) in enumerate(velocity)
+        velocity_field[i, :, :, :] = v
+    end
 
     vtk_multiblock(fname) do vtm
         # First block.
@@ -63,6 +68,7 @@ function save_vtk(fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTupl
             for (name_i, array_i) in zip(data_names_v, data_arrays_v)
                 vtk[name_i] = Array(array_i)
             end
+            vtk["Velocity"] = velocity_field
         end
     end
 

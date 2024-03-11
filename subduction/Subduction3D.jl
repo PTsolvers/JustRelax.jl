@@ -2,7 +2,7 @@ using CUDA
 using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+@init_parallel_stencil(CUDA, Float64, 3)
 
 using JustPIC
 using JustPIC._3D
@@ -72,7 +72,8 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     particle_args               = (pPhases, )
 
     # Assign particles phases anomaly
-    init_phases!(pPhases, PTArray(phases_GMG), particles, xvi)
+    phases_device = PTArray(phases_GMG)
+    init_phases!(pPhases, phases_device, particles, xvi)
     phase_ratios     = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
     # ----------------------------------------------------
@@ -80,7 +81,7 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.5 / √3.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-3,  CFL = 0.95 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -109,8 +110,8 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(;
-        free_slip    = (left = true , right = true , top = true , bot = true , front = true , back = true ),
-        no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
+        free_slip    = (left = true , right = true , top = true , bot = false , front = true , back = true ),
+        no_slip      = (left = false, right = false, top = false, bot = true, front = false, back = false),
         periodicity  = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -152,7 +153,8 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
+    while it < 150 # run only for 5 Myrs
+    # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
         
         # # interpolate fields from particle to grid vertices
         # particle2grid!(thermal.T, pT, xvi, particles)
@@ -184,7 +186,7 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             viscosity_cutoff = (1e18, 1e24)
         );
         @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
-        dt   = compute_dt(stokes, di, dt_diff) / 2
+        dt   = compute_dt(stokes, di)
         # ------------------------------
 
         # # Thermal solver ---------------
@@ -226,7 +228,7 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 5) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if do_vtk
@@ -237,32 +239,38 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                     εxy = Array(stokes.ε.xy),
                     Vx  = Array(Vx_v),
                     Vy  = Array(Vy_v),
+                    Vz  = Array(Vz_v),
                 )
                 data_c = (;
-                    Tc  = Array(thermal.Tc),
                     P   = Array(stokes.P),
                     τxx = Array(stokes.τ.xx),
                     τyy = Array(stokes.τ.yy),
                     εxx = Array(stokes.ε.xx),
                     εyy = Array(stokes.ε.yy),
-                    η   = Array(log10.(η)),
+                    η   = Array(η),
+                )
+                velocity_v = (
+                    Array(Vx_v),
+                    Array(Vy_v),
+                    Array(Vz_v),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
                     xci,
                     data_v,
-                    data_c
+                    data_c,
+                    velocity_v
                 )
             end
 
             slice_j = ny >>> 1
             # Make Makie figure
             fig = Figure(size = (1400, 1800), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = ar, title = "P [GPA]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "τII [MPa]")
-            ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
-            ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+            ax1 = Axis(fig[1,1], title = "P [GPA]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+            ax2 = Axis(fig[2,1], title = "τII [MPa]")
+            ax3 = Axis(fig[1,3], title = "log10(εII)")
+            ax4 = Axis(fig[2,3], title = "log10(η)")
             # Plot temperature
             h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(stokes.P[:, slice_j, :]./1e9) , colormap=:lajolla)
             # Plot particles phase
@@ -301,4 +309,4 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir   = "Subduction3D"
-# main3D(igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+main3D(igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

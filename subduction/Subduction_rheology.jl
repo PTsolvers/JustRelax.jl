@@ -32,46 +32,44 @@ end
 
 function init_phases!(phases, phase_grid, particles, xvi)
     ni = size(phases)
-
-    @parallel_indices (I...) function _init_phases!(phases, phase_grid, pcoords::NTuple{N, T}, index, xvi) where {N,T}
-
-        ni = size(phases)
-
-        for ip in JustRelax.cellaxes(phases)
-            # quick escape
-            iszero(JustRelax.@cell(index[ip, I...])) && continue
-
-            pᵢ = ntuple(Val(N)) do i 
-                JustRelax.@cell pcoords[i][ip, I...]
-            end
-
-            d = Inf # distance to the nearest particle
-            particle_phase = -1
-            for offi in 0:1, offj in 0:1, offk in 0:1
-                ii, jj, kk = I[1] + offi, I[2] + offj, I[3] + offk
-
-                !(ii ≤ ni[1]) && continue
-                !(jj ≤ ni[2]) && continue
-                !(kk ≤ ni[3]) && continue
-
-                xvᵢ = (
-                    xvi[1][ii], 
-                    xvi[2][jj], 
-                    xvi[3][kk], 
-                )
-                # @show xvᵢ ii jj kk
-                d_ijk = √(sum((pᵢ[i] - xvᵢ[i])^2 for i in 1:N))
-                if d_ijk < d
-                    d = d_ijk
-                    particle_phase = phase_grid[ii, jj, kk]
-                end
-            end
-            JustRelax.@cell phases[ip, I...] = particle_phase + 1.0
-
-        end
-        return nothing
-    end
-
     @parallel (@idx ni) _init_phases!(phases, phase_grid, particles.coords, particles.index, xvi)
 end
 
+@parallel_indices (I...) function _init_phases!(phases, phase_grid, pcoords::NTuple{N, T}, index, xvi) where {N,T}
+
+    ni = size(phases)
+
+    for ip in JustRelax.cellaxes(phases)
+        # quick escape
+        JustRelax.@cell(index[ip, I...]) == 0 && continue
+
+        pᵢ = ntuple(Val(N)) do i 
+            JustRelax.@cell pcoords[i][ip, I...]
+        end
+
+        d = Inf # distance to the nearest particle
+        particle_phase = -1
+        for offi in 0:1, offj in 0:1, offk in 0:1
+            ii, jj, kk = I[1] + offi, I[2] + offj, I[3] + offk
+
+            !(ii ≤ ni[1]) && continue
+            !(jj ≤ ni[2]) && continue
+            !(kk ≤ ni[3]) && continue
+
+            xvᵢ = (
+                xvi[1][ii], 
+                xvi[2][jj], 
+                xvi[3][kk], 
+            )
+            # @show xvᵢ ii jj kk
+            d_ijk = √(sum((pᵢ[i] - xvᵢ[i])^2 for i in 1:N))
+            if d_ijk < d
+                d = d_ijk
+                particle_phase = phase_grid[ii, jj, kk]
+            end
+        end
+        JustRelax.@cell phases[ip, I...] = particle_phase + 1.0
+    end
+
+    return nothing
+end

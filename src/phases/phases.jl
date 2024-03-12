@@ -126,7 +126,7 @@ function phase_ratios_center!(phase_ratios::PhaseRatio, particles, xci, di, pPha
     return nothing
 end
 
-@parallel_indices (I...) function phase_ratios_center_kernel(
+@parallel_indices (I...) function phase_ratios_center(
     ratio_centers, pxi::NTuple{N,T1}, xci::NTuple{N,T2}, di::NTuple{N,T3}, phases
 ) where {N,T1,T2,T3}
 

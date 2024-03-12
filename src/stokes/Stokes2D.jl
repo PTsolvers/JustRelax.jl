@@ -733,7 +733,9 @@ function JustRelax.solve!(
             )
 
             if rem(iter, 5) == 0
-                @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+                # @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+                ρ_old = copy(ρg[2])
+                ρg[2] .= ρ_old .* exp.(-stokes.∇V.*dt)
             end
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(

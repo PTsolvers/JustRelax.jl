@@ -324,7 +324,7 @@ function new_thermal_anomaly(phases, particles, xc_anomaly, yc_anomaly, r_anomal
     @parallel (JustRelax.@idx ni) new_anomlay_particles(phases, particles.coords..., particles.index, xc_anomaly, yc_anomaly, r_anomaly, sticky_air)
 end
 
-# function main2D(igg; figdir=figdir, nx=nx, ny=ny)
+function main2D(igg; figdir=figdir, nx=nx, ny=ny)
 
     #-------rheology parameters--------------------------------------------------------------
     # plasticity setup
@@ -343,8 +343,8 @@ end
     el          = SetConstantElasticity(; G=G0, ν=0.5)                            # elastic spring
     el_magma    = SetConstantElasticity(; G=G_magma, ν=0.5)                            # elastic spring
     creep_rock  = LinearViscous(; η=1e21 * Pa * s)
-    creep_magma = LinearViscous(; η=1e16 * Pa * s)
-    creep_air   = LinearViscous(; η=1e16 * Pa * s)
+    creep_magma = LinearViscous(; η=1e21 * Pa * s)
+    creep_air   = LinearViscous(; η=1e20 * Pa * s)
     cutoff_visc = (1e14, 1e24)
     β_rock      = inv(get_Kb(el))
     β_magma     = inv(get_Kb(el_magma))
@@ -368,7 +368,8 @@ end
         #Name="UpperCrust"
         SetMaterialParams(;
             Phase   = 1,
-            Density  = PT_Density(ρ0=2700kg/m^3, β=β_rock/Pa),
+            Density  = PT_Density(ρ0=2700kg/m^3,α=3e-5/K, β=β_rock/Pa),
+            Gravity  = ConstantGravity(g=1.0m/s^2),
             HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=3.0Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
@@ -382,6 +383,7 @@ end
         SetMaterialParams(;
             Phase   = 2,
             Density  = PT_Density(ρ0=2600kg/m^3, β=β_magma/Pa),
+            Gravity  = ConstantGravity(g=1.0m/s^2),
             HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=1.5Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
@@ -395,6 +397,7 @@ end
         SetMaterialParams(;
             Phase   = 3,
             Density  = PT_Density(ρ0=2600kg/m^3, β=β_magma/Pa),
+            Gravity  = ConstantGravity(g=1.0m/s^2),
             HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=1.5Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
@@ -407,7 +410,8 @@ end
         #Name="Sticky Air"
         SetMaterialParams(;
             Phase   = 4,
-            Density   = PT_Density(ρ0=10kg/m^3,α=0.0, β= 0.0),
+            Density   = PT_Density(ρ0=2500kg/m^3,α=0.0, β= 0.0),
+            Gravity  = ConstantGravity(g=1.0m/s^2),
             HeatCapacity = ConstantHeatCapacity(Cp=1000J/kg/K),
             Conductivity = ConstantConductivity(k=15Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=0.0J/kg),
@@ -460,7 +464,7 @@ end
 
     α = MatParam[1].Density[1].α.val                    # thermal expansion coefficient for PT Density
     Ra =   ρ0 * g * α * ΔT * 10^3 / (η * κ)                # Rayleigh number
-    dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01           # diffusive CFL timestep limiter
+    dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01)         # diffusive CFL timestep limiter
 
     # Initialisation
     thermal = ThermalArrays(ni)                                # initialise thermal arrays and boundary conditions
@@ -484,7 +488,7 @@ end
     args = (; T=thermal.Tc, P=stokes.P, dt=Inf)
 
     pt_thermal = PTThermalCoeffs(
-        MatParam, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=5e-2 / √2.1
+        MatParam, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
     )
     # Boundary conditions of the flow
     stokes.V.Vx .= PTArray([ (x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
@@ -584,7 +588,8 @@ end
         fig
     end
 
-    while it < 10 #nt
+    P_init = deepcopy(stokes.P)
+    while it < 1 #nt
 
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end] .= 273.0
@@ -656,7 +661,7 @@ end
         @parallel (@idx ni) multi_copy!(
             @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
         )
-        dt = compute_dt(stokes, di, dt_diff, igg)
+        # dt = compute_dt(stokes, di, dt_diff, igg)
         # ------------------------------
         @show dt
 
@@ -837,7 +842,8 @@ end
                 # Plot temperature
                 p1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
                 # Plot effective viscosity
-                p2  = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:glasgow, colorrange= (log10(1e14), log10(1e21)))
+                p2  = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.P .- P_init) , colormap=:roma)#, colorrange= (log10(1e14), log10(1e21)))
+                # p2  = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:glasgow, colorrange= (log10(1e14), log10(1e21)))
                 # Plot particles phase
                 p3  = scatter!(ax3, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
                 # Plot 2nd invariant of strain rate
@@ -876,6 +882,7 @@ end
                     fig = Figure(; size=(1200, 900))
                     ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
                     ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
+                    a3  = Axis(fig[2, 1]; aspect=2 / 3, title="τII")
 
                     scatter!(
                         ax1,
@@ -887,11 +894,17 @@ end
                         Array(stokes.P[:]),
                         Y,
                     )
+                    scatter!(
+                        a3,
+                        Array(log10.(stokes.τ.II[:])),
+                        Y,
+                    )
 
                     hideydecorations!(ax2)
                     save(joinpath(figdir, "pressure_profile_$it.png"), fig)
                     fig
                 end
+
             end
         end
     end
@@ -901,10 +914,10 @@ end
 
 
 
-figdir = "thermal_stress_test_inelastic"
+figdir = "thermal_stress_test_inelastic_no_gravity"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 128
+n        = 64
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

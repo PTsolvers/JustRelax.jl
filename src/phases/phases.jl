@@ -119,7 +119,14 @@ end
 end
 
 # ParallelStencil launch kernel for 2D
-@parallel_indices (I...) function phase_ratios_center(
+
+function phase_ratios_center!(phase_ratios::PhaseRatio, particles, xci, di, pPhases)
+    ni = size(pPhases)
+    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
+    return nothing
+end
+
+@parallel_indices (I...) function phase_ratios_center_kernel(
     ratio_centers, pxi::NTuple{N,T1}, xci::NTuple{N,T2}, di::NTuple{N,T3}, phases
 ) where {N,T1,T2,T3}
 

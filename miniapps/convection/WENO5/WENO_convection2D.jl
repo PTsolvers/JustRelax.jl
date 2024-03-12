@@ -83,7 +83,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
+function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Physical domain ------------------------------------
     ly           = 700e3            # domain length in y
@@ -172,7 +172,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
-    if save_vtk
+    if do_vtk
         vtk_dir      = figdir*"\\vtk"
         take(vtk_dir)
     end
@@ -229,7 +229,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             nout=1e3,
             viscosity_cutoff=(1e18, 1e24)
         )
-        @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 

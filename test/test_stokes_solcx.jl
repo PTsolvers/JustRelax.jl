@@ -1,6 +1,6 @@
 push!(LOAD_PATH, "..")
 
-using Test
+using Test, Suppressor
 using JustRelax
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -23,6 +23,8 @@ function check_convergence_case1()
     return passed
 end
 
-@testset begin
-    @test check_convergence_case1()
+@testset "solcx" begin
+    @suppress begin
+        @test check_convergence_case1()
+    end
 end

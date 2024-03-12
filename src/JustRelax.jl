@@ -12,8 +12,6 @@ using CellArrays
 using StaticArrays
 
 function solve!() end
-function tensor_invariant!() end
-function init_P!() end
 
 include("topology/Topology.jl")
 export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g

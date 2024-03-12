@@ -407,13 +407,13 @@ function JustRelax.solve!(
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
     θ = @zeros(ni...)
+    ητ = deepcopy(η)
 
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
-            ητ = deepcopy(η)
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
             # @hide_communication b_width begin # communication/computation overlap

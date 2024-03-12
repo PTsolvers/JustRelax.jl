@@ -768,7 +768,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
                 ax0 = Axis(
                     fig[1, 1:2];
                     aspect=ar,
-                    title="t = $(t./1e3) Kyrs",
+                    title="t = $(t./(3600*24*365*1e3)) Kyrs",
                     titlesize=50,
                     height=0.0,
                 )

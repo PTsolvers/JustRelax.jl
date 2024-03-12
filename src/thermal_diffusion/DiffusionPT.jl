@@ -706,6 +706,7 @@ function heatdiffusion_PT!(
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
 
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
+    @parallel (@idx size(thermal.ΔTc)...) temperature2center!(thermal.ΔTc, thermal.ΔT)
 
     return nothing
 end
@@ -809,6 +810,7 @@ function heatdiffusion_PT!(
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
+    @parallel (@idx size(thermal.ΔTc)...) temperature2center!(thermal.ΔTc, thermal.ΔT)
 
     return nothing
 end

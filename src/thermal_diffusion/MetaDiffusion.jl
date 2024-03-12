@@ -9,6 +9,7 @@ function make_thermal_arrays!(ndim)
             T::_T # Temperature @ grid nodes
             Tc::_T # Temperature @ cell centers
             ΔT::_T
+            ΔTc::_T
             Told::_T
             dT_dt::_T
             $(flux1...)
@@ -33,6 +34,7 @@ function make_thermal_arrays!(ndim)
                 ΔT = @zeros(nx + 3, ny + 1)
                 Told = @zeros(nx + 3, ny + 1)
                 Tc = @zeros(ni...)
+                ΔTc = @zeros(ni...)
                 H = @zeros(ni...)
                 shear_heating = @zeros(ni...)
                 dT_dt = @zeros(nx + 1, ny - 1)
@@ -42,7 +44,7 @@ function make_thermal_arrays!(ndim)
                 qTy2 = @zeros(nx + 1, ny)
                 ResT = @zeros(nx + 1, ny - 1)
                 return new{typeof(T)}(
-                    T, Tc, ΔT, Told, dT_dt, qTx, qTy, qTx2, qTy2, H, shear_heating, ResT
+                    T, Tc, ΔT, ΔTc, Told, dT_dt, qTx, qTy, qTx2, qTy2, H, shear_heating, ResT
                 )
             end
 
@@ -50,6 +52,7 @@ function make_thermal_arrays!(ndim)
                 nx, ny, nz = ni
                 T, ΔT, Told = @zeros(ni .+ 1...), @zeros(ni .+ 1...), @zeros(ni .+ 1...)
                 Tc = @zeros(ni...)
+                ΔTc = @zeros(ni...)
                 H = @zeros(ni...)
                 shear_heating = @zeros(ni...)
                 dT_dt = @zeros(ni .- 1)
@@ -64,6 +67,7 @@ function make_thermal_arrays!(ndim)
                     T,
                     Tc,
                     ΔT,
+                    ΔTc,
                     Told,
                     dT_dt,
                     qTx,

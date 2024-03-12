@@ -13,3 +13,11 @@ function get_shear_modulus(args...)
     end
     return Kb
 end
+
+function get_thermal_expansion(args...)
+    α = GeoParams.get_α(args...)
+    if isnan(α) || iszero(α)
+        return 0.0
+    end
+    return α
+end

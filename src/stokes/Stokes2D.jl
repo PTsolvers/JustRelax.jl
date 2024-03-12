@@ -45,7 +45,7 @@ using ParallelStencil
 using GeoParams, LinearAlgebra, Printf
 
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
-import JustRelax: tensor_invariant!, compute_τ_nonlinear!
+import JustRelax: tensor_invariant!, init_P!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
@@ -64,7 +64,8 @@ export solve!,
     rotate_stress_particles_jaumann!,
     rotate_stress_particles_rotation_matrix!,
     compute_vorticity!,
-    tensor_invariant!
+    tensor_invariant!,
+    init_P!
 
 function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
     τxx, τyy, τxy, τxy_c = stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ.xy_c

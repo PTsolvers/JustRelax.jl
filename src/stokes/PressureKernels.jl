@@ -1,3 +1,25 @@
+
+"""
+    init_P!(P, ρg, z)
+
+Initialize the pressure field `P` based on the buoyancy forces `ρg` and the vertical coordinate `z`.
+
+# Arguments
+- `P::Array`: Pressure field to be initialized.
+- `ρg::Float64`: Buoyancy forces.
+- `z::Array`: Vertical coordinate.
+"""
+function init_P!(P, ρg, z)
+    ni = size(P)
+    @parallel (@idx ni) init_P_kernel!(P, ρg, z)
+    return nothing
+end
+
+@parallel_indices (I...) function init_P_kernel!(P, ρg, z)
+    P[I...] = abs(ρg[I...] * z[I[end]]) * (z[I[end]] < 0.0)
+    return nothing
+end
+
 # Continuity equation
 
 ## Incompressible 

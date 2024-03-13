@@ -368,7 +368,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         #Name="UpperCrust"
         SetMaterialParams(;
             Phase   = 1,
-            Density  = PT_Density(ρ0=2700kg/m^3,α=3e-5/K, β=β_rock/Pa),
+            Density  = PT_Density(ρ0=2700kg/m^3,α=3e-5/K, T0=273.0, β=β_rock/Pa),
             HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=3.0Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
@@ -381,7 +381,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         #Name="Magma"
         SetMaterialParams(;
             Phase   = 2,
-            Density  = PT_Density(ρ0=2600kg/m^3, β=β_magma/Pa),
+            Density  = PT_Density(ρ0=2600kg/m^3, T0=273.0, β=β_magma/Pa),
             HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=1.5Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
@@ -394,7 +394,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         #Name="Thermal Anomaly"
         SetMaterialParams(;
             Phase   = 3,
-            Density  = PT_Density(ρ0=2600kg/m^3, β=β_magma/Pa),
+            Density  = PT_Density(ρ0=2600kg/m^3, T0=273.0, β=β_magma/Pa),
             HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=1.5Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
@@ -407,7 +407,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         #Name="Sticky Air"
         SetMaterialParams(;
             Phase   = 4,
-            Density   = PT_Density(ρ0=10kg/m^3, β= 0.0),
+            Density   = PT_Density(ρ0=10kg/m^3, T0=273.0,β= 0.0),
             HeatCapacity = ConstantHeatCapacity(Cp=1000J/kg/K),
             Conductivity = ConstantConductivity(k=15Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=0.0J/kg),
@@ -585,7 +585,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
     end
 
     P_init = deepcopy(stokes.P);
-    while it < 10 #nt
+    while it < 1 #nt
 
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end] .= 273.0
@@ -606,7 +606,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         solve!(
             stokes,
             pt_stokes,
-            thermal,
+            # thermal,
             di,
             flow_bcs,
             ρg,
@@ -615,7 +615,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
             phase_ratios,
             MatParam,
             args,
-            dt * 1e-1,
+            dt,
             igg;
             iterMax = 250e3,
             nout = 5e3,
@@ -879,10 +879,10 @@ end
 
 
 
-figdir = "thermal_stress_test_inelastic_no_gravity"
+figdir = "thermal_stress_high_res_test"
 save_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 64
+n        = 160
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

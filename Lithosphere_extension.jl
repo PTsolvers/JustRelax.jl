@@ -343,8 +343,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
     el          = SetConstantElasticity(; G=G0, ν=0.5)                            # elastic spring
     el_magma    = SetConstantElasticity(; G=G_magma, ν=0.5)                            # elastic spring
     creep_rock  = LinearViscous(; η=1e21 * Pa * s)
-    creep_magma = LinearViscous(; η=1e21 * Pa * s)
-    creep_air   = LinearViscous(; η=1e20 * Pa * s)
+    creep_magma = LinearViscous(; η=1e16 * Pa * s)
+    creep_air   = LinearViscous(; η=1e16 * Pa * s)
     cutoff_visc = (1e14, 1e24)
     β_rock      = inv(get_Kb(el))
     β_magma     = inv(get_Kb(el_magma))
@@ -369,7 +369,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         SetMaterialParams(;
             Phase   = 1,
             Density  = PT_Density(ρ0=2700kg/m^3,α=3e-5/K, β=β_rock/Pa),
-            Gravity  = ConstantGravity(g=1.0m/s^2),
             HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=3.0Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
@@ -383,7 +382,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         SetMaterialParams(;
             Phase   = 2,
             Density  = PT_Density(ρ0=2600kg/m^3, β=β_magma/Pa),
-            Gravity  = ConstantGravity(g=1.0m/s^2),
             HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=1.5Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
@@ -397,7 +395,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         SetMaterialParams(;
             Phase   = 3,
             Density  = PT_Density(ρ0=2600kg/m^3, β=β_magma/Pa),
-            Gravity  = ConstantGravity(g=1.0m/s^2),
             HeatCapacity = ConstantHeatCapacity(Cp=1050J/kg/K),
             Conductivity = ConstantConductivity(k=1.5Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=350e3J/kg),
@@ -410,8 +407,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         #Name="Sticky Air"
         SetMaterialParams(;
             Phase   = 4,
-            Density   = PT_Density(ρ0=2500kg/m^3,α=0.0, β= 0.0),
-            Gravity  = ConstantGravity(g=1.0m/s^2),
+            Density   = PT_Density(ρ0=10kg/m^3, β= 0.0),
             HeatCapacity = ConstantHeatCapacity(Cp=1000J/kg/K),
             Conductivity = ConstantConductivity(k=15Watt/K/m),
             LatentHeat = ConstantLatentHeat(Q_L=0.0J/kg),
@@ -488,7 +484,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
     args = (; T=thermal.Tc, P=stokes.P, dt=Inf)
 
     pt_thermal = PTThermalCoeffs(
-        MatParam, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
+        MatParam, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=5e-2 / √2.1
     )
     # Boundary conditions of the flow
     stokes.V.Vx .= PTArray([ (x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
@@ -588,47 +584,16 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny)
         fig
     end
 
-    P_init = deepcopy(stokes.P)
-    while it < 1 #nt
+    P_init = deepcopy(stokes.P);
+    while it < 10 #nt
 
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end] .= 273.0
         @views thermal.T[2:end-1, :] .= T_buffer
         temperature2center!(thermal)
 
-        # if rem(it, 100) == 0
-        # # if it > 75 && rem(it, 75) == 0
-        #     x_anomaly, y_anomaly = lx * 0.6, -ly * 0.27  # Randomly vary center of dike
-        #     r_anomaly = nondimensionalize(0.75km,CharDim)
-        #     δT = 10.0              # thermal perturbation (in %)
-        #     new_thermal_anomaly(pPhases, particles, x_anomaly, y_anomaly, r_anomaly, sticky_air)
-        #     circular_perturbation!(thermal.T, δT, x_anomaly, -y_anomaly, r_anomaly, xvi, sticky_air)
-        #     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        #         copyinn_x!(dst, src)
-        #     end
-        #     @views T_buffer[:, end] .= nondimensionalize(0.0C, CharDim)
-        #     @views thermal.T[2:end-1, :] .= T_buffer
-        #     temperature2center!(thermal)
-        #     grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles.coords)
-
-        #     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
-        # end
         args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt)
 
-        # #open the conduit
-        # if it == 114
-        #     conduit_gradient_TBuffer!(T_buffer, offset, xc_conduit, -yc_conduit, r_conduit, xvi)
-        #     open_conduit!(pPhases, particles, xc_conduit, yc_conduit, r_conduit)
-        #     grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
-        # end
-
-        # @views T_buffer[:, end] .= nondimensionalize(0.0C, CharDim)
-        # @views T_buffer[args.sticky_air.==4.0] .= nondimensionalize(0.0C, CharDim)
-        # # @views T_buffer[:, 1] .= maximum(thermal.T)
-        # @views thermal.T[2:end-1, :] .= T_buffer
-        # temperature2center!(thermal)
-
-        args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt)
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, MatParam, cutoff_visc
         )

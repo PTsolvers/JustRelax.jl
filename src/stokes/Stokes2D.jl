@@ -651,6 +651,31 @@ function JustRelax.solve!(
 end
 
 ## thermal stresses (D.Kiss)
+"""
+    solve!(
+        stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
+        pt_stokes::PTStokesCoeffs,
+        thermal::ThermalArrays,
+        di::NTuple{2,T},
+        flow_bcs,
+        ρg,
+        η,
+        η_vep,
+        phase_ratios::PhaseRatio,
+        rheology,
+        args,
+        dt,
+        igg::IGG;
+        viscosity_cutoff=(1e16, 1e24),
+        iterMax=10e3,
+        nout=500,
+        b_width=(4, 4, 0),
+        verbose=true,
+    ) where {A,B,C,D,T}
+
+This Stokes solver accounts for thermal stresses. It is based on the work of Kiss et al. (2023).
+    `viscosity_cutoff`, `interMax`, `nout`, `b_width`, `verbose` are optional arguments.
+"""
 function JustRelax.solve!(
     stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
     pt_stokes::PTStokesCoeffs,
@@ -705,8 +730,9 @@ function JustRelax.solve!(
     λ = @zeros(ni...)
     η0 = deepcopy(η)
     do_visc = true
-    # GC.enable(false)
 
+    # D. Kiss version (not working yet)
+    # ρ_old = copy(ρg[2])
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
     end
@@ -733,9 +759,9 @@ function JustRelax.solve!(
             )
 
             if rem(iter, 5) == 0
-                # @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
-                ρ_old = copy(ρg[2])
-                ρg[2] .= ρ_old .* exp.(-stokes.∇V.*dt)
+                @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+                ## Kiss et al 2023 density (not working yet)
+                # ρg[2] .= ρ_old .* exp.(-stokes.∇V * dt)
             end
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(

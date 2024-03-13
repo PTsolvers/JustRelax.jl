@@ -32,6 +32,13 @@ end
     return nothing
 end
 
+"""
+   compute_P!(P, P0, RP, ∇V, ΔTc, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ)
+
+Compute the pressure field `P` and the residual `RP` for the compressible case. This function introduces thermal stresses
+after the implementation of Kiss et al. (2023). The temperature difference `ΔTc` on the cell center is used to compute this
+as well as α as the thermal expansivity.
+"""
 @parallel_indices (I...) function compute_P!(
     P, P0, RP, ∇V, ΔTc, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ
 ) where {N,C<:JustRelax.CellArray}

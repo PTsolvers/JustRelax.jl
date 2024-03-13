@@ -703,6 +703,7 @@ function heatdiffusion_PT!(
     println("\n ...solver finished in $(round(wtime0, sigdigits=5)) seconds \n")
     println("====================================\n")
 
+    thermal_bcs!(thermal.T, thermal_bc)
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
 
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -808,6 +809,7 @@ function heatdiffusion_PT!(
     println("\n ...solver finished in $(round(wtime0, sigdigits=5)) seconds \n")
     println("====================================\n")
 
+    thermal_bcs!(thermal.T, thermal_bc)
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
     @parallel (@idx size(thermal.ΔTc)...) temperature2center!(thermal.ΔTc, thermal.ΔT)

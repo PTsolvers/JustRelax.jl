@@ -216,7 +216,7 @@ end
 
 n      = 16
 nx     = n
-ny     = n 
+ny     = n
 nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
 figdir = "ShearBand3D"
 igg    = if !(JustRelax.MPI.Initialized())

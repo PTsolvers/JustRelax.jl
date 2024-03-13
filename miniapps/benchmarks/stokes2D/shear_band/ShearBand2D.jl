@@ -58,13 +58,11 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     el_bg   = ConstantElasticity(; G=G0, Kb=4)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4)
     visc    = LinearViscous(; η=η0)
-    soft_C  = LinearSoftening((C, C), (0e0, 1e0))
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ,
         η_vp = η_reg,
-        Ψ    = 0,
-        softening_C = soft_C
+        Ψ    = 0
     )
     rheology = (
         # Low density phase

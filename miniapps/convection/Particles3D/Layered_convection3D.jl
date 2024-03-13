@@ -82,12 +82,12 @@ end
 function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
 
     # Physical domain ------------------------------------
-    lz            = 700e3                # domain length in z
-    lx = ly       = lz * ar              # domain length in x and y
-    ni            = nx, ny, nz           # number of cells
-    li            = lx, ly, lz           # domain length
-    di            = @. li / ni           # grid steps
-    origin        = 0.0, 0.0, -lz        # origin coordinates (15km of sticky air layer)
+    lz           = 700e3                # domain length in z
+    lx = ly      = lz * ar              # domain length in x and y
+    ni           = nx, ny, nz           # number of cells
+    li           = lx, ly, lz           # domain length
+    di           = @. li / ni           # grid steps
+    origin       = 0.0, 0.0, -lz        # origin coordinates (15km of sticky air layer)
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
@@ -99,10 +99,11 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 20, 1
-    particles = init_particles(
+    nxcell, max_xcell, min_xcell = 25, 35, 8
+    particles                   = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
+    subgrid_arrays              = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vx, grid_vy, grid_vz   = velocity_grids(xci, xvi, di)
     # temperature
@@ -113,7 +114,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     xc_anomaly       = lx/2   # origin of thermal anomaly
     yc_anomaly       = ly/2   # origin of thermal anomaly
     zc_anomaly       = -610e3 # origin of thermal anomaly
-    r_anomaly        = 25e3   # radius of perturbation
+    r_anomaly        = 50e3   # radius of perturbation
     init_phases!(pPhases, particles, lx, ly; d=abs(zc_anomaly), r=r_anomaly)
     phase_ratios     = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
@@ -133,9 +134,8 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     )
     # initialize thermal profile - Half space cooling
     @parallel init_T!(thermal.T, xvi[3])
-    thermal_bcs!(thermal.T, thermal_bc)
-
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, xvi)
+    thermal_bcs!(thermal.T, thermal_bc)
     @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
 
@@ -193,6 +193,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     end
 
     grid2particle!(pT, xvi, thermal.T, particles)
+    dt₀         = similar(stokes.P)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
@@ -203,6 +204,11 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     # Time loop
     t, it = 0.0, 0
     while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
+        
+        # interpolate fields from particle to grid vertices
+        particle2grid!(thermal.T, pT, xvi, particles)
+        temperature2center!(thermal)
+ 
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         @parallel (@idx ni) compute_viscosity!(
@@ -228,13 +234,9 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             nout             = 1e3,
             viscosity_cutoff = (1e18, 1e24)
         );
-        @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff) / 2
         # ------------------------------
-
-        # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, xvi, particles)
-        temperature2center!(thermal)
 
         # Thermal solver ---------------
         heatdiffusion_PT!(
@@ -251,6 +253,13 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             nout    = 1e2,
             verbose = true,
         )
+        subgrid_characteristic_time!(
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+        )
+        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+        subgrid_diffusion!(
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi,  di, dt
+        )
         # ------------------------------
 
         # Advection --------------------
@@ -258,8 +267,6 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, grid_vz, dt, 2 / 3)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-        # interpolate fields from grid vertices to particles
-        grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles)
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
@@ -291,7 +298,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                     εyy = Array(stokes.ε.yy),
                     η   = Array(log10.(η)),
                 )
-                save_vtk(
+                do_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
                     xci,
@@ -308,9 +315,9 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, slice_j, :]) , colormap=:batlow)
+            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, slice_j, :]) , colormap=:lajolla)
             # Plot particles phase
-            h2  = heatmap!(ax2, xci[1].*1e-3, xci[3].*1e-3, Array(stokes.τ.II[:, slice_j, :].*1-e6) , colormap=:batlow)
+            h2  = heatmap!(ax2, xci[1].*1e-3, xci[3].*1e-3, Array(stokes.τ.II[:, slice_j, :].*1e-6) , colormap=:batlow)
             # Plot 2nd invariant of strain rate
             h3  = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
             # Plot effective viscosity
@@ -335,7 +342,7 @@ end
 
 do_vtk   = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 128
+n        = 32
 nx       = n
 ny       = n
 nz       = n
@@ -347,4 +354,4 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir   = "Plume3D_$n"
-main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

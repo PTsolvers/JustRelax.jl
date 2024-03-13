@@ -9,13 +9,21 @@ using ParallelStencil
 model = PS_Setup(:cpu, Float64, 3)
 environment!(model)
 
-include("../miniapps/benchmarks/stokes3D/burstedde/Burstedde.jl")
+include("../miniapps/benchmarks/stokes3D/taylor_green/TaylorGreen.jl")
 
 function check_convergence_case1()
     nx = 16
     ny = 16
     nz = 16
-    _, _, iters = burstedde(; nx=nx, ny=ny, nz=nz, init_MPI=true, finalize_MPI=true)
+
+    # run model
+    _, _, iters = taylorGreen(;
+        nx=nx,
+        ny=ny,
+        nz=ny,
+        init_MPI=JustRelax.MPI.Initialized() ? false : true,
+        finalize_MPI=false,
+    )
 
     tol = 1e-8
     passed = iters.err_evo1[end] < tol
@@ -23,8 +31,6 @@ function check_convergence_case1()
     return passed
 end
 
-@testset "Burstedde" begin
-    @suppress begin
-        @test check_convergence_case1()
-    end
+@testset "TaylorGreen" begin
+    @test check_convergence_case1()
 end

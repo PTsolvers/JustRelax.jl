@@ -1,6 +1,7 @@
 ## GeoParams
 
 # include("Rheology.jl")
+include("../rheology/GeoParams.jl")
 
 @inline get_phase(x::PhaseRatio) = x.center
 @inline get_phase(x) = x

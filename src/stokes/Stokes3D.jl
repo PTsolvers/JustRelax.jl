@@ -409,6 +409,9 @@ function JustRelax.solve!(
     θ = @zeros(ni...)
     ητ = deepcopy(η)
 
+    cte_density   = is_constant_density(rheology)
+    cte_viscosity = is_constant_viscosity(rheology)
+
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -439,48 +442,63 @@ function JustRelax.solve!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
 
-            # # Update buoyancy
-            # @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
+            # Update buoyancy
+            if !cte_density
+                @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
+            end
+            if !cte_viscosity
+                # Update viscosity
+                ν = 1e-2
+                @parallel (@idx ni) compute_viscosity!(
+                    η,
+                    ν,
+                    phase_ratios.center,
+                    @strain(stokes)...,
+                    args,
+                    rheology,
+                    viscosity_cutoff,
+                )
+            end
 
-            # # Update viscosity
-            # ν = 1e-2
-            # @parallel (@idx ni) compute_viscosity!(
-            #     η,
-            #     ν,
-            #     phase_ratios.center,
-            #     @strain(stokes)...,
-            #     args,
-            #     rheology,
-            #     viscosity_cutoff,
-            # )
-
-            @parallel (@idx ni) compute_τ_nonlinear!(
-                @tensor_center(stokes.τ),
-                stokes.τ.II,
-                @tensor_center(stokes.τ_o),
-                @strain(stokes),
-                @tensor_center(stokes.ε_pl),
-                stokes.EII_pl,
-                stokes.P,
-                θ,
-                η,
-                η_vep,
-                λ,
-                phase_ratios.center,
-                tupleize(rheology), # needs to be a tuple
-                dt,
-                pt_stokes.θ_dτ,
-            )
-
-            @parallel (@idx ni .+ 1) center2vertex!(
-                stokes.τ.yz,
-                stokes.τ.xz,
-                stokes.τ.xy,
-                stokes.τ.yz_c,
-                stokes.τ.xz_c,
-                stokes.τ.xy_c,
-            )
-            update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
+            # if !cte_viscosity
+                @parallel (@idx ni) compute_τ_nonlinear!(
+                    @tensor_center(stokes.τ),
+                    stokes.τ.II,
+                    @tensor_center(stokes.τ_o),
+                    @strain(stokes),
+                    @tensor_center(stokes.ε_pl),
+                    stokes.EII_pl,
+                    stokes.P,
+                    θ,
+                    η,
+                    η_vep,
+                    λ,
+                    phase_ratios.center,
+                    tupleize(rheology), # needs to be a tuple
+                    dt,
+                    pt_stokes.θ_dτ,
+                )
+                @parallel (@idx ni .+ 1) center2vertex!(
+                    stokes.τ.yz,
+                    stokes.τ.xz,
+                    stokes.τ.xy,
+                    stokes.τ.yz_c,
+                    stokes.τ.xz_c,
+                    stokes.τ.xy_c,
+                )
+                update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
+            # else
+            #     @parallel (@idx ni .+ 1) compute_τ!(
+            #         @tensor(stokes.τ)...,
+            #         @tensor(stokes.τ_o)...,
+            #         @tensor(stokes.ε)...,
+            #         η,
+            #         phase_ratios.center,
+            #         tupleize(rheology), # needs to be a tuple
+            #         dt,
+            #         pt_stokes.θ_dτ,
+            #     )
+            # end
 
             # @parallel (@idx ni .+ 1) compute_τ_vertex!(
             #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ

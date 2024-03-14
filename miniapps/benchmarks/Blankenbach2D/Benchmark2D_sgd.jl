@@ -260,7 +260,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             phase   = phase_ratios,
             iterMax = 10e3,
             nout    = 50,
-            verbose = false,
+            verbose = true,
         )
         for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
             copyinn_x!(dst, src)

@@ -106,6 +106,7 @@ function solKz(;
             iterMax = 150e3,
             nout    = 1e3,
             b_width = (4, 4, 1),
+            verbose = false,
         )
         t += Δt
     end

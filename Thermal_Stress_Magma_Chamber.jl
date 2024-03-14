@@ -179,13 +179,13 @@ end
 
 
 
-function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk= false)
+# function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk= false)
 
     #-------rheology parameters--------------------------------------------------------------
     # plasticity setup
     do_DP       = true               # do_DP=false: Von Mises, do_DP=true: Drucker-Prager (friction angle)
     η_reg       = 1.0e14           # regularisation "viscosity" for Drucker-Prager
-    Coh         = 10.0              # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    Coh         = 10MPa              # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
     ϕ           = 30.0 * do_DP         # friction angle
     G0          = 25e9Pa        # elastic shear modulus
     G_magma     = 10e9Pa        # elastic shear modulus perturbation
@@ -600,7 +600,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk= false)
                 ax2 = Axis(
                     fig[2, 2][1, 1];
                     aspect=ar,
-                    title=L"\log_{10}(\eta_{vep}) [\mathrm{Pas}]",
+                    # title=L"\log_{10}(\eta_{vep}) [\mathrm{Pas}]",
+                    title=L"ΔP [MPa]",
                     titlesize=40,
                     yticklabelsize=25,
                     xticklabelsize=25,
@@ -639,7 +640,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk= false)
                 # Plot temperature
                 p1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:].-273) , colormap=:batlow)
                 # Plot effective viscosity
-                p2  = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.P .- P_init) , colormap=:roma)#, colorrange= (log10(1e14), log10(1e21)))
+                p2  = heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array((stokes.P .- P_init)./1e6) , colormap=:roma)#, colorrange= (log10(1e14), log10(1e21)))
                 # Plot particles phase
                 p3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:glasgow, colorrange= (log10(1e14), log10(1e21)))
                 # p3  = scatter!(ax3, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))

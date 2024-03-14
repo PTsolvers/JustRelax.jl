@@ -372,10 +372,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             fig
             
             fig2 = Figure(size = (900, 1200), title = "Time Series")
-            ax21 = Axis(fig2[1,1], aspect = 3, title = "log10(V_{RMS})")
-            ax22 = Axis(fig2[2,1], aspect = 3, title = "log10(Nu_{top})")
-            l1 = lines!(ax21,trms,log10.(Urms))
-            l2 = lines!(ax22,trms,log10.(Nu_top))
+            ax21 = Axis(fig2[1,1], aspect = 3, title = "(V_{RMS})")
+            ax22 = Axis(fig2[2,1], aspect = 3, title = "(Nu_{top})")
+            l1 = lines!(ax21,trms,(Urms))
+            l2 = lines!(ax22,trms,(Nu_top))
             save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
         end
         it      +=  1
@@ -407,7 +407,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         fig
     end
 
-#    @show Urms[Int64(nit)] Nu_top[Int64(nit)]
+    @show Urms[Int64(nit)] Nu_top[Int64(nit)]
 
     return nothing
 end

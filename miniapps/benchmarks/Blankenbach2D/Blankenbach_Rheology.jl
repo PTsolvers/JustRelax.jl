@@ -7,17 +7,17 @@ function init_rheologies()
         # Name              = "UpperCrust",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = PT_Density(; ρ0=4000.0,α = 2.5e-5, β = 0.0),
+            Density           = PT_Density(; ρ0=4000.0, T0=273, α = 2.5e-5, β = 0.0),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1250.0),
             Conductivity      = ConstantConductivity(;k=5.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1.0e23),)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1.0e21),)),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             Gravity           = ConstantGravity(; g=10.0),
         ),        
     )
 end
 
-function init_phases!(phases, particles, Lx, d, r, thick_air)
+function init_phases!(phases, particles, Lx, d, r)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)

@@ -53,11 +53,11 @@ end
 
     T[i + 1 , j] = 273e0 + 600e0
 
-    if (-0.09e3 < depth ≤  -0.03e3)
+    if (-0.05e3 < depth ≤  -0.15e3)
         T[i + 1, j] = 273e0 + 1200e0
     end
 
-    if  (-0.06e3 < depth ≤  -0.05e3 ) && (120 < x[i] ≤  130)
+    if  (-0.1e3 < depth ≤  -0.09e3 ) && (245 < x[i] ≤  255)
         T[i + 1, j] = 273e0 + 1300e0
     end
 
@@ -86,8 +86,8 @@ end
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
     # Physical domain ------------------------------------
-    ly           = 0.125e3            # domain length in y
-    lx           = 0.25e3             # domain length in x
+    lx           = 0.5e3             # domain length in x
+    ly           = 0.25e3            # domain length in y
     ni           = nx, ny            # number of cells
     li           = lx, ly            # domain length in x- and y-
     di           = @. li / ni        # grid step in x- and -y
@@ -300,13 +300,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
             if do_save_vtk
                 JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+
                 data_v = (;
                     T   = Array(thermal.T[2:end-1, :]),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
                     Vx  = Array(Vx_v),
                     Vy  = Array(Vy_v),
-                    Velocity = (Vx,Vy)
                 )
                 data_c = (;
                     P   = Array(stokes.P),
@@ -443,11 +443,11 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "2nd_overnight_run_320_20e3its"
+figdir   = "OM_Setup_Krafla"
 # figdir   = "test_JP"
 do_save_vtk = true # set to true to generate VTK files for ParaView
-ar       = 1 # aspect ratio
-n        = 320
+ar       = 2 # aspect ratio
+n        = 512
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

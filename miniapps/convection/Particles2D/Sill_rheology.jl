@@ -3,9 +3,9 @@
 function init_rheologies(; is_plastic = true)
     # Dislocation and Diffusion creep
     # disl_upper_crust            = DislocationCreep(A=5.07e-18, n=2.3, E=154e3, V=6e-6,  r=0.0, R=8.3145)
-    linear_viscosity_rhy            = LinearMeltViscosity(A = -8.1590, B = 2.4050e+04K, T0 = -430.9606K,η0=1e5Pa*s)
+    linear_viscosity_rhy            = LinearMeltViscosity(A = -8.1590, B = 2.4050e+04K, T0 = -430.9606K,η0=1e3Pa*s)
     # linear_viscosity_rhy            = LinearViscous(; η=1e13Pa*s)
-    linear_viscosity_bas            = LinearMeltViscosity(A = -9.6012, B = 1.3374e+04K, T0 = 307.8043K, η0=1e5Pa*s)
+    linear_viscosity_bas            = LinearMeltViscosity(A = -9.6012, B = 1.3374e+04K, T0 = 307.8043K, η0=1e3Pa*s)
     # linear_viscosity_bas            = LinearViscous(; η=1e9Pa*s)
     el_rhy              = SetConstantElasticity(; G=25e9, ν=0.5)
     el_bas              = SetConstantElasticity(; G=25e9, ν=0.5)
@@ -55,7 +55,7 @@ function init_rheologies(; is_plastic = true)
         # Name              = "Rhyolite",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = MeltDependent_Density(ρmelt=T_Density(ρ0=2300kg / m^3)),
+            Density           = MeltDependent_Density(ρmelt=T_Density(ρ0=2300kg / m^3), ρsolid=ConstantDensity(ρ=2700kg / m^3)),
             # Density           = PT_Density(; ρ0=2300, β=β_rhy, T0=0.0, α = 3.5e-5),
             # HeatCapacity      = ConstantHeatCapacity(Cp=1050J/kg/K),
             HeatCapacity      = Latent_HeatCapacity(Cp=ConstantHeatCapacity(), Q_L=400e3J/kg),
@@ -102,7 +102,7 @@ function init_phases!(phases, particles)
                 @cell phases[ip, i, j] = 1.0
             end
 
-            if 0.075e3 < depth ≤ 0.175e3
+            if 0.05e3 < depth ≤ 0.15e3
                 @cell phases[ip, i, j] = 2.0
 
             end

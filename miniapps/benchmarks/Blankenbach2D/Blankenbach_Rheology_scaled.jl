@@ -12,7 +12,7 @@ function init_rheologies()
             Conductivity      = ConstantConductivity(;k=1.0),
             CompositeRheology = CompositeRheology((LinearViscous(; η=1),)),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            Gravity           = ConstantGravity(; g = 1e6),
+            Gravity           = ConstantGravity(; g = 1e4),
         ),        
     )
 end

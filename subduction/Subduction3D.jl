@@ -23,6 +23,7 @@ using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 # Load file with all the rheology configurations
 include("Subduction_rheology.jl")
 include("GMG_setup.jl")
+# include("../toy.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -40,9 +41,9 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
+function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
 
-    li, origin, T_GMG, phases_GMG = generate_model()
+    # li, origin, T_GMG, phases_GMG = generate_model()
 
     # Physical domain ------------------------------------
     # lz           = 700e3                # domain length in z
@@ -60,7 +61,7 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 25, 35, 8
+    nxcell, max_xcell, min_xcell = 40, 60, 20
     particles                   = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
@@ -75,13 +76,13 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     phases_device = PTArray(phases_GMG)
     init_phases!(pPhases, phases_device, particles, xvi)
     phase_ratios     = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
+    phase_ratios_center!(phase_ratios, particles, xci, di, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-3,  CFL = 0.95 / √3.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=5e-3,  CFL = 0.99 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -90,16 +91,18 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     # thermal.T       .= T_GMG
     # @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
-
+    phase_ratios.center[1,1,1]
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(3))
-    @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
-    @parallel init_P!(stokes.P, ρg[3], xci[3])
+    for _ in 1:3
+        compute_ρg!(ρg[3], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+        JustRelax.Stokes3D.init_P!(stokes.P, ρg[3], xci[3])
+    end
     # Rheology
     η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
+    compute_viscosity!(
+        η, 1.0, phase_ratios, stokes, args, rheology, (1e18, 1e24)
     )
     η_vep            = deepcopy(η)
 
@@ -126,25 +129,6 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     take(figdir)
     # ----------------------------------------------------
 
-    # # Plot initial T and η profiles
-    # fig = let
-    #     Zv  = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-    #     Z   = [z for x in xci[1], y in xci[2], z in xci[3]][:]
-    #     fig = Figure(size = (1200, 900))
-    #     ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-    #     ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-    #     lines!(ax1, Array(thermal.T[:]), Zv./1e3)
-    #     lines!(ax2, Array(log10.(η[:])), Z./1e3)
-    #     ylims!(ax1, minimum(xvi[3])./1e3, 0)
-    #     ylims!(ax2, minimum(xvi[3])./1e3, 0)
-    #     hideydecorations!(ax2)
-    #     save(joinpath(figdir, "initial_profile.png"), fig)
-    #     fig
-    # end
-
-    # grid2particle!(pT, xvi, thermal.T, particles)
-    # dt₀         = similar(stokes.P)
-
     local Vx_v, Vy_v, Vz_v
     if do_vtk
         Vx_v = @zeros(ni.+1...)
@@ -153,7 +137,7 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while it < 150 # run only for 5 Myrs
+    while it < 1000 # run only for 5 Myrs
     # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
         
         # # interpolate fields from particle to grid vertices
@@ -162,29 +146,34 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
  
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        @parallel (@idx ni) compute_viscosity!(
-            η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
+        compute_viscosity!(
+            η, 1.0, phase_ratios, stokes, args, rheology, (1e18, 1e24)
         )
-        @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
-
+        compute_ρg!(ρg[3], phase_ratios, rheology, args)
+        
         # Stokes solver ----------------
-        solve!(
-            stokes,
-            pt_stokes,
-            di,
-            flow_bcs,
-            ρg,
-            η,
-            η_vep,
-            phase_ratios,
-            rheology,
-            args,
-            Inf,
-            igg;
-            iterMax          = 100e3,
-            nout             = 1e3,
-            viscosity_cutoff = (1e18, 1e24)
-        );
+        t_stokes = @elapsed begin
+            out = solve!(
+                stokes,
+                pt_stokes,
+                di,
+                flow_bcs,
+                ρg,
+                η,
+                η_vep,
+                phase_ratios,
+                rheology,
+                args,
+                Inf,
+                igg;
+                iterMax          = 150e3,
+                nout             = 1e3,
+                viscosity_cutoff = (1e18, 1e24)
+            );
+        end
+        println("Stokes solver time             ")
+        println("   Total time:      $t_stokes s")
+        println("   Time/iteration:  $(t_stokes / out.iter) s")
         @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di)
         # ------------------------------
@@ -295,12 +284,17 @@ function main3D(igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
 
     return nothing
 end
-## END OF MAIN SCRIPT ----------------------------------------------------------------
 
+## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-nx       = 126
-ny       = 33
-nz       = 63
+# nx       = 126
+# ny       = 33
+# nz       = 63
+# nx       = 165
+# ny       = 222
+# nz       = 54
+nx,ny,nz = 128, 35, 101
+li, origin, phases_GMG, = GMG_only(nx, ny, nz)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI= true)...)
 else
@@ -308,5 +302,5 @@ else
 end
 
 # (Path)/folder where output data and figures are stored
-figdir   = "Subduction3D"
-main3D(igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+figdir   = "Subduction3D_2"
+main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

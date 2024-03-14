@@ -3,27 +3,28 @@
 function init_rheologies()
     # Define rheolgy struct
     rheology = (
-        # Name              = "mantle",
-        SetMaterialParams(;
-            Phase             = 1,
-            Density           = ConstantDensity(; ρ=3.2e3),
-            CompositeRheology = CompositeRheology( (LinearViscous(η = 1e21), ) ),
-            # Elasticity        = el_upper_crust,
-            Gravity           = ConstantGravity(; g=9.81),
-        ),
         # Name              = "crust",
         SetMaterialParams(;
-            Phase             = 2,
+            Phase             = 1,
             Density           = ConstantDensity(; ρ=3.28e3),
-            CompositeRheology = CompositeRheology( (LinearViscous(η = 1e21), ) ),
+            CompositeRheology = CompositeRheology( (LinearViscous(η = 1e23), ) ),
             # Elasticity        = el_upper_crust,
             Gravity           = ConstantGravity(; g=9.81),
         ),
         # Name              = "slab",
         SetMaterialParams(;
-            Phase             = 3,
+            Phase             = 2,
             Density           = ConstantDensity(; ρ=3.28e3),
+            # CompositeRheology = CompositeRheology( (LinearViscous(η = 2e23), ) ),
             CompositeRheology = CompositeRheology( (LinearViscous(η = 2e23), ) ),
+            # Elasticity        = el_upper_crust,
+            Gravity           = ConstantGravity(; g=9.81),
+        ),
+        # Name              = "mantle",
+        SetMaterialParams(;
+            Phase             = 3,
+            Density           = ConstantDensity(; ρ=3.2e3),
+            CompositeRheology = CompositeRheology( (LinearViscous(η = 1e21), ) ),
             # Elasticity        = el_upper_crust,
             Gravity           = ConstantGravity(; g=9.81),
         ),
@@ -68,7 +69,7 @@ end
                 particle_phase = phase_grid[ii, jj, kk]
             end
         end
-        JustRelax.@cell phases[ip, I...] = particle_phase + 1.0
+        JustRelax.@cell phases[ip, I...] = Float64(particle_phase)
     end
 
     return nothing

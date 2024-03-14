@@ -153,7 +153,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
 
     # PT coefficients for thermal diffusion -------------
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 1e-3 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 1e-1 / √2.1
     )
 
     # Boundary conditions -------------------------------
@@ -239,7 +239,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             Inf,
             igg;
             iterMax          = 150e3,
-            nout             = 50,
+            nout             = 200,
             viscosity_cutoff = (-Inf, Inf),
             verbose          = false
         )
@@ -427,7 +427,7 @@ ar          =   1 # aspect ratio
 n           =   51
 nx          =   n
 ny          =   n
-nit         =   2e3
+nit         =   6e3
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else

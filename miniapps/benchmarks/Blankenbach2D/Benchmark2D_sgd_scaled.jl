@@ -414,7 +414,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-figdir      =   "Blankenbach_subgrid_ND"
+figdir      =   "Blankenbach_subgrid_scaled"
 save_vtk    =   false # set to true to generate VTK files for ParaView
 ar          =   1 # aspect ratio
 n           =   51

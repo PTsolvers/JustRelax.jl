@@ -52,7 +52,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
+function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Physical domain ------------------------------------
     ly           = 40e3              # domain length in y
@@ -145,7 +145,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
-    if save_vtk
+    if do_vtk
         vtk_dir      = figdir*"\\vtk"
         take(vtk_dir)
     end
@@ -176,7 +176,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
     grid2particle!(pT, xvi, T_buffer, particles)
 
     local Vx_v, Vy_v
-    if save_vtk
+    if do_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
     end
@@ -209,7 +209,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
                 nout=1e3,
                 viscosity_cutoff=(-Inf, Inf)
             )
-            @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+            @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
             dt   = compute_dt(stokes, di, dt_diff)
             # ------------------------------
 
@@ -269,7 +269,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
             if it == 1 || rem(it, 10) == 0
                 checkpointing(figdir, stokes, thermal.T, η, t)
 
-                if save_vtk
+                if do_vtk
                     JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                     data_v = (;
                         T   = Array(thermal.T[2:end-1, :]),
@@ -286,7 +286,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
                         εyy = Array(stokes.ε.yy),
                         η   = Array(η),
                     )
-                    save_vtk(
+                    do_vtk(
                         joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                         xvi,
                         xci,
@@ -336,7 +336,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", save_vtk =false)
   end
 
 figdir   = "Benchmark_Duretz_etal_2014"
-save_vtk = false # set to true to generate VTK files for ParaView
+do_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
 n        = 64
 nx       = n*ar - 2
@@ -347,4 +347,4 @@ else
     igg
 end
 
-main2D(igg; ar=ar, ny=ny, nx=nx, figdir=figdir, save_vtk=save_vtk)
+main2D(igg; ar=ar, ny=ny, nx=nx, figdir=figdir, do_vtk=do_vtk)

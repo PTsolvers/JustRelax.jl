@@ -14,7 +14,6 @@ using GeoParams
 import JustRelax: PTArray, Velocity, SymmetricTensor, pureshear_bc!
 import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
-import JustRelax: tensor_invariant!, compute_τ_nonlinear!, compute_τ_vertex!, compute_τ!
 import JustRelax: compute_maxloc!, solve!
 import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi, backend
 
@@ -25,11 +24,9 @@ include("StressRotation.jl")
 include("StressKernels.jl")
 include("PressureKernels.jl")
 include("VelocityKernels.jl")
+include("StressKernels.jl")
 
 export solve!, pureshear_bc!
-rotate_stress_particles_jaumann!,
-rotate_stress_particles_rotation_matrix!, compute_vorticity!,
-tensor_invariant!
 
 @parallel function update_τ_o!(
     τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o, τxx, τyy, τzz, τxy, τxz, τyz
@@ -244,6 +241,7 @@ function JustRelax.solve!(
     G = get_shear_modulus(rheology)
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
+    θ = @zeros(ni...)
 
     # solver loop
     wtime0 = 0.0
@@ -287,9 +285,14 @@ function JustRelax.solve!(
                 stokes.τ.II,
                 @tensor(stokes.τ_o),
                 @strain(stokes),
+                @tensor_center(stokes.ε_pl),
+                stokes.EII_pl,
                 stokes.P,
+                θ,
                 η,
                 @ones(ni...),
+                λ,
+                tupleize(rheology), # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
             )

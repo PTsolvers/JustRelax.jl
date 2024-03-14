@@ -1,7 +1,6 @@
 push!(LOAD_PATH, "..")
 
 function runtests()
-    exename = joinpath(Sys.BINDIR, Base.julia_exename())
     testdir = pwd()
     istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
     testfiles = sort(
@@ -19,7 +18,7 @@ function runtests()
         println("")
         println("Running tests from $f")
         try
-            run(`$exename -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
+            run(`$(Base.julia_cmd()) -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
         catch ex
             nfail += 1
         end

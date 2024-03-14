@@ -15,12 +15,22 @@ model = PS_Setup(:Threads, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Floa
 environment!(model)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
+using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 
 # Load file with all the rheology configurations
-include("Blankenbach_Rheology.jl")
+include("Blankenbach_Rheology_scaled.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
+
+function copyinn_x!(A, B)
+
+    @parallel function f_x(A, B)
+        @all(A) = @inn_x(B)
+        return nothing
+    end
+
+    @parallel f_x(A, B)
+end
 
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
@@ -35,12 +45,8 @@ end
 end
 
 # Initial thermal profile
-@parallel_indices (i, j) function init_T!(T, y)
-    depth = -y[j]
-
-    dTdZ        = (1273-273)/1000e3
-    offset      = 273e0
-    T[i, j]     = (depth) * dTdZ + offset
+@parallel_indices (i, j) function init_T!(T, y)    
+    T[i, j] = 1 - y[j]
     return nothing
 end
 
@@ -49,7 +55,7 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)            
-            T[i, j] += 20.0
+            T[i, j] += .2
         end
         return nothing
     end
@@ -62,26 +68,21 @@ end
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk =false)
-
+    
     # Physical domain ------------------------------------
-    ly           = 1000e3               # domain length in y
+    ly           = 1.0                  # domain length in y
     lx           = ly * ar              # domain length in x
     ni           = nx, ny               # number of cells
     li           = lx, ly               # domain length in x- and y-
     di           = @. li / ni           # grid step in x- and -y
-    origin       = 0.0, -ly             # origin coordinates
+    origin       = 0.0, 0.0             # origin coordinates
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies()
-    κ            = (rheology[1].Conductivity[1].k / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
-    dt = dt_diff = 0.9 * min(di...)^2 / κ / 4.0 # diffusive CFL timestep limiter
-    # ----------------------------------------------------
-
-    # Weno model -----------------------------------------
-    weno = WENO5(ni=(nx,ny).+1, method=Val{2}()) # ni.+1 for Temp
+    dt = dt_diff = 0.9 * min(di...)^2 / 4.0 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -98,8 +99,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
 
     # Elliptical temperature anomaly
     xc_anomaly      = 0.0    # origin of thermal anomaly
-    yc_anomaly      = -600e3  # origin of thermal anomaly
-    r_anomaly       = 100e3    # radius of perturbation
+    yc_anomaly      = 1/3  # origin of thermal anomaly
+    r_anomaly       = 0.1/2    # radius of perturbation
     init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly)
     phase_ratios    = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
@@ -125,11 +126,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
 
-    # Rayleigh number
-    ΔT           = thermal.T[1,1] - thermal.T[1,end]
-    Ra           = (rheology[1].Density[1].ρ0 * rheology[1].Gravity[1].g * rheology[1].Density[1].α * ΔT * ly^3.0 ) / 
-                        (κ * rheology[1].CompositeRheology[1].elements[1].η )
-    @show Ra
+    # Rayleigh number ------------------------------------
+    Ra              = rheology[1].Gravity[1].g
+    println("Ra = $Ra")
 
     # Buoyancy forces ------------------------------------
     ρg               = @zeros(ni...), @zeros(ni...)
@@ -174,17 +173,23 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-        scatter!(ax2, Array(log10.(η[:])), Y./1e3)
-        ylims!(ax1, minimum(xvi[2])./1e3, 0)
-        ylims!(ax2, minimum(xvi[2])./1e3, 0)
+        scatter!(ax1, Array(thermal.T[2:end-1,:][:]), (1 .-Yv))
+        scatter!(ax2, Array(log10.(η[:])), (1 .- Y))
+        ylims!(ax1, maximum(xvi[2]), 0)
+        ylims!(ax2, maximum(xvi[2]), 0)
         hideydecorations!(ax2)
         save(joinpath(figdir, "initial_profile.png"), fig)
         fig
     end
 
-    # WENO arrays
-    T_WENO  = @zeros(ni.+1)
+    T_buffer    = @zeros(ni.+1)
+    Told_buffer = similar(T_buffer)
+    dt₀         = similar(stokes.P)
+    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+        copyinn_x!(dst, src)
+    end
+    grid2particle!(pT, xvi, T_buffer, particles)
+    pT0.data    .= pT.data
 
     local Vx_v, Vy_v
     if save_vtk
@@ -227,15 +232,15 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             Inf,
             igg;
             iterMax          = 150e3,
-            nout             = 50,
+            nout             = 200,
             viscosity_cutoff = (-Inf, Inf),
             verbose          = false
         )
-        # @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        # @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
-        # Weno advection
+        # Thermal solver ---------------
         heatdiffusion_PT!(
             thermal,
             pt_thermal,
@@ -247,16 +252,20 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             igg     = igg,
             phase   = phase_ratios,
             iterMax = 10e3,
-            nout    = 1e2,
+            nout    = 50,
             verbose = false,
         )
-        T_WENO .= thermal.T[2:end-1, :]
-        JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
-        thermal.T[2:end-1, :] .= T_WENO
+        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+            copyinn_x!(dst, src)
+        end
+        subgrid_characteristic_time!(
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+        )
+        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+        subgrid_diffusion!(
+            pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, particles, xvi,  di, dt
+        )
         # ------------------------------
-	thermal.T[2:end-1,end]  .= 273.0
-	thermal.T[2:end-1,1] 	.= 1273.0
 
         # Advection --------------------
         # advect particles in space
@@ -267,30 +276,39 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         # clean_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         inject = check_injection(particles)
-        inject && inject_particles_phase!(particles, pPhases, tuple(), tuple(), xvi)
+        # inject && break
+        inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)        
 
-        # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----
-        Nu_it   =   (ly / (1000.0*lx)) * 
-            sum( ((abs.(thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1])) ./ di[2]) .*di[1])             
+        # Nusselt number, Nu = ∫ ∂T/∂z dx ----
+        Nu_it   =   sum( ((abs.(thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1])) ./ di[2]) .*di[1])             
         push!(Nu_top, Nu_it)
         # -------------------------------------------
 
         # Compute U rms -----------------------------
-        # U₍ᵣₘₛ₎ = H*ρ₀*c₍ₚ₎/k * √ 1/H/L * ∫∫ (vx²+vz²) dx dz
+        # U₍ᵣₘₛ₎ = √ ∫∫ (vx²+vz²) dx dz
         Urms_it = let
             JustRelax.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
-            sqrt( sum( Vx_v.^2 .* prod(di)) / lx /ly ) * 
-                ((ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )
+            sqrt( sum( Vx_v.^2 .* prod(di)) )
         end
         push!(Urms, Urms_it)
         push!(trms, t)
         # -------------------------------------------
 
+        # interpolate fields from particle to grid vertices
+        particle2grid!(T_buffer, pT, xvi, particles)
+        @views T_buffer[:, end]      .= 0.0        
+        @views T_buffer[:, 1]        .= 1.0
+        @views thermal.T[2:end-1, :] .= T_buffer
+        flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+        temperature2center!(thermal)
+        @show extrema(thermal.T)
+        any(isnan.(thermal.T)) && break
+        
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 200) == 0 || it == nit
+        if it == 1 || rem(it, 200) == 0 || it == nit || any(isnan.(thermal.T))
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if save_vtk
@@ -318,37 +336,46 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
                     data_c
                 )
             end
+
+            # Make particles plottable
+            p        = particles.coords
+            ppx, ppy = p
+            pxv      = ppx.data[:]
+            pyv      = ppy.data[:]
+            clr      = pT.data[:] #pPhases.data[:]
+            idxv     = particles.index.data[:];
+
             # Make Makie figure
             fig = Figure(size = (900, 900), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
             ax3 = Axis(fig[1,3], aspect = ar, title = "Vx [m/s]")
-            #ax4 = Axis(fig[2,3], aspect = ar, title = "T [K]")
+            ax4 = Axis(fig[2,3], aspect = ar, title = "T [K]")
             #
-            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(T_WENO) , colormap=:lajolla, colorrange=(273,1273) )
+            h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:]) , colormap=:lajolla, colorrange=(0, 1) )
             # 
-            h2  = heatmap!(ax2, xvi[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy) , colormap=:batlow)
+            h2  = heatmap!(ax2, xvi[1], xvi[2], Array(stokes.V.Vy) , colormap=:batlow)
             # 
-            h3  = heatmap!(ax3, xvi[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vx) , colormap=:batlow)
+            h3  = heatmap!(ax3, xvi[1], xvi[2], Array(stokes.V.Vx) , colormap=:batlow)
             # 
-            #h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(273,1273), markersize=3)    
-            #h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)) , colormap=:batlow)
+            h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), markersize=3)    
+            # h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(0, 1), markersize=3)            
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
             Colorbar(fig[1,2], h1)
             Colorbar(fig[2,2], h2)
             Colorbar(fig[1,4], h3)
-            #Colorbar(fig[2,4], h4)
-            linkaxes!(ax1, ax2, ax3)
+            # Colorbar(fig[2,4], h4)
+            linkaxes!(ax1, ax2, ax3, ax4)
             save(joinpath(figdir, "$(it).png"), fig)
             fig
             
             fig2 = Figure(size = (900, 1200), title = "Time Series")
-            ax21 = Axis(fig2[1,1], aspect = 3, title = "V_{RMS}")
-            ax22 = Axis(fig2[2,1], aspect = 3, title = "Nu_{top}")
-            l1 = lines!(ax21,trms./(1e6*(365.25*24*60*60)),Urms)
-            l2 = lines!(ax22,trms./(1e6*(365.25*24*60*60)),Nu_top)
+            ax21 = Axis(fig2[1,1], aspect = 3, title = "(V_{RMS})")
+            ax22 = Axis(fig2[2,1], aspect = 3, title = "(Nu_{top})")
+            l1 = lines!(ax21,trms,(Urms))
+            l2 = lines!(ax22,trms,(Nu_top))
             save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
         end
         it      +=  1
@@ -371,10 +398,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "⟨T⟩")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "⟨log10(η)⟩")        
-        lines!(ax1, Tmean, xvi[2]./1e3)
-        lines!(ax2, log10.(Emean), xci[2]./1e3)
-        ylims!(ax1, minimum(xvi[2])./1e3, 0)
-        ylims!(ax2, minimum(xvi[2])./1e3, 0)
+        lines!(ax1, Tmean, (1 .- xvi[2]))
+        lines!(ax2, log10.(Emean), (1 .- xci[2]))
+        ylims!(ax1, maximum(xvi[2]), 0)
+        ylims!(ax2, maximum(xvi[2]), 0)
         hideydecorations!(ax2)
         save(joinpath(figdir, "Mean_profiles_$(it).png"), fig)
         fig
@@ -387,7 +414,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-figdir      =   "Blankenbach_WENO"
+figdir      =   "Blankenbach_subgrid_ND"
 save_vtk    =   false # set to true to generate VTK files for ParaView
 ar          =   1 # aspect ratio
 n           =   51

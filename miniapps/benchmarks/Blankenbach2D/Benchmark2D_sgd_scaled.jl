@@ -18,7 +18,7 @@ environment!(model)
 using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 
 # Load file with all the rheology configurations
-include("Blankenbach_Rheology_ND.jl")
+include("Blankenbach_Rheology_scaled.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

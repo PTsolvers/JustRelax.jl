@@ -12,16 +12,22 @@ _tocpu(x) = x
 _tocpu(x::T) where {T<:CuArray} = Array(x)
 _tocpu(x::T) where {T<:ROCArray} = Array(x)
 
+
+
 """
     checkpointing(dst, stokes, T, η, time)
 
 Save necessary data in `dst` as and HDF5 file to restart the model from the state at `time`
 """
-function checkpointing(dst, stokes, T, η, time)
+function checkpointing(dst, stokes, T, η, px, py, index, phases, time)
     !isdir(dst) && mkpath(dst) # creat folder in case it does not exist
     fname = joinpath(dst, "checkpoint")
     h5open("$(fname).h5", "w") do file
         write(file, @namevar(time)...)
+        write(file, @namevar(px)...)
+        write(file, @namevar(py)...)
+        write(file, @namevar(index)...)
+        write(file, @namevar(phases)...)
         write(file, @namevar(stokes.V.Vx)...)
         write(file, @namevar(stokes.V.Vy)...)
         write(file, @namevar(stokes.P)...)

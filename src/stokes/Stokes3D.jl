@@ -411,14 +411,14 @@ function JustRelax.solve!(
 
     cte_density   = is_constant_density(rheology)
     cte_viscosity = is_constant_viscosity(rheology)
-
+    do_halo_update = !all(isone, igg.dims)
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
             compute_maxloc!(ητ, η)
-            update_halo!(ητ)
+            do_halo_update && update_halo!(ητ)
             # @hide_communication b_width begin # communication/computation overlap
             #     @parallel compute_maxloc!(ητ, η)
             #     update_halo!(ητ)
@@ -486,7 +486,7 @@ function JustRelax.solve!(
                     stokes.τ.xz_c,
                     stokes.τ.xy_c,
                 )
-                update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
+                do_halo_update && update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
             # else
             #     @parallel (@idx ni .+ 1) compute_τ!(
             #         @tensor(stokes.τ)...,
@@ -517,7 +517,7 @@ function JustRelax.solve!(
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bc)
-                update_halo!(@velocity(stokes)...)
+                do_halo_update && update_halo!(@velocity(stokes)...)
             end
         end
 

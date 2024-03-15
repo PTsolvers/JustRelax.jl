@@ -44,8 +44,10 @@ as well as α as the thermal expansivity.
 ) where {N,C<:JustRelax.CellArray}
     ΔTc = args.ΔTc
     K = fn_ratio(get_bulk_modulus, rheology, phase_ratio[I...])
-    α =  fn_ratio(get_thermal_expansion, rheology, phase_ratio[I...])
-    RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...],ΔTc[I...], α, η[I...], K, dt, r, θ_dτ)
+    α = fn_ratio(get_thermal_expansion, rheology, phase_ratio[I...])
+    RP[I...], P[I...] = _compute_P!(
+        P[I...], P0[I...], ∇V[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
+    )
     return nothing
 end
 
@@ -66,7 +68,7 @@ end
 
 function _compute_P!(P, P0, ∇V, ΔTc, α, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
-    _dt  = inv(dt)
+    _dt = inv(dt)
     RP = fma((P - P0), _Kdt, (-∇V + (α * (ΔTc * _dt))))
     P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
     return RP, P

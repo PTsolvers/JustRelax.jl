@@ -44,7 +44,19 @@ function make_thermal_arrays!(ndim)
                 qTy2 = @zeros(nx + 1, ny)
                 ResT = @zeros(nx + 1, ny - 1)
                 return new{typeof(T)}(
-                    T, Tc, ΔT, ΔTc, Told, dT_dt, qTx, qTy, qTx2, qTy2, H, shear_heating, ResT
+                    T,
+                    Tc,
+                    ΔT,
+                    ΔTc,
+                    Told,
+                    dT_dt,
+                    qTx,
+                    qTy,
+                    qTx2,
+                    qTy2,
+                    H,
+                    shear_heating,
+                    ResT,
                 )
             end
 

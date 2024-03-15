@@ -17,7 +17,7 @@ end
 # With GeoParams
 
 @parallel_indices (I...) function compute_P!(
-    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ, args
 ) where {N}
     K = get_bulk_modulus(rheology, phase[I...])
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
@@ -25,7 +25,7 @@ end
 end
 
 @parallel_indices (I...) function compute_P!(
-    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ, args
 ) where {N,C<:JustRelax.CellArray}
     K = fn_ratio(get_bulk_modulus, rheology, phase_ratio[I...])
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
@@ -40,8 +40,9 @@ after the implementation of Kiss et al. (2023). The temperature difference `ΔTc
 as well as α as the thermal expansivity.
 """
 @parallel_indices (I...) function compute_P!(
-    P, P0, RP, ∇V, ΔTc, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ, args
 ) where {N,C<:JustRelax.CellArray}
+    ΔTc = args.ΔTc
     K = fn_ratio(get_bulk_modulus, rheology, phase_ratio[I...])
     α =  fn_ratio(get_thermal_expansion, rheology, phase_ratio[I...])
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...],ΔTc[I...], α, η[I...], K, dt, r, θ_dτ)

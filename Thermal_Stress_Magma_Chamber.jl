@@ -179,7 +179,7 @@ end
 
 
 
-# function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk= false)
+# function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk= false, igg=igg)
 
     #-------rheology parameters--------------------------------------------------------------
     # plasticity setup
@@ -340,7 +340,7 @@ end
     ρg = @zeros(ni...), @zeros(ni...)                      # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
 
     # Arguments for functions
-    args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt)
+    args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
     @copy thermal.Told thermal.T
 
     for _ in 1:2
@@ -419,7 +419,7 @@ end
     end
 
     P_init = deepcopy(stokes.P);
-    while it < 25 #nt
+    while it < 50 #nt
 
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end] .= 273.0
@@ -435,12 +435,11 @@ end
             ρg[2], phase_ratios.center, MatParam, (T=thermal.Tc, P=stokes.P)
         )
         @copy stokes.P0 stokes.P
-        args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt)
+        args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
         # Stokes solver -----------------
         solve!(
             stokes,
             pt_stokes,
-            thermal,
             di,
             flow_bcs,
             ρg,
@@ -515,7 +514,7 @@ end
 
         #  # # Plotting -------------------------------------------------------
         if it == 1 || rem(it, 1) == 0
-            checkpointing(figdir, stokes, thermal.T, η, t)
+            checkpointing_jld2(figdir, stokes, thermal, η, particles, pPhases, t; igg=igg)
 
             if igg.me == 0
                 if do_vtk
@@ -714,7 +713,7 @@ end
 figdir = "Thermal_stress_cooling_magma_body"
 do_vtk = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 128
+n        = 64
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -724,7 +723,7 @@ else
 end
 
 # run main script
-main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=do_vtk);
+main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=do_vtk, igg=igg);
 
 function plot_particles(particles, pPhases)
     p = particles.coords

@@ -1,65 +1,63 @@
-using Printf, LinearAlgebra, GeoParams, SpecialFunctions, CellArrays, StaticArrays
+using Printf, LinearAlgebra, GeoParams, CellArrays, StaticArrays
 using JustRelax
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+@init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
-using JustPIC._2D
+using JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:Threads, Float64, 2)  #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
+model = PS_Setup(:Threads, Float64, 3)  #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 environment!(model)
 
 import JustRelax.@cell
 
-
-distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
-
-@parallel_indices (i, j) function init_T!(T, z)
-    if z[j] == maximum(z)
-        T[i, j] = 300.0
-    elseif z[j] == minimum(z)
-        T[i, j] = 3500.0
+@parallel_indices (i, j, k) function init_T!(T, z)
+    if z[k] == maximum(z)
+        T[i, j, k] = 300.0
+    elseif z[k] == minimum(z)
+        T[i, j, k] = 3500.0
     else
-        T[i, j] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
+        T[i, j, k] = z[k] * (1900.0 - 1600.0) / minimum(z) + 1600.0
     end
     return nothing
 end
 
-function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
+function elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi)
 
-    @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
-        @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i, j]  += δT
+    @parallel_indices (i, j, k) function _elliptical_perturbation!(T, x, y, z)
+        @inbounds if (((x[i]-xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
+            T[i, j, k] += δT
         end
         return nothing
     end
 
-    @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
+    @parallel _elliptical_perturbation!(T, xvi...)
 end
 
-function init_phases!(phases, particles, xc, yc, r)
+function init_phases!(phases, particles, xc, yc, zc, r)
     ni = size(phases)
-    center = xc, yc
+    center = xc, yc, zc
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, center, r)
+    @parallel_indices (I...) function init_phases!(phases, px, py, pz, index, center, r)
         @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+            JustRelax.@cell(index[ip, I...]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, i, j]
-            y = JustRelax.@cell py[ip, i, j]
+            x = JustRelax.@cell px[ip, I...]
+            y = JustRelax.@cell py[ip, I...]
+            z = JustRelax.@cell pz[ip, I...]
 
             # plume - rectangular
-            if (((x - center[1] ))^2 + ((y - center[2]))^2) ≤ r^2
-                JustRelax.@cell phases[ip, i, j] = 2.0
+            if (((x - center[1]))^2 + ((y - center[2]))^2 + ((z - center[3]))^2) ≤ r^2
+                JustRelax.@cell phases[ip, I...] = 2.0
 
             else
-                JustRelax.@cell phases[ip, i, j] = 1.0
+                JustRelax.@cell phases[ip, I...] = 1.0
             end
         end
         return nothing
@@ -68,28 +66,32 @@ function init_phases!(phases, particles, xc, yc, r)
     @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
 end
 
-@parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
+function diffusion_3D(;
+    nx           = 32,
+    ny           = 32,
+    nz           = 32,
+    lx           = 100e3,
+    ly           = 100e3,
+    lz           = 100e3,
+    ρ0           = 3.3e3,
+    Cp0          = 1.2e3,
+    K0           = 3.0,
+    init_MPI     = JustRelax.MPI.Initialized() ? false : true,
+    finalize_MPI = false,
+)
 
-    args_ij = ntuple_idx(args, I...)
-    H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij)
-
-    return nothing
-end
-
-function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     kyr      = 1e3 * 3600 * 24 * 365.25
-    Myr      = 1e3 * kyr
+    Myr      = 1e6 * 3600 * 24 * 365.25
     ttot     = 1 * Myr # total simulation time
     dt       = 50 * kyr # physical time step
 
-    init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg    = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
-
     # Physical domain
-    ni           = (nx, ny)
-    li           = (lx, ly)  # domain length in x- and y-
+    ni           = (nx, ny, nz)
+    li           = (lx, ly, lz)  # domain length in x- and y-
     di           = @. li / ni # grid step in x- and -y
-    grid         = Geometry(ni, li; origin = (0, -ly))
+    origin       = 0, 0, -lz # nodes at the center and vertices of the cells
+    igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Define the thermal parameters with GeoParams
@@ -115,23 +117,33 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     args       = (; P=P)
 
     ## Allocate arrays needed for every Thermal Diffusion
+    # general thermal arrays
     thermal    = ThermalArrays(ni)
+    thermal.H .= 1e-6
+    # physical parameters
+    ρ          = @fill(ρ0, ni...)
+    Cp         = @fill(Cp0, ni...)
+    K          = @fill(K0, ni...)
+    ρCp        = @. Cp * ρ
+
+    # Boundary conditions
     thermal_bc = TemperatureBoundaryConditions(;
-        no_flux = (left = true, right = true, top = false, bot = false),
+        no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
+        periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
+
+    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])
 
     # Add thermal perturbation
     δT                  = 100e0 # thermal perturbation
     r                   = 10e3 # thermal perturbation radius
-    center_perturbation = lx/2, -ly/2
+    center_perturbation = lx/2, ly/2, -lz/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
-    @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 40, 40, 1
+    nxcell, max_xcell, min_xcell = 20, 20, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni
     )
     # temperature
     pPhases,     = init_cell_arrays(particles, Val(1))
@@ -140,18 +152,15 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, pPhases)
     # ----------------------------------------------------
 
-    @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
-
     # PT coefficients for thermal diffusion
     args       = (; P=P, T=thermal.Tc)
-    pt_thermal = JustRelax.PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.65 / √2
-    )
+    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
 
-    # Time loop
     t  = 0.0
     it = 0
     nt = Int(ceil(ttot / dt))
+
+    # Physical time loop
     while it < nt
         heatdiffusion_PT!(
             thermal,
@@ -161,16 +170,20 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
             args,
             dt,
             di;
+            igg     = igg,
             phase   = phase_ratios,
-            iterMax = 1e3,
-            nout    = 10,
+            iterMax = 10e3,
+            nout    = 1e2,
+            verbose = true,
         )
 
-        it += 1
         t  += dt
+        it += 1
     end
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), thermal
+    finalize_global_grid(; finalize_MPI=finalize_MPI)
+
+    return (ni=ni, xci=xci, li=li, di=di), thermal
 end
 
-diffusion_2D()
+diffusion_3D()

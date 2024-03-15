@@ -1,3 +1,16 @@
+push!(LOAD_PATH, "..")
+
+using Test, Suppressor
+using GeoParams, CellArrays
+using JustRelax, JustRelax.DataIO
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
+
+# setup ParallelStencil.jl environment
+model  = PS_Setup(:Threads, Float64, 2)
+environment!(model)
+
+# HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j) function init_T!(T, z)
     if z[j] == maximum(z)
         T[i, j] = 300.0
@@ -20,7 +33,7 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
-
+# MAIN SCRIPT --------------------------------------------------------------------
 function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, K0=3.0)
     kyr      = 1e3 * 3600 * 24 * 365.25
     Myr      = 1e3 * kyr
@@ -69,11 +82,13 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     r                   = 10e3 # thermal perturbation radius
     center_perturbation = lx/2, -ly/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
+    temperature2center!(thermal)
 
     # Time loop
     t  = 0.0
     it = 0
     nt = Int(ceil(ttot / dt))
+
     while it < nt
         heatdiffusion_PT!(
             thermal,
@@ -82,12 +97,23 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
             rheology,
             args,
             dt,
-            di,
+            di;
+            verbose=false,
         )
 
         t  += dt
         it += 1
     end
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), thermal
+    return thermal
+end
+
+@testset "Diffusion_2D" begin
+    @suppress begin
+        nx=32;
+        ny=32;
+        thermal = diffusion_2D(; nx = nx, ny = ny)
+        @test thermal.T[Int(ceil(size(thermal.T)[1]/2)), Int(ceil(size(thermal.T)[2]/2))] ≈ 1823.6076461523571 atol=1e-1
+        @test thermal.Tc[Int(ceil(size(thermal.Tc)[1]/2)), Int(ceil(size(thermal.Tc)[2]/2))] ≈ 1828.3169386441218 atol=1e-1
+    end
 end

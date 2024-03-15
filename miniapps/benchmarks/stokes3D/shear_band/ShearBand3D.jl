@@ -168,7 +168,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             logεII = Array(log10.(stokes.ε.II)),
             η   = Array(η_vep),
         )
-        save_vtk(
+        do_vtk(
             joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
             xvi,
             xci,

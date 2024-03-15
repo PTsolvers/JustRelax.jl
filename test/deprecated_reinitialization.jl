@@ -1,6 +1,6 @@
 push!(LOAD_PATH, "..")
 
-using Test
+using Test, Suppressor
 using JustRelax
 using ParallelStencil
 

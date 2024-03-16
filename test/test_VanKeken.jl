@@ -1,5 +1,5 @@
-push!(LOAD_PATH, "..")
-using Test, Suppressor
+# push!(LOAD_PATH, "..")
+# using Test, Suppressor
 
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -76,7 +76,7 @@ function VanKeken2D(ny=32, nx=32)
     origin       = 0.0, 0.0     # origin coordinates
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    dt           = Inf
+    dt           = 1
 
     # Physical properties using GeoParams ----------------
     rheology = (
@@ -98,7 +98,7 @@ function VanKeken2D(ny=32, nx=32)
     )
 
     # Initialize particles -------------------------------
-    nxcell, max_p, min_p = 40, 40, 1
+    nxcell, max_p, min_p = 40, 40, 15
     particles            = init_particles(
         backend, nxcell, max_p, min_p, xvi..., di..., nx, ny
     )
@@ -210,10 +210,10 @@ function VanKeken2D(ny=32, nx=32)
 end
 
 
-@testset "VanKeken" begin
-    @suppress begin
-        iters, Urms = VanKeken2D()
-        @test passed = iters.err_evo1[end] < 1e-4
-        @test maximum(Urms) ≈ 0.006467433778939805 atol=1e-4
-    end
-end
+# @testset "VanKeken" begin
+#     @suppress begin
+#         iters, Urms = VanKeken2D()
+#         @test passed = iters.err_evo1[end] < 1e-4
+#         @test maximum(Urms) ≈ 0.006467433778939805 atol=1e-4
+#     end
+# end

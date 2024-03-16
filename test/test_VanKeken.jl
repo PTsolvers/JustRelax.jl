@@ -169,7 +169,7 @@ function VanKeken2D(ny=32, nx=32)
             phase_ratios,
             rheology,
             args,
-            Inf,
+            dt,
             igg;
             iterMax          = 10e3,
             nout             = 50,

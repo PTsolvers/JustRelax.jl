@@ -235,11 +235,8 @@ function main(igg, nx, ny)
             save(joinpath(figdir, "$(it).png"), fig)
 
         end
-
-        # dt = min(compute_dt(stokes, di) / 10, dt_max)
-
     end
-    return fig
+    return nothing
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 

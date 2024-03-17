@@ -264,7 +264,7 @@ end
             Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
         end
         if all((i, j) .≤ size(Ry))
-            θ = 1.0
+            θ = 1
             # Interpolate Vx into Vy node
             Vxᵢⱼ =
                 0.25 * (Vx[i, j + 1] + Vx[i + 1, j + 1] + Vx[i, j + 2] + Vx[i + 1, j + 2])
@@ -293,5 +293,6 @@ end
             Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + ρg_correction
         end
     end
+
     return nothing
 end

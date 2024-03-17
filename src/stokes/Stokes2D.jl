@@ -612,7 +612,7 @@ function JustRelax.solve!(
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
-    
+
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
@@ -626,7 +626,7 @@ function JustRelax.solve!(
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
-    
+
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
         end

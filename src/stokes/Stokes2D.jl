@@ -676,7 +676,7 @@ function JustRelax.solve!(
     end
 
     stokes.P .= θ
-    @views stokes.P .-= stokes.P[:, end]
+    # @views stokes.P .-= stokes.P[:, end]
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)

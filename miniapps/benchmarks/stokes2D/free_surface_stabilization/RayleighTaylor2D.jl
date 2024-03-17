@@ -14,7 +14,6 @@ using ParallelStencil
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 
-# Velocity helper grids for the particle advection
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
         @all(A) = @inn_x(B)
@@ -29,9 +28,8 @@ macro all_j(A)
     esc(:($A[$idx_j]))
 end
 
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
+@parallel_indices (i, j) function init_P!(P, ρg, z)
+    P[i, j] = sum(abs(ρg[i, jj] * z[jj]) * z[jj] < 0.0 for jj in j:size(P, 2))
     return nothing
 end
 
@@ -66,12 +64,12 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(igg, nx, ny)
+function RT_2D(igg, nx, ny)
 
     # Physical domain ------------------------------------
-    thick_air    = 100e3             # thickness of sticky air layer
+    thick_air    = 100e3              # thickness of sticky air layer
     ly           = 500e3 + thick_air # domain length in y
-    lx           = 500e3             # domain length in x
+    lx           = 500e3           # domain length in x
     ni           = nx, ny            # number of cells
     li           = lx, ly            # domain length in x- and y-
     di           = @. li / ni        # grid step in x- and -y
@@ -85,7 +83,7 @@ function main(igg, nx, ny)
         # Name              = "Air",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = ConstantDensity(; ρ=1e3),
+            Density           = ConstantDensity(; ρ=1e1),
             CompositeRheology = CompositeRheology((LinearViscous(; η=1e19),)),
             Gravity           = ConstantGravity(; g=9.81),
         ),
@@ -104,10 +102,11 @@ function main(igg, nx, ny)
             Gravity           = ConstantGravity(; g=9.81),
         )
     )
+    dt           = 1 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 30, 40, 15
+    nxcell, max_xcell, min_xcell = 40, 80, 20
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
     )
@@ -121,13 +120,14 @@ function main(igg, nx, ny)
     A             = 5e3    # Amplitude of the anomaly
     init_phases!(pPhases, particles, A)
     phase_ratios  = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    # @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-5,  CFL = 0.95 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -147,7 +147,10 @@ function main(igg, nx, ny)
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(; 
-        free_slip    = (left = true, right=true, top=true, bot=true),
+        free_slip    = (left = true, right=true, top=true, bot=false),
+        no_slip      = (left = false, right=false, top=false, bot=true),
+        # free_slip    = (left = true, right=true, top=true, bot=true),
+        # no_slip      = (left = false, right=false, top=false, bot=false),
     )
 
     # Plot initial T and η profiles
@@ -168,13 +171,16 @@ function main(igg, nx, ny)
     Vx_v = @zeros(ni.+1...)
     Vy_v = @zeros(ni.+1...)
 
-    figdir = "FreeSurface"
+    figdir = "FreeSurface2"
     take(figdir)
 
     # Time loop
     t, it = 0.0, 0
-    dt    = 50e3 * (3600 * 24 *365.25)
-    while it < 150 # run only for 5 Myrs
+    dt_max = 50e3 * (3600 * 24 * 365.25)
+    dt = 1e3 * (3600 * 24 * 365.25)
+    @views stokes.P .-= stokes.P[:, end]
+
+    while it < 500 # run only for 5 Myrs
 
         # Stokes solver ----------------
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
@@ -198,10 +204,24 @@ function main(igg, nx, ny)
             args,
             dt,
             igg;
-            iterMax = 50e3,
+            iterMax = 75e3,
             nout=1e3,
             viscosity_cutoff=(-Inf, Inf)
         )
+        dt = if it ≤ 10
+            min(compute_dt(stokes, di) / 2, 1e3 * (3600 * 24 * 365.25))
+        elseif 10 < it ≤ 20
+            min(compute_dt(stokes, di) / 2, 10e3 * (3600 * 24 * 365.25))
+        elseif 20 < it ≤ 30
+            min(compute_dt(stokes, di) / 2, 25e3 * (3600 * 24 * 365.25))
+        else
+            min(compute_dt(stokes, di) / 2, dt_max)
+        end
+        # @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        # @parallel (@idx ni) multi_copy!(
+        #     @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+        # )
+        # @parallel (JustRelax.@idx ni) Justensor_invariant!(stokes.ε.II, @strain(stokes)...)
         # ------------------------------
 
         # Advection --------------------
@@ -213,18 +233,33 @@ function main(igg, nx, ny)
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
-        
+        # @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
+    
         @show it += 1
         t        += dt
 
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || rem(it, 25) == 0
             JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-            nt = 5
+            nt = 2
+
+            p        = particles.coords
+            ppx, ppy = p
+            pxv      = ppx.data[:]./1e3
+            pyv      = ppy.data[:]./1e3
+            clr      = pPhases.data[:]
 
             fig = Figure(resolution = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(t/(1e3 * 3600 * 24 *365.25)) Kyrs")
-            heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)), colormap = :grayC)
+            # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)), colormap = :grayC)
+            scatter!(
+                ax, 
+                pxv, pyv, 
+                color=clr, 
+                colormap = :lajolla,
+                markersize = 3
+            )
+            # scatter!(ax, pxv, pyv, color=clr, colormap = :grayC)
             arrows!(
                 ax,
                 xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))..., 
@@ -235,19 +270,20 @@ function main(igg, nx, ny)
             save(joinpath(figdir, "$(it).png"), fig)
 
         end
+
     end
-    return nothing
+    return fig
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n        = 101
-nx       = n
-ny       = n
+n        = 60
+nx       = n #85
+ny       = n #102
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else
     igg
 end
 
-main(igg, nx, ny)
+RT_2D(igg, nx, ny)

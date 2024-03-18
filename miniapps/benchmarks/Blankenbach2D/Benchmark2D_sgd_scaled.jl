@@ -236,7 +236,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             viscosity_cutoff = (-Inf, Inf),
             verbose          = false
         )
-        # @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 

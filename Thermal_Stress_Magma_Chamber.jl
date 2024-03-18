@@ -182,13 +182,13 @@ end
     return GeoParams.compute_meltfraction_ratio(phase_ratios, rheology, args)
 end
 
-function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false, igg=igg)
+function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     #-------rheology parameters--------------------------------------------------------------
     # plasticity setup
     do_DP = true               # do_DP=false: Von Mises, do_DP=true: Drucker-Prager (friction angle)
     η_reg = 1.0e14           # regularisation "viscosity" for Drucker-Prager
-    Coh = 10MPa              # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    Coh = 10.0MPa              # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
     ϕ = 30.0 * do_DP         # friction angle
     G0 = 25e9Pa        # elastic shear modulus
     G_magma = 10e9Pa        # elastic shear modulus perturbation
@@ -252,7 +252,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false, igg=igg)
         #Name="Sticky Air"
         SetMaterialParams(;
             Phase=4,
-            Density=PT_Density(; ρ0=10kg / m^3, T0=273.0, β=0.0),
+            Density=PT_Density(; ρ0=10kg / m^3, α=0.0, T0=273.0, β=0.0),
             HeatCapacity=ConstantHeatCapacity(; Cp=1000J / kg / K),
             Conductivity=ConstantConductivity(; k=15Watt / K / m),
             LatentHeat=ConstantLatentHeat(; Q_L=0.0J / kg),
@@ -721,10 +721,10 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false, igg=igg)
 
 end
 
-figdir = "Thermal_stress_cooling_magma_body"
+figdir = "Incompressible_Thermal_stresses_around_cooling_magma"
 do_vtk = true # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
-n = 64
+n = 128
 nx = n * ar - 2
 ny = n - 2
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -734,7 +734,7 @@ else
 end
 
 # run main script
-main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=do_vtk, igg=igg);
+main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=do_vtk);
 
 function plot_particles(particles, pPhases)
     p = particles.coords

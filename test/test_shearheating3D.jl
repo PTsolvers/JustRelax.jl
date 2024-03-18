@@ -113,7 +113,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
 
     # Rheology
     η                = @ones(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args             = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
@@ -145,7 +145,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
     local iters
     while it < 5
             # Update buoyancy and viscosity -
-            args = (; T = thermal.Tc, P = stokes.P,  dt = Inf)
+            args = (; T = thermal.Tc, P = stokes.P,  dt = dt, ΔTc = @zeros(ni...))
             @parallel (@idx ni) compute_viscosity!(
                 η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
             )

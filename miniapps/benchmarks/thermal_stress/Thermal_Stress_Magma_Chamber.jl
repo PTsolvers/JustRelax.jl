@@ -60,11 +60,6 @@ function init_phases!(phases, particles, xc_anomaly, yc_anomaly, r_anomaly, stic
                 @cell phases[ip, i, j] = 1.0 # crust
             end
 
-            # # # chamber - elliptical
-            # if (((x - xc)^2 / ((a)^2)) + ((y + yc)^2 / ((b)^2)) ≤ r^2)
-            #     JustRelax.@cell phases[ip, i, j] = 2.0
-            # end
-
             # thermal anomaly - circular
             if ((x - xc_anomaly)^2 + (y + yc_anomaly)^2 ≤ r_anomaly^2)
                 JustRelax.@cell phases[ip, i, j] = 2.0
@@ -115,47 +110,14 @@ end
     return nothing
 end
 
-function circular_anomaly!(T, anomaly, xc, yc, r, xvi, sticky_air)
-    @parallel_indices (i, j) function _circular_anomaly!(
-        T, anomaly, xc, yc, r, x, y, sticky_air
-    )
-        depth = -y[j] - sticky_air
-        @inbounds if (((x[i] - xc)^2 + (depth[j] + yc)^2) ≤ r^2)
-            T[i + 1, j] = anomaly
-        end
-        return nothing
-    end
-
-    ni = length.(xvi)
-    @parallel (@idx ni) _circular_anomaly!(T, anomaly, xc, yc, r, xvi..., sticky_air)
-    return nothing
-end
-
-function elliptical_anomaly!(T, anomaly, xc, yc, a, b, r, xvi, sticky_air)
-    @parallel_indices (i, j) function _elliptical_anomaly!(
-        T, anomaly, xc, yc, a, b, r, x, y, sticky_air
-    )
-        depth = -y[j] - sticky_air
-        @inbounds if (((x[i] - xc)^2 / a^2) + ((depth[j] + yc)^2 / b^2) ≤ r^2)
-            T[i + 1, j] = anomaly
-        end
-        return nothing
-    end
-
-    ni = length.(xvi)
-    @parallel (@idx ni) _elliptical_anomaly!(
-        T, anomaly, xc, yc, a, b, r, xvi..., sticky_air
-    )
-    return nothing
-end
-
 function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi, sticky_air)
     @parallel_indices (i, j) function _circular_perturbation!(
         T, δT, xc_anomaly, yc_anomaly, r_anomaly, x, y, sticky_air
     )
         depth = -y[j] - sticky_air
         @inbounds if ((x[i] - xc_anomaly)^2 + (depth[j] + yc_anomaly)^2 ≤ r_anomaly^2)
-            T[i + 1, j] = anomaly
+            # T[i + 1, j] *= δT / 100 + 1
+            T[i + 1, j] = δT
         end
         return nothing
     end
@@ -182,6 +144,28 @@ end
     return GeoParams.compute_meltfraction_ratio(phase_ratios, rheology, args)
 end
 
+function phase_change!(phases, particles)
+    ni = size(phases)
+    @parallel_indices (I...) function _phase_change!(phases, px, py, index)
+        @inbounds for ip in JustRelax.cellaxes(phases)
+            #quick escape
+            JustRelax.@cell(index[ip, I...]) == 0 && continue
+
+            x = JustRelax.@cell px[ip, I...]
+            y = (JustRelax.@cell py[ip, I...])
+            phase_ij = @cell phases[ip, I...]
+            if y > 0.0 && (phase_ij == 2.0 || phase_ij == 3.0)
+                @cell phases[ip, I...] = 4.0
+            end
+        end
+        return nothing
+    end
+
+    @parallel (JustRelax.@idx ni) _phase_change!(
+        phases, particles.coords..., particles.index
+    )
+end
+
 function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     #-------rheology parameters--------------------------------------------------------------
@@ -194,8 +178,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     G_magma = 10e9Pa                    # elastic shear modulus perturbation
     εbg = 0.0                           # background strain rate
 
-    soft_C = LinearSoftening((ustrip(Coh) / 2, ustrip(Coh)), (0e0, 1e-1)) # softening law
-    pl = DruckerPrager_regularised(; C=Coh, ϕ=ϕ, η_vp=η_reg, Ψ=0.0, softening_C=soft_C)        # plasticity
+    # # soft_C      = LinearSoftening((ustrip(Coh)/2, ustrip(Coh)), (0e0, 1e-1)) # softening law
+    soft_C = NonLinearSoftening(; ξ₀=ustrip(Coh), Δ=ustrip(Coh) / 2) # softening law
+    pl = DruckerPrager_regularised(; C=Coh, ϕ=ϕ, η_vp=η_reg, Ψ=0.0)#, softening_C = soft_C)        # plasticity
 
     el = SetConstantElasticity(; G=G0, ν=0.5)                            # elastic spring
     el_magma = SetConstantElasticity(; G=G_magma, ν=0.5)                            # elastic spring
@@ -209,7 +194,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     #-------JustRelax parameters-------------------------------------------------------------
     # Domain setup for JustRelax
-    sticky_air = 0.0                        # thickness oif the sticky air layer
+    sticky_air = 2.5e3                        # thickness oif the sticky air layer
     ly = 12.5e3 + sticky_air                # domain length in y-direction
     lx = 10.5e3                             # domain length in x-direction
     li = lx, ly                             # domain length in x- and y-direction
@@ -240,7 +225,20 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
             Phase=2,
             Density=PT_Density(; ρ0=2600kg / m^3, T0=273.0, β=β_magma / Pa),
             HeatCapacity=ConstantHeatCapacity(; Cp=1050J / kg / K),
-            Conductivity=ConstantConductivity(; k=3.0Watt / K / m),
+            Conductivity=ConstantConductivity(; k=1.5Watt / K / m),
+            LatentHeat=ConstantLatentHeat(; Q_L=350e3J / kg),
+            ShearHeat=ConstantShearheating(0.0NoUnits),
+            CompositeRheology=CompositeRheology((creep_magma, el_magma)),
+            Melting=MeltingParam_Caricchi(),
+            Elasticity=el_magma,
+        ),
+
+        #Name="Thermal Anomaly"
+        SetMaterialParams(;
+            Phase=3,
+            Density=PT_Density(; ρ0=2600kg / m^3, T0=273.0, β=β_magma / Pa),
+            HeatCapacity=ConstantHeatCapacity(; Cp=1050J / kg / K),
+            Conductivity=ConstantConductivity(; k=1.5Watt / K / m),
             LatentHeat=ConstantLatentHeat(; Q_L=350e3J / kg),
             ShearHeat=ConstantShearheating(0.0NoUnits),
             CompositeRheology=CompositeRheology((creep_magma, el_magma)),
@@ -270,11 +268,10 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pPhases)
-
+    #----------------------------------------------------
     x_anomaly = lx * 0.5
     y_anomaly = -5e3  # origin of the small thermal anomaly
     r_anomaly = 1.5e3             # radius of perturbation
-    anomaly = 750.0 .+ 273.0 # temperature anomaly
 
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, r_anomaly, sticky_air)
     phase_ratios = PhaseRatio(ni, length(MatParam))
@@ -284,6 +281,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     geotherm = GeoUnit(0.03K / m)
     geotherm = ustrip(Value(geotherm))
     ΔT = geotherm * (ly - sticky_air) # temperature difference between top and bottom of the domain
+    tempoffset = 0.0
     η = MatParam[2].CompositeRheology[1][1].η.val       # viscosity for the Rayleigh number
     Cp0 = MatParam[2].HeatCapacity[1].Cp.val              # heat capacity
     ρ0 = MatParam[2].Density[1].ρ0.val                   # reference Density
@@ -293,7 +291,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     g = MatParam[1].Gravity[1].g.val                    # Gravity
 
     α = MatParam[1].Density[1].α.val                    # thermal expansion coefficient for PT Density
-    Ra = ρ0 * g * α * (anomaly) * 1.5e3^3 / (η * κ)                # Rayleigh number
+    Ra = ρ0 * g * α * ΔT * 10^3 / (η * κ)                # Rayleigh number
     dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01)         # diffusive CFL timestep limiter
 
     # Initialisation
@@ -311,7 +309,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         thermal.Tc, thermal.T
     )
 
-    stokes = StokesArrays(ni, ViscoElastic)                     # initialise stokes arrays with the defined regime
+    stokes = StokesArrays(ni, ViscoElastic)                         # initialise stokes arrays with the defined regime
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4, CFL=0.99 / √2.1) #ϵ=1e-4,  CFL=1 / √2.1 CFL=0.27 / √2.1
 
     args = (; T=thermal.Tc, P=stokes.P, dt=Inf)
@@ -320,7 +318,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         MatParam, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=5e-2 / √2.1
     )
     # Boundary conditions of the flow
-    stokes.V.Vx .= PTArray([(x - lx / 2) * εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vx .= PTArray([
+        εbg * (x - lx * 0.5) / (lx / 2) / 2 for x in xvi[1], _ in 1:(ny + 2)
+    ])
     stokes.V.Vy .= PTArray([
         (abs(y) - sticky_air) * εbg * (abs(y) > sticky_air) for _ in 1:(nx + 2), y in xvi[2]
     ])
@@ -332,13 +332,13 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     flow_bcs!(stokes, flow_bcs)
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
-    η = @ones(ni...)                                      # initialise viscosity
-    η_vep = deepcopy(η)                                   # initialise viscosity for the VEP
+    η = @ones(ni...)                                     # initialise viscosity
+    η_vep = deepcopy(η)                                       # initialise viscosity for the VEP
     G = @fill(MatParam[1].Elasticity[1].G.val, ni...)     # initialise shear modulus
     ϕ = similar(η)                                        # melt fraction center
 
     # Buoyancy force
-    ρg = @zeros(ni...), @zeros(ni...)                     # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
+    ρg = @zeros(ni...), @zeros(ni...)                      # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
 
     # Arguments for functions
     args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
@@ -357,6 +357,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     )
     η_vep = copy(η)
 
+    anomaly = 750 + 273              # thermal perturbation (in %)
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air
     )
@@ -401,9 +402,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         Yv = [y for x in xvi[1], y in xvi[2]][:]
         Y = [y for x in xci[1], y in xci[2]][:]
         fig = Figure(; size=(1200, 900))
-        ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
+        ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T [C]")
         ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
-        scatter!(ax1, Array(thermal.T[2:(end - 1), :][:] .- 273.0), Yv)
+        scatter!(ax1, Array(thermal.T[2:(end - 1), :][:] .- 273), Yv)
         lines!(ax2, Array(stokes.P[:]), Y)
         hideydecorations!(ax2)
         save(joinpath(figdir, "initial_profile.png"), fig)
@@ -417,7 +418,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         @views thermal.T[2:(end - 1), :] .= T_buffer
         temperature2center!(thermal)
 
-        args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt)
+        args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
 
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, MatParam, cutoff_visc
@@ -426,7 +427,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
             ρg[2], phase_ratios.center, MatParam, (T=thermal.Tc, P=stokes.P)
         )
         @copy stokes.P0 stokes.P
-        args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
         # Stokes solver -----------------
         solve!(
             stokes,

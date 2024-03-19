@@ -579,8 +579,9 @@ function JustRelax.solve!(
             if rem(iter, nout) == 0
                 @copy η0 η
             end
-            if do_visc
-                ν = 1e-2
+            # if iter % 10 == 0
+                # if do_visc
+                ν = 1e-4
                 @parallel (@idx ni) compute_viscosity!(
                     η,
                     ν,
@@ -590,7 +591,7 @@ function JustRelax.solve!(
                     rheology,
                     viscosity_cutoff,
                 )
-            end
+            # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),

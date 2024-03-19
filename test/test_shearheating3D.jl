@@ -121,7 +121,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √3
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=5e-2 / √3
     )
 
     # Boundary conditions

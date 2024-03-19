@@ -24,4 +24,4 @@ end
 
 @inline get_α(p::MaterialParams) = get_α(p.Density[1])
 @inline get_α(p::ConstantDensity) = 0.0
-@inline get_α(p::Union{T_Density, PT_Density}) = GeoParams.get_α(p)
+@inline get_α(p::Union{T_Density,PT_Density}) = GeoParams.get_α(p)

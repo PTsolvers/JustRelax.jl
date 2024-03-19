@@ -600,7 +600,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 ax3 = Axis(
                     fig[3, 1][1, 1];
                     aspect=ar,
-                    title=L"Phases",
+                    title=L"Viscosity [\mathrm{Pa s}]",
                     xlabel="Width [km]",
                     titlesize=40,
                     yticklabelsize=25,

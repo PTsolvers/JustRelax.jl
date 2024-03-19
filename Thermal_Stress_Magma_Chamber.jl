@@ -186,17 +186,16 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     #-------rheology parameters--------------------------------------------------------------
     # plasticity setup
-    do_DP = true               # do_DP=false: Von Mises, do_DP=true: Drucker-Prager (friction angle)
-    η_reg = 1.0e14           # regularisation "viscosity" for Drucker-Prager
-    Coh = 10.0MPa              # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ = 30.0 * do_DP         # friction angle
-    G0 = 25e9Pa        # elastic shear modulus
-    G_magma = 10e9Pa        # elastic shear modulus perturbation
-    # εbg         = 2.5e-14            # background strain rate
-    εbg = 0.0            # background strain rate
+    do_DP = true                        # do_DP=false: Von Mises, do_DP=true: Drucker-Prager (friction angle)
+    η_reg = 1.0e14                      # regularisation "viscosity" for Drucker-Prager
+    Coh = 10.0MPa                       # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ = 30.0 * do_DP                    # friction angle
+    G0 = 25e9Pa                         # elastic shear modulus
+    G_magma = 10e9Pa                    # elastic shear modulus perturbation
+    εbg = 0.0                           # background strain rate
 
-    # soft_C      = LinearSoftening((ustrip(Coh)/2, ustrip(Coh)), (0e0, 1e-1)) # softening law
-    pl = DruckerPrager_regularised(; C=Coh, ϕ=ϕ, η_vp=η_reg, Ψ=0.0)#, softening_C = soft_C)        # plasticity
+    soft_C = LinearSoftening((ustrip(Coh) / 2, ustrip(Coh)), (0e0, 1e-1)) # softening law
+    pl = DruckerPrager_regularised(; C=Coh, ϕ=ϕ, η_vp=η_reg, Ψ=0.0, softening_C=soft_C)        # plasticity
 
     el = SetConstantElasticity(; G=G0, ν=0.5)                            # elastic spring
     el_magma = SetConstantElasticity(; G=G_magma, ν=0.5)                            # elastic spring
@@ -210,15 +209,15 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     #-------JustRelax parameters-------------------------------------------------------------
     # Domain setup for JustRelax
-    sticky_air = 0.0              # thickness oif the sticky air layer
-    ly = 12.5e3 + sticky_air # domain length in y-direction
-    lx = 10.5e3            # domain length in x-direction
-    li = lx, ly            # domain length in x- and y-direction
-    ni = nx, ny            # number of grid points in x- and y-direction
-    di = @. li / ni        # grid step in x- and y-direction
-    origin = 0.0, -ly          # origin coordinates of the domain
+    sticky_air = 0.0                        # thickness oif the sticky air layer
+    ly = 12.5e3 + sticky_air                # domain length in y-direction
+    lx = 10.5e3                             # domain length in x-direction
+    li = lx, ly                             # domain length in x- and y-direction
+    ni = nx, ny                             # number of grid points in x- and y-direction
+    di = @. li / ni                         # grid step in x- and y-direction
+    origin = 0.0, -ly                       # origin coordinates of the domain
     grid = Geometry(ni, li; origin=origin)
-    (; xci, xvi) = grid             # nodes at the center and vertices of the cells
+    (; xci, xvi) = grid                     # nodes at the center and vertices of the cells
     #---------------------------------------------------------------------------------------
 
     # Set material parameters
@@ -274,8 +273,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     x_anomaly = lx * 0.5
     y_anomaly = -5e3  # origin of the small thermal anomaly
-
     r_anomaly = 1.5e3             # radius of perturbation
+    anomaly = 750.0 .+ 273.0 # temperature anomaly
 
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, r_anomaly, sticky_air)
     phase_ratios = PhaseRatio(ni, length(MatParam))
@@ -294,7 +293,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     g = MatParam[1].Gravity[1].g.val                    # Gravity
 
     α = MatParam[1].Density[1].α.val                    # thermal expansion coefficient for PT Density
-    Ra = ρ0 * g * α * (900 + 273 - ΔT) * 1.5e3^3 / (η * κ)                # Rayleigh number
+    Ra = ρ0 * g * α * (anomaly) * 1.5e3^3 / (η * κ)                # Rayleigh number
     dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01)         # diffusive CFL timestep limiter
 
     # Initialisation
@@ -312,7 +311,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         thermal.Tc, thermal.T
     )
 
-    stokes = StokesArrays(ni, ViscoElastic)                         # initialise stokes arrays with the defined regime
+    stokes = StokesArrays(ni, ViscoElastic)                     # initialise stokes arrays with the defined regime
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4, CFL=0.99 / √2.1) #ϵ=1e-4,  CFL=1 / √2.1 CFL=0.27 / √2.1
 
     args = (; T=thermal.Tc, P=stokes.P, dt=Inf)
@@ -322,7 +321,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     )
     # Boundary conditions of the flow
     stokes.V.Vx .= PTArray([(x - lx / 2) * εbg for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray([-(ly - abs(y)) * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.V.Vy .= PTArray([
+        (abs(y) - sticky_air) * εbg * (abs(y) > sticky_air) for _ in 1:(nx + 2), y in xvi[2]
+    ])
 
     flow_bcs = FlowBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true),
@@ -331,13 +332,13 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     flow_bcs!(stokes, flow_bcs)
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
-    η = @ones(ni...)                                     # initialise viscosity
-    η_vep = deepcopy(η)                                       # initialise viscosity for the VEP
+    η = @ones(ni...)                                      # initialise viscosity
+    η_vep = deepcopy(η)                                   # initialise viscosity for the VEP
     G = @fill(MatParam[1].Elasticity[1].G.val, ni...)     # initialise shear modulus
     ϕ = similar(η)                                        # melt fraction center
 
     # Buoyancy force
-    ρg = @zeros(ni...), @zeros(ni...)                      # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
+    ρg = @zeros(ni...), @zeros(ni...)                     # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
 
     # Arguments for functions
     args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
@@ -355,8 +356,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, MatParam, cutoff_visc
     )
     η_vep = copy(η)
-
-    anomaly = 750.0 .+ 273.0 # temperature anomaly
 
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air
@@ -453,7 +452,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         @parallel (@idx ni) multi_copy!(
             @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
         )
-        # dt = compute_dt(stokes, di, dt_diff, igg)
+        dt = compute_dt(stokes, di, dt_diff, igg)
         # ------------------------------
         @show dt
 
@@ -553,7 +552,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 # Make Makie figure
                 fig = Figure(; size=(2000, 1800), createmissing=true)
                 ar = li[1] / li[2]
-                # ar = DataAspect()
 
                 ax0 = Axis(
                     fig[1, 1:2];
@@ -593,7 +591,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 ax2 = Axis(
                     fig[2, 2][1, 1];
                     aspect=ar,
-                    # title=L"\log_{10}(\eta_{vep}) [\mathrm{Pas}]",
                     title=L"ΔP [MPa]",
                     titlesize=40,
                     yticklabelsize=25,
@@ -638,15 +635,15 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     Array(thermal.T[2:(end - 1), :] .- 273);
                     colormap=:batlow,
                 )
-                # Plot effective viscosity
+                # Plot Pressure difference
                 p2 = heatmap!(
                     ax2,
                     xci[1] .* 1e-3,
                     xci[2] .* 1e-3,
                     Array((stokes.P .- P_init) ./ 1e6);
                     colormap=:roma,
-                )#, colorrange= (log10(1e14), log10(1e21)))
-                # Plot particles phase
+                )
+                # Plot effective viscosity
                 p3 = heatmap!(
                     ax3,
                     xci[1] .* 1e-3,
@@ -655,7 +652,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     colormap=:glasgow,
                     colorrange=(log10(1e14), log10(1e21)),
                 )
-                # p3  = scatter!(ax3, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
                 # Plot 2nd invariant of strain rate
                 p4 = heatmap!(
                     ax4,
@@ -738,14 +734,10 @@ main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=do_vtk);
 
 function plot_particles(particles, pPhases)
     p = particles.coords
-    # pp = [argmax(p) for p in phase_ratios.center] #if you want to plot it in a heatmap rather than scatter
     ppx, ppy = p
-    # pxv = ustrip.(dimensionalize(ppx.data[:], km, CharDim))
-    # pyv = ustrip.(dimensionalize(ppy.data[:], km, CharDim))
     pxv = ppx.data[:]
     pyv = ppy.data[:]
     clr = pPhases.data[:]
-    # clrT = pT.data[:]
     idxv = particles.index.data[:]
     f, ax, h = scatter(
         Array(pxv[idxv]), Array(pyv[idxv]); color=Array(clr[idxv]), colormap=:roma

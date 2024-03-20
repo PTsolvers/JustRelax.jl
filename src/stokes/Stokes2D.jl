@@ -555,7 +555,7 @@ function JustRelax.solve!(
                 @copy η0 η
             end
             # if do_visc
-                ν = 1e-3
+                ν = 1e-2
                 @parallel (@idx ni) compute_viscosity!(
                     η,
                     ν,

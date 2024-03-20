@@ -108,7 +108,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 1
+    nxcell, max_xcell, min_xcell = 30, 45, 15
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )

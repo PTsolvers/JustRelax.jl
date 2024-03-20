@@ -224,7 +224,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
     while it < 5e3
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf, ϕ= ϕ)
+        args = (; T = thermal.Tc, P = stokes.P,  dt=dt, ϕ= ϕ)
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
         )
@@ -244,7 +244,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
             phase_ratios,
             rheology,
             args,
-            Inf,
+            dt,
             igg;
             iterMax = 150e3,
             nout=1e3,

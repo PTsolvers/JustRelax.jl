@@ -17,7 +17,7 @@ model = PS_Setup(:CUDA, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64
 environment!(model)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays, WriteVTK
+using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays, WriteVTK, Statistics
 
 # Load file with all the rheology configurations
 include("Sill_rheology_small_sill.jl")
@@ -124,13 +124,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     # initialize phases
     init_phases!(pPhases, particles)
     phase_ratios     = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    # @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-8,  CFL = 0.95 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -168,7 +169,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-2 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 5e-2 / √2.1
     )
 
     # Boundary conditions
@@ -221,12 +222,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     t, it = 0.0, 0
 
 
-    while it < 30e3
+    while it < 5e3
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf, ϕ= ϕ)
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
         )
+        η .= mean(η)
         @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
         # ------------------------------
 
@@ -311,7 +313,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
 
         # update phase ratios
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
+        # @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
         @parallel (@idx ni) compute_melt_fraction!(
             ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
         )
@@ -319,7 +322,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 25) == 0
+        if it == 1 || rem(it, 5) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if do_save_vtk
@@ -455,6 +458,23 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
                 save(joinpath(figdir, "Temperature_$(it).png"), fig)
                 fig
             end
+            let
+                fig = Figure(size = (2000, 1000), title = "t = $t")
+                ax1 = Axis(fig[1,1], aspect = DataAspect(), title = "Particles  (t=$(round((t/(3600)))) hours)",  titlesize=40,
+                yticklabelsize=25,
+                xticklabelsize=25,
+                xlabelsize=25,)
+                p = particles.coords
+                ppx, ppy = p
+                pxv = ppx.data[:]
+                pyv = ppy.data[:]
+                clr = pPhases.data[:]
+                idxv = particles.index.data[:]
+                h=scatter!(ax1,Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:roma, markersize=3)
+                Colorbar(fig[1,2], h,height = Relative(4/4), ticklabelsize=25, ticksize=15)
+                save(joinpath(figdir, "Particles_$(it).png"), fig)
+                fig
+            end
 
         end
         # ------------------------------
@@ -467,7 +487,7 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "Small_Setup_low_visc_Subgrid_diffusion"
+figdir   = "test_convergence"
 # figdir   = "test_JP"
 do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio

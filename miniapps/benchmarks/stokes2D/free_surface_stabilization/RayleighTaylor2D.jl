@@ -29,10 +29,10 @@ macro all_j(A)
     esc(:($A[$idx_j]))
 end
 
-# @parallel_indices (i, j) function init_P!(P, ρg, z)
-#     P[i, j] = sum(abs(ρg[i, jj] * z[jj]) * z[jj] < 0.0 for jj in j:size(P, 2))
-#     return nothing
-# end
+@parallel_indices (i, j) function init_P!(P, ρg, z)
+    P[i, j] = sum(abs(ρg[i, jj] * z[jj]) * z[jj] < 0.0 for jj in j:size(P, 2))
+    return nothing
+end
 
 function init_phases!(phases, particles, A)
     ni = size(phases)
@@ -139,7 +139,7 @@ function RT_2D(igg, nx, ny)
     η                = @zeros(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
-    # @parallel init_P!(stokes.P, ρg[2], xci[2])
+    @parallel init_P!(stokes.P, ρg[2], xci[2])
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, Inf)
     )
@@ -149,8 +149,6 @@ function RT_2D(igg, nx, ny)
     flow_bcs         = FlowBoundaryConditions(; 
         free_slip    = (left = true, right=true, top=true, bot=false),
         no_slip      = (left = false, right=false, top=false, bot=true),
-        # free_slip    = (left = true, right=true, top=true, bot=true),
-        # no_slip      = (left = false, right=false, top=false, bot=false),
     )
 
     # Plot initial T and η profiles
@@ -171,15 +169,12 @@ function RT_2D(igg, nx, ny)
     Vx_v = @zeros(ni.+1...)
     Vy_v = @zeros(ni.+1...)
 
-    figdir = "FreeSurface2"
+    figdir = "RayleighTaylor2D"
     take(figdir)
 
     # Time loop
     t, it = 0.0, 0
     dt = dt_max = 50e3 * (3600 * 24 * 365.25)
-    # dt = 1e3 * (3600 * 24 * 365.25)
-    # @views stokes.P .-= stokes.P[:, end]
-
     while it < 500 # run only for 5 Myrs
 
         # Stokes solver ----------------
@@ -209,22 +204,16 @@ function RT_2D(igg, nx, ny)
             nout    = 5e3,
             viscosity_cutoff=(-Inf, Inf)
         )
-        dt = if it ≤ 10
-            min(compute_dt(stokes, di) / 2, 1e3 * (3600 * 24 * 365.25))
-        elseif 10 < it ≤ 20
-            min(compute_dt(stokes, di) / 2, 10e3 * (3600 * 24 * 365.25))
-        elseif 20 < it ≤ 30
-            min(compute_dt(stokes, di) / 2, 25e3 * (3600 * 24 * 365.25))
-        else
-            min(compute_dt(stokes, di) / 2, dt_max)
-        end
-        # dt = min(compute_dt(stokes, di) / 2, dt_max)
-
-        # @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        # @parallel (@idx ni) multi_copy!(
-        #     @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-        # )
-        # @parallel (JustRelax.@idx ni) Justensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        # dt = if it ≤ 10
+        #     min(compute_dt(stokes, di) / 2, 1e3 * (3600 * 24 * 365.25))
+        # elseif 10 < it ≤ 20
+        #     min(compute_dt(stokes, di) / 2, 10e3 * (3600 * 24 * 365.25))
+        # elseif 20 < it ≤ 30
+        #     min(compute_dt(stokes, di) / 2, 25e3 * (3600 * 24 * 365.25))
+        # else
+        #     min(compute_dt(stokes, di) / 2, dt_max)
+        # end
+        dt = min(compute_dt(stokes, di) / 2, dt_max)
         # ------------------------------
 
         # Advection --------------------

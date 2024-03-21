@@ -139,20 +139,18 @@ function main(igg, nx, ny)
    
     # Buoyancy forces & rheology
     ρg               = @zeros(ni...), @zeros(ni...)
-    η                = @zeros(ni...)
+    η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, Inf)
+        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
     η_vep            = copy(η)
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(; 
         free_slip    = (left = true, right=true, top=true, bot=true),
-        # no_slip      = (left = false, right=false, top=false, bot=true),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
 
     # Plot initial T and η profiles
@@ -178,7 +176,7 @@ function main(igg, nx, ny)
 
     # Time loop
     t, it = 0.0, 0
-    dt = 50e3 * (3600 * 24 *365.25)
+    dt = 1e3 * (3600 * 24 *365.25)
     while it < 10 # run only for 5 Myrs
 
         # Stokes solver ----------------
@@ -207,14 +205,14 @@ function main(igg, nx, ny)
             nout=1e3,
             viscosity_cutoff=(-Inf, Inf)
         )
-        dt = compute_dt(stokes, di) #/2
+        dt = compute_dt(stokes, di) / 2
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
         # advect particles in memory
-        shuffle_particles!(particles, xvi, particle_args)        
+        move_particles!(particles, xvi, particle_args)        
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
@@ -246,7 +244,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n        = 101
+n        = 100
 nx       = n
 ny       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

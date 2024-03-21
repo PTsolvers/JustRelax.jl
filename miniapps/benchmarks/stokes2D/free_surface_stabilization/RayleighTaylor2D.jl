@@ -281,8 +281,8 @@ end
 
 # (Path)/folder where output data and figures are stored
 n        = 100
-nx       = n #85
-ny       = n #102
+nx       = n
+ny       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else

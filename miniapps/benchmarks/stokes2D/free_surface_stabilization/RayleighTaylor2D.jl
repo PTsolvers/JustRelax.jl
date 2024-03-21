@@ -1,3 +1,4 @@
+# using CUDA
 using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
 
@@ -28,10 +29,10 @@ macro all_j(A)
     esc(:($A[$idx_j]))
 end
 
-@parallel_indices (i, j) function init_P!(P, ρg, z)
-    P[i, j] = sum(abs(ρg[i, jj] * z[jj]) * z[jj] < 0.0 for jj in j:size(P, 2))
-    return nothing
-end
+# @parallel_indices (i, j) function init_P!(P, ρg, z)
+#     P[i, j] = sum(abs(ρg[i, jj] * z[jj]) * z[jj] < 0.0 for jj in j:size(P, 2))
+#     return nothing
+# end
 
 function init_phases!(phases, particles, A)
     ni = size(phases)
@@ -102,11 +103,10 @@ function RT_2D(igg, nx, ny)
             Gravity           = ConstantGravity(; g=9.81),
         )
     )
-    dt           = 1 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 40, 80, 20
+    nxcell, max_xcell, min_xcell = 30, 40, 10
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
     )
@@ -139,7 +139,7 @@ function RT_2D(igg, nx, ny)
     η                = @zeros(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
-    @parallel init_P!(stokes.P, ρg[2], xci[2])
+    # @parallel init_P!(stokes.P, ρg[2], xci[2])
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, Inf)
     )
@@ -176,9 +176,9 @@ function RT_2D(igg, nx, ny)
 
     # Time loop
     t, it = 0.0, 0
-    dt_max = 50e3 * (3600 * 24 * 365.25)
-    dt = 1e3 * (3600 * 24 * 365.25)
-    @views stokes.P .-= stokes.P[:, end]
+    dt = dt_max = 50e3 * (3600 * 24 * 365.25)
+    # dt = 1e3 * (3600 * 24 * 365.25)
+    # @views stokes.P .-= stokes.P[:, end]
 
     while it < 500 # run only for 5 Myrs
 
@@ -186,11 +186,10 @@ function RT_2D(igg, nx, ny)
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         
         @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
-        @parallel init_P!(stokes.P, ρg[2], xci[2])
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
         )
-
+        # η .= mean(η)
         solve!(
             stokes,
             pt_stokes,
@@ -205,7 +204,9 @@ function RT_2D(igg, nx, ny)
             dt,
             igg;
             iterMax = 75e3,
-            nout=1e3,
+            iterMin = 15e3,
+            viscosity_relaxation = 1e-1,
+            nout    = 5e3,
             viscosity_cutoff=(-Inf, Inf)
         )
         dt = if it ≤ 10
@@ -217,6 +218,8 @@ function RT_2D(igg, nx, ny)
         else
             min(compute_dt(stokes, di) / 2, dt_max)
         end
+        # dt = min(compute_dt(stokes, di) / 2, dt_max)
+
         # @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
         # @parallel (@idx ni) multi_copy!(
         #     @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
@@ -228,7 +231,7 @@ function RT_2D(igg, nx, ny)
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
         # advect particles in memory
-        shuffle_particles!(particles, xvi, particle_args)        
+        move_particles!(particles, xvi, particle_args)        
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
@@ -239,7 +242,7 @@ function RT_2D(igg, nx, ny)
         @show it += 1
         t        += dt
 
-        if it == 1 || rem(it, 25) == 0
+        if it == 1 || rem(it, 5) == 0
             JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 2
 
@@ -264,7 +267,7 @@ function RT_2D(igg, nx, ny)
                 ax,
                 xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))..., 
                 lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
-                color = :red,
+                color = :darkblue,
             )
             fig
             save(joinpath(figdir, "$(it).png"), fig)
@@ -272,12 +275,12 @@ function RT_2D(igg, nx, ny)
         end
 
     end
-    return fig
+    return 
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n        = 60
+n        = 100
 nx       = n #85
 ny       = n #102
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

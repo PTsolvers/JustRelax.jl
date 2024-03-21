@@ -502,13 +502,13 @@ function JustRelax.solve!(
     args,
     dt,
     igg::IGG;
-    viscosity_cutoff = (1e16, 1e24),
-    iterMax = 50e3,
-    iterMin = 1e2,
-    viscosity_relaxation = 1e-3,
-    nout    = 500,
-    b_width = (4, 4, 0),
-    verbose = true,
+    viscosity_cutoff=(1e16, 1e24),
+    iterMax=50e3,
+    iterMin=1e2,
+    viscosity_relaxation=1e-3,
+    nout=500,
+    b_width=(4, 4, 0),
+    verbose=true,
 ) where {A,B,C,D,T}
 
     # unpack
@@ -617,7 +617,9 @@ function JustRelax.solve!(
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
-            @parallel (1:size(stokes.V.Vy, 1)-2, 1:size(stokes.V.Vy, 2))  interp_Vx_on_Vy!(Vx_on_Vy, stokes.V.Vx)
+            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
+                Vx_on_Vy, stokes.V.Vx
+            )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -682,7 +684,6 @@ function JustRelax.solve!(
         if igg.me == 0 && err ≤ ϵ && iter ≥ 20000
             println("Pseudo-transient iterations converged in $iter iterations")
         end
-
     end
 
     stokes.P .= θ
@@ -797,7 +798,6 @@ function JustRelax.solve!(
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
-          
         end
 
         iter += 1

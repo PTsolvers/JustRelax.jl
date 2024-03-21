@@ -238,7 +238,7 @@ function make_PTstokes_struct!()
             ) where {N,T}
                 lτ = min(li...)
                 Vpdτ = min(di...) * CFL
-                θ_dτ = lτ * (r + 4/3) / (Re * Vpdτ)
+                θ_dτ = lτ * (r + 4 / 3) / (Re * Vpdτ)
                 ηdτ = Vpdτ * lτ / Re
 
                 return new{typeof(r)}(CFL, ϵ, Re, r, Vpdτ, θ_dτ, ηdτ)

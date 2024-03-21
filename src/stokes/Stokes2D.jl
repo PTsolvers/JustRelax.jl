@@ -595,7 +595,7 @@ function JustRelax.solve!(
                     rheology,
                     viscosity_cutoff,
                 )
-            end
+            # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),

@@ -96,6 +96,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             tupleize,
             compute_maxloc!,
             continuation_log,
+            continuation_linear,
             mean_mpi,
             norm_mpi,
             minimum_mpi,
@@ -143,7 +144,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export compute_shear_heating!
 
         include(joinpath(@__DIR__, "Interpolations.jl"))
-        export vertex2center!, center2vertex!, temperature2center!
+        export vertex2center!, center2vertex!, temperature2center!, interp_Vx_on_Vy!
 
         include(joinpath(@__DIR__, "advection/weno5.jl"))
         export WENO5, WENO_advection!

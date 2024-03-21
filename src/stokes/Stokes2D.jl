@@ -545,7 +545,6 @@ function JustRelax.solve!(
     λ = @zeros(ni...)
     η0 = deepcopy(η)
     do_visc = true
-    # GC.enable(false)
 
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
@@ -595,7 +594,7 @@ function JustRelax.solve!(
                     rheology,
                     viscosity_cutoff,
                 )
-            # end
+            end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -680,14 +679,13 @@ function JustRelax.solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        # if igg.me == 0 && err ≤ ϵ && iter ≥ 20000
-        #     println("Pseudo-transient iterations converged in $iter iterations")
-        # end
+        if igg.me == 0 && err ≤ ϵ && iter ≥ 20000
+            println("Pseudo-transient iterations converged in $iter iterations")
+        end
 
     end
 
     stokes.P .= θ
-    # @views stokes.P .-= stokes.P[:, end]
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)

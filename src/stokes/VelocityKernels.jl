@@ -297,7 +297,7 @@ end
     return nothing
 end
 
-@parallel_indices (I[1]) function FreeSurface_Vy!(
+@parallel_indices (i) function FreeSurface_Vy!(
     Vy::AbstractArray{T,2},
     Vx::AbstractArray{T,2},
     P::AbstractArray{T,2},
@@ -305,13 +305,13 @@ end
     dx,
     dy,
 ) where {T}
-    Vy[I[1], end] = Vy[I[1], end-1] + 3.0/2.0*(P[I[1], end]/(2.0*η[I[1], end]) + inv(3.0) * (Vx[I[1]+1, end]-Vx[I[1], end])*inv(dx))*dy
+    Vy[i, end] = Vy[i, end-1] + 3.0/2.0*(P[i, end]/(2.0*η[i, end]) + inv(3.0) * (Vx[i+1, end]-Vx[i, end])*inv(dx))*dy
     return nothing
 end
 
 # @parallel (@idx ni) FreeSurface_Vy!(@velocity(stokes)..., stokes.P, η, di[1], di[2])
 
-@parallel_indices (I...) function FreeSurface_Vy_ve!(
+@parallel_indices (i) function FreeSurface_Vy_ve!(
     Vy::AbstractArray{T,2},
     Vx::AbstractArray{T,2},
     P::AbstractArray{T,2},
@@ -324,13 +324,13 @@ end
     dx::T,
     dy::T
 ) where {T}
-    phase = @inbounds phase_ratios[I...]
+    phase = @inbounds phase_ratios[i,end]
     Gdt = (fn_ratio(get_shear_modulus, rheology, phase) * dt)
-    Vy[I[1], end] = Vy[I[1], end-1] + 3.0/2.0*(P[I[1], end]/(2.0*η[I[1], end]) - (τyy_old[I[1], end]+P_old[I[1], end])/(2.0*Gdt) + inv(3.0) * (Vx[I[1]+1, end]-Vx[I[1], end])*inv(dx))*dy
+    Vy[i, end] = Vy[i, end-1] + 3.0/2.0*(P[i, end]/(2.0*η[i, end]) - (τyy_old[i, end]+P_old[i, end])/(2.0*Gdt) + inv(3.0) * (Vx[i+1, end]-Vx[i, end])*inv(dx))*dy
     return nothing
 end
 
-@parallel_indices (I...) function FreeSurface_Vy_vep!(
+@parallel_indices (i) function FreeSurface_Vy_vep!(
     Vy::AbstractArray{T,2},
     Vx::AbstractArray{T,2},
     P::AbstractArray{T,2},
@@ -344,17 +344,17 @@ end
     dx::T,
     dy::T
 ) where {T}
-    phase = @inbounds phase_ratios[I...]
+    phase = @inbounds phase_ratios[i, end]
     Gdt = (fn_ratio(get_shear_modulus, rheology, phase) * dt)
-    Vy[I[1], end] = Vy[I[1], end-1] + 3.0/2.0*(P[I[1], end]/(2.0*η[I[1], end]*(1.0-εII_pl[I[1], end])) - (τyy_old[I[1], end]+P_old[I[1], end])/(2.0*Gdt) + inv(3.0) * (Vx[I[1]+1, end]-Vx[I[1], end])*inv(dx))*dy
+    Vy[i, end] = Vy[i, end-1] + 3.0/2.0*(P[i, end]/(2.0*η[i, end]*(1.0-εII_pl[i, end])) - (τyy_old[i, end]+P_old[i, end])/(2.0*Gdt) + inv(3.0) * (Vx[i+1, end]-Vx[i, end])*inv(dx))*dy
     return nothing
 end
 
-@parallel_indices (I...) function FreeSurface_τyy!(σyy::AbstractArray{T,2},) where {T}
-    σyy[I[1], end] = 0.0
+@parallel_indices (i) function FreeSurface_τyy!(σyy::AbstractArray{T,2},) where {T}
+    σyy[i, end] = 0.0
     return
 end
-@parallel_indices (I...) function FreeSurface_τxy!(σxy::AbstractArray{T,2},) where {T}
-    σxy[I[1], end] =  -σxy[I[1], end-1]
+@parallel_indices (i) function FreeSurface_τxy!(σxy::AbstractArray{T,2},) where {T}
+    σxy[i, end] =  -σxy[i, end-1]
     return
 end

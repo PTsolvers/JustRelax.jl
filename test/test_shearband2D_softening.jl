@@ -1,4 +1,7 @@
-using GeoParams, GLMakie, CellArrays
+push!(LOAD_PATH, "..")
+
+using Test, Suppressor
+using GeoParams, CellArrays
 using JustRelax, JustRelax.DataIO
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -32,7 +35,12 @@ function init_phases!(phase_ratios, xci, radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, figdir="model_figs")
+function ShearBand2D()
+    n      = 32
+    nx     = n
+    ny     = n
+    init_mpi = JustRelax.MPI.Initialized() ? false : true
+    igg    = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
     # Physical domain ------------------------------------
     ly           = 1e0          # domain length in y
@@ -43,6 +51,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     origin       = 0.0, 0.0     # origin coordinates
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    dt           = Inf
 
     # Physical properties using GeoParams ----------------
     τ_y     = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
@@ -117,22 +126,18 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
-    # IO ------------------------------------------------
-    # if it does not exist, make folder where figures are stored
-    take(figdir)
-    # ----------------------------------------------------
-
     # Time loop
     t, it      = 0.0, 0
     tmax       = 3.5
     τII        = Float64[]
     sol        = Float64[]
     ttot       = Float64[]
+    local iters, τII, sol
 
     while t < tmax
 
         # Stokes solver ----------------
-        solve!(
+        iters = solve!(
             stokes,
             pt_stokes,
             di,
@@ -166,38 +171,20 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
         println("it = $it; t = $t \n")
 
-        # visualisation
-        th    = 0:pi/50:3*pi;
-        xunit = @. radius * cos(th) + 0.5;
-        yunit = @. radius * sin(th) + 0.5;
-
-        fig   = Figure(size = (1600, 1600), title = "t = $t")
-        ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}", titlesize=35)
-        ax2   = Axis(fig[2,1], aspect = 1, title = L"E_{II}", titlesize=35)
-        ax3   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize=35)
-        ax4   = Axis(fig[2,2], aspect = 1)
-        heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
-        heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
-        lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-        lines!(ax4, ttot, τII, color = :black)
-        lines!(ax4, ttot, sol, color = :red)
-        hidexdecorations!(ax1)
-        hidexdecorations!(ax3)
-        save(joinpath(figdir, "$(it).png"), fig)
-
     end
 
-    return nothing
+    finalize_global_grid(; finalize_MPI = true)
+
+    return iters, τII, sol
+
+
 end
 
-n      = 128
-nx     = n
-ny     = n
-figdir = "ShearBands2D_lin_softening"
-igg  = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-else
-    igg
+@testset "NonLinearSoftening_ShearBand2D" begin
+    @suppress begin
+        iters, τII, sol = ShearBand2D()
+        @test passed = iters.err_evo1[end] < 1e-6
+        @test τII[end] ≈ 1.48359 atol = 1e-4
+        @test sol[end] ≈ 1.94255 atol = 1e-4
+    end
 end
-main(igg; figdir = figdir, nx = nx, ny = ny);

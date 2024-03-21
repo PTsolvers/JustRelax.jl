@@ -1,3 +1,6 @@
+push!(LOAD_PATH, "..")
+using Test, Suppressor
+
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.DataIO
@@ -18,10 +21,10 @@ environment!(model)
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CellArrays
-using GLMakie
 
 # Load file with all the rheology configurations
-include("Shearheating_rheology.jl")
+# Load file with all the rheology configurations
+include("../miniapps/benchmarks/stokes3D/shear_heating/Shearheating_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -39,8 +42,10 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =false)
+function Shearheating3D(nx=16, ny=16, nz=16)
 
+    init_mpi = JustRelax.MPI.Initialized() ? false : true
+    igg    = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi)...)
     # Physical domain ------------------------------------
     lx           = 70e3           # domain length in x
     ly           = 70e3           # domain length in y
@@ -133,41 +138,12 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
 
-    # IO ----- -------------------------------------------
-    # if it does not exist, make folder where figures are stored
-    if do_vtk
-        vtk_dir      = figdir*"\\vtk"
-        take(vtk_dir)
-    end
-    take(figdir)
-    # ----------------------------------------------------
-
-    # Plot initial T and η profiles
-    let # let block to avoid polluting the global namespace
-        Zv  = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-        Z   = [z for x in xci[1], y in xci[2], z in xci[3]][:]
-        fig = Figure(size = (1200, 900))
-        ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-        ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[:]), Zv./1e3)
-        scatter!(ax2, Array(log10.(η[:])), Z./1e3 )
-        ylims!(ax1, minimum(xvi[3])./1e3, 0)
-        ylims!(ax2, minimum(xvi[3])./1e3, 0)
-        hideydecorations!(ax2)
-        save(joinpath(figdir, "initial_profile.png"), fig)
-    end
-
     grid2particle!(pT, xvi, thermal.T, particles)
 
-    local Vx_v, Vy_v, Vz_v
-    if do_vtk
-        Vx_v = @zeros(ni.+1...)
-        Vy_v = @zeros(ni.+1...)
-        Vz_v = @zeros(ni.+1...)
-    end
     # Time loop
     t, it = 0.0, 0
-    while it < 10
+    local iters
+    while it < 5
             # Update buoyancy and viscosity -
             args = (; T = thermal.Tc, P = stokes.P,  dt = Inf)
             @parallel (@idx ni) compute_viscosity!(
@@ -177,7 +153,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
             # ------------------------------
 
             # Stokes solver ----------------
-            solve!(
+            iters = solve!(
                 stokes,
                 pt_stokes,
                 di,
@@ -192,7 +168,8 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                 igg;
                 iterMax = 100e3,
                 nout=1e3,
-                viscosity_cutoff=(-Inf, Inf)
+                viscosity_cutoff=(-Inf, Inf),
+                verbose=false,
             )
             @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
             dt   = compute_dt(stokes, di, dt_diff)
@@ -225,7 +202,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                 phase   = phase_ratios,
                 iterMax = 10e3,
                 nout    = 1e2,
-                verbose = true,
+                verbose = false,
             )
             # ------------------------------
 
@@ -244,81 +221,21 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
 
             @show it += 1
             t        += dt
-
-            # Data I/O and plotting ---------------------
-            if it == 1 || rem(it, 10) == 0
-                checkpointing(figdir, stokes, thermal.T, η, t)
-
-                if do_vtk
-                    JustRelax.velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-                    data_v = (;
-                        T   = Array(thermal.T),
-                        τxy = Array(stokes.τ.xy),
-                        εxy = Array(stokes.ε.xy),
-                        Vx  = Array(Vx_v),
-                        Vy  = Array(Vy_v),
-                    )
-                    data_c = (;
-                        Tc  = Array(thermal.Tc),
-                        P   = Array(stokes.P),
-                        τxx = Array(stokes.τ.xx),
-                        τyy = Array(stokes.τ.yy),
-                        εxx = Array(stokes.ε.xx),
-                        εyy = Array(stokes.ε.yy),
-                        η   = Array(log10.(η)),
-                    )
-                    do_vtk(
-                        joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                        xvi,
-                        xci,
-                        data_v,
-                        data_c
-                    )
-                end
-
-                # Make Makie figure
-                slice_j = ny >>> 1
-                fig     = Figure(size = (1200, 1200), title = "t = $t")
-                ax1     = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-                ax2     = Axis(fig[2,1], aspect = ar, title = "Shear heating [W/m3]")
-                ax3     = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
-                ax4     = Axis(fig[2,3], aspect = ar, title = "log10(η)")
-                # Plot temperature
-                h1      = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, slice_j, :].-273.0) , colormap=:batlow)
-                # Plot particles phase
-                h2      = heatmap!(ax2, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.shear_heating[:, slice_j, :]) , colormap=:batlow)
-                # Plot 2nd invariant of strain rate
-                h3      = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
-                # Plot effective viscosity
-                h4      = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:, slice_j, :])) , colormap=:batlow)
-                hidexdecorations!(ax1)
-                hidexdecorations!(ax2)
-                hidexdecorations!(ax3)
-                Colorbar(fig[1,2], h1)
-                Colorbar(fig[2,2], h2)
-                Colorbar(fig[1,4], h3)
-                Colorbar(fig[2,4], h4)
-                linkaxes!(ax1, ax2, ax3, ax4)
-                save(joinpath(figdir, "$(it).png"), fig)
-                fig
-            end
             # ------------------------------
 
       end
 
-      return nothing
-  end
+    finalize_global_grid(; finalize_MPI = true)
 
-figdir   = "3D_Benchmark_Duretz_etal_2014"
-do_vtk = false # set to true to generate VTK files for ParaView
-n        = 32
-nx       = n
-ny       = n
-nz       = n
-igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, nz; init_MPI= true)...)
-else
-    igg
+    return iters, thermal
+
+
 end
 
-main3D(igg; ar=ar, ny=ny, nx=nx, nz=nz,figdir=figdir, do_vtk=do_vtk)
+@testset "Shearheating3D" begin
+    @suppress begin
+        iters, thermal = Shearheating3D()
+        @test passed = iters.err_evo1[end] < 1e-4
+    # @test maximum.(thermal.shear_heating)
+    end
+end

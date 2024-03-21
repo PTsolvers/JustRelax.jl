@@ -49,6 +49,7 @@ import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
 import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi, backend
+import JustRelax: interp_Vx_on_Vy!
 
 @eval @init_parallel_stencil($backend, Float64, 2)
 
@@ -501,11 +502,13 @@ function JustRelax.solve!(
     args,
     dt,
     igg::IGG;
-    viscosity_cutoff=(1e16, 1e24),
-    iterMax=10e3,
-    nout=500,
-    b_width=(4, 4, 0),
-    verbose=true,
+    viscosity_cutoff = (1e16, 1e24),
+    iterMax = 50e3,
+    iterMin = 10e3,
+    viscosity_relaxation = 1e-3,
+    nout    = 500,
+    b_width = (4, 4, 0),
+    verbose = true,
 ) where {A,B,C,D,T}
 
     # unpack
@@ -547,8 +550,11 @@ function JustRelax.solve!(
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
     end
+    Vx_on_Vy = @zeros(size(stokes.V.Vy))
 
-    while iter < 2 || (err > ϵ && iter ≤ iterMax)
+    while iter ≤ iterMax
+        iterMin < iter && err < ϵ && break
+
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
@@ -580,10 +586,9 @@ function JustRelax.solve!(
                 @copy η0 η
             end
             if do_visc
-                ν = 1e-2
                 @parallel (@idx ni) compute_viscosity!(
                     η,
-                    ν,
+                    viscosity_relaxation,
                     phase_ratios.center,
                     @strain(stokes)...,
                     args,
@@ -613,9 +618,12 @@ function JustRelax.solve!(
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
+            @parallel (1:size(stokes.V.Vy, 1)-2, 1:size(stokes.V.Vy, 2))  interp_Vx_on_Vy!(Vx_on_Vy, stokes.V.Vx)
+
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
+                    Vx_on_Vy,
                     θ,
                     @stress(stokes)...,
                     pt_stokes.ηdτ,
@@ -626,12 +634,12 @@ function JustRelax.solve!(
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
-
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
         end
 
         iter += 1
+
         if iter % nout == 0 && iter > 1
             er_η = norm_mpi(@.(log10(η) - log10(η0)))
             er_η < 1e-3 && (do_visc = false)
@@ -639,6 +647,7 @@ function JustRelax.solve!(
                 stokes.R.Rx,
                 stokes.R.Ry,
                 @velocity(stokes)...,
+                Vx_on_Vy,
                 stokes.P,
                 @stress(stokes)...,
                 ρg...,
@@ -657,7 +666,8 @@ function JustRelax.solve!(
             err = maximum_mpi(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
-            if igg.me == 0 && ((verbose && err > ϵ) || iter == iterMax)
+
+            if igg.me == 0 #&& ((verbose && err > ϵ) || iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
@@ -670,9 +680,10 @@ function JustRelax.solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && err ≤ ϵ
-            println("Pseudo-transient iterations converged in $iter iterations")
-        end
+        # if igg.me == 0 && err ≤ ϵ && iter ≥ 20000
+        #     println("Pseudo-transient iterations converged in $iter iterations")
+        # end
+
     end
 
     stokes.P .= θ
@@ -788,8 +799,7 @@ function JustRelax.solve!(
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
-            # apply boundary conditions boundary conditions
-            # flow_bcs!(stokes, flow_bcs)
+          
         end
 
         iter += 1

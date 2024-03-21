@@ -222,13 +222,12 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     t, it = 0.0, 0
 
 
-    while it < 5e3
+    while it < 30e3
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=dt, ϕ= ϕ)
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
         )
-        η .= mean(η)
         @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
         # ------------------------------
 
@@ -304,10 +303,12 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]      .= minimum(T_buffer)
-        @views thermal.T[2:end-1, :] .= T_buffer
+        @views thermal.T[:, end]     .= 273e0 + 600e0
+        @views thermal.T[:, 1]       .= 273e0 + 600e0
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+        thermal_bcs!(thermal.T, thermal_bc)
         temperature2center!(thermal)
+
         @show extrema(thermal.T)
         any(isnan.(thermal.T)) && break
 
@@ -322,7 +323,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || rem(it, 25) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if do_save_vtk
@@ -487,7 +488,7 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "test_convergence"
+figdir   = "240321_more_particles_eta_1e5_bas_1e3_rhy"
 # figdir   = "test_JP"
 do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio

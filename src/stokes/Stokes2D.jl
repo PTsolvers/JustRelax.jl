@@ -504,7 +504,7 @@ function JustRelax.solve!(
     igg::IGG;
     viscosity_cutoff = (1e16, 1e24),
     iterMax = 50e3,
-    iterMin = 10e3,
+    iterMin = 1e2,
     viscosity_relaxation = 1e-3,
     nout    = 500,
     b_width = (4, 4, 0),

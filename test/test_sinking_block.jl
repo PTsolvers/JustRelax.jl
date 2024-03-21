@@ -174,7 +174,7 @@ function Sinking_Block2D()
         phase_ratios,
         rheology,
         args,
-        Inf,
+        dt,
         igg;
         iterMax=150e3,
         nout=1e3,

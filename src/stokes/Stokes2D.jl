@@ -134,11 +134,11 @@ function JustRelax.solve!(
                     @velocity(stokes)...,
                     stokes.P,
                     @stress(stokes)...,
-                    ηdτ,
+                    pt_stokes.ηdτ,
                     ρg...,
                     ητ,
-                    _dx,
-                    _dy,
+                    _di...,
+                    dt,
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
@@ -149,7 +149,14 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             Vmin, Vmax = extrema(stokes.V.Vx)
             Pmin, Pmax = extrema(stokes.P)
@@ -259,10 +266,11 @@ function JustRelax.solve!(
                     @velocity(stokes)...,
                     stokes.P,
                     @stress(stokes)...,
-                    ηdτ,
+                    pt_stokes.ηdτ,
                     ρg...,
                     ητ,
                     _di...,
+                    dt,
                 )
                 # free slip boundary conditions
                 flow_bcs!(stokes, flow_bcs)
@@ -273,7 +281,14 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
@@ -404,12 +419,13 @@ function JustRelax.solve!(
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
-                    stokes.P,
+                    θ,
                     @stress(stokes)...,
-                    ηdτ,
+                    pt_stokes.ηdτ,
                     ρg...,
                     ητ,
                     _di...,
+                    dt,
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
@@ -420,8 +436,16 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
+
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
@@ -485,6 +509,7 @@ function JustRelax.solve!(
 ) where {A,B,C,D,T}
 
     # unpack
+
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
@@ -554,8 +579,9 @@ function JustRelax.solve!(
             if rem(iter, nout) == 0
                 @copy η0 η
             end
-            if do_visc
-                ν = 1e-2
+            # if iter % 10 == 0
+                # if do_visc
+                ν = 1e-4
                 @parallel (@idx ni) compute_viscosity!(
                     η,
                     ν,
@@ -565,7 +591,7 @@ function JustRelax.solve!(
                     rheology,
                     viscosity_cutoff,
                 )
-            end
+            # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -590,10 +616,18 @@ function JustRelax.solve!(
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
-                    @velocity(stokes)..., θ, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
+                    @velocity(stokes)...,
+                    θ,
+                    @stress(stokes)...,
+                    pt_stokes.ηdτ,
+                    ρg...,
+                    ητ,
+                    _di...,
+                    dt,
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
+
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
         end
@@ -603,7 +637,14 @@ function JustRelax.solve!(
             er_η = norm_mpi(@.(log10(η) - log10(η0)))
             er_η < 1e-3 && (do_visc = false)
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, θ, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (
@@ -636,6 +677,7 @@ function JustRelax.solve!(
     end
 
     stokes.P .= θ
+    # @views stokes.P .-= stokes.P[:, end]
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
@@ -673,6 +715,7 @@ function JustRelax.solve!(
 ) where {A,B,C,D,N,T}
 
     # unpack
+
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
@@ -736,10 +779,11 @@ function JustRelax.solve!(
                     @velocity(stokes)...,
                     stokes.P,
                     @stress(stokes)...,
-                    ηdτ,
+                    pt_stokes.ηdτ,
                     ρg...,
                     ητ,
                     _di...,
+                    dt,
                 )
                 # apply boundary conditions boundary conditions
                 flow_bcs!(stokes, flow_bcs)
@@ -752,7 +796,14 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])

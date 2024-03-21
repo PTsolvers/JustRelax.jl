@@ -1,8 +1,8 @@
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
-using JustRelax, JustRelax.DataIO, CSV, DataFrames
+using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using JustRelax, JustRelax.DataIO#, CSV, DataFrames
 import JustRelax.@cell
 using JustPIC
 using JustPIC._2D
@@ -59,7 +59,7 @@ end
 
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
+function main2D(igg; ny=64, nx=64, figdir="model_figs")
 
     # Physical domain ------------------------------------
     ly           = 1            # domain length in y
@@ -70,7 +70,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     origin       = 0.0, 0.0     # origin coordinates
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    dt           = Inf
+    dt           = 1e-10
 
     # Physical properties using GeoParams ----------------
     rheology = (
@@ -91,7 +91,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
     )
 
     # Initialize particles -------------------------------
-    nxcell, max_p, min_p = 40, 40, 1
+    nxcell, max_p, min_p = 40, 60, 20
     particles            = init_particles(
         backend, nxcell, max_p, min_p, xvi..., di..., nx, ny
     )
@@ -165,7 +165,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
             phase_ratios,
             rheology,
             args,
-            Inf,
+            dt, ## dt needs to be a number! not 0 or Inf
             igg;
             iterMax          = 10e3,
             nout             = 50,
@@ -189,7 +189,7 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
         # # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
-        @show inject = check_injection(particles)
+        inject = check_injection(particles)
         # inject && break
         inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
@@ -209,8 +209,8 @@ function main2D(igg; ny=16, nx=ny*8, figdir="model_figs")
 
     end
 
-    df = DataFrame(t=trms, Urms=Urms)
-    CSV.write(joinpath(figdir, "Urms.csv"), df)
+    # df = DataFrame(t=trms, Urms=Urms)
+    # CSV.write(joinpath(figdir, "Urms.csv"), df)
 
     return nothing
 end

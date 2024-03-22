@@ -196,7 +196,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     # Domain setup for JustRelax
     sticky_air = 2.5e3                        # thickness oif the sticky air layer
     ly = 12.5e3 + sticky_air                # domain length in y-direction
-    lx = 10.5e3                             # domain length in x-direction
+    lx = 15.5e3                             # domain length in x-direction
     li = lx, ly                             # domain length in x- and y-direction
     ni = nx, ny                             # number of grid points in x- and y-direction
     di = @. li / ni                         # grid step in x- and y-direction
@@ -717,7 +717,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
 end
 
-figdir = "Incompressible_Thermal_stresses_around_cooling_magma"
+figdir = "Thermal_stresses_around_cooling_magma"
 do_vtk = true # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
 n = 128

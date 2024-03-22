@@ -134,11 +134,11 @@ function JustRelax.solve!(
                     @velocity(stokes)...,
                     stokes.P,
                     @stress(stokes)...,
-                    ηdτ,
+                    pt_stokes.ηdτ,
                     ρg...,
                     ητ,
-                    _dx,
-                    _dy,
+                    _di...,
+                    dt,
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
@@ -149,7 +149,14 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             Vmin, Vmax = extrema(stokes.V.Vx)
             Pmin, Pmax = extrema(stokes.P)
@@ -259,7 +266,7 @@ function JustRelax.solve!(
                     @velocity(stokes)...,
                     stokes.P,
                     @stress(stokes)...,
-                    ηdτ,
+                    pt_stokes.ηdτ,
                     ρg...,
                     ητ,
                     _di...,
@@ -404,12 +411,13 @@ function JustRelax.solve!(
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
-                    stokes.P,
+                    θ,
                     @stress(stokes)...,
-                    ηdτ,
+                    pt_stokes.ηdτ,
                     ρg...,
                     ητ,
                     _di...,
+                    dt,
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
@@ -420,8 +428,16 @@ function JustRelax.solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
+
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
@@ -478,13 +494,16 @@ function JustRelax.solve!(
     dt,
     igg::IGG;
     viscosity_cutoff=(1e16, 1e24),
-    iterMax=10e3,
+    iterMax=50e3,
+    iterMin=1e2,
+    viscosity_relaxation=1e-3,
     nout=500,
     b_width=(4, 4, 0),
     verbose=true,
 ) where {A,B,C,D,T}
 
     # unpack
+
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
@@ -517,13 +536,15 @@ function JustRelax.solve!(
     λ = @zeros(ni...)
     η0 = deepcopy(η)
     do_visc = true
-    # GC.enable(false)
 
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
     end
+    Vx_on_Vy = @zeros(size(stokes.V.Vy))
 
-    while iter < 2 || (err > ϵ && iter ≤ iterMax)
+    while iter ≤ iterMax
+        iterMin < iter && err < ϵ && break
+
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
@@ -556,10 +577,9 @@ function JustRelax.solve!(
                 @copy η0 η
             end
             if do_visc
-                ν = 1e-2
                 @parallel (@idx ni) compute_viscosity!(
                     η,
-                    ν,
+                    viscosity_relaxation,
                     phase_ratios.center,
                     @strain(stokes)...,
                     args,
@@ -589,9 +609,21 @@ function JustRelax.solve!(
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
+            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
+                Vx_on_Vy, stokes.V.Vx
+            )
+
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
-                    @velocity(stokes)..., θ, @stress(stokes)..., ηdτ, ρg..., ητ, _di...
+                    @velocity(stokes)...,
+                    Vx_on_Vy,
+                    θ,
+                    @stress(stokes)...,
+                    pt_stokes.ηdτ,
+                    ρg...,
+                    ητ,
+                    _di...,
+                    dt,
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
@@ -600,11 +632,20 @@ function JustRelax.solve!(
         end
 
         iter += 1
+
         if iter % nout == 0 && iter > 1
             er_η = norm_mpi(@.(log10(η) - log10(η0)))
             er_η < 1e-3 && (do_visc = false)
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, θ, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                Vx_on_Vy,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (
@@ -618,7 +659,8 @@ function JustRelax.solve!(
             err = maximum_mpi(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
-            if igg.me == 0 && ((verbose && err > ϵ) || iter == iterMax)
+
+            if igg.me == 0 #&& ((verbose && err > ϵ) || iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
@@ -631,7 +673,7 @@ function JustRelax.solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && err ≤ ϵ
+        if igg.me == 0 && err ≤ ϵ && iter ≥ 20000
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
@@ -674,6 +716,7 @@ function JustRelax.solve!(
 ) where {A,B,C,D,N,T}
 
     # unpack
+
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
@@ -737,23 +780,29 @@ function JustRelax.solve!(
                     @velocity(stokes)...,
                     stokes.P,
                     @stress(stokes)...,
-                    ηdτ,
+                    pt_stokes.ηdτ,
                     ρg...,
                     ητ,
                     _di...,
+                    dt,
                 )
                 # apply boundary conditions boundary conditions
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(stokes.V.Vx, stokes.V.Vy)
             end
-            # apply boundary conditions boundary conditions
-            # flow_bcs!(stokes, flow_bcs)
         end
 
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx,
+                stokes.R.Ry,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
+                ρg...,
+                _di...,
+                dt,
             )
             errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])

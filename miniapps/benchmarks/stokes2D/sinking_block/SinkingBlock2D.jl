@@ -164,7 +164,7 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
         phase_ratios,
         rheology,
         args,
-        Inf,
+        dt,
         igg;
         iterMax=150e3,
         nout=1e3,

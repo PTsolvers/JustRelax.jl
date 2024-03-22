@@ -203,7 +203,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
                 phase_ratios,
                 rheology,
                 args,
-                Inf,
+                dt,
                 igg;
                 iterMax = 75e3,
                 nout=1e3,

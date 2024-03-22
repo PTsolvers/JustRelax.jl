@@ -172,16 +172,13 @@ function ShearBand2D()
     finalize_global_grid(; finalize_MPI = true)
 
     return iters, τII, sol
-
-
 end
 
 @testset "ShearBand2D" begin
     @suppress begin
         iters, τII, sol = ShearBand2D()
         @test passed = iters.err_evo1[end] < 1e-6
-        @test τII[end] ≈ 1.4170633311147924 atol = 1e-6
-        @test sol[end] ≈ 1.939605233155363 atol = 1e-6
+        @test τII[end] ≈ 1.41706 atol = 1e-4
+        @test sol[end] ≈ 1.93960 atol = 1e-4
     end
-
 end

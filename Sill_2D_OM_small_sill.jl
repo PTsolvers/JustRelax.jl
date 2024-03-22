@@ -1,8 +1,9 @@
 using CUDA
-CUDA.allowscalar(false)
+# CUDA.allowscalar(false)
 using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
 using ParallelStencil
+# @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 @init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
@@ -11,9 +12,11 @@ using JustPIC._2D
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:CUDA, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
+# model = PS_Setup(:Threads, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 environment!(model)
 
 # Load script dependencies
@@ -71,14 +74,31 @@ end
 end
 
 @parallel_indices (I...) function compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
-args_ijk = ntuple_idx(args, I...)
-ϕ[I...] = compute_melt_frac(rheology, args_ijk, phase_ratios[I...])
-return nothing
+    ϕ[I...] = compute_melt_frac(rheology, (; T=args.T[I...]), phase_ratios[I...])
+    return nothing
 end
 
 @inline function compute_melt_frac(rheology, args, phase_ratios)
     return GeoParams.compute_meltfraction_ratio(phase_ratios, rheology, args)
 end
+
+
+# function foo!(ϕ, phase_ratios, rheology, args)
+#     for i in 1:size(ϕ, 1), j in 1:size(ϕ, 2)
+#         args_ijk = ntuple_idx(args, i, j)
+#         ϕ[i, j] = compute_melt_frac(rheology, args_ijk, phase_ratios[i, j])
+#     end
+#     # args_ijk = ntuple_idx(args, I...)
+#     # ϕ[I...] = compute_melt_frac(rheology, args_ijk, phase_ratios[I...])
+#     return nothing
+# end
+
+# @code_warntype foo!(ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
+
+# @device_code_warntype interactive=true  @parallel (@idx ni) compute_melt_fraction!(
+#     ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
+# )
+
 
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
@@ -108,7 +128,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 30, 45, 15
+    nxcell, max_xcell, min_xcell = 30, 45, 20
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
@@ -295,24 +315,21 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-        # interpolate fields from grid vertices to particles
-        # grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
+        @views thermal.T[2:end-1, :] .= T_buffer
         @views thermal.T[:, end]     .= 273e0 + 600e0
         @views thermal.T[:, 1]       .= 273e0 + 600e0
-        @views thermal.T[2:end-1, :] .= T_buffer
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
         thermal_bcs!(thermal.T, thermal_bc)
         temperature2center!(thermal)
 
         @show extrema(thermal.T)
         any(isnan.(thermal.T)) && break
-
 
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
@@ -416,12 +433,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
                     xlabelsize=25,)
 
             # Plot temperature
-            h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:lipari, colorrange=(700, 1200))
+            h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:lipari, colorrange=(700, 1600))
             # Plot particles phase
             #h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
             #h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
 
-            h2  = heatmap!(ax2, xci[1], xci[2], Array(ρg[2]./10.0) , colormap=:batlowW, colorrange=(2650, 2820))
+            # h2  = heatmap!(ax2, xci[1], xci[2], Array(ρg[2]./10.0) , colormap=:batlowW, colorrange=(2650, 2820))
+            h2  = heatmap!(ax2, xci[1], xci[2], Array(ρg[2]./10.0) , colormap=:vikO)
 
             # Plot 2nd invariant of strain rate
             #h3  = heatmap!(ax3, xci[1], xci[2], Array(log10.(stokes.ε.II)) , colormap=:batlow)
@@ -455,7 +473,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
                 xticklabelsize=25,
                 xlabelsize=25,)
                  # Plot temperature
-                h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:lipari, colorrange=(700, 1200))
+                h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:lipari, colorrange=(700, 1600))
                 Colorbar(fig[1,2], h1, height = Relative(4/4), ticklabelsize=25, ticksize=15)
                 save(joinpath(figdir, "Temperature_$(it).png"), fig)
                 fig
@@ -489,13 +507,13 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "Overnight_240321_more_particles_eta_1e5_bas_1e3_rhy"
+figdir   = "240322_eta_1e5_bas_1e3_rhy"
 # figdir   = "test_JP"
 do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 320
-nx       = n*ar - 2
-ny       = n - 2
+n        = 512
+nx       = n
+ny       = n * 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else

@@ -1,19 +1,11 @@
-function compute_viscosity!(
-    η, ν, stokes::StokesArrays, args, rheology, cutoff
-)
+function compute_viscosity!(η, ν, stokes::StokesArrays, args, rheology, cutoff)
     ni = size(η)
-    @parallel (@idx ni) compute_viscosity!(
-        η, ν, @strain(stokes)..., args, rheology, cutoff
-    )
+    @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, rheology, cutoff)
 end
 
-function compute_viscosity!(
-    η, ν, εII::AbstractArray, args, rheology, cutoff
-)
+function compute_viscosity!(η, ν, εII::AbstractArray, args, rheology, cutoff)
     ni = size(η)
-    @parallel (@idx ni) compute_viscosity!(
-        η,  ν, εII, args, rheology, cutoff
-    )
+    @parallel (@idx ni) compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
 function compute_viscosity!(

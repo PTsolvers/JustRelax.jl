@@ -41,7 +41,9 @@ function append!(data_series, data::NamedTuple, time_step, seconds)
     return nothing
 end
 
-function save_vtk(fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTuple, velocity::NTuple{N, T}) where {N, T}
+function save_vtk(
+    fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTuple, velocity::NTuple{N,T}
+) where {N,T}
 
     # unpack data names and arrays
     data_names_v = string.(keys(data_v))

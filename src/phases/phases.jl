@@ -122,7 +122,9 @@ end
 
 function phase_ratios_center!(phase_ratios::PhaseRatio, particles, xci, di, pPhases)
     ni = size(pPhases)
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
+    @parallel (@idx ni) phase_ratios_center(
+        phase_ratios.center, particles.coords, xci, di, pPhases
+    )
     return nothing
 end
 

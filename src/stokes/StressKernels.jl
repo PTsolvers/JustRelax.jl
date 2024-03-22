@@ -118,7 +118,7 @@ end
     av_xz(A) = _av_xzi(A, i, j, k)
     av_yz(A) = _av_yzi(A, i, j, k)
     get(x) = x[i, j, k]
-    
+
     @inbounds begin
         if all((i, j, k) .≤ size(τxx))
             _Gdt = inv(get(G) * dt)
@@ -180,7 +180,6 @@ end
     return nothing
 end
 
-
 @parallel_indices (i, j, k) function compute_τ!(
     τxx,
     τyy,
@@ -241,12 +240,13 @@ end
         end
         # Compute τ_xy
         if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
-            G = (
-                fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k]) +
-                fn_ratio(get_shear_modulus, rheology, phase_center[i-1, j, k]) +
-                fn_ratio(get_shear_modulus, rheology, phase_center[i, j-1, k]) +
-                fn_ratio(get_shear_modulus, rheology, phase_center[i-1, j-1, k])
-            ) * 0.25
+            G =
+                (
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i - 1, j, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j - 1, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i - 1, j - 1, k])
+                ) * 0.25
             _Gdt = inv(G * dt)
             η_ij = harm_xy(η)
             denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
@@ -258,12 +258,13 @@ end
         end
         # Compute τ_xz
         if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
-            G = (
-                fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k]) +
-                fn_ratio(get_shear_modulus, rheology, phase_center[i-1, j, k]) +
-                fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k-1]) +
-                fn_ratio(get_shear_modulus, rheology, phase_center[i-1, j, k-1])
-            ) * 0.25
+            G =
+                (
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i - 1, j, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k - 1]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i - 1, j, k - 1])
+                ) * 0.25
             _Gdt = inv(G * dt)
             η_ij = harm_xz(η)
             denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
@@ -275,14 +276,15 @@ end
         end
         # Compute τ_yz
         if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
-            G = (
-                fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k]) +
-                fn_ratio(get_shear_modulus, rheology, phase_center[i, j-1, k]) +
-                fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k-1]) +
-                fn_ratio(get_shear_modulus, rheology, phase_center[i, j-1, k-1])
-            ) * 0.25
+            G =
+                (
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j - 1, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k - 1]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j - 1, k - 1])
+                ) * 0.25
             _Gdt = inv(G * dt)
-            
+
             η_ij = harm_yz(η)
             denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
             τyz[i, j, k] +=

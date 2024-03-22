@@ -91,7 +91,9 @@ end
         Base.@_inline_meta
         Base.@nexprs $N i -> begin
             τij_n = τij[i]
-            dτ_i = dτ_r * fma(2.0 * ηij, εij[i], fma(-((τij_n - τij_o[i])) * ηij, _Gdt, -τij_n))
+            dτ_i =
+                dτ_r *
+                fma(2.0 * ηij, εij[i], fma(-((τij_n - τij_o[i])) * ηij, _Gdt, -τij_n))
             pt_τ_i = τij_n + dτ_i
         end
         dτij = Base.@ncall $N tuple dτ
@@ -155,7 +157,9 @@ end
     return correct_stress!((τxx, τyy, τxy), τij, dτij, i, j)
 end
 
-@inline function correct_stress!(τxx, τyy, τzz, τyz, τxz, τxy, τij::NTuple, dτij::NTuple, i, j, k)
+@inline function correct_stress!(
+    τxx, τyy, τzz, τyz, τxz, τxy, τij::NTuple, dτij::NTuple, i, j, k
+)
     return correct_stress!((τxx, τyy, τzz, τyz, τxz, τxy), τij, dτij, i, j, k)
 end
 

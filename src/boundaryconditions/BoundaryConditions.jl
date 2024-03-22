@@ -31,9 +31,9 @@ struct FlowBoundaryConditions{T,nD} <: AbstractBoundaryConditions
 end
 
 @inline bc_index(x::NTuple) = mapreduce(xi -> max(size(xi)...), max, x)
-@inline function bc_index(x::NTuple{3, T}) where T 
+@inline function bc_index(x::NTuple{3,T}) where {T}
     n = mapreduce(xi -> max(size(xi)...), max, x)
-    return n,n
+    return n, n
 end
 @inline bc_index(x::T) where {T<:AbstractArray{<:Any,2}} = max(size(x)...)
 @inline function bc_index(x::T) where {T<:AbstractArray{<:Any,3}}
@@ -48,10 +48,12 @@ end
 
 Apply the prescribed heat boundary conditions `bc` on the `T`
 """
-@inline function thermal_bcs!(T::AbstractArray{_T, N}, bcs::TemperatureBoundaryConditions) where {_T, N}
+@inline function thermal_bcs!(
+    T::AbstractArray{_T,N}, bcs::TemperatureBoundaryConditions
+) where {_T,N}
     n = bc_index(T)
 
-    for _ in 1:N-1
+    for _ in 1:(N - 1)
         # no flux boundary conditions
         do_bc(bcs.no_flux) && (@parallel (@idx n) free_slip!(T, bcs.no_flux))
     end
@@ -59,14 +61,15 @@ Apply the prescribed heat boundary conditions `bc` on the `T`
     return nothing
 end
 
-@inline thermal_bcs!(thermal::ThermalArrays, bcs::TemperatureBoundaryConditions) = thermal_bcs!(thermal.T, bcs)
+@inline thermal_bcs!(thermal::ThermalArrays, bcs::TemperatureBoundaryConditions) =
+    thermal_bcs!(thermal.T, bcs)
 
 """
     flow_bcs!(stokes, bcs::FlowBoundaryConditions, di) 
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes` 
 """
-function _flow_bcs!(bcs::FlowBoundaryConditions, V::NTuple{N, T}) where {N, T}
+function _flow_bcs!(bcs::FlowBoundaryConditions, V::NTuple{N,T}) where {N,T}
     n = bc_index(V)
     for _ in 1:2
         # no slip boundary conditions
@@ -85,7 +88,7 @@ end
 
 # BOUNDARY CONDITIONS KERNELS
 
-@parallel_indices (i) function no_slip!(Ax::T, Ay::T, bc) where T
+@parallel_indices (i) function no_slip!(Ax::T, Ay::T, bc) where {T}
     @inbounds begin
         if bc.bot
             (i ≤ size(Ax, 2)) && (Ax[1, i] = 0.0)
@@ -109,7 +112,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function no_slip!(Ax::T, Ay::T, Az::T, bc) where T
+@parallel_indices (i, j) function no_slip!(Ax::T, Ay::T, Az::T, bc) where {T}
     @inbounds begin
         if bc.bot
             (i ≤ size(Ax, 1)) && (j ≤ size(Ax, 2)) && (Ax[i, j, 1] = -Ax[i, j, 2])
@@ -136,13 +139,12 @@ end
             (i ≤ size(Az, 1)) && (j ≤ size(Az, 3)) && (Az[i, end, j] = -Az[i, end - 1, j])
         end
 
-        bc.bot   && (i ≤ size(Az, 1)) && (j ≤ size(Az, 2)) && (Az[i, j, 1]   = 0.0)
-        bc.top   && (i ≤ size(Az, 1)) && (j ≤ size(Az, 2)) && (Az[i, j, end] = 0.0)
-        bc.left  && (i ≤ size(Ax, 2)) && (j ≤ size(Ax, 3)) && (Ax[1, i, j]   = 0.0)
+        bc.bot && (i ≤ size(Az, 1)) && (j ≤ size(Az, 2)) && (Az[i, j, 1] = 0.0)
+        bc.top && (i ≤ size(Az, 1)) && (j ≤ size(Az, 2)) && (Az[i, j, end] = 0.0)
+        bc.left && (i ≤ size(Ax, 2)) && (j ≤ size(Ax, 3)) && (Ax[1, i, j] = 0.0)
         bc.right && (i ≤ size(Ax, 2)) && (j ≤ size(Ax, 3)) && (Ax[end, i, j] = 0.0)
-        bc.front && (i ≤ size(Ay, 1)) && (j ≤ size(Ay, 3)) && (Ay[i, 1, j]   = 0.0)
-        bc.back  && (i ≤ size(Ay, 1)) && (j ≤ size(Ay, 3)) && (Ay[i, end, j] = 0.0)
-
+        bc.front && (i ≤ size(Ay, 1)) && (j ≤ size(Ay, 3)) && (Ay[i, 1, j] = 0.0)
+        bc.back && (i ≤ size(Ay, 1)) && (j ≤ size(Ay, 3)) && (Ay[i, end, j] = 0.0)
     end
     return nothing
 end
@@ -163,7 +165,7 @@ end
 
 @parallel_indices (i, j) function free_slip!(Ax, Ay, Az, bc)
     @inbounds begin
-        
+
         # free slip in the top and bottom XY planes
         if bc.top
             if i ≤ size(Ax, 1) && j ≤ size(Ax, 2)

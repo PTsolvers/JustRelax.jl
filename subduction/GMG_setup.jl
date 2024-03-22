@@ -21,14 +21,14 @@ function GMG_only(nx, ny, nz)
 
     # We use a lithospheric structure. Note that if the lowermost layer has the same phase as the mantle, you can define `Tlab` as the lithosphere-asthenosphere boundary which will automatically adjust the phase depending on temperature
     lith = LithosphericPhases(Layers=[15 45 10], Phases=[1 2 3], Tlab=1250)
-    AddBox!(Phases, Temp, Grid; xlim=(-3000,-1000), ylim=(0, 1000.0), zlim=(-70.0, 0.0), phase = lith,
+    AddBox!(Phases, Temp, Grid; xlim=(-3000,-1000), ylim=(0, 1000.0), zlim=(-60.0, 0.0), phase = lith,
             Origin=(-0,0,0),
             T=SpreadingRateTemp(SpreadingVel=3, MORside="left"), StrikeAngle=0);
 
     # And an an inclined part:
-    AddBox!(Phases, Temp, Grid; xlim=(0,300).-1000, ylim=(0, 1000.0), zlim=(-70.0, 0.0), phase = lith, 
+    AddBox!(Phases, Temp, Grid; xlim=(0,300).-1000, ylim=(0, 1000.0), zlim=(-60.0, 0.0), phase = lith, 
             # Origin=(-1000,0,0),
-            T=McKenzie_subducting_slab(Tsurface=0,v_cm_yr=3), DipAngle=30, StrikeAngle=0);
+            T=McKenzie_subducting_slab(Tsurface=0,v_cm_yr=3), DipAngle=15, StrikeAngle=0);
     # Add them to the `CartData` dataset:
     Grid = addField(Grid,(;Phases, Temp))
 
@@ -40,4 +40,3 @@ function GMG_only(nx, ny, nz)
 
     return li, origin, Phases, Temp
 end
-ss

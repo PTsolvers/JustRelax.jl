@@ -113,8 +113,8 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(;
-        free_slip    = (left = true , right = true , top = true , bot = false , front = true , back = true ),
-        no_slip      = (left = false, right = false, top = false, bot = true, front = false, back = false),
+        free_slip    = (left = true , right = true , top = true , bot = false,  front = true , back = true ),
+        no_slip      = (left = false, right = false, top = false, bot = true, front =    false, back = false),
         periodicity  = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions

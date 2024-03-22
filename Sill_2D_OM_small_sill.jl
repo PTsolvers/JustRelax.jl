@@ -512,8 +512,8 @@ figdir   = "240322_eta_1e5_bas_1e3_rhy"
 do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
 n        = 512
-nx       = n
-ny       = n * 2
+nx       = n * 2
+ny       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else

@@ -49,7 +49,6 @@ import JustRelax:
     Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
 import JustRelax: compute_maxloc!, solve!
 import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi, backend
-import JustRelax: interp_Vx_on_Vy!
 
 @eval @init_parallel_stencil($backend, Float64, 2)
 
@@ -271,7 +270,6 @@ function JustRelax.solve!(
                     ρg...,
                     ητ,
                     _di...,
-                    dt,
                 )
                 # free slip boundary conditions
                 flow_bcs!(stokes, flow_bcs)
@@ -284,12 +282,10 @@ function JustRelax.solve!(
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,
-                @velocity(stokes)...,
                 stokes.P,
                 @stress(stokes)...,
                 ρg...,
                 _di...,
-                dt,
             )
             errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])

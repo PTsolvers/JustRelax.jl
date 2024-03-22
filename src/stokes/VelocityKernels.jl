@@ -136,7 +136,6 @@ end
     if all((i, j) .< size(Vy) .- 1)
         θ = 1.0
         # Interpolate Vx into Vy node
-        # Vxᵢⱼ = 0.25 * (Vx[i, j + 1] + Vx[i + 1, j + 1] + Vx[i, j + 2] + Vx[i + 1, j + 2])
         Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
         # Vertical velocity
         Vyᵢⱼ = Vy[i + 1, j + 1]
@@ -266,8 +265,6 @@ end
         end
         if all((i, j) .≤ size(Ry))
             θ = 1.0
-            # Interpolate Vx into Vy node
-            # Vxᵢⱼ =
             #     0.25 * (Vx[i, j + 1] + Vx[i + 1, j + 1] + Vx[i, j + 2] + Vx[i + 1, j + 2])
             Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
             # Vertical velocity

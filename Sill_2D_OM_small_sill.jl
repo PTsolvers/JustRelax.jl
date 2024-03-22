@@ -131,7 +131,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-8,  CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=5e-5,  CFL = 0.95 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -305,6 +305,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
         particle2grid!(T_buffer, pT, xvi, particles)
         @views thermal.T[:, end]     .= 273e0 + 600e0
         @views thermal.T[:, 1]       .= 273e0 + 600e0
+        @views thermal.T[2:end-1, :] .= T_buffer
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
         thermal_bcs!(thermal.T, thermal_bc)
         temperature2center!(thermal)
@@ -488,7 +489,7 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "240321_more_particles_eta_1e5_bas_1e3_rhy"
+figdir   = "Overnight_240321_more_particles_eta_1e5_bas_1e3_rhy"
 # figdir   = "test_JP"
 do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio

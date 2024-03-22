@@ -56,7 +56,7 @@ function init_rheologies(; is_plastic = true)
         SetMaterialParams(;
             Phase             = 1,
             Density           = MeltDependent_Density(ρmelt=T_Density(ρ0=2300kg / m^3),ρsolid=ConstantDensity(ρ=2700kg / m^3)),
-            # Density           = PT_Density(; ρ0=2300, β=β_rhy, T0=0.0, α = 3.5e-5),
+            # Density           = PT_Density(; ρ0=2300, β=β_rhy, T0=273.15, α = 3.5e-5),
             # HeatCapacity      = ConstantHeatCapacity(Cp=1050J/kg/K),
             HeatCapacity      = Latent_HeatCapacity(Cp=ConstantHeatCapacity(), Q_L=400e3J/kg),
             Conductivity      = K_crust,
@@ -72,7 +72,7 @@ function init_rheologies(; is_plastic = true)
         SetMaterialParams(;
             Phase             = 2,
             Density           = MeltDependent_Density(ρmelt=T_Density(ρ0=2800kg / m^3)),
-            # Density           = PT_Density(; ρ0=2800, β=β_bas, T0=0.0, α = 3.5e-5),
+            # Density           = PT_Density(; ρ0=2800, β=β_bas, T0=273.15, α = 3.5e-5),
             # HeatCapacity      = ConstantHeatCapacity(Cp=1050J/kg/K),
             HeatCapacity      = Latent_HeatCapacity(Cp=ConstantHeatCapacity(), Q_L=400e3J/kg),
             Conductivity      = K_crust,

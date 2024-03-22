@@ -130,7 +130,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=5e-5,  CFL = 0.95 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -159,7 +159,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     end
     # Rheology
     η                = @ones(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf, ϕ=ϕ)
+    args             = (; T = thermal.Tc, P = stokes.P, dt = dt, ϕ=ϕ)
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
@@ -168,7 +168,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-2 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 5e-2 / √2.1
     )
 
     # Boundary conditions
@@ -302,9 +302,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]      .= minimum(T_buffer)
+        @views thermal.T[:, end]     .= 273e0 + 600e0
+        @views thermal.T[:, 1]       .= 273e0 + 600e0
         @views thermal.T[2:end-1, :] .= T_buffer
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+        thermal_bcs!(thermal.T, thermal_bc)
         temperature2center!(thermal)
         @show extrema(thermal.T)
         any(isnan.(thermal.T)) && break
@@ -467,7 +469,7 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "OM_Geometry_lower_resolution"
+figdir   = "OM_Geometry_bas1e5_rhy1e3"
 # figdir   = "test_JP"
 do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 2 # aspect ratio

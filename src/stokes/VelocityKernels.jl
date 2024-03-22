@@ -115,7 +115,7 @@ end
 
 # with free surface stabilization
 @parallel_indices (i, j) function compute_V!(
-    Vx::AbstractArray{T,2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy, dt
+    Vx::AbstractArray{T,2}, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy, dt
 ) where {T}
     d_xi(A) = _d_xi(A, i, j, _dx)
     d_yi(A) = _d_yi(A, i, j, _dy)
@@ -136,7 +136,7 @@ end
     if all((i, j) .< size(Vy) .- 1)
         θ = 1.0
         # Interpolate Vx into Vy node
-        Vxᵢⱼ = 0.25 * (Vx[i, j + 1] + Vx[i + 1, j + 1] + Vx[i, j + 2] + Vx[i + 1, j + 2])
+        Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
         # Vertical velocity
         Vyᵢⱼ = Vy[i + 1, j + 1]
         # Get necessary buoyancy forces
@@ -249,7 +249,7 @@ end
 end
 
 @parallel_indices (i, j) function compute_Res!(
-    Rx::AbstractArray{T,2}, Ry, Vx, Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
+    Rx::AbstractArray{T,2}, Ry, Vx, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
 ) where {T}
     @inline d_xa(A) = _d_xa(A, i, j, _dx)
     @inline d_ya(A) = _d_ya(A, i, j, _dy)
@@ -264,10 +264,9 @@ end
             Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
         end
         if all((i, j) .≤ size(Ry))
-            θ = 1
-            # Interpolate Vx into Vy node
-            Vxᵢⱼ =
-                0.25 * (Vx[i, j + 1] + Vx[i + 1, j + 1] + Vx[i, j + 2] + Vx[i + 1, j + 2])
+            θ = 1.0
+            #     0.25 * (Vx[i, j + 1] + Vx[i + 1, j + 1] + Vx[i, j + 2] + Vx[i + 1, j + 2])
+            Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
             # Vertical velocity
             Vyᵢⱼ = Vy[i + 1, j + 1]
             # Get necessary buoyancy forces
@@ -291,70 +290,9 @@ end
             # correction term
             ρg_correction = (Vxᵢⱼ * ∂ρg∂x + Vyᵢⱼ * ∂ρg∂y) * θ * dt
             Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + ρg_correction
+            # Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
         end
     end
 
     return nothing
-end
-
-@parallel_indices (i) function FreeSurface_Vy!(
-    Vy::AbstractArray{T,2},
-    Vx::AbstractArray{T,2},
-    P::AbstractArray{T,2},
-    η::AbstractArray{T,2},
-    dx,
-    dy,
-) where {T}
-    Vy[i, end] = Vy[i, end-1] + 3.0/2.0*(P[i, end]/(2.0*η[i, end]) + inv(3.0) * (Vx[i+1, end]-Vx[i, end])*inv(dx))*dy
-    return nothing
-end
-
-# @parallel (@idx ni) FreeSurface_Vy!(@velocity(stokes)..., stokes.P, η, di[1], di[2])
-
-@parallel_indices (i) function FreeSurface_Vy_ve!(
-    Vy::AbstractArray{T,2},
-    Vx::AbstractArray{T,2},
-    P::AbstractArray{T,2},
-    P_old::AbstractArray{T,2},
-    τyy_old::AbstractArray{T,2},
-    η::AbstractArray{T,2},
-    rheology,
-    phase_ratios::CellArray,
-    dt::T,
-    dx::T,
-    dy::T
-) where {T}
-    phase = @inbounds phase_ratios[i,end]
-    Gdt = (fn_ratio(get_shear_modulus, rheology, phase) * dt)
-    Vy[i, end] = Vy[i, end-1] + 3.0/2.0*(P[i, end]/(2.0*η[i, end]) - (τyy_old[i, end]+P_old[i, end])/(2.0*Gdt) + inv(3.0) * (Vx[i+1, end]-Vx[i, end])*inv(dx))*dy
-    return nothing
-end
-
-@parallel_indices (i) function FreeSurface_Vy_vep!(
-    Vy::AbstractArray{T,2},
-    Vx::AbstractArray{T,2},
-    P::AbstractArray{T,2},
-    P_old::AbstractArray{T,2},
-    τyy_old::AbstractArray{T,2},
-    εII_pl::AbstractArray{T,2},
-    η::AbstractArray{T,2},
-    rheology,
-    phase_ratios::CellArray,
-    dt::T,
-    dx::T,
-    dy::T
-) where {T}
-    phase = @inbounds phase_ratios[i, end]
-    Gdt = (fn_ratio(get_shear_modulus, rheology, phase) * dt)
-    Vy[i, end] = Vy[i, end-1] + 3.0/2.0*(P[i, end]/(2.0*η[i, end]*(1.0-εII_pl[i, end])) - (τyy_old[i, end]+P_old[i, end])/(2.0*Gdt) + inv(3.0) * (Vx[i+1, end]-Vx[i, end])*inv(dx))*dy
-    return nothing
-end
-
-@parallel_indices (i) function FreeSurface_τyy!(σyy::AbstractArray{T,2},) where {T}
-    σyy[i, end] = 0.0
-    return
-end
-@parallel_indices (i) function FreeSurface_τxy!(σxy::AbstractArray{T,2},) where {T}
-    σxy[i, end] =  -σxy[i, end-1]
-    return
 end

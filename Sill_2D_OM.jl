@@ -57,7 +57,7 @@ end
         T[i + 1, j] = 273e0 + 1200e0
     end
 
-    if  (-0.14e3 < depth ≤  -0.15e3 ) && (245 < x[i] ≤  255)
+    if  (-0.15e3 < depth ≤  -0.14e3 ) && (245 < x[i] ≤  255)
         T[i + 1, j] = 273e0 + 1300e0
     end
 
@@ -469,11 +469,11 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "OM_Geometry_bas1e5_rhy1e3"
+figdir   = "240322_OM_Geometry_bas1e5_rhy1e3"
 # figdir   = "test_JP"
 do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 2 # aspect ratio
-n        = 320
+n        = 512
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

@@ -89,7 +89,7 @@ function solCx(
     ρ         = solCx_density(xci, ni, di)
     fy        = ρ .* g
     ρg        = @zeros(ni...), fy
-    dt        = Inf
+    dt        = 1
     G         = @fill(Inf, ni...)
     K         = @fill(Inf, ni...)
 
@@ -124,7 +124,7 @@ function solCx(
             η,
             G,
             K,
-            Inf,
+            0.1,
             igg;
             iterMax = 500e3,
             nout    = 5e3,

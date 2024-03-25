@@ -7,13 +7,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Check for GLMakie dependency
+      - name: Check for GLMakie and JustPIC dependencies
         run: |
           if grep -q "GLMakie" ./Project.toml; then
             echo "GLMakie dependency found, failing the test."
             exit 1
-          else
-            echo "GLMakie dependency not found."
           fi
+          if grep -q "JustPIC" ./Project.toml; then
+            echo "JustPIC dependency found, failing the test."
+            exit 1
+          fi
+          echo "Neither GLMakie nor JustPIC dependencies found."

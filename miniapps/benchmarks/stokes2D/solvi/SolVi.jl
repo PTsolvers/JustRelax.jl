@@ -69,7 +69,7 @@ function solVi(;
     ηi        = Δη # inclusion viscosity
     η         = solvi_viscosity(ni, di, li, rc, η0, ηi) # viscosity field
     ρg        = @zeros(ni...), @zeros(ni...)
-    dt        = Inf
+    dt        = 0.1
     G         = @fill(Inf, ni...)
     Kb        = @fill(Inf, ni...)
 

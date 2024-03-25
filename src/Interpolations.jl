@@ -1,3 +1,19 @@
+"""
+    interp_Vx_on_Vy!(Vx_on_Vy, Vx)
+
+Interpolates the values of `Vx` onto the grid points of `Vy`.
+
+# Arguments
+- `Vx_on_Vy::AbstractArray`: `Vx` at `Vy` grid points.
+- `Vx::AbstractArray`: `Vx` at its staggered grid points.
+
+
+"""
+@parallel_indices (i, j) function interp_Vx_on_Vy!(Vx_on_Vy, Vx)
+    Vx_on_Vy[i + 1, j] = 0.25 * (Vx[i, j] + Vx[i + 1, j] + Vx[i, j + 1] + Vx[i + 1, j + 1])
+    return nothing
+end
+
 # From cell vertices to cell center
 
 function temperature2center!(thermal::ThermalArrays)

@@ -181,7 +181,7 @@ function Shearheating2D()
             phase_ratios,
             rheology,
             args,
-            Inf,
+            dt,
             igg;
             iterMax = 75e3,
             nout=1e3,

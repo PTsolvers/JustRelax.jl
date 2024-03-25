@@ -497,7 +497,7 @@ function JustRelax.solve!(
     iterMax=50e3,
     iterMin=1e2,
     viscosity_relaxation=1e-2,
-    free_surface = false,
+    free_surface=false,
     nout=500,
     b_width=(4, 4, 0),
     verbose=true,

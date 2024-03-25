@@ -1,0 +1,19 @@
+name: Check Dependencies
+
+on: [push, pull_request]
+
+jobs:
+  check_dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Check for GLMakie dependency
+        run: |
+          if grep -q "GLMakie" ./Project.toml; then
+            echo "GLMakie dependency found, failing the test."
+            exit 1
+          else
+            echo "GLMakie dependency not found."
+          fi

@@ -89,7 +89,7 @@ end
 
 # BOUNDARY CONDITIONS KERNELS
 
-@parallel_indices (i) function no_slip!(Ax::T, Ay::T, bc) where {T}
+@parallel_indices (i) function no_slip!(Ax, Ay, bc)
     @inbounds begin
         if bc.left
             (i ≤ size(Ax, 2)) && (Ax[1, i] = 0.0)
@@ -104,32 +104,6 @@ end
             (1 < i < size(Ax, 1)) && (Ax[i, 1] = -Ax[i, 2])
         end
         if bc.top
-            (i ≤ size(Ay, 1)) && (Ay[i, end] = 0.0)
-            (1 < i < size(Ax, 1)) && (Ax[i, end] = -Ax[i, end - 1])
-        end
-        # corners
-        # bc.bot && (Ax[1, 1] = 0.0; Ax[1, 1] = 0.0)
-        # bc.left && bc.bot && (Ax[1, 1] = 0.0)
-        # bc.right && bc.top && (Ay[end, end] = 0.0)
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function no_slip!(Ax::T, Ay::T, Az::T, bc) where {T}
-    @inbounds begin
-        if bc.bot
-            (i ≤ size(Ax, 1)) && (j ≤ size(Ax, 2)) && (Ax[i, j, 1] = -Ax[i, j, 2])
-            (i ≤ size(Ay, 1)) && (j ≤ size(Ay, 2)) && (Ay[i, j, 1] = -Ay[i, j, 2])
-        end
-        if bc.top
-            (i ≤ size(Ax, 1)) && (j ≤ size(Ax, 2)) && (Ax[i, j, end] = -Ax[i, j, end - 1])
-            (i ≤ size(Ay, 1)) && (j ≤ size(Ay, 2)) && (Ay[i, j, end] = -Ay[i, j, end - 1])
-        end
-        if bc.left
-            (i ≤ size(Ay, 1)) && (Ay[i, 1] = 0.0)
-            (1 < i < size(Ax, 1)) && (Ax[i, 1] = -Ax[i, 2])
-        end
-        if bc.right
             (i ≤ size(Ay, 1)) && (Ay[i, end] = 0.0)
             (1 < i < size(Ax, 1)) && (Ax[i, end] = -Ax[i, end - 1])
         end

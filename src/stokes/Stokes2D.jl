@@ -496,7 +496,8 @@ function JustRelax.solve!(
     viscosity_cutoff=(1e16, 1e24),
     iterMax=50e3,
     iterMin=1e2,
-    viscosity_relaxation=1e-3,
+    viscosity_relaxation=1e-2,
+    free_surface = false,
     nout=500,
     b_width=(4, 4, 0),
     verbose=true,
@@ -622,7 +623,7 @@ function JustRelax.solve!(
                     ρg...,
                     ητ,
                     _di...,
-                    dt,
+                    dt * free_surface,
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
@@ -644,7 +645,7 @@ function JustRelax.solve!(
                 @stress(stokes)...,
                 ρg...,
                 _di...,
-                dt,
+                dt * free_surface,
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (

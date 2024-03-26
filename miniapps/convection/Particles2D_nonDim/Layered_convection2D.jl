@@ -52,17 +52,18 @@ end
         T[i + 1, j] = nondimensionalize(273e0K, CharDim)
 
     elseif nondimensionalize(0e0km, CharDim) ≤ (depth) < nondimensionalize(35e3km, CharDim) 
-        dTdZ        = (923-273)/35e3
+        dTdZ        = nondimensionalize((923-273)/35e3 * K/km, CharDim)
+
         offset      = nondimensionalize(273e0K, CharDim) 
         T[i + 1, j] = (depth) * dTdZ + offset
 
     elseif nondimensionalize(110e3km, CharDim)  > (depth) ≥ nondimensionalize(35e3km, CharDim)
-        dTdZ        = (1492-923)/75e3
+        dTdZ        = nondimensionalize((1492-923)/75e3 * K/km, CharDim)
         offset      = nondimensionalize(923K, CharDim) 
         T[i + 1, j] = (depth - nondimensionalize(35e3km, CharDim)) * dTdZ + offset
 
     elseif (depth) ≥ nondimensionalize(110e3km, CharDim) 
-        dTdZ        = (1837 - 1492)/590e3
+        dTdZ        = nondimensionalize((1837 - 1492)/590e3 * K/km, CharDim)
         offset      = nondimensionalize(1492e0K, CharDim) 
         T[i + 1, j] = (depth - nondimensionalize(110e3km, CharDim)) * dTdZ + offset
 
@@ -72,22 +73,24 @@ end
 end
 
 # Thermal rectangular perturbation
-function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air)
+function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air, CharDim)
 
-    @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
+    @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, CharDim, x, y)
         @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc - thick_air)^2 ≤ r^2)
             depth       = -y[j] - thick_air
-            dTdZ        = (2047 - 2017) / 50e3
-            offset      = 2017
-            T[i + 1, j] = (depth - 585e3) * dTdZ + offset
+            dTdZ        = nondimensionalize((2047 - 2017)K / 50e3km, CharDim)
+            offset      = nondimensionalize(2017e0K, CharDim)             
+            T[i + 1, j] = (depth - nondimensionalize(585e3km, CharDim)) * dTdZ + offset
         end
         return nothing
     end
+
     ni = length.(xvi)
-    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, CharDim, xvi...)
 
     return nothing
 end
+
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -139,7 +142,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.75 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-7,  CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -153,7 +156,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     thermal_bcs!(thermal.T, thermal_bc)
     Tbot = thermal.T[1, 1]
     Ttop = thermal.T[1, end]
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air)
+    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
     @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
 
@@ -392,4 +395,4 @@ end
 
 # run main script
 
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);

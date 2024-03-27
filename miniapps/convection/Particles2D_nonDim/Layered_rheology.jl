@@ -5,52 +5,52 @@ function init_rheologies(CharDim; is_plastic = true)
     # Dislocation and Diffusion creep
     disl_upper_crust            = DislocationCreep(
         A=5.07e-18Pa^(-23//10) / s, # units are Pa^(-n) / s 
-        n=2.3, 
+        n=2.3NoUnits, 
         E=154e3J/mol, 
         V=6e-6m^3/mol,  
-        r=0.0, 
+        r=0.0NoUnits, 
         R=8.3145J/mol/K
     )
     disl_lower_crust            = DislocationCreep(
         A=2.08e-23Pa^(-32//10) / s, # units are Pa^(-n) / s 
-        n=3.2, 
+        n=3.2NoUnits, 
         E=238e3J/mol, 
         V=6e-6m^3/mol,  
-        r=0.0, 
-        R=8.3145J/mol/K
+        r=0.0NoUnits, 
+        R=8.3145J/mol/K,
     )
     disl_lithospheric_mantle    = DislocationCreep(
         A=2.51e-17Pa^(-35//10) / s, # units are Pa^(-n) / s 
-        n=3.5, 
+        n=3.5NoUnits, 
         E=530e3J/mol, 
         V=6e-6m^3/mol,  
-        r=0.0, 
+        r=0.0NoUnits, 
         R=8.3145J/mol/K
     )
     disl_sublithospheric_mantle = DislocationCreep(
         A=2.51e-17Pa^(-35//10) / s, # units are Pa^(-n) / s
-        n=3.5, 
+        n=3.5NoUnits, 
         E=530e3J/mol, 
         V=6e-6m^3/mol,  
-        r=0.0, 
+        r=0.0NoUnits, 
         R=8.3145J/mol/K
     )
     diff_lithospheric_mantle    = DiffusionCreep(
-        A=2.51e-17Pa^(-1 - 0) / s * m^(-0), # units are Pa^(-n - r) / s * m^(-p)
-        n=1.0, 
+        A=2.51e-17Pa^(-1) / s, # units are Pa^(-n - r) / s * m^(-p)
+        n=1.0NoUnits, 
         E=530e3J/mol, 
         V=6e-6m^3/mol,  
-        r=0.0, 
-        p=0.0,
+        r=0.0NoUnits, 
+        p=0.0NoUnits,
         R=8.3145J/mol/K
     )
     diff_sublithospheric_mantle = DiffusionCreep(
-        A=2.51e-17Pa^(-1 - 0) / s * m^(-0), # units are Pa^(-n - r) / s * m^(-p)
-        n=1.0, 
+        A=2.51e-17Pa^(-1) / s, # units are Pa^(-n - r) / s * m^(-p)
+        n=1.0NoUnits, 
         E=530e3J/mol, 
         V=6e-6m^3/mol,  
-        r=0.0, 
-        p=0.0,
+        r=0.0NoUnits, 
+        p=0.0NoUnits,
         R=8.3145J/mol/K
     )
 
@@ -80,7 +80,7 @@ function init_rheologies(CharDim; is_plastic = true)
         DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     end
     pl_wz     = if is_plastic
-        DruckerPrager_regularised(; C = 2e6, ϕ=2.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
+        DruckerPrager_regularised(; C = 2e6Pa, ϕ=2.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     else
         DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     end
@@ -100,49 +100,58 @@ function init_rheologies(CharDim; is_plastic = true)
         d = 0.00004*1e-6,
     )
 
+    g = -9.81m/s^2
+
     # Define rheolgy struct
     rheology = (
         # Name              = "UpperCrust",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = PT_Density(; ρ0=2.75e3kg / m^3, β=β_upper_crust, T0=273K, α = 3.5e-5/ K),
+            Density           = PT_Density(; ρ0=2.75e3kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2J / kg / K),
             Conductivity      = K_crust,
+            # CompositeRheology = CompositeRheology((LinearViscous(; η=1e22Pa*s),)),
             CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
             Elasticity        = el_upper_crust,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            Gravity           = ConstantGravity(; g=9.81m/s^2),
+            Gravity           = ConstantGravity(; g=g),
             CharDim           = CharDim,
         ),
         # Name              = "LowerCrust",
         SetMaterialParams(;
             Phase             = 2,
-            Density           = PT_Density(; ρ0=3e3kg / m^3, β=β_upper_crust, T0=273K, α = 3.5e-5/ K),
+            Density           = PT_Density(; ρ0=3e3kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2J / kg / K),
             Conductivity      = K_crust,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
+            # CompositeRheology = CompositeRheology((LinearViscous(; η=5e21Pa*s),)),
             CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
+            Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_lower_crust,
             CharDim           = CharDim,
         ),
         # Name              = "LithosphericMantle",
         SetMaterialParams(;
             Phase             = 3,
-            Density           = PT_Density(; ρ0=3.3e3kg / m^3, β=β_upper_crust, T0=273K, α = 3.5e-5/ K),
+            Density           = PT_Density(; ρ0=3.3e3kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3J / kg / K),
             Conductivity      = K_mantle,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
+            # CompositeRheology = CompositeRheology((LinearViscous(; η=1e19Pa*s),)),
             CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, el_lithospheric_mantle, pl)),
+            Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_lithospheric_mantle,
             CharDim           = CharDim,
         ),
         SetMaterialParams(;
             Phase             = 4,
-            Density           = PT_Density(; ρ0=(3.3e3-50)kg / m^3, β=β_upper_crust, T0=273K, α = 3.5e-5/ K),
+            Density           = PT_Density(; ρ0=(3.3e3-50)kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3J / kg / K),
             Conductivity      = K_mantle,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
+            # CompositeRheology = CompositeRheology((LinearViscous(; η=1e19Pa*s),)),
             CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
+            Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_sublithospheric_mantle,
             CharDim           = CharDim,
         ),
@@ -153,6 +162,7 @@ function init_rheologies(CharDim; is_plastic = true)
             HeatCapacity      = ConstantHeatCapacity(; Cp=3e3J / kg / K),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             Conductivity      = ConstantConductivity(; k=1.0Watt / m / K),
+            Gravity           = ConstantGravity(; g=g),
             CompositeRheology = CompositeRheology((LinearViscous(; η=1e19Pa*s),)),
             CharDim           = CharDim,
         ),

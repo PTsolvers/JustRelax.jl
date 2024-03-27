@@ -51,21 +51,21 @@ end
     if depth < nondimensionalize(0e0km, CharDim)
         T[i + 1, j] = nondimensionalize(273e0K, CharDim)
 
-    elseif nondimensionalize(0e0km, CharDim) ≤ (depth) < nondimensionalize(35e3km, CharDim) 
-        dTdZ        = nondimensionalize((923-273)/35e3 * K/km, CharDim)
+    elseif nondimensionalize(0e0km, CharDim) ≤ (depth) < nondimensionalize(35km, CharDim) 
+        dTdZ        = nondimensionalize((923-273)/35 * K/km, CharDim)
 
         offset      = nondimensionalize(273e0K, CharDim) 
         T[i + 1, j] = (depth) * dTdZ + offset
 
-    elseif nondimensionalize(110e3km, CharDim)  > (depth) ≥ nondimensionalize(35e3km, CharDim)
-        dTdZ        = nondimensionalize((1492-923)/75e3 * K/km, CharDim)
+    elseif nondimensionalize(110km, CharDim)  > (depth) ≥ nondimensionalize(35km, CharDim)
+        dTdZ        = nondimensionalize((1492-923)/75 * K/km, CharDim)
         offset      = nondimensionalize(923K, CharDim) 
-        T[i + 1, j] = (depth - nondimensionalize(35e3km, CharDim)) * dTdZ + offset
+        T[i + 1, j] = (depth - nondimensionalize(35km, CharDim)) * dTdZ + offset
 
-    elseif (depth) ≥ nondimensionalize(110e3km, CharDim) 
-        dTdZ        = nondimensionalize((1837 - 1492)/590e3 * K/km, CharDim)
+    elseif (depth) ≥ nondimensionalize(110km, CharDim) 
+        dTdZ        = nondimensionalize((1837 - 1492)/590 * K/km, CharDim)
         offset      = nondimensionalize(1492e0K, CharDim) 
-        T[i + 1, j] = (depth - nondimensionalize(110e3km, CharDim)) * dTdZ + offset
+        T[i + 1, j] = (depth - nondimensionalize(110km, CharDim)) * dTdZ + offset
 
     end
 
@@ -78,9 +78,9 @@ function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air, CharDim)
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, CharDim, x, y)
         @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc - thick_air)^2 ≤ r^2)
             depth       = -y[j] - thick_air
-            dTdZ        = nondimensionalize((2047 - 2017)K / 50e3km, CharDim)
+            dTdZ        = nondimensionalize((2047 - 2017)K / 50km, CharDim)
             offset      = nondimensionalize(2017e0K, CharDim)             
-            T[i + 1, j] = (depth - nondimensionalize(585e3km, CharDim)) * dTdZ + offset
+            T[i + 1, j] = (depth - nondimensionalize(585km, CharDim)) * dTdZ + offset
         end
         return nothing
     end
@@ -96,10 +96,11 @@ end
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
-    thickness    = 700e3 * km
-    η0           = 1e20 * Pa * s
-    CharDim      = GEO_units(; length = thickness, viscosity = η0)
-
+    thickness    = 700 * km
+    η0           = 1e21
+    CharDim      = GEO_units(; 
+        length = thickness, viscosity = η0, temperature = 1e3K
+    )
     # Physical domain ------------------------------------
     thick_air    = nondimensionalize(0e0km, CharDim)                 # thickness of sticky air layer
     ly           = nondimensionalize(thickness, CharDim) + thick_air # domain length in y
@@ -132,8 +133,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Elliptical temperature anomaly
     xc_anomaly       = lx/2    # origin of thermal anomaly
-    yc_anomaly       = nondimensionalize(-610e3km, CharDim) # origin of thermal anomaly
-    r_anomaly        = nondimensionalize(25e3km, CharDim) # radius of perturbation
+    yc_anomaly       = nondimensionalize(-610km, CharDim) # origin of thermal anomaly
+    r_anomaly        = nondimensionalize(25km, CharDim) # radius of perturbation
     init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly, thick_air, CharDim)
     phase_ratios     = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
@@ -191,7 +192,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
-        vtk_dir      = figdir*"\\vtk"
+        vtk_dir      = joinpath(figdir, "vtk")
         take(vtk_dir)
     end
     take(figdir)
@@ -396,3 +397,41 @@ end
 # run main script
 
 # main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+
+
+# @parallel_indices (I...) function compute_viscosity!(
+#     η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
+# )
+
+I=5,5
+εxx, εyy, εxyv = stokes.ε.xx, stokes.ε.yy,stokes.ε.xy
+    # convenience closure
+    @inline gather(A) = _gather(A, I...)
+
+    # @inbounds begin
+        # cache
+        ε = εxx[I...], εyy[I...]
+
+        # we need strain rate not to be zero, otherwise we get NaNs
+        εII_0 = all(ε.==0) * eps()
+
+        # argument fields at local index
+        args_ij = JustRelax.local_viscosity_args(args, I...)
+
+        # local phase ratio
+        ratio_ij = ratios_center[I...]
+
+        # compute second invariant of strain rate tensor
+        εij = εII_0 + ε[1], -εII_0 + ε[1], gather(εxyv)
+        εII = second_invariant(εij...)
+
+        # compute and update stress viscosity
+        ηi = JustRelax.compute_phase_viscosity_εII(rheology, ratio_ij, εII, args_ij)
+        ηi = continuation_log(ηi, η[I...], ν)
+        η[I...] = clamp(ηi, cutoff...)
+    # end
+
+#     return nothing
+# end
+
+compute_viscosity_εII(rheology[1], εII, (; P=7400, T=0.2))

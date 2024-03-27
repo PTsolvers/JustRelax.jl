@@ -79,28 +79,9 @@ function init_rheologies(CharDim; is_plastic = true)
     else
         DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     end
-    pl_wz     = if is_plastic
-        DruckerPrager_regularised(; C = 2e6Pa, ϕ=2.0, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-    else
-        DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-    end
-
+   
     # crust
-    K_crust = TP_Conductivity(;
-        a = 0.64,
-        b = 807e0,
-        c = 0.77,
-        d = 0.00004*1e-6,
-    )
-
-    K_mantle = TP_Conductivity(;
-        a = 0.73,
-        b = 1293e0,
-        c = 0.77,
-        d = 0.00004*1e-6,
-    )
-
-    g = -9.81m/s^2
+    g = 9.81m/s^2
 
     # Define rheolgy struct
     rheology = (
@@ -109,8 +90,7 @@ function init_rheologies(CharDim; is_plastic = true)
             Phase             = 1,
             Density           = PT_Density(; ρ0=2.75e3kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2J / kg / K),
-            Conductivity      = K_crust,
-            # CompositeRheology = CompositeRheology((LinearViscous(; η=1e22Pa*s),)),
+            Conductivity      = ConstantConductivity(; k=3.0Watt / m / K),
             CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
             Elasticity        = el_upper_crust,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
@@ -122,9 +102,8 @@ function init_rheologies(CharDim; is_plastic = true)
             Phase             = 2,
             Density           = PT_Density(; ρ0=3e3kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2J / kg / K),
-            Conductivity      = K_crust,
+            Conductivity      = ConstantConductivity(; k=3.0Watt / m / K),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            # CompositeRheology = CompositeRheology((LinearViscous(; η=5e21Pa*s),)),
             CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
             Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_lower_crust,
@@ -135,9 +114,8 @@ function init_rheologies(CharDim; is_plastic = true)
             Phase             = 3,
             Density           = PT_Density(; ρ0=3.3e3kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3J / kg / K),
-            Conductivity      = K_mantle,
+            Conductivity      = ConstantConductivity(; k=3.0Watt / m / K),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            # CompositeRheology = CompositeRheology((LinearViscous(; η=1e19Pa*s),)),
             CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, el_lithospheric_mantle, pl)),
             Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_lithospheric_mantle,
@@ -147,9 +125,8 @@ function init_rheologies(CharDim; is_plastic = true)
             Phase             = 4,
             Density           = PT_Density(; ρ0=(3.3e3-50)kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3J / kg / K),
-            Conductivity      = K_mantle,
+            Conductivity      = ConstantConductivity(; k=3.0Watt / m / K),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            # CompositeRheology = CompositeRheology((LinearViscous(; η=1e19Pa*s),)),
             CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
             Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_sublithospheric_mantle,
@@ -179,16 +156,16 @@ function init_phases!(phases, particles, Lx, d, r, thick_air, CharDim)
 
             x = JustRelax.@cell px[ip, i, j]
             depth = -(JustRelax.@cell py[ip, i, j]) - nondimensionalize(thick_air * km, CharDim)
-            if nondimensionalize(0e0km, CharDim) ≤ depth ≤ nondimensionalize(21e3km, CharDim)
+            if nondimensionalize(0e0km, CharDim) ≤ depth ≤ nondimensionalize(21km, CharDim)
                 @cell phases[ip, i, j] = 1.0
 
-            elseif nondimensionalize(35e3km, CharDim) ≥ depth >  nondimensionalize(21e3km, CharDim)
+            elseif nondimensionalize(35km, CharDim) ≥ depth >  nondimensionalize(21km, CharDim)
                 @cell phases[ip, i, j] = 2.0
 
-            elseif nondimensionalize(90e3km, CharDim) ≥ depth >  nondimensionalize(35e3km, CharDim)
+            elseif nondimensionalize(90km, CharDim) ≥ depth >  nondimensionalize(35km, CharDim)
                 @cell phases[ip, i, j] = 3.0
 
-            elseif depth > nondimensionalize(90e3km, CharDim)
+            elseif depth > nondimensionalize(90km, CharDim)
                 @cell phases[ip, i, j] = 3.0
 
             elseif depth < nondimensionalize(0e0km, CharDim)

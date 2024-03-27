@@ -440,6 +440,7 @@ function JustRelax.solve!(
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
+                args,
             )
 
             @parallel (@idx ni) compute_strain_rate!(

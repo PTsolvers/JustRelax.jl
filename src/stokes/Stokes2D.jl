@@ -563,6 +563,7 @@ function JustRelax.solve!(
                 dt,
                 r,
                 θ_dτ,
+                args,
             )
 
             if rem(iter, 5) == 0

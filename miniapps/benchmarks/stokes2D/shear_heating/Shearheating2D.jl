@@ -120,7 +120,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Rheology
     η                = @ones(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args             = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
@@ -184,7 +184,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     t, it = 0.0, 0
     while it < 100
             # Update buoyancy and viscosity -
-            args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+            args = (; T = thermal.Tc, P = stokes.P,  dt=dt, ΔTc = @zeros(ni...))
             @parallel (@idx ni) compute_viscosity!(
                 η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
             )

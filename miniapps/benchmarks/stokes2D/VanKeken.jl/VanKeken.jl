@@ -111,7 +111,7 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
 
     # Buoyancy forces
     ρg                   = @zeros(ni...), @zeros(ni...)
-    args                 = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
+    args                 = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
     @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 

@@ -32,8 +32,6 @@ end
     return conductivity * inv(heatcapacity * ρ)
 end
 
-# ρ*Cp
-
 @inline function compute_ρCp(rheology, args)
     return compute_heatcapacity(rheology, args) * compute_density(rheology, args)
 end

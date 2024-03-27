@@ -300,19 +300,6 @@ macro allocate(ni...)
     return esc(:(PTArray(undef, $(ni...))))
 end
 
-function indices(::NTuple{3,T}) where {T}
-    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
-    k = (blockIdx().z - 1) * blockDim().z + threadIdx().z
-    return i, j, k
-end
-
-function indices(::NTuple{2,T}) where {T}
-    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
-    return i, j
-end
-
 """
     maxloc!(B, A; window)
 
@@ -407,6 +394,7 @@ Compute the time step `dt` for the velocity field `S.V` and the diffusive maximu
     dt_adv = mapreduce(x -> x[1] * inv(maximum_mpi(abs.(x[2]))), min, zip(di, V)) * n
     return min(dt_diff, dt_adv)
 end
+
 """
     compute_dt(S::StokesArrays, di, igg)
 
@@ -510,6 +498,6 @@ for (f1, f2) in zip(
 )
     @eval begin
         $f1(A::AbstractArray) = $f2(Array(A))
-        $f1(A) = $f2(A)
+        $f1(A::Array) = $f2(A)
     end
 end

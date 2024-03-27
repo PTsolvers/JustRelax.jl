@@ -656,7 +656,7 @@ function JustRelax.solve!(
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
-            err = maximum_mpi(errs)
+            err = maximum(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
 

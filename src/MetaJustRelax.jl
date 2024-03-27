@@ -117,7 +117,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             apply_free_slip!
 
         include(joinpath(@__DIR__, "phases/phases.jl"))
-        export PhaseRatio, fn_ratio, phase_ratios_center
+        export PhaseRatio, fn_ratio, phase_ratios_center, phase_ratios_center!
 
         include(joinpath(@__DIR__, "rheology/BuoyancyForces.jl"))
         export compute_ρg!
@@ -126,10 +126,10 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
         export compute_viscosity!
 
         include(joinpath(@__DIR__, "stokes/Stokes2D.jl"))
-        export solve!, tensor_invariant!
+        export solve!
 
         include(joinpath(@__DIR__, "stokes/Stokes3D.jl"))
-        export solve!, tensor_invariant!
+        export solve!
 
         include(joinpath(@__DIR__, "thermal_diffusion/DiffusionExplicit.jl"))
         export ThermalParameters

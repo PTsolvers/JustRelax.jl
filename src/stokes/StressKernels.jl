@@ -180,6 +180,123 @@ end
     return nothing
 end
 
+@parallel_indices (i, j, k) function compute_τ!(
+    τxx,
+    τyy,
+    τzz,
+    τyz,
+    τxz,
+    τxy,
+    τxx_o,
+    τyy_o,
+    τzz_o,
+    τyz_o,
+    τxz_o,
+    τxy_o,
+    εxx,
+    εyy,
+    εzz,
+    εyz,
+    εxz,
+    εxy,
+    η,
+    phase_center,
+    rheology,
+    dt,
+    θ_dτ,
+)
+    harm_xy(A) = _harm_xyi(A, i, j, k)
+    harm_xz(A) = _harm_xzi(A, i, j, k)
+    harm_yz(A) = _harm_yzi(A, i, j, k)
+    av_xy(A) = _av_xyi(A, i, j, k)
+    av_xz(A) = _av_xzi(A, i, j, k)
+    av_yz(A) = _av_yzi(A, i, j, k)
+    get(x) = x[i, j, k]
+
+    @inbounds begin
+        if all((i, j, k) .≤ size(τxx))
+            phase = phase_center[i, j, k]
+            _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
+            η_ij = get(η)
+            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
+            # Compute τ_xx
+            τxx[i, j, k] +=
+                (
+                    -(get(τxx) - get(τxx_o)) * η_ij * _Gdt - get(τxx) +
+                    2.0 * η_ij * get(εxx)
+                ) * denominator
+            # Compute τ_yy
+            τyy[i, j, k] +=
+                (
+                    -(get(τyy) - get(τyy_o)) * η_ij * _Gdt - get(τyy) +
+                    2.0 * η_ij * get(εyy)
+                ) * denominator
+            # Compute τ_zz
+            τzz[i, j, k] +=
+                (
+                    -(get(τzz) - get(τzz_o)) * η_ij * _Gdt - get(τzz) +
+                    2.0 * η_ij * get(εzz)
+                ) * denominator
+        end
+        # Compute τ_xy
+        if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
+            G =
+                (
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i - 1, j, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j - 1, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i - 1, j - 1, k])
+                ) * 0.25
+            _Gdt = inv(G * dt)
+            η_ij = harm_xy(η)
+            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
+            τxy[i, j, k] +=
+                (
+                    -(get(τxy) - get(τxy_o)) * η_ij * _Gdt - get(τxy) +
+                    2.0 * η_ij * get(εxy)
+                ) * denominator
+        end
+        # Compute τ_xz
+        if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
+            G =
+                (
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i - 1, j, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k - 1]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i - 1, j, k - 1])
+                ) * 0.25
+            _Gdt = inv(G * dt)
+            η_ij = harm_xz(η)
+            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
+            τxz[i, j, k] +=
+                (
+                    -(get(τxz) - get(τxz_o)) * η_ij * _Gdt - get(τxz) +
+                    2.0 * η_ij * get(εxz)
+                ) * denominator
+        end
+        # Compute τ_yz
+        if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
+            G =
+                (
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j - 1, k]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j, k - 1]) +
+                    fn_ratio(get_shear_modulus, rheology, phase_center[i, j - 1, k - 1])
+                ) * 0.25
+            _Gdt = inv(G * dt)
+
+            η_ij = harm_yz(η)
+            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
+            τyz[i, j, k] +=
+                (
+                    -(get(τyz) - get(τyz_o)) * η_ij * _Gdt - get(τyz) +
+                    2.0 * η_ij * get(εyz)
+                ) * denominator
+        end
+    end
+    return nothing
+end
+
 @parallel_indices (i, j, k) function compute_τ_vertex!(
     τyz, τxz, τxy, εyz, εxz, εxy, ηvep, θ_dτ
 )

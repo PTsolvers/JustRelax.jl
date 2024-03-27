@@ -317,7 +317,7 @@ end
     τyy_old::AbstractArray{T,2},
     η::AbstractArray{T,2},
     rheology,
-    phase_ratios::CellArray,
+    phase_ratios,
     dt::T,
     dx::T,
     dy::T
@@ -325,6 +325,7 @@ end
     phase = @inbounds phase_ratios[i,end]
     Gdt = (fn_ratio(get_shear_modulus, rheology, phase) * dt)
     Vy[i, end] = Vy[i, end-1] + 3.0/2.0*(P[i, end]/(2.0*η[i, end]) - (τyy_old[i, end]+P_old[i, end])/(2.0*Gdt) + inv(3.0) * (Vx[i+1, end]-Vx[i, end])*inv(dx))*dy
+    @show Vy[i, end]
     return nothing
 end
 
@@ -337,7 +338,7 @@ end
     εII_pl::AbstractArray{T,2},
     η::AbstractArray{T,2},
     rheology,
-    phase_ratios::CellArray,
+    phase_ratios,
     dt::T,
     dx::T,
     dy::T

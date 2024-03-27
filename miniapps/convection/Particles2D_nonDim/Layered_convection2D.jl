@@ -229,11 +229,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
+    while t < nondimensionalize(5e6yr, CharDim) # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]      .= nondimensionalize(273.0K, CharDim)
+        @views T_buffer[:, end]      .= Ttop
         @views T_buffer[:, 1]        .= Tbot
         @views thermal.T[2:end-1, :] .= T_buffer
         temperature2center!(thermal)
@@ -395,43 +395,4 @@ else
 end
 
 # run main script
-
-# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
-
-
-# @parallel_indices (I...) function compute_viscosity!(
-#     η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
-# )
-
-I=5,5
-εxx, εyy, εxyv = stokes.ε.xx, stokes.ε.yy,stokes.ε.xy
-    # convenience closure
-    @inline gather(A) = _gather(A, I...)
-
-    # @inbounds begin
-        # cache
-        ε = εxx[I...], εyy[I...]
-
-        # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = all(ε.==0) * eps()
-
-        # argument fields at local index
-        args_ij = JustRelax.local_viscosity_args(args, I...)
-
-        # local phase ratio
-        ratio_ij = ratios_center[I...]
-
-        # compute second invariant of strain rate tensor
-        εij = εII_0 + ε[1], -εII_0 + ε[1], gather(εxyv)
-        εII = second_invariant(εij...)
-
-        # compute and update stress viscosity
-        ηi = JustRelax.compute_phase_viscosity_εII(rheology, ratio_ij, εII, args_ij)
-        ηi = continuation_log(ηi, η[I...], ν)
-        η[I...] = clamp(ηi, cutoff...)
-    # end
-
-#     return nothing
-# end
-
-compute_viscosity_εII(rheology[1], εII, (; P=7400, T=0.2))
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);

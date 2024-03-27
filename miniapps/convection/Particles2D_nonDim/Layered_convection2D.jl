@@ -310,7 +310,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 25) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if do_vtk

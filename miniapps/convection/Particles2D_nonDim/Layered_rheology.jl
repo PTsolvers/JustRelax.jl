@@ -80,7 +80,19 @@ function init_rheologies(CharDim; is_plastic = true)
         DruckerPrager_regularised(; C = Inf, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     end
    
-    # crust
+    K_crust = TP_Conductivity(;
+        a = 0.64Watt / K / m ,
+        b = 807e00Watt / m ,
+        c = 0.77K,
+        d = 0.00004/ MPa,
+    )
+    K_mantle = TP_Conductivity(;
+        a = 0.73Watt / K / m ,
+        b = 1293e00Watt / m ,
+        c = 0.77K,
+        d = 0.00004/ MPa,
+    )
+    
     g = 9.81m/s^2
 
     # Define rheolgy struct
@@ -90,7 +102,7 @@ function init_rheologies(CharDim; is_plastic = true)
             Phase             = 1,
             Density           = PT_Density(; ρ0=2.75e3kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2J / kg / K),
-            Conductivity      = ConstantConductivity(; k=3.0Watt / m / K),
+            Conductivity      = K_crust,
             CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
             Elasticity        = el_upper_crust,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
@@ -102,7 +114,7 @@ function init_rheologies(CharDim; is_plastic = true)
             Phase             = 2,
             Density           = PT_Density(; ρ0=3e3kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2J / kg / K),
-            Conductivity      = ConstantConductivity(; k=3.0Watt / m / K),
+            Conductivity      = K_crust,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
             Gravity           = ConstantGravity(; g=g),
@@ -114,7 +126,7 @@ function init_rheologies(CharDim; is_plastic = true)
             Phase             = 3,
             Density           = PT_Density(; ρ0=3.3e3kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3J / kg / K),
-            Conductivity      = ConstantConductivity(; k=3.0Watt / m / K),
+            Conductivity      = K_mantle,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, el_lithospheric_mantle, pl)),
             Gravity           = ConstantGravity(; g=g),
@@ -125,7 +137,7 @@ function init_rheologies(CharDim; is_plastic = true)
             Phase             = 4,
             Density           = PT_Density(; ρ0=(3.3e3-50)kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3J / kg / K),
-            Conductivity      = ConstantConductivity(; k=3.0Watt / m / K),
+            Conductivity      = K_mantle,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
             Gravity           = ConstantGravity(; g=g),

@@ -97,7 +97,7 @@ end
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     thickness    = 700 * km
-    η0           = 1e21
+    η0           = 1e20
     CharDim      = GEO_units(; 
         length = thickness, viscosity = η0, temperature = 1e3K
     )
@@ -178,7 +178,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-2 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-6, CFL= 1e-3 / √2.1
     )
 
     # Boundary conditions
@@ -206,11 +206,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv)
-        scatter!(ax2, Array(log10.(η[:])), Y)
+        scatter!(ax2, Array(log10.(A[:])), Y)
         ylims!(ax1, minimum(xvi[2]), 0)
         ylims!(ax2, minimum(xvi[2]), 0)
         hideydecorations!(ax2)
-        # save(joinpath(figdir, "initial_profile.png"), fig)
+        save(joinpath(figdir, "initial_profile.png"), fig)
         fig
     end
 
@@ -233,9 +233,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]      .= Ttop
-        @views T_buffer[:, 1]        .= Tbot
         @views thermal.T[2:end-1, :] .= T_buffer
+        @views thermal.T[:, end]     .= Ttop
+        @views thermal.T[:, 1]       .= Tbot
+        thermal_bcs!(thermal.T, thermal_bc)
         temperature2center!(thermal)
  
         # Update buoyancy and viscosity -
@@ -279,8 +280,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
             di;
             igg     = igg,
             phase   = phase_ratios,
-            iterMax = 10e3,
-            nout    = 1e2,
+            iterMax = 50e3,
+            nout    = 5e2,
             verbose = true,
         )
         for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
@@ -345,19 +346,20 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
             pxv      = ppx.data[:]
             pyv      = ppy.data[:]
             clr      = pPhases.data[:]
-            clr      = pT.data[:]
             idxv     = particles.index.data[:];
 
             # Make Makie figure
-            fig = Figure(size = (900, 900), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
+            t_dim = Float16(dimensionalize(t, yr, CharDim).val / 1e3)
+            fig = Figure(size = (900, 900), title = "t = $t_dim [kyr]")
+            ax1 = Axis(fig[1,1], aspect = ar, title = "T [K] ; t=$t_dim [kyrs]")
+            ax2 = Axis(fig[2,1], aspect = ar, title = "phase")
+            # ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
             ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
             h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:]) , colormap=:batlow)
             # Plot particles phase
-            h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
+            h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:grayC)
             # Plot 2nd invariant of strain rate
             h3  = heatmap!(ax3, xci[1], xci[2], Array(log10.(stokes.ε.II)) , colormap=:batlow)
             # Plot effective viscosity

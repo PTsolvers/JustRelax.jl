@@ -120,7 +120,6 @@ function RT_2D(igg, nx, ny)
     A             = 5e3    # Amplitude of the anomaly
     init_phases!(pPhases, particles, A)
     phase_ratios  = PhaseRatio(ni, length(rheology))
-    # @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
     # ----------------------------------------------------
 
@@ -185,7 +184,6 @@ function RT_2D(igg, nx, ny)
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
         )
-        # η .= mean(η)
         solve!(
             stokes,
             pt_stokes,
@@ -199,12 +197,12 @@ function RT_2D(igg, nx, ny)
             args,
             dt,
             igg;
-            iterMax = 150e3,
-            iterMin =   5e3,
-            viscosity_relaxation = 1e-2,
-            nout    = 5e3,
-            free_surface = true,
-            viscosity_cutoff=(-Inf, Inf)
+            iterMax              = 150e3,
+            iterMin              =   5e3,
+            viscosity_relaxation =  1e-2,
+            nout                 =   5e3,
+            free_surface         =  true,
+            viscosity_cutoff     = (-Inf, Inf)
         )
         dt = if it ≤ 10
             min(compute_dt(stokes, di),  1e3 * (3600 * 24 * 365.25))
@@ -215,7 +213,6 @@ function RT_2D(igg, nx, ny)
         else
             min(compute_dt(stokes, di), dt_max)
         end
-        # dt = min(compute_dt(stokes, di), dt_max)
         # ------------------------------
 
         # Advection --------------------
@@ -245,7 +242,6 @@ function RT_2D(igg, nx, ny)
 
             fig = Figure(size = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(t/(1e3 * 3600 * 24 *365.25)) Kyrs")
-            # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)), colormap = :grayC)
             scatter!(
                 ax, 
                 pxv, pyv, 
@@ -253,7 +249,6 @@ function RT_2D(igg, nx, ny)
                 colormap = :lajolla,
                 markersize = 3
             )
-            # scatter!(ax, pxv, pyv, color=clr, colormap = :grayC)
             arrows!(
                 ax,
                 xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))..., 

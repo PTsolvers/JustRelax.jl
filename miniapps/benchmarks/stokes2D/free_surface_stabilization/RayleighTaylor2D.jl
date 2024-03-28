@@ -30,30 +30,30 @@ macro all_j(A)
 end
 
 @parallel_indices (i, j) function init_P!(P, ρg, z)
-    P[i, j] = sum(abs(ρg[i, jj] * z[jj]) * z[jj] < 0.0 for jj in j:size(P, 2))
+    P[i, j] = sum(abs(ρg[i, jj] * z[jj]) for jj in j:size(P, 2))
     return nothing
 end
 
 function init_phases!(phases, particles, A)
     ni = size(phases)
-
+    
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, A)
-
+        
         f(x, A, λ) = A * sin(π*x/λ)
-
+        
         @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
             JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
             x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j])
+            depth = -(JustRelax.@cell py[ip, i, j]) 
             @cell phases[ip, i, j] = 2.0
-
+            
             if 0e0 ≤ depth ≤ 100e3
                 @cell phases[ip, i, j] = 1.0
 
             elseif depth > (-f(x, A, 500e3) + (200e3 - A))
-                @cell phases[ip, i, j] = 3.0
+                @cell phases[ip, i, j] = 3.0          
             end
 
         end
@@ -84,8 +84,8 @@ function RT_2D(igg, nx, ny)
         # Name              = "Air",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = ConstantDensity(; ρ=1e1),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e19),)),
+            Density           = ConstantDensity(; ρ=1e0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e17),)),
             Gravity           = ConstantGravity(; g=9.81),
         ),
         # Name              = "Crust",
@@ -116,7 +116,7 @@ function RT_2D(igg, nx, ny)
     pT, pPhases      = init_cell_arrays(particles, Val(2))
     particle_args    = (pT, pPhases)
 
-    # Elliptical temperature anomaly
+    # Elliptical temperature anomaly 
     A             = 5e3    # Amplitude of the anomaly
     init_phases!(pPhases, particles, A)
     phase_ratios  = PhaseRatio(ni, length(rheology))
@@ -133,20 +133,20 @@ function RT_2D(igg, nx, ny)
     # TEMPERATURE PROFILE --------------------------------
     thermal          = ThermalArrays(ni)
     # ----------------------------------------------------
-
+   
     # Buoyancy forces & rheology
     ρg               = @zeros(ni...), @zeros(ni...)
-    η                = @zeros(ni...)
+    η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, Inf)
+        η, 0.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, 1e24)
     )
     η_vep            = copy(η)
 
     # Boundary conditions
-    flow_bcs         = FlowBoundaryConditions(;
+    flow_bcs         = FlowBoundaryConditions(; 
         free_slip    = (left = true, right=true, top=true, bot=false),
         no_slip      = (left = false, right=false, top=false, bot=true),
     )
@@ -159,7 +159,6 @@ function RT_2D(igg, nx, ny)
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         scatter!(ax1, Array(ρg[2][:]./9.81), Y./1e3)
         scatter!(ax2, Array(log10.(η[:])), Y./1e3)
-        # scatter!(ax2, Array(stokes.P[:]), Y./1e3)
         ylims!(ax1, minimum(xvi[2])./1e3, 0)
         ylims!(ax2, minimum(xvi[2])./1e3, 0)
         hideydecorations!(ax2)
@@ -179,7 +178,7 @@ function RT_2D(igg, nx, ny)
 
         # Stokes solver ----------------
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-
+        
         @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
@@ -198,10 +197,11 @@ function RT_2D(igg, nx, ny)
             args,
             dt,
             igg;
-            iterMax = 75e3,
-            iterMin = 15e3,
-            viscosity_relaxation = 1e-1,
+            iterMax = 150e3,
+            iterMin =   5e3,
+            viscosity_relaxation = 5e-3,
             nout    = 5e3,
+            free_surface = true,
             viscosity_cutoff=(-Inf, Inf)
         )
         # dt = if it ≤ 10
@@ -220,14 +220,14 @@ function RT_2D(igg, nx, ny)
         # advect particles in space
         advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, xvi, particle_args)        
         # check if we need to inject particles
         inject = check_injection(particles)
         inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
         # @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
-
+    
         @show it += 1
         t        += dt
 
@@ -241,20 +241,20 @@ function RT_2D(igg, nx, ny)
             pyv      = ppy.data[:]./1e3
             clr      = pPhases.data[:]
 
-            fig = Figure(resolution = (900, 900), title = "t = $t")
+            fig = Figure(size = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(t/(1e3 * 3600 * 24 *365.25)) Kyrs")
             # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)), colormap = :grayC)
             scatter!(
-                ax,
-                pxv, pyv,
-                color=clr,
+                ax, 
+                pxv, pyv, 
+                color=clr, 
                 colormap = :lajolla,
                 markersize = 3
             )
             # scatter!(ax, pxv, pyv, color=clr, colormap = :grayC)
             arrows!(
                 ax,
-                xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
+                xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))..., 
                 lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
                 color = :darkblue,
             )
@@ -264,7 +264,7 @@ function RT_2D(igg, nx, ny)
         end
 
     end
-    return
+    return 
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 

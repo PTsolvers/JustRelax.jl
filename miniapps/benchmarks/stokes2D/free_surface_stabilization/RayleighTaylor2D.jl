@@ -85,7 +85,7 @@ function RT_2D(igg, nx, ny)
         SetMaterialParams(;
             Phase             = 1,
             Density           = ConstantDensity(; ρ=1e0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e17),)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e16),)),
             Gravity           = ConstantGravity(; g=9.81),
         ),
         # Name              = "Crust",
@@ -127,7 +127,7 @@ function RT_2D(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-5,  CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-8,  CFL = 0.95 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -149,6 +149,7 @@ function RT_2D(igg, nx, ny)
     flow_bcs         = FlowBoundaryConditions(; 
         free_slip    = (left = true, right=true, top=true, bot=false),
         no_slip      = (left = false, right=false, top=false, bot=true),
+        free_surface = true,
     )
 
     # Plot initial T and η profiles
@@ -173,7 +174,8 @@ function RT_2D(igg, nx, ny)
 
     # Time loop
     t, it = 0.0, 0
-    dt = dt_max = 50e3 * (3600 * 24 * 365.25)
+    dt = 1e3 * (3600 * 24 * 365.25)
+    dt_max = 50e3 * (3600 * 24 * 365.25)
     while it < 500 # run only for 5 Myrs
 
         # Stokes solver ----------------
@@ -199,21 +201,21 @@ function RT_2D(igg, nx, ny)
             igg;
             iterMax = 150e3,
             iterMin =   5e3,
-            viscosity_relaxation = 5e-3,
+            viscosity_relaxation = 1e-2,
             nout    = 5e3,
             free_surface = true,
             viscosity_cutoff=(-Inf, Inf)
         )
-        # dt = if it ≤ 10
-        #     min(compute_dt(stokes, di) / 2, 1e3 * (3600 * 24 * 365.25))
-        # elseif 10 < it ≤ 20
-        #     min(compute_dt(stokes, di) / 2, 10e3 * (3600 * 24 * 365.25))
-        # elseif 20 < it ≤ 30
-        #     min(compute_dt(stokes, di) / 2, 25e3 * (3600 * 24 * 365.25))
-        # else
-        #     min(compute_dt(stokes, di) / 2, dt_max)
-        # end
-        dt = min(compute_dt(stokes, di) / 2, dt_max)
+        dt = if it ≤ 10
+            min(compute_dt(stokes, di),  1e3 * (3600 * 24 * 365.25))
+        elseif 10 < it ≤ 20
+            min(compute_dt(stokes, di), 10e3 * (3600 * 24 * 365.25))
+        elseif 20 < it ≤ 30
+            min(compute_dt(stokes, di), 25e3 * (3600 * 24 * 365.25))
+        else
+            min(compute_dt(stokes, di), dt_max)
+        end
+        # dt = min(compute_dt(stokes, di), dt_max)
         # ------------------------------
 
         # Advection --------------------

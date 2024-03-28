@@ -80,7 +80,7 @@ end
 function free_surface_bcs!(stokes, bcs::FlowBoundaryConditions, η, rheology, phase_ratios, dt, di)
     if bcs.free_surface
         # apply boundary conditions
-        @parallel (@idx  (size(stokes.V.Vy, 2) - 1)) FreeSurface_Vy_ve!(
+        @parallel (@idx  (size(stokes.V.Vy, 2) - 1)) FreeSurface_Vy!(
             @velocity(stokes)...,
             stokes.P,
             stokes.P0,
@@ -250,7 +250,6 @@ end
     Vy[i+1, end] = Vy[i+1, end-1] + 3.0/2.0*(P[i, end]/(2.0*η[i, end]) - (τyy_old[i, end]+P_old[i, end])/(2.0*Gdt) + inv(3.0) * (Vx[i+1, end-1]-Vx[i, end-1])*inv(dx))*dy
     return nothing
 end
-
 
 function pureshear_bc!(
     stokes::StokesArrays, xci::NTuple{2,T}, xvi::NTuple{2,T}, εbg

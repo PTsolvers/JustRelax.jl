@@ -14,14 +14,16 @@ end
 struct FlowBoundaryConditions{T,nD} <: AbstractBoundaryConditions
     no_slip::T
     free_slip::T
+    free_surface::Bool
 
     function FlowBoundaryConditions(;
         no_slip::T=(left=false, right=false, top=false, bot=false),
         free_slip::T=(left=true, right=true, top=true, bot=true),
+        free_surface::Bool=false
     ) where {T}
         @assert length(no_slip) === length(free_slip)
         nD = length(no_slip) == 4 ? 2 : 3
-        return new{T,nD}(no_slip, free_slip)
+        return new{T,nD}(no_slip, free_slip, free_surface)
     end
 end
 
@@ -59,6 +61,12 @@ end
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes`
 """
+
+flow_bcs!(stokes, bcs::FlowBoundaryConditions) = _flow_bcs!(bcs, @velocity(stokes))
+function flow_bcs!(bcs::FlowBoundaryConditions, V::Vararg{T,N}) where {T,N}
+    return _flow_bcs!(bcs, tuple(V...))
+end
+
 function _flow_bcs!(bcs::FlowBoundaryConditions, V)
     n = bc_index(V)
     # no slip boundary conditions
@@ -69,9 +77,27 @@ function _flow_bcs!(bcs::FlowBoundaryConditions, V)
     return nothing
 end
 
-flow_bcs!(stokes, bcs::FlowBoundaryConditions) = _flow_bcs!(bcs, @velocity(stokes))
-function flow_bcs!(bcs::FlowBoundaryConditions, V::Vararg{T,N}) where {T,N}
-    return _flow_bcs!(bcs, tuple(V...))
+function free_surface_bcs!(stokes, bcs::FlowBoundaryConditions, η, rheology, phase_ratios, dt, di)
+    if bcs.free_surface
+        # apply boundary conditions
+        @parallel (@idx  (size(stokes.V.Vy, 2) - 1)) FreeSurface_Vy_ve!(
+            @velocity(stokes)...,
+            stokes.P,
+            stokes.P0,
+            stokes.τ_o.yy,
+            η,
+            rheology,
+            phase_ratios.center,
+            dt,
+            di...,
+        )
+    end
+end
+
+function free_surface_bcs!(τ::SymmetricTensor, bcs::FlowBoundaryConditions)
+    if bcs.free_surface
+        @views τ.yy[:, end] .= 0.0
+    end
 end
 
 # BOUNDARY CONDITIONS KERNELS

@@ -612,6 +612,7 @@ function JustRelax.solve!(
                 dt,
                 θ_dτ,
             )
+            free_surface_bcs!(stokes.τ, flow_bcs)
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
@@ -633,6 +634,7 @@ function JustRelax.solve!(
                     dt,
                 )
                 # apply boundary conditions
+                free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
 
                 update_halo!(stokes.V.Vx, stokes.V.Vy)

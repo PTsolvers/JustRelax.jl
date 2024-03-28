@@ -114,7 +114,8 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             free_slip_x!,
             free_slip_y!,
             free_slip_z!,
-            apply_free_slip!
+            apply_free_slip!,
+            free_surface_bcs!
 
         include(joinpath(@__DIR__, "phases/phases.jl"))
         export PhaseRatio, fn_ratio, phase_ratios_center
@@ -148,6 +149,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
 
         include(joinpath(@__DIR__, "advection/weno5.jl"))
         export WENO5, WENO_advection!
+            
     end
 
     # conditional submodule load

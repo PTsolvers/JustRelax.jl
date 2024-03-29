@@ -4,7 +4,7 @@ struct TemperatureBoundaryConditions{T,nD} <: AbstractBoundaryConditions
     no_flux::T
 
     function TemperatureBoundaryConditions(;
-        no_flux::T=(left=true, right=false, top=false, bot=false),
+        no_flux::T=(left=true, right=false, top=false, bot=false)
     ) where {T}
         nD = length(no_flux) == 4 ? 2 : 3
         return new{T,nD}(no_flux)
@@ -19,7 +19,7 @@ struct FlowBoundaryConditions{T,nD} <: AbstractBoundaryConditions
     function FlowBoundaryConditions(;
         no_slip::T=(left=false, right=false, top=false, bot=false),
         free_slip::T=(left=true, right=true, top=true, bot=true),
-        free_surface::Bool=false
+        free_surface::Bool=false,
     ) where {T}
         @assert length(no_slip) === length(free_slip)
         nD = length(no_slip) == 4 ? 2 : 3
@@ -73,31 +73,8 @@ function _flow_bcs!(bcs::FlowBoundaryConditions, V)
     do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip))
     # free slip boundary conditions
     do_bc(bcs.free_slip) && (@parallel (@idx n) free_slip!(V..., bcs.free_slip))
-   
+
     return nothing
-end
-
-function free_surface_bcs!(stokes, bcs::FlowBoundaryConditions, η, rheology, phase_ratios, dt, di)
-    if bcs.free_surface
-        # apply boundary conditions
-        @parallel (@idx  (size(stokes.V.Vy, 2) - 1)) FreeSurface_Vy!(
-            @velocity(stokes)...,
-            stokes.P,
-            stokes.P0,
-            stokes.τ_o.yy,
-            η,
-            rheology,
-            phase_ratios.center,
-            dt,
-            di...,
-        )
-    end
-end
-
-function free_surface_bcs!(τ::SymmetricTensor, bcs::FlowBoundaryConditions)
-    if bcs.free_surface
-        @views τ.yy[:, end] .= 0.0
-    end
 end
 
 # BOUNDARY CONDITIONS KERNELS
@@ -232,6 +209,38 @@ end
     return nothing
 end
 
+function free_surface_bcs!(
+    stokes, bcs::FlowBoundaryConditions, η, rheology, phase_ratios, dt, di
+)
+
+    indices_range(Vx, Vy) = @idx (size(Vy, 2) - 1)
+    indices_range(Vx, Vy, Vz) = @idx (size(Vz, 1) - 2, size(Vz, 2) - 2)
+
+    V = @velocity(stokes)
+    n = indices_range(V...)
+
+    if bcs.free_surface
+        # apply boundary conditions
+        @parallel n FreeSurface_Vy!(
+            V...,
+            stokes.P,
+            stokes.P0,
+            stokes.τ_o.yy,
+            η,
+            rheology,
+            phase_ratios.center,
+            dt,
+            di...,
+        )
+    end
+end
+
+function free_surface_bcs!(τ::SymmetricTensor, bcs::FlowBoundaryConditions)
+    if bcs.free_surface
+        @views τ.yy[:, end] .= 0.0
+    end
+end
+
 @parallel_indices (i) function FreeSurface_Vy!(
     Vx::AbstractArray{T,2},
     Vy::AbstractArray{T,2},
@@ -243,11 +252,51 @@ end
     phase_ratios,
     dt::T,
     dx::T,
-    dy::T
+    dy::T,
 ) where {T}
     phase = @inbounds phase_ratios[i, end]
     Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
-    Vy[i+1, end] = Vy[i+1, end-1] + 3.0/2.0*(P[i, end]/(2.0*η[i, end]) - (τyy_old[i, end]+P_old[i, end])/(2.0*Gdt) + inv(3.0) * (Vx[i+1, end-1]-Vx[i, end-1])*inv(dx))*dy
+    Vy[i + 1, end] =
+        Vy[i + 1, end - 1] +
+        3.0 / 2.0 *
+        (
+            P[i, end] / (2.0 * η[i, end]) -
+            (τyy_old[i, end] + P_old[i, end]) / (2.0 * Gdt) +
+            inv(3.0) * (Vx[i + 1, end - 1] - Vx[i, end - 1]) * inv(dx)
+        ) *
+        dy
+    return nothing
+end
+
+@parallel_indices (i, j) function FreeSurface_Vy!(
+    Vx::AbstractArray{T,3},
+    Vy::AbstractArray{T,3},
+    Vz::AbstractArray{T,3},
+    P::AbstractArray{T,3},
+    P_old::AbstractArray{T,3},
+    τyy_old::AbstractArray{T,3},
+    η::AbstractArray{T,3},
+    rheology,
+    phase_ratios,
+    dt::T,
+    dx::T,
+    dy::T,
+    dz::T,
+) where {T}
+    phase = @inbounds phase_ratios[i, end]
+    Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
+    Vz[i + 1, j + 1, end] =
+        Vz[i + 1, j + 1, end - 1] +
+        3.0 / 2.0 *
+        (
+            P[i, j, end] / (2.0 * η[i, j, end]) -
+            (τyy_old[i, j, end] + P_old[i, j, end]) / (2.0 * Gdt) +
+            inv(3.0) * (
+                (Vx[i + 1, j + 1, end - 1] - Vx[i, j + 1, end - 1]) * inv(dx) +
+                (Vy[i + 1, j + 1, end - 1] - Vy[i + 1, j, end - 1]) * inv(dy)
+            )
+        ) *
+        dz
     return nothing
 end
 

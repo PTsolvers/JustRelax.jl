@@ -130,7 +130,6 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     thermal          = ThermalArrays(ni)
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
-        periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
     # initialize thermal profile - Half space cooling
     @parallel init_T!(thermal.T, xvi[3])
@@ -162,7 +161,6 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left = true , right = true , top = true , bot = true , front = true , back = true ),
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
-        periodicity  = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
@@ -170,7 +168,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
-        vtk_dir      = figdir*"\\vtk"
+        vtk_dir      = joinpath(figdir, "vtk")
         take(vtk_dir)
     end
     take(figdir)
@@ -354,4 +352,4 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir   = "Plume3D_$n"
-main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+# main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

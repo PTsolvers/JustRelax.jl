@@ -68,9 +68,9 @@ end
 function RT_2D(igg, nx, ny)
 
     # Physical domain ------------------------------------
-    thick_air    = 100e3              # thickness of sticky air layer
+    thick_air    = 100e3             # thickness of sticky air layer
     ly           = 500e3 + thick_air # domain length in y
-    lx           = 500e3           # domain length in x
+    lx           = 500e3             # domain length in x
     ni           = nx, ny            # number of cells
     li           = lx, ly            # domain length in x- and y-
     di           = @. li / ni        # grid step in x- and -y
@@ -146,8 +146,8 @@ function RT_2D(igg, nx, ny)
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(; 
-        free_slip    = (left = true, right=true, top=true, bot=false),
-        no_slip      = (left = false, right=false, top=false, bot=true),
+        free_slip    = (left =  true, right =  true, top =  true, bot = false),
+        no_slip      = (left = false, right = false, top = false, bot =  true),
         free_surface = true,
     )
 

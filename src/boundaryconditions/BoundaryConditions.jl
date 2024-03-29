@@ -283,7 +283,7 @@ end
     dy::T,
     dz::T,
 ) where {T}
-    phase = @inbounds phase_ratios[i, end]
+    phase = @inbounds phase_ratios[i, j, end]
     Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
     Vz[i + 1, j + 1, end] =
         Vz[i + 1, j + 1, end - 1] +

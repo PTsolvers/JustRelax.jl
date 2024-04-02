@@ -171,7 +171,9 @@ module JustRelax2D
     
     # Utils
     JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di, dt_diff, I) = compute_dt(S, di, dt_diff, I::IGG)
-
+    JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(S, di, dt_diff)
+    JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di) = compute_dt(S, di)
+    
 end
 
 end

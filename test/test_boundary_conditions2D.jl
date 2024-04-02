@@ -36,7 +36,6 @@ environment!(model)
         @test @views Vx[:  , end] == -Vx[:      , end - 1]
 
         # test with StokesArrays
-        # periodicity
         ni = 5, 5
         stokes = StokesArrays(ni, ViscoElastic)
         stokes.V.Vx .= PTArray(rand(n + 1, n + 2))

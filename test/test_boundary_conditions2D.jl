@@ -1,4 +1,3 @@
-using Test, Suppressor
 using JustRelax
 
 model = PS_Setup(:cpu, Float64, 2)
@@ -6,14 +5,12 @@ environment!(model)
 
 @testset "Boundary Conditions" begin
     @suppress begin
-    # periodicity
         n = 5 # number of elements
         Vx, Vy = PTArray(rand(n + 1, n + 2)), PTArray(rand(n + 2, n + 1))
         # free-slip
         bcs = FlowBoundaryConditions(;
             no_slip=(left=false, right=false, top=false, bot=false),
             free_slip=(left=true, right=true, top=true, bot=true),
-            periodicity=(left=false, right=false, top=false, bot=false),
         )
         flow_bcs!(bcs, Vx, Vy)
 

@@ -66,6 +66,8 @@ struct ThermalArrays{_T}
     end
 end
 
+ThermalArrays(::Type{CPUBackend}, ni::NTuple{N,Number}) where {N} = ThermalArrays(ni...)
+ThermalArrays(::Type{CPUBackend}, ni::Vararg{Number,N}) where {N} = ThermalArrays(ni...)
 ThermalArrays(ni::NTuple{N,Number}) where {N} = ThermalArrays(ni...)
 function ThermalArrays(::Number, ::Number)
     throw(ArgumentError("ThermalArrays dimensions must be given as integers"))

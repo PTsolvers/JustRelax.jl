@@ -50,7 +50,14 @@ end
 
 Apply the prescribed heat boundary conditions `bc` on the `T`
 """
-function thermal_bcs!(T, bcs::TemperatureBoundaryConditions)
+thermal_bcs!(thermal, bcs) = thermal_bcs!(backend(thermal), thermal, bcs)
+function thermal_bcs!(
+    ::CPUBackendTrait, thermal::ThermalArrays, bcs::FlowBoundaryConditions
+)
+    return thermal_bcs!(thermal.T, bcs)
+end
+
+function thermal_bcs!(T::AbstractArray, bcs::TemperatureBoundaryConditions)
     n = bc_index(T)
 
     # no flux boundary conditions
@@ -64,12 +71,15 @@ end
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes`
 """
-flow_bcs!(stokes, bcs::FlowBoundaryConditions) = _flow_bcs!(bcs, @velocity(stokes))
-function flow_bcs!(bcs::FlowBoundaryConditions, V::Vararg{T,N}) where {T,N}
+flow_bcs!(stokes, bcs) = flow_bcs!(backend(stokes), stokes, bcs)
+function flow_bcs!(::CPUBackendTrait, stokes, bcs)
+    return _flow_bcs!(bcs, @velocity(stokes))
+end
+function flow_bcs!(bcs, V::Vararg{T,N}) where {T,N}
     return _flow_bcs!(bcs, tuple(V...))
 end
 
-function _flow_bcs!(bcs::FlowBoundaryConditions, V)
+function _flow_bcs!(bcs, V)
     n = bc_index(V)
     # no slip boundary conditions
     do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip))
@@ -214,57 +224,6 @@ end
     return nothing
 end
 
-@parallel_indices (i) function periodic_boundaries!(Ax, Ay, bc)
-    @inbounds begin
-        if i ≤ size(Ax, 1)
-            bc.bot && (Ax[i, 1] = Ax[i, end - 1])
-            bc.top && (Ax[i, end] = Ax[i, 2])
-        end
-        if i ≤ size(Ay, 2)
-            bc.left && (Ay[1, i] = Ay[end - 1, i])
-            bc.right && (Ay[end, i] = Ay[2, i])
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i) function periodic_boundaries!(
-    T::_T, bc
-) where {_T<:AbstractArray{<:Any,2}}
-    @inbounds begin
-        if i ≤ size(T, 1)
-            bc.bot && (T[i, 1] = T[i, end - 1])
-            bc.top && (T[i, end] = T[i, 2])
-        end
-        if i ≤ size(T, 2)
-            bc.left && (T[1, i] = T[end - 1, i])
-            bc.right && (T[end, i] = T[2, i])
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function periodic_boundaries!(
-    T::_T, bc
-) where {_T<:AbstractArray{<:Any,3}}
-    nx, ny, nz = size(T)
-    @inbounds begin
-        if i ≤ nx && j ≤ ny
-            bc.bot && (T[i, j, 1] = T[i, j, end - 1])
-            bc.top && (T[i, j, end] = T[i, j, 2])
-        end
-        if i ≤ ny && j ≤ nz
-            bc.left && (T[1, i, j] = T[end - 1, i, j])
-            bc.right && (T[end, i, j] = T[2, i, j])
-        end
-        if i ≤ nx && j ≤ nz
-            bc.front && (T[i, 1, j] = T[i, end - 1, j])
-            bc.back && (T[i, end, j] = T[i, 2, j])
-        end
-    end
-    return nothing
-end
-
 function pureshear_bc!(
     stokes::StokesArrays, xci::NTuple{2,T}, xvi::NTuple{2,T}, εbg
 ) where {T}
@@ -303,19 +262,6 @@ function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{2,T}}, Vx, Vy) where
     n = max(size(Vx, 1), size(Vy, 2))
     # free slip boundary conditions
     @parallel (1:n) _apply_free_slip!(Vx, Vy, freeslip_x, freeslip_y)
-
-    return nothing
-end
-
-function thermal_boundary_conditions!(
-    insulation::NamedTuple, T::AbstractArray{_T,2}
-) where {_T}
-    insulation_x, insulation_y = insulation
-
-    nx, ny = size(T)
-
-    insulation_x && (@parallel (1:ny) free_slip_x!(T))
-    insulation_y && (@parallel (1:nx) free_slip_y!(T))
 
     return nothing
 end

@@ -4,6 +4,9 @@ export StokesArrays, PTStokesCoeffs
 include("types/heat_diffusion.jl")
 export ThermalArrays, PTThermalCoeffs
 
+include("types/phases.jl")
+export PhaseRatio
+
 include("Utils.jl")
 export @allocate,
     @add,
@@ -32,7 +35,8 @@ export FlowBoundaryConditions,
 include("MiniKernels.jl")
 
 include("phases/phases.jl")
-export PhaseRatio, fn_ratio, phase_ratios_center
+export fn_ratio, phase_ratios_center
+# export PhaseRatio, fn_ratio, phase_ratios_center
 
 include("rheology/BuoyancyForces.jl")
 export compute_ρg!

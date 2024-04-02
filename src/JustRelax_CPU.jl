@@ -8,13 +8,9 @@ using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
 using MPI
 
-import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend
+import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend
 
 @init_parallel_stencil(Threads, Float64, 2)
-
-export PTArray
-
-PTArray() = Array
 
 include("common.jl")
 include("stokes/Stokes2D.jl")
@@ -32,13 +28,9 @@ using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
 using MPI
 
-import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend
+import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend
 
 @init_parallel_stencil(Threads, Float64, 3)
-
-export PTArray
-
-PTArray() = Array
 
 include("common.jl")
 include("stokes/Stokes3D.jl")

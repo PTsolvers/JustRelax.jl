@@ -16,7 +16,12 @@ end
 
 # From cell vertices to cell center
 
-function temperature2center!(thermal::ThermalArrays)
+temperature2center!(thermal) = temperature2center!(backend(thermal), thermal)
+function temperature2center!(::CPUBackendTrait, thermal::ThermalArrays)
+    return _temperature2center!(thermal)
+end
+
+function _temperature2center!(thermal::ThermalArrays)
     @parallel (@idx size(thermal.Tc)...) temperature2center_kernel!(thermal.Tc, thermal.T)
     return nothing
 end

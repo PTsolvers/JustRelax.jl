@@ -1,4 +1,4 @@
-function heatdiffusion_PT!(thermal::ThermalArrays, args...; kwargs)
+function heatdiffusion_PT!(thermal, args...; kwargs)
     return heatdiffusion_PT!(backend(thermal), thermal, args...; kwargs...)
 end
 

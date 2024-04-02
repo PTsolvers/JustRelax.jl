@@ -1,10 +1,3 @@
-# abstract type AbstractStokesModel end
-# abstract type AbstractViscosity end
-# abstract type Viscous <: AbstractStokesModel end
-# abstract type AbstractElasticModel <: AbstractStokesModel end
-# abstract type ViscoElastic <: AbstractElasticModel end
-# abstract type ViscoElastoPlastic <: AbstractElasticModel end
-
 ## Velocity type
 
 struct Velocity{T}
@@ -206,6 +199,10 @@ struct StokesArrays{A,B,C,D,T}
     end
 end
 
+function StokesArrays(::Type{CPUBackend}, ni::Vararg{Integer,N}) where {N}
+    return StokesArrays(tuple(ni...))
+end
+StokesArrays(::Type{CPUBackend}, ni::NTuple{N,Integer}) where {N} = StokesArrays(ni)
 StokesArrays(ni::Vararg{Integer,N}) where {N} = StokesArrays(tuple(ni...))
 function StokesArrays(::Number, ::Number)
     throw(ArgumentError("StokesArrays dimensions must be given as integers"))

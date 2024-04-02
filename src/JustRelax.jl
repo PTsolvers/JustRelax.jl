@@ -12,6 +12,15 @@ using StaticArrays
 
 function solve!() end
 
+struct CPUBackend end
+struct AMDGPUBackend end
+
+PTArray() = Array
+PTArray(::Type{CPUBackend}) = Array
+PTArray(::T) where {T} = error(ArgumentError("Unknown backend $T"))
+
+export PTArray, CPUBackend, CUDABackend, AMDGPUBackend
+
 include("types/traits.jl")
 export BackendTrait, CPUBackendTrait
 
@@ -23,6 +32,6 @@ export @cell, element, setelement!, cellnum, cellaxes, new_empty_cell, setindex!
 
 include("JustRelax_CPU.jl")
 
-include("IO/DataIO.jl")
+# include("IO/DataIO.jl")
 
 end # module

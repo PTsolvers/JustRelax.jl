@@ -1,21 +1,3 @@
-
-struct Phases{T}
-    vertex::T
-    center::T
-end
-
-struct PhaseRatio{T}
-    vertex::T
-    center::T
-
-    function PhaseRatio(ni, num_phases)
-        center = @fill(0.0, ni..., celldims = (num_phases,))
-        vertex = @fill(0.0, ni .+ 1..., celldims = (num_phases,))
-        T = typeof(center)
-        return new{T}(vertex, center)
-    end
-end
-
 """
     nphases(x::PhaseRatio)
 
@@ -33,53 +15,6 @@ end
 ) where {N,T,N1,N2,N3,T_Array}
     return N
 end
-
-# # ParallelStencil launch kernel
-# @parallel_indices (I...) function phase_ratios_center(x, phases)
-#     phase_ratios_center(x, phases, I...)
-#     return nothing
-# end
-
-# """
-#     phase_ratios_center(x::PhaseRatio, cell::Vararg{Int, N})
-
-# Compute the phase ratios at the center of the cell `cell` in `x::PhaseRatio`.
-# """
-# function phase_ratios_center(x::PhaseRatio, phases, cell::Vararg{Int,N}) where {N}
-#     return phase_ratios_center(x.center, phases, cell...)
-# end
-
-# @inline function phase_ratios_center(x::CellArray, phases, cell::Vararg{Int,N}) where {N}
-#     # total number of material phases
-#     num_phases = nphases(x)
-#     # number of active particles in this cell
-#     n = 0
-#     for j in cellaxes(phases)
-#         n += isinteger(@cell(phases[j, cell...])) && @cell(phases[j, cell...]) != 0
-#     end
-#     _n = inv(n)
-#     # compute phase ratios
-#     ratios = _phase_ratios_center(phases, num_phases, _n, cell...)
-#     for (i, ratio) in enumerate(ratios)
-#         @cell x[i, cell...] = ratio
-#     end
-# end
-
-# @generated function _phase_ratios_center(
-#     phases, ::Val{N1}, _n, cell::Vararg{Int,N2}
-# ) where {N1,N2}
-#     quote
-#         Base.@_inline_meta
-#         Base.@nexprs $N1 i -> reps_i = begin
-#             c = 0
-#             for j in cellaxes(phases)
-#                 c += @cell(phases[j, cell...]) == i
-#             end
-#             c * _n
-#         end
-#         Base.@ncall $N1 tuple reps
-#     end
-# end
 
 """
     fn_ratio(fn::F, rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio) where {N, F}
@@ -112,7 +47,17 @@ end
     end
 end
 
-function phase_ratios_center(phase_ratios, particles, grid::Geometry, phases)
+function phase_ratios_center(phase_ratios, particles, grid, phases)
+    return phase_ratios_center(backend(phase_ratios), phase_ratios, particles, grid, phases)
+end
+
+function phase_ratios_center(
+    ::CPUBackendTrait, phase_ratios::PhaseRatio, particles, grid::Geometry, phases
+)
+    return _phase_ratios_center(phase_ratios, particles, grid, phases)
+end
+
+function _phase_ratios_center(phase_ratios::PhaseRatio, particles, grid::Geometry, phases)
     ni = size(phases)
     @parallel (@idx ni) phase_ratios_center_kernel(
         phase_ratios.center, particles.coords, grid.xci, grid.di, phases

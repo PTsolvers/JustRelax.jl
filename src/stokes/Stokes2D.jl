@@ -9,14 +9,15 @@ end
 ## 2D VISCO-ELASTIC STOKES SOLVER
 
 # backend trait
-function solve!(stokes::StokesArrays, args...; kwargs)
-    return solve!(backend(stokes), stokes, args...; kwargs...)
+function solve!(stokes, args...; kwargs)
+    return solve!(backend(stokes), stokes, args...; kwargs)
 end
 
-function solve!(
-    ::CPUBackendTrait,
+solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...) 
+
+function _solve!(
     stokes::StokesArrays,
-    pt_stokes::PTStokesCoeffs,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs::FlowBoundaryConditions,
     ρg,
@@ -142,10 +143,9 @@ function solve!(
 end
 
 # visco-elastic solver
-function solve!(
-    ::CPUBackendTrait,
+function _solve!(
     stokes::StokesArrays,
-    pt_stokes::PTStokesCoeffs,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ρg,
@@ -259,10 +259,9 @@ end
 
 # GeoParams: general (visco-elasto-plastic) solver
 
-function solve!(
-    ::CPUBackendTrait,
+function _solve!(
     stokes::StokesArrays,
-    pt_stokes::PTStokesCoeffs,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ρg,
@@ -420,10 +419,9 @@ end
 
 ## With phase ratios
 
-function solve!(
-    ::CPUBackendTrait,
+function _solve!(
     stokes::StokesArrays,
-    pt_stokes::PTStokesCoeffs,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ρg,
@@ -633,11 +631,10 @@ function solve!(
     )
 end
 
-function solve!(
-    ::CPUBackendTrait,
+function _solve!(
     stokes::StokesArrays,
     thermal::ThermalArrays,
-    pt_stokes::PTStokesCoeffs,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ϕ,

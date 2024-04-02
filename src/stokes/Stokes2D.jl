@@ -509,7 +509,8 @@ function solve!(
             )
 
             if rem(iter, 5) == 0
-                @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+                compute_ρg!(ρg[2], phase_ratios, rheology, args)
+                # @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
             end
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
@@ -520,14 +521,8 @@ function solve!(
                 @copy η0 η
             end
             if do_visc
-                @parallel (@idx ni) compute_viscosity!(
-                    η,
-                    viscosity_relaxation,
-                    phase_ratios.center,
-                    @strain(stokes)...,
-                    args,
-                    rheology,
-                    viscosity_cutoff,
+                compute_viscosity!(
+                    stokes,viscosity_relaxation, phase_ratios, args, rheology, viscosity_cutoff
                 )
             end
 
@@ -549,7 +544,7 @@ function solve!(
                 θ_dτ,
             )
 
-            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
             @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(

@@ -23,7 +23,7 @@ end
 
 function compute_shear_heating!(thermal, stokes, phase_ratios::PhaseRatio, rheology, dt)
     ni = size(thermal.shear_heating)
-    @parallel (ni) compute_shear_heating_kernel!(
+    @parallel (@idx ni) compute_shear_heating_kernel!(
         thermal.shear_heating,
         @tensor_center(stokes.τ),
         @tensor_center(stokes.τ_o),

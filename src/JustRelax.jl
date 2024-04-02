@@ -13,6 +13,7 @@ using StaticArrays
 function solve!() end
 
 include("types/traits.jl")
+export BackendTrait, CPUBackendTrait
 
 include("topology/Topology.jl")
 export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g

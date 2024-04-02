@@ -55,8 +55,8 @@ end
 Viscosity(args...) = Viscosity(promote(args...)...)
 
 function Viscosity(ni::NTuple{N,Integer}) where {N}
-    η = @zeros(ni...)
-    η_vep = @zeros(ni...)
+    η = @ones(ni...)
+    η_vep = @ones(ni...)
     ητ = @zeros(ni...)
     return Viscosity(η, η_vep, ητ)
 end

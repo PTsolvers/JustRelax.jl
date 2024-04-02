@@ -83,12 +83,11 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     particle_args    = (pT, pPhases)
 
     # Elliptical temperature anomaly
-    xc_anomaly       = lx/2    # origin of thermal anomaly
-    yc_anomaly       = 40e3  # origin of thermal anomaly
-    # yc_anomaly       = 39e3  # origin of thermal anomaly
-    r_anomaly        = 3e3    # radius of perturbation
-    init_phases!(pPhases, particles, lx/2, yc_anomaly, r_anomaly)
+    xc_anomaly       = lx/2 # origin of thermal anomaly
+    yc_anomaly       = 40e3 # origin of thermal anomaly
+    r_anomaly        = 3e3  # radius of perturbation
     phase_ratios     = PhaseRatio(ni, length(rheology))
+    init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
     phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
@@ -120,10 +119,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     compute_viscosity!(
         stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
     )
-
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-3 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-1 / √2.1
     )
 
     # Boundary conditions
@@ -230,11 +228,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
                 args,
                 dt,
                 di;
-                igg     = igg,
-                phase   = phase_ratios,
-                iterMax = 10e3,
-                nout    = 1e2,
-                verbose = true,
+                kwargs = (;
+                    igg     = igg,
+                    phase   = phase_ratios,
+                    iterMax = 10e3,
+                    nout    = 1e2,
+                    verbose = true,
+                )
             )
             # ------------------------------
 
@@ -252,14 +252,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
             inject = check_injection(particles)
             inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
             # update phase ratios
-            @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+            phase_ratios_center(phase_ratios, particles, grid, pPhases)
 
             @show it += 1
             t        += dt
 
             # Data I/O and plotting ---------------------
             if it == 1 || rem(it, 10) == 0
-                checkpointing(figdir, stokes, thermal.T, η, t)
+                checkpointing(figdir, stokes, thermal.T, stokes.viscosity.η, t)
 
                 if do_vtk
                     JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -276,7 +276,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
                         τyy = Array(stokes.τ.yy),
                         εxx = Array(stokes.ε.xx),
                         εyy = Array(stokes.ε.yy),
-                        η   = Array(η),
+                        η   = Array(stokes.viscosity.η),
                     )
                     do_vtk(
                         joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -308,7 +308,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
                 # Plot 2nd invariant of strain rate
                 h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
                 # Plot effective viscosity
-                h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:batlow)
+                h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
                 hidexdecorations!(ax1)
                 hidexdecorations!(ax2)
                 hidexdecorations!(ax3)
@@ -339,6 +339,4 @@ else
     igg
 end
 
-# main2D(igg; ar=ar, ny=ny, nx=nx, figdir=figdir, do_vtk=do_vtk)
-
-foo(args...; x=1) = x
+main2D(igg; ar=ar, ny=ny, nx=nx, figdir=figdir, do_vtk=do_vtk)

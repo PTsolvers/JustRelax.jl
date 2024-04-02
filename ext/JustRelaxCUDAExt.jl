@@ -170,7 +170,7 @@ module JustRelax2D
     JustRelax.JustRelax2D.solve!(::CUDABackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...) 
     
     # Utils
-    JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di, dt_diff, I::IGG) = compute_dt(S, di, dt_diff, I::IGG)
+    JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di, dt_diff, I) = compute_dt(S, di, dt_diff, I::IGG)
 
 end
 

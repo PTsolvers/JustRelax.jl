@@ -55,14 +55,14 @@ end
 function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Physical domain ------------------------------------
-    ly           = 40e3              # domain length in y
-    lx           = 70e3           # domain length in x
-    ni           = nx, ny            # number of cells
-    li           = lx, ly            # domain length in x- and y-
-    di           = @. li / ni        # grid step in x- and -y
-    origin       = 0.0, -ly          # origin coordinates (15km f sticky air layer)
+    ly           = 40e3       # domain length in y
+    lx           = 70e3       # domain length in x
+    ni           = nx, ny     # number of cells
+    li           = lx, ly     # domain length in x- and y-
+    di           = @. li / ni # grid step in x- and -y
+    origin       = 0.0, -ly   # origin coordinates (15km f sticky air layer)
     grid         = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    (; xci, xvi) = grid       # nodes at the center and vertices of the cells
      # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------

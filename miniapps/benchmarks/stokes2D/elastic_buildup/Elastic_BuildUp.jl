@@ -50,7 +50,7 @@ function elastic_buildup(;
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes    = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(ni)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, CFL=1 / √2.1)
 
@@ -78,15 +78,16 @@ function elastic_buildup(;
             di,
             flow_bcs,
             ρg,
-            η,
             Gc,
             Kb,
             dt,
             igg;
-            iterMax=150e3,
-            nout=1000,
-            b_width=(4, 4, 1),
-            verbose=true,
+            kwargs = (;
+                iterMax=150e3,
+                nout=1000,
+                b_width=(4, 4, 1),
+                verbose=true,
+            )
         )
 
         @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))

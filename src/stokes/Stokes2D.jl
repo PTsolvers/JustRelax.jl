@@ -317,15 +317,15 @@ function solve!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
             )
 
-            @parallel (@idx ni) compute_ρg!(ρg[2], rheology, args)
+            compute_ρg!(ρg[2], rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
             ν = 1e-2
-            @parallel (@idx ni) compute_viscosity!(
-                η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff
+            compute_viscosity!(
+                stokes, ν, args, rheology, viscosity_cutoff
             )
             compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
@@ -347,7 +347,7 @@ function solve!(
                 θ_dτ,
             )
 
-            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
             @hide_communication b_width begin # communication/computation overlap
@@ -510,7 +510,6 @@ function solve!(
 
             if rem(iter, 5) == 0
                 compute_ρg!(ρg[2], phase_ratios, rheology, args)
-                # @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
             end
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(

@@ -1,6 +1,5 @@
 # using CUDA
 using JustRelax, JustRelax.DataIO
-import JustRelax.@cell
 
 # setup ParallelStencil.jl environment
 model = PS_Setup(:Threads, Float64, 2)
@@ -43,10 +42,10 @@ function init_phases!(phases, particles, A)
         
         @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+            @cell(index[ip, i, j]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j]) 
+            x = @cell px[ip, i, j]
+            depth = -(@cell py[ip, i, j]) 
             @cell phases[ip, i, j] = 2.0
             
             if 0e0 ≤ depth ≤ 100e3

@@ -18,6 +18,8 @@ function make_thermal_arrays!(ndim)
             shear_heating::_T # shear heating terms
             ResT::_T
 
+            ThermalArrays(args::Vararg{T, N}) where {T<:AbstractArray, N} = new{$PTArray}(args...)
+
             function ThermalArrays(ni::NTuple{1,Integer})
                 nx, = ni
                 T, ΔT, Told = @zeros(ni...), @zeros(ni...), @zeros(ni...)

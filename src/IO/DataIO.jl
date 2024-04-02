@@ -2,7 +2,6 @@ module DataIO
 
 using WriteVTK
 using HDF5
-using JLD2
 using MPI
 using CUDA, AMDGPU
 
@@ -11,9 +10,6 @@ import ..JustRelax: Geometry
 include("H5.jl")
 
 export save_hdf5, checkpointing, metadata
-
-include("JLD2.jl")
-export checkpointing_jld2
 
 include("VTK.jl")
 

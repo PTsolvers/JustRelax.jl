@@ -55,8 +55,6 @@ function thermal_bcs!(T, bcs::TemperatureBoundaryConditions)
 
     # no flux boundary conditions
     do_bc(bcs.no_flux) && (@parallel (@idx n) free_slip!(T, bcs.no_flux))
-    # periodic conditions
-    do_bc(bcs.periodicity) && (@parallel (@idx n) periodic_boundaries!(T, bcs.periodicity))
 
     return nothing
 end
@@ -66,6 +64,11 @@ end
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes`
 """
+flow_bcs!(stokes, bcs::FlowBoundaryConditions) = _flow_bcs!(bcs, @velocity(stokes))
+function flow_bcs!(bcs::FlowBoundaryConditions, V::Vararg{T,N}) where {T,N}
+    return _flow_bcs!(bcs, tuple(V...))
+end
+
 function _flow_bcs!(bcs::FlowBoundaryConditions, V)
     n = bc_index(V)
     # no slip boundary conditions
@@ -77,11 +80,6 @@ function _flow_bcs!(bcs::FlowBoundaryConditions, V)
         (@parallel (@idx n) periodic_boundaries!(V..., bcs.periodicity))
 
     return nothing
-end
-
-flow_bcs!(stokes, bcs::FlowBoundaryConditions) = _flow_bcs!(bcs, @velocity(stokes))
-function flow_bcs!(bcs::FlowBoundaryConditions, V::Vararg{T,N}) where {T,N}
-    return _flow_bcs!(bcs, tuple(V...))
 end
 
 # BOUNDARY CONDITIONS KERNELS
@@ -270,19 +268,19 @@ end
 function pureshear_bc!(
     stokes::StokesArrays, xci::NTuple{2,T}, xvi::NTuple{2,T}, εbg
 ) where {T}
-    stokes.V.Vx[:, 2:(end - 1)] .= PTArray([εbg * x for x in xvi[1], y in xci[2]])
-    stokes.V.Vy[2:(end - 1), :] .= PTArray([-εbg * y for x in xci[1], y in xvi[2]])
+    stokes.V.Vx[:, 2:(end - 1)] .= PTArray(([εbg * x for x in xvi[1], y in xci[2]]))
+    stokes.V.Vy[2:(end - 1), :] .= PTArray(([-εbg * y for x in xci[1], y in xvi[2]]))
 
     return nothing
 end
 
-@parallel_indices (j) function free_slip_x!(A::AbstractArray{eltype(PTArray),2})
+@parallel_indices (j) function free_slip_x!(A::AbstractArray{T,2}) where {T}
     A[1, j] = A[2, j]
     A[end, j] = A[end - 1, j]
     return nothing
 end
 
-@parallel_indices (i) function free_slip_y!(A::AbstractArray{eltype(PTArray),2})
+@parallel_indices (i) function free_slip_y!(A::AbstractArray{T,2}) where {T}
     A[i, 1] = A[i, 2]
     A[i, end] = A[i, end - 1]
     return nothing
@@ -357,18 +355,4 @@ function apply_free_slip!(freeslip::NamedTuple{<:Any,NTuple{3,T}}, Vx, Vy, Vz) w
         @parallel (1:size(Vx, 1), 1:size(Vx, 2)) free_slip_z!(Vx)
         @parallel (1:size(Vy, 1), 1:size(Vy, 2)) free_slip_z!(Vy)
     end
-end
-
-function thermal_boundary_conditions!(
-    insulation::NamedTuple, T::AbstractArray{_T,3}
-) where {_T}
-    # vertical boundaries
-    frontal, lateral = insulation
-
-    nx, ny, nz = size(T)
-
-    frontal && (@parallel (1:nx, 1:nz) free_slip_y!(T))
-    lateral && (@parallel (1:ny, 1:nz) free_slip_x!(T))
-
-    return nothing
 end

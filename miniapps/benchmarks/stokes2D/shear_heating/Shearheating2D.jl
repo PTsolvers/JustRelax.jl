@@ -1,8 +1,9 @@
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
-using JustRelax, JustRelax.DataIO
-import JustRelax.@cell
-using ParallelStencil
+using JustRelax, JustRelax.JustRelax2D
+using JustRelax.DataIO
+# import JustRelax.@cell
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
@@ -13,8 +14,8 @@ using JustPIC._2D
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
-environment!(model)
+# model = PS_Setup(:cpu, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
+# environment!(model)
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CellArrays
@@ -23,8 +24,7 @@ using GLMakie
 # Load file with all the rheology configurations
 include("Shearheating_rheology.jl")
 
-
-# ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
+## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
 function copyinn_x!(A, B)
 
@@ -72,7 +72,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 1
+    nxcell, max_xcell, min_xcell = 20, 40, 10
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
@@ -89,12 +89,12 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     r_anomaly        = 3e3    # radius of perturbation
     init_phases!(pPhases, particles, lx/2, yc_anomaly, r_anomaly)
     phase_ratios     = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes           = StokesArrays(ni, ViscoElastic)
+    stokes           = StokesArrays(ni)
     pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
@@ -102,51 +102,45 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     thermal          = ThermalArrays(ni)
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux      = (left = true, right = true, top = false, bot = false),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
 
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
     thermal_bcs!(thermal.T, thermal_bc)
-
-    @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
+    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
-    ρg               = @zeros(ni...), @zeros(ni...)
-
-    @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
+    ρg = @zeros(ni...), @zeros(ni...)
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology
-    η                = @ones(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
+    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    compute_viscosity!(
+        stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
     )
-    η_vep            = copy(η)
 
     # PT coefficients for thermal diffusion
-    pt_thermal       = PTThermalCoeffs(
+    pt_thermal = PTThermalCoeffs(
         rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-3 / √2.1
     )
 
     # Boundary conditions
-    flow_bcs         = FlowBoundaryConditions(;
-        free_slip    = (left = true, right=true, top=true, bot=true),
-        periodicity  = (left = false, right = false, top = false, bot = false),
+    flow_bcs      = FlowBoundaryConditions(;
+        free_slip = (left = true, right=true, top=true, bot=true),
     )
     ## Compression and not extension - fix this
-    εbg              = 5e-14
-    stokes.V.Vx .= PTArray([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
+    εbg          = 5e-14
+    stokes.V.Vx .= PTArray()([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray()([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
-        vtk_dir      = figdir*"\\vtk"
+        vtk_dir      = joinpath(figdir, "vtk")
         take(vtk_dir)
     end
     take(figdir)
@@ -160,7 +154,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-        scatter!(ax2, Array(log10.(η[:])), Y./1e3)
+        scatter!(ax2, Array(log10.(stokes.viscosity.η[:])), Y./1e3)
         ylims!(ax1, minimum(xvi[2])./1e3, 0)
         ylims!(ax2, minimum(xvi[2])./1e3, 0)
         hideydecorations!(ax2)
@@ -185,10 +179,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     while it < 100
             # Update buoyancy and viscosity -
             args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-            @parallel (@idx ni) compute_viscosity!(
-                η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
+            compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+            compute_viscosity!(
+                stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
             )
-            @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
             # ------------------------------
 
             # Stokes solver ----------------
@@ -198,18 +192,18 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
                 di,
                 flow_bcs,
                 ρg,
-                η,
-                η_vep,
                 phase_ratios,
                 rheology,
                 args,
                 dt,
                 igg;
-                iterMax = 75e3,
-                nout=1e3,
-                viscosity_cutoff=(-Inf, Inf)
+                kwargs = (;
+                    iterMax = 75e3,
+                    nout=1e3,
+                    viscosity_cutoff=(-Inf, Inf)
+                )
             )
-            @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+            tensor_invariant!(stokes.ε)
             dt   = compute_dt(stokes, di, dt_diff)
             # ------------------------------
 
@@ -219,12 +213,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
             @views thermal.T[2:end-1, :] .= T_buffer
             temperature2center!(thermal)
 
-            @parallel (@idx ni) compute_shear_heating!(
-                thermal.shear_heating,
-                @tensor_center(stokes.τ),
-                @tensor_center(stokes.τ_o),
-                @strain(stokes),
-                phase_ratios.center,
+            compute_shear_heating!(
+                thermal,
+                stokes,
+                phase_ratios,
                 rheology, # needs to be a tuple
                 dt,
             )
@@ -347,4 +339,6 @@ else
     igg
 end
 
-main2D(igg; ar=ar, ny=ny, nx=nx, figdir=figdir, do_vtk=do_vtk)
+# main2D(igg; ar=ar, ny=ny, nx=nx, figdir=figdir, do_vtk=do_vtk)
+
+foo(args...; x=1) = x

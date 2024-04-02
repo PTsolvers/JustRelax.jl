@@ -1,3 +1,33 @@
+## 3D ELASTICITY MODULE
+
+module Stokes3D
+
+using ImplicitGlobalGrid
+using ParallelStencil
+using ParallelStencil.FiniteDifferences3D
+using JustRelax
+using CUDA, AMDGPU
+using LinearAlgebra
+using Printf
+using GeoParams
+
+import JustRelax: PTArray, Velocity, SymmetricTensor, pureshear_bc!
+import JustRelax:
+    Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
+import JustRelax: compute_maxloc!, solve!
+import JustRelax: mean_mpi, norm_mpi, minimum_mpi, maximum_mpi, backend
+
+@eval @init_parallel_stencil($backend, Float64, 3)
+
+include("../rheology/GeoParams.jl")
+include("StressRotation.jl")
+include("StressKernels.jl")
+include("PressureKernels.jl")
+include("VelocityKernels.jl")
+include("StressKernels.jl")
+
+export solve!, pureshear_bc!
+
 @parallel function update_τ_o!(
     τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o, τxx, τyy, τzz, τxy, τxz, τyz
 )
@@ -10,20 +40,39 @@
     return nothing
 end
 
-function update_τ_o!(stokes::StokesArrays)
+function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,3}) where {A,B,C,D}
     @parallel update_τ_o!(@tensor(stokes.τ_o)..., @stress(stokes)...)
 end
 
-## 3D VISCO-ELASTIC STOKES SOLVER
-solve!(stokes::StokesArrays, args...) = solve!(CPUBackendTrait(stokes), stokes, args...)
+## BOUNDARY CONDITIONS
 
-function solve!(
-    ::CPUBackendTrait,
-    stokes::StokesArrays,
+function JustRelax.pureshear_bc!(
+    stokes::StokesArrays, di::NTuple{3,T}, li::NTuple{3,T}, εbg
+) where {T}
+    # unpack
+    Vx, _, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
+    dx, _, dz = di
+    lx, _, lz = li
+    # Velocity pure shear boundary conditions
+    stokes.V.Vx .= PTArray([
+        -εbg * ((i - 1) * dx - 0.5 * lx) for i in 1:size(Vx, 1), j in 1:size(Vx, 2),
+        k in 1:size(Vx, 3)
+    ])
+    return stokes.V.Vz .= PTArray([
+        εbg * ((k - 1) * dz - 0.5 * lz) for i in 1:size(Vz, 1), j in 1:size(Vz, 2),
+        k in 1:size(Vz, 3)
+    ])
+end
+
+## 3D VISCO-ELASTIC STOKES SOLVER
+
+function JustRelax.solve!(
+    stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
     flow_bcs,
     ρg,
+    η,
     K,
     G,
     dt,
@@ -32,14 +81,13 @@ function solve!(
     nout=500,
     b_width=(4, 4, 4),
     verbose=true,
-) where {T}
+) where {A,B,C,D,T}
 
     # solver related
     ϵ = pt_stokes.ϵ
     # geometry
     _di = @. 1 / di
     ni = size(stokes.P)
-    (; η) = stokes.viscosity
 
     # ~preconditioner
     ητ = deepcopy(η)
@@ -151,13 +199,14 @@ end
 
 ## 3D VISCO-ELASTO-PLASTIC STOKES SOLVER WITH GeoParams.jl
 
-function solve!(
-    ::CPUBackendTrait,
-    stokes::StokesArrays,
+function JustRelax.solve!(
+    stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
     flow_bcs::FlowBoundaryConditions,
     ρg,
+    η,
+    η_vep,
     rheology::MaterialParams,
     args,
     dt,
@@ -166,14 +215,13 @@ function solve!(
     nout=500,
     b_width=(4, 4, 4),
     verbose=true,
-) where {T}
+) where {A,B,C,D,T}
 
     # solver related
     ϵ = pt_stokes.ϵ
     # geometry
     _di = @. 1 / di
     ni = size(stokes.P)
-    (; η, η_vep) = stokes.viscosity
 
     # ~preconditioner
     ητ = deepcopy(η)
@@ -324,13 +372,14 @@ function solve!(
 end
 
 # GeoParams and multiple phases
-function solve!(
-    ::CPUBackendTrait,
-    stokes::StokesArrays,
+function JustRelax.solve!(
+    stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
     flow_bc::FlowBoundaryConditions,
     ρg,
+    η,
+    η_vep,
     phase_ratios::PhaseRatio,
     rheology::NTuple{N,AbstractMaterialParamsStruct},
     args,
@@ -341,7 +390,7 @@ function solve!(
     b_width=(4, 4, 4),
     verbose=true,
     viscosity_cutoff=(-Inf, Inf),
-) where {T,N}
+) where {A,B,C,D,T,N}
 
     ## UNPACK
 
@@ -350,7 +399,6 @@ function solve!(
     # geometry
     _di = @. 1 / di
     ni = size(stokes.P)
-    (; η, η_vep) = stokes.viscosity
 
     # errors
     err = Inf
@@ -509,3 +557,5 @@ function solve!(
         av_time=av_time,
     )
 end
+
+end # END OF MODULE

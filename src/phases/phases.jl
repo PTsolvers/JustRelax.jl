@@ -34,58 +34,52 @@ end
     return N
 end
 
-# ParallelStencil launch kernel for 2D
-@parallel_indices (i, j) function phase_ratios_center(x, phases)
-    phase_ratios_center(x, phases, i, j)
-    return nothing
-end
+# # ParallelStencil launch kernel
+# @parallel_indices (I...) function phase_ratios_center(x, phases)
+#     phase_ratios_center(x, phases, I...)
+#     return nothing
+# end
 
-# ParallelStencil launch kernel for 3D
-@parallel_indices (i, j, k) function phase_ratios_center(x, phases)
-    phase_ratios_center(x, phases, i, j, k)
-    return nothing
-end
+# """
+#     phase_ratios_center(x::PhaseRatio, cell::Vararg{Int, N})
 
-"""
-    phase_ratios_center(x::PhaseRatio, cell::Vararg{Int, N})
+# Compute the phase ratios at the center of the cell `cell` in `x::PhaseRatio`.
+# """
+# function phase_ratios_center(x::PhaseRatio, phases, cell::Vararg{Int,N}) where {N}
+#     return phase_ratios_center(x.center, phases, cell...)
+# end
 
-Compute the phase ratios at the center of the cell `cell` in `x::PhaseRatio`.
-"""
-function phase_ratios_center(x::PhaseRatio, phases, cell::Vararg{Int,N}) where {N}
-    return phase_ratios_center(x.center, phases, cell...)
-end
+# @inline function phase_ratios_center(x::CellArray, phases, cell::Vararg{Int,N}) where {N}
+#     # total number of material phases
+#     num_phases = nphases(x)
+#     # number of active particles in this cell
+#     n = 0
+#     for j in cellaxes(phases)
+#         n += isinteger(@cell(phases[j, cell...])) && @cell(phases[j, cell...]) != 0
+#     end
+#     _n = inv(n)
+#     # compute phase ratios
+#     ratios = _phase_ratios_center(phases, num_phases, _n, cell...)
+#     for (i, ratio) in enumerate(ratios)
+#         @cell x[i, cell...] = ratio
+#     end
+# end
 
-@inline function phase_ratios_center(x::CellArray, phases, cell::Vararg{Int,N}) where {N}
-    # total number of material phases
-    num_phases = nphases(x)
-    # number of active particles in this cell
-    n = 0
-    for j in cellaxes(phases)
-        n += isinteger(@cell(phases[j, cell...])) && @cell(phases[j, cell...]) != 0
-    end
-    _n = inv(n)
-    # compute phase ratios
-    ratios = _phase_ratios_center(phases, num_phases, _n, cell...)
-    for (i, ratio) in enumerate(ratios)
-        @cell x[i, cell...] = ratio
-    end
-end
-
-@generated function _phase_ratios_center(
-    phases, ::Val{N1}, _n, cell::Vararg{Int,N2}
-) where {N1,N2}
-    quote
-        Base.@_inline_meta
-        Base.@nexprs $N1 i -> reps_i = begin
-            c = 0
-            for j in cellaxes(phases)
-                c += @cell(phases[j, cell...]) == i
-            end
-            c * _n
-        end
-        Base.@ncall $N1 tuple reps
-    end
-end
+# @generated function _phase_ratios_center(
+#     phases, ::Val{N1}, _n, cell::Vararg{Int,N2}
+# ) where {N1,N2}
+#     quote
+#         Base.@_inline_meta
+#         Base.@nexprs $N1 i -> reps_i = begin
+#             c = 0
+#             for j in cellaxes(phases)
+#                 c += @cell(phases[j, cell...]) == i
+#             end
+#             c * _n
+#         end
+#         Base.@ncall $N1 tuple reps
+#     end
+# end
 
 """
     fn_ratio(fn::F, rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio) where {N, F}
@@ -118,8 +112,15 @@ end
     end
 end
 
-# ParallelStencil launch kernel for 2D
-@parallel_indices (I...) function phase_ratios_center(
+function phase_ratios_center(phase_ratios, particles, grid::Geometry, phases)
+    ni = size(phases)
+    @parallel (@idx ni) phase_ratios_center_kernel(
+        phase_ratios.center, particles.coords, grid.xci, grid.di, phases
+    )
+    return nothing
+end
+
+@parallel_indices (I...) function phase_ratios_center_kernel(
     ratio_centers, pxi::NTuple{N,T1}, xci::NTuple{N,T2}, di::NTuple{N,T3}, phases
 ) where {N,T1,T2,T3}
 
@@ -127,15 +128,11 @@ end
     cell_center = ntuple(i -> xci[i][I[i]], Val(N))
     # phase ratios weights (∑w = 1.0)
     w = phase_ratio_weights(
-        getindex.(pxi, I...),
-        phases[I...],
-        cell_center,
-        di,
-        JustRelax.nphases(ratio_centers),
+        getindex.(pxi, I...), phases[I...], cell_center, di, nphases(ratio_centers)
     )
     # update phase ratios array
     for k in 1:numphases(ratio_centers)
-        JustRelax.@cell ratio_centers[k, I...] = w[k]
+        @cell ratio_centers[k, I...] = w[k]
     end
 
     return nothing

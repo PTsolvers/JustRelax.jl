@@ -70,25 +70,8 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_τ_vertex!(
-    τxy::AbstractArray{T,2}, εxy, η, θ_dτ
-) where {T}
-    @inline av(A) = _av_a(A, i, j)
-
-    # Shear components
-    if all((i, j) .< size(τxy) .- 1)
-        I = i + 1, j + 1
-        av_η_ij = av(η)
-        denominator = inv(θ_dτ + 1.0)
-
-        τxy[I...] += (-τxy[I...] + 2.0 * av_η_ij * εxy[I...]) * denominator
-    end
-
-    return nothing
-end
-
 @parallel_indices (i, j, k) function compute_τ!(
-    τxx,
+    τxx::AbstractArray{T,3},
     τyy,
     τzz,
     τyz,
@@ -110,7 +93,7 @@ end
     G,
     dt,
     θ_dτ,
-)
+) where {T}
     harm_xy(A) = _harm_xyi(A, i, j, k)
     harm_xz(A) = _harm_xzi(A, i, j, k)
     harm_yz(A) = _harm_yzi(A, i, j, k)
@@ -197,15 +180,11 @@ end
             η_ij = harm_xy(ηvep)
             denominator = inv(θ_dτ + 1.0)
             τxy[i, j, k] += (-get(τxy) + 2.0 * η_ij * get(εxy)) * denominator
-            denominator = inv(θ_dτ + 1.0)
-            τxy[i, j, k] += (-get(τxy) + 2.0 * η_ij * get(εxy)) * denominator
         end
 
         # Compute τ_xz
         if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
             η_ij = harm_xz(ηvep)
-            denominator = inv(θ_dτ + 1.0)
-            τxz[i, j, k] += (-get(τxz) + 2.0 * η_ij * get(εxz)) * denominator
             denominator = inv(θ_dτ + 1.0)
             τxz[i, j, k] += (-get(τxz) + 2.0 * η_ij * get(εxz)) * denominator
         end
@@ -214,42 +193,6 @@ end
             η_ij = harm_yz(ηvep)
             denominator = inv(θ_dτ + 1.0)
             τyz[i, j, k] += (-get(τyz) + 2.0 * η_ij * get(εyz)) * denominator
-            denominator = inv(θ_dτ + 1.0)
-            τyz[i, j, k] += (-get(τyz) + 2.0 * η_ij * get(εyz)) * denominator
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j, k) function compute_τ_vertex!(
-    τyz, τxz, τxy, εyz, εxz, εxy, η, θ_dτ
-)
-    I = i, j, k
-    harm_xy(A) = _harm_xyi(A, I...)
-    harm_xz(A) = _harm_xzi(A, I...)
-    harm_yz(A) = _harm_yzi(A, I...)
-    av_xy(A) = _av_xyi(A, I...)
-    av_xz(A) = _av_xzi(A, I...)
-    av_yz(A) = _av_yzi(A, I...)
-
-    @inbounds begin
-        # Compute τ_xy
-        if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
-            η_ij = av_xy(η)
-            denominator = inv(θ_dτ + 1.0)
-            τxy[I...] += (-τxy[I...] + 2.0 * η_ij * εxy[I...]) * denominator
-        end
-        # Compute τ_xz
-        if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
-            η_ij = av_xz(η)
-            denominator = inv(θ_dτ + 1.0)
-            τxz[I...] += (-τxz[I...] + 2.0 * η_ij * εxz[I...]) * denominator
-        end
-        # Compute τ_yz
-        if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
-            η_ij = av_yz(η)
-            denominator = inv(θ_dτ + 1.0)
-            τyz[I...] += (-τyz[I...] + 2.0 * η_ij * εyz[I...]) * denominator
         end
     end
     return nothing
@@ -354,19 +297,33 @@ end
     return nothing
 end
 
-@parallel_indices (I...) function tensor_invariant!(II, xx, yy, xyv)
+"""
+    tensor_invariant!(A::SymmetricTensor)
+
+Compute the tensor invariant of the given symmetric tensor `A`.
+
+# Arguments
+- `A::SymmetricTensor`: The input symmetric tensor.
+"""
+function tensor_invariant!(A::SymmetricTensor)
+    ni = size(A.II)
+    @parallel (@idx ni) tensor_invariant_kernel!(A.II, @tensor(A)...)
+    return nothing
+end
+
+@parallel_indices (I...) function tensor_invariant_kernel!(II, xx, yy, xy)
     # convenience closure
     @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
-        τ = xx[I...], yy[I...], gather(xyv)
+        τ = xx[I...], yy[I...], gather(xy)
         II[I...] = second_invariant_staggered(τ...)
     end
 
     return nothing
 end
 
-@parallel_indices (I...) function tensor_invariant!(II, xx, yy, zz, yz, xz, xy)
+@parallel_indices (I...) function tensor_invariant_kernel!(II, xx, yy, zz, yz, xz, xy)
 
     # convenience closures
     @inline gather_yz(A) = _gather_yz(A, I...)

@@ -1,6 +1,13 @@
 ## 2D KERNELS
+function compute_viscosity!(stokes::StokesArrays, ν, args, rheology, cutoff)
+    ni = size(stokes.viscosity.η)
+    @parallel (@idx ni) compute_viscosity_kernel!(
+        stokes.viscosity.η, ν, @strain(stokes)..., args, rheology, cutoff
+    )
+    return nothing
+end
 
-@parallel_indices (I...) function compute_viscosity!(
+@parallel_indices (I...) function compute_viscosity_kernel!(
     η, ν, εxx, εyy, εxyv, args, rheology, cutoff
 )
 
@@ -30,7 +37,15 @@
     return nothing
 end
 
-@parallel_indices (I...) function compute_viscosity!(η, ν, εII, args, rheology, cutoff)
+function compute_viscosity!(η, ν, εII::AbstractArray, args, rheology, cutoff)
+    ni = size(stokes.viscosity.η)
+    @parallel (@idx ni) compute_viscosity_kernel!(η, ν, εII, args, rheology, cutoff)
+    return nothing
+end
+
+@parallel_indices (I...) function compute_viscosity_kernel!(
+    η, ν, εII, args, rheology, cutoff
+)
     @inbounds begin
         # argument fields at local index
         args_ij = local_viscosity_args(args, I...)
@@ -47,7 +62,23 @@ end
     return nothing
 end
 
-@parallel_indices (I...) function compute_viscosity!(
+function compute_viscosity!(
+    stokes::StokesArrays, ν, phase_ratios::PhaseRatio, args, rheology, cutoff
+)
+    ni = size(stokes.viscosity.η)
+    @parallel (@idx ni) compute_viscosity_kernel!(
+        stokes.viscosity.η,
+        ν,
+        phase_ratios.center,
+        @strain(stokes)...,
+        args,
+        rheology,
+        cutoff,
+    )
+    return nothing
+end
+
+@parallel_indices (I...) function compute_viscosity_kernel!(
     η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
 )
 
@@ -82,7 +113,7 @@ end
 
 ## 3D KERNELS
 
-@parallel_indices (I...) function compute_viscosity!(
+@parallel_indices (I...) function compute_viscosity_kernel!(
     η, ν, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
 )
 
@@ -115,24 +146,7 @@ end
     return nothing
 end
 
-@parallel_indices (I...) function compute_viscosity!(η, ν, εII, args, rheology, cutoff)
-    @inbounds begin
-        # # argument fields at local index
-        args_ijk = local_viscosity_args(args, I...)
-
-        # compute second invariant of strain rate tensor
-        εII_ij = εII[I...]
-
-        # update stress and effective viscosity
-        ηi = compute_viscosity_εII(rheology, εII_ij, args_ijk)
-        ηi = continuation_log(ηi, η[I...], ν)
-        η[I...] = clamp(ηi, cutoff...)
-    end
-
-    return nothing
-end
-
-@parallel_indices (I...) function compute_viscosity!(
+@parallel_indices (I...) function compute_viscosity_kernel!(
     η, ν, ratios_center, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
 )
 

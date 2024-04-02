@@ -324,9 +324,7 @@ function solve!(
             )
 
             ν = 1e-2
-            compute_viscosity!(
-                stokes, ν, args, rheology, viscosity_cutoff
-            )
+            compute_viscosity!(stokes, ν, args, rheology, viscosity_cutoff)
             compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
@@ -521,7 +519,12 @@ function solve!(
             end
             if do_visc
                 compute_viscosity!(
-                    stokes,viscosity_relaxation, phase_ratios, args, rheology, viscosity_cutoff
+                    stokes,
+                    viscosity_relaxation,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff,
                 )
             end
 

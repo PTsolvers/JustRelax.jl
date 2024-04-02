@@ -28,7 +28,20 @@ struct ThermalArrays{_T}
         qTy2 = @zeros(nx + 1, ny)
         ResT = @zeros(nx + 1, ny - 1)
         return new{typeof(T)}(
-            T, Tc, ΔT, Told, dT_dt, qTx, qTy, nothing, qTx2, qTy2, nothing, H, shear_heating, ResT
+            T,
+            Tc,
+            ΔT,
+            Told,
+            dT_dt,
+            qTx,
+            qTy,
+            nothing,
+            qTx2,
+            qTy2,
+            nothing,
+            H,
+            shear_heating,
+            ResT,
         )
     end
 

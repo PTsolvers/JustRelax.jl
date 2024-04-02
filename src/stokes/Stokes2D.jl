@@ -574,10 +574,10 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            stokes.P[1, 1] = stokes.P[2, 1]
-            stokes.P[end, 1] = stokes.P[end - 1, 1]
-            stokes.P[1, end] = stokes.P[2, end]
-            stokes.P[end, end] = stokes.P[end - 1, end]
+            # stokes.P[1, 1] = stokes.P[2, 1]
+            # stokes.P[end, 1] = stokes.P[end - 1, 1]
+            # stokes.P[1, end] = stokes.P[2, end]
+            # stokes.P[end, end] = stokes.P[end - 1, end]
 
             if rem(iter, 5) == 0
                 @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)

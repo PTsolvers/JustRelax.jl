@@ -212,7 +212,6 @@ end
 function free_surface_bcs!(
     stokes, bcs::FlowBoundaryConditions, η, rheology, phase_ratios, dt, di
 )
-
     indices_range(Vx, Vy) = @idx (size(Vy, 2) - 1)
     indices_range(Vx, Vy, Vz) = @idx (size(Vz, 1) - 2, size(Vz, 2) - 2)
 

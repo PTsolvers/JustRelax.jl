@@ -93,9 +93,6 @@ function solVi3D(;
     flow_bcs = FlowBoundaryConditions(;
         free_slip   = (left=false, right=false, top=false, bot=false, back=false, front=false),
         no_slip     = (left=false, right=false, top=false, bot=false, back=false, front=false),
-        periodicity = (
-            left=false, right=false, top=false, bot=false, back=false, front=false
-        ),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)

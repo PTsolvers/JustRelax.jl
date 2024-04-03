@@ -106,7 +106,6 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     flow_bcs     = FlowBoundaryConditions(;
         free_slip   = (left = true , right = true , top = true , bot = true , back = true , front = true),
         no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
-        periodicity = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
     stokes.V.Vx .= PTArray([ x*εbg/2 for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
     stokes.V.Vy .= PTArray([ y*εbg/2 for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])

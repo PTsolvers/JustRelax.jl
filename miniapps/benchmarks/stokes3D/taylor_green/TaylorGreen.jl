@@ -116,9 +116,6 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     flow_bcs = FlowBoundaryConditions(;
         free_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
         no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
-        periodicity=(
-            left=false, right=false, top=false, bot=false, back=false, front=false
-        ),
     )
     # impose analytical velocity at the boundaries of the domain
     velocity!(stokes, xci, xvi)

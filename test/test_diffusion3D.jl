@@ -88,7 +88,6 @@ function diffusion_3D(;
     pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
-        periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
 
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])

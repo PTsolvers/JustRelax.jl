@@ -257,7 +257,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01)         # diffusive CFL timestep limiter
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 1
+    nxcell, max_xcell, min_xcell = 20, 40, 15
     particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...)
 
     subgrid_arrays   = SubgridDiffusionCellArrays(particles)
@@ -387,9 +387,12 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     while it < 25 #nt
 
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= 273.0
+        @views T_buffer[:, end] .= 293.0
         @views thermal.T[2:end - 1, :] .= T_buffer
+        thermal_bcs!(thermal.T, thermal_bc)
         temperature2center!(thermal)
+        thermal.ΔT .= thermal.T .- thermal.Told
+        @parallel (@idx size(thermal.ΔTc)...) temperature2center!(thermal.ΔTc, thermal.ΔT)
 
         # Update buoyancy and viscosity -
         args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)

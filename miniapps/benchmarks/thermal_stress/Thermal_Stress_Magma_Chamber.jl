@@ -89,7 +89,7 @@ end
     depth = -y[j] - sticky_air
 
     if depth < 0e0
-        T[i + 1, j] = 293e0
+        T[i + 1, j] = 273e0
 
     elseif 0e0 ≤ (depth) < 15e3
         dTdZ = (723 - 273) / 15e3
@@ -281,7 +281,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     thermal = ThermalArrays(ni)                                # initialise thermal arrays and boundary conditions
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux=(left=true, right=true, top=false, bot=false),
-        periodicity=(left=false, right=false, top=false, bot=false),
     )
     @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], sticky_air)
     circular_perturbation!(
@@ -312,7 +311,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     flow_bcs = FlowBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true),
-        periodicity=(left=false, right=false, top=false, bot=false),
+        free_surface =true,
     )
     flow_bcs!(stokes, flow_bcs)
     update_halo!(stokes.V.Vx, stokes.V.Vy)
@@ -623,7 +622,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     xci[2] .* 1e-3,
                     Array(log10.(η_vep));
                     colormap=:glasgow,
-                    colorrange=(log10(1e14), log10(1e21)),
+                    colorrange=(log10(1e16), log10(1e24)),
                 )
                 # Plot 2nd invariant of strain rate
                 p4 = heatmap!(

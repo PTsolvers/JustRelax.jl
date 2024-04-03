@@ -109,7 +109,6 @@ function Shearheating2D()
     thermal          = ThermalArrays(ni)
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux      = (left = true, right = true, top = false, bot = false),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
 
     # Initialize constant temperature
@@ -141,7 +140,6 @@ function Shearheating2D()
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left = true, right=true, top=true, bot=true),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
     ## Compression and not extension - fix this
     εbg              = 5e-14

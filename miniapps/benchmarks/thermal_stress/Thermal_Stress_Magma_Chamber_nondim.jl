@@ -46,8 +46,13 @@ end
 #     @all(P) = (abs(@all(ρg) * (@all_j(z))) - (@all(ρg) * sticky_air)) * <((@all_j(z)), 0.0)
 #     return nothing
 # end
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
+# @parallel function init_P!(P, ρg, z)
+#     @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
+#     return nothing
+# end
+
+@parallel_indices (i, j) function init_P!(P, ρg, z, dz)
+    P[i, j] = sum(abs(ρg[i, jj] * z[jj]) for jj in j:size(P, 2)) * dz
     return nothing
 end
 
@@ -199,7 +204,7 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
         β_rock = 6.0e-11
         β_magma = 6.0e-11
     end
-
+    g=9.81m/s^2
     rheology = (
         #Name="UpperCrust"
         SetMaterialParams(;
@@ -209,9 +214,10 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
             Conductivity=ConstantConductivity(; k=3.0Watt / K / m),
             LatentHeat=ConstantLatentHeat(; Q_L=350e3J / kg),
             ShearHeat=ConstantShearheating(1.0NoUnits),
-            # CompositeRheology=CompositeRheology((creep_rock, el, pl)),
-            CompositeRheology=CompositeRheology((creep_rock,)),
+            CompositeRheology=CompositeRheology((creep_rock, el, pl)),
+            # CompositeRheology=CompositeRheology((creep_rock,)),
             Melting=MeltingParam_Caricchi(),
+            Gravity   = ConstantGravity(; g=g),
             Elasticity=el,
             CharDim=CharDim,
         ),
@@ -224,9 +230,10 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
             Conductivity=ConstantConductivity(; k=1.5Watt / K / m),
             LatentHeat=ConstantLatentHeat(; Q_L=350e3J / kg),
             ShearHeat=ConstantShearheating(0.0NoUnits),
-            CompositeRheology=CompositeRheology((creep_magma, )),
-            # CompositeRheology=CompositeRheology((creep_magma, el_magma)),
+            # CompositeRheology=CompositeRheology((creep_magma, )),
+            CompositeRheology=CompositeRheology((creep_magma, el_magma)),
             Melting=MeltingParam_Caricchi(),
+            Gravity   = ConstantGravity(; g=g),
             Elasticity=el_magma,
             CharDim=CharDim,
         ),
@@ -234,12 +241,13 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
         #Name="Sticky Air"
         SetMaterialParams(;
             Phase=3,
-            Density   = ConstantDensity(ρ=10kg/m^3,),
+            Density   = ConstantDensity(ρ=1kg/m^3,),
             HeatCapacity=ConstantHeatCapacity(; Cp=1000J / kg / K),
             Conductivity=ConstantConductivity(; k=15Watt / K / m),
             LatentHeat=ConstantLatentHeat(; Q_L=0.0J / kg),
             ShearHeat=ConstantShearheating(0.0NoUnits),
             CompositeRheology=CompositeRheology((creep_air,)),
+            Gravity   = ConstantGravity(; g=g),
             CharDim=CharDim,
         ),
     )
@@ -296,9 +304,14 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux=(left=true, right=true, top=false, bot=false),
     )
-    @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], sticky_air, nondimensionalize(0e0km,CharDim),
-    nondimensionalize(15km,CharDim), nondimensionalize((723 - 273)K,CharDim) / nondimensionalize(15km,CharDim),
-    nondimensionalize(273e0K,CharDim))
+    @parallel (@idx ni .+ 1) init_T!(
+        thermal.T, xvi[2], 
+        sticky_air,
+        nondimensionalize(0e0km,CharDim),
+        nondimensionalize(15km,CharDim), 
+        nondimensionalize((723 - 273)K,CharDim) / nondimensionalize(15km,CharDim),
+        nondimensionalize(273K,CharDim)
+    )
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air
     )
@@ -309,13 +322,13 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(ni, ViscoElastic)                         # initialise stokes arrays with the defined regime
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4, CFL=0.99 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4, CFL=0.9 / √2.1)
     # ----------------------------------------------------
 
     args = (; T=thermal.Tc, P=stokes.P, dt=dt)
 
     pt_thermal = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=5e-2 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.8 / √2.1
     )
     # Boundary conditions of the flow
     stokes.V.Vx .= PTArray([
@@ -342,11 +355,11 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...)                      # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
-    for _ in 1:2
+    for _ in 1:10
         @parallel (JustRelax.@idx ni) compute_ρg!(
             ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
         )
-        @parallel init_P!(stokes.P, ρg[2], xci[2])
+        @parallel init_P!(stokes.P, ρg[2], xci[2], di[2])
     end
 
     @parallel (@idx ni) compute_melt_fraction!(
@@ -369,7 +382,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     # Plot initial T and η profiles
     let
         Yv = [y for x in xvi[1], y in xvi[2]][:]
-        Y = [y for x in xci[1], y in xci[2]][:]
+        Y  = [y for x in xci[1], y in xci[2]][:]
         fig = Figure(; size=(1200, 900))
         ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
         ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
@@ -378,11 +391,11 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
             Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :][:], C, CharDim))),
             ustrip.(dimensionalize(Yv, km, CharDim)),
         )
-        lines!(
+        scatter!(
             ax2,
             # Array(ρg[2][:]),
-            Array(ustrip.(dimensionalize(stokes.P[:], Pa, CharDim))),
-            ustrip.(dimensionalize(Y, km, CharDim)),
+            Array(ustrip.(dimensionalize(stokes.P[:], MPa, CharDim))),
+            # ustrip.(dimensionalize(Y, km, CharDim)),
         )
         hideydecorations!(ax2)
         save(joinpath(figdir, "initial_profile.png"), fig)
@@ -408,8 +421,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
-    Tsurf = thermal.T[1, end]
-    Tbot = thermal.T[1, 1]
+    Tsurf  = thermal.T[1, end]
+    Tbot   = thermal.T[1, 1]
 
     while it < 25 #nt
 
@@ -636,7 +649,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     ax1,
                     ustrip.(dimensionalize(xvi[1],km,CharDim)),
                     ustrip.(dimensionalize(xvi[2],km,CharDim)),
-                    ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :] .- 273)),K,CharDim));
+                    ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])),C,CharDim));
                     colormap=:batlow,
                 )
                 # Plot Pressure difference

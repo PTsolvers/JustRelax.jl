@@ -1,5 +1,5 @@
 using JustRelax
-
+using Test, Suppressor
 model = PS_Setup(:cpu, Float64, 2)
 environment!(model)
 

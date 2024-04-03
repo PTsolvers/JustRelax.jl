@@ -1,17 +1,20 @@
+using CUDA
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax2D
-using JustRelax.DataIO
+# using JustRelax.DataIO
 # import JustRelax.@cell
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+# @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+@init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
 using JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
 # model = PS_Setup(:cpu, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
@@ -27,7 +30,6 @@ include("Shearheating_rheology.jl")
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
 function copyinn_x!(A, B)
-
     @parallel function f_x(A, B)
         @all(A) = @inn_x(B)
         return nothing
@@ -86,19 +88,19 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     xc_anomaly       = lx/2 # origin of thermal anomaly
     yc_anomaly       = 40e3 # origin of thermal anomaly
     r_anomaly        = 3e3  # radius of perturbation
-    phase_ratios     = PhaseRatio(ni, length(rheology))
+    phase_ratios     = PhaseRatio(backend, ni, length(rheology))
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
     phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes           = StokesArrays(ni)
+    stokes           = StokesArrays(backend, ni)
     pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal          = ThermalArrays(ni)
+    thermal          = ThermalArrays(backend, ni)
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux      = (left = true, right = true, top = false, bot = false),
     )
@@ -130,8 +132,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     )
     ## Compression and not extension - fix this
     εbg          = 5e-14
-    stokes.V.Vx .= PTArray()([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray()([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend )([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray(backend)([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
@@ -174,7 +176,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     end
     # Time loop
     t, it = 0.0, 0
-    while it < 100
+    while it < 1
             # Update buoyancy and viscosity -
             args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
             compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))

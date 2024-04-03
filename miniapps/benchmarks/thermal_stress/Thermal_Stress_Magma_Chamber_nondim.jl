@@ -1,18 +1,20 @@
-using CUDA
+# using CUDA
 using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
 using ParallelStencil
-@init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+# @init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
 using JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:CUDA, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
+# model = PS_Setup(:CUDA, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
+model = PS_Setup(:cpu, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 environment!(model)
 
 using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
@@ -166,7 +168,7 @@ end
 function init_rheology(CharDim; is_compressible = false, steady_state=true)
     # plasticity setup
     do_DP = true                        # do_DP=false: Von Mises, do_DP=true: Drucker-Prager (friction angle)
-    η_reg = 1.0e16                      # regularisation "viscosity" for Drucker-Prager
+    η_reg = 1.0e16Pa*s                      # regularisation "viscosity" for Drucker-Prager
     Coh = 10.0MPa                       # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
     ϕ = 30.0 * do_DP                    # friction angle
     G0 = 6.0e11Pa                         # elastic shear modulus
@@ -202,12 +204,13 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
         #Name="UpperCrust"
         SetMaterialParams(;
             Phase=1,
-            Density=PT_Density(; ρ0=2650kg / m^3, α=3e-5 / K, T0=273.0, β=β_rock / Pa),
+            Density=PT_Density(; ρ0=2650kg / m^3, α=3e-5 / K, T0=0.0C, β=β_rock / Pa),
             HeatCapacity=ConstantHeatCapacity(; Cp=1050J / kg / K),
             Conductivity=ConstantConductivity(; k=3.0Watt / K / m),
             LatentHeat=ConstantLatentHeat(; Q_L=350e3J / kg),
             ShearHeat=ConstantShearheating(1.0NoUnits),
-            CompositeRheology=CompositeRheology((creep_rock, el, pl)),
+            # CompositeRheology=CompositeRheology((creep_rock, el, pl)),
+            CompositeRheology=CompositeRheology((creep_rock,)),
             Melting=MeltingParam_Caricchi(),
             Elasticity=el,
             CharDim=CharDim,
@@ -216,12 +219,13 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
         #Name="Magma"
         SetMaterialParams(;
             Phase=2,
-            Density=PT_Density(; ρ0=2650kg / m^3, T0=273.0, β=β_magma / Pa),
+            Density=PT_Density(; ρ0=2650kg / m^3, T0=0.0C, β=β_magma / Pa),
             HeatCapacity=ConstantHeatCapacity(; Cp=1050J / kg / K),
             Conductivity=ConstantConductivity(; k=1.5Watt / K / m),
             LatentHeat=ConstantLatentHeat(; Q_L=350e3J / kg),
             ShearHeat=ConstantShearheating(0.0NoUnits),
-            CompositeRheology=CompositeRheology((creep_magma, el_magma)),
+            CompositeRheology=CompositeRheology((creep_magma, )),
+            # CompositeRheology=CompositeRheology((creep_magma, el_magma)),
             Melting=MeltingParam_Caricchi(),
             Elasticity=el_magma,
             CharDim=CharDim,
@@ -245,7 +249,7 @@ end
 
 function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
-    CharDim = GEO_units(;length=12.5km, viscosity=1e21, temperature = 1e3K)
+    CharDim = GEO_units(;length=12.5km, viscosity=1e21, temperature = 1e3C)
     #-------JustRelax parameters-------------------------------------------------------------
     # Domain setup for JustRelax
     sticky_air = nondimensionalize(1.5km, CharDim)                      # thickness of the sticky air layer
@@ -376,6 +380,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         )
         lines!(
             ax2,
+            # Array(ρg[2][:]),
             Array(ustrip.(dimensionalize(stokes.P[:], Pa, CharDim))),
             ustrip.(dimensionalize(Y, km, CharDim)),
         )
@@ -401,18 +406,12 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     end
     grid2particle!(pT, xvi, T_buffer, particles)
     @copy stokes.P0 stokes.P
+    thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
-
+    Tsurf = thermal.T[1, end]
+    Tbot = thermal.T[1, 1]
 
     while it < 25 #nt
-
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= 273.0
-        @views thermal.T[2:end - 1, :] .= T_buffer
-        thermal_bcs!(thermal.T, thermal_bc)
-        temperature2center!(thermal)
-        thermal.ΔT .= thermal.T .- thermal.Told
-        @parallel (@idx size(thermal.ΔTc)...) temperature2center!(thermal.ΔTc, thermal.ΔT)
 
         # Update buoyancy and viscosity -
         args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
@@ -436,7 +435,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
             args,
             dt,
             igg;
-            iterMax=250e3,
+            iterMax=100e3,
             free_surface=true,
             nout=5e3,
             viscosity_cutoff=cutoff_visc,
@@ -501,6 +500,15 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         @parallel (@idx ni) compute_melt_fraction!(
             ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
         )
+
+        particle2grid!(T_buffer, pT, xvi, particles)
+        @views T_buffer[:, end] .= Tsurf
+        @views T_buffer[:, 1] .= Tbot
+        @views thermal.T[2:end - 1, :] .= T_buffer
+        thermal_bcs!(thermal.T, thermal_bc)
+        temperature2center!(thermal)
+        thermal.ΔT .= thermal.T .- thermal.Told
+        @parallel (@idx size(thermal.ΔTc)...) temperature2center!(thermal.ΔTc, thermal.ΔT)
 
         @show it += 1
         t += dt

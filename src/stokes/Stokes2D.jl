@@ -620,8 +620,8 @@ function JustRelax.solve!(
                 dt,
                 θ_dτ,
             )
-            free_surface_bcs!(stokes.τ, flow_bcs)
-
+            # free_surface_bcs!(stokes.τ, flow_bcs)
+            @views stokes.τ.yy[:, end] .= stokes.P[:, end]
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 

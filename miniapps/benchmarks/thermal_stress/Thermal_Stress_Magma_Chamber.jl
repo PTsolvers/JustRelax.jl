@@ -640,7 +640,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     ax5,
                     xci[1] .* 1e-3,
                     xci[2] .* 1e-3,
-                    Array(log10.(stokes.τ.II));
+                    Array((stokes.τ.II));
                     colormap=:batlow,
                 )
                 hidexdecorations!(ax1)
@@ -679,7 +679,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
                     scatter!(ax1, Array(thermal.T[2:(end - 1), :][:] .- 273.0), Yv)
                     lines!(ax2, Array(stokes.P[:]), Y)
-                    scatter!(a3, Array(log10.(stokes.τ.II[:])), Y)
+                    scatter!(a3, Array((stokes.τ.II[:])), Y)
 
                     hideydecorations!(ax2)
                     save(joinpath(figdir, "pressure_profile_$it.png"), fig)

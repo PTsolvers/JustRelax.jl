@@ -320,7 +320,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     η     = @ones(ni...)  # initialise viscosity
     η_vep = similar(η)
-    ϕ     = @zeros(ni...) # melt fraction center
 
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, cutoff_visc
@@ -337,10 +336,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
 
-    # @parallel (@idx ni) compute_melt_fraction!(
-    #     ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
-    # )
-
+ 
     # Arguments for functions
     args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
     @copy thermal.Told thermal.T
@@ -368,8 +364,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         )
         scatter!(
             ax2,
-            # Array(ρg[2][:]),
-            # Array(ustrip.(dimensionalize(ρg[2][:], kg/m^3 * m / s^2, CharDim)))./9.81,
             Array(ustrip.(dimensionalize(stokes.P[:], MPa, CharDim))),
             ustrip.(dimensionalize(Z, km, CharDim)),
         )
@@ -380,7 +374,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     # Time loop
     t, it = 0.0, 0
-    local iters
     local Vx_v, Vy_v
     if do_vtk
         Vx_v = @zeros(ni .+ 1...)
@@ -388,14 +381,11 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         Vz_v = @zeros(ni .+ 1...)
     end
 
-    # T_buffer    = @zeros(ni.+1)
-    # Told_buffer = similar(T_buffer)
     dt₀         = similar(stokes.P)
     grid2particle!(pT, xvi, thermal.T, particles)
 
     @copy stokes.P0 stokes.P
     @copy thermal.Told thermal.T
-    P_init = deepcopy(stokes.P)
     Tsurf  = thermal.T[1, 1, end]
     Tbot   = thermal.T[1, 1, 1]
 
@@ -480,9 +470,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
-        # @parallel (@idx ni) compute_melt_fraction!(
-        #     ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
-        # )
 
         particle2grid!(thermal.T, pT, xvi, particles)
         @views thermal.T[:, :, end] .= Tsurf
@@ -527,171 +514,17 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                     )
                 end
 
-                # Make particles plottable
-                ppx, ppy = particles.coords
-                pxv      = ppx.data[:] ./ 1e3
-                pyv      = ppy.data[:] ./ 1e3
-                clr      = pPhases.data[:]
-                idxv     = particles.index.data[:]
-
-                t_dim    = (dimensionalize(t, yr, CharDim).val / 1e3)
-                
-                # Make Makie figure
-                fig = Figure(; size=(1200, 1200), createmissing=true)
-                ar  = li[1] / li[2]
-
-                ax0 = Axis(
-                    fig[1, 1:2];
-                    aspect=ar,
-                    title="t = $(t_dim) Kyrs",
-                    titlesize=50,
-                    height=0.0,
-                )
-                ax0.ylabelvisible      = false
-                ax0.xlabelvisible      = false
-                ax0.xgridvisible       = false
-                ax0.ygridvisible       = false
-                ax0.xticksvisible      = false
-                ax0.yticksvisible      = false
-                ax0.yminorticksvisible = false
-                ax0.xminorticksvisible = false
-                ax0.xgridcolor         = :white
-                ax0.ygridcolor         = :white
-                ax0.ytickcolor         = :white
-                ax0.xtickcolor         = :white
-                ax0.yticklabelcolor    = :white
-                ax0.xticklabelcolor    = :white
-                ax0.yticklabelsize     = 0
-                ax0.xticklabelsize     = 0
-                ax0.xlabelcolor        = :white
-                ax0.ylabelcolor        = :white
-
-                ax1 = Axis(
-                    fig[2, 1][1, 1];
-                    aspect         = ar,
-                    title          = L"T [\mathrm{C}]",
-                    titlesize      = 40,
-                    yticklabelsize = 25,
-                    xticklabelsize = 25,
-                    xlabelsize     = 25,
-                )
-                ax2 = Axis(
-                    fig[2, 2][1, 1];
-                    aspect         = ar,
-                    title          = L"ΔP [MPa]",
-                    titlesize      = 40,
-                    yticklabelsize = 25,
-                    xticklabelsize = 25,
-                    xlabelsize     = 25,
-                )
-                ax3 = Axis(
-                    fig[3, 1][1, 1];
-                    aspect         = ar,
-                    title          = L"Viscosity [\mathrm{Pa s}]",
-                    xlabel         = "Width [km]",
-                    titlesize      = 40,
-                    yticklabelsize = 25,
-                    xticklabelsize = 25,
-                    xlabelsize     = 25,
-                )
-                ax4 = Axis(
-                    fig[3, 2][1, 1];
-                    aspect         = ar,
-                    title          = L"\log_{10}(\dot{\varepsilon}_{\textrm{II}}) [\mathrm{s}^{-1}]",
-                    xlabel         = "Width [km]",
-                    titlesize      = 40,
-                    yticklabelsize = 25,
-                    xticklabelsize = 25,
-                    xlabelsize     = 25,
-                )
-                ax5 = Axis(
-                    fig[4, 1][1, 1];
-                    aspect         = ar,
-                    title          = L"\tau_{\textrm{II}} [MPa]",
-                    xlabel         = "Width [km]",
-                    titlesize      = 40,
-                    yticklabelsize = 25,
-                    xticklabelsize = 25,
-                    xlabelsize     = 25,
-                )
-                # Plot temperature
-                p1 = heatmap!(
-                    ax1,
-                    ustrip.(dimensionalize(xvi[1],km,CharDim)),
-                    ustrip.(dimensionalize(xvi[2],km,CharDim)),
-                    ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])),C,CharDim));
-                    colormap = :batlow,
-                )
-                # Plot Pressure difference
-                p2 = heatmap!(
-                    ax2,
-                    ustrip.(dimensionalize(xci[1],km,CharDim)),
-                    ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize((Array((stokes.P .- P_init))),MPa,CharDim));
-                    colormap = :roma,
-                )
-                # Plot effective viscosity
-                p3 = heatmap!(
-                    ax3,
-                    ustrip.(dimensionalize(xci[1],km,CharDim)),
-                    ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize((Array(log10.(η_vep))),Pa*s,CharDim));
-                    colormap   = :glasgow,
-                    colorrange = (log10(1e16), log10(1e24)),
-                )
-                # Plot 2nd invariant of strain rate
-                p4 = heatmap!(
-                    ax4,
-                    ustrip.(dimensionalize(xci[1],km,CharDim)),
-                    ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize(Array(log10.(stokes.ε.II)),s^-1,CharDim));
-                    colormap = :roma,
-                )
-                # Plot 2nd invariant of stress
-                p5 = heatmap!(
-                    ax5,
-                    ustrip.(dimensionalize(xci[1],km,CharDim)),
-                    ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize(Array((stokes.τ.II)),MPa,CharDim));
-                    colormap = :batlow,
-                )
-                hidexdecorations!(ax1)
-                hidexdecorations!(ax2)
-                hidexdecorations!(ax3)
-                Colorbar(
-                    fig[2, 1][1, 2], p1; height = Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                Colorbar(
-                    fig[2, 2][1, 2], p2; height = Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                Colorbar(
-                    fig[3, 1][1, 2], p3; height = Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                Colorbar(
-                    fig[3, 2][1, 2], p4; height = Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                Colorbar(
-                    fig[4, 1][1, 2], p5; height = Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                rowgap!(fig.layout, 1)
-                colgap!(fig.layout, 1)
-                colgap!(fig.layout, 1)
-                colgap!(fig.layout, 1)
-                figsave = joinpath(figdir, @sprintf("%06d.png", it))
-                save(figsave, fig)
-                fig
-
                 let
-                    Yv  = [y for x in ustrip.(dimensionalize(xvi[1],km,CharDim)), y in ustrip.(dimensionalize(xvi[2],km,CharDim))][:]
-                    Y   = [y for x in ustrip.(dimensionalize(xci[1],km,CharDim)), y in ustrip.(dimensionalize(xci[2],km,CharDim))][:]
+                    Zv  = [z for _ in 1:nx+1, _ in 1:ny+1, z in ustrip.(dimensionalize(xvi[3],km,CharDim))][:]
+                    Z   = [z for _ in 1:nx  , _ in 1:ny  , z in ustrip.(dimensionalize(xci[3],km,CharDim))][:]
                     fig = Figure(; size=(1200, 900))
-                    ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
-                    ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
-                    a3  = Axis(fig[2, 1]; aspect=2 / 3, title="τII")
+                    ax1 = Axis(fig[1, 1]; aspect = 2 / 3, title="T")
+                    ax2 = Axis(fig[1, 2]; aspect = 2 / 3, title="Pressure")
+                    a3  = Axis(fig[2, 1]; aspect = 2 / 3, title="τII")
 
-                    scatter!(ax1, ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])), C, CharDim))[:], Yv, markersize=4)
-                    scatter!(ax2, ustrip.(dimensionalize((Array((stokes.P))),MPa,CharDim))[:], Y, markersize = 4)
-                    scatter!(a3,  ustrip.(dimensionalize(Array((stokes.τ.II)),MPa,CharDim))[:], Y, markersize = 4)
+                    scatter!(ax1, ustrip.(dimensionalize((Array(thermal.T)), C, CharDim))[:]  , Zv, markersize = 4)
+                    scatter!(ax2, ustrip.(dimensionalize((Array(stokes.P)), MPa, CharDim))[:] , Z , markersize = 4)
+                    scatter!(a3,  ustrip.(dimensionalize(Array(stokes.τ.II), MPa, CharDim))[:], Z , markersize = 4)
 
                     hideydecorations!(ax2)
                     save(joinpath(figdir, "pressure_profile_$it.png"), fig)
@@ -720,6 +553,31 @@ end
 
 # run main script
 main3D(igg; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk = do_vtk);
+
+
+# Plot initial T and η profiles
+let
+    Zv = [z for _ in xvi[1], _ in xvi[2], z in xvi[3]][:]
+    Z  = [z for _ in xci[1], _ in xci[2], z in xci[3]][:]
+    fig = Figure(; size=(1200, 900))
+    ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
+    ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
+    scatter!(
+        ax1,
+        Array(ustrip.(dimensionalize(thermal.T[:], C, CharDim))),
+        ustrip.(dimensionalize(Zv, km, CharDim)),
+    )
+    scatter!(
+        ax2,
+        # Array(ρg[2][:]),
+        # Array(ustrip.(dimensionalize(ρg[2][:], kg/m^3 * m / s^2, CharDim)))./9.81,
+        Array(ustrip.(dimensionalize(stokes.P[:], MPa, CharDim))),
+        ustrip.(dimensionalize(Z, km, CharDim)),
+    )
+    hideydecorations!(ax2)
+    save(joinpath(figdir, "initial_profile.png"), fig)
+    fig
+end
 
 # function plot_particles(particles, pPhases)
 #     p = particles.coords

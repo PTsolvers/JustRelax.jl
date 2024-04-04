@@ -273,7 +273,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     #---------------------------------------------------------------------------------------
 
     # Physical Parameters
-    rheology = init_rheology(CharDim; is_compressible=false, steady_state=true)
+    rheology = init_rheology(CharDim; is_compressible=true, steady_state=false)
     cutoff_visc = nondimensionalize((1e16Pa*s, 1e24Pa*s),CharDim)
     κ = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01)         # diffusive CFL timestep limiter
@@ -305,10 +305,10 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         no_flux=(left=true, right=true, top=false, bot=false),
     )
     @parallel (@idx ni .+ 1) init_T!(
-        thermal.T, xvi[2], 
+        thermal.T, xvi[2],
         sticky_air,
         nondimensionalize(0e0km,CharDim),
-        nondimensionalize(15km,CharDim), 
+        nondimensionalize(15km,CharDim),
         nondimensionalize((723 - 273)K,CharDim) / nondimensionalize(15km,CharDim),
         nondimensionalize(273K,CharDim)
     )
@@ -388,7 +388,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
         scatter!(
             ax1,
-            Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :][:], C, CharDim))),
+            ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])), C, CharDim))[:],
             ustrip.(dimensionalize(Yv, km, CharDim)),
         )
         scatter!(
@@ -674,7 +674,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     ax4,
                     ustrip.(dimensionalize(xci[1],km,CharDim)),
                     ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize(Array(log10.(stokes.ε.II)),s^-1,CharDim));
+                   log10.(ustrip.(dimensionalize(Array((stokes.ε.II)),s^-1,CharDim)));
                     colormap=:roma,
                 )
                 # Plot 2nd invariant of stress
@@ -682,7 +682,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     ax5,
                     ustrip.(dimensionalize(xci[1],km,CharDim)),
                     ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize(Array(log10.(stokes.τ.II)),MPa,CharDim));
+                    ustrip.(dimensionalize(Array((stokes.τ.II)),MPa,CharDim));
                     colormap=:batlow,
                 )
                 hidexdecorations!(ax1)
@@ -719,9 +719,12 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
                     a3 = Axis(fig[2, 1]; aspect=2 / 3, title="τII")
 
-                    scatter!(ax1, ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :] .- 273)),K,CharDim))[:], Yv)
-                    lines!(ax2, ustrip.(dimensionalize((Array((stokes.P))),MPa,CharDim))[:], Y)
-                    scatter!(a3, ustrip.(dimensionalize(Array(log10.(stokes.τ.II)),MPa,CharDim))[:], Y)
+                    scatter!(ax1, ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])), C, CharDim))[:],
+                    ustrip.(dimensionalize(Yv, km, CharDim)))
+                    lines!(ax2, ustrip.(dimensionalize((Array((stokes.P))),MPa,CharDim))[:],
+                    ustrip.(dimensionalize(Y, km, CharDim)))
+                    scatter!(a3, ustrip.(dimensionalize(Array((stokes.τ.II)),MPa,CharDim))[:],
+                    ustrip.(dimensionalize(Y, km, CharDim)))
 
                     hideydecorations!(ax2)
                     save(joinpath(figdir, "pressure_profile_$it.png"), fig)

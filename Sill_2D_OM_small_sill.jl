@@ -82,24 +82,6 @@ end
     return GeoParams.compute_meltfraction_ratio(phase_ratios, rheology, args)
 end
 
-
-# function foo!(ϕ, phase_ratios, rheology, args)
-#     for i in 1:size(ϕ, 1), j in 1:size(ϕ, 2)
-#         args_ijk = ntuple_idx(args, i, j)
-#         ϕ[i, j] = compute_melt_frac(rheology, args_ijk, phase_ratios[i, j])
-#     end
-#     # args_ijk = ntuple_idx(args, I...)
-#     # ϕ[I...] = compute_melt_frac(rheology, args_ijk, phase_ratios[I...])
-#     return nothing
-# end
-
-# @code_warntype foo!(ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
-
-# @device_code_warntype interactive=true  @parallel (@idx ni) compute_melt_fraction!(
-#     ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
-# )
-
-
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -117,9 +99,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology     = init_rheologies(; is_plastic = false)
+    rheology     = init_rheologies()
     κ            = (4 / (compute_heatcapacity(rheology[1].HeatCapacity[1].Cp) * rheology[1].Density[1].ρ))
-    @show κ
+    # @show κ
     # κ            = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 / 100 # diffusive CFL timestep limiter
@@ -158,7 +140,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     thermal          = ThermalArrays(ni)
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux      = (left = true, right = true, top = false, bot = false),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
     @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], xvi[1])
@@ -189,13 +170,12 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 5e-2 / √2.1
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-6, CFL= 5e-2 / √2.1
     )
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left = true, right=true, top=true, bot=true),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
@@ -242,7 +222,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     t, it = 0.0, 0
 
 
-    while it < 30e3
+    while it < 100e3
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=dt, ϕ= ϕ)
         @parallel (@idx ni) compute_viscosity!(
@@ -341,7 +321,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 25) == 0
+        if it == 1 || rem(it, 100) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if do_save_vtk
@@ -507,11 +487,11 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "240322_eta_1e5_bas_1e3_rhy"
+figdir   = "240404_COSTA_256ny_eta_1e5_bas_1e5_rhy"
 # figdir   = "test_JP"
 do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 512
+n        = 256
 nx       = n * 2
 ny       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

@@ -222,7 +222,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
 
     # while it < 30e3
-    while it < 50e3
+    while it < 100e3
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=dt, ϕ= ϕ)
         @parallel (@idx ni) compute_viscosity!(
@@ -321,7 +321,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 75) == 0
+        if it == 1 || rem(it, 100) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
             if do_save_vtk
@@ -469,7 +469,7 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "240322_OM_Geometry_bas1e5_rhy1e3"
+figdir   = "240325_OM_Geometry_bas1e5_rhy1e3"
 # figdir   = "test_JP"
 do_save_vtk = true # set to true to generate VTK files for ParaView
 ar       = 2 # aspect ratio

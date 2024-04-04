@@ -214,7 +214,7 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
             CompositeRheology =CompositeRheology((creep_air,)),
             Gravity           = ConstantGravity(; g=g),
             CharDim           = CharDim,
-        ), 
+        ),
     )
 
 end
@@ -224,7 +224,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     # Characteristic lengths for non dimensionalization
     CharDim      = GEO_units(;length=12.5km, viscosity=1e21, temperature = 1e3C)
-    
+
     #-------JustRelax parameters-------------------------------------------------------------
     # Domain setup for JustRelax
     sticky_air   = nondimensionalize(1.5km, CharDim)          # thickness of the sticky air layer
@@ -256,7 +256,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     # temperature
     pT, pPhases      = init_cell_arrays(particles, Val(2))
     particle_args    = (pT, pPhases)
-    
+
     # Circular temperature anomaly--------------------------
     x_anomaly    = lx * 0.5
     y_anomaly    = ly * 0.5
@@ -273,11 +273,11 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         no_flux = (left = true, right = true, front = true, back = true, top = false, bot = false),
     )
     @parallel (@idx ni .+ 1) init_T!(
-        thermal.T, 
-        xvi[3], 
+        thermal.T,
+        xvi[3],
         sticky_air,
         nondimensionalize(0e0km,CharDim),
-        nondimensionalize(15km,CharDim), 
+        nondimensionalize(15km,CharDim),
         nondimensionalize((723 - 273)K,CharDim) / nondimensionalize(15km,CharDim),
         nondimensionalize(273K,CharDim)
     )
@@ -336,9 +336,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
 
- 
     # Arguments for functions
-    args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
+    args = (; T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
     @copy thermal.Told thermal.T
 
     # IO ------------------------------------------------
@@ -392,7 +391,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     while it < 25 #nt
 
         # Update buoyancy and viscosity -
-        args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
+        args = (; T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, cutoff_visc
         )
@@ -501,8 +500,12 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                         P   = Array(stokes.P),
                         τxx = Array(stokes.τ.xx),
                         τyy = Array(stokes.τ.yy),
+                        τzz = Array(stokes.τ.zz),
+                        τII = Array(stokes.τ.II),
                         εxx = Array(stokes.ε.xx),
                         εyy = Array(stokes.ε.yy),
+                        εzz = Array(stokes.ε.zz),
+                        εII = Array(stokes.ε.II),
                         η   = Array(η),
                     )
                     save_vtk(

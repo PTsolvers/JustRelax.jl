@@ -357,7 +357,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T [C]")
         ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
         scatter!(ax1, Array(thermal.T[2:(end - 1), :][:] .- 273), Yv)
-        lines!(ax2, Array(stokes.P[:]), Y)
+        lines!(ax2, Array(stokes.P[:]./1e6), Y)
         hideydecorations!(ax2)
         save(joinpath(figdir, "initial_profile.png"), fig)
         fig
@@ -705,7 +705,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     a3 = Axis(fig[2, 1]; aspect=2 / 3, title="τII")
 
                     scatter!(ax1, Array(thermal.T[2:(end - 1), :][:] .- 273.0), Yv)
-                    lines!(ax2, Array(stokes.P[:]), Y)
+                    lines!(ax2, Array(stokes.P[:]./1e6), Y)
                     scatter!(a3, Array((stokes.τ.II[:])./1e6), Y)
 
                     hideydecorations!(ax2)

@@ -337,9 +337,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk=false)
         # @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
 
-    @parallel (@idx ni) compute_melt_fraction!(
-        ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
-    )
+    # @parallel (@idx ni) compute_melt_fraction!(
+    #     ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
+    # )
 
     # Arguments for functions
     args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
@@ -385,6 +385,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk=false)
     if do_vtk
         Vx_v = @zeros(ni .+ 1...)
         Vy_v = @zeros(ni .+ 1...)
+        Vz_v = @zeros(ni .+ 1...)
     end
 
     # T_buffer    = @zeros(ni.+1)
@@ -426,7 +427,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk=false)
             nout=5e3,
             viscosity_cutoff=cutoff_visc,
         )
-        @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(
+        @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(
             stokes.ε.II, @strain(stokes)...
         )
         @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -460,37 +461,32 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk=false)
             nout=1e3,
             verbose=true,
         )
-
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
         )
         centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
         subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, particles, xvi,  di, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi,  di, dt
         )
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
+        advection_RK!(particles, @velocity(stokes), grid_vxi..., dt, 2 / 3)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         inject = check_injection(particles)
-        inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
+        inject && inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
-        @parallel (@idx ni) compute_melt_fraction!(
-            ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
-        )
+        # @parallel (@idx ni) compute_melt_fraction!(
+        #     ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
+        # )
 
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= Tsurf
-        @views T_buffer[:, 1] .= Tbot
-        @views thermal.T[2:end - 1, :] .= T_buffer
+        particle2grid!(thermal.T, pT, xvi, particles)
+        @views thermal.T[:, :, end] .= Tsurf
+        @views thermal.T[:, :, 1] .= Tbot
         thermal_bcs!(thermal.T, thermal_bc)
         temperature2center!(thermal)
         thermal.ΔT .= thermal.T .- thermal.Told
@@ -505,13 +501,14 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk=false)
 
             if igg.me == 0
                 if do_vtk
-                    JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                    JustRelax.velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                     data_v = (;
-                        T=Array(thermal.T[2:(end - 1), :]),
+                        T=Array(thermal.T),
                         τxy=Array(stokes.τ.xy),
                         εxy=Array(stokes.ε.xy),
                         Vx=Array(Vx_v),
                         Vy=Array(Vy_v),
+                        Vz=Array(Vy_v),
                     )
                     data_c = (;
                         P=Array(stokes.P),
@@ -703,14 +700,15 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk=false)
             end
         end
     end
-    # finalize_global_grid()
 
+    finalize_global_grid()
+    return nothing
 end
 
-figdir = "NONDIM_Thermal_stresses_around_cooling_magma"
+figdir = "NONDIM_Thermal_stresses_around_cooling_magma_3D"
 do_vtk = true # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
-n = 128
+n = 64
 nx = n
 ny = n
 nz = n
@@ -721,7 +719,7 @@ else
 end
 
 # run main script
-# main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=do_vtk);
+main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=do_vtk);
 
 # function plot_particles(particles, pPhases)
 #     p = particles.coords

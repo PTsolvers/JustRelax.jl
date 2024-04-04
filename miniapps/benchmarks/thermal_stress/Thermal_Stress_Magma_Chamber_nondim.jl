@@ -604,18 +604,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     yticklabelsize=25,
                     xticklabelsize=25,
                     xlabelsize=25,
-                )
+                    )
                 ax2 = Axis(
                     fig[2, 2][1, 1];
-                    aspect=ar,
-                    title=L"ΔP [MPa]",
-                    titlesize=40,
-                    yticklabelsize=25,
-                    xticklabelsize=25,
-                    xlabelsize=25,
-                )
-                ax3 = Axis(
-                    fig[3, 1][1, 1];
                     aspect=ar,
                     title=L"Viscosity [\mathrm{Pa s}]",
                     xlabel="Width [km]",
@@ -624,8 +615,26 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     xticklabelsize=25,
                     xlabelsize=25,
                 )
+                ax3 = Axis(
+                    fig[3, 1][1, 1];
+                    aspect=ar,
+                    title=L"ΔP [MPa]",
+                    titlesize=40,
+                    yticklabelsize=25,
+                    xticklabelsize=25,
+                    xlabelsize=25,
+                )
                 ax4 = Axis(
                     fig[3, 2][1, 1];
+                    aspect=ar,
+                    title=L"P [MPa]",
+                    titlesize=40,
+                    yticklabelsize=25,
+                    xticklabelsize=25,
+                    xlabelsize=25,
+                )
+                ax5 = Axis(
+                    fig[4, 1][1, 1];
                     aspect=ar,
                     title=L"\log_{10}(\dot{\varepsilon}_{\textrm{II}}) [\mathrm{s}^{-1}]",
                     xlabel="Width [km]",
@@ -634,8 +643,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     xticklabelsize=25,
                     xlabelsize=25,
                 )
-                ax5 = Axis(
-                    fig[4, 1][1, 1];
+                ax6 = Axis(
+                    fig[4, 2][1, 1];
                     aspect=ar,
                     title=L"\tau_{\textrm{II}} [MPa]",
                     xlabel="Width [km]",
@@ -652,34 +661,52 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])),C,CharDim));
                     colormap=:batlow,
                 )
-                # Plot Pressure difference
+                # Plot effective viscosity
                 p2 = heatmap!(
                     ax2,
-                    ustrip.(dimensionalize(xci[1],km,CharDim)),
-                    ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize((Array((stokes.P .- P_init))),MPa,CharDim));
-                    colormap=:roma,
-                )
-                # Plot effective viscosity
-                p3 = heatmap!(
-                    ax3,
                     ustrip.(dimensionalize(xci[1],km,CharDim)),
                     ustrip.(dimensionalize(xci[2],km,CharDim)),
                     ustrip.(dimensionalize((Array(log10.(η_vep))),Pa*s,CharDim));
                     colormap=:glasgow,
                     colorrange=(log10(1e16), log10(1e24)),
                 )
-                # Plot 2nd invariant of strain rate
+                arrows!(
+                    ax2,
+                    ustrip.(dimensionalize(xvi[1],km,CharDim))[1:5:end-1],
+                    ustrip.(dimensionalize(xvi[2],km,CharDim))[1:5:end-1],
+                    Array.((ustrip.(dimensionalize(Vx_v, cm/yr, CharDim))[1:5:end-1, 1:5:end-1],
+                    ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))[1:5:end-1, 1:5:end-1]))...,
+                    lengthscale = 1 / max(maximum(ustrip.(dimensionalize(Vx_v, cm/yr, CharDim))),
+                    maximum(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim)))),
+                    color = :red,
+                )
+                # Plot Pressure difference
+                p3 = heatmap!(
+                    ax3,
+                    ustrip.(dimensionalize(xci[1],km,CharDim)),
+                    ustrip.(dimensionalize(xci[2],km,CharDim)),
+                    ustrip.(dimensionalize((Array((stokes.P .- P_init))),MPa,CharDim));
+                    colormap=:roma,
+                )
+                # Plot Pressure difference
                 p4 = heatmap!(
                     ax4,
+                    ustrip.(dimensionalize(xci[1],km,CharDim)),
+                    ustrip.(dimensionalize(xci[2],km,CharDim)),
+                    ustrip.(dimensionalize((Array((stokes.P))),MPa,CharDim));
+                    colormap=:roma,
+                )
+                # Plot 2nd invariant of strain rate
+                p5 = heatmap!(
+                    ax5,
                     ustrip.(dimensionalize(xci[1],km,CharDim)),
                     ustrip.(dimensionalize(xci[2],km,CharDim)),
                    log10.(ustrip.(dimensionalize(Array((stokes.ε.II)),s^-1,CharDim)));
                     colormap=:roma,
                 )
                 # Plot 2nd invariant of stress
-                p5 = heatmap!(
-                    ax5,
+                p6 = heatmap!(
+                    ax6,
                     ustrip.(dimensionalize(xci[1],km,CharDim)),
                     ustrip.(dimensionalize(xci[2],km,CharDim)),
                     ustrip.(dimensionalize(Array((stokes.τ.II)),MPa,CharDim));
@@ -702,6 +729,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 )
                 Colorbar(
                     fig[4, 1][1, 2], p5; height=Relative(0.7), ticklabelsize=25, ticksize=15
+                )
+                Colorbar(
+                    fig[4, 2][1, 2], p6; height=Relative(0.7), ticklabelsize=25, ticksize=15
                 )
                 rowgap!(fig.layout, 1)
                 colgap!(fig.layout, 1)

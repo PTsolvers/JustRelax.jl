@@ -1,18 +1,17 @@
-using CUDA
 using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
 using ParallelStencil
-@init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
 using JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:CUDA, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
+model = PS_Setup(:Threads, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
 environment!(model)
 
 using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
@@ -566,7 +565,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 ax2 = Axis(
                     fig[2, 2][1, 1];
                     aspect=ar,
-                    title=L"ΔP [MPa]",
+                    title=L"Viscosity [\mathrm{Pa s}]",
+                    xlabel="Width [km]",
                     titlesize=40,
                     yticklabelsize=25,
                     xticklabelsize=25,
@@ -575,8 +575,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 ax3 = Axis(
                     fig[3, 1][1, 1];
                     aspect=ar,
-                    title=L"Viscosity [\mathrm{Pa s}]",
-                    xlabel="Width [km]",
+                    title=L"ΔP [MPa]",
                     titlesize=40,
                     yticklabelsize=25,
                     xticklabelsize=25,
@@ -585,8 +584,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 ax4 = Axis(
                     fig[3, 2][1, 1];
                     aspect=ar,
-                    title=L"\log_{10}(\dot{\varepsilon}_{\textrm{II}}) [\mathrm{s}^{-1}]",
-                    xlabel="Width [km]",
+                    title=L"P [MPa]",
                     titlesize=40,
                     yticklabelsize=25,
                     xticklabelsize=25,
@@ -594,6 +592,16 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 )
                 ax5 = Axis(
                     fig[4, 1][1, 1];
+                    aspect=ar,
+                    title=L"\log_{10}(\dot{\varepsilon}_{\textrm{II}}) [\mathrm{s}^{-1}]",
+                    xlabel="Width [km]",
+                    titlesize=40,
+                    yticklabelsize=25,
+                    xticklabelsize=25,
+                    xlabelsize=25,
+                )
+                ax6 = Axis(
+                    fig[4, 2][1, 1];
                     aspect=ar,
                     title=L"\tau_{\textrm{II}} [MPa]",
                     xlabel="Width [km]",
@@ -610,37 +618,53 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     Array(thermal.T[2:(end - 1), :] .- 273);
                     colormap=:batlow,
                 )
-                # Plot Pressure difference
+                # Plot effective viscosity
                 p2 = heatmap!(
                     ax2,
-                    xci[1] .* 1e-3,
-                    xci[2] .* 1e-3,
-                    Array((stokes.P .- P_init) ./ 1e6);
-                    colormap=:roma,
-                )
-                # Plot effective viscosity
-                p3 = heatmap!(
-                    ax3,
                     xci[1] .* 1e-3,
                     xci[2] .* 1e-3,
                     Array(log10.(η_vep));
                     colormap=:glasgow,
                     colorrange=(log10(1e16), log10(1e24)),
                 )
-                # Plot 2nd invariant of strain rate
+                arrows!(
+                    ax2,
+                    xvi[1][1:5:end-1]./1e3, xvi[2][1:5:end-1]./1e3,
+                    Array.((Vx_v[1:5:end-1, 1:5:end-1],
+                    Vy_v[1:5:end-1, 1:5:end-1]))...,
+                    lengthscale = 2 / max(maximum(Vx_v),  maximum(Vy_v)),
+                    color = :darkblue,
+                )
+                # Plot Pressure difference
+                p3 = heatmap!(
+                    ax3,
+                    xci[1] .* 1e-3,
+                    xci[2] .* 1e-3,
+                    Array((stokes.P .- P_init) ./ 1e6);
+                    colormap=:roma,
+                )
+                # Plot Pressure difference
                 p4 = heatmap!(
                     ax4,
+                    xci[1] .* 1e-3,
+                    xci[2] .* 1e-3,
+                    Array((stokes.P) ./ 1e6);
+                    colormap=:roma,
+                )
+                    # Plot 2nd invariant of strain rate
+                p5 = heatmap!(
+                    ax5,
                     xci[1] .* 1e-3,
                     xci[2] .* 1e-3,
                     Array(log10.(stokes.ε.II));
                     colormap=:roma,
                 )
                 # Plot 2nd invariant of stress
-                p5 = heatmap!(
-                    ax5,
+                p6 = heatmap!(
+                    ax6,
                     xci[1] .* 1e-3,
                     xci[2] .* 1e-3,
-                    Array((stokes.τ.II));
+                    Array((stokes.τ.II)./1e6);
                     colormap=:batlow,
                 )
                 hidexdecorations!(ax1)
@@ -661,6 +685,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 Colorbar(
                     fig[4, 1][1, 2], p5; height=Relative(0.7), ticklabelsize=25, ticksize=15
                 )
+                Colorbar(
+                    fig[4, 2][1, 2], p6; height=Relative(0.7), ticklabelsize=25, ticksize=15
+                )
                 rowgap!(fig.layout, 1)
                 colgap!(fig.layout, 1)
                 colgap!(fig.layout, 1)
@@ -679,7 +706,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
                     scatter!(ax1, Array(thermal.T[2:(end - 1), :][:] .- 273.0), Yv)
                     lines!(ax2, Array(stokes.P[:]), Y)
-                    scatter!(a3, Array((stokes.τ.II[:])), Y)
+                    scatter!(a3, Array((stokes.τ.II[:])./1e6), Y)
 
                     hideydecorations!(ax2)
                     save(joinpath(figdir, "pressure_profile_$it.png"), fig)

@@ -31,10 +31,35 @@ Compute the pressure field `P` and the residual `RP` for the compressible case. 
 after the implementation of Kiss et al. (2023). The temperature difference `ΔTc` on the cell center is used to compute this
 as well as α as the thermal expansivity.
 """
-@parallel_indices (I...) function compute_P!(
-    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ, args
+function compute_P!(
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio, dt, r, θ_dτ, kwargs::NamedTuple
+) where N
+    compute_P!(P, P0, RP, ∇V, η, rheology, phase_ratio, dt, r, θ_dτ; kwargs...)
+end
+
+function compute_P!(
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio, dt, r, θ_dτ; ΔTc = nothing, kwargs...
+) where N
+    ni = size(P)
+    @parallel (@idx ni) compute_P_kernel!(
+        P, P0, RP, ∇V, η, rheology, phase_ratio, dt, r, θ_dτ, ΔTc
+    )
+    return nothing
+end
+
+@parallel_indices (I...) function compute_P_kernel!(
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ, ::Nothing
 ) where {N,C<:JustRelax.CellArray}
-    ΔTc = args.ΔTc
+    K = fn_ratio(get_bulk_modulus, rheology, phase_ratio[I...])
+    RP[I...], P[I...] = _compute_P!(
+        P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ
+    )
+    return nothing
+end
+
+@parallel_indices (I...) function compute_P_kernel!(
+    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ, ΔTc
+) where {N,C<:JustRelax.CellArray}
     K = fn_ratio(get_bulk_modulus, rheology, phase_ratio[I...])
     α = fn_ratio(get_thermal_expansion, rheology, phase_ratio[I...])
     RP[I...], P[I...] = _compute_P!(

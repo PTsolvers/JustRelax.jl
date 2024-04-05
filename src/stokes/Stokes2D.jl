@@ -561,7 +561,7 @@ function JustRelax.solve!(
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
-            @parallel (@idx ni) compute_P!(
+            compute_P!(
                 stokes.P,
                 stokes.P0,
                 stokes.R.RP,
@@ -620,8 +620,8 @@ function JustRelax.solve!(
                 dt,
                 θ_dτ,
             )
-            free_surface_bcs!(stokes)
-            # @views stokes.τ.yy[:, end] .= stokes.P[:, end]
+            free_surface_bcs!(stokes, flow_bcs)
+            
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 

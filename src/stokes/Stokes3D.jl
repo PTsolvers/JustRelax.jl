@@ -417,19 +417,18 @@ function JustRelax.solve!(
 
     # solver loop
     wtime0 = 0.0
+    ητ = deepcopy(η)
+
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
-            ητ = deepcopy(η)
-            compute_maxloc!(ητ, η)
-            update_halo!(ητ)
-            # @hide_communication b_width begin # communication/computation overlap
-            #     @parallel compute_maxloc!(ητ, η)
-            #     update_halo!(ητ)
-            # end
+            @hide_communication b_width begin # communication/computation overlap
+                @parallel compute_maxloc!(ητ, η)
+                update_halo!(ητ)
+            end
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
-            @parallel (@idx ni) compute_P!(
+            compute_P!(
                 stokes.P,
                 stokes.P0,
                 stokes.R.RP,

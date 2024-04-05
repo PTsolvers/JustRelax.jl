@@ -206,11 +206,12 @@ end
             Vx[i + 1, j + 1, k + 1] += Rx_ijk * ηdτ / av_x(ητ)
         end
         if all((i, j, k) .< size(Vy) .- 1)
-            Ry_ijk = Ry[i, j, k]
-            _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
-            _dy * (τyy[i, j + 1, k] - τyy[i, j, k]) +
-            _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) - d_ya(P) - av_y(fy)
-            Vy[i + 1, j + 1, k + 1] += Ry_ijk * ηdτ / av_y(ητ)
+            Ry_ijk =
+            Ry[i, j, k] =
+                _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
+                _dy * (τyy[i, j + 1, k] - τyy[i, j, k]) +
+                _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) - d_ya(P) - av_y(fy)
+        Vy[i + 1, j + 1, k + 1] += Ry_ijk * ηdτ / av_y(ητ)
         end
         if all((i, j, k) .< size(Vz) .- 1)
             Rz_ijk =

@@ -132,7 +132,6 @@ function diffusion_3D(;
     # Boundary conditions
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
-        periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
 
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])

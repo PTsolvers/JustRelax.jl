@@ -31,7 +31,7 @@ end
         ε = εxx[I...], εyy[I...]
 
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = allzero(ε...) * 1e-15
+        εII_0 = allzero(ε...) * eps()
 
         # argument fields at local index
         args_ij = local_viscosity_args(args, I...)
@@ -78,7 +78,7 @@ end
         ε = εxx[I...], εyy[I...]
 
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = allzero(ε...) * 1e-18
+        εII_0 = allzero(ε...) * eps()
 
         # argument fields at local index
         args_ij = local_viscosity_args(args, I...)
@@ -114,7 +114,7 @@ end
         εij_normal = εxx[I...], εyy[I...], εzz[I...]
 
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = allzero(εij_normal...) * 1e-18
+        εII_0 = allzero(εij_normal...) * eps()
 
         # # argument fields at local index
         args_ijk = local_viscosity_args(args, I...)
@@ -164,7 +164,7 @@ end
         εij_normal = εxx[I...], εyy[I...], εzz[I...]
 
         # we need strain rate not to be zero, otherwise we get NaNs
-        εII_0 = allzero(εij_normal...) * 1e-18
+        εII_0 = allzero(εij_normal...) * eps()
 
         # # argument fields at local index
         args_ijk = local_viscosity_args(args, I...)

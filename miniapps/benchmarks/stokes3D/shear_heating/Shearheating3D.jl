@@ -90,7 +90,6 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     thermal         = ThermalArrays(ni)
     thermal_bc      = TemperatureBoundaryConditions(;
         no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
-        periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
 
     # Initialize constant temperature
@@ -123,7 +122,6 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left = true , right = true , top = true , bot = true , front = true , back = true ),
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
-        periodicity  = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
     ## Compression and not extension - fix this
     εbg              = 5e-14

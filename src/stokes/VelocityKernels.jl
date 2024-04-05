@@ -88,7 +88,7 @@ end
     return nothing
 end
 
-## VELOCITY 
+## VELOCITY
 
 @parallel_indices (i, j) function compute_V!(
     Vx::AbstractArray{T,2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy

@@ -15,12 +15,22 @@ model = PS_Setup(:Threads, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Floa
 environment!(model)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
+using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 
 # Load file with all the rheology configurations
 include("Blankenbach_Rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
+
+function copyinn_x!(A, B)
+
+    @parallel function f_x(A, B)
+        @all(A) = @inn_x(B)
+        return nothing
+    end
+
+    @parallel f_x(A, B)
+end
 
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
@@ -80,10 +90,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     dt = dt_diff = 0.9 * min(di...)^2 / κ / 4.0 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
-    # Weno model -----------------------------------------
-    weno = WENO5(ni=(nx,ny).+1, method=Val{2}()) # ni.+1 for Temp
-    # ----------------------------------------------------
-
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 12, 24, 6
     particles           = init_particles(
@@ -115,7 +121,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     thermal         = ThermalArrays(ni)
     thermal_bc      = TemperatureBoundaryConditions(;
         no_flux     = (left = true, right = true, top = false, bot = false),
-        periodicity = (left = false, right = false, top = false, bot = false),
     )
     # initialize thermal profile
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
@@ -153,7 +158,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     # Boundary conditions -------------------------------
     flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left = true, right=true, top=true, bot=true),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
@@ -183,8 +187,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         fig
     end
 
-    # WENO arrays
-    T_WENO  = @zeros(ni.+1)
+    T_buffer    = @zeros(ni.+1)
+    Told_buffer = similar(T_buffer)
+    dt₀         = similar(stokes.P)
+    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+        copyinn_x!(dst, src)
+    end
+    grid2particle!(pT, xvi, T_buffer, particles)
+    pT0.data    .= pT.data
 
     local Vx_v, Vy_v
     if save_vtk
@@ -227,14 +237,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             Inf,
             igg;
             iterMax          = 150e3,
-            nout             = 50,
+            nout             = 200,
             viscosity_cutoff = (-Inf, Inf),
             verbose          = false
         )
         dt   = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
-        # Weno advection
+        # Thermal solver ---------------
         heatdiffusion_PT!(
             thermal,
             pt_thermal,
@@ -246,16 +256,20 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             igg     = igg,
             phase   = phase_ratios,
             iterMax = 10e3,
-            nout    = 1e2,
-            verbose = false,
+            nout    = 50,
+            verbose = true,
         )
-        T_WENO .= thermal.T[2:end-1, :]
-        JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
-        thermal.T[2:end-1, :] .= T_WENO
+        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+            copyinn_x!(dst, src)
+        end
+        subgrid_characteristic_time!(
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+        )
+        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+        subgrid_diffusion!(
+            pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, particles, xvi,  di, dt
+        )
         # ------------------------------
-	thermal.T[2:end-1,end]  .= 273.0
-	thermal.T[2:end-1,1] 	.= 1273.0
 
         # Advection --------------------
         # advect particles in space
@@ -266,7 +280,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         # clean_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         inject = check_injection(particles)
-        inject && inject_particles_phase!(particles, pPhases, tuple(), tuple(), xvi)
+        # inject && break
+        inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)        
 
@@ -287,6 +302,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         push!(Urms, Urms_it)
         push!(trms, t)
         # -------------------------------------------
+
+        # interpolate fields from particle to grid vertices
+        particle2grid!(T_buffer, pT, xvi, particles)
+        @views T_buffer[:, end]      .= 273.0        
+        @views T_buffer[:, 1]        .= 1273.0
+        @views thermal.T[2:end-1, :] .= T_buffer
+        flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+        temperature2center!(thermal)
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 200) == 0 || it == nit
@@ -317,20 +340,29 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
                     data_c
                 )
             end
+
+            # Make particles plottable
+            p        = particles.coords
+            ppx, ppy = p
+            pxv      = ppx.data[:]./1e3
+            pyv      = ppy.data[:]./1e3
+            clr      = pT.data[:] #pPhases.data[:]
+            idxv     = particles.index.data[:];
+
             # Make Makie figure
             fig = Figure(size = (900, 900), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
             ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
             ax3 = Axis(fig[1,3], aspect = ar, title = "Vx [m/s]")
-            #ax4 = Axis(fig[2,3], aspect = ar, title = "T [K]")
+            ax4 = Axis(fig[2,3], aspect = ar, title = "T [K]")
             #
-            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(T_WENO) , colormap=:lajolla, colorrange=(273,1273) )
+            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:lajolla, colorrange=(273,1273) )
             # 
             h2  = heatmap!(ax2, xvi[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy) , colormap=:batlow)
             # 
             h3  = heatmap!(ax3, xvi[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vx) , colormap=:batlow)
             # 
-            #h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(273,1273), markersize=3)    
+            h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(273,1273), markersize=3)    
             #h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)) , colormap=:batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
@@ -338,8 +370,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             Colorbar(fig[1,2], h1)
             Colorbar(fig[2,2], h2)
             Colorbar(fig[1,4], h3)
-            #Colorbar(fig[2,4], h4)
-            linkaxes!(ax1, ax2, ax3)
+            Colorbar(fig[2,4], h4)
+            linkaxes!(ax1, ax2, ax3, ax4)
             save(joinpath(figdir, "$(it).png"), fig)
             fig
             
@@ -386,7 +418,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-figdir      =   "Blankenbach_WENO"
+figdir      =   "Blankenbach_subgrid"
 save_vtk    =   false # set to true to generate VTK files for ParaView
 ar          =   1 # aspect ratio
 n           =   51

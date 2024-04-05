@@ -140,7 +140,6 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     thermal    = ThermalArrays(ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux     = (left = true, right = true, top = false, bot = false),
-        periodicity = (left = false, right = false, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
     adiabat     = 0.3 # adiabatic gradient
@@ -194,7 +193,6 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     # Boundary conditions
     flow_bcs = FlowBoundaryConditions(;
         free_slip   = (left = true, right=true, top=true, bot=true),
-        periodicity = (left = false, right = false, top = false, bot = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)

@@ -2,31 +2,28 @@ abstract type AbstractBoundaryConditions end
 
 struct TemperatureBoundaryConditions{T,nD} <: AbstractBoundaryConditions
     no_flux::T
-    periodicity::T
 
     function TemperatureBoundaryConditions(;
-        no_flux::T=(left=true, right=false, top=false, bot=false),
-        periodicity::T=(left=false, right=false, top=false, bot=false),
+        no_flux::T=(left=true, right=false, top=false, bot=false)
     ) where {T}
-        @assert length(no_flux) === length(periodicity)
         nD = length(no_flux) == 4 ? 2 : 3
-        return new{T,nD}(no_flux, periodicity)
+        return new{T,nD}(no_flux)
     end
 end
 
 struct FlowBoundaryConditions{T,nD} <: AbstractBoundaryConditions
     no_slip::T
     free_slip::T
-    periodicity::T
+    free_surface::Bool
 
     function FlowBoundaryConditions(;
         no_slip::T=(left=false, right=false, top=false, bot=false),
         free_slip::T=(left=true, right=true, top=true, bot=true),
-        periodicity::T=(left=false, right=false, top=false, bot=false),
+        free_surface::Bool=false,
     ) where {T}
-        @assert length(no_slip) === length(free_slip) === length(periodicity)
+        @assert length(no_slip) === length(free_slip)
         nD = length(no_slip) == 4 ? 2 : 3
-        return new{T,nD}(no_slip, free_slip, periodicity)
+        return new{T,nD}(no_slip, free_slip, free_surface)
     end
 end
 
@@ -53,10 +50,8 @@ Apply the prescribed heat boundary conditions `bc` on the `T`
 ) where {_T,N}
     n = bc_index(T)
 
-    for _ in 1:(N - 1)
-        # no flux boundary conditions
-        do_bc(bcs.no_flux) && (@parallel (@idx n) free_slip!(T, bcs.no_flux))
-    end
+    # no flux boundary conditions
+    do_bc(bcs.no_flux) && (@parallel (@idx n) free_slip!(T, bcs.no_flux))
 
     return nothing
 end
@@ -69,22 +64,20 @@ end
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes`
 """
-function _flow_bcs!(bcs::FlowBoundaryConditions, V::NTuple{N,T}) where {N,T}
+
+flow_bcs!(stokes, bcs::FlowBoundaryConditions) = _flow_bcs!(bcs, @velocity(stokes))
+function flow_bcs!(bcs::FlowBoundaryConditions, V::Vararg{T,N}) where {T,N}
+    return _flow_bcs!(bcs, tuple(V...))
+end
+
+function _flow_bcs!(bcs::FlowBoundaryConditions, V)
     n = bc_index(V)
     # no slip boundary conditions
     do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip))
     # free slip boundary conditions
     do_bc(bcs.free_slip) && (@parallel (@idx n) free_slip!(V..., bcs.free_slip))
-    # periodic conditions
-    do_bc(bcs.periodicity) &&
-        (@parallel (@idx n) periodic_boundaries!(V..., bcs.periodicity))
 
     return nothing
-end
-
-flow_bcs!(stokes, bcs::FlowBoundaryConditions) = _flow_bcs!(bcs, @velocity(stokes))
-function flow_bcs!(bcs::FlowBoundaryConditions, V::Vararg{T,N}) where {T,N}
-    return _flow_bcs!(bcs, tuple(V...))
 end
 
 # BOUNDARY CONDITIONS KERNELS
@@ -257,54 +250,93 @@ end
     return nothing
 end
 
-@parallel_indices (i) function periodic_boundaries!(Ax, Ay, bc)
-    @inbounds begin
-        if i ≤ size(Ax, 1)
-            bc.bot && (Ax[i, 1] = Ax[i, end - 1])
-            bc.top && (Ax[i, end] = Ax[i, 2])
-        end
-        if i ≤ size(Ay, 2)
-            bc.left && (Ay[1, i] = Ay[end - 1, i])
-            bc.right && (Ay[end, i] = Ay[2, i])
-        end
+function free_surface_bcs!(
+    stokes, bcs::FlowBoundaryConditions, η, rheology, phase_ratios, dt, di
+)
+    indices_range(Vx, Vy) = @idx (size(Vy, 2) - 1)
+    indices_range(Vx, Vy, Vz) = @idx (size(Vz, 1) - 2, size(Vz, 2) - 2)
+
+    V = @velocity(stokes)
+    n = indices_range(V...)
+
+    if bcs.free_surface
+        # apply boundary conditions
+        @parallel n FreeSurface_Vy!(
+            V...,
+            stokes.P,
+            stokes.P0,
+            stokes.τ_o.yy,
+            η,
+            rheology,
+            phase_ratios.center,
+            dt,
+            di...,
+        )
     end
+end
+
+function free_surface_bcs!(τ::SymmetricTensor, bcs::FlowBoundaryConditions)
+    if bcs.free_surface
+        @views τ.yy[:, end] .= 0.0
+    end
+end
+
+@parallel_indices (i) function FreeSurface_Vy!(
+    Vx::AbstractArray{T,2},
+    Vy::AbstractArray{T,2},
+    P::AbstractArray{T,2},
+    P_old::AbstractArray{T,2},
+    τyy_old::AbstractArray{T,2},
+    η::AbstractArray{T,2},
+    rheology,
+    phase_ratios,
+    dt::T,
+    dx::T,
+    dy::T,
+) where {T}
+    phase = @inbounds phase_ratios[i, end]
+    Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
+    Vy[i + 1, end] =
+        Vy[i + 1, end - 1] +
+        3.0 / 2.0 *
+        (
+            P[i, end] / (2.0 * η[i, end]) -
+            (τyy_old[i, end] + P_old[i, end]) / (2.0 * Gdt) +
+            inv(3.0) * (Vx[i + 1, end - 1] - Vx[i, end - 1]) * inv(dx)
+        ) *
+        dy
     return nothing
 end
 
-@parallel_indices (i) function periodic_boundaries!(
-    T::_T, bc
-) where {_T<:AbstractArray{<:Any,2}}
-    @inbounds begin
-        if i ≤ size(T, 1)
-            bc.bot && (T[i, 1] = T[i, end - 1])
-            bc.top && (T[i, end] = T[i, 2])
-        end
-        if i ≤ size(T, 2)
-            bc.left && (T[1, i] = T[end - 1, i])
-            bc.right && (T[end, i] = T[2, i])
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function periodic_boundaries!(
-    T::_T, bc
-) where {_T<:AbstractArray{<:Any,3}}
-    nx, ny, nz = size(T)
-    @inbounds begin
-        if i ≤ nx && j ≤ ny
-            bc.bot && (T[i, j, 1] = T[i, j, end - 1])
-            bc.top && (T[i, j, end] = T[i, j, 2])
-        end
-        if i ≤ ny && j ≤ nz
-            bc.left && (T[1, i, j] = T[end - 1, i, j])
-            bc.right && (T[end, i, j] = T[2, i, j])
-        end
-        if i ≤ nx && j ≤ nz
-            bc.front && (T[i, 1, j] = T[i, end - 1, j])
-            bc.back && (T[i, end, j] = T[i, 2, j])
-        end
-    end
+@parallel_indices (i, j) function FreeSurface_Vy!(
+    Vx::AbstractArray{T,3},
+    Vy::AbstractArray{T,3},
+    Vz::AbstractArray{T,3},
+    P::AbstractArray{T,3},
+    P_old::AbstractArray{T,3},
+    τyy_old::AbstractArray{T,3},
+    η::AbstractArray{T,3},
+    rheology,
+    phase_ratios,
+    dt::T,
+    dx::T,
+    dy::T,
+    dz::T,
+) where {T}
+    phase = @inbounds phase_ratios[i, j, end]
+    Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
+    Vz[i + 1, j + 1, end] =
+        Vz[i + 1, j + 1, end - 1] +
+        3.0 / 2.0 *
+        (
+            P[i, j, end] / (2.0 * η[i, j, end]) -
+            (τyy_old[i, j, end] + P_old[i, j, end]) / (2.0 * Gdt) +
+            inv(3.0) * (
+                (Vx[i + 1, j + 1, end - 1] - Vx[i, j + 1, end - 1]) * inv(dx) +
+                (Vy[i + 1, j + 1, end - 1] - Vy[i + 1, j, end - 1]) * inv(dy)
+            )
+        ) *
+        dz
     return nothing
 end
 

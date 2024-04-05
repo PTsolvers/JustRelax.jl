@@ -7,8 +7,8 @@ function init_rheologies(; is_plastic = true)
     disl_lower_crust            = DislocationCreep(A=2.08e-23, n=3.2, E=238e3, V=6e-6,  r=0.0, R=8.3145)
     disl_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=6e-6,  r=0.0, R=8.3145)
     disl_sublithospheric_mantle = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=6e-6,  r=0.0, R=8.3145)
-    diff_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=1.0, E=530e3, V=6e-6,  r=0.0, R=8.3145)
-    diff_sublithospheric_mantle = DislocationCreep(A=2.51e-17, n=1.0, E=530e3, V=6e-6,  r=0.0, R=8.3145)
+    diff_lithospheric_mantle    = DiffusionCreep(A=2.51e-17, n=1.0, E=530e3, V=6e-6,  p=0, r=0.0, R=8.3145)
+    diff_sublithospheric_mantle = DiffusionCreep(A=2.51e-17, n=1.0, E=530e3, V=6e-6,  p=0, r=0.0, R=8.3145)
 
     # Elasticity
     el_upper_crust              = SetConstantElasticity(; G=25e9, ν=0.5)

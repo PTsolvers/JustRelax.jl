@@ -234,14 +234,17 @@ function free_surface_bcs!(
     end
 end
 
-
-function free_surface_bcs!(stokes::StokesArrays{A, B, C, D, E, 2}, bcs::FlowBoundaryConditions) where {A, B, C, D, E}
+function free_surface_bcs!(
+    stokes::StokesArrays{A,B,C,D,E,2}, bcs::FlowBoundaryConditions
+) where {A,B,C,D,E}
     if bcs.free_surface
         @views stokes.τ.yy[:, end] .= 0.0
     end
 end
 
-function free_surface_bcs!(stokes::StokesArrays{A, B, C, D, E, 3}, bcs::FlowBoundaryConditions) where {A, B, C, D, E}
+function free_surface_bcs!(
+    stokes::StokesArrays{A,B,C,D,E,3}, bcs::FlowBoundaryConditions
+) where {A,B,C,D,E}
     if bcs.free_surface
         @views stokes.τ.zz[:, :, end] .= 0.0
     end

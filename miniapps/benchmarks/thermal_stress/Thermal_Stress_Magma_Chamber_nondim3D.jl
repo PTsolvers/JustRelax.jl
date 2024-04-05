@@ -311,7 +311,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     # ])
 
     flow_bcs = FlowBoundaryConditions(;
-        free_slip    = (left=true, right=true, front=true, back=true, top=false, bot=false),
+        free_slip    = (left=true, right=true, front=true, back=true, top=true, bot=true),
         no_slip      = (left=false, right=false, front=false, back=false, top=false, bot=false),
         free_surface = true,
     )

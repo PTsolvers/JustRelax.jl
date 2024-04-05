@@ -422,10 +422,8 @@ function JustRelax.solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
-            @hide_communication b_width begin # communication/computation overlap
-                @parallel compute_maxloc!(ητ, η)
-                update_halo!(ητ)
-            end
+            compute_maxloc!(ητ, η)
+            update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             compute_P!(

@@ -133,20 +133,6 @@ function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi, 
     )
 end
 
-@parallel_indices (i, j) function compute_melt_fraction!(ϕ, rheology, args)
-    ϕ[i, j] = compute_meltfraction(rheology, ntuple_idx(args, i, j))
-    return nothing
-end
-
-@parallel_indices (I...) function compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
-    args_ijk = ntuple_idx(args, I...)
-    ϕ[I...] = compute_melt_frac(rheology, args_ijk, phase_ratios[I...])
-    return nothing
-end
-
-@inline function compute_melt_frac(rheology, args, phase_ratios)
-    return GeoParams.compute_meltfraction_ratio(phase_ratios, rheology, args)
-end
 
 function phase_change!(phases, particles)
     ni = size(phases)
@@ -362,10 +348,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         @parallel init_P!(stokes.P, ρg[2], xci[2], di[2])
     end
 
-    @parallel (@idx ni) compute_melt_fraction!(
-        ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
-    )
-
     # Arguments for functions
     args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
     @copy thermal.Told thermal.T
@@ -510,9 +492,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
-        @parallel (@idx ni) compute_melt_fraction!(
-            ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
-        )
 
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end] .= Tsurf

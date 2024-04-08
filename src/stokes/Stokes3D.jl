@@ -417,19 +417,16 @@ function JustRelax.solve!(
 
     # solver loop
     wtime0 = 0.0
+    ητ = deepcopy(η)
+
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
-            ητ = deepcopy(η)
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
-            # @hide_communication b_width begin # communication/computation overlap
-            #     @parallel compute_maxloc!(ητ, η)
-            #     update_halo!(ητ)
-            # end
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
-            @parallel (@idx ni) compute_P!(
+            compute_P!(
                 stokes.P,
                 stokes.P0,
                 stokes.R.RP,
@@ -440,6 +437,7 @@ function JustRelax.solve!(
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
+                args,
             )
 
             @parallel (@idx ni) compute_strain_rate!(
@@ -478,6 +476,7 @@ function JustRelax.solve!(
                 dt,
                 pt_stokes.θ_dτ,
             )
+            free_surface_bcs!(stokes, flow_bc)
 
             @parallel (@idx ni .+ 1) center2vertex!(
                 stokes.τ.yz,
@@ -505,6 +504,7 @@ function JustRelax.solve!(
                     _di...,
                 )
                 # apply boundary conditions
+                free_surface_bcs!(stokes, flow_bc, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bc)
                 update_halo!(@velocity(stokes)...)
             end

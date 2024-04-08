@@ -107,7 +107,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
 
     # Rheology
     η                = @ones(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args             = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
@@ -115,7 +115,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √3
+        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=5e-2 / √3
     )
 
     # Boundary conditions
@@ -134,7 +134,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
-        vtk_dir      = figdir*"\\vtk"
+        vtk_dir      = joinpath(figdir,"vtk")
         take(vtk_dir)
     end
     take(figdir)
@@ -167,7 +167,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     t, it = 0.0, 0
     while it < 10
             # Update buoyancy and viscosity -
-            args = (; T = thermal.Tc, P = stokes.P,  dt = Inf)
+            args = (; T = thermal.Tc, P = stokes.P,  dt = dt, ΔTc = @zeros(ni...))
             @parallel (@idx ni) compute_viscosity!(
                 η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
             )
@@ -186,7 +186,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                 phase_ratios,
                 rheology,
                 args,
-                Inf,
+                dt,
                 igg;
                 iterMax = 100e3,
                 nout=1e3,
@@ -277,6 +277,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                 # Make Makie figure
                 slice_j = ny >>> 1
                 fig     = Figure(size = (1200, 1200), title = "t = $t")
+                ar      = li[1] / li[3]
                 ax1     = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
                 ax2     = Axis(fig[2,1], aspect = ar, title = "Shear heating [W/m3]")
                 ax3     = Axis(fig[1,3], aspect = ar, title = "log10(εII)")

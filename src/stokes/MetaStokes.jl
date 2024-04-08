@@ -19,6 +19,8 @@ function make_velocity_struct!(ndim::Integer; name::Symbol=:Velocity)
             function $(name)(ni::NTuple{3,T}) where {T}
                 return new{$PTArray}(@zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...))
             end
+
+            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{$PTArray}(args...)
         end
     end
 end
@@ -80,6 +82,8 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTens
                     @zeros(ni...), # II (second invariant)
                 )
             end
+
+            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{$PTArray}(args...)
         end
     end
 end
@@ -106,11 +110,13 @@ function make_residual_struct!(ndim; name::Symbol=:Residual)
                 RP = @zeros(ni[4]...)
                 return new{typeof(Rx)}(Rx, Ry, Rz, RP)
             end
+
+            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{$PTArray}(args...)
         end
     end
 end
 
-function make_stokes_struct!()
+function make_stokes_struct!(; name::Symbol=:StokesArrays)
     @eval begin
         struct StokesArrays{M<:AbstractStokesModel,A,B,C,T,nDim}
             P::T
@@ -211,6 +217,19 @@ function make_stokes_struct!()
 
                 return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
                     P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, deepcopy(τ), R
+                )
+            end
+
+            function $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N}
+                return new{
+                    ViscoElastic,
+                    typeof(args[4]),
+                    typeof(args[5]),
+                    typeof(args[end]),
+                    typeof(args[1]),
+                    N,
+                }(
+                    args...
                 )
             end
         end

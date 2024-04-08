@@ -178,7 +178,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     # Rheology
     η        = @ones(ni...)
     depth    = PTArray([y for x in xci[1], y in xci[2]])
-    args     = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
+    args     = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = dt, ΔTc = thermal.ΔTc)
     η_cutoff = 1e18, 1e23
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, @strain(stokes)..., args, rheology, η_cutoff
@@ -229,7 +229,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     local iters
     while (t / (1e6 * 3600 * 24 * 365.25)) < 4.5e3
         # Stokes solver ----------------
-        args = (; T = thermal.Tc, P = stokes.P, depth = depth, dt=Inf)
+        args = (; T = thermal.Tc, P = stokes.P, depth = depth, dt=dt, ΔTc = thermal.ΔTc)
         @parallel (@idx ni) compute_ρg!(ρg[2], rheology, args)
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, @strain(stokes)..., args, rheology, η_cutoff

@@ -561,7 +561,7 @@ function JustRelax.solve!(
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
-            @parallel (@idx ni) compute_P!(
+            compute_P!(
                 stokes.P,
                 stokes.P0,
                 stokes.R.RP,
@@ -572,6 +572,7 @@ function JustRelax.solve!(
                 dt,
                 r,
                 θ_dτ,
+                args,
             )
 
             # stokes.P[1, 1] = stokes.P[2, 1]
@@ -619,7 +620,7 @@ function JustRelax.solve!(
                 dt,
                 θ_dτ,
             )
-            free_surface_bcs!(stokes.τ, flow_bcs)
+            free_surface_bcs!(stokes, flow_bcs)
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
@@ -643,8 +644,7 @@ function JustRelax.solve!(
                 # apply boundary conditions
                 free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
-
-                update_halo!(stokes.V.Vx, stokes.V.Vy)
+                update_halo!(@velocity(stokes)...)
             end
         end
 

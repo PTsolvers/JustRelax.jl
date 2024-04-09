@@ -14,10 +14,10 @@ environment!(model)
         )
         flow_bcs!(bcs, Vx, Vy)
 
-    @test @views Vx[:, 1] == Vx[:, 2]
-    @test @views Vx[:, end] == Vx[:, end - 1]
-    @test @views Vy[1, :] == Vy[2, :]
-    @test @views Vy[end, :] == Vy[end - 1, :]
+        @test @views Vx[:, 1]   == Vx[:, 2]
+        @test @views Vx[:, end] == Vx[:, end - 1]
+        @test @views Vy[1, :]   == Vy[2, :]
+        @test @views Vy[end, :] == Vy[end - 1, :]
 
         # no-slip
         Vx, Vy = PTArray(rand(n + 1, n + 2)), PTArray(rand(n + 2, n + 1))
@@ -47,10 +47,10 @@ environment!(model)
         )
         flow_bcs!(stokes, flow_bcs)
 
-    @test @views stokes.V.Vx[  :,   1] == stokes.V.Vx[      :,       2]
-    @test @views stokes.V.Vx[  :, end] == stokes.V.Vx[      :, end - 1]
-    @test @views stokes.V.Vy[  1,   :] == stokes.V.Vy[      2,       :]
-    @test @views stokes.V.Vy[end,   :] == stokes.V.Vy[end - 1,       :]
+        @test @views stokes.V.Vx[  :,   1] == stokes.V.Vx[      :,       2]
+        @test @views stokes.V.Vx[  :, end] == stokes.V.Vx[      :, end - 1]
+        @test @views stokes.V.Vy[  1,   :] == stokes.V.Vy[      2,       :]
+        @test @views stokes.V.Vy[end,   :] == stokes.V.Vy[end - 1,       :]
 
         # no-slip
         flow_bcs = FlowBoundaryConditions(;
@@ -59,14 +59,15 @@ environment!(model)
         )
         flow_bcs!(stokes, flow_bcs)
 
-    @test sum(!iszero(stokes.V.Vx[1  , i]) for i in axes(Vx,2)) == 0
-    @test sum(!iszero(stokes.V.Vx[end, i]) for i in axes(Vx,2)) == 0
-    @test sum(!iszero(stokes.V.Vy[i,   1]) for i in axes(Vy,1)) == 0
-    @test sum(!iszero(stokes.V.Vy[i,   1]) for i in axes(Vy,1)) == 0
-    @test @views stokes.V.Vy[1  ,   :] == -stokes.V.Vy[2      ,       :]
-    @test @views stokes.V.Vy[end,   :] == -stokes.V.Vy[end - 1,       :]
-    @test @views stokes.V.Vx[:  ,   1] == -stokes.V.Vx[:      ,       2]
-    @test @views stokes.V.Vx[:  , end] == -stokes.V.Vx[:      , end - 1]
+        @test sum(!iszero(stokes.V.Vx[1  , i]) for i in axes(Vx,2)) == 0
+        @test sum(!iszero(stokes.V.Vx[end, i]) for i in axes(Vx,2)) == 0
+        @test sum(!iszero(stokes.V.Vy[i,   1]) for i in axes(Vy,1)) == 0
+        @test sum(!iszero(stokes.V.Vy[i,   1]) for i in axes(Vy,1)) == 0
+        @test @views stokes.V.Vy[1  ,   :] == -stokes.V.Vy[2      ,       :]
+        @test @views stokes.V.Vy[end,   :] == -stokes.V.Vy[end - 1,       :]
+        @test @views stokes.V.Vx[:  ,   1] == -stokes.V.Vx[:      ,       2]
+        @test @views stokes.V.Vx[:  , end] == -stokes.V.Vx[:      , end - 1]
+    end
 end
 
 @testset "Temperature boundary conditions 2D" begin

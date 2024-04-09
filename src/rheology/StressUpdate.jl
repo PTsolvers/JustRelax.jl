@@ -1,7 +1,6 @@
 # inner kernel to compute the plastic stress update within Pseudo-Transient stress continuation
 function _compute_τ_nonlinear!(
     τ::NTuple{N1,T},
-    τII,
     τ_old::NTuple{N1,T},
     ε::NTuple{N1,T},
     ε_pl::NTuple{N1,T},

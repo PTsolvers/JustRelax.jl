@@ -282,7 +282,6 @@ function JustRelax.solve!(
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
-                stokes.τ.II,
                 @tensor(stokes.τ_o),
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -473,7 +472,6 @@ function JustRelax.solve!(
             # if !cte_viscosity
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
-                stokes.τ.II,
                 @tensor_center(stokes.τ_o),
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),

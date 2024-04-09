@@ -376,7 +376,6 @@ end
 
 @parallel_indices (I...) function compute_τ_nonlinear!(
     τ,     # @ centers
-    τII,   # @ centers
     τ_old, # @ centers
     ε,     # @ vertices
     ε_pl,  # @ centers
@@ -405,7 +404,7 @@ end
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
+        τ, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
 
     # augmented pressure with plastic volumetric strain over pressure
@@ -417,7 +416,6 @@ end
 # multi phase visco-elasto-plastic flow, where phases are defined in the cell center
 @parallel_indices (I...) function compute_τ_nonlinear!(
     τ,      # @ centers
-    τII,    # @ centers
     τ_old,  # @ centers
     ε,      # @ vertices
     ε_pl,   # @ centers
@@ -447,7 +445,7 @@ end
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
     _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
+        τ, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
     )
     # augmented pressure with plastic volumetric strain over pressure
     @inbounds θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)

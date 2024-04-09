@@ -421,6 +421,8 @@ function JustRelax.solve!(
     do_halo_update = !all(isone, igg.dims)
     # solver loop
     wtime0 = 0.0
+    ητ = deepcopy(η)
+
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
@@ -432,7 +434,7 @@ function JustRelax.solve!(
             # end
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
-            @parallel (@idx ni) compute_P!(
+            compute_P!(
                 stokes.P,
                 stokes.P0,
                 stokes.R.RP,
@@ -443,6 +445,7 @@ function JustRelax.solve!(
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
+                args,
             )
 
             @parallel (@idx ni) compute_strain_rate!(
@@ -485,6 +488,8 @@ function JustRelax.solve!(
                 dt,
                 pt_stokes.θ_dτ,
             )
+            free_surface_bcs!(stokes, flow_bc)
+
             @parallel (@idx ni .+ 1) center2vertex!(
                 stokes.τ.yz,
                 stokes.τ.xz,
@@ -523,6 +528,7 @@ function JustRelax.solve!(
                     _di...,
                 )
                 # apply boundary conditions
+                free_surface_bcs!(stokes, flow_bc, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bc)
                 do_halo_update && update_halo!(@velocity(stokes)...)
             end

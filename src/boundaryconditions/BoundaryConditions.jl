@@ -253,8 +253,8 @@ end
 function free_surface_bcs!(
     stokes, bcs::FlowBoundaryConditions, η, rheology, phase_ratios, dt, di
 )
-    indices_range(Vx, Vy) = @idx (size(Vy, 2) - 1)
-    indices_range(Vx, Vy, Vz) = @idx (size(Vz, 1) - 2, size(Vz, 2) - 2)
+    indices_range(::Any, Vy) = @idx (size(Vy, 2) - 1)
+    indices_range(::Any, ::Any, Vz) = @idx (size(Vz, 1) - 2, size(Vz, 2) - 2)
 
     V = @velocity(stokes)
     n = indices_range(V...)
@@ -275,9 +275,19 @@ function free_surface_bcs!(
     end
 end
 
-function free_surface_bcs!(τ::SymmetricTensor, bcs::FlowBoundaryConditions)
+function free_surface_bcs!(
+    stokes::StokesArrays{A,B,C,D,E,2}, bcs::FlowBoundaryConditions
+) where {A,B,C,D,E}
     if bcs.free_surface
-        @views τ.yy[:, end] .= 0.0
+        @views stokes.τ.yy[:, end] .= 0.0
+    end
+end
+
+function free_surface_bcs!(
+    stokes::StokesArrays{A,B,C,D,E,3}, bcs::FlowBoundaryConditions
+) where {A,B,C,D,E}
+    if bcs.free_surface
+        @views stokes.τ.zz[:, :, end] .= 0.0
     end
 end
 

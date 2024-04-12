@@ -489,24 +489,24 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                 if do_vtk
                     JustRelax.velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                     data_v = (;
-                        T  = Array(thermal.T),
-                        τxy= Array(stokes.τ.xy),
-                        εxy= Array(stokes.ε.xy),
-                        Vx = Array(Vx_v),
-                        Vy = Array(Vy_v),
-                        Vz = Array(Vz_v),
+                        T  = Array(ustrip.(dimensionalize(thermal.T, C, CharDim))),
+                        τxy= Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
+                        εxy= Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
+                        Vx = Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
+                        Vy = Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
+                        Vz = Array(ustrip.(dimensionalize(Vz_v, cm/yr, CharDim))),
                     )
                     data_c = (;
-                        P   = Array(stokes.P),
-                        τxx = Array(stokes.τ.xx),
-                        τyy = Array(stokes.τ.yy),
-                        τzz = Array(stokes.τ.zz),
-                        τII = Array(stokes.τ.II),
-                        εxx = Array(stokes.ε.xx),
-                        εyy = Array(stokes.ε.yy),
-                        εzz = Array(stokes.ε.zz),
-                        εII = Array(stokes.ε.II),
-                        η   = Array(η),
+                        P   = Array(ustrip.(dimensionalize(stokes.P,MPa,CharDim))),
+                        τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa,CharDim))),
+                        τyy = Array(ustrip.(dimensionalize(stokes.τ.yy,MPa,CharDim))),
+                        τzz = Array(ustrip.(dimensionalize(stokes.τ.zz,MPa,CharDim))),
+                        τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
+                        εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1,CharDim))),
+                        εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1,CharDim))),
+                        εzz = Array(ustrip.(dimensionalize(stokes.ε.zz, s^-1,CharDim))),
+                        εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim))),
+                        η   = Array(ustrip.(dimensionalize(η,Pa*s,CharDim))),
                     )
                     save_vtk(
                         joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -541,7 +541,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     return nothing
 end
 
-figdir = "NONDIM_Thermal_stresses_around_cooling_magma_3D"
+figdir = "Thermal_stresses_around_cooling_magma_3D"
 do_vtk = true # set to true to generate VTK files for ParaView
 ar     = 1 # aspect ratio
 n      = 64

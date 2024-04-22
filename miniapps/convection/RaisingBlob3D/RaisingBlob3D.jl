@@ -228,7 +228,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             args,
             Inf,
             igg;
-            iterMax          = 250e3,
+            iterMax          = 100e3,
             nout             = 1e3,
             viscosity_cutoff = (1e18, 1e24)
         );
@@ -336,7 +336,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             Colorbar(fig[1,4], h3)
             Colorbar(fig[2,4], h4)
             linkaxes!(ax1, ax2, ax3, ax4)
-            # save(joinpath(figdir, "$(it).png"), fig)
+            save(joinpath(figdir, "$(it).png"), fig)
             fig
         end
         # ------------------------------

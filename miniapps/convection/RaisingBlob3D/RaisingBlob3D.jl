@@ -98,7 +98,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 25, 35, 8
+    nxcell, max_xcell, min_xcell = 25, 35, 10
     particles                   = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
@@ -113,7 +113,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     xc_anomaly       = lx/2   # origin of thermal anomaly
     yc_anomaly       = ly/2   # origin of thermal anomaly
     zc_anomaly       = -610e3 # origin of thermal anomaly
-    r_anomaly        = 50e3   # radius of perturbation
+    r_anomaly        = 35e3   # radius of perturbation
     init_phases!(pPhases, particles, lx, ly; d=abs(zc_anomaly), r=r_anomaly)
     phase_ratios     = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
@@ -163,7 +163,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+    update_halo!(@velocity(stokes)...)
 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -233,7 +233,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             viscosity_cutoff = (1e18, 1e24)
         );
         @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
-        dt   = compute_dt(stokes, di, dt_diff) / 2
+        dt   = compute_dt(stokes, di, dt_diff) 
         # ------------------------------
 
         # Thermal solver ---------------
@@ -327,8 +327,8 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             # Plot 2nd invariant of strain rate
             h3  = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
             # Plot effective viscosity
-            # h4  = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:, slice_j, :])) , colormap=:batlow)
-            h4  = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(stokes.V.Vz[:, slice_j, :]) , colormap=:batlow)
+            h4  = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η[:, slice_j, :])) , colormap=:batlow)
+            # h4  = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(stokes.V.Vz[:, slice_j, :]) , colormap=:batlow)
             hideydecorations!(ax3)
             hideydecorations!(ax4)
             Colorbar(fig[1,2], h1)

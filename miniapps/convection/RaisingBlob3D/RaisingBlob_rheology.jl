@@ -21,7 +21,7 @@ function init_rheologies()
             Density           = PT_Density(; ρ0=3e3, β=0, T0=273, α = 3.5e-5),
             HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2),
             Conductivity      = K_crust,
-            CompositeRheology = CompositeRheology((LinearViscous(; η=η_blob), )),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=η_bg), )),
             # Elasticity        = SetConstantElasticity(; G=25e9, ν=0.5),
             Gravity           = ConstantGravity(; g=9.81),
         ),

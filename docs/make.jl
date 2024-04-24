@@ -13,4 +13,4 @@ makedocs(;
     ],
 )
 
-deploydocs(; repo="https://github.com/PTsolvers/JustRelax.jl", devbranch="main")
+deploydocs(; repo="github.com/PTsolvers/JustRelax.jl", devbranch="main")

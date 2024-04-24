@@ -15,35 +15,35 @@ function init_rheologies()
     ϕ_oceanic_crust = sind(0)
     C_oceanic_crust = 5e6
 
-    ϕ_oceanic_litho = sind(0)
+    ϕ_oceanic_litho = sind(10)
     C_oceanic_litho = 5e6
 
     ϕ_cont_crust    = sind(20)
     C_cont_crust    = 30e6
     
-    soft_C  = LinearSoftening((C_oceanic_litho*0.95, C_oceanic_litho), (0.1, 0.5))
+    soft_C  = LinearSoftening((C_oceanic_litho*0.05, C_oceanic_litho), (0.1, 0.5))
     
     # common physical properties
     α     = 3e-5 # 1 / K
     Cp    = 1000 # J / kg K
     # C     = 3e6  # Pa
-    η_reg = 1e18
-
+    η_reg = 1e20
+    ρbg   = 2700 # kg / m^3
 
     # Define rheolgy struct
     rheology = (
         # Name              = "dry olivine - Hirth_Kohlstedt_2003",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = PT_Density(; ρ0=3.3e3, α = α, β = 0e0, T0 = 273),
+            Density           = PT_Density(; ρ0=3.3e3-ρbg, α = α, β = 0e0, T0 = 273),
             HeatCapacity      = ConstantHeatCapacity(; Cp=Cp),
             Conductivity      = ConstantConductivity(; k = 3),
             CompositeRheology = CompositeRheology( 
                     (
                         disl_dry_olivine, 
                         diff_dry_olivine,
-                        # ConstantElasticity(; G=5e10, ν=0.5),
-                        DruckerPrager_regularised(; C = C_dry_olivine, ϕ=ϕ_dry_olivine, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
+                        ConstantElasticity(; G=5e10, ν=0.5),
+                        DruckerPrager_regularised(; C = C_dry_olivine, ϕ=ϕ_dry_olivine, η_vp=η_reg, Ψ=0.0, softening_C = soft_C) # non-regularized plasticity
                     ) 
                 ),
             RadioactiveHeat   = ConstantRadioactiveHeat(6.6667e-12),
@@ -53,70 +53,67 @@ function init_rheologies()
         # Name              = "oceanic crust",
         SetMaterialParams(;
             Phase             = 2,
-            Density           = PT_Density(; ρ0=3.3e3, α = α, β = 0e0, T0 = 273),
+            Density           = PT_Density(; ρ0=3.3e3-ρbg, α = α, β = 0e0, T0 = 273),
             HeatCapacity      = ConstantHeatCapacity(; Cp=Cp),
             Conductivity      = ConstantConductivity(; k =3 ),
             CompositeRheology = CompositeRheology( 
                 (
                     disl_oceanic_crust,
-                    # ConstantElasticity(; G=5e10, ν=0.5),
+                    ConstantElasticity(; G=5e10, ν=0.5),
                     DruckerPrager_regularised(; C = C_oceanic_crust, ϕ = ϕ_oceanic_crust, η_vp=η_reg, Ψ=0.0, softening_C = soft_C) # non-regularized plasticity
                 ) 
             ),
             RadioactiveHeat   = ConstantRadioactiveHeat(2.333e-10),
-            # Elasticity        = ConstantElasticity(; G=5e10, ν=0.5),
         ),
         # Name              = "oceanic lithosphere",
         SetMaterialParams(;
             Phase             = 3,
-            Density           = PT_Density(; ρ0=3.3e3, α = α, β = 0e0, T0 = 273),
+            Density           = PT_Density(; ρ0=3.3e3-ρbg, α = α, β = 0e0, T0 = 273),
             HeatCapacity      = ConstantHeatCapacity(; Cp=Cp),
-            Conductivity      = ConstantConductivity(; k = 3),
             Conductivity      = ConstantConductivity(; k = 3),
             CompositeRheology = CompositeRheology( 
                     (
                         disl_dry_olivine, 
                         diff_dry_olivine,
                         ConstantElasticity(; G=5e10, ν=0.5),
-                        DruckerPrager_regularised(; C = C_dry_olivine, ϕ=ϕ_dry_olivine, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
+                        DruckerPrager_regularised(; C = C_dry_olivine, ϕ=ϕ_dry_olivine, η_vp=η_reg, Ψ=0.0, softening_C = soft_C) # non-regularized plasticity
                     ) 
                 ),
             RadioactiveHeat   = ConstantRadioactiveHeat(6.6667e-12),
             Elasticity        = ConstantElasticity(; G=5e10, ν=0.5),
-            # Elasticity        = ConstantElasticity(; G=5e10, ν=0.5),
         ),
         # Name              = "continental crust",
         SetMaterialParams(;
             Phase             = 4,
-            Density           = PT_Density(; ρ0=2.7e3, α = α, β = 0e0, T0 = 273),
+            Density           = PT_Density(; ρ0=2.7e3-ρbg, α = α, β = 0e0, T0 = 273),
             RadioactiveHeat   = ConstantRadioactiveHeat(5.3571e-10),
             HeatCapacity      = ConstantHeatCapacity(; Cp=Cp),
             Conductivity      = ConstantConductivity(; k =3 ),
             CompositeRheology = CompositeRheology( 
                 (
                     disl_cont_crust, 
-                    # ConstantElasticity(; G=5e10, ν=0.5),
-                    DruckerPrager_regularised(; C = C_cont_crust, ϕ = ϕ_cont_crust, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
+                    ConstantElasticity(; G=5e10, ν=0.5),
+                    DruckerPrager_regularised(; C = C_cont_crust, ϕ = ϕ_cont_crust, η_vp=η_reg, Ψ=0.0, softening_C = soft_C) # non-regularized plasticity
                 ) 
             ),
-            # Elasticity        = ConstantElasticity(; G=5e10, ν=0.5),
+            Elasticity        = ConstantElasticity(; G=5e10, ν=0.5),
         ),
         # Name              = "continental lithosphere",
         SetMaterialParams(;
             Phase             = 5,
-            Density           = PT_Density(; ρ0=3.3e3, α = α, β = 0e0, T0 = 273),
+            Density           = PT_Density(; ρ0=3.3e3-ρbg, α = α, β = 0e0, T0 = 273),
             HeatCapacity      = ConstantHeatCapacity(; Cp=Cp),
             Conductivity      = ConstantConductivity(; k = 3),
             CompositeRheology = CompositeRheology( 
                     (
                         disl_dry_olivine, 
                         diff_dry_olivine,
-                        # ConstantElasticity(; G=5e10, ν=0.5),
-                        DruckerPrager_regularised(; C = C_dry_olivine, ϕ=ϕ_dry_olivine, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
+                        ConstantElasticity(; G=5e10, ν=0.5),
+                        DruckerPrager_regularised(; C = C_dry_olivine, ϕ=ϕ_dry_olivine, η_vp=η_reg, Ψ=0.0, softening_C = soft_C) # non-regularized plasticity
                     ) 
                 ),
             RadioactiveHeat   = ConstantRadioactiveHeat(6.6667e-12),
-            # Elasticity        = ConstantElasticity(; G=5e10, ν=0.5),
+            Elasticity        = ConstantElasticity(; G=5e10, ν=0.5),
         ),
     )
 end

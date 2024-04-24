@@ -550,13 +550,16 @@ function JustRelax.solve!(
         Aij .= 0.0
     end
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
-
+    
+    ρg_bg = 2700 * 9.81
+    Plitho = reverse(cumsum(reverse((ρg[2] .+ ρg_bg) .* di[2], dims=2), dims=2), dims=2)
+    args.P .= stokes.P .+ Plitho .- minimum(stokes.P)
+  
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
 
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window=(1, 1))
-            # compute_maxloc!(ητ, η_vep; window=(1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -583,11 +586,12 @@ function JustRelax.solve!(
             if rem(iter, 5) == 0
                 @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
             end
+            # args.P .= reverse(cumsum(reverse(ρg[2] .+ ρg_bg, dims=2), dims=2), dims=2)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-
+            
             if rem(iter, nout) == 0
                 @copy η0 η
             end
@@ -609,7 +613,8 @@ function JustRelax.solve!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
                 stokes.EII_pl,
-                stokes.P,
+                args.P,
+                # stokes.P,
                 θ,
                 η,
                 η_vep,
@@ -619,6 +624,7 @@ function JustRelax.solve!(
                 dt,
                 θ_dτ,
             )
+            # θ .-= args.P
             free_surface_bcs!(stokes, flow_bcs)
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
@@ -629,25 +635,17 @@ function JustRelax.solve!(
             )
 
             @hide_communication b_width begin # communication/computation overlap
-                # @parallel compute_V!(
-                #     @velocity(stokes)...,
-                #     Vx_on_Vy,
-                #     θ,
-                #     @stress(stokes)...,
-                #     pt_stokes.ηdτ,
-                #     ρg...,
-                #     ητ,
-                #     _di...,
-                #     dt * free_surface,
-                # )
                 @parallel compute_V!(
                     @velocity(stokes)...,
+                    Vx_on_Vy,
                     stokes.P,
                     @stress(stokes)...,
                     pt_stokes.ηdτ,
-                    ρg...,
+                    ρg[1],
+                    ρg[2],
                     ητ,
                     _di...,
+                    dt * free_surface,
                 )
                 # apply boundary conditions
                 free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
@@ -668,7 +666,8 @@ function JustRelax.solve!(
                 Vx_on_Vy,
                 stokes.P,
                 @stress(stokes)...,
-                ρg...,
+                ρg[1],
+                ρg[2],
                 _di...,
                 dt * free_surface,
             )
@@ -703,7 +702,7 @@ function JustRelax.solve!(
         end
     end
 
-    stokes.P .= θ
+    # stokes.P .= θ
     # @views stokes.P .-= stokes.P[:, end]
 
     # accumulate plastic strain tensor

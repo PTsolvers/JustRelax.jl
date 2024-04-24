@@ -1,21 +1,21 @@
-# using CUDA
+using CUDA
 using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
-# @init_parallel_stencil(CUDA, Float64, 2)
+# @init_parallel_stencil(Threads, Float64, 2)
+@init_parallel_stencil(CUDA, Float64, 2)
 
 using JustPIC
 using JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-# const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2) # or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
-# model = PS_Setup(:CUDA, Float64, 2) # or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
+# model = PS_Setup(:cpu, Float64, 2) # or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
+model = PS_Setup(:CUDA, Float64, 2) # or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
 environment!(model)
 
 # Load script dependencies
@@ -42,12 +42,12 @@ function copyinn_x!(A, B)
     @parallel f_x(A, B)
 end
 
-
 # Initial pressure profile - not accurate
 @parallel function init_P!(P, ρg, z)
     @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
     return nothing
 end
+
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -89,7 +89,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.99 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -108,22 +108,29 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(2))
-    for _ in 1:2
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        JustRelax.Stokes2D.init_P!(stokes.P, ρg[2], xci[2])
-    end
+    # for _ in 1:2
+        # compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+        # JustRelax.Stokes2D.init_P!(stokes.P, ρg[2], xci[2])
+    # end
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+    # Plitho = reverse(cumsum(reverse(ρg[2] .+ (2700*9.81), dims=2), dims=2), dims=2)
     
+    ρg_bg = 2700 * 9.81
+    # args.P .= reverse(cumsum(reverse(ρg[2] .+ ρg_bg, dims=2), dims=2), dims=2)
+    Plitho = reverse(cumsum(reverse((ρg[2] .+ ρg_bg).* di[2], dims=2), dims=2), dims=2)
+    # args.P = stokes.P .+ Plitho .- minimum(stokes.P)
+
     # Rheology
     η                = @ones(ni...)
     η_vep            = similar(η)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args0             = (; T = thermal.Tc, P =  Plitho, dt = Inf)
     compute_viscosity!(
-        η, 1.0, phase_ratios, stokes, args, rheology, (1e18, 1e24)
+        η, 1.0, phase_ratios, stokes, args0, rheology, (1e18, 1e24)
     )
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-2 / √3
+        rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √3
     )
 
     # Boundary conditions
@@ -142,8 +149,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-        scatter!(ax2, Array(log10.(η[:])), Y./1e3)
-        # scatter!(ax2, Array(ρg[2][:]), Y./1e3)
+        # scatter!(ax2, Array(log10.(η[:])), Y./1e3)
+        # scatter!(ax2, Array(stokes.P[:]), Y./1e3)
+        scatter!(ax2, Array(Plitho[:]), Y./1e3)
         ylims!(ax1, minimum(xvi[2])./1e3, 0)
         ylims!(ax2, minimum(xvi[2])./1e3, 0)
         hideydecorations!(ax2)
@@ -188,11 +196,13 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
         
-        # interpolate fields from particle to grid vertices
-        # particle2grid!(thermal.T, pT, xvi, particles)
-        # temperature2center!(thermal)
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+        Plitho .= reverse(cumsum(reverse((ρg[2] .+ ρg_bg).* di[2], dims=2), dims=2), dims=2)
+        # Plitho .= -(ρg[2] .+ ρg_bg) .* xci[2]'
+        Plitho .= stokes.P .+ Plitho .- minimum(stokes.P)
+        # args.P .= 0
+    
+        args = (; T = thermal.Tc, P = Plitho,  dt=Inf)
         compute_viscosity!(
             η, 1.0, phase_ratios, stokes, args, rheology, (1e18, 1e24)
         )
@@ -214,10 +224,10 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 dt,
                 igg;
                 iterMax          = 100e3,
-                nout             = 1e3,
+                nout             = 2e3,
                 viscosity_cutoff = (1e18, 1e24),
                 free_surface     = false,
-                # viscosity_relaxation = 1e-5
+                viscosity_relaxation = 1e-2
             );
         end
         println("Stokes solver time             ")
@@ -271,7 +281,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             if do_vtk
                 JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T   = Array(thermal.T),
+                    T   = Array(T_buffer),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
                     Vx  = Array(Vx_v),
@@ -283,7 +293,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                     τyy = Array(stokes.τ.yy),
                     εxx = Array(stokes.ε.xx),
                     εyy = Array(stokes.ε.yy),
-                    η   = Array(η),
+                    η   = Array(η_vep),
                 )
                 velocity_v = (
                     Array(Vx_v),
@@ -346,7 +356,9 @@ do_vtk   = true # set to true to generate VTK files for ParaView
 figdir   = "Subduction_LAMEM_2D"
 # nx, ny   = 512, 256
 # nx, ny   = 512, 128
-nx, ny   = 384, 64
+n        = 64
+nx, ny   = n*6, n
+nx, ny   = 512, 128
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
@@ -354,5 +366,4 @@ else
     igg
 end
 
-# main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
-
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

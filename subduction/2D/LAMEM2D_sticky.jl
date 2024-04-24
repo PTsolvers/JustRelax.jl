@@ -63,7 +63,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Physical properties using GeoParams ----------------
     rheology           = init_rheologies()
     rheology_augmented = init_augmented_rheologies()
-    dt                 = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt                 = 1e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------

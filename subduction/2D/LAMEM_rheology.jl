@@ -118,11 +118,11 @@ function init_rheologies()
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase             = 6,
-            Density           = ConstantDensity(; ρ=1e3-ρbg), # water density
+            Density           = ConstantDensity(; ρ=1e0-ρbg), # water density
             HeatCapacity      = ConstantHeatCapacity(; Cp=3e3),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             Conductivity      = ConstantConductivity(; k=1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e18),)),
         ),
     )
 end
@@ -244,11 +244,11 @@ function init_augmented_rheologies()
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase             = 6,
-            Density           = ConstantDensity(; ρ=1e3-ρbg), # water density
+            Density           = ConstantDensity(; ρ=1e0-ρbg), # water density
             HeatCapacity      = ConstantHeatCapacity(; Cp=3e3),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             Conductivity      = ConstantConductivity(; k=1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e18),)),
         ),
     )
 end

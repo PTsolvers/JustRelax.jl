@@ -513,19 +513,21 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 if do_vtk
                     JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                     data_v = (;
-                        T=Array(thermal.T[2:(end - 1), :]),
-                        τxy=Array(stokes.τ.xy),
-                        εxy=Array(stokes.ε.xy),
-                        Vx=Array(Vx_v),
-                        Vy=Array(Vy_v),
+                        T=Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
+                        τxy= Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
+                        εxy= Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
+                        Vx = Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
+                        Vy = Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
                     )
                     data_c = (;
-                        P=Array(stokes.P),
-                        τxx=Array(stokes.τ.xx),
-                        τyy=Array(stokes.τ.yy),
-                        εxx=Array(stokes.ε.xx),
-                        εyy=Array(stokes.ε.yy),
-                        η=Array(η),
+                        P   = Array(ustrip.(dimensionalize(stokes.P,MPa,CharDim))),
+                        τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa,CharDim))),
+                        τyy = Array(ustrip.(dimensionalize(stokes.τ.yy,MPa,CharDim))),
+                        τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
+                        εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1,CharDim))),
+                        εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1,CharDim))),
+                        εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim))),
+                        η   = Array(ustrip.(dimensionalize(η,Pa*s,CharDim))),
                     )
                     save_vtk(
                         joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -552,7 +554,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 ax0 = Axis(
                     fig[1, 1:2];
                     aspect=ar,
-                    title="t = $(t_dim) Kyrs",
+                    title="t = $(round(ustrip.(t_Kyrs); digits=3)) Kyrs",
                     titlesize=50,
                     height=0.0,
                 )
@@ -746,7 +748,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
 end
 
-figdir = "NONDIM_Thermal_stresses_around_cooling_magma"
+figdir = "Thermal_stresses_around_cooling_magma"
 do_vtk = true # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
 n = 128

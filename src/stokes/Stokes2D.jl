@@ -556,6 +556,7 @@ function JustRelax.solve!(
 
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window=(1, 1))
+            # compute_maxloc!(ητ, η_vep; window=(1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -628,16 +629,25 @@ function JustRelax.solve!(
             )
 
             @hide_communication b_width begin # communication/computation overlap
+                # @parallel compute_V!(
+                #     @velocity(stokes)...,
+                #     Vx_on_Vy,
+                #     θ,
+                #     @stress(stokes)...,
+                #     pt_stokes.ηdτ,
+                #     ρg...,
+                #     ητ,
+                #     _di...,
+                #     dt * free_surface,
+                # )
                 @parallel compute_V!(
                     @velocity(stokes)...,
-                    Vx_on_Vy,
-                    θ,
+                    stokes.P,
                     @stress(stokes)...,
                     pt_stokes.ηdτ,
                     ρg...,
                     ητ,
                     _di...,
-                    dt * free_surface,
                 )
                 # apply boundary conditions
                 free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)

@@ -204,7 +204,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv)
-        scatter!(ax2, Array(log10.(A[:])), Y)
+        scatter!(ax2, Array(log10.(η[:])), Y)
         ylims!(ax1, minimum(xvi[2]), 0)
         ylims!(ax2, minimum(xvi[2]), 0)
         hideydecorations!(ax2)
@@ -395,4 +395,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);

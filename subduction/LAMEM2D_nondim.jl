@@ -22,7 +22,7 @@ environment!(model)
 using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
 
 # Load file with all the rheology configurations
-include("LAMEM_rheology.jl")
+include("LAMEM_rheology_nondim.jl")
 include("LAMEM_setup2D.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -53,16 +53,24 @@ end
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
 
+    thickness    = 660 * km
+    η0           = 1e20Pa*s
+    CharDim      = GEO_units(; 
+        length = thickness, viscosity = η0, temperature = 1e3C
+    )
+
     # Physical domain ------------------------------------
     ni           = nx, ny           # number of cells
-    di           = @. li / ni       # grid steps
-    grid         = Geometry(ni, li; origin = origin)
+    li_nd        = nondimensionalize(li[1]m, CharDim), nondimensionalize(li[2]m, CharDim)
+    origin_nd    = nondimensionalize(origin[1]m, CharDim), nondimensionalize(origin[2]m, CharDim)
+    di           = @. li_nd / ni       # grid steps
+    grid         = Geometry(ni, li_nd; origin = origin_nd)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology     = init_rheologies()
-    dt           = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    rheology     = init_rheologies(CharDim)
+    dt           = nondimensionalize(10e3 * 3600 * 24 * 365 * s, CharDim) # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -89,36 +97,37 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.99 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    Ttop             = 20 + 273
-    Tbot             = 1565.0 + 273
+    Ttop             = nondimensionalize(20e0C, CharDim)
+    Tbot             = nondimensionalize(1565e0C, CharDim)
     thermal          = ThermalArrays(ni)
-    @views thermal.T[2:end-1, :] .= PTArray(T_GMG)
+    @views thermal.T[2:end-1, :] .= PTArray(nondimensionalize(T_GMG .* K, CharDim))
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux      = (left = true, right = true, top = false, bot = false),
     )
     thermal_bcs!(thermal, thermal_bc)
-    @views thermal.T[:, end] .= Ttop 
-    @views thermal.T[:, 1]   .= Tbot 
+    # @views thermal.T[:, end] .= Ttop 
+    # @views thermal.T[:, 1]   .= Tbot 
     @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(2))
-    for _ in 1:2
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        JustRelax.Stokes2D.init_P!(stokes.P, ρg[2], xci[2])
-    end
+    # for _ in 1:2
+    #     compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+    #     JustRelax.Stokes2D.init_P!(stokes.P, ρg[2], xci[2])
+    # end
     
     # Rheology
     η                = @ones(ni...)
     η_vep            = similar(η)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    viscosity_cutoff = nondimensionalize((1e16Pa*s, 1e24Pa*s), CharDim)
     compute_viscosity!(
-        η, 1.0, phase_ratios, stokes, args, rheology, (1e18, 1e24)
+        η, 1.0, phase_ratios, stokes, args, rheology, viscosity_cutoff 
     )
 
     # PT coefficients for thermal diffusion
@@ -182,8 +191,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]      .= Ttop
-        @views T_buffer[:, 1]        .= Tbot
+        # @views T_buffer[:, end]      .= Ttop
+        # @views T_buffer[:, 1]        .= Tbot
         @views thermal.T[2:end-1, :] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
@@ -194,7 +203,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         compute_viscosity!(
-            η, 1.0, phase_ratios, stokes, args, rheology, (1e18, 1e24)
+            η, 1.0, phase_ratios, stokes, args, rheology, viscosity_cutoff
         )
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
         
@@ -211,19 +220,20 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 phase_ratios,
                 rheology,
                 args,
-                dt,
+                Inf,
                 igg;
-                iterMax          = 100e3,
-                nout             = 1e3,
-                viscosity_cutoff = (1e18, 1e24),
+                iterMax          = 1,
+                nout             = 1,
+                viscosity_cutoff = viscosity_cutoff,
                 free_surface     = false,
-                # viscosity_relaxation = 1e-5
+                viscosity_relaxation = 1e-3
             );
         end
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
         @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.τ.II, @strain(stokes)...)
         dt   = compute_dt(stokes, di)
         # ------------------------------
 
@@ -346,7 +356,8 @@ do_vtk   = true # set to true to generate VTK files for ParaView
 figdir   = "Subduction_LAMEM_2D"
 # nx, ny   = 512, 256
 # nx, ny   = 512, 128
-nx, ny   = 384, 64
+n        = 64
+nx, ny   = n*6, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
@@ -355,4 +366,3 @@ else
 end
 
 # main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
-

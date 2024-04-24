@@ -72,11 +72,12 @@ function init_rheologies()
             Density           = PT_Density(; ρ0=3.3e3, α = α, β = 0e0, T0 = 273),
             HeatCapacity      = ConstantHeatCapacity(; Cp=Cp),
             Conductivity      = ConstantConductivity(; k = 3),
+            Conductivity      = ConstantConductivity(; k = 3),
             CompositeRheology = CompositeRheology( 
                     (
                         disl_dry_olivine, 
                         diff_dry_olivine,
-                        # ConstantElasticity(; G=5e10, ν=0.5),
+                        ConstantElasticity(; G=5e10, ν=0.5),
                         DruckerPrager_regularised(; C = C_dry_olivine, ϕ=ϕ_dry_olivine, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
                     ) 
                 ),

@@ -9,7 +9,7 @@ function GMG_subduction_2D(nx, ny)
     Phases = zeros(Int64, nx, 1, nz);
     Temp   = fill(1280.0, nx, 1, nz);
     air_thickness = 20.0
-    lith   = LithosphericPhases(Layers=[air_thickness+20 80], Phases=[1 2 0])
+    lith   = LithosphericPhases(Layers=[20 80], Phases=[1 2 0])
   
     # Add left oceanic plate
     add_box!(
@@ -57,7 +57,7 @@ function GMG_subduction_2D(nx, ny)
         xlim    =(0, 400), 
         zlim    =(-660.0, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
-        phase   = LithosphericPhases(Layers=[air_thickness+25 90], Phases=[3 4 0] ), 
+        phase   = LithosphericPhases(Layers=[25 90], Phases=[3 4 0] ), 
         T       = HalfspaceCoolingTemp(
             Tsurface = 20,
             Tmantle  = 1280.0,
@@ -73,7 +73,7 @@ function GMG_subduction_2D(nx, ny)
         xlim    =(400, 1500), 
         zlim    =(-660.0, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
-        phase   = LithosphericPhases(Layers=[air_thickness+35 100], Phases=[3 4 0] ), 
+        phase   = LithosphericPhases(Layers=[35 100], Phases=[3 4 0] ), 
         T       = HalfspaceCoolingTemp(
             Tsurface = 20,
             Tmantle  = 1280.0,
@@ -88,7 +88,7 @@ function GMG_subduction_2D(nx, ny)
         xlim    =(0, 300), 
         zlim    =(-660.0, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=30,
-        phase   = LithosphericPhases(Layers=[air_thickness+30 80], Phases=[1 2 0], Tlab=1250 ), 
+        phase   = LithosphericPhases(Layers=[30 80], Phases=[1 2 0], Tlab=1250 ), 
         T       = HalfspaceCoolingTemp(
             Tsurface = 20,
             Tmantle  = 1280.0,

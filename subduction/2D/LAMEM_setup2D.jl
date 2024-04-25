@@ -1,6 +1,5 @@
 using GeophysicalModelGenerator
 
-
 function GMG_subduction_2D(nx, ny)
     # Our starting basis is the example above with ridge and overriding slab
     nx, nz = nx, ny

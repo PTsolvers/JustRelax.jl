@@ -586,7 +586,6 @@ function JustRelax.solve!(
             if rem(iter, 5) == 0
                 @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
             end
-            # args.P .= reverse(cumsum(reverse(ρg[2] .+ ρg_bg, dims=2), dims=2), dims=2)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -625,10 +624,12 @@ function JustRelax.solve!(
                 θ_dτ,
             )
             # θ .-= args.P
-            free_surface_bcs!(stokes, flow_bcs)
+            # free_surface_bcs!(stokes, flow_bcs)
 
             @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
+
+            # stokes.τ.yy[:, end] .= Plitho[:, end]
 
             @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
                 Vx_on_Vy, stokes.V.Vx
@@ -641,14 +642,14 @@ function JustRelax.solve!(
                     stokes.P,
                     @stress(stokes)...,
                     pt_stokes.ηdτ,
-                    ρg[1],
-                    ρg[2],
+                    ρg...,
                     ητ,
                     _di...,
                     dt * free_surface,
                 )
                 # apply boundary conditions
-                free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
+                free_surface_bcs!(stokes, flow_bcs, args, η, rheology, phase_ratios, dt, di)
+                # free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end

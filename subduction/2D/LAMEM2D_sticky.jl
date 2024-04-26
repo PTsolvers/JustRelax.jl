@@ -1,22 +1,38 @@
-using CUDA
+const isCUDA = true
+
+@static if isCUDA 
+    using CUDA
+end
+
 using JustRelax, JustRelax.DataIO
 import JustRelax.@cell
 using ParallelStencil
-# @init_parallel_stencil(Threads, Float64, 2)
-@init_parallel_stencil(CUDA, Float64, 2)
+@static if isCUDA 
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 
 using JustPIC
 using JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-# const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if isCUDA 
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 # setup ParallelStencil.jl environment
-# model = PS_Setup(:cpu, Float64, 2) # or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
-model = PS_Setup(:CUDA, Float64, 2) # or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
-environment!(model)
+
+@static if isCUDA 
+    model = PS_Setup(:CUDA, Float64, 2) # or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
+    environment!(model)
+else
+    model = PS_Setup(:cpu, Float64, 2) # or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
+    environment!(model)
+end
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
@@ -61,7 +77,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology           = init_rheologies(; ρbg = 2.7e3)
+    ρbg                = 2.7e3
+    rheology           = init_rheologies(; ρbg = ρbg)
     rheology_augmented = init_rheologies(; ρbg = 0e0)
     dt                 = 50e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
@@ -77,9 +94,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # velocity grids
     grid_vxi        = velocity_grids(xci, xvi, di)
     # temperature
-    pPhases, pT     = init_cell_arrays(particles, Val(2))
-    particle_args   = (pPhases, pT)
-
+    pPhases, pT         = init_cell_arrays(particles, Val(2))
+    τxx_p, τyy_p, τxy_p = init_cell_arrays(particles, Val(3))
+    vorticity_p,        = init_cell_arrays(particles, Val(1))
+    particle_args       = (pT, τxx_p, τyy_p, τxy_p, vorticity_p, pPhases)
+    
     # Assign particles phases anomaly
     phases_device    = PTArray(phases_GMG)
     init_phases!(pPhases, phases_device, particles, xvi)
@@ -114,13 +133,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         # JustRelax.Stokes2D.init_P!(stokes.P, ρg[2], xci[2])
     # end
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-    # Plitho = reverse(cumsum(reverse(ρg[2] .+ (2700*9.81), dims=2), dims=2), dims=2)
     
-    ρg_bg = 2700 * 9.81
-    # Plitho = reverse(cumsum(reverse(ρg[2] .* di[2], dims=2), dims=2), dims=2)
+    ρg_bg = ρbg * 9.81
     Plitho = reverse(cumsum(reverse((ρg[2] .+ ρg_bg).* di[2], dims=2), dims=2), dims=2)
-    # Plitho -= stokes.P .+ Plitho .- minimum(stokes.P)
-    # stokes.P .= Plitho 
 
     # Rheology
     η                = @ones(ni...)
@@ -187,6 +202,10 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Time loop
     t, it = 0.0, 0
 
+    # Vertice arrays of normal components of the stress tensor
+    τxx_vertex, τyy_vertex = @zeros(ni.+1...), @zeros(ni.+1...)
+    τxx_o_vertex, τyy_o_vertex = @zeros(ni.+1...), @zeros(ni.+1...)
+
     while it < 1000 # run only for 5 Myrs
     # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
         
@@ -200,7 +219,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         
         # # Update buoyancy and viscosity -
         Plitho .= reverse(cumsum(reverse((ρg[2] .+ ρg_bg).* di[2], dims=2), dims=2), dims=2)
-        # # Plitho .= -(ρg[2] .+ ρg_bg) .* xci[2]'
         Plitho .= stokes.P .+ Plitho .- minimum(stokes.P)
     
         args = (; T = thermal.Tc, P = Plitho,  dt=Inf)
@@ -225,7 +243,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 args,
                 dt,
                 igg;
-                iterMax          = 150e3,
+                iterMax          = 10e3,
                 nout             = 1e3,
                 viscosity_cutoff = (1e18, 1e24),
                 free_surface     = false,
@@ -250,12 +268,12 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             di;
             igg     = igg,
             phase   = phase_ratios,
-            iterMax = 10e3,
-            nout    = 1e2,
+            iterMax = 150e3,
+            nout    = 2e3,
             verbose = true,
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology_augmented, thermal, stokes, xci, di
         )
         centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
         subgrid_diffusion!(
@@ -268,8 +286,23 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
+        # JustRelax.Stokes2D.rotate_stress_particles!(
+        #     stokes,
+        #     τxx_vertex, 
+        #     τyy_vertex,
+        #     τxx_o_vertex, 
+        #     τyy_o_vertex,
+        #     τxx_p, 
+        #     τyy_p, 
+        #     τxy_p,
+        #     vorticity_p,
+        #     particles,
+        #     grid,
+        #     dt
+        # )
+
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT, τxx_p, τyy_p, τxy_p, vorticity_p), (T_buffer, τxx_vertex, τyy_vertex, stokes.τ.xy, stokes.ω.xy_v), xvi)
         # update phase ratios
         @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
 
@@ -330,7 +363,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             # Plot temperature
             h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
             # Plot particles phase
-            h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
+            h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
             # Plot 2nd invariant of strain rate
             h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
             # Plot effective viscosity
@@ -343,8 +376,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             Colorbar(fig[1,4], h3)
             Colorbar(fig[2,4], h4)
             linkaxes!(ax1, ax2, ax3, ax4)
-            save(joinpath(figdir, "$(it).png"), fig)
             fig
+            save(joinpath(figdir, "$(it).png"), fig)
         end
         # ------------------------------
 
@@ -358,10 +391,10 @@ do_vtk   = true # set to true to generate VTK files for ParaView
 figdir   = "Subduction_LAMEM_2D"
 # nx, ny   = 512, 256
 # nx, ny   = 512, 128
-n        = 64
+n        = 128
 nx, ny   = n*6, n
 nx, ny   = 512, 128
-nx, ny   = 512, 132
+# nx, ny   = 512, 132
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
@@ -369,29 +402,19 @@ else
     igg
 end
 
-# main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
 
-# f,ax,h=heatmap(xvi./1e3..., phases_GMG)
-# heatmap(xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)) , colormap=:lipari, colorrange=(18, 24))
-# scatter(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize=2)
+# c = Array(phase_ratios.center)
+# a = [any(isnan, x) for x in c] 
 
-# p = [argmax(p) for p in phase_ratios.center]
+# any(isnan, c[1])
 
-# lines(log10.(η[100,:]), xci[2])
-# lines(Plitho[100,:], xci[2])
-# lines!(Plitho[100,:], xci[2])
-# heatmap(log10.(η), xci[1]./1e3, xci[2]./1e3, colormap=:batlow)
-# heatmap(xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)) , colormap=:lipari, colorrange=(18, 24))
+# p        = particles.coords
+# ppx, ppy = p
+# pxv      = ppx.data[:]./1e3
+# pyv      = ppy.data[:]./1e3
+# clr      = pPhases.data[:]
+# # clr      = pT.data[:]
+# idxv     = particles.index.data[:];
+# scatter!(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 3)
 
-# flow_bcs         = FlowBoundaryConditions(;
-#     free_slip    = (left = true , right = true , top = true , bot = true),
-#     free_surface = true,
-# )
-
-# free_surface_bcs!(
-#     stokes, flow_bcs, η, rheology, phase_ratios, dt, di
-# )
-
-# size(stokes.V.Vy, 1) - 2
-
-# free_surface_bcs!(stokes, flow_bcs, args, η, rheology, phase_ratios, dt, di)   

@@ -1,10 +1,11 @@
 using GeophysicalModelGenerator
 
 function GMG_subduction_2D(nx, ny)
+    model_depth = 660
     # Our starting basis is the example above with ridge and overriding slab
     nx, nz = nx, ny
     x      = range(-2000, 2000, nx);
-    z      = range(-660,    20, nz);
+    z      = range(-model_depth, 20, nz);
     Grid2D = CartData(xyz_grid(x,0,z))
     Phases = zeros(Int64, nx, 1, nz);
     Temp   = fill(1280.0, nx, 1, nz);
@@ -17,7 +18,7 @@ function GMG_subduction_2D(nx, ny)
         Temp, 
         Grid2D; 
         xlim    =(-2000, 0), 
-        zlim    =(-660.0, 0.0), 
+        zlim    =(-model_depth, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
         phase   = lith, 
         T       = SpreadingRateTemp(
@@ -36,7 +37,7 @@ function GMG_subduction_2D(nx, ny)
         Temp, 
         Grid2D; 
         xlim    =(1500, 2000), 
-        zlim    =(-660.0, 0.0), 
+        zlim    =(-model_depth, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
         phase   = lith, 
         T       = SpreadingRateTemp(
@@ -55,7 +56,7 @@ function GMG_subduction_2D(nx, ny)
         Temp, 
         Grid2D; 
         xlim    =(0, 400), 
-        zlim    =(-660.0, 0.0), 
+        zlim    =(-model_depth, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
         phase   = LithosphericPhases(Layers=[25 90], Phases=[3 4 0] ), 
         T       = HalfspaceCoolingTemp(
@@ -71,7 +72,7 @@ function GMG_subduction_2D(nx, ny)
         Temp, 
         Grid2D; 
         xlim    =(400, 1500), 
-        zlim    =(-660.0, 0.0), 
+        zlim    =(-model_depth, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
         phase   = LithosphericPhases(Layers=[35 100], Phases=[3 4 0] ), 
         T       = HalfspaceCoolingTemp(
@@ -86,7 +87,7 @@ function GMG_subduction_2D(nx, ny)
         Temp, 
         Grid2D; 
         xlim    =(0, 300), 
-        zlim    =(-660.0, 0.0), 
+        zlim    =(-model_depth, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=30,
         phase   = LithosphericPhases(Layers=[30 80], Phases=[1 2 0], Tlab=1250 ), 
         T       = HalfspaceCoolingTemp(
@@ -116,3 +117,21 @@ function GMG_subduction_2D(nx, ny)
 
     return li, origin, ph, Temp[:,1,:].+273
 end
+
+
+function struct2cpu(a::T) where T<:Union{StokesArrays, SymmetricTensor, ThermalArrays, Velocity, Residual}
+    nfields = fieldcount(T)
+    cpu_fields = ntuple(Val(nfields)) do i 
+        struct2cpu(getfield(a, i))
+    end
+    return T(cpu_fields...)
+end
+
+# @inline struct2cpu(A::Array) = A
+# @inline struct2cpu(A::AbstractArray) = Array(A)
+
+# struct2cpu(stokes)
+
+# foo(::T) where T = T(rand(2,2),rand(2,2))
+# foo(T.name.Typeofwrapper)
+# T.name.Typeofwrapper[1]

@@ -10,16 +10,16 @@ function init_rheologies(; ρbg = 0e0)
     diff_dry_olivine   = SetDiffusionCreep(Diffusion.dry_olivine_Hirth_2003; V = 14.5e-6)
 
     ϕ_dry_olivine   = sind(20)
-    C_dry_olivine   = 30e6 * Inf
+    C_dry_olivine   = 30e6 
 
     ϕ_oceanic_crust = sind(0)
-    C_oceanic_crust = 5e6 * Inf
+    C_oceanic_crust = 5e6 
 
     ϕ_oceanic_litho = sind(10)
-    C_oceanic_litho = 5e6 * Inf
+    C_oceanic_litho = 5e6 
 
     ϕ_cont_crust    = sind(20)
-    C_cont_crust    = 30e6 * Inf
+    C_cont_crust    = 30e6 
     
     soft_C  = LinearSoftening((C_oceanic_litho*0.05, C_oceanic_litho), (0.1, 0.5))
     
@@ -119,13 +119,13 @@ function init_rheologies(; ρbg = 0e0)
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase             = 6,
-            Density           = ConstantDensity(; ρ=2-ρbg), # water density
+            Density           = ConstantDensity(; ρ=1-ρbg), # water density
             HeatCapacity      = ConstantHeatCapacity(; Cp=3e3),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             Conductivity      = ConstantConductivity(; k=3.0),
             CompositeRheology = CompositeRheology(
                 (
-                    LinearViscous(; η=1e24),
+                    LinearViscous(; η=1e21),
                     # elasticity
                 )
             ),

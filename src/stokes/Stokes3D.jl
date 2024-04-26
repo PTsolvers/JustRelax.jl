@@ -372,7 +372,7 @@ end
 
 # GeoParams and multiple phases
 function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,3},
+    stokes::StokesArrays{ViscoElastic,A,B,C,D,E,3},
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
     flow_bc::FlowBoundaryConditions,
@@ -389,7 +389,7 @@ function JustRelax.solve!(
     b_width=(4, 4, 4),
     verbose=true,
     viscosity_cutoff=(-Inf, Inf),
-) where {A,B,C,D,T,N}
+) where {A,B,C,D,E,T,N}
 
     ## UNPACK
 

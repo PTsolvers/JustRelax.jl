@@ -20,8 +20,60 @@ function make_velocity_struct!(ndim::Integer; name::Symbol=:Velocity)
                 return new{$PTArray}(@zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...))
             end
 
-            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{$PTArray}(args...)
         end
+        $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = $(name)(args...)
+    end
+end
+
+abstract type AbstractVorticityTensor end
+
+function make_vorticity_struct!(ndim::Integer)
+    dims = (:xy, :xz, :yz)
+    fields_c = if ndim == 2
+        [:($(Symbol(dims[1], :_c))::T)]
+
+    elseif ndim == 3
+        [:($(Symbol(dims[i], :_c))::T) for i in 1:ndim]
+    else
+        throw(ArgumentError("ndim must be 2 or 3"))
+    end
+
+    fields_v = if ndim == 2
+        [:($(Symbol(dims[1], :_v))::T)]
+
+    elseif ndim == 3
+        [:($(Symbol(dims[i], :_v))::T) for i in 1:ndim]
+    end
+
+    @eval begin
+        struct VorticityTensor{T} <: AbstractVorticityTensor
+            $(fields_c...) # centers
+            $(fields_v...) # vertices
+
+            function VorticityTensor(ni::NTuple{2,T}) where {T}
+                # centers
+                xy_c = @zeros(ni...)
+                # vertices
+                xy_v = @zeros(ni .+ 1...)
+
+                return new{$PTArray}(xy_c, xy_v)
+            end
+
+            function VorticityTensor(ni::NTuple{3,T}) where {T}
+                # centers
+                yz_c = @zeros(ni...)
+                xz_c = @zeros(ni...)
+                xy_c = @zeros(ni...)
+                # vertices
+                yz_v = @zeros(ni .+ 1...)
+                xz_v = @zeros(ni .+ 1...)
+                xy_v = @zeros(ni .+ 1...)
+
+                return new{$PTArray}(yz_c, xz_c, xy_c, yz_v, xz_v, xy_v)
+            end
+
+        end
+        VorticityTensor(args::Vararg{T,N}) where {T<:AbstractArray,N} = VorticityTensor(args...)
     end
 end
 
@@ -83,8 +135,9 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTens
                 )
             end
 
-            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{$PTArray}(args...)
         end
+
+        $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = $(name)(args...)
     end
 end
 
@@ -111,19 +164,21 @@ function make_residual_struct!(ndim; name::Symbol=:Residual)
                 return new{typeof(Rx)}(Rx, Ry, Rz, RP)
             end
 
-            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{$PTArray}(args...)
         end
+        $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = $(name)(args...)
     end
 end
 
 function make_stokes_struct!(; name::Symbol=:StokesArrays)
     @eval begin
-        struct StokesArrays{M<:AbstractStokesModel,A,B,C,T,nDim}
+        struct StokesArrays{M<:AbstractStokesModel,A,B,C,D,T,nDim}
             P::T
             P0::T
             V::A
             ∇V::T
             τ::B
+            ω::D
+            ω_o::D
             ε::B
             ε_pl::B
             EII_pl::T
@@ -139,12 +194,14 @@ function make_stokes_struct!(; name::Symbol=:StokesArrays)
                 V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1], ni[2] + 2)))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
+                ω = VorticityTensor(ni) # vorticity
+                ω_o = VorticityTensor(ni) # vorticity
                 ε_pl = SymmetricTensor(ni)
                 EII_pl = @zeros(ni...)
                 R = Residual(((ni[1] - 1, ni[2]), (ni[1], ni[2] - 1)), ni)
 
-                return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
-                    P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, nothing, R
+                return new{model,typeof(V),typeof(τ),typeof(R),typeof(ω),typeof(P),2}(
+                    P, P0, V, ∇V, τ, ω, ω_o, ε, ε_pl, EII_pl, nothing, R
                 )
             end
 
@@ -157,12 +214,14 @@ function make_stokes_struct!(; name::Symbol=:StokesArrays)
                 V = Velocity(((ni[1] + 1, ni[2] + 2), (ni[1] + 2, ni[2] + 1)))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
+                ω = VorticityTensor(ni) # vorticity
+                ω_o = VorticityTensor(ni) # vorticity
                 ε_pl = SymmetricTensor(ni)
                 EII_pl = @zeros(ni...)
                 R = Residual(((ni[1] - 1, ni[2]), (ni[1], ni[2] - 1), ni))
 
-                return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),2}(
-                    P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, deepcopy(τ), R
+                return new{model,typeof(V),typeof(τ),typeof(R),typeof(ω),typeof(P),2}(
+                    P, P0, V, ∇V, τ, ω, ω_o, ε, ε_pl, EII_pl, deepcopy(τ), R
                 )
             end
 
@@ -179,6 +238,8 @@ function make_stokes_struct!(; name::Symbol=:StokesArrays)
                 ))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
+                ω = VorticityTensor(ni) # vorticity
+                ω_o = VorticityTensor(ni) # vorticity
                 ε_pl = SymmetricTensor(ni)
                 EII_pl = @zeros(ni...)
                 R = Residual((
@@ -188,8 +249,8 @@ function make_stokes_struct!(; name::Symbol=:StokesArrays)
                     ni,
                 ))
 
-                return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
-                    P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, nothing, R
+                return new{model,typeof(V),typeof(τ),typeof(R),typeof(ω),typeof(P),3}(
+                    P, P0, V, ∇V, τ, ω, ω_o, ε, ε_pl, EII_pl, nothing, R
                 )
             end
 
@@ -206,6 +267,8 @@ function make_stokes_struct!(; name::Symbol=:StokesArrays)
                 ))
                 τ = SymmetricTensor(ni)
                 ε = SymmetricTensor(ni)
+                ω = VorticityTensor(ni) # vorticity
+                ω_o = VorticityTensor(ni) # vorticity
                 ε_pl = SymmetricTensor(ni)
                 EII_pl = @zeros(ni...)
                 R = Residual((
@@ -215,8 +278,8 @@ function make_stokes_struct!(; name::Symbol=:StokesArrays)
                     ni,
                 ))
 
-                return new{model,typeof(V),typeof(τ),typeof(R),typeof(P),3}(
-                    P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, deepcopy(τ), R
+                return new{model,typeof(V),typeof(τ),typeof(R),typeof(ω),typeof(P),3}(
+                    P, P0, V, ∇V, τ, ω, ω_o, ε, ε_pl, EII_pl, deepcopy(τ), R
                 )
             end
 
@@ -226,12 +289,14 @@ function make_stokes_struct!(; name::Symbol=:StokesArrays)
                     typeof(args[4]),
                     typeof(args[5]),
                     typeof(args[end]),
+                    typeof(args[6]),
                     typeof(args[1]),
                     N,
                 }(
                     args...
                 )
             end
+            
         end
     end
 end

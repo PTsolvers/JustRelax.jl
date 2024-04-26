@@ -43,6 +43,9 @@ using CUDA, AMDGPU
 using ParallelStencil
 # using ParallelStencil.FiniteDifferences2D
 using GeoParams, LinearAlgebra, Printf
+using JustPIC, JustPIC._2D
+
+import JustPIC._2D: @cell
 
 import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
 import JustRelax:
@@ -53,7 +56,8 @@ import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi, backend
 @eval @init_parallel_stencil($backend, Float64, 2)
 
 include("../rheology/GeoParams.jl")
-include("StressRotation.jl")
+# include("StressRotation.jl")
+include("StressRotationParticles.jl")
 include("StressKernels.jl")
 include("PressureKernels.jl")
 include("VelocityKernels.jl")
@@ -489,7 +493,7 @@ end
 ## With phase ratios
 
 function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
+    stokes::StokesArrays{ViscoElastic,A,B,C,D,E,2},
     pt_stokes::PTStokesCoeffs,
     di::NTuple{2,T},
     flow_bcs,
@@ -509,7 +513,7 @@ function JustRelax.solve!(
     nout=500,
     b_width=(4, 4, 0),
     verbose=true,
-) where {A,B,C,D,T}
+) where {A,B,C,D,E,T}
 
     # unpack
 
@@ -708,6 +712,12 @@ function JustRelax.solve!(
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+    compute_vorticity!(stokes, di)
+
+    # @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    # @parallel (@idx ni) multi_copy!(
+        # @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+    # )
 
     return (
         iter=iter,
@@ -717,10 +727,11 @@ function JustRelax.solve!(
         norm_Ry=norm_Ry,
         norm_∇V=norm_∇V,
     )
+
 end
 
 function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
+    stokes::StokesArrays{ViscoElastic,A,B,C,D,E,2},
     thermal::ThermalArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{2,T},
@@ -739,7 +750,7 @@ function JustRelax.solve!(
     nout=500,
     b_width=(4, 4, 1),
     verbose=true,
-) where {A,B,C,D,N,T}
+) where {A,B,C,D,E,N,T}
 
     # unpack
 

@@ -50,6 +50,7 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
     # CREATE ARRAY STRUCTS
     make_velocity_struct!(N) # velocity
     make_symmetrictensor_struct!(N) # (symmetric) tensors
+    make_vorticity_struct!(N) # (symmetric) tensors
     ## Stokes
     make_residual_struct!(N) # residuals
     make_stokes_struct!() # Arrays for Stokes solver

@@ -96,7 +96,6 @@ end
     Jaumann derivative
 
 τij_o += v_k * ∂τij_o/∂x_k - ω_ij * ∂τkj_o + ∂τkj_o * ω_ij
-
 """
 Base.@propagate_inbounds function rotate_stress!(
     V, τ::NTuple{N,T}, idx, _di, dt

@@ -20,5 +20,5 @@ environment!(model)
     @test JustRelax.iscpu(stokes.P) isa JustRelax.CPUDeviceTrait
     @test JustRelax.iscpu(stokes)   isa JustRelax.CPUDeviceTrait
     @test JustRelax.iscpu(thermal)  isa JustRelax.CPUDeviceTrait
-    @test_throws ArgumentError("Unkown device") JustRelax.iscpu("potato")
+    @test_throws ArgumentError("Unknown device") JustRelax.iscpu("potato")
 end

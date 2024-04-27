@@ -42,6 +42,6 @@ export @cell, element, setelement!, cellnum, cellaxes, new_empty_cell, setindex!
 
 include("JustRelax_CPU.jl")
 
-# include("IO/DataIO.jl")
+include("IO/DataIO.jl")
 
 end # module

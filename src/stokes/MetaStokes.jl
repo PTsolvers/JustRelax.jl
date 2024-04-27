@@ -220,10 +220,10 @@ function make_stokes_struct!(; name::Symbol=:StokesArrays)
                 )
             end
 
-            function $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N}
+            function $(name)(args::Vararg{Any,N}) where {N}
                 return new{
                     ViscoElastic,
-                    typeof(args[4]),
+                    typeof(args[3]),
                     typeof(args[5]),
                     typeof(args[end]),
                     typeof(args[1]),

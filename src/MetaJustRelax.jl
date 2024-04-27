@@ -77,6 +77,9 @@ function environment!(model::PS_Setup{T,N}) where {T,N}
             ViscoElastoPlastic,
             solve!
 
+        include(joinpath(@__DIR__, "array_conversions.jl"))
+        export Array
+
         include(joinpath(@__DIR__, "Utils.jl"))
         export @allocate, @add, @idx, @copy
         export @velocity,

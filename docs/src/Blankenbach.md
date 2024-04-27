@@ -131,7 +131,7 @@ Stokes arrays object
 stokes = StokesArrays(backend_JR, ni)
 ```
 
-and the correspondant heat diffusion one
+and the correspondent heat diffusion one
 ```julia
 thermal = ThermalArrays(backend_JR, ni)
 ```

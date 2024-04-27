@@ -1,10 +1,8 @@
 # from "A benchmark comparison for mantle convection codes"; Blankenbach et al., 1989
 
 function init_rheologies()
-
     # Define rheolgy struct
     rheology = (
-        # Name              = "UpperCrust",
         SetMaterialParams(;
             Phase             = 1,
             Density           = PT_Density(; ρ0=1, α = 1, β = 0.0),
@@ -25,11 +23,11 @@ function init_phases!(phases, particles, Lx, d, r)
             # quick escape
             JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
-            @cell phases[ip, i, j] = 1.0
+            JustRelax.@cell phases[ip, i, j] = 1.0
 
         end
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
 end

@@ -21,8 +21,17 @@ PTArray(::T) where {T} = error(ArgumentError("Unknown backend $T"))
 
 export PTArray, CPUBackend, CUDABackend, AMDGPUBackend
 
+include("types/stokes.jl")
+# export StokesArrays, PTStokesCoeffs
+
+include("types/heat_diffusion.jl")
+# export ThermalArrays, PTThermalCoeffs
+
+include("types/phases.jl")
+# export PhaseRatio
+
 include("types/traits.jl")
-export BackendTrait, CPUBackendTrait
+export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 
 include("topology/Topology.jl")
 export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g

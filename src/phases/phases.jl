@@ -1,9 +1,10 @@
 """
-    nphases(x::PhaseRatio)
+    nphases(x::JustRelax.PhaseRatio)
 
-Return the number of phases in `x::PhaseRatio`.
+Return the number of phases in `x::JustRelax.PhaseRatio`.
 """
-@inline nphases(x::PhaseRatio) = nphases(x.center)
+@inline nphases(x::JustRelax.PhaseRatio) = nphases(x.center)
+
 @inline function nphases(
     ::CellArray{StaticArraysCore.SArray{Tuple{N},T,N1,N},N2,N3,T_Array}
 ) where {N,T,N1,N2,N3,T_Array}
@@ -52,12 +53,14 @@ function phase_ratios_center(phase_ratios, particles, grid, phases)
 end
 
 function phase_ratios_center(
-    ::CPUBackendTrait, phase_ratios::PhaseRatio, particles, grid::Geometry, phases
+    ::CPUBackendTrait, phase_ratios::JustRelax.PhaseRatio, particles, grid::Geometry, phases
 )
     return _phase_ratios_center(phase_ratios, particles, grid, phases)
 end
 
-function _phase_ratios_center(phase_ratios::PhaseRatio, particles, grid::Geometry, phases)
+function _phase_ratios_center(
+    phase_ratios::JustRelax.PhaseRatio, particles, grid::Geometry, phases
+)
     ni = size(phases)
     @parallel (@idx ni) phase_ratios_center_kernel(
         phase_ratios.center, particles.coords, grid.xci, grid.di, phases

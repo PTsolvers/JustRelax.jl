@@ -1,5 +1,5 @@
 ## 2D STOKES MODULE
-function update_τ_o!(stokes::StokesArrays)
+function update_τ_o!(stokes::JustRelax.StokesArrays)
     @parallel (@idx size(τxy)) multi_copy!(
         @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
     )
@@ -13,10 +13,10 @@ function solve!(stokes, args...; kwargs)
     return solve!(backend(stokes), stokes, args...; kwargs)
 end
 
-solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...) 
+solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...)
 
 function _solve!(
-    stokes::StokesArrays,
+    stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
     flow_bcs::FlowBoundaryConditions,
@@ -144,7 +144,7 @@ end
 
 # visco-elastic solver
 function _solve!(
-    stokes::StokesArrays,
+    stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
@@ -260,7 +260,7 @@ end
 # GeoParams: general (visco-elasto-plastic) solver
 
 function _solve!(
-    stokes::StokesArrays,
+    stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
@@ -429,12 +429,12 @@ end
 ## With phase ratios
 
 function _solve!(
-    stokes::StokesArrays,
+    stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ρg,
-    phase_ratios::PhaseRatio,
+    phase_ratios::JustRelax.PhaseRatio,
     rheology,
     args,
     dt,
@@ -650,8 +650,8 @@ function _solve!(
 end
 
 function _solve!(
-    stokes::StokesArrays,
-    thermal::ThermalArrays,
+    stokes::JustRelax.StokesArrays,
+    thermal::JustRelax.ThermalArrays,
     pt_stokes,
     di::NTuple{2,T},
     flow_bcs,

@@ -21,7 +21,9 @@ end
     return nothing
 end
 
-function compute_shear_heating!(thermal, stokes, phase_ratios::PhaseRatio, rheology, dt)
+function compute_shear_heating!(
+    thermal, stokes, phase_ratios::JustRelax.PhaseRatio, rheology, dt
+)
     ni = size(thermal.shear_heating)
     @parallel (@idx ni) compute_shear_heating_kernel!(
         thermal.shear_heating,

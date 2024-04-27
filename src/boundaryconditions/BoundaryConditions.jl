@@ -49,7 +49,7 @@ Apply the prescribed heat boundary conditions `bc` on the `T`
 """
 thermal_bcs!(thermal, bcs) = thermal_bcs!(backend(thermal), thermal, bcs)
 function thermal_bcs!(
-    ::CPUBackendTrait, thermal::ThermalArrays, bcs::FlowBoundaryConditions
+    ::CPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs::FlowBoundaryConditions
 )
     return thermal_bcs!(thermal.T, bcs)
 end
@@ -243,21 +243,19 @@ function free_surface_bcs!(
     end
 end
 
-function free_surface_bcs!(
-    stokes::StokesArrays{A,B,C,D,E,2}, bcs::FlowBoundaryConditions
-) where {A,B,C,D,E}
+function free_surface_bcs!(stokes::JustRelax.StokesArrays, bcs::FlowBoundaryConditions)
     if bcs.free_surface
         @views stokes.τ.yy[:, end] .= 0.0
     end
 end
 
-function free_surface_bcs!(
-    stokes::StokesArrays{A,B,C,D,E,3}, bcs::FlowBoundaryConditions
-) where {A,B,C,D,E}
-    if bcs.free_surface
-        @views stokes.τ.zz[:, :, end] .= 0.0
-    end
-end
+# function free_surface_bcs!(
+#     stokes::JustRelax.StokesArrays{A,B,C,D,E,3}, bcs::FlowBoundaryConditions
+# ) where {A,B,C,D,E}
+#     if bcs.free_surface
+#         @views stokes.τ.zz[:, :, end] .= 0.0
+#     end
+# end
 
 @parallel_indices (i) function FreeSurface_Vy!(
     Vx::AbstractArray{T,2},
@@ -319,7 +317,7 @@ end
 end
 
 function pureshear_bc!(
-    stokes::StokesArrays, xci::NTuple{2,T}, xvi::NTuple{2,T}, εbg
+    stokes::JustRelax.StokesArrays, xci::NTuple{2,T}, xvi::NTuple{2,T}, εbg
 ) where {T}
     stokes.V.Vx[:, 2:(end - 1)] .= PTArray(([εbg * x for x in xvi[1], y in xci[2]]))
     stokes.V.Vy[2:(end - 1), :] .= PTArray(([-εbg * y for x in xci[1], y in xvi[2]]))

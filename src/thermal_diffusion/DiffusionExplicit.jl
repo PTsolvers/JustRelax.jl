@@ -54,8 +54,8 @@ end
 ## SOLVER
 
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
-    pt_thermal::PTThermalCoeffs,
+    thermal::JustRelax.ThermalArrays{M},
+    pt_thermal::JustRelax.PTThermalCoeffs,
     thermal_parameters::ThermalParameters{<:AbstractArray{_T,1}},
     ni::NTuple{1,Integer},
     di::NTuple{1,_T},
@@ -302,7 +302,7 @@ end
 ## SOLVER
 
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_parameters::ThermalParameters{<:AbstractArray{_T,2}},
     thermal_bc::NamedTuple,
     di::NTuple{2,_T},
@@ -328,7 +328,7 @@ end
 
 # upwind advection
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_parameters::ThermalParameters{<:AbstractArray{_T,2}},
     stokes,
     thermal_bc::TemperatureBoundaryConditions,
@@ -366,7 +366,7 @@ end
 # GEOPARAMS VERSION
 
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     rheology,
     args::NamedTuple,
@@ -398,10 +398,10 @@ end
 
 # with multiple material phases
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     rheology::NTuple{N,AbstractMaterialParamsStruct},
-    phase_ratios::PhaseRatio,
+    phase_ratios::JustRelax.PhaseRatio,
     args::NamedTuple,
     di::NTuple{2,_T},
     dt,
@@ -428,7 +428,7 @@ end
 
 # Upwind advection
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
     rheology,
@@ -466,7 +466,7 @@ end
 
 # Upwind advection
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
     phases,
@@ -763,7 +763,7 @@ end
 ## SOLVER
 
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_parameters::ThermalParameters{<:AbstractArray{_T,3}},
     thermal_bc::NamedTuple,
     di::NTuple{3,_T},
@@ -791,7 +791,7 @@ end
 
 # upwind advection
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_parameters::ThermalParameters{<:AbstractArray{_T,3}},
     thermal_bc::NamedTuple,
     stokes,
@@ -834,7 +834,7 @@ end
 # GEOPARAMS VERSION
 
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     rheology,
     args::NamedTuple,
@@ -871,10 +871,10 @@ end
 
 # with multiple material phases - no advection
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     rheology::NTuple{N,AbstractMaterialParamsStruct},
-    phase_ratios::PhaseRatio,
+    phase_ratios::JustRelax.PhaseRatio,
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;
@@ -916,7 +916,7 @@ end
 
 # upwind advection
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
     rheology,
@@ -967,7 +967,7 @@ end
 
 # upwind advection
 function JustRelax.solve!(
-    thermal::ThermalArrays{M},
+    thermal::JustRelax.ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     stokes,
     phases,

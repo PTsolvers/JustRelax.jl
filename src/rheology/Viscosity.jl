@@ -2,13 +2,11 @@
 function compute_viscosity!(stokes, ν, args, rheology, cutoff)
     return compute_viscosity!(backend(stokes), ν, args, rheology, cutoff)
 end
-function compute_viscosity!(
-    ::CPUBackendTrait, stokes, ν, args, rheology, cutoff
-)
+function compute_viscosity!(::CPUBackendTrait, stokes, ν, args, rheology, cutoff)
     return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
 end
 
-function _compute_viscosity!(stokes::StokesArrays, ν, args, rheology, cutoff)
+function _compute_viscosity!(stokes::JustRelax.StokesArrays, ν, args, rheology, cutoff)
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(
         stokes.viscosity.η, ν, @strain(stokes)..., args, rheology, cutoff
@@ -77,13 +75,24 @@ function compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
     )
 end
 function compute_viscosity!(
-    ::CPUBackendTrait, stokes::StokesArrays, ν, phase_ratios, args, rheology, cutoff
+    ::CPUBackendTrait,
+    stokes::JustRelax.StokesArrays,
+    ν,
+    phase_ratios,
+    args,
+    rheology,
+    cutoff,
 )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
 function _compute_viscosity!(
-    stokes::StokesArrays, ν, phase_ratios::PhaseRatio, args, rheology, cutoff
+    stokes::JustRelax.StokesArrays,
+    ν,
+    phase_ratios::JustRelax.PhaseRatio,
+    args,
+    rheology,
+    cutoff,
 )
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(

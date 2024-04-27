@@ -1,10 +1,10 @@
-include("types/stokes.jl")
+include("types/constructors/stokes.jl")
 export StokesArrays, PTStokesCoeffs
 
-include("types/heat_diffusion.jl")
+include("types/constructors/heat_diffusion.jl")
 export ThermalArrays, PTThermalCoeffs
 
-include("types/phases.jl")
+include("types/constructors/phases.jl")
 export PhaseRatio
 
 include("Utils.jl")
@@ -70,5 +70,4 @@ include("stokes/VelocityKernels.jl")
 # thermal diffusion
 
 include("thermal_diffusion/DiffusionPT.jl")
-export heatdiffusion_PT!
-export compute_shear_heating!
+export PTThermalCoeffs, heatdiffusion_PT!, compute_shear_heating!

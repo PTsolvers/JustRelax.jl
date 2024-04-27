@@ -9,8 +9,8 @@ Heat diffusion solver using Pseudo-Transient iterations. Both `K` and `ρCp` are
 """
 function heatdiffusion_PT!(
     ::CPUBackendTrait,
-    thermal::ThermalArrays,
-    pt_thermal::PTThermalCoeffs,
+    thermal::JustRelax.ThermalArrays,
+    pt_thermal::JustRelax.PTThermalCoeffs,
     thermal_bc::TemperatureBoundaryConditions,
     K::AbstractArray,
     ρCp::AbstractArray,
@@ -98,8 +98,8 @@ Heat diffusion solver using Pseudo-Transient iterations.
 """
 function heatdiffusion_PT!(
     ::CPUBackendTrait,
-    thermal::ThermalArrays,
-    pt_thermal::PTThermalCoeffs,
+    thermal::JustRelax.ThermalArrays,
+    pt_thermal::JustRelax.PTThermalCoeffs,
     thermal_bc::TemperatureBoundaryConditions,
     rheology,
     args::NamedTuple,

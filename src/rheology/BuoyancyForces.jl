@@ -21,7 +21,7 @@ end
 Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`. 
 The `phase_ratios` are used to compute the density of the composite rheology.
 """
-function compute_ρg!(ρg, phase_ratios::PhaseRatio, rheology, args)
+function compute_ρg!(ρg, phase_ratios::JustRelax.PhaseRatio, rheology, args)
     ni = size(ρg)
     @parallel (@idx ni) compute_ρg_kernel!(ρg, phase_ratios.center, rheology, args)
     return nothing

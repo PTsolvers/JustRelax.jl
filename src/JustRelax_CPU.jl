@@ -9,6 +9,7 @@ using GeoParams, LinearAlgebra, Printf
 using MPI
 
 import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend
+import JustRelax: PTStokesCoeffs
 
 @init_parallel_stencil(Threads, Float64, 2)
 
@@ -29,6 +30,7 @@ using GeoParams, LinearAlgebra, Printf
 using MPI
 
 import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend
+import JustRelax: PTStokesCoeffs
 
 @init_parallel_stencil(Threads, Float64, 3)
 

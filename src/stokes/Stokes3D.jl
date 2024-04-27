@@ -10,16 +10,18 @@
     return nothing
 end
 
-function update_τ_o!(stokes::StokesArrays)
+function update_τ_o!(stokes::JustRelax.StokesArrays)
     @parallel update_τ_o!(@tensor(stokes.τ_o)..., @stress(stokes)...)
 end
 
 ## 3D VISCO-ELASTIC STOKES SOLVER
-solve!(stokes::StokesArrays, args...) = solve!(CPUBackendTrait(stokes), stokes, args...)
+function solve!(stokes::JustRelax.StokesArrays, args...)
+    return solve!(CPUBackendTrait(stokes), stokes, args...)
+end
 
 function solve!(
     ::CPUBackendTrait,
-    stokes::StokesArrays,
+    stokes::JustRelax.StokesArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
     flow_bcs,
@@ -153,7 +155,7 @@ end
 
 function solve!(
     ::CPUBackendTrait,
-    stokes::StokesArrays,
+    stokes::JustRelax.StokesArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
     flow_bcs::FlowBoundaryConditions,
@@ -326,12 +328,12 @@ end
 # GeoParams and multiple phases
 function solve!(
     ::CPUBackendTrait,
-    stokes::StokesArrays,
+    stokes::JustRelax.StokesArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
     flow_bc::FlowBoundaryConditions,
     ρg,
-    phase_ratios::PhaseRatio,
+    phase_ratios::JustRelax.PhaseRatio,
     rheology::NTuple{N,AbstractMaterialParamsStruct},
     args,
     dt,

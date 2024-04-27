@@ -298,14 +298,14 @@ end
 end
 
 """
-    tensor_invariant!(A::SymmetricTensor)
+    tensor_invariant!(A::JustRelax.SymmetricTensor)
 
 Compute the tensor invariant of the given symmetric tensor `A`.
 
 # Arguments
-- `A::SymmetricTensor`: The input symmetric tensor.
+- `A::JustRelax.SymmetricTensor`: The input symmetric tensor.
 """
-function tensor_invariant!(A::SymmetricTensor)
+function tensor_invariant!(A::JustRelax.SymmetricTensor)
     ni = size(A.II)
     @parallel (@idx ni) tensor_invariant_kernel!(A.II, @tensor(A)...)
     return nothing

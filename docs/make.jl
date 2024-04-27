@@ -10,6 +10,9 @@ makedocs(;
     warnonly = Documenter.except(:footnote),
     pages=[
         "Home" => "index.md",
+        "Examples" => [
+            "Blankenbach.md"
+            ],
     ],
 )
 

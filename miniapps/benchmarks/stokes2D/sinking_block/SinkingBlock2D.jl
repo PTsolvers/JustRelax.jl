@@ -135,7 +135,7 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
 
     # Viscosity
     η        = @ones(ni...)
-    args     = (; dt = Inf)
+    args     = (; dt = dt, ΔTc = @zeros(ni...))
     η_cutoff = -Inf, Inf
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, η_cutoff
@@ -146,13 +146,12 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
     # Boundary conditions
     flow_bcs = FlowBoundaryConditions(;
         free_slip    = (left =  true, right =  true, top =  true, bot =  true),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # Stokes solver ----------------
-    args = (; T = @ones(ni...), P = stokes.P, dt=Inf)
+    args = (; T = @ones(ni...), P = stokes.P, dt=dτ, ΔTc = @zeros(ni...))
     solve!(
         stokes,
         pt_stokes,

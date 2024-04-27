@@ -144,7 +144,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     thermal          = ThermalArrays(ni)
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux      = (left = true, right = true, top = false, bot = false),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
     @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], thick_air)
@@ -162,7 +161,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     end
     # Rheology
     η                = @ones(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args             = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e16, 1e24)
     )
@@ -228,9 +227,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         @views T_buffer[:, 1]        .= Tbot
         @views thermal.T[2:end-1, :] .= T_buffer
         temperature2center!(thermal)
- 
+
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+        args = (; T = thermal.Tc, P = stokes.P,  dt=dt, ΔTc = thermal.ΔTc)
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e18, 1e24)
         )

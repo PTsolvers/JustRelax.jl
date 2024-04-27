@@ -97,7 +97,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-4,  CFL = 0.05 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-    args         = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args         = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
     # Rheology
     η            = @ones(ni...)
     η_vep        = similar(η) # effective visco-elasto-plastic viscosity

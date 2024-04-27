@@ -29,7 +29,7 @@ macro all_j(A)
 end
 
 @parallel_indices (i, j) function init_P!(P, ρg, z)
-    P[i, j] = sum(abs(ρg[i, jj] * z[jj]) * z[jj] < 0.0 for jj in j:size(P, 2))
+    P[i, j] = sum(abs(ρg[i, jj] * z[jj]) for jj in j:size(P, 2))
     return nothing
 end
 
@@ -67,9 +67,9 @@ end
 function RT_2D(igg, nx, ny)
 
     # Physical domain ------------------------------------
-    thick_air    = 100e3              # thickness of sticky air layer
+    thick_air    = 100e3             # thickness of sticky air layer
     ly           = 500e3 + thick_air # domain length in y
-    lx           = 500e3           # domain length in x
+    lx           = 500e3             # domain length in x
     ni           = nx, ny            # number of cells
     li           = lx, ly            # domain length in x- and y-
     di           = @. li / ni        # grid step in x- and -y
@@ -83,8 +83,8 @@ function RT_2D(igg, nx, ny)
         # Name              = "Air",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = ConstantDensity(; ρ=1e1),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e19),)),
+            Density           = ConstantDensity(; ρ=1e0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e16),)),
             Gravity           = ConstantGravity(; g=9.81),
         ),
         # Name              = "Crust",
@@ -119,14 +119,13 @@ function RT_2D(igg, nx, ny)
     A             = 5e3    # Amplitude of the anomaly
     init_phases!(pPhases, particles, A)
     phase_ratios  = PhaseRatio(ni, length(rheology))
-    # @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-5,  CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-8,  CFL = 0.95 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -135,19 +134,20 @@ function RT_2D(igg, nx, ny)
    
     # Buoyancy forces & rheology
     ρg               = @zeros(ni...), @zeros(ni...)
-    η                = @zeros(ni...)
+    η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, Inf)
+        η, 0.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, 1e24)
     )
     η_vep            = copy(η)
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(; 
-        free_slip    = (left = true, right=true, top=true, bot=false),
-        no_slip      = (left = false, right=false, top=false, bot=true),
+        free_slip    = (left =  true, right =  true, top =  true, bot = false),
+        no_slip      = (left = false, right = false, top = false, bot =  true),
+        free_surface = true,
     )
 
     # Plot initial T and η profiles
@@ -158,7 +158,6 @@ function RT_2D(igg, nx, ny)
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         scatter!(ax1, Array(ρg[2][:]./9.81), Y./1e3)
         scatter!(ax2, Array(log10.(η[:])), Y./1e3)
-        # scatter!(ax2, Array(stokes.P[:]), Y./1e3)
         ylims!(ax1, minimum(xvi[2])./1e3, 0)
         ylims!(ax2, minimum(xvi[2])./1e3, 0)
         hideydecorations!(ax2)
@@ -173,7 +172,8 @@ function RT_2D(igg, nx, ny)
 
     # Time loop
     t, it = 0.0, 0
-    dt = dt_max = 50e3 * (3600 * 24 * 365.25)
+    dt = 1e3 * (3600 * 24 * 365.25)
+    dt_max = 50e3 * (3600 * 24 * 365.25)
     while it < 500 # run only for 5 Myrs
 
         # Stokes solver ----------------
@@ -183,7 +183,6 @@ function RT_2D(igg, nx, ny)
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
         )
-        # η .= mean(η)
         solve!(
             stokes,
             pt_stokes,
@@ -197,22 +196,22 @@ function RT_2D(igg, nx, ny)
             args,
             dt,
             igg;
-            iterMax = 75e3,
-            iterMin = 15e3,
-            viscosity_relaxation = 1e-1,
-            nout    = 5e3,
-            viscosity_cutoff=(-Inf, Inf)
+            iterMax              = 150e3,
+            iterMin              =   5e3,
+            viscosity_relaxation =  1e-2,
+            nout                 =   5e3,
+            free_surface         =  true,
+            viscosity_cutoff     = (-Inf, Inf)
         )
-        # dt = if it ≤ 10
-        #     min(compute_dt(stokes, di) / 2, 1e3 * (3600 * 24 * 365.25))
-        # elseif 10 < it ≤ 20
-        #     min(compute_dt(stokes, di) / 2, 10e3 * (3600 * 24 * 365.25))
-        # elseif 20 < it ≤ 30
-        #     min(compute_dt(stokes, di) / 2, 25e3 * (3600 * 24 * 365.25))
-        # else
-        #     min(compute_dt(stokes, di) / 2, dt_max)
-        # end
-        dt = min(compute_dt(stokes, di) / 2, dt_max)
+        dt = if it ≤ 10
+            min(compute_dt(stokes, di),  1e3 * (3600 * 24 * 365.25))
+        elseif 10 < it ≤ 20
+            min(compute_dt(stokes, di), 10e3 * (3600 * 24 * 365.25))
+        elseif 20 < it ≤ 30
+            min(compute_dt(stokes, di), 25e3 * (3600 * 24 * 365.25))
+        else
+            min(compute_dt(stokes, di), dt_max)
+        end
         # ------------------------------
 
         # Advection --------------------
@@ -240,9 +239,8 @@ function RT_2D(igg, nx, ny)
             pyv      = ppy.data[:]./1e3
             clr      = pPhases.data[:]
 
-            fig = Figure(resolution = (900, 900), title = "t = $t")
+            fig = Figure(size = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(t/(1e3 * 3600 * 24 *365.25)) Kyrs")
-            # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)), colormap = :grayC)
             scatter!(
                 ax, 
                 pxv, pyv, 
@@ -250,7 +248,6 @@ function RT_2D(igg, nx, ny)
                 colormap = :lajolla,
                 markersize = 3
             )
-            # scatter!(ax, pxv, pyv, color=clr, colormap = :grayC)
             arrows!(
                 ax,
                 xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))..., 

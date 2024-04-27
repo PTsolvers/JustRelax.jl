@@ -274,6 +274,7 @@ function _solve!(
     nout=500,
     b_width=(4, 4, 0),
     verbose=true,
+    free_surface=false,
     kwargs...,
 ) where {T}
 
@@ -309,6 +310,8 @@ function _solve!(
     wtime0 = 0.0
     λ = @zeros(ni...)
     θ = @zeros(ni...)
+    Vx_on_Vy = @zeros(size(stokes.V.Vy))
+
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -347,16 +350,21 @@ function _solve!(
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
+            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
+                Vx_on_Vy, stokes.V.Vx
+            )
+
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
+                    Vx_on_Vy,
                     θ,
                     @stress(stokes)...,
                     pt_stokes.ηdτ,
                     ρg...,
                     ητ,
                     _di...,
-                    dt,
+                    dt * free_surface,
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
@@ -370,11 +378,12 @@ function _solve!(
                 stokes.R.Rx,
                 stokes.R.Ry,
                 @velocity(stokes)...,
+                Vx_on_Vy,
                 stokes.P,
                 @stress(stokes)...,
                 ρg...,
                 _di...,
-                dt,
+                dt * free_surface,
             )
 
             errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
@@ -491,7 +500,7 @@ function _solve!(
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
-            @parallel (@idx ni) compute_P!(
+            compute_P!(
                 stokes.P,
                 stokes.P0,
                 stokes.R.RP,
@@ -502,7 +511,13 @@ function _solve!(
                 dt,
                 r,
                 θ_dτ,
+                args,
             )
+
+            # stokes.P[1, 1] = stokes.P[2, 1]
+            # stokes.P[end, 1] = stokes.P[end - 1, 1]
+            # stokes.P[1, end] = stokes.P[2, end]
+            # stokes.P[end, end] = stokes.P[end - 1, end]
 
             if rem(iter, 5) == 0
                 compute_ρg!(ρg[2], phase_ratios, rheology, args)
@@ -543,6 +558,7 @@ function _solve!(
                 dt,
                 θ_dτ,
             )
+            free_surface_bcs!(stokes, flow_bcs)
 
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
@@ -564,8 +580,9 @@ function _solve!(
                     dt * free_surface,
                 )
                 # apply boundary conditions
+                free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
-                update_halo!(stokes.V.Vx, stokes.V.Vy)
+                update_halo!(@velocity(stokes)...)
             end
         end
 
@@ -617,6 +634,7 @@ function _solve!(
     end
 
     stokes.P .= θ
+    # @views stokes.P .-= stokes.P[:, end]
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)

@@ -1,5 +1,5 @@
 # JustRelax.jl
-
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
 ![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
 [![codecov](https://codecov.io/gh/PTsolvers/JustRelax.jl/graph/badge.svg?token=4ZJO7ZGT8H)](https://codecov.io/gh/PTsolvers/JustRelax.jl)
@@ -41,12 +41,12 @@ We provide several miniapps, each designed to solve a well-specified benchmark p
 
 ## Installation
 
-`JustRelax.jl` is not yet registered (we are in the process), however it can be installed from the repository
+`JustRelax.jl` is a registered package and can be added as follows:
 
 ```julia
-using Pkg; Pkg.add("https://github.com/PTsolvers/JustRelax.jl.git")
+using Pkg; Pkg.add("JustRelax")
 ```
-
+However, as the API is changing and not every feature leads to a new release, one can also do `add JustRelax#main` which will clone the main branch of the repository.
 After installation, you can test the package by running the following commands:
 
 ```julia
@@ -65,6 +65,8 @@ This example displays how the package can be used to simulate shear band localis
 ```julia
 using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.DataIO
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 # setup ParallelStencil.jl environment
 model  = PS_Setup(:Threads, Float64, 2)
@@ -113,14 +115,17 @@ JustRelax allows to setup a model environment `PS_Setup` (and interplay with the
 ```
 If you therefore want to run a 3D code, change the `dimensions` to 3 in the commands above.
 
-For this specific example we use particles to define the material phases, for which we rely on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). As in `JustRelax.jl`, we need to set up the environment of `JustPIC.jl`. This can be done by running the appropriate command in the REPL and restarting the Julia session:
+For this specific example we use particles to define the material phases, for which we rely on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). As in `JustRelax.jl`, we need to set up the environment of `JustPIC.jl`. This is done by running/including the following commands:
+
 
 ```julia
-  set_backend("Threads_Float64_2D") # running on the CPU
-  set_backend("CUDA_Float64_2D")    # running on an NVIDIA GPU
-  set_backend("AMDGPU_Float64_2D")  # running on an AMD GPU
+  using JustPIC
+  using JustPIC._2D
+
+  const backend = CPUBackend    # Threads is the default backend
+  const backend = CUDABackend   # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script
+  const backend = AMDGPUBackend # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 ```
-After restarting Julia, there should be a file called `LocalPreferences.toml` in the directory together with your `Project.toml` and `Manifest.toml`. This file contains the information about the backend to use. To change the backend further, simply run the command again. The backend defaults to `Threads_Float64_2D`
 
 For the initial setup, you will need to specify the number of nodes in x- and y- direction `nx` and `ny` as well as the directory where the figures are stored (`figdir`). The initialisation of the global grid and MPI environment is done with `igg = IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)`:
 
@@ -200,7 +205,7 @@ pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1)
 # PT coefficients after Räss, L., Utkin, I., Duretz, T., Omlin, S., and Podladchikov, Y. Y.: Assessing the robustness and scalability of the accelerated pseudo-transient method, Geosci. Model Dev., 15, 5757–5786, https://doi.org/10.5194/gmd-15-5757-2022, 2022.
 # Buoyancy forces
 ρg        = @zeros(ni...), @zeros(ni...)
-args      = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+args      = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
 # Viscosity
 η         = @ones(ni...)
 η_vep     = similar(η) # effective visco-elasto-plastic viscosity
@@ -219,6 +224,7 @@ flow_bcs     = FlowBoundaryConditions(;
 stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
 stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
 flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+update_halo!(stokes.V.Vx, stokes.V.Vy)
 ```
 Pseudo-transient Stokes solver and visualisation of the results. The visualisation is done with [GLMakie.jl](https://github.com/MakieOrg/Makie.jl).
 
@@ -251,7 +257,7 @@ while t < tmax
         viscosity_cutoff = (-Inf, Inf)
     )
     # Compute second invariant of the strain rate tensor
-    @parallel (JustRelax.@idx ni) tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+    @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
     push!(τII, maximum(stokes.τ.xx))
     # Update old stresses
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -302,7 +308,7 @@ The miniapps without particles are:
 
 ## Benchmarks
 
-Current (Stokes 2D-3D, thermal diffusion) and future benchmarks can be found in the [Benchmarks](miniapps/benchmarks).
+Current (Blankenback2D, Stokes 2D-3D, thermal diffusion, thermal stress) and future benchmarks can be found in the [Benchmarks](miniapps/benchmarks).
 
 ## Funding
 The development of this package is supported by the [GPU4GEO](https://ptsolvers.github.io/GPU4GEO/) [PASC](https://www.pasc-ch.org) project.

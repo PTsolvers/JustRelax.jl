@@ -109,7 +109,6 @@ function Shearheating2D()
     thermal          = ThermalArrays(ni)
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux      = (left = true, right = true, top = false, bot = false),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
 
     # Initialize constant temperature
@@ -127,7 +126,7 @@ function Shearheating2D()
 
     # Rheology
     η                = @ones(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args             = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
     @parallel (@idx ni) compute_viscosity!(
         η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
     )
@@ -141,7 +140,6 @@ function Shearheating2D()
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left = true, right=true, top=true, bot=true),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
     ## Compression and not extension - fix this
     εbg              = 5e-14
@@ -162,7 +160,7 @@ function Shearheating2D()
     local iters, thermal
     while it < 10
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+        args = (; T = thermal.Tc, P = stokes.P,  dt=dt, ΔTc = @zeros(ni...))
         @parallel (@idx ni) compute_viscosity!(
             η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
         )

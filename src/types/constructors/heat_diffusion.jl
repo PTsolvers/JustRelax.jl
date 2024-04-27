@@ -1,3 +1,10 @@
+function ThermalArrays(::Type{CPUBackend}, ni::NTuple{N,Integer}) where N
+    return ThermalArrays(ni...)
+end
+
+function ThermalArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where N
+    return ThermalArrays(ni...)
+end
 
 function ThermalArrays(nx::Integer, ny::Integer)
     T = @zeros(nx + 3, ny + 1)

@@ -71,6 +71,10 @@ function Residual(nx::Integer, ny::Integer, nz::Integer)
 end
 
 ## StokesArrays type
+function StokesArrays(::Type{CPUBackend}, ni::NTuple{N,Integer}) where N
+    return StokesArrays(ni)
+end
+
 function StokesArrays(ni::NTuple{N,Integer}) where {N}
     P = @zeros(ni...)
     P0 = @zeros(ni...)

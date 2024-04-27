@@ -12,8 +12,9 @@ using StaticArrays
 
 function solve!() end
 
-struct CPUBackend end
-struct AMDGPUBackend end
+abstract type AbstractBackend end
+struct CPUBackend <: AbstractBackend end
+struct AMDGPUBackend <: AbstractBackend end
 
 PTArray() = Array
 PTArray(::Type{CPUBackend}) = Array

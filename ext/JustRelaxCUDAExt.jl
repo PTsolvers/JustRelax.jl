@@ -39,12 +39,6 @@ module JustRelax2D
 
     # Types
     function JustRelax.JustRelax2D.StokesArrays(
-        ::Type{CUDABackend}, ni::Vararg{Integer,N}
-    ) where {N}
-        return StokesArrays(tuple(ni...))
-    end
-
-    function JustRelax.JustRelax2D.StokesArrays(
         ::Type{CUDABackend}, ni::NTuple{N,Integer}
     ) where {N}
         return StokesArrays(ni)
@@ -64,6 +58,55 @@ module JustRelax2D
 
     function JustRelax.JustRelax2D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
         return PhaseRatio(ni, num_phases)
+    end
+
+    function PTThermalCoeffs(
+        ::Type{CUDABackend},
+        rheology,
+        phase_ratios,
+        args,
+        dt,
+        ni,
+        di::NTuple{nDim,T},
+        li::NTuple{nDim,Any};
+        ϵ = 1e-8,
+        CFL = 0.9 / √3,
+    ) where {nDim,T}
+        return JustRelax.JustRelax2D.PTThermalCoeffs(
+            rheology,
+            phase_ratios,
+            args,
+            dt,
+            ni,
+            di,
+            li;
+            ϵ = ϵ,
+            CFL = CFL,
+        )
+    end
+    
+    
+    function PTThermalCoeffs(
+        ::Type{CUDABackend},
+        rheology,
+        args,
+        dt,
+        ni,
+        di::NTuple{nDim,T},
+        li::NTuple{nDim,Any};
+        ϵ = 1e-8,
+        CFL = 0.9 / √3,
+    ) where {nDim,T}
+        return JustRelax.JustRelax2D.PTThermalCoeffs(
+            rheology,
+            args,
+            dt,
+            ni,
+            di,
+            li;
+            ϵ = ϵ,
+            CFL = CFL,
+        )
     end
 
     # Boundary conditions

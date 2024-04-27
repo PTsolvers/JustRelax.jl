@@ -18,13 +18,7 @@ module JustRelax2D
     using MPI
 
     import JustRelax:
-        IGG,
-        BackendTrait,
-        CPUBackendTrait,
-        backend,
-        CPUBackend,
-        Geometry,
-        @cell
+        IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend, Geometry, @cell
 
     @init_parallel_stencil(CUDA, Float64, 2)
 
@@ -69,23 +63,14 @@ module JustRelax2D
         ni,
         di::NTuple{nDim,T},
         li::NTuple{nDim,Any};
-        ϵ = 1e-8,
-        CFL = 0.9 / √3,
+        ϵ=1e-8,
+        CFL=0.9 / √3,
     ) where {nDim,T}
         return JustRelax.JustRelax2D.PTThermalCoeffs(
-            rheology,
-            phase_ratios,
-            args,
-            dt,
-            ni,
-            di,
-            li;
-            ϵ = ϵ,
-            CFL = CFL,
+            rheology, phase_ratios, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL
         )
     end
-    
-    
+
     function PTThermalCoeffs(
         ::Type{CUDABackend},
         rheology,
@@ -94,31 +79,20 @@ module JustRelax2D
         ni,
         di::NTuple{nDim,T},
         li::NTuple{nDim,Any};
-        ϵ = 1e-8,
-        CFL = 0.9 / √3,
+        ϵ=1e-8,
+        CFL=0.9 / √3,
     ) where {nDim,T}
         return JustRelax.JustRelax2D.PTThermalCoeffs(
-            rheology,
-            args,
-            dt,
-            ni,
-            di,
-            li;
-            ϵ = ϵ,
-            CFL = CFL,
+            rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL
         )
     end
 
     # Boundary conditions
-    function JustRelax.JustRelax2D.flow_bcs!(
-        ::CUDABackendTrait, stokes::StokesArrays, bcs
-    )
+    function JustRelax.JustRelax2D.flow_bcs!(::CUDABackendTrait, stokes::StokesArrays, bcs)
         return _flow_bcs!(bcs, @velocity(stokes))
     end
 
-    function flow_bcs!(
-        ::CUDABackendTrait, stokes::StokesArrays, bcs
-    )
+    function flow_bcs!(::CUDABackendTrait, stokes::StokesArrays, bcs)
         return _flow_bcs!(bcs, @velocity(stokes))
     end
 
@@ -127,10 +101,8 @@ module JustRelax2D
     )
         return thermal_bcs!(thermal.T, bcs)
     end
-    
-    function thermal_bcs!(
-        ::CUDABackendTrait, thermal::ThermalArrays, bcs
-    )
+
+    function thermal_bcs!(::CUDABackendTrait, thermal::ThermalArrays, bcs)
         return thermal_bcs!(thermal.T, bcs)
     end
 
@@ -159,9 +131,7 @@ module JustRelax2D
         return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
     end
 
-    function compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, args, rheology, cutoff
-    )
+    function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff)
         return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
     end
     function compute_viscosity!(
@@ -169,9 +139,7 @@ module JustRelax2D
     )
         return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
     end
-    function compute_viscosity!(
-        η, ν, εII::CuArray, args, rheology, cutoff
-    )
+    function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
         return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
     end
 
@@ -210,13 +178,19 @@ module JustRelax2D
     end
 
     # Solvers
-    JustRelax.JustRelax2D.solve!(::CUDABackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...) 
-    
+    function JustRelax.JustRelax2D.solve!(::CUDABackendTrait, stokes, args...; kwargs)
+        return _solve!(stokes, args...; kwargs...)
+    end
+
     # Utils
-    JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di, dt_diff, I) = compute_dt(S, di, dt_diff, I::IGG)
-    JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(S, di, dt_diff)
+    function JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di, dt_diff, I)
+        return compute_dt(S, di, dt_diff, I::IGG)
+    end
+    function JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di, dt_diff)
+        return compute_dt(S, di, dt_diff)
+    end
     JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di) = compute_dt(S, di)
-    
+
 end
 
 end

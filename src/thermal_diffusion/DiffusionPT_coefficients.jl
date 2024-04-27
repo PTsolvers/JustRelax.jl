@@ -7,8 +7,8 @@ function PTThermalCoeffs(
     ni,
     di::NTuple{nDim,T},
     li::NTuple{nDim,Any};
-    ϵ = 1e-8,
-    CFL = 0.9 / √3,
+    ϵ=1e-8,
+    CFL=0.9 / √3,
 ) where {nDim,T}
     Vpdτ = min(di...) * CFL
     max_lxyz = max(li...)
@@ -23,7 +23,15 @@ end
 
 # without phase ratios
 function PTThermalCoeffs(
-    ::Type{CPUBackend}, rheology, args, dt, ni, di::NTuple{nDim,T}, li::NTuple{nDim,Any}; ϵ=1e-8, CFL=0.9 / √3
+    ::Type{CPUBackend},
+    rheology,
+    args,
+    dt,
+    ni,
+    di::NTuple{nDim,T},
+    li::NTuple{nDim,Any};
+    ϵ=1e-8,
+    CFL=0.9 / √3,
 ) where {nDim,T}
     Vpdτ = min(di...) * CFL
     max_lxyz = max(li...)

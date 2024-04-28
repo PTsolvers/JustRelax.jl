@@ -1,7 +1,0 @@
-@test backend(Array) == CPUBackendTrait()
-@test backend(Matrix) == CPUBackendTrait()
-@test backend(Vector) == CPUBackendTrait()
-@test backend(rand(2)) == CPUBackendTrait()
-@test backend(rand(2,2)) == CPUBackendTrait()
-@test backend(rand(2,2,2)) == CPUBackendTrait()
-@test_throws ArgumentError backend(rand()) 

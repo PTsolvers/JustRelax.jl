@@ -47,11 +47,11 @@ The `WENO5` structure contains the parameters and temporary variables used in th
     # grid size
     ni::NTuple{N,Int64}
     # fluxes
-    ut::A = PTArray(zeros(ni...))
-    fL::A = PTArray(zeros(ni...))
-    fR::A = PTArray(zeros(ni...))
-    fB::A = PTArray(zeros(ni...))
-    fT::A = PTArray(zeros(ni...))
+    ut::A = zeros(ni...)
+    fL::A = zeros(ni...)
+    fR::A = zeros(ni...)
+    fB::A = zeros(ni...)
+    fT::A = zeros(ni...)
     # method
     method::M = Val{1} # 1:JS, 2:Z
 end

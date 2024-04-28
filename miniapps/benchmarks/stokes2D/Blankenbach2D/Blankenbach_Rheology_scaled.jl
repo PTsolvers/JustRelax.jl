@@ -15,19 +15,18 @@ function init_rheologies()
     )
 end
 
-function init_phases!(phases, particles, Lx, d, r)
+function init_phases!(phases, particles)
     ni = size(phases)
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
+    @parallel_indices (i, j) function init_phases!(phases, index)
         @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
             JustRelax.@cell(index[ip, i, j]) == 0 && continue
-
             JustRelax.@cell phases[ip, i, j] = 1.0
-
         end
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
+    @parallel (@idx ni) init_phases!(phases, particles.index)
+    return nothing
 end

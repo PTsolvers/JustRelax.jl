@@ -1,7 +1,8 @@
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+const backend_JR = JustRelax.CPUBackend
+
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
-const backend_JR = JustRelax.CPUBackend
 
 using JustPIC
 using JustPIC._2D
@@ -17,7 +18,6 @@ using Printf, LinearAlgebra, GeoParams, GLMakie
 include("Blankenbach_Rheology_scaled.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
         @all(A) = @inn_x(B)
@@ -47,11 +47,11 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk =false)
+function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", save_vtk =false)
     
     # Physical domain ------------------------------------
     ly           = 1.0                  # domain length in y
-    lx           = ly * ar              # domain length in x
+    lx           = ly                   # domain length in x
     ni           = nx, ny               # number of cells
     li           = lx, ly               # domain length in x- and y-
     di           = @. li / ni           # grid step in x- and -y
@@ -66,9 +66,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 12, 24, 6
+    nxcell, max_xcell, min_xcell = 24, 36, 12
     particles           = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        backend, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
     subgrid_arrays      = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -76,16 +76,15 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     # temperature
     pT, pT0, pPhases    = init_cell_arrays(particles, Val(3))
     particle_args       = (pT, pT0, pPhases)
-
-    init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly)
-    phase_ratios    = PhaseRatio(backend_JR, ni, length(rheology))
+    phase_ratios        = PhaseRatio(backend_JR, ni, length(rheology))
+    init_phases!(pPhases, particles)
     phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes          = StokesArrays(backend_JR, ni)
-    pt_stokes       = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.85 / √2.1)
+    pt_stokes       = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -109,19 +108,19 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     Ra              = rheology[1].Gravity[1].g
     println("Ra = $Ra")
 
-    # Buoyancy forces ------------------------------------
-    ρg               = @zeros(ni...), @zeros(ni...)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-    # Rheology ------------------------------------------
-    η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf) 
+   
+    # Buoyancy forces  & viscosity ----------------------
+    ρg               = @zeros(ni...), @zeros(ni...)
+    η                = @ones(ni...)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
     compute_viscosity!(
         stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
     )
-    
+  
     # PT coefficients for thermal diffusion -------------
     pt_thermal       = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 1e-1 / √2.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 0.5 / √2.1
     )
 
     # Boundary conditions -------------------------------
@@ -207,7 +206,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
                 verbose          = true
             )
         )
-        dt   = compute_dt(stokes, di, dt_diff)
+        dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -326,15 +325,15 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             # 
             h3  = heatmap!(ax3, xvi[1], xvi[2], Array(stokes.V.Vx) , colormap=:batlow)
             # 
-            h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), markersize=3)    
-            # h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(0, 1), markersize=3)            
+            # h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), markersize=3)    
+            h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(0, 1), markersize=3)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
             Colorbar(fig[1,2], h1)
             Colorbar(fig[2,2], h2)
             Colorbar(fig[1,4], h3)
-            # Colorbar(fig[2,4], h4)
+            Colorbar(fig[2,4], h4)
             linkaxes!(ax1, ax2, ax3, ax4)
             save(joinpath(figdir, "$(it).png"), fig)
             fig
@@ -345,6 +344,15 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             l1 = lines!(ax21,trms,(Urms))
             l2 = lines!(ax22,trms,(Nu_top))
             save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
+
+            cmap = ([:white, :white, :white, :white])
+            fig3 = Figure(size = (900, 900), title = "t = $t")
+            ax  = Axis(fig3[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+            h1  = heatmap!(ax, xvi..., thermal.T[2:end-1,:], colormap=:lipari, colorrange=(0, 1))
+            contour!(ax, xvi..., thermal.T[2:end-1,:], linewidth=5, levels= 0.2:0.2:0.8, colormap=cmap)
+            Colorbar(fig3[1,2], h1)
+            save(joinpath(figdir, "Temp.png"), fig3)
+            fig3
         end
         it      +=  1
         t       +=  dt
@@ -385,10 +393,10 @@ end
 figdir      =   "Blankenbach_subgrid_scaled"
 save_vtk    =   false # set to true to generate VTK files for ParaView
 ar          =   1 # aspect ratio
-n           =   51
+n           =   64
 nx          =   n
 ny          =   n
-nit         =   6e3
+nit         =   2e3#6e3
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else
@@ -397,3 +405,4 @@ end
 
 # run main script
 main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, save_vtk = save_vtk);
+

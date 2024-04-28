@@ -1,6 +1,7 @@
-using JustRelax, JustRelax.DataIO
-import JustRelax.@cell
-using ParallelStencil
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+const backend_JR = JustRelax.CPUBackend
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
@@ -8,11 +9,7 @@ using JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-
-# setup ParallelStencil.jl environment
-model = PS_Setup(:Threads, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
-environment!(model)
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
@@ -32,18 +29,6 @@ function copyinn_x!(A, B)
     @parallel f_x(A, B)
 end
 
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    esc(:($A[$idx_j]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
-    return nothing
-end
-
 # Initial thermal profile
 @parallel_indices (i, j) function init_T!(T, y)
     depth = -y[j]
@@ -56,7 +41,6 @@ end
 
 # Thermal rectangular perturbation
 function rectangular_perturbation!(T, xc, yc, r, xvi)
-
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)            
             T[i, j] += 20.0
@@ -65,17 +49,16 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
     end
     ni = size(T)
     @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
-
     return nothing
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk =false)
+function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", save_vtk =false)
 
     # Physical domain ------------------------------------
     ly           = 1000e3               # domain length in y
-    lx           = ly * ar              # domain length in x
+    lx           = ly                   # domain length in x
     ni           = nx, ny               # number of cells
     li           = lx, ly               # domain length in x- and y-
     di           = @. li / ni           # grid step in x- and -y
@@ -91,9 +74,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 12, 24, 6
+    nxcell, max_xcell, min_xcell = 24, 36, 12
     particles           = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        backend, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
     subgrid_arrays      = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -101,58 +84,53 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
     # temperature
     pT, pT0, pPhases    = init_cell_arrays(particles, Val(3))
     particle_args       = (pT, pT0, pPhases)
-
-    # Elliptical temperature anomaly
-    xc_anomaly      = 0.0    # origin of thermal anomaly
-    yc_anomaly      = -600e3  # origin of thermal anomaly
-    r_anomaly       = 100e3    # radius of perturbation
-    init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly)
-    phase_ratios    = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    phase_ratios        = PhaseRatio(backend_JR, ni, length(rheology))
+    init_phases!(pPhases, particles)
+    phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes          = StokesArrays(ni, ViscoElastic)
-    pt_stokes       = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.85 / √2.1)
+    stokes          = StokesArrays(backend_JR, ni)
+    pt_stokes       = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal         = ThermalArrays(ni)
+    thermal         = ThermalArrays(backend_JR, ni)
     thermal_bc      = TemperatureBoundaryConditions(;
         no_flux     = (left = true, right = true, top = false, bot = false),
     )
     # initialize thermal profile
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
+    # Elliptical temperature anomaly
+    xc_anomaly      = 0.0    # origin of thermal anomaly
+    yc_anomaly      = -600e3  # origin of thermal anomaly
+    r_anomaly       = 100e3    # radius of perturbation
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
     thermal_bcs!(thermal.T, thermal_bc)
     thermal.Told    .= thermal.T
-    @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
+    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Rayleigh number
-    ΔT           = thermal.T[1,1] - thermal.T[1,end]
-    Ra           = (rheology[1].Density[1].ρ0 * rheology[1].Gravity[1].g * rheology[1].Density[1].α * ΔT * ly^3.0 ) / 
-                        (κ * rheology[1].CompositeRheology[1].elements[1].η )
+    ΔT = thermal.T[1,1] - thermal.T[1,end]
+    Ra = (rheology[1].Density[1].ρ0 * rheology[1].Gravity[1].g * rheology[1].Density[1].α * ΔT * ly^3.0 ) / 
+       (κ * rheology[1].CompositeRheology[1].elements[1].η )
     @show Ra
 
-    # Buoyancy forces ------------------------------------
-    ρg               = @zeros(ni...), @zeros(ni...)
-    for _ in 1:1
-        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
-        @parallel init_P!(stokes.P, ρg[2], xci[2])
-    end
-    # Rheology ------------------------------------------
-    η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf) 
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, 1e25)
+
+    # Buoyancy forces  & viscosity ----------------------
+    ρg               = @zeros(ni...), @zeros(ni...)
+    η                = @ones(ni...)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
+    compute_viscosity!(
+        stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
     )
-    η_vep            = copy(η)
 
     # PT coefficients for thermal diffusion -------------
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 1e-1 / √2.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 0.5 / √2.1
     )
 
     # Boundary conditions -------------------------------
@@ -216,10 +194,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
        
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        @parallel (@idx ni) compute_viscosity!(
-            η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
-        )
-        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+        compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+        compute_ρg!(ρg[2], phase_ratios, rheology, args)
         # ------------------------------
 
         # Stokes solver ----------------
@@ -229,19 +205,19 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             phase_ratios,
             rheology,
             args,
             Inf,
             igg;
-            iterMax          = 150e3,
-            nout             = 200,
-            viscosity_cutoff = (-Inf, Inf),
-            verbose          = false
+            kwargs = (;
+                iterMax          = 150e3,
+                nout             = 200,
+                viscosity_cutoff = (-Inf, Inf),
+                verbose          = true
+            )
         )
-        dt   = compute_dt(stokes, di, dt_diff)
+        dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -253,11 +229,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
             args,
             dt,
             di;
-            igg     = igg,
-            phase   = phase_ratios,
-            iterMax = 10e3,
-            nout    = 50,
-            verbose = true,
+            kwargs = (;
+                igg     = igg,
+                phase   = phase_ratios,
+                iterMax = 10e3,
+                nout    = 1e2,
+                verbose = true,
+            )
         )
         for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
             copyinn_x!(dst, src)
@@ -273,17 +251,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
 
         # Advection --------------------
         # advect particles in space
-        advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
-        # clean_particles!(particles, xvi, particle_args)
+        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-        # clean_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
-        inject = check_injection(particles)
-        # inject && break
-        inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
         # update phase ratios
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)        
+        phase_ratios_center(phase_ratios, particles, grid, pPhases)
 
         # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----
         Nu_it   =   (ly / (1000.0*lx)) * 
@@ -294,7 +268,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
         # Compute U rms -----------------------------
         # U₍ᵣₘₛ₎ = H*ρ₀*c₍ₚ₎/k * √ 1/H/L * ∫∫ (vx²+vz²) dx dz
         Urms_it = let
-            JustRelax.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
+            JustRelax.JustRelax2D.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
             sqrt( sum( Vx_v.^2 .* prod(di)) / lx /ly ) * 
                 ((ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )
@@ -313,7 +287,6 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, nit = 1e1, figdir="figs2D", save_vtk 
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 200) == 0 || it == nit
-            checkpointing(figdir, stokes, thermal.T, η, t)
 
             if save_vtk
                 JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)

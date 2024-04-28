@@ -407,13 +407,8 @@ function _solve!(
 
             # Update viscosity
             compute_viscosity!(
-                    stokes,
-                    viscosity_relaxation,
-                    phase_ratios,
-                    args,
-                    rheology,
-                    viscosity_cutoff,
-                )
+                stokes, viscosity_relaxation, phase_ratios, args, rheology, viscosity_cutoff
+            )
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),

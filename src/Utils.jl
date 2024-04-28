@@ -299,14 +299,10 @@ macro residuals(A)
     end
 end
 
-@inline function unpack_residuals(
-    A::JustRelax.Residual{<:AbstractArray{T,2}}
-) where {T}
+@inline function unpack_residuals(A::JustRelax.Residual{<:AbstractArray{T,2}}) where {T}
     return A.Rx, A.Ry
 end
-@inline function unpack_residuals(
-    A::JustRelax.Residual{<:AbstractArray{T,3}}
-) where {T}
+@inline function unpack_residuals(A::JustRelax.Residual{<:AbstractArray{T,3}}) where {T}
     return A.Rx, A.Ry, A.Rz
 end
 

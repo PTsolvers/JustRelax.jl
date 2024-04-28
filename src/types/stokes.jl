@@ -10,7 +10,6 @@ end
 
 Velocity(Vx::T, Vy::T) where {T} = Velocity(Vx, Vy, nothing)
 
-
 Velocity(ni::NTuple{N,Number}) where {N} = Velocity(ni...)
 function Velocity(::Number, ::Number)
     throw(ArgumentError("Velocity dimensions must be given as integers"))

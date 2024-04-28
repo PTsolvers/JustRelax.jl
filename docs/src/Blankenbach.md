@@ -21,7 +21,7 @@ We will also use `ParallelStencil.jl` to write some device-agnostic helper funct
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 ```
-and will use GeoParams to define and compute physical properties of the materials:
+and will use [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl/tree/main) to define and compute physical properties of the materials:
 ```julia
 using GeoParams
 ```
@@ -389,3 +389,10 @@ linkaxes!(ax1, ax2, ax3, ax4)
 save(joinpath(figdir, "$(it).png"), fig)
 fig
 ```
+
+### Final model
+Temperature field
+![Temperatuere](../assets/Blankenbach/Temp.png)
+
+And time history of the rms-velocity and Nusselt number
+![time series](../assets/Blankenbach/Time_Series_V_Nu.png)

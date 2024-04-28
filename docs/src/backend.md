@@ -6,7 +6,7 @@ JustRelax supports three backends: CPU, and CUDA and AMD GPU cards. To use the d
 using JustRelax
 ```
 
-The GPU backends are implemented as extensions, so it is enough to load the appropiate GPU Pkg before loading JustRelax. That is, to use CUDA cards:
+The GPU backends are implemented as extensions, so it is enough to load the appropriate GPU Pkg before loading JustRelax. That is, to use CUDA cards:
 ```julia
 using CUDA, JustRelax
 ```

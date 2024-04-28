@@ -14,7 +14,7 @@ function Velocity(nx::Integer, ny::Integer, nz::Integer)
     nVz = (nx + 2, ny + 2, nz + 1)
 
     Vx, Vy, Vz = @zeros(nVx...), @zeros(nVy), @zeros(nVz)
-    return JustRelax.Velocity{PTArray}(Vx, Vy, Vz)
+    return JustRelax.Velocity(Vx, Vy, Vz)
 end
 
 ## Viscosity type
@@ -41,11 +41,11 @@ end
 function SymmetricTensor(nx::Integer, ny::Integer, nz::Integer)
     return JustRelax.SymmetricTensor(
         @zeros(nx, ny, nz), # xx
-        @zeros(nx + 1, ny + 1, nz), # xy
         @zeros(nx, ny, nz), # yy
-        @zeros(nx + 1, ny, nz + 1), # xz
-        @zeros(nx, ny + 1, nz + 1), # yz
         @zeros(nx, ny, nz), # zz
+        @zeros(nx + 1, ny + 1, nz), # xy
+        @zeros(nx, ny + 1, nz + 1), # yz
+        @zeros(nx + 1, ny, nz + 1), # xz
         @zeros(nx, ny, nz), # yz @ cell center
         @zeros(nx, ny, nz), # xz @ cell center
         @zeros(nx, ny, nz), # xy @ cell center

@@ -300,12 +300,12 @@ macro residuals(A)
 end
 
 @inline function unpack_residuals(
-    A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}
+    A::JustRelax.Residual{<:AbstractArray{T,2}}
 ) where {T}
     return A.Rx, A.Ry
 end
 @inline function unpack_residuals(
-    A::JustRelax.SymmetricTensor{<:AbstractArray{T,3}}
+    A::JustRelax.Residual{<:AbstractArray{T,3}}
 ) where {T}
     return A.Rx, A.Ry, A.Rz
 end

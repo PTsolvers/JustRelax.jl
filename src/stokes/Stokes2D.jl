@@ -9,10 +9,11 @@ end
 ## 2D VISCO-ELASTIC STOKES SOLVER
 
 # backend trait
-function solve!(stokes, args...; kwargs)
+function solve!(stokes::JustRelax.StokesArrays, args...; kwargs)
     return solve!(backend(stokes), stokes, args...; kwargs)
 end
 
+# entry point for extensions
 solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...)
 
 function _solve!(
@@ -558,7 +559,7 @@ function _solve!(
                 dt,
                 θ_dτ,
             )
-            free_surface_bcs!(stokes, flow_bcs)
+            # free_surface_bcs!(stokes, flow_bcs)
 
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)

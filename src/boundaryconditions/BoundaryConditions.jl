@@ -243,11 +243,11 @@ function free_surface_bcs!(
     end
 end
 
-function free_surface_bcs!(stokes::JustRelax.StokesArrays, bcs::FlowBoundaryConditions)
-    if bcs.free_surface
-        @views stokes.τ.yy[:, end] .= 0.0
-    end
-end
+# function free_surface_bcs!(stokes::JustRelax.StokesArrays, bcs::FlowBoundaryConditions)
+#     if bcs.free_surface
+#         @views stokes.τ.yy[:, end] .= 0.0
+#     end
+# end
 
 # function free_surface_bcs!(
 #     stokes::JustRelax.StokesArrays{A,B,C,D,E,3}, bcs::FlowBoundaryConditions

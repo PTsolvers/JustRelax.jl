@@ -15,12 +15,14 @@ function update_τ_o!(stokes::JustRelax.StokesArrays)
 end
 
 ## 3D VISCO-ELASTIC STOKES SOLVER
-function solve!(stokes::JustRelax.StokesArrays, args...)
-    return solve!(CPUBackendTrait(stokes), stokes, args...)
+function solve!(stokes::JustRelax.StokesArrays, args...; kwargs)
+    return solve!(backend(stokes), stokes, args...; kwargs)
 end
 
-function solve!(
-    ::CPUBackendTrait,
+# entry point for extensions
+solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...)
+
+function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
@@ -34,6 +36,7 @@ function solve!(
     nout=500,
     b_width=(4, 4, 4),
     verbose=true,
+    kwargs...,
 ) where {T}
 
     # solver related
@@ -153,8 +156,7 @@ end
 
 ## 3D VISCO-ELASTO-PLASTIC STOKES SOLVER WITH GeoParams.jl
 
-function solve!(
-    ::CPUBackendTrait,
+function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
@@ -168,6 +170,7 @@ function solve!(
     nout=500,
     b_width=(4, 4, 4),
     verbose=true,
+    kwargs...,
 ) where {T}
 
     # solver related
@@ -326,8 +329,7 @@ function solve!(
 end
 
 # GeoParams and multiple phases
-function solve!(
-    ::CPUBackendTrait,
+function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes::PTStokesCoeffs,
     di::NTuple{3,T},
@@ -342,7 +344,9 @@ function solve!(
     nout=500,
     b_width=(4, 4, 4),
     verbose=true,
+    viscosity_relaxation=1e-2,
     viscosity_cutoff=(-Inf, Inf),
+    kwargs...,
 ) where {T,N}
 
     ## UNPACK
@@ -399,19 +403,17 @@ function solve!(
             )
 
             # Update buoyancy
-            @parallel (@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
+            compute_ρg!(ρg[end], phase_ratios, rheology, args)
 
             # Update viscosity
-            ν = 1e-2
-            @parallel (@idx ni) compute_viscosity!(
-                η,
-                ν,
-                phase_ratios.center,
-                @strain(stokes)...,
-                args,
-                rheology,
-                viscosity_cutoff,
-            )
+            compute_viscosity!(
+                    stokes,
+                    viscosity_relaxation,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff,
+                )
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -430,9 +432,9 @@ function solve!(
                 dt,
                 pt_stokes.θ_dτ,
             )
-            free_surface_bcs!(stokes, flow_bc)
+            # free_surface_bcs!(stokes, flow_bc)
 
-            @parallel (@idx ni .+ 1) center2vertex!(
+            center2vertex!(
                 stokes.τ.yz,
                 stokes.τ.xz,
                 stokes.τ.xy,

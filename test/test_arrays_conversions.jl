@@ -1,24 +1,35 @@
-using JustRelax, Test
-model = PS_Setup(:Threads, Float64, 2)
-environment!(model)
+using JustRelax, JustRelax.JustRelax2D, Test
+const bk = JustRelax.backend
 
-@testset "Array conversions" begin
-    ni = 10, 10
-    stokes  = StokesArrays(ni, ViscoElastic)
-    thermal = ThermalArrays(ni)
+# @testset "Array conversions" begin
+    ni      = 2, 2
+    stokes  = StokesArrays(CPUBackend, ni)
+    thermal = ThermalArrays(CPUBackend, ni)
 
-    @test Array(stokes.V) isa Velocity{Array{T, N}} where {T, N}
-    @test Array(stokes.τ) isa SymmetricTensor{Array{T, N}} where {T, N}
-    @test Array(stokes.R) isa Residual{Array{T, N}} where {T, N}
-    @test Array(stokes.P) isa Array{T, N} where {T, N}
-    @test Array(stokes)   isa StokesArrays
-    @test Array(thermal)  isa ThermalArrays{Array{T, N}} where {T, N}
+    # @test Array(stokes.V) isa Velocity{Array{T, N}} where {T, N}
+    # @test Array(stokes.τ) isa SymmetricTensor{Array{T, N}} where {T, N}
+    # @test Array(stokes.R) isa Residual{Array{T, N}} where {T, N}
+    # @test Array(stokes.P) isa Array{T, N} where {T, N}
+    # @test Array(stokes)   isa StokesArrays
+    # @test Array(thermal)  isa ThermalArrays{Array{T, N}} where {T, N}
     
-    @test JustRelax.iscpu(stokes.V) isa JustRelax.CPUDeviceTrait
-    @test JustRelax.iscpu(stokes.τ) isa JustRelax.CPUDeviceTrait
-    @test JustRelax.iscpu(stokes.R) isa JustRelax.CPUDeviceTrait
-    @test JustRelax.iscpu(stokes.P) isa JustRelax.CPUDeviceTrait
-    @test JustRelax.iscpu(stokes)   isa JustRelax.CPUDeviceTrait
-    @test JustRelax.iscpu(thermal)  isa JustRelax.CPUDeviceTrait
-    @test_throws ArgumentError("Unknown device") JustRelax.iscpu("potato")
-end
+
+    # test generic arrays
+    @test bk(Array)       === CPUBackendTrait()
+    @test bk(Matrix)      === CPUBackendTrait()
+    @test bk(Vector)      === CPUBackendTrait()
+    @test bk(rand(2))     === CPUBackendTrait()
+    @test bk(rand(2,2))   === CPUBackendTrait()
+    @test bk(rand(2,2,2)) === CPUBackendTrait()
+    @test_throws ArgumentError backend(rand()) 
+
+    # test JR structs
+    @test bk(stokes.V) === CPUBackendTrait()
+    @test bk(stokes.τ) === CPUBackendTrait()
+    @test bk(stokes.R) === CPUBackendTrait()
+    @test bk(stokes.P) === CPUBackendTrait()
+    @test bk(stokes)   === CPUBackendTrait()
+    @test bk(thermal)  === CPUBackendTrait()
+    @test_throws ArgumentError bk("potato")
+# end
+

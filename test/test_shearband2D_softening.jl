@@ -2,13 +2,12 @@ push!(LOAD_PATH, "..")
 
 using Test, Suppressor
 using GeoParams, CellArrays
-using JustRelax, JustRelax.DataIO
+using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
-# setup ParallelStencil.jl environment
-model  = PS_Setup(:Threads, Float64, 2)
-environment!(model)
+const backend = CPUBackend
+
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -31,16 +30,16 @@ function init_phases!(phase_ratios, xci, radius)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
 function ShearBand2D()
-    n      = 32
-    nx     = n
-    ny     = n
+    n        = 32
+    nx       = n
+    ny       = n
     init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg    = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+    igg      = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
     # Physical domain ------------------------------------
     ly           = 1e0          # domain length in y
@@ -63,7 +62,7 @@ function ShearBand2D()
     εbg     = 1.0           # background strain-rate
     η_reg   = 8e-3          # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
-    dt /= 5
+    dt     /= 5
     el_bg   = ConstantElasticity(; G=G0, Kb=4)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4)
     visc    = LinearViscous(; η=η0)
@@ -102,7 +101,7 @@ function ShearBand2D()
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes    = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1)
 
     # Buoyancy forces
@@ -112,8 +111,8 @@ function ShearBand2D()
     # Rheology
     η         = @ones(ni...)
     η_vep     = similar(η) # effective visco-elasto-plastic viscosity
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
+    compute_viscosity!(
+        stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
     )
 
     # Boundary conditions
@@ -143,19 +142,19 @@ function ShearBand2D()
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             phase_ratios,
             rheology,
             args,
             dt,
             igg;
-            verbose          = false,
-            iterMax          = 50e3,
-            nout             = 1e2,
-            viscosity_cutoff = (-Inf, Inf)
+            kwargs = (
+                verbose          = false,
+                iterMax          = 50e3,
+                nout             = 1e2,
+                viscosity_cutoff = (-Inf, Inf)
+            )
         )
-        @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        tensor_invariant!(stokes.ε)
         push!(τII, maximum(stokes.τ.xx))
 
         @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -176,7 +175,6 @@ function ShearBand2D()
     finalize_global_grid(; finalize_MPI = true)
 
     return iters, τII, sol
-
 
 end
 

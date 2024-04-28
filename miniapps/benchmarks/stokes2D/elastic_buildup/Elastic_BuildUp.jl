@@ -42,18 +42,19 @@ function elastic_buildup(;
     kyr       = 1e3 * yr
     ttot      = endtime * kyr # total simulation time
 
-    ## Setup-specific parameters and fields
-    η         = fill(η0, nx, ny)
-    g         = 0.0 # gravity
-    Gc        = @fill(G, ni...)
-    Kb        = @fill(Inf, ni...)
-
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes    = StokesArrays(ni)
+    stokes    = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, CFL=1 / √2.1)
 
+    ## Setup-specific parameters and fields
+    (; η)     = stokes.viscosity
+    η        .= fill(η0, nx, ny)
+    g         = 0.0 # gravity
+    Gc        = @fill(G, ni...)
+    Kb        = @fill(Inf, ni...)
+  
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
     flow_bcs  = FlowBoundaryConditions(;

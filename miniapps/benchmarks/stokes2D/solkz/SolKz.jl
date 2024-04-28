@@ -7,7 +7,7 @@ function solKz_viscosity(xci, ni, di; B=log(1e6))
     xc, yc = xci
     # make grid array (will be eaten by GC)
     y     = @zeros(ni...)
-    y     = PTArray([yci for _ in xc, yci in yc])
+    y     = PTArray(backend)([yci for _ in xc, yci in yc])
     η     = @zeros(ni...)
 
     _viscosity(y, B) = exp(B * y)
@@ -27,8 +27,8 @@ end
 function solKz_density(xci, ni, di)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x      = PTArray([xci for xci in xc, _ in yc])
-    y      = PTArray([yci for _ in xc, yci in yc])
+    x      = PTArray(backend)([xci for xci in xc, _ in yc])
+    y      = PTArray(backend)([yci for _ in xc, yci in yc])
     ρ      = @zeros(ni...)
 
     _density(x, y) = -sin(2 * y) * cos(3 * π * x)
@@ -68,14 +68,15 @@ function solKz(;
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes    = StokesArrays(ni, ViscoElastic)
+    (; η)     = stokes.viscosity
+    stokes    = StokesArrays(backend, ni, ViscoElastic)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di; Re = 5π, CFL = 1 / √2.1)
 
     ## Setup-specific parameters and fields
-    η         = solKz_viscosity(xci, ni, di; B = log(Δη)) # viscosity field
+    η        .= solKz_viscosity(xci, ni, di; B = log(Δη)) # viscosity field
     ρ         = solKz_density(xci, ni, di)
-    fy        = ρ * g
+    fy        = ρ .* g
     ρg        = @zeros(ni...), fy
     dt        = 0.1
     G         = @fill(Inf, ni...)
@@ -98,15 +99,16 @@ function solKz(;
             di,
             flow_bcs,
             ρg,
-            η,
             G,
             Kb,
             dt,
             igg;
-            iterMax = 150e3,
-            nout    = 1e3,
-            b_width = (4, 4, 1),
-            verbose = false,
+            kwargs = (
+                iterMax = 150e3,
+                nout    = 1e3,
+                b_width = (4, 4, 1),
+                verbose = false
+            ),
         )
         t += Δt
     end

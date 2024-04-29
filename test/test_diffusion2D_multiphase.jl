@@ -182,7 +182,9 @@ end
         nx=32;
         ny=32;
         thermal = diffusion_2D(; nx = nx, ny = ny)
-        @test  thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1819.2297931741878 atol=1e-1
-        @test thermal.Tc[  nx >>> 1    ,   nx >>> 1    ] ≈ 1824.3532934301472 atol=1e-1
+        
+        nx_T, ny_T = size(thermal.T)
+        @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1819.2297931741878 atol=1e-1
+        @test thermal.Tc[ nx >>> 1    ,   nx >>> 1    ] ≈ 1824.3532934301472 atol=1e-1
     end
 end

@@ -14,7 +14,7 @@ const bk = JustRelax.backend
     @test bk(rand(2,2,2)) === CPUBackendTrait()
 
     # test error handling
-    @test_throws ArgumentError backend(rand()) 
+    @test_throws ArgumentError bk(rand()) 
     @test_throws ArgumentError bk("potato")
 
     # test JR structs

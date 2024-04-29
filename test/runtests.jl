@@ -14,11 +14,7 @@ function runtests()
 
     f0 = "test_traits.jl", "test_types.jl"
     for f in f0
-        try
-            include(f)
-        catch ex
-            nfail += 1
-        end
+        include(f)
     end
     
     for f in testfiles
@@ -32,6 +28,7 @@ function runtests()
             nfail += 1
         end
     end
+    
     return nfail
 end
 

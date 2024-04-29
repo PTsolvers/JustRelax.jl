@@ -68,8 +68,8 @@ function solKz(;
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
+    stokes    = StokesArrays(backend, ni)
     (; η)     = stokes.viscosity
-    stokes    = StokesArrays(backend, ni, ViscoElastic)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di; Re = 5π, CFL = 1 / √2.1)
 
@@ -107,7 +107,7 @@ function solKz(;
                 iterMax = 150e3,
                 nout    = 1e3,
                 b_width = (4, 4, 1),
-                verbose = false
+                verbose = true
             ),
         )
         t += Δt

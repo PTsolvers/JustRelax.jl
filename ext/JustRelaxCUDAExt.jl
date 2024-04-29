@@ -18,15 +18,12 @@ module JustRelax2D
     using MPI
 
     import JustRelax:
-        IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend, Geometry, @cell
+        IGG, BackendTrait, CPUBackendTrait, CUDABackendTrait, backend, CPUBackend, Geometry, @cell
 
     @init_parallel_stencil(CUDA, Float64, 2)
 
     include("../src/common.jl")
     include("../src/stokes/Stokes2D.jl")
-
-    # add CUDA traits
-    struct CUDABackendTrait <: BackendTrait end
 
     @inline backend(::CuArray) = CUDABackendTrait()
     @inline backend(::Type{<:CuArray}) = CUDABackendTrait()
@@ -144,7 +141,7 @@ module JustRelax2D
     end
 
     ## Stress
-    JustRelax.JustRelax2D.tensor_invariant!(A::SymmetricTensor) = tensor_invariant!(A)
+    JustRelax.JustRelax2D.tensor_invariant!(A::JustRelax.SymmetricTensor) = tensor_invariant!(A)
 
     ## Buoyancy forces
     function JustRelax.JustRelax2D.compute_ρg!(ρg::CuArray, rheology, args)

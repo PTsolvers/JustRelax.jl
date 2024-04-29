@@ -1,14 +1,15 @@
 function heatdiffusion_PT!(thermal, args...; kwargs)
-    return heatdiffusion_PT!(backend(thermal), thermal, args...; kwargs...)
+    return heatdiffusion_PT!(backend(thermal), thermal, args...; kwargs=kwargs)
 end
+
+heatdiffusion_PT!(::CPUBackendTrait, thermal, args...; kwargs) = _heatdiffusion_PT!(thermal, args...; kwargs...)
 
 """
     heatdiffusion_PT!(thermal, pt_thermal, K, ρCp, dt, di; iterMax, nout, verbose)
 
 Heat diffusion solver using Pseudo-Transient iterations. Both `K` and `ρCp` are n-dimensional arrays.
 """
-function heatdiffusion_PT!(
-    ::CPUBackendTrait,
+function _heatdiffusion_PT!(
     thermal::JustRelax.ThermalArrays,
     pt_thermal::JustRelax.PTThermalCoeffs,
     thermal_bc::TemperatureBoundaryConditions,
@@ -17,10 +18,11 @@ function heatdiffusion_PT!(
     dt,
     di;
     igg=nothing,
-    b_width=(4, 4, 4),
+    b_width=(4, 4, 1),
     iterMax=50e3,
     nout=1e3,
     verbose=true,
+    kwargs...
 )
     # Compute some constant stuff
     _dt = inv(dt)
@@ -96,8 +98,7 @@ end
 
 Heat diffusion solver using Pseudo-Transient iterations.
 """
-function heatdiffusion_PT!(
-    ::CPUBackendTrait,
+function _heatdiffusion_PT!(
     thermal::JustRelax.ThermalArrays,
     pt_thermal::JustRelax.PTThermalCoeffs,
     thermal_bc::TemperatureBoundaryConditions,
@@ -111,6 +112,7 @@ function heatdiffusion_PT!(
     iterMax=50e3,
     nout=1e3,
     verbose=true,
+    kwargs...
 )
     phases = get_phase(phase)
 
@@ -121,7 +123,7 @@ function heatdiffusion_PT!(
     ϵ = pt_thermal.ϵ
     ni = size(thermal.Tc)
     @copy thermal.Told thermal.T
-    update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
+    !isnothing(phase) && update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
 
     # errors
     iter_count = Int64[]

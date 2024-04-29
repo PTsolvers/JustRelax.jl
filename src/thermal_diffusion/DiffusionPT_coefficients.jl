@@ -1,5 +1,51 @@
 function PTThermalCoeffs(
+    ::Type{CPUBackend}, K, ρCp, dt, di::NTuple{nDim,T}, li::NTuple{nDim,Any}; ϵ=1e-8, CFL=0.9 / √3
+) where {nDim,T}
+
+    PTThermalCoeffs(
+        K, ρCp, dt, di, li; ϵ=ϵ, CFL=CFL
+    )
+end
+
+function PTThermalCoeffs(
+    K, ρCp, dt, di::NTuple{nDim,T}, li::NTuple{nDim,Any}; ϵ=1e-8, CFL=0.9 / √3
+) where {nDim,T}
+    Vpdτ = min(di...) * CFL
+    max_lxyz = max(li...)
+    max_lxyz2 = max_lxyz^2
+    Re = @. π + √(π * π + ρCp * max_lxyz2 / K / dt) # Numerical Reynolds number
+    θr_dτ = @. max_lxyz / Vpdτ / Re
+    dτ_ρ = @. Vpdτ * max_lxyz / K / Re
+    return JustRelax.PTThermalCoeffs(CFL, ϵ, max_lxyz, max_lxyz2, Vpdτ, θr_dτ, dτ_ρ)
+end
+
+
+function PTThermalCoeffs(
     ::Type{CPUBackend},
+    rheology,
+    phase_ratios,
+    args,
+    dt,
+    ni,
+    di::NTuple{nDim,T},
+    li::NTuple{nDim,Any};
+    ϵ=1e-8,
+    CFL=0.9 / √3,
+) where {nDim,T}
+    PTThermalCoeffs(
+        rheology,
+        phase_ratios,
+        args,
+        dt,
+        ni,
+        di,
+        li;
+        ϵ=ϵ,
+        CFL=CFL,
+    )   
+end
+
+function PTThermalCoeffs(
     rheology,
     phase_ratios,
     args,
@@ -24,6 +70,28 @@ end
 # without phase ratios
 function PTThermalCoeffs(
     ::Type{CPUBackend},
+    rheology,
+    args,
+    dt,
+    ni,
+    di::NTuple{nDim,T},
+    li::NTuple{nDim,Any};
+    ϵ=1e-8,
+    CFL=0.9 / √3,
+) where {nDim,T}
+    PTThermalCoeffs(
+        rheology,
+        args,
+        dt,
+        ni,
+        di,
+        li;
+        ϵ=ϵ,
+        CFL=CFL,
+    ) 
+end
+
+function PTThermalCoeffs(
     rheology,
     args,
     dt,

@@ -43,15 +43,3 @@ struct PTThermalCoeffs{T,M}
         return new{T,M}(CFL, ϵ, max_lxyz, max_lxyz2, Vpdτ, θr_dτ, dτ_ρ)
     end
 end
-
-function PTThermalCoeffs(
-    K, ρCp, dt, di::NTuple{nDim,T}, li::NTuple{nDim,Any}; ϵ=1e-8, CFL=0.9 / √3
-) where {nDim,T}
-    Vpdτ = min(di...) * CFL
-    max_lxyz = max(li...)
-    max_lxyz2 = max_lxyz^2
-    Re = @. π + √(π * π + ρCp * max_lxyz2 / K / dt) # Numerical Reynolds number
-    θr_dτ = @. max_lxyz / Vpdτ / Re
-    dτ_ρ = @. Vpdτ * max_lxyz / K / Re
-    return PTThermalCoeffs(CFL, ϵ, max_lxyz, max_lxyz2, Vpdτ, θr_dτ, dτ_ρ)
-end

@@ -47,5 +47,4 @@ include("IO/DataIO.jl")
 include("array_conversions.jl")
 export Array
 
-
 end # module

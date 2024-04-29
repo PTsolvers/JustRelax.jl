@@ -2,7 +2,9 @@ function heatdiffusion_PT!(thermal, args...; kwargs)
     return heatdiffusion_PT!(backend(thermal), thermal, args...; kwargs=kwargs)
 end
 
-heatdiffusion_PT!(::CPUBackendTrait, thermal, args...; kwargs) = _heatdiffusion_PT!(thermal, args...; kwargs...)
+function heatdiffusion_PT!(::CPUBackendTrait, thermal, args...; kwargs)
+    return _heatdiffusion_PT!(thermal, args...; kwargs...)
+end
 
 """
     heatdiffusion_PT!(thermal, pt_thermal, K, ρCp, dt, di; iterMax, nout, verbose)
@@ -22,7 +24,7 @@ function _heatdiffusion_PT!(
     iterMax=50e3,
     nout=1e3,
     verbose=true,
-    kwargs...
+    kwargs...,
 )
     # Compute some constant stuff
     _dt = inv(dt)
@@ -112,7 +114,7 @@ function _heatdiffusion_PT!(
     iterMax=50e3,
     nout=1e3,
     verbose=true,
-    kwargs...
+    kwargs...,
 )
     phases = get_phase(phase)
 

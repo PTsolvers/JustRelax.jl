@@ -6,7 +6,15 @@ import Base: Array
 
 function Array(
     x::T
-) where {T<:Union{JustRelax.StokesArrays,JustRelax.SymmetricTensor,JustRelax.ThermalArrays,JustRelax.Velocity,JustRelax.Residual}}
+) where {
+    T<:Union{
+        JustRelax.StokesArrays,
+        JustRelax.SymmetricTensor,
+        JustRelax.ThermalArrays,
+        JustRelax.Velocity,
+        JustRelax.Residual,
+    },
+}
     return Array(backend(x), x)
 end
 
@@ -14,7 +22,14 @@ Array(::CPUBackendTrait, x) = x
 
 function Array(
     ::NonCPUBackendTrait, x::T
-) where {T<:Union{JustRelax.SymmetricTensor,JustRelax.ThermalArrays,JustRelax.Velocity,JustRelax.Residual}}
+) where {
+    T<:Union{
+        JustRelax.SymmetricTensor,
+        JustRelax.ThermalArrays,
+        JustRelax.Velocity,
+        JustRelax.Residual,
+    },
+}
     nfields = fieldcount(T)
     cpu_fields = ntuple(Val(nfields)) do i
         Base.@_inline_meta

@@ -1,10 +1,14 @@
 function PTThermalCoeffs(
-    ::Type{CPUBackend}, K, ρCp, dt, di::NTuple{nDim,T}, li::NTuple{nDim,Any}; ϵ=1e-8, CFL=0.9 / √3
+    ::Type{CPUBackend},
+    K,
+    ρCp,
+    dt,
+    di::NTuple{nDim,T},
+    li::NTuple{nDim,Any};
+    ϵ=1e-8,
+    CFL=0.9 / √3,
 ) where {nDim,T}
-
-    PTThermalCoeffs(
-        K, ρCp, dt, di, li; ϵ=ϵ, CFL=CFL
-    )
+    return PTThermalCoeffs(K, ρCp, dt, di, li; ϵ=ϵ, CFL=CFL)
 end
 
 function PTThermalCoeffs(
@@ -19,7 +23,6 @@ function PTThermalCoeffs(
     return JustRelax.PTThermalCoeffs(CFL, ϵ, max_lxyz, max_lxyz2, Vpdτ, θr_dτ, dτ_ρ)
 end
 
-
 function PTThermalCoeffs(
     ::Type{CPUBackend},
     rheology,
@@ -32,17 +35,7 @@ function PTThermalCoeffs(
     ϵ=1e-8,
     CFL=0.9 / √3,
 ) where {nDim,T}
-    PTThermalCoeffs(
-        rheology,
-        phase_ratios,
-        args,
-        dt,
-        ni,
-        di,
-        li;
-        ϵ=ϵ,
-        CFL=CFL,
-    )   
+    return PTThermalCoeffs(rheology, phase_ratios, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 
 function PTThermalCoeffs(
@@ -79,27 +72,11 @@ function PTThermalCoeffs(
     ϵ=1e-8,
     CFL=0.9 / √3,
 ) where {nDim,T}
-    PTThermalCoeffs(
-        rheology,
-        args,
-        dt,
-        ni,
-        di,
-        li;
-        ϵ=ϵ,
-        CFL=CFL,
-    ) 
+    return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 
 function PTThermalCoeffs(
-    rheology,
-    args,
-    dt,
-    ni,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
-    ϵ=1e-8,
-    CFL=0.9 / √3,
+    rheology, args, dt, ni, di::NTuple{nDim,T}, li::NTuple{nDim,Any}; ϵ=1e-8, CFL=0.9 / √3
 ) where {nDim,T}
     Vpdτ = min(di...) * CFL
     max_lxyz = max(li...)

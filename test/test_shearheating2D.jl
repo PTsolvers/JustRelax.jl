@@ -1,13 +1,12 @@
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
-using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JustRelax, JustRelax.JustRelax2D
 const backend_JR = JustRelax.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-using JustPIC
-using JustPIC._2D
+using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
@@ -15,14 +14,13 @@ const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBac
 # const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams
+using Printf, GeoParams
 
 # Load file with all the rheology configurations
 include("../miniapps/benchmarks/stokes2D/shear_heating/Shearheating_rheology.jl")
 
 
 # ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
 function copyinn_x!(A, B)
 
     @parallel function f_x(A, B)
@@ -115,7 +113,7 @@ function Shearheating2D()
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology
-    args             = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
@@ -181,12 +179,10 @@ function Shearheating2D()
         @views thermal.T[2:end-1, :] .= T_buffer
         temperature2center!(thermal)
 
-        @parallel (@idx ni) compute_shear_heating!(
-            thermal.shear_heating,
-            @tensor_center(stokes.τ),
-            @tensor_center(stokes.τ_o),
-            @strain(stokes),
-            phase_ratios.center,
+        compute_shear_heating!(
+            thermal,
+            stokes,
+            phase_ratios,
             rheology, # needs to be a tuple
             dt,
         )

@@ -4,7 +4,7 @@ using ParallelStencil.FiniteDifferences3D
 #   D. W. Schmid and Y. Y. Podladchikov. Analytical solutions for deformable elliptical inclusions in
 #   general shear. Geophysical Journal International, 155(1):269–288, 2003.
 
-include("vizSolVi3D.jl")
+# include("vizSolVi3D.jl")
 
 @parallel function smooth!(A2::AbstractArray{T,3}, A::AbstractArray{T,3}, fact::T) where {T}
     @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
@@ -73,7 +73,8 @@ function solVi3D(;
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes    = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(backend, ni)
+    (; η)     = stokes.viscosity
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √3)
 
@@ -84,12 +85,12 @@ function solVi3D(;
     G  = 1.0 # elastic shear modulus
     # dt = η0 / (G * ξ)
     dt = Inf
-    η  = viscosity(ni, di, li, rc, η0, ηi)
+    η .= viscosity(ni, di, li, rc, η0, ηi)
     Gc = @fill(G, ni...)
     Kb = @fill(Inf, ni...)
 
     ## Boundary conditions
-    pureshear_bc!(stokes, di, li, εbg)
+    pureshear_bc!(stokes, xci, xvi, εbg)
     flow_bcs = FlowBoundaryConditions(;
         free_slip   = (left=false, right=false, top=false, bot=false, back=false, front=false),
         no_slip     = (left=false, right=false, top=false, bot=false, back=false, front=false),
@@ -105,7 +106,20 @@ function solVi3D(;
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, Kb, Gc, dt, igg; iterMax=5000, nout=100, verbose=false,
+            stokes, 
+            pt_stokes, 
+            di, 
+            flow_bcs, 
+            ρg, 
+            Kb, 
+            Gc, 
+            dt, 
+            igg; 
+            kwargs = (; 
+                iterMax=5000, 
+                nout=100, 
+                verbose=false
+            ),
         )
         t += Δt
     end

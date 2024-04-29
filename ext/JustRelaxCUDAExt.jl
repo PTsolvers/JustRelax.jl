@@ -38,16 +38,16 @@ module JustRelax2D
         return StokesArrays(ni)
     end
 
-    function JustRelax.JustRelax2D.ThermalArrays(
+    function JustRelax.JustRelax2D.::JustRelax.ThermalArrays(
         ::Type{CUDABackend}, ni::NTuple{N,Number}
     ) where {N}
-        return ThermalArrays(ni...)
+        return ::JustRelax.ThermalArrays(ni...)
     end
 
-    function JustRelax.JustRelax2D.ThermalArrays(
+    function JustRelax.JustRelax2D.::JustRelax.ThermalArrays(
         ::Type{CUDABackend}, ni::Vararg{Number,N}
     ) where {N}
-        return ThermalArrays(ni...)
+        return ::JustRelax.ThermalArrays(ni...)
     end
 
     function JustRelax.JustRelax2D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
@@ -88,27 +88,27 @@ module JustRelax2D
     end
 
     # Boundary conditions
-    function JustRelax.JustRelax2D.flow_bcs!(::CUDABackendTrait, stokes::StokesArrays, bcs)
+    function JustRelax.JustRelax2D.flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
         return _flow_bcs!(bcs, @velocity(stokes))
     end
 
-    function flow_bcs!(::CUDABackendTrait, stokes::StokesArrays, bcs)
+    function flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
         return _flow_bcs!(bcs, @velocity(stokes))
     end
 
     function JustRelax.JustRelax2D.thermal_bcs!(
-        ::CUDABackendTrait, thermal::ThermalArrays, bcs
+        ::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs
     )
         return thermal_bcs!(thermal.T, bcs)
     end
 
-    function thermal_bcs!(::CUDABackendTrait, thermal::ThermalArrays, bcs)
+    function thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
         return thermal_bcs!(thermal.T, bcs)
     end
 
     # Phases
     function JustRelax.JustRelax2D.phase_ratios_center(
-        ::CUDABackendTrait, phase_ratios::PhaseRatio, particles, grid::Geometry, phases
+        ::CUDABackendTrait, phase_ratios::JustRelax.PhaseRatio, particles, grid::Geometry, phases
     )
         return _phase_ratios_center(phase_ratios, particles, grid, phases)
     end
@@ -151,14 +151,14 @@ module JustRelax2D
         return compute_ρg!(ρg, rheology, args)
     end
     function JustRelax.JustRelax2D.compute_ρg!(
-        ρg::CuArray, phase_ratios::PhaseRatio, rheology, args
+        ρg::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args
     )
         return compute_ρg!(ρg, phase_ratios, rheology, args)
     end
 
     # Interpolations
     function JustRelax.JustRelax2D.temperature2center!(
-        ::CUDABackendTrait, thermal::ThermalArrays
+        ::CUDABackendTrait, thermal::JustRelax.ThermalArrays
     )
         return _temperature2center!(thermal)
     end
@@ -183,13 +183,13 @@ module JustRelax2D
     end
 
     # Utils
-    function JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di, dt_diff, I)
+    function JustRelax.JustRelax2D.compute_dt(S::JustRelax.StokesArrays, di, dt_diff, I)
         return compute_dt(S, di, dt_diff, I::IGG)
     end
-    function JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di, dt_diff)
+    function JustRelax.JustRelax2D.compute_dt(S::JustRelax.StokesArrays, di, dt_diff)
         return compute_dt(S, di, dt_diff)
     end
-    JustRelax.JustRelax2D.compute_dt(S::StokesArrays, di) = compute_dt(S, di)
+    JustRelax.JustRelax2D.compute_dt(S::JustRelax.StokesArrays, di) = compute_dt(S, di)
 
 end
 

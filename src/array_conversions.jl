@@ -5,24 +5,24 @@ struct CPUDeviceTrait <: DeviceTrait end
 struct NonCPUDeviceTrait <: DeviceTrait end
 
 @inline iscpu(::Array) = CPUDeviceTrait()
-@inline iscpu(::AbstractArray) = NonCPUDeviceTrait()
+@inline iscpu(::T) where {T<:AbstractArray} = NonCPUDeviceTrait()
 @inline iscpu(::T) where {T} = throw(ArgumentError("Unknown device"))
 
 @inline iscpu(::Velocity{Array{T,N}}) where {T,N} = CPUDeviceTrait()
-@inline iscpu(::Velocity{AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
+@inline iscpu(::Velocity{<:AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
 
 @inline iscpu(::SymmetricTensor{Array{T,N}}) where {T,N} = CPUDeviceTrait()
-@inline iscpu(::SymmetricTensor{AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
+@inline iscpu(::SymmetricTensor{<:AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
 
 @inline iscpu(::Residual{Array{T,N}}) where {T,N} = CPUDeviceTrait()
-@inline iscpu(::Residual{AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
+@inline iscpu(::Residual{<:AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
 
 @inline iscpu(::ThermalArrays{Array{T,N}}) where {T,N} = CPUDeviceTrait()
-@inline iscpu(::ThermalArrays{AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
+@inline iscpu(::ThermalArrays{<:AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
 
 @inline iscpu(::StokesArrays{M,A,B,C,Array{T,N},nDim}) where {M,A,B,C,T,N,nDim} =
     CPUDeviceTrait()
-@inline iscpu(::StokesArrays{M,A,B,C,AbstractArray{T,N},nDim}) where {M,A,B,C,T,N,nDim} =
+@inline iscpu(::StokesArrays{M,A,B,C,<:AbstractArray{T,N},nDim}) where {M,A,B,C,T,N,nDim} =
     NonCPUDeviceTrait()
 
 ## Conversion of structs to CPU

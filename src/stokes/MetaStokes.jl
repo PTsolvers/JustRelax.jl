@@ -20,7 +20,7 @@ function make_velocity_struct!(ndim::Integer; name::Symbol=:Velocity)
                 return new{$PTArray}(@zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...))
             end
 
-            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{$PTArray}(args...)
+            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{T}(args...)
         end
     end
 end
@@ -83,7 +83,7 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTens
                 )
             end
 
-            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{$PTArray}(args...)
+            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{T}(args...)
         end
     end
 end
@@ -111,7 +111,7 @@ function make_residual_struct!(ndim; name::Symbol=:Residual)
                 return new{typeof(Rx)}(Rx, Ry, Rz, RP)
             end
 
-            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{$PTArray}(args...)
+            $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = new{T}(args...)
         end
     end
 end

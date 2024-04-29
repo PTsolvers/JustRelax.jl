@@ -6,16 +6,22 @@ makedocs(;
     sitename="JustRelax.jl",
     authors="Albert de Montserrat and contributors",
     modules=[JustRelax],
-    format=Documenter.HTML(; prettyurls=get(ENV, "CI", nothing) == "true"), # easier local build
+    format=Documenter.HTML(; prettyurls=get(ENV, "CI", nothing) == "true",
+    size_threshold_ignore = ["man/listfunctions.md"]), # easier local build
+
     warnonly = Documenter.except(:footnote),
     pages=[
-        "Home"      => "index.md",
-        "Backend"   => "backend.md",
-        "Equations" => "equations.md",
-        "Advection" => "advection.md",
-        "Examples"  => [
-            "Blankenbach.md"
+        "Home"      => "man/index.md",
+        "User guide"=> Any[
+            "Installation" => "man/installation.md",
+        ],
+        "Backend"   => "man/backend.md",
+        "Equations" => "man/equations.md",
+        "Advection" => "man/advection.md",
+        "Examples"  => Any[
+            "Blankenbach" => "man/Blankenbach.md",
             ],
+        "List of functions" => "man/listfunctions.md",
     ],
 )
 

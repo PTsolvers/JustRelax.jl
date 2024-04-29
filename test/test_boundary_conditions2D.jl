@@ -1,5 +1,5 @@
 using JustRelax, JustRelax.JustRelax2D
-using Test#, Suppressor
+using Test, Suppressor
 
 const backend = CPUBackend
 @testset "Boundary Conditions" begin

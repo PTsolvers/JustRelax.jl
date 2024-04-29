@@ -36,7 +36,7 @@ function check_convergence_case1()
     )
 
     tol = 1e-8
-    passed = iters.err_evo1[end] < tol
+    passed = iters.norm_Rx[end] < tol
 
     return passed
 end

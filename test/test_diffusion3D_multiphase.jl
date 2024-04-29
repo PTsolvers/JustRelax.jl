@@ -6,12 +6,15 @@ using JustRelax
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
+const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+
+
 using JustPIC
 using JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 import JustRelax.@cell
 
@@ -117,7 +120,7 @@ function diffusion_3D(;
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend_JR, ni)
     thermal.H .= 1e-6
     # physical parameters
     ρ          = @fill(ρ0, ni...)
@@ -145,14 +148,14 @@ function diffusion_3D(;
     )
     # temperature
     pPhases,     = init_cell_arrays(particles, Val(1))
+    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, center_perturbation..., r)
-    phase_ratios = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, pPhases)
+    phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion
     args       = (; P=P, T=thermal.Tc)
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
+    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
 
     t  = 0.0
     it = 0
@@ -168,11 +171,13 @@ function diffusion_3D(;
             args,
             dt,
             di;
-            igg     = igg,
-            phase   = phase_ratios,
-            iterMax = 10e3,
-            nout    = 1e2,
-            verbose = false,
+            kwargs = (;
+                igg     = igg,
+                phase   = phase_ratios,
+                iterMax = 10e3,
+                nout    = 1e2,
+                verbose = false,
+            )
         )
 
         t  += dt

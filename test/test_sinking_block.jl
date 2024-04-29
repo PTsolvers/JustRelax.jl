@@ -2,7 +2,7 @@ push!(LOAD_PATH, "..")
 
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
 
 const backend_JR = CPUBackend

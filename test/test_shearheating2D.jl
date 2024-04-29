@@ -1,3 +1,5 @@
+using Test, Suppressor
+
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax2D
@@ -14,7 +16,7 @@ const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBac
 # const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using Printf, GeoParams
+using GeoParams
 
 # Load file with all the rheology configurations
 include("../miniapps/benchmarks/stokes2D/shear_heating/Shearheating_rheology.jl")

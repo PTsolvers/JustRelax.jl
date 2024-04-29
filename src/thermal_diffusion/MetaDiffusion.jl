@@ -19,7 +19,7 @@ function make_thermal_arrays!(ndim)
             ResT::_T
 
             function ThermalArrays(args::Vararg{T,N}) where {T<:AbstractArray,N}
-                return new{$PTArray}(args...)
+                return new{T}(args...)
             end
 
             function ThermalArrays(ni::NTuple{1,Integer})

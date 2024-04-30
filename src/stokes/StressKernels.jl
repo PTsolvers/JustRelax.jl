@@ -311,7 +311,7 @@ function tensor_invariant!(A::JustRelax.SymmetricTensor)
 end
 
 function tensor_invariant!(::CPUBackendTrait, A::JustRelax.SymmetricTensor)
-    _tensor_invariant!(A)
+    return _tensor_invariant!(A)
 end
 
 function _tensor_invariant!(A::JustRelax.SymmetricTensor)

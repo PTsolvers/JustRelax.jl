@@ -404,7 +404,7 @@ function compute_dt(S::JustRelax.StokesArrays, args...)
 end
 
 function compute_dt(::CPUBackendTrait, S::JustRelax.StokesArrays, args...)
-    _compute_dt(S, args...)
+    return _compute_dt(S, args...)
 end
 
 """

@@ -10,7 +10,8 @@ using MPI
 
 import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend
 import JustRelax: PTStokesCoeffs
-import JustRelax: AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
+import JustRelax:
+    AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
 
 @init_parallel_stencil(Threads, Float64, 2)
 
@@ -32,7 +33,8 @@ using MPI
 
 import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend
 import JustRelax: PTStokesCoeffs
-import JustRelax: AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
+import JustRelax:
+    AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
 
 @init_parallel_stencil(Threads, Float64, 3)
 

@@ -40,7 +40,7 @@ grid         = Geometry(ni, li; origin = origin)
 dt           = Inf
 ```
 
-## Physical properties using GeoParams ----------------
+## Physical properties using GeoParams
 ```julia
 τ_y     = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
 ϕ       = 30            # friction angle
@@ -104,7 +104,7 @@ function init_phases!(phase_ratios, xci, radius)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
 end
 
 ```

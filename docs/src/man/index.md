@@ -1,22 +1,16 @@
-```@meta
-CurrentModule = JustRelax
-```
-
 # JustRelax.jl
-
-Documentation for [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl)
 
 Need to solve a very large multi-physics problem on many GPUs in parallel? Just Relax!
 
-`JustRelax.jl` is a collection of accelerated iterative pseudo-transient solvers using MPI and multiple CPU or GPU backends. It's part of the [PTSolvers organisation](https://ptsolvers.github.io) and
+`JustRelax` is a collection of accelerated iterative pseudo-transient solvers using MPI and multiple CPU or GPU backends. It's part of the [PTSolvers organisation](https://ptsolvers.github.io) and
 developed within the [GPU4GEO project](https://www.pasc-ch.org/projects/2021-2024/gpu4geo/). Current publications, outreach and news can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
 
 The package relies on other packages as building blocks and parallelisation tools:
 
-* [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl)
-* [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl)
-* [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)
-* [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl)
+* [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) - device agnostic parallel kernels
+* [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) - (CUDA-aware) MPI communication
+* [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl) - Material physics
+* [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) - Particle-in-cell advection
 
 
 The package serves several purposes:

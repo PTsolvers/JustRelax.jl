@@ -306,6 +306,15 @@ Compute the tensor invariant of the given symmetric tensor `A`.
 - `A::JustRelax.SymmetricTensor`: The input symmetric tensor.
 """
 function tensor_invariant!(A::JustRelax.SymmetricTensor)
+    tensor_invariant!(backend(A), A)
+    return nothing
+end
+
+function tensor_invariant!(::CPUBackendTrait, A::JustRelax.SymmetricTensor)
+    _tensor_invariant!(A)
+end
+
+function _tensor_invariant!(A::JustRelax.SymmetricTensor)
     ni = size(A.II)
     @parallel (@idx ni) tensor_invariant_kernel!(A.II, @tensor(A)...)
     return nothing

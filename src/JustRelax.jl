@@ -31,6 +31,9 @@ include("types/heat_diffusion.jl")
 include("types/phases.jl")
 # export PhaseRatio
 
+include("boundaryconditions/types.jl")
+export TemperatureBoundaryConditions, FlowBoundaryConditions
+
 include("types/traits.jl")
 export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 

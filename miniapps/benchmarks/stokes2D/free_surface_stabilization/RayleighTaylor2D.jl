@@ -40,24 +40,25 @@ function init_phases!(phases, particles, A)
         
         @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
-            @cell(index[ip, i, j]) == 0 && continue
+            JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
-            x = @cell px[ip, i, j]
-            depth = -(@cell py[ip, i, j]) 
-            @cell phases[ip, i, j] = 2.0
+            x = JustRelax.@cell px[ip, i, j]
+            depth = -(JustRelax.@cell py[ip, i, j]) 
+            JustRelax.@cell phases[ip, i, j] = 2.0
             
             if 0e0 ≤ depth ≤ 100e3
-                @cell phases[ip, i, j] = 1.0
+                JustRelax.@cell phases[ip, i, j] = 1.0
 
             elseif depth > (-f(x, A, 500e3) + (200e3 - A))
-                @cell phases[ip, i, j] = 3.0          
+                JustRelax.@cell phases[ip, i, j] = 3.0
+
             end
 
         end
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, A)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, A)
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
@@ -117,7 +118,7 @@ function RT_2D(igg, nx, ny)
     A             = 5e3    # Amplitude of the anomaly
     phase_ratios  = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, A)
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
+    phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -144,20 +145,6 @@ function RT_2D(igg, nx, ny)
         free_surface = true,
     )
 
-    # Plot initial T and η profiles
-    let
-        Y   = [y for x in xci[1], y in xci[2]][:]
-        fig = Figure(size = (1200, 900))
-        ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-        ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        scatter!(ax1, Array(ρg[2][:]./9.81), Y./1e3)
-        scatter!(ax2, Array(log10.(η[:])), Y./1e3)
-        ylims!(ax1, minimum(xvi[2])./1e3, 0)
-        ylims!(ax2, minimum(xvi[2])./1e3, 0)
-        hideydecorations!(ax2)
-        fig
-    end
-
     Vx_v = @zeros(ni.+1...)
     Vy_v = @zeros(ni.+1...)
 
@@ -181,8 +168,6 @@ function RT_2D(igg, nx, ny)
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             phase_ratios,
             rheology,
             args,

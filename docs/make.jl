@@ -14,12 +14,13 @@ makedocs(;
         "Home"      => "man/index.md",
         "User guide"=> Any[
             "Installation" => "man/installation.md",
-        ],
-        "Backend"   => "man/backend.md",
-        "Equations" => "man/equations.md",
-        "Advection" => "man/advection.md",
+            "Backend"   => "man/backend.md",
+            "Equations" => "man/equations.md",
+            "Advection" => "man/advection.md",
+            ],
         "Examples"  => Any[
             "Blankenbach" => "man/Blankenbach.md",
+            "Shear Bands" => "man/ShearBands.md",
             ],
         "List of functions" => "man/listfunctions.md",
     ],

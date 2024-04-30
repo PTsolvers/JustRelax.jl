@@ -40,20 +40,20 @@ function init_phases!(phases, particles)
 
         @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
-            @cell(index[ip, i, j]) == 0 && continue
+            JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
-            x = @cell px[ip, i, j]
-            depth = -(@cell py[ip, i, j]) 
-            @cell phases[ip, i, j] = 2.0
+            x = JustRelax.@cell px[ip, i, j]
+            depth = -(JustRelax.@cell py[ip, i, j]) 
+            JustRelax.@cell phases[ip, i, j] = 2.0
 
             if 0e0 ≤ depth ≤ 100e3
-                @cell phases[ip, i, j] = 1.0
+                JustRelax.@cell phases[ip, i, j] = 1.0
 
             else
-                @cell phases[ip, i, j] = 2.0
+                JustRelax.@cell phases[ip, i, j] = 2.0
 
                 if ((x - 250e3)^2 + (depth - 250e3)^2 ≤ r^2)
-                    @cell phases[ip, i, j] = 3.0
+                    JustRelax.@cell phases[ip, i, j] = 3.0
                 end
             end
 
@@ -143,6 +143,7 @@ function main(igg, nx, ny)
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left = true, right=true, top=true, bot=true),
+        # free_surface = true
     )
 
     # Plot initial T and η profiles
@@ -188,9 +189,10 @@ function main(igg, nx, ny)
             dt,
             igg;
             kwargs = (;
-                iterMax = 150e3,
-                nout=1e3,
-                viscosity_cutoff=(-Inf, Inf)
+                iterMax          = 150e3,
+                nout             = 1e3,
+                viscosity_cutoff = (-Inf, Inf),
+                free_surface     = true
             )
         )
         dt = compute_dt(stokes, di) / 2
@@ -210,7 +212,7 @@ function main(igg, nx, ny)
         t        += dt
 
         if it == 1 || rem(it, 5) == 0
-            JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 5
             fig = Figure(resolution = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(t/(1e3 * 3600 * 24 *365.25)) Kyrs")

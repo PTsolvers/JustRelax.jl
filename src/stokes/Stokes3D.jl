@@ -24,7 +24,7 @@ solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kw
 
 function _solve!(
     stokes::JustRelax.StokesArrays,
-    pt_stokes::PTStokesCoeffs,
+    pt_stokes,
     di::NTuple{3,T},
     flow_bcs,
     ρg,
@@ -158,7 +158,7 @@ end
 
 function _solve!(
     stokes::JustRelax.StokesArrays,
-    pt_stokes::PTStokesCoeffs,
+    pt_stokes,
     di::NTuple{3,T},
     flow_bcs::FlowBoundaryConditions,
     ρg,
@@ -331,7 +331,7 @@ end
 # GeoParams and multiple phases
 function _solve!(
     stokes::JustRelax.StokesArrays,
-    pt_stokes::PTStokesCoeffs,
+    pt_stokes,
     di::NTuple{3,T},
     flow_bc::FlowBoundaryConditions,
     ρg,

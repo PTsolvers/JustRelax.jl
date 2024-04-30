@@ -1,7 +1,7 @@
 push!(LOAD_PATH, "..")
 
 using Test, Suppressor
-using GeoParams, CellArrays
+using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -91,7 +91,7 @@ function ShearBand2D()
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatio(ni, length(rheology))
+    phase_ratios = PhaseRatio(backend, ni, length(rheology))
     init_phases!(phase_ratios, xci, radius)
 
     # STOKES ---------------------------------------------

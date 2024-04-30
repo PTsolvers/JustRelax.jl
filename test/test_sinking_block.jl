@@ -10,7 +10,7 @@ const backend_JR = CPUBackend
 using JustPIC, JustPIC._2D
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using Printf, LinearAlgebra, GeoParams, CellArrays
+using GeoParams
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -151,7 +151,6 @@ function Sinking_Block2D()
 
     # Stokes solver ----------------
     args = (; T = @ones(ni...), P = stokes.P, dt=dt, ΔTc = @zeros(ni...))
-    local iters, velocity
     iters = solve!(
         stokes,
         pt_stokes,
@@ -181,8 +180,6 @@ function Sinking_Block2D()
     finalize_global_grid(; finalize_MPI = true)
 
     return iters, velocity
-
-
 end
 
 @testset "Sinking_Block2D" begin

@@ -1,7 +1,7 @@
 push!(LOAD_PATH, "..")
 
 using Test, Suppressor
-using GeoParams, CellArrays
+using GeoParams
 using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)

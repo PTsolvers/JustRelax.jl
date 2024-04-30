@@ -145,6 +145,7 @@ function Shearheating2D()
     t, it = 0.0, 0
     local iters, thermal
     while it < 10
+        
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))

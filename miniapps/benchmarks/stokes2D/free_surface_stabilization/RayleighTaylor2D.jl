@@ -1,19 +1,17 @@
 # using CUDA
-using JustRelax, JustRelax.DataIO
-
-# setup ParallelStencil.jl environment
-model = PS_Setup(:Threads, Float64, 2)
-environment!(model)
+using JustRelax, JustRelax.JustRelax2D
+const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
-const backend = CPUBackend
+const backend = JustPIC.CPUBackend
 
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using LinearAlgebra, GeoParams, GLMakie
 
+## START OF HELPER FUNCTION ----------------------------------------------------------
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
         @all(A) = @inn_x(B)
@@ -38,7 +36,7 @@ function init_phases!(phases, particles, A)
     
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, A)
         
-        f(x, A, λ) = A * sin(π*x/λ)
+        f(x, A, λ) = A * sin(π * x / λ)
         
         @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
@@ -117,31 +115,27 @@ function RT_2D(igg, nx, ny)
 
     # Elliptical temperature anomaly 
     A             = 5e3    # Amplitude of the anomaly
+    phase_ratios  = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, A)
-    phase_ratios  = PhaseRatio(ni, length(rheology))
     @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes           = StokesArrays(ni, ViscoElastic)
+    stokes           = StokesArrays(backend_JR, ni)
     pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-8,  CFL = 0.95 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal          = ThermalArrays(ni)
+    thermal          = ThermalArrays(backend_JR, ni)
     # ----------------------------------------------------
    
     # Buoyancy forces & rheology
     ρg               = @zeros(ni...), @zeros(ni...)
-    η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
-    @parallel (@idx ni) compute_viscosity!(
-        η, 0.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, 1e24)
-    )
-    η_vep            = copy(η)
+    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(; 
@@ -176,13 +170,11 @@ function RT_2D(igg, nx, ny)
     dt_max = 50e3 * (3600 * 24 * 365.25)
     while it < 500 # run only for 5 Myrs
 
+        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)       
+        compute_ρg!(ρg[2], phase_ratios, rheology, args)
+        compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+
         # Stokes solver ----------------
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        
-        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
-        @parallel (@idx ni) compute_viscosity!(
-            η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
-        )
         solve!(
             stokes,
             pt_stokes,
@@ -196,12 +188,14 @@ function RT_2D(igg, nx, ny)
             args,
             dt,
             igg;
-            iterMax              = 150e3,
-            iterMin              =   5e3,
-            viscosity_relaxation =  1e-2,
-            nout                 =   5e3,
-            free_surface         =  true,
-            viscosity_cutoff     = (-Inf, Inf)
+            kwargs = (
+                iterMax              = 150e3,
+                iterMin              =   5e3,
+                viscosity_relaxation =  1e-2,
+                nout                 =   5e3,
+                free_surface         =  true,
+                viscosity_cutoff     = (-Inf, Inf)
+            )
         )
         dt = if it ≤ 10
             min(compute_dt(stokes, di),  1e3 * (3600 * 24 * 365.25))
@@ -216,21 +210,20 @@ function RT_2D(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
+        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)        
         # check if we need to inject particles
-        inject = check_injection(particles)
-        inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
         # @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
-    
+        phase_ratios_center(phase_ratios, particles, grid, pPhases)
+
         @show it += 1
         t        += dt
 
         if it == 1 || rem(it, 5) == 0
-            JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 2
 
             p        = particles.coords
@@ -256,7 +249,6 @@ function RT_2D(igg, nx, ny)
             )
             fig
             save(joinpath(figdir, "$(it).png"), fig)
-
         end
 
     end

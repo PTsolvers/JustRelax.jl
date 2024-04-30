@@ -1,12 +1,14 @@
 using JustRelax, JustRelax.JustRelax2D
+const backend_JR = CPUBackend
+
 using JustPIC, JustPIC._2D
-const backend = CPUBackend
+const backend = JustPIC.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using LinearAlgebra, GeoParams, GLMakie
 
 # Velocity helper grids for the particle advection
 function copyinn_x!(A, B)
@@ -117,18 +119,18 @@ function main(igg, nx, ny)
 
     # Elliptical temperature anomaly
     init_phases!(pPhases, particles)
-    phase_ratios  = PhaseRatio(ni, length(rheology))
+    phase_ratios  = PhaseRatio(backend_JR, ni, length(rheology))
     phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes           = StokesArrays(ni, ViscoElastic)
+    stokes           = StokesArrays(backend_JR, ni)
     pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.95 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal          = ThermalArrays(ni)
+    thermal          = ThermalArrays(backend_JR, ni)
     # ----------------------------------------------------
 
     # Buoyancy forces & rheology
@@ -196,12 +198,11 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
+        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
-        inject = check_injection(particles)
-        inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
         phase_ratios_center(phase_ratios, particles, grid, pPhases)
  

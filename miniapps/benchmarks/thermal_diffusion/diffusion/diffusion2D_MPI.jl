@@ -1,15 +1,14 @@
 # using CairoMakie
-using JustRelax, GeoParams
-using GLMakie
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+using JustRelax, JustRelax.JustRelax2D
+const backend_JR = CPUBackend
 
-# setup ParallelStencil.jl environment
-dimension = 2 # 2 | 3
-device = :cpu # :cpu | :CUDA | :AMDGPU
-precision = Float64
-model = PS_Setup(device, precision, dimension)
-environment!(model)
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+
+import JustRelax.@cell
+using GeoParams
+
+using GLMakie
 
 @parallel_indices (i, j) function init_T!(T, z, lz)
     if z[j] ≥ 0.0
@@ -70,7 +69,7 @@ function diffusion_2D(;
     args       = (; P=P)
 
     ## Allocate arrays needed for every Thermal Diffusion
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend_JR, ni)
     thermal.H .= 1e-6 # radiogenic heat production
     # physical parameters
     ρ          = @fill(ρ0, ni...)
@@ -78,7 +77,7 @@ function diffusion_2D(;
     K          = @fill(K0, ni...)
     ρCp        = @. Cp * ρ
 
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li)
+    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
@@ -89,6 +88,7 @@ function diffusion_2D(;
     r                   = 10e3 # thermal perturbation radius
     center_perturbation = lx/2, -ly/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
+    temperature2center!(thermal)
 
     # global array
     nx_v = ((nx + 2) - 2) * igg.dims[1]
@@ -108,8 +108,10 @@ function diffusion_2D(;
             args,
             dt,
             di;
-            igg=igg,
-            b_width=(4, 4, 1),
+            kwargs = (;
+                igg     = igg,
+                b_width = (4, 4, 1),
+            )
         )
 
         @views T_nohalo .= Array(thermal.T[2:end-2, 2:end-1]) # Copy data to CPU removing the halo

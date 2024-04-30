@@ -1,3 +1,17 @@
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
+
+using Printf, LinearAlgebra, GeoParams, CellArrays
+using JustRelax, JustRelax.JustRelax2D
+import JustRelax.@cell
+const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+
+using JustPIC, JustPIC._2D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+
 @parallel_indices (i, j) function init_T!(T, z)
     if z[j] == maximum(z)
         T[i, j] = 300.0
@@ -26,9 +40,8 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     Myr      = 1e3 * kyr
     ttot     = 1 * Myr # total simulation time
     dt       = 50 * kyr # physical time step
-
     init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg    = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+    igg      = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
     # Physical domain
     ni           = (nx, ny)
@@ -50,7 +63,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     args       = (; P=P)
 
     ## Allocate arrays needed for every Thermal Diffusion
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend_JR, ni)
     thermal.H .= 1e-6 # radiogenic heat production
     # physical parameters
     ρ          = @fill(ρ0, ni...)
@@ -58,7 +71,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     K          = @fill(K0, ni...)
     ρCp        = @. Cp * ρ
 
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li)
+    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
@@ -69,11 +82,13 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     r                   = 10e3 # thermal perturbation radius
     center_perturbation = lx/2, -ly/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
+    temperature2center!(thermal)
 
     # Time loop
     t  = 0.0
     it = 0
     nt = Int(ceil(ttot / dt))
+
     while it < nt
         heatdiffusion_PT!(
             thermal,
@@ -82,7 +97,8 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
             rheology,
             args,
             dt,
-            di,
+            di;
+            kwargs = (; verbose=false),
         )
 
         t  += dt

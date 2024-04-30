@@ -1,28 +1,19 @@
-using CUDA
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax2D
-# using JustRelax.DataIO
-# import JustRelax.@cell
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
-# @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
-@init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+const backend_JR = CPUBackend
 
-using JustPIC
-using JustPIC._2D
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+@init_parallel_stencil(Threads, Float64, 2)
+
+using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-# const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-
-# setup ParallelStencil.jl environment
-# model = PS_Setup(:cpu, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
-# environment!(model)
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CellArrays
-using GLMakie
+using GeoParams
 
 # Load file with all the rheology configurations
 include("Shearheating_rheology.jl")
@@ -74,7 +65,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 10
+    nxcell, max_xcell, min_xcell = 20, 32, 12
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
     )
@@ -85,22 +76,22 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     particle_args    = (pT, pPhases)
 
     # Elliptical temperature anomaly
-    xc_anomaly       = lx/2 # origin of thermal anomaly
-    yc_anomaly       = 40e3 # origin of thermal anomaly
-    r_anomaly        = 3e3  # radius of perturbation
-    phase_ratios     = PhaseRatio(backend, ni, length(rheology))
+    xc_anomaly       = lx / 2 # origin of thermal anomaly
+    yc_anomaly       = 40e3   # origin of thermal anomaly
+    r_anomaly        = 3e3    # radius of perturbation
+    phase_ratios     = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
     phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes           = StokesArrays(backend, ni)
+    stokes           = StokesArrays(backend_JR, ni)
     pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal          = ThermalArrays(backend, ni)
+    thermal          = ThermalArrays(backend_JR, ni)
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux      = (left = true, right = true, top = false, bot = false),
     )
@@ -112,30 +103,37 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # ----------------------------------------------------
 
     # Buoyancy forces
-    ρg = @zeros(ni...), @zeros(ni...)
+    ρg               = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    compute_viscosity!(
-        stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
-    )
+    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+
     # PT coefficients for thermal diffusion
-    pt_thermal = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-1 / √2.1
+    pt_thermal       = PTThermalCoeffs(
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-3 / √2.1
     )
 
     # Boundary conditions
-    flow_bcs      = FlowBoundaryConditions(;
-        free_slip = (left = true, right=true, top=true, bot=true),
+    flow_bcs         = FlowBoundaryConditions(;
+        free_slip    = (left = true, right=true, top=true, bot=true),
     )
     ## Compression and not extension - fix this
-    εbg          = 5e-14
-    stokes.V.Vx .= PTArray(backend )([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray(backend)([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
+    εbg              = 5e-14
+    stokes.V.Vx     .= PTArray(backend_JR)([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy     .= PTArray(backend_JR)([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
+
+    T_buffer    = @zeros(ni.+1)
+    Told_buffer = similar(T_buffer)
+    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+        copyinn_x!(dst, src)
+    end
+    grid2particle!(pT, xvi, T_buffer, particles)
+
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -162,18 +160,12 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         fig
     end
 
-    T_buffer    = @zeros(ni.+1)
-    Told_buffer = similar(T_buffer)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, xvi, T_buffer, particles)
-
     local Vx_v, Vy_v
     if do_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
     end
+
     # Time loop
     t, it = 0.0, 0
     while it < 1
@@ -240,21 +232,20 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
             )
             # ------------------------------
 
-            # Advection --------------------
-            # advect particles in space
-            advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
-            # advect particles in memory
-            move_particles!(particles, xvi, particle_args)
-            # interpolate fields from grid vertices to particles
-            for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-                copyinn_x!(dst, src)
-            end
-            grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
-            # check if we need to inject particles
-            inject = check_injection(particles)
-            inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
-            # update phase ratios
-            phase_ratios_center(phase_ratios, particles, grid, pPhases)
+           # Advection --------------------
+        # advect particles in space
+        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        # advect particles in memory
+        move_particles!(particles, xvi, particle_args)
+        # interpolate fields from grid vertices to particles
+        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+            copyinn_x!(dst, src)
+        end
+        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
+        # update phase ratios
+        phase_ratios_center(phase_ratios, particles, grid, pPhases)
 
             @show it += 1
             t        += dt

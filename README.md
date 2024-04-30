@@ -58,19 +58,17 @@ The test will take a while, so grab a :coffee: or :tea:
 
 ## Example: shear band localisation (2D)
 
-![ShearBand2D](miniapps/benchmarks/stokes2D/shear_band/movies/DP_nx2058_2D.gif)
+![ShearBand2D](docs/src/assets/movies/DP_nx2058_2D.gif)
 
 This example displays how the package can be used to simulate shear band localisation. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl).
 
 ```julia
-using GeoParams, GLMakie, CellArrays
-using JustRelax, JustRelax.DataIO
+using GeoParams, CellArrays, GLMakie
+using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
-# setup ParallelStencil.jl environment
-model  = PS_Setup(:Threads, Float64, 2)
-environment!(model)
+const backend = CPUBackend
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -101,30 +99,33 @@ function init_phases!(phase_ratios, xci, radius)
 end
 ```
 
-JustRelax allows to setup a model environment `PS_Setup` (and interplay with the underlying ParallelStencil package) to specify the dimension of the problem (2D or 3D) and the backend (CPU or GPU). The `PS_setup` functions takes `device`, `precision` and `dimensions` as argument:
+# Initialize packages
 
+Load JustRelax necessary modules and define backend.
 ```julia
-  model = PS_Setup(:Threads, Float64, 2)  #running on the CPU in 2D
-  environment!(model)
-
-  model = PS_Setup(:CUDA, Float64, 2)     #running on an NVIDIA GPU in 2D
-  environment!(model)
-
-  model = PS_Setup(:AMDGPU, Float64, 2)   #running on an AMD GPU in 2D
-  environment!(model)
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+const backend_JR = JustRelax.CPUBackend
 ```
-If you therefore want to run a 3D code, change the `dimensions` to 3 in the commands above.
 
 For this specific example we use particles to define the material phases, for which we rely on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). As in `JustRelax.jl`, we need to set up the environment of `JustPIC.jl`. This is done by running/including the following commands:
-
 
 ```julia
   using JustPIC
   using JustPIC._2D
 
-  const backend = CPUBackend    # Threads is the default backend
-  const backend = CUDABackend   # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script
-  const backend = AMDGPUBackend # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+  const backend = JustPIC.CPUBackend    # Threads is the default backend
+  const backend = JustPIC.CUDABackend   # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script
+  const backend = JustPIC.AMDGPUBackend # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+```
+
+We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
+```julia
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+```
+and will use [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl/tree/main) to define and compute physical properties of the materials:
+```julia
+using GeoParams
 ```
 
 For the initial setup, you will need to specify the number of nodes in x- and y- direction `nx` and `ny` as well as the directory where the figures are stored (`figdir`). The initialisation of the global grid and MPI environment is done with `igg = IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)`:
@@ -138,18 +139,19 @@ figdir = "ShearBands2D"
 igg    = IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)
 ```
 
-Initialisation of the physical domain and the grid. As `JustRelax.jl` relies on [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl), the grid can be `MPIAWARE` through setting the grid steps in x- and y- direction to ` di = @. li / (nx_g(),ny_g())`. This makes it a global grid and the grid steps are automatically distributed over the MPI processes.
+Initialisation of the physical domain and the grid. As `JustRelax.jl` relies on [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl), the grid can be `MPIAWARE`. This makes it a global grid and the grid steps are automatically distributed over the MPI processes.
 
 ```julia
 # Physical domain ------------------------------------
-ly       = 1e0          # domain length in y
-lx       = ly           # domain length in x
-ni       = nx, ny       # number of cells
-li       = lx, ly       # domain length in x- and y-
-di       = @. li / ni   # grid step in x- and -y
-origin   = 0.0, 0.0     # origin coordinates
-xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
-dt       = Inf
+ly           = 1.0                      # domain length in y
+lx           = ly                       # domain length in x
+ni           = nx, ny                   # number of cells
+li           = lx, ly                   # domain length in x- and y-
+di           = @. li / ni               # grid step in x- and -y
+origin       = 0.0, 0.0                 # origin coordinates
+grid         = Geometry(ni, li; origin = origin)
+(; xci, xvi) = grid                     # nodes at the center and vertices of the cells
+dt           = Inf
 ```
 Initialisation of the rheology with [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). The rheology can be tailored to the specific problem with different creep laws and material parameters (see [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) or the miniapps in the [convection folder](miniapps/convection).
 
@@ -196,22 +198,19 @@ Initialisation of the Stokes arrays and the necessary allocations. The rheology 
 ```julia
 # Initialize phase ratios -------------------------------
 radius       = 0.1
-phase_ratios = PhaseRatio(ni, length(rheology))
+phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
 init_phases!(phase_ratios, xci, radius)
 # STOKES ---------------------------------------------
 # Allocate arrays needed for every Stokes problem
-stokes    = StokesArrays(ni, ViscoElastic)
+stokes = StokesArrays(backend_JR, ni)
 pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1)
 # PT coefficients after Räss, L., Utkin, I., Duretz, T., Omlin, S., and Podladchikov, Y. Y.: Assessing the robustness and scalability of the accelerated pseudo-transient method, Geosci. Model Dev., 15, 5757–5786, https://doi.org/10.5194/gmd-15-5757-2022, 2022.
 # Buoyancy forces
-ρg        = @zeros(ni...), @zeros(ni...)
-args      = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
-# Viscosity
-η         = @ones(ni...)
-η_vep     = similar(η) # effective visco-elasto-plastic viscosity
-@parallel (@idx ni) compute_viscosity!(
-    η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
-)
+ρg               = @zeros(ni...), @zeros(ni...)
+η                = @ones(ni...)
+args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+compute_ρg!(ρg[2], phase_ratios, rheology, args)
+compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
 ```
 
 Define pure shear velocity boundary conditions
@@ -238,26 +237,26 @@ t, it, tmax    = 0.0, 0,  3.5
 
 while t < tmax
     # Stokes solver ----------------
-    solve!(
-        stokes,
-        pt_stokes,
-        di,
-        flow_bcs,
-        ρg,
-        η,
-        η_vep,
-        phase_ratios,
-        rheology,
-        args,
-        dt,
-        igg;
-        verbose          = false,
-        iterMax          = 500e3,
-        nout             = 1e3,
-        viscosity_cutoff = (-Inf, Inf)
-    )
+  solve!(
+      stokes,
+      pt_stokes,
+      di,
+      flow_bcs,
+      ρg,
+      phase_ratios,
+      rheology,
+      args,
+      dt,
+      igg;
+      kwargs = (;
+          iterMax          = 150e3,
+          nout             = 200,
+          viscosity_cutoff = (-Inf, Inf),
+          verbose          = true
+      )
+  )
     # Compute second invariant of the strain rate tensor
-    @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+    tensor_invariant!(stokes.ε)
     push!(τII, maximum(stokes.τ.xx))
     # Update old stresses
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -267,22 +266,24 @@ while t < tmax
 
     it += 1
     t  += dt
+
     push!(sol, solution(εbg, t, G0, η0))
     push!(ttot, t)
 
     println("it = $it; t = $t \n")
 
-    # visualisation
+    # visualisation of high density inclusion
     th    = 0:pi/50:3*pi;
     xunit = @. radius * cos(th) + 0.5;
     yunit = @. radius * sin(th) + 0.5;
+
     fig   = Figure(size = (1600, 1600), title = "t = $t")
-    ax1   = Axis(fig[1,1], aspect = 1, title = "τII")
-    ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
-    ax3   = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
+    ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}", titlesize=35)
+    ax2   = Axis(fig[2,1], aspect = 1, title = L"E_{II}", titlesize=35)
+    ax3   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize=35)
     ax4   = Axis(fig[2,2], aspect = 1)
     heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-    heatmap!(ax2, xci..., Array(log10.(η_vep)) , colormap=:batlow)
+    heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
     heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
     lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
     lines!(ax4, ttot, τII, color = :black)
@@ -290,21 +291,24 @@ while t < tmax
     hidexdecorations!(ax1)
     hidexdecorations!(ax3)
     save(joinpath(figdir, "$(it).png"), fig)
+    fig
 end
 ```
 
 ## Miniapps
 
-Currently there are 3 convection miniapps with particles and 3 corresponding miniapps without. The miniapps with particles are:
+Currently there are 4 convection miniapps with particles and 4 corresponding miniapps without. The miniapps with particles are:
 
   * [Layered_convection2D.jl](miniapps/convection/Particles2D/Layered_convection2D.jl)
+  * [Layered_convection2D_nonDim.jl](miniapps/convection/Particles2D_nonDim/Layered_convection2D.jl)
   * [Layered_convection3D.jl](miniapps/convection/Particles3D/Layered_convection3D.jl)
   * [WENO_convection2D.jl](miniapps/convection/WENO5/WENO_convection2D.jl)
 
 The miniapps without particles are:
   * [GlobalConvection2D_Upwind.jl](miniapps/convection/GlobalConvection2D_Upwind.jl)
-  * [GlobalConvection3D_Upwind.jl](miniapps/convection/GlobalConvection3D_Upwind.jl)
   * [GlobalConvection2D_WENO5.jl](miniapps/convection/GlobalConvection2D_WENO5.jl)
+  * [GlobalConvection2D_WENO5_MPI.jl](miniapps/convection/GlobalConvection2D_WENO5_MPI.jl)
+  * [GlobalConvection3D_Upwind.jl](miniapps/convection/GlobalConvection3D_Upwind.jl)
 
 ## Benchmarks
 

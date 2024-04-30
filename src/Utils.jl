@@ -412,7 +412,7 @@ end
 
 Compute the time step `dt` for the velocity field `S.V` for a regular grid with grid spacing `di`.
 """
-@inline _compute_dt(S::JustRelax.StokesArrays, di) = compute_dt(@velocity(S), di, Inf)
+@inline _compute_dt(S::JustRelax.StokesArrays, di) = _compute_dt(@velocity(S), di, Inf)
 
 """
     compute_dt(S::JustRelax.StokesArrays, di, dt_diff)

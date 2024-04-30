@@ -129,8 +129,8 @@ function Shearheating2D()
     )
     ## Compression and not extension - fix this
     εbg              = 5e-14
-    stokes.V.Vx     .= PTArray([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy     .= PTArray([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
+    stokes.V.Vx     .= PTArray(backend_JR)([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy     .= PTArray(backend_JR)([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
@@ -154,7 +154,7 @@ function Shearheating2D()
         # ------------------------------
 
         # Stokes solver ----------------
-        solve!(
+        iters = solve!(
             stokes,
             pt_stokes,
             di,

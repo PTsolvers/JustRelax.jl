@@ -124,7 +124,7 @@ function RT_2D(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-8,  CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -142,6 +142,7 @@ function RT_2D(igg, nx, ny)
     flow_bcs         = FlowBoundaryConditions(; 
         free_slip    = (left =  true, right =  true, top =  true, bot = false),
         no_slip      = (left = false, right = false, top = false, bot =  true),
+        # free_slip    = (left =  true, right =  true, top =  true, bot = true),
         free_surface = true,
     )
 
@@ -174,9 +175,9 @@ function RT_2D(igg, nx, ny)
             dt,
             igg;
             kwargs = (
-                iterMax              = 150e3,
-                iterMin              =   5e3,
-                viscosity_relaxation =  1e-2,
+                iterMax              = 50e3,
+                iterMin              =  1e3,
+                # viscosity_relaxation =  1e-2,
                 nout                 =   5e3,
                 free_surface         =  true,
                 viscosity_cutoff     = (-Inf, Inf)
@@ -201,7 +202,6 @@ function RT_2D(igg, nx, ny)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        # @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
         phase_ratios_center(phase_ratios, particles, grid, pPhases)
 
         @show it += 1

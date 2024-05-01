@@ -143,6 +143,7 @@ function main(igg, nx, ny)
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left = true, right = true, top = true, bot = true),
+        free_surface = true
     )
 
     Vx_v = @zeros(ni.+1...)
@@ -153,7 +154,7 @@ function main(igg, nx, ny)
 
     # Time loop
     t, it = 0.0, 0
-    dt = 1e3 * (3600 * 24 *365.25)
+    dt = 1e3 * (3600 * 24 * 365.25)
     while it < 15 # run only for 5 Myrs
 
         # Stokes solver ----------------

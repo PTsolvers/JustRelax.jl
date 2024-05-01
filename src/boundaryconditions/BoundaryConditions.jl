@@ -214,20 +214,6 @@ function free_surface_bcs!(
     end
 end
 
-# function free_surface_bcs!(stokes::JustRelax.StokesArrays, bcs::FlowBoundaryConditions)
-#     if bcs.free_surface
-#         @views stokes.τ.yy[:, end] .= 0.0
-#     end
-# end
-
-# function free_surface_bcs!(
-#     stokes::JustRelax.StokesArrays{A,B,C,D,E,3}, bcs::FlowBoundaryConditions
-# ) where {A,B,C,D,E}
-#     if bcs.free_surface
-#         @views stokes.τ.zz[:, :, end] .= 0.0
-#     end
-# end
-
 @parallel_indices (i) function FreeSurface_Vy!(
     Vx::AbstractArray{T,2},
     Vy::AbstractArray{T,2},
@@ -243,15 +229,16 @@ end
 ) where {T}
     phase = @inbounds phase_ratios[i, end]
     Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
+    ν = 1e-2
     Vy[i + 1, end] =
-        Vy[i + 1, end - 1] +
-        3.0 / 2.0 *
+        ν * (Vy[i + 1, end - 1] +
+        (3 / 2) *
         (
-            P[i, end] / (2.0 * η[i, end]) -
-            (τyy_old[i, end] + P_old[i, end]) / (2.0 * Gdt) +
+            P[i, end] / (2.0 * η[i, end]) + #-
+            # (τyy_old[i, end] + P_old[i, end]) / (2.0 * Gdt) +
             inv(3.0) * (Vx[i + 1, end - 1] - Vx[i, end - 1]) * inv(dx)
         ) *
-        dy
+        dy) + (1 - ν) * Vy[i + 1, end] 
     return nothing
 end
 

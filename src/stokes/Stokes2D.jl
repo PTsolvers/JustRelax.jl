@@ -569,6 +569,8 @@ function _solve!(
             )
 
             @hide_communication b_width begin # communication/computation overlap
+                flow_bcs!(stokes, flow_bcs)
+                
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     Vx_on_Vy,
@@ -582,7 +584,7 @@ function _solve!(
                 )
                 # apply boundary conditions
                 free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
-                flow_bcs!(stokes, flow_bcs)
+                # flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end
         end

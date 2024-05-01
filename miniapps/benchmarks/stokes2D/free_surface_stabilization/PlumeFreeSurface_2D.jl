@@ -142,24 +142,8 @@ function main(igg, nx, ny)
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(;
-        free_slip    = (left = true, right=true, top=true, bot=true),
-        # free_surface = true
+        free_slip    = (left = true, right = true, top = true, bot = true),
     )
-
-    # Plot initial T and η profiles
-    let
-        Y   = [y for x in xci[1], y in xci[2]][:]
-        fig = Figure(size = (1200, 900))
-        ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-        ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        scatter!(ax1, Array(ρg[2][:]./9.81), Y./1e3)
-        scatter!(ax2, Array(log10.(stokes.viscosity.η[:])), Y./1e3)
-        # scatter!(ax2, Array(stokes.P[:]), Y./1e3)
-        ylims!(ax1, minimum(xvi[2])./1e3, 0)
-        ylims!(ax2, minimum(xvi[2])./1e3, 0)
-        hideydecorations!(ax2)
-        fig
-    end
 
     Vx_v = @zeros(ni.+1...)
     Vy_v = @zeros(ni.+1...)
@@ -170,13 +154,13 @@ function main(igg, nx, ny)
     # Time loop
     t, it = 0.0, 0
     dt = 1e3 * (3600 * 24 *365.25)
-    while it < 10 # run only for 5 Myrs
+    while it < 15 # run only for 5 Myrs
 
         # Stokes solver ----------------
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
         compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
-
+        
         solve!(
             stokes,
             pt_stokes,
@@ -189,7 +173,7 @@ function main(igg, nx, ny)
             dt,
             igg;
             kwargs = (;
-                iterMax          = 150e3,
+                iterMax          = 50e3,
                 nout             = 1e3,
                 viscosity_cutoff = (-Inf, Inf),
                 free_surface     = true
@@ -207,14 +191,14 @@ function main(igg, nx, ny)
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
         phase_ratios_center(phase_ratios, particles, grid, pPhases)
- 
+    
         @show it += 1
         t        += dt
 
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || rem(it, 1) == 0
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 5
-            fig = Figure(resolution = (900, 900), title = "t = $t")
+            fig = Figure(size = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(t/(1e3 * 3600 * 24 *365.25)) Kyrs")
             heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η)), colormap = :grayC)
             arrows!(

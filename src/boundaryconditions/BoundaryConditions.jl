@@ -231,14 +231,16 @@ end
     Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
     ν = 1e-2
     Vy[i + 1, end] =
-        ν * (Vy[i + 1, end - 1] +
-        (3 / 2) *
-        (
-            P[i, end] / (2.0 * η[i, end]) + #-
-            # (τyy_old[i, end] + P_old[i, end]) / (2.0 * Gdt) +
-            inv(3.0) * (Vx[i + 1, end - 1] - Vx[i, end - 1]) * inv(dx)
-        ) *
-        dy) + (1 - ν) * Vy[i + 1, end] 
+        ν * (
+            Vy[i + 1, end - 1] +
+            (3 / 2) *
+            (
+                P[i, end] / (2.0 * η[i, end]) + #-
+                (τyy_old[i, end] + P_old[i, end]) / (2.0 * Gdt) +
+                inv(3.0) * (Vx[i + 1, end - 1] - Vx[i, end - 1]) * inv(dx)
+            ) *
+            dy
+        ) + (1 - ν) * Vy[i + 1, end]
     return nothing
 end
 

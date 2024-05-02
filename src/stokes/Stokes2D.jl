@@ -271,6 +271,7 @@ function _solve!(
     dt,
     igg::IGG;
     viscosity_cutoff=(-Inf, Inf),
+    viscosity_relaxation=1e-2,
     iterMax=10e3,
     nout=500,
     b_width=(4, 4, 0),
@@ -326,8 +327,7 @@ function _solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            ν = 1e-2
-            compute_viscosity!(stokes, ν, args, rheology, viscosity_cutoff)
+            compute_viscosity!(stokes, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation)
             compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
@@ -441,9 +441,9 @@ function _solve!(
     dt,
     igg::IGG;
     viscosity_cutoff=(-Inf, Inf),
+    viscosity_relaxation=1e-2,
     iterMax=50e3,
     iterMin=1e2,
-    viscosity_relaxation=1e-2,
     free_surface=false,
     nout=500,
     b_width=(4, 4, 0),
@@ -520,9 +520,7 @@ function _solve!(
             # stokes.P[1, end] = stokes.P[2, end]
             # stokes.P[end, end] = stokes.P[end - 1, end]
 
-            if rem(iter, 5) == 0
-                compute_ρg!(ρg[2], phase_ratios, rheology, args)
-            end
+            compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -534,11 +532,11 @@ function _solve!(
             if do_visc
                 compute_viscosity!(
                     stokes,
-                    viscosity_relaxation,
                     phase_ratios,
                     args,
                     rheology,
-                    viscosity_cutoff,
+                    viscosity_cutoff;
+                    relaxation = viscosity_relaxation,
                 )
             end
 
@@ -569,8 +567,6 @@ function _solve!(
             )
 
             @hide_communication b_width begin # communication/computation overlap
-                flow_bcs!(stokes, flow_bcs)
-
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     Vx_on_Vy,
@@ -584,7 +580,7 @@ function _solve!(
                 )
                 # apply boundary conditions
                 free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
-                # flow_bcs!(stokes, flow_bcs)
+                flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end
         end

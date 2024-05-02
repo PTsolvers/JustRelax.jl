@@ -167,7 +167,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     
     # Rheology
     viscosity_cutoff = nondimensionalize((1e16Pa*s, 1e24Pa*s), CharDim)
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -235,7 +235,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
         compute_viscosity!(
-            stokes, 1.0, phase_ratios, args, rheology, viscosity_cutoff
+            stokes, phase_ratios, args, rheology, viscosity_cutoff
         )
         # ------------------------------
 

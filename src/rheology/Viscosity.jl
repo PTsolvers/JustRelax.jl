@@ -1,7 +1,8 @@
 ## 2D KERNELS
-function compute_viscosity!(stokes, ν, args, rheology, cutoff)
-    return compute_viscosity!(backend(stokes), ν, args, rheology, cutoff)
+function compute_viscosity!(stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1e0)
+    return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff)
 end
+
 function compute_viscosity!(::CPUBackendTrait, stokes, ν, args, rheology, cutoff)
     return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
 end
@@ -69,9 +70,9 @@ end
     return nothing
 end
 
-function compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+function compute_viscosity!(stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation = 1e0)
     return compute_viscosity!(
-        backend(stokes), stokes, ν, phase_ratios, args, rheology, cutoff
+        backend(stokes), stokes, relaxation, phase_ratios, args, rheology, cutoff
     )
 end
 function compute_viscosity!(
@@ -225,23 +226,6 @@ end
     return local_args
 end
 
-# @generated function compute_phase_viscosity_εII(
-#     rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio, εII, args
-# ) where {N}
-#     quote
-#         Base.@_inline_meta
-#         η = 0.0
-#         Base.@nexprs $N i -> (
-#             η += if iszero(ratio[i])
-#                 0.0
-#             else
-#                 inv(compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args)) * ratio[i]
-#             end
-#         )
-#         inv(η)
-#     end
-# end
-
 @generated function compute_phase_viscosity_εII(
     rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio, εII, args
 ) where {N}
@@ -252,9 +236,26 @@ end
             η += if iszero(ratio[i])
                 0.0
             else
-                compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args) * ratio[i]
+                inv(compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args)) * ratio[i]
             end
         )
-        η
+        inv(η)
     end
 end
+
+# @generated function compute_phase_viscosity_εII(
+#     rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio, εII, args
+# ) where {N}
+#     quote
+#         Base.@_inline_meta
+#         η = 0.0
+#         Base.@nexprs $N i -> (
+#             η += if iszero(ratio[i])
+#                 0.0
+#             else
+#                 compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args) * ratio[i]
+#             end
+#         )
+#         η
+#     end
+# end

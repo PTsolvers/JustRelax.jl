@@ -99,7 +99,7 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
     # Rheology
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
     flow_bcs             = FlowBoundaryConditions(;

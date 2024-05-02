@@ -290,7 +290,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     η = @ones(ni...) # initialise viscosity
 
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, cutoff_visc)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
     η_vep = copy(η)
 
     # Buoyancy force
@@ -362,7 +362,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         # Update buoyancy and viscosity -
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, cutoff_visc)
+        compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
       
         # Stokes solver -----------------
         solve!(

@@ -109,10 +109,8 @@ function ShearBand2D()
     args      = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
 
     # Rheology
-    η         = @ones(ni...)
-    η_vep     = similar(η) # effective visco-elasto-plastic viscosity
     compute_viscosity!(
-        stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
+        stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
 
     # Boundary conditions

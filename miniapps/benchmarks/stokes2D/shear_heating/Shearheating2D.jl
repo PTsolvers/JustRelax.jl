@@ -109,7 +109,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Rheology
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -173,7 +173,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
             args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
             compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
             compute_viscosity!(
-                stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
+                stokes, phase_ratios, args, rheology, (-Inf, Inf)
             )
             # ------------------------------
 

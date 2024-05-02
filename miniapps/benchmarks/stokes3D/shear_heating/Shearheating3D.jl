@@ -1,7 +1,9 @@
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
-using JustRelax, JustRelax.DataIO
+using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 import JustRelax.@cell
+const backend_JR = JustRelax.CPUBackend
+
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64,  3) or (AMDGPU, Float64, 3)
 
@@ -11,10 +13,6 @@ using JustPIC._3D
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-
-# setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 3)  #or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
-environment!(model)
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CellArrays
@@ -42,15 +40,15 @@ end
 function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =false)
 
     # Physical domain ------------------------------------
-    lx           = 70e3           # domain length in x
-    ly           = 70e3           # domain length in y
-    lz           = 40e3              # domain length in y
-    ni           = nx, ny, nz            # number of cells
-    li           = lx, ly, lz            # domain length in x- and y-
-    di           = @. li / (nx_g(),ny_g(),nz_g())        # grid step in x- and -y
-    origin       = 0.0, 0.0, -lz          # origin coordinates (15km f sticky air layer)
+    lx           = 70e3                             # domain length in x
+    ly           = 70e3                             # domain length in y
+    lz           = 40e3                             # domain length in y
+    ni           = nx, ny, nz                       # number of cells
+    li           = lx, ly, lz                       # domain length in x- and y-
+    di           = @. li / (nx_g(),ny_g(),nz_g())   # grid step in x- and -y
+    origin       = 0.0, 0.0, -lz                    # origin coordinates (15km f sticky air layer)
     grid         = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    (; xci, xvi) = grid                             # nodes at the center and vertices of the cells
      # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
@@ -75,43 +73,37 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     yc_anomaly       = ly/2   # origin of thermal anomaly
     zc_anomaly       = 40e3  # origin of thermal anomaly
     r_anomaly        = 3e3    # radius of perturbation
-    init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
+    init_phases!(backend_JR, pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
     phase_ratios     = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes    = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(backend_JR, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal         = ThermalArrays(ni)
-    thermal_bc      = TemperatureBoundaryConditions(;
-        no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
+    thermal     = ThermalArrays(backend_JR, ni)
+    thermal_bc  = TemperatureBoundaryConditions(;
+        no_flux = (left = true , right = true , top = false, bot = false, front = true , back = true),
     )
 
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
     thermal_bcs!(thermal.T, thermal_bc)
-
-    @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
+    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(3))
-
-    @parallel (JustRelax.@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
+    compute_ρg!(ρg[3], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
     @parallel init_P!(stokes.P, ρg[3], xci[3])
 
     # Rheology
-    η                = @ones(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
-    )
-    η_vep            = deepcopy(η)
+    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -167,11 +159,9 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     t, it = 0.0, 0
     while it < 10
             # Update buoyancy and viscosity -
-            args = (; T = thermal.Tc, P = stokes.P,  dt = dt, ΔTc = @zeros(ni...))
-            @parallel (@idx ni) compute_viscosity!(
-                η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
-            )
-            @parallel (JustRelax.@idx ni) compute_ρg!(ρg[3], phase_ratios.center, rheology, args)
+            args = (; T = thermal.Tc, P = stokes.P,  dt = Inf)
+            compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
+            compute_ρg!(ρg[3], phase_ratios, rheology, args)
             # ------------------------------
 
             # Stokes solver ----------------
@@ -181,18 +171,18 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                 di,
                 flow_bcs,
                 ρg,
-                η,
-                η_vep,
                 phase_ratios,
                 rheology,
                 args,
                 dt,
                 igg;
-                iterMax = 100e3,
-                nout=1e3,
-                viscosity_cutoff=(-Inf, Inf)
+                kwargs = (;
+                    iterMax = 100e3,
+                    nout=1e3,
+                    viscosity_cutoff=(-Inf, Inf)
+                )
             )
-            @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+            tensor_invariant!(stokes.ε)
             dt   = compute_dt(stokes, di, dt_diff)
             # ------------------------------
 
@@ -200,12 +190,10 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
             particle2grid!(thermal.T, pT, xvi, particles)
             temperature2center!(thermal)
 
-            @parallel (@idx ni) compute_shear_heating!(
-                thermal.shear_heating,
-                @tensor_center(stokes.τ),
-                @tensor_center(stokes.τ_o),
-                @strain(stokes),
-                phase_ratios.center,
+            compute_shear_heating!(
+                thermal,
+                stokes,
+                phase_ratios,
                 rheology, # needs to be a tuple
                 dt,
             )
@@ -219,36 +207,37 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                 args,
                 dt,
                 di;
-                igg     = igg,
-                phase   = phase_ratios,
-                iterMax = 10e3,
-                nout    = 1e2,
-                verbose = true,
+                kwargs = (;
+                    igg     = igg,
+                    phase   = phase_ratios,
+                    iterMax = 10e3,
+                    nout    = 1e2,
+                    verbose = true,
+                )
             )
             # ------------------------------
 
             # Advection --------------------
             # advect particles in space
-            advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, grid_vz, dt, 2 / 3)
+            advection!(particles, RungeKutta2(), @velocity(stokes), ( grid_vx, grid_vy, grid_vz), dt)
             # advect particles in memory
             move_particles!(particles, xvi, particle_args)
             # interpolate fields from grid vertices to particles
             grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles)
             # check if we need to inject particles
-            inject = check_injection(particles)
-            inject && inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
+            inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
             # update phase ratios
-            @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
+            phase_ratios_center(phase_ratios, particles, grid, pPhases)
 
             @show it += 1
             t        += dt
 
             # Data I/O and plotting ---------------------
             if it == 1 || rem(it, 10) == 0
-                checkpointing(figdir, stokes, thermal.T, η, t)
+                # checkpointing(figdir, stokes, thermal.T, η, t)
 
                 if do_vtk
-                    JustRelax.velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+                    velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                     data_v = (;
                         T   = Array(thermal.T),
                         τxy = Array(stokes.τ.xy),

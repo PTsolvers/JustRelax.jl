@@ -107,7 +107,7 @@ function VanKeken2D(ny=32, nx=32)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
     # Rheology
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
     flow_bcs             = FlowBoundaryConditions(;
@@ -132,10 +132,6 @@ function VanKeken2D(ny=32, nx=32)
     local iters, Urms
 
     while it < nt
-
-        # Update buoyancy
-        compute_ρg!(ρg[2], phase_ratios, rheology, args)
-        # ------------------------------
 
         # Stokes solver ----------------
         iters = solve!(

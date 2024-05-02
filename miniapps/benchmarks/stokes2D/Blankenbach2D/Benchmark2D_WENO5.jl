@@ -124,7 +124,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
     η                = @ones(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
     compute_viscosity!(
-        stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
+        stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
 
     # PT coefficients for thermal diffusion -------------
@@ -187,7 +187,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+        compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
         # ------------------------------
 

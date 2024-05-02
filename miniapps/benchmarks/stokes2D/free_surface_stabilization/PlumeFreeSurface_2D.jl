@@ -138,7 +138,7 @@ function main(igg, nx, ny)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(;
@@ -155,13 +155,8 @@ function main(igg, nx, ny)
     # Time loop
     t, it = 0.0, 0
     dt = 1e3 * (3600 * 24 * 365.25)
-    while it < 15 # run only for 5 Myrs
+    while it < 15
 
-        # Stokes solver ----------------
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
-        
         solve!(
             stokes,
             pt_stokes,
@@ -174,10 +169,10 @@ function main(igg, nx, ny)
             dt,
             igg;
             kwargs = (;
-                iterMax          = 50e3,
-                nout             = 1e3,
+                iterMax          =        50e3,
+                nout             =         1e3,
                 viscosity_cutoff = (-Inf, Inf),
-                free_surface     = true
+                free_surface     =        true
             )
         )
         dt = compute_dt(stokes, di) / 2

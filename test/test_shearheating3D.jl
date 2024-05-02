@@ -110,7 +110,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
 
     # Rheology
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -136,12 +136,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
     t, it = 0.0, 0
     local iters
     while it < 5
-            # Update buoyancy and viscosity -
-            args = (; T = thermal.Tc, P = stokes.P,  dt = Inf)
-            compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
-            compute_ρg!(ρg[end], phase_ratios, rheology, args)
-            # ------------------------------
-
+        
             # Stokes solver ----------------
             iters = solve!(
                 stokes,

@@ -137,9 +137,9 @@ function Sinking_Block2D()
     # ----------------------------------------------------
 
     # Viscosity
-    args     = (; dt = dt, ΔTc = @zeros(ni...))
+    args = (; T = @ones(ni...), P = stokes.P, dt=Inf)
     η_cutoff = -Inf, Inf
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
     # ----------------------------------------------------
 
     # Boundary conditions
@@ -150,7 +150,6 @@ function Sinking_Block2D()
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # Stokes solver ----------------
-    args = (; T = @ones(ni...), P = stokes.P, dt=dt, ΔTc = @zeros(ni...))
     iters = solve!(
         stokes,
         pt_stokes,

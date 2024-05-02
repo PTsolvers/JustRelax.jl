@@ -290,7 +290,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
         @parallel init_P!(stokes.P, ρg[3], xci[3], sticky_air)
     end
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, cutoff_visc)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # Arguments for functions
     @copy thermal.Told thermal.T
@@ -348,7 +348,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # Update buoyancy and viscosity -
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, cutoff_visc)
+        compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
       
         # Stokes solver -----------------
         solve!(

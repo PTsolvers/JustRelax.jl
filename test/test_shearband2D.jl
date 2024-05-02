@@ -105,7 +105,7 @@ function ShearBand2D()
 
     # Rheology
     compute_viscosity!(
-        stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf)
+        stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
     # Boundary conditions
     flow_bcs     = FlowBoundaryConditions(;

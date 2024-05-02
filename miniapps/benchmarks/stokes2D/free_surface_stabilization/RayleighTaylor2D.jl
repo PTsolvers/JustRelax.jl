@@ -136,13 +136,12 @@ function RT_2D(igg, nx, ny)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
     flow_bcs         = FlowBoundaryConditions(; 
         free_slip    = (left =  true, right =  true, top =  true, bot = false),
         no_slip      = (left = false, right = false, top = false, bot =  true),
-        # free_slip    = (left =  true, right =  true, top =  true, bot = true),
         free_surface = true,
     )
 
@@ -153,14 +152,10 @@ function RT_2D(igg, nx, ny)
     take(figdir)
 
     # Time loop
-    t, it = 0.0, 0
-    dt = 1e3 * (3600 * 24 * 365.25)
-    dt_max = 50e3 * (3600 * 24 * 365.25)
-    while it < 500 # run only for 5 Myrs
-
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)       
-        compute_ρg!(ρg[2], phase_ratios, rheology, args)
-        compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+    t, it   = 0.0, 0
+    dt      = 1e3 * (3600 * 24 * 365.25)
+    dt_max  = 50e3 * (3600 * 24 * 365.25)
+    while it < 500
 
         # Stokes solver ----------------
         solve!(
@@ -175,9 +170,9 @@ function RT_2D(igg, nx, ny)
             dt,
             igg;
             kwargs = (
-                iterMax              = 50e3,
-                iterMin              =  1e3,
-                # viscosity_relaxation =  1e-2,
+                iterMax              =  50e3,
+                iterMin              =   1e3,
+                viscosity_relaxation =  1e-2,
                 nout                 =   5e3,
                 free_surface         =  true,
                 viscosity_cutoff     = (-Inf, Inf)
@@ -251,4 +246,4 @@ else
     igg
 end
 
-RT_2D(igg, nx, ny)
+# RT_2D(igg, nx, ny)

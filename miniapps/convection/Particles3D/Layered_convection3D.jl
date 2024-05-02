@@ -143,7 +143,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     
     # Rheology
     viscosity_cutoff = (1e18, 1e24)
-    compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -204,7 +204,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         compute_ρg!(ρg[end], phase_ratios, rheology, args)
         compute_viscosity!(
-            stokes, 1.0, phase_ratios, args, rheology, viscosity_cutoff
+            stokes, phase_ratios, args, rheology, viscosity_cutoff
         )
         # ------------------------------
 

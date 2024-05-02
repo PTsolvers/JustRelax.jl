@@ -1,7 +1,7 @@
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 import JustRelax.@cell
 
-const backend_JR = JustRelax.CPUBackend
+const backend_JR = CPUBackend
 
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -49,20 +49,20 @@ end
     if depth < nondimensionalize(0e0km, CharDim)
         T[i + 1, j] = nondimensionalize(273e0K, CharDim)
 
-    elseif nondimensionalize(0e0km, CharDim) ≤ (depth) < nondimensionalize(35km, CharDim) 
+    elseif nondimensionalize(0e0km, CharDim) ≤ (depth) < nondimensionalize(35km, CharDim)
         dTdZ        = nondimensionalize((923-273)/35 * K/km, CharDim)
 
-        offset      = nondimensionalize(273e0K, CharDim) 
+        offset      = nondimensionalize(273e0K, CharDim)
         T[i + 1, j] = (depth) * dTdZ + offset
 
     elseif nondimensionalize(110km, CharDim)  > (depth) ≥ nondimensionalize(35km, CharDim)
         dTdZ        = nondimensionalize((1492-923)/75 * K/km, CharDim)
-        offset      = nondimensionalize(923K, CharDim) 
+        offset      = nondimensionalize(923K, CharDim)
         T[i + 1, j] = (depth - nondimensionalize(35km, CharDim)) * dTdZ + offset
 
-    elseif (depth) ≥ nondimensionalize(110km, CharDim) 
+    elseif (depth) ≥ nondimensionalize(110km, CharDim)
         dTdZ        = nondimensionalize((1837 - 1492)/590 * K/km, CharDim)
-        offset      = nondimensionalize(1492e0K, CharDim) 
+        offset      = nondimensionalize(1492e0K, CharDim)
         T[i + 1, j] = (depth - nondimensionalize(110km, CharDim)) * dTdZ + offset
 
     end
@@ -77,7 +77,7 @@ function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air, CharDim)
         @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc - thick_air)^2 ≤ r^2)
             depth       = -y[j] - thick_air
             dTdZ        = nondimensionalize((2047 - 2017)K / 50km, CharDim)
-            offset      = nondimensionalize(2017e0K, CharDim)             
+            offset      = nondimensionalize(2017e0K, CharDim)
             T[i + 1, j] = (depth - nondimensionalize(585km, CharDim)) * dTdZ + offset
         end
         return nothing
@@ -96,7 +96,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     thickness    = 700 * km
     η0           = 1e20
-    CharDim      = GEO_units(; 
+    CharDim      = GEO_units(;
         length = thickness, viscosity = η0, temperature = 1e3K
     )
     # Physical domain ------------------------------------
@@ -157,14 +157,14 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
     temperature2center!(thermal)
     # ----------------------------------------------------
-
+    args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
     # Buoyancy forces
     ρg               = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
-    
+
     # Rheology
     viscosity_cutoff = nondimensionalize((1e16Pa*s, 1e24Pa*s), CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
@@ -180,7 +180,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
-    
+
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
@@ -230,7 +230,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         @views thermal.T[:, 1]       .= Tbot
         thermal_bcs!(thermal.T, thermal_bc)
         temperature2center!(thermal)
- 
+
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))

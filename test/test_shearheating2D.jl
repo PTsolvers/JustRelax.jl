@@ -3,7 +3,7 @@ using Test, Suppressor
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax2D
-const backend_JR = JustRelax.CPUBackend
+const backend_JR = CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -12,7 +12,7 @@ using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 # const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
@@ -215,7 +215,7 @@ function Shearheating2D()
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # update phase ratios
         phase_ratios_center(phase_ratios, particles, grid, pPhases)
-        
+
         @show it += 1
         t        += dt
 

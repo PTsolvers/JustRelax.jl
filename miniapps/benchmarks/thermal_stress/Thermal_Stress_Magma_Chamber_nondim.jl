@@ -1,6 +1,6 @@
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 import JustRelax.@cell
-const backend_JR = JustRelax.CPUBackend
+const backend_JR = CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -10,7 +10,7 @@ using JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 using Printf, Statistics, LinearAlgebra, GeoParams, GLMakie, CellArrays
 using StaticArrays
@@ -363,7 +363,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
         compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
-      
+
         # Stokes solver -----------------
         solve!(
             stokes,
@@ -382,7 +382,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 nout             = 5e3,
                 viscosity_cutoff = cutoff_visc,
             )
-        )       
+        )
         tensor_invariant!(stokes.ε)
 
         @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -416,7 +416,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                 nout    = 1e3,
                 verbose = true,
             )
-            
+
         )
         for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
             copyinn_x!(dst, src)
@@ -684,9 +684,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
             end
         end
     end
-    
+
     finalize_global_grid()
-    
+
     return nothing
 end
 

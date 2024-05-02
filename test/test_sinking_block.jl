@@ -8,7 +8,7 @@ using ParallelStencil, ParallelStencil.FiniteDifferences2D
 const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 using GeoParams
 

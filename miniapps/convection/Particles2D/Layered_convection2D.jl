@@ -3,14 +3,14 @@ import JustRelax.@cell
 
 const backend_JR = CPUBackend
 
-using ParallelStencil, ParallelStencil.FiniteDifferences2D 
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
 using GeoParams, GLMakie
@@ -157,7 +157,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
-    
+
     # Rheology
     viscosity_cutoff = (1e16, 1e24)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)

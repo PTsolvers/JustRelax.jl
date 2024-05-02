@@ -3,7 +3,7 @@ using JustRelax, JustRelax.JustRelax2D
 const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend
+const backend = CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
@@ -33,19 +33,19 @@ end
 
 function init_phases!(phases, particles, A)
     ni = size(phases)
-    
+
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, A)
-        
+
         f(x, A, λ) = A * sin(π * x / λ)
-        
+
         @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
             JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
             x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j]) 
+            depth = -(JustRelax.@cell py[ip, i, j])
             JustRelax.@cell phases[ip, i, j] = 2.0
-            
+
             if 0e0 ≤ depth ≤ 100e3
                 JustRelax.@cell phases[ip, i, j] = 1.0
 
@@ -114,7 +114,7 @@ function RT_2D(igg, nx, ny)
     pT, pPhases      = init_cell_arrays(particles, Val(2))
     particle_args    = (pT, pPhases)
 
-    # Elliptical temperature anomaly 
+    # Elliptical temperature anomaly
     A             = 5e3    # Amplitude of the anomaly
     phase_ratios  = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, A)
@@ -130,7 +130,7 @@ function RT_2D(igg, nx, ny)
     # TEMPERATURE PROFILE --------------------------------
     thermal          = ThermalArrays(backend_JR, ni)
     # ----------------------------------------------------
-   
+
     # Buoyancy forces & rheology
     ρg               = @zeros(ni...), @zeros(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
@@ -139,7 +139,7 @@ function RT_2D(igg, nx, ny)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
-    flow_bcs         = FlowBoundaryConditions(; 
+    flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left =  true, right =  true, top =  true, bot = false),
         no_slip      = (left = false, right = false, top = false, bot =  true),
         free_surface = true,
@@ -193,7 +193,7 @@ function RT_2D(igg, nx, ny)
         # advect particles in space
         advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)        
+        move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
@@ -215,15 +215,15 @@ function RT_2D(igg, nx, ny)
             fig = Figure(size = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(t/(1e3 * 3600 * 24 *365.25)) Kyrs")
             scatter!(
-                ax, 
-                pxv, pyv, 
-                color=clr, 
+                ax,
+                pxv, pyv,
+                color=clr,
                 colormap = :lajolla,
                 markersize = 3
             )
             arrows!(
                 ax,
-                xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))..., 
+                xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
                 lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
                 color = :darkblue,
             )
@@ -232,7 +232,7 @@ function RT_2D(igg, nx, ny)
         end
 
     end
-    return 
+    return
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 

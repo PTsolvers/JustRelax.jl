@@ -1,6 +1,6 @@
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 import JustRelax.@cell
-const backend_JR = JustRelax.CPUBackend
+const backend_JR = CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(Threads, Float64, 3) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -10,7 +10,7 @@ using JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 using Printf, Statistics, LinearAlgebra, GeoParams, GLMakie, CellArrays
 using StaticArrays
@@ -349,7 +349,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
         compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
-      
+
         # Stokes solver -----------------
         solve!(
             stokes,

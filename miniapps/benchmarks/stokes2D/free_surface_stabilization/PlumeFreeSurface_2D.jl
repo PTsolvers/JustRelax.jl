@@ -2,7 +2,7 @@ using JustRelax, JustRelax.JustRelax2D
 const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend
+const backend = CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
@@ -43,7 +43,7 @@ function init_phases!(phases, particles)
             JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
             x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j]) 
+            depth = -(JustRelax.@cell py[ip, i, j])
             JustRelax.@cell phases[ip, i, j] = 2.0
 
             if 0e0 ≤ depth ≤ 100e3
@@ -187,7 +187,7 @@ function main(igg, nx, ny)
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
         phase_ratios_center(phase_ratios, particles, grid, pPhases)
-    
+
         @show it += 1
         t        += dt
 

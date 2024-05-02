@@ -1,6 +1,6 @@
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 import JustRelax.@cell
-const backend_JR = JustRelax.CPUBackend
+const backend_JR = CPUBackend
 
 using Printf, GeoParams, GLMakie, CellArrays, CSV, DataFrames
 

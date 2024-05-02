@@ -13,7 +13,7 @@ using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 import JustRelax.@cell
 
@@ -182,7 +182,7 @@ end
         nx=32;
         ny=32;
         thermal = diffusion_2D(; nx = nx, ny = ny)
-        
+
         nx_T, ny_T = size(thermal.T)
         @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1819.2297931741878 atol=1e-1
         @test thermal.Tc[ nx >>> 1    ,   nx >>> 1    ] ≈ 1824.3532934301472 atol=1e-1

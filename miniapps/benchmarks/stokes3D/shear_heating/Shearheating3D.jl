@@ -2,7 +2,7 @@
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 import JustRelax.@cell
-const backend_JR = JustRelax.CPUBackend
+const backend_JR = CPUBackend
 
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64,  3) or (AMDGPU, Float64, 3)

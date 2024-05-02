@@ -7,7 +7,7 @@ Shear Band benchmark to test the visco-elasto-plastic rheology implementation in
 Load JustRelax necessary modules and define backend.
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-const backend_JR = JustRelax.CPUBackend
+const backend_JR = CPUBackend
 ```
 
 

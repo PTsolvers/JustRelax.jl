@@ -4,7 +4,7 @@ using Test, Suppressor
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax3D
-const backend_JR = JustRelax.CPUBackend
+const backend_JR = CPUBackend
 import JustRelax.@cell
 
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
@@ -14,7 +14,7 @@ using JustPIC, JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 # const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
@@ -136,7 +136,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
     t, it = 0.0, 0
     local iters
     while it < 5
-        
+
             # Stokes solver ----------------
             iters = solve!(
                 stokes,
@@ -149,7 +149,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
                 args,
                 Inf,
                 igg;
-                kwargs = (   
+                kwargs = (
                     iterMax = 100e3,
                     nout=1e3,
                     viscosity_cutoff=(-Inf, Inf),

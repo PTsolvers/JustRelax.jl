@@ -7,13 +7,13 @@ Thermal convection benchmark from  [Blankenbach et al., 1989](https://academic.o
 Load JustRelax necessary modules and define backend.
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-const backend_JR = JustRelax.CPUBackend
+const backend_JR = CPUBackend
 ```
 
 For this benchmark we will use particles to track the advection of the material phases and their information. For this, we will use [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl)
 ```julia
 using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 ```
 
 We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
@@ -57,14 +57,14 @@ rheology = (
         CompositeRheology = CompositeRheology((LinearViscous(; η = 1),)),
         RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
         Gravity           = ConstantGravity(; g = 1e4),
-    ),        
+    ),
 )
 ```
 
 ## Initialize particles
 ```julia
 nxcell              = 24 # initial number of perticles per cell
-max_xcell           = 35 # maximum number of perticles per cell 
+max_xcell           = 35 # maximum number of perticles per cell
 min_xcell           = 12 # minimum number of perticles per cell
 particles           = init_particles(
     backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
@@ -77,7 +77,7 @@ grid_vx, grid_vy    = velocity_grids(xci, xvi, di) # staggered velocity grids
 and we want to keep track of the temperature `pT`, temperature of the previous time step `pT0`, and material phase `pPhase`:
 
 ```julia
-pT, pT0, pPhases = init_cell_arrays(particles, Val(3)) 
+pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
 particle_args    = (pT, pT0, pPhases)
 ```
 
@@ -113,7 +113,7 @@ or we can use the alternative one-liners
 ```julia
 @views pPhase.data[!isnan.(particles.index.data)] .= 1.0
 ```
-or 
+or
 ```julia
 map!(x -> isnan(x) ? NaN : 1.0, pPhase.data, particles.index.data)
 ```
@@ -127,7 +127,7 @@ phase_ratios_center(phase_ratios, particles, grid, pPhases)
 ## Stokes and heat diffusion arrays
 
 Stokes arrays object
-```julia    
+```julia
 stokes = StokesArrays(backend_JR, ni)
 ```
 
@@ -140,7 +140,7 @@ thermal = ThermalArrays(backend_JR, ni)
 
 To initialize the thermal profile we use `ParallelStencil.jl` again
 ```julia
-@parallel_indices (i, j) function init_T!(T, y)    
+@parallel_indices (i, j) function init_T!(T, y)
     T[i, j] = 1 - y[j]
     return nothing
 end
@@ -153,7 +153,7 @@ and we define a rectangular thermal anomaly at $x \in [0, 0.05]$, $y \in [\frac{
 ```julia
 function rectangular_perturbation!(T, xc, yc, r, xvi)
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
-        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)            
+        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
             T[i, j] += .2
         end
         return nothing
@@ -173,14 +173,14 @@ We initialize the buoyancy forces and viscosity
 ```julia
 ρg               = @zeros(ni...), @zeros(ni...)
 η                = @ones(ni...)
-args             = (; T = thermal.Tc, P = stokes.P, dt = Inf) 
+args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 compute_ρg!(ρg[2], phase_ratios, rheology, args)
 compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
-```  
+```
 where `(-Inf, Inf)` is the viscosity cutoff.
 
 ## Boundary conditions
-```julia    
+```julia
 flow_bcs      = FlowBoundaryConditions(;
     free_slip = (left = true, right=true, top=true, bot=true),
 )
@@ -213,7 +213,7 @@ end
 grid2particle!(pT, xvi, T_buffer, particles)
 pT0.data    .= pT.data
 ```
-where 
+where
 ```julia
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
@@ -270,8 +270,8 @@ solve!(
 )
 # calculate adaptive time step
 dt = compute_dt(stokes, di, dt_diff)
-```     
-2. Heat diffusion solver   
+```
+2. Heat diffusion solver
 ```julia
 heatdiffusion_PT!(
     thermal,
@@ -319,7 +319,7 @@ phase_ratios_center(phase_ratios, particles, grid, pPhases)
 ```julia
 # interpolate fields from particle to grid vertices
 particle2grid!(T_buffer, pT, xvi, particles)
-@views T_buffer[:, end]      .= 0.0        
+@views T_buffer[:, end]      .= 0.0
 @views T_buffer[:, 1]        .= 1.0
 @views thermal.T[2:end-1, :] .= T_buffer
 flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -334,10 +334,10 @@ compute_ρg!(ρg[2], phase_ratios, rheology, args)
 ```
 7. Compute Nusselt number and rms-velocity
 ```julia
-# Nusselt number, Nu = ∫ ∂T/∂z dx 
-Nu_it = sum( ((abs.(thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1])) ./ di[2]) .*di[1])             
+# Nusselt number, Nu = ∫ ∂T/∂z dx
+Nu_it = sum( ((abs.(thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1])) ./ di[2]) .*di[1])
 push!(Nu_top, Nu_it)
-# Compute U rms 
+# Compute U rms
 # U₍ᵣₘₛ₎ = √ ∫∫ (vx²+vz²) dx dz
 Urms_it = let
     JustRelax.JustRelax2D.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
@@ -350,7 +350,7 @@ push!(trms, t)
 
 # Visualization
 We will use `Makie.jl` to visualize the results
-```julia 
+```julia
 using GLMakie
 ```
 
@@ -377,7 +377,7 @@ h2  = heatmap!(ax2, xvi[1], xvi[2], Array(stokes.V.Vy) , colormap=:batlow)
 # x-velocity
 h3  = heatmap!(ax3, xvi[1], xvi[2], Array(stokes.V.Vx) , colormap=:batlow)
 # particles temperature
-h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(0, 1), markersize=3)            
+h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(0, 1), markersize=3)
 hidexdecorations!(ax1)
 hidexdecorations!(ax2)
 hidexdecorations!(ax3)

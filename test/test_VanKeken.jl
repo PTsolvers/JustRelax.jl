@@ -13,7 +13,7 @@ using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # x-length of the domain
 const λ = 0.9142
@@ -184,6 +184,6 @@ end
     @suppress begin
         iters, Urms = VanKeken2D()
         @test passed = iters.err_evo1[end] < 1e-4
-        @test all(<(1e-2), Urms) 
+        @test all(<(1e-2), Urms)
     end
 end

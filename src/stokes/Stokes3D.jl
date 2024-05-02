@@ -170,7 +170,7 @@ function _solve!(
     iterMax=10e3,
     nout=500,
     b_width=(4, 4, 4),
-    viscosity_relaxation = 1e-2,
+    viscosity_relaxation=1e-2,
     verbose=true,
     kwargs...,
 ) where {T}
@@ -228,7 +228,14 @@ function _solve!(
             # Update buoyancy
             @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
 
-            compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation)
+            compute_viscosity!(
+                stokes,
+                phase_ratios,
+                args,
+                rheology,
+                viscosity_cutoff;
+                relaxation=viscosity_relaxation,
+            )
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -400,7 +407,12 @@ function _solve!(
 
             # Update viscosity
             compute_viscosity!(
-                stokes, phase_ratios, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation
+                stokes,
+                phase_ratios,
+                args,
+                rheology,
+                viscosity_cutoff;
+                relaxation=viscosity_relaxation,
             )
 
             @parallel (@idx ni) compute_τ_nonlinear!(

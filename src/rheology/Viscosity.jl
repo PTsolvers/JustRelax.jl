@@ -1,5 +1,7 @@
 ## 2D KERNELS
-function compute_viscosity!(stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1e0)
+function compute_viscosity!(
+    stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation=1e0
+)
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff)
 end
 
@@ -70,7 +72,9 @@ end
     return nothing
 end
 
-function compute_viscosity!(stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation = 1e0)
+function compute_viscosity!(
+    stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation=1e0
+)
     return compute_viscosity!(
         backend(stokes), stokes, relaxation, phase_ratios, args, rheology, cutoff
     )

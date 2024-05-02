@@ -63,7 +63,7 @@ function init_phases!(phases, particles, Lx, d, r)
 
             x = JustRelax.@cell px[ip, i, j]
             depth = -(JustRelax.@cell py[ip, i, j])
-            @cell phases[ip, i, j] = 1.0 # matrix
+            JustRelax.@cell phases[ip, i, j] = 1.0 # matrix
 
             # thermal anomaly - circular
             if ((x - Lx)^2 + (depth - d)^2 ≤ r^2)
@@ -73,5 +73,5 @@ function init_phases!(phases, particles, Lx, d, r)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, d)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, d)
 end

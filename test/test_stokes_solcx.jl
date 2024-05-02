@@ -1,12 +1,11 @@
 push!(LOAD_PATH, "..")
 
 using Test, Suppressor
-using JustRelax
+using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
-model = PS_Setup(:cpu, Float64, 2)
-environment!(model)
+const backend = CPUBackend
 
 include("../miniapps/benchmarks/stokes2D/solcx/SolCx.jl")
 

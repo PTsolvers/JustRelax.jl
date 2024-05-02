@@ -1,24 +1,16 @@
-using JustRelax, Test
-model = PS_Setup(:Threads, Float64, 2)
-environment!(model)
+using JustRelax, JustRelax.JustRelax2D, Test
+const bk = JustRelax.backend
 
 @testset "Array conversions" begin
-    ni = 10, 10
-    stokes  = StokesArrays(ni, ViscoElastic)
-    thermal = ThermalArrays(ni)
-
-    @test Array(stokes.V) isa Velocity{Array{T, N}} where {T, N}
-    @test Array(stokes.τ) isa SymmetricTensor{Array{T, N}} where {T, N}
-    @test Array(stokes.R) isa Residual{Array{T, N}} where {T, N}
-    @test Array(stokes.P) isa Array{T, N} where {T, N}
-    @test Array(stokes)   isa StokesArrays
-    @test Array(thermal)  isa ThermalArrays{Array{T, N}} where {T, N}
+    ni      = 2, 2
+    stokes  = StokesArrays(CPUBackend, ni)
+    thermal = ThermalArrays(CPUBackend, ni)
     
-    @test JustRelax.iscpu(stokes.V) isa JustRelax.CPUDeviceTrait
-    @test JustRelax.iscpu(stokes.τ) isa JustRelax.CPUDeviceTrait
-    @test JustRelax.iscpu(stokes.R) isa JustRelax.CPUDeviceTrait
-    @test JustRelax.iscpu(stokes.P) isa JustRelax.CPUDeviceTrait
-    @test JustRelax.iscpu(stokes)   isa JustRelax.CPUDeviceTrait
-    @test JustRelax.iscpu(thermal)  isa JustRelax.CPUDeviceTrait
-    @test_throws ArgumentError("Unknown device") JustRelax.iscpu("potato")
+    @test Array(stokes.V) isa JustRelax.Velocity{Array{T, N}} where {T, N}
+    @test Array(stokes.τ) isa JustRelax.SymmetricTensor{Array{T, N}} where {T, N}
+    @test Array(stokes.R) isa JustRelax.Residual{Array{T, N}} where {T, N}
+    @test Array(stokes.P) isa Array{T, N} where {T, N}
+    @test Array(stokes)   isa JustRelax.StokesArrays
+    @test Array(thermal)  isa JustRelax.ThermalArrays{Array{T, N}} where {T, N}    
 end
+

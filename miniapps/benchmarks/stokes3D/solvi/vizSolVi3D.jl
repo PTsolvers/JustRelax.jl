@@ -1,4 +1,4 @@
-function plot(stokes::StokesArrays, geometry, rc; cmap=:vik)
+function plot(stokes, geometry, rc; cmap=:vik)
     xci, xvi = geometry.xci, geometry.xvi
 
     cx, cy = (geometry.xvi[1][end] - geometry.xvi[1][1]) / 2,

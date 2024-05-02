@@ -1,13 +1,11 @@
 push!(LOAD_PATH, "..")
 
 using Test, Suppressor
-using JustRelax
+using JustRelax, JustRelax.JustRelax3D
+const backend = CPUBackend
+
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
-
-# setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 3)
-environment!(model)
 
 include("../miniapps/benchmarks/stokes3D/solvi/SolVi3D.jl")
 
@@ -38,7 +36,7 @@ function check_convergence_case1()
     )
 
     tol = 1e-8
-    passed = iters.err_evo1[end] < tol
+    passed = iters.norm_Rx[end] < tol
 
     return passed
 end

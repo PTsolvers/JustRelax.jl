@@ -1,11 +1,11 @@
+using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+import JustRelax.@cell
+const backend_JR = CPUBackend
+
 using Printf, GeoParams, GLMakie, CellArrays, CSV, DataFrames
-using JustRelax, JustRelax.DataIO
+
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
-
-# setup ParallelStencil.jl environment
-model  = PS_Setup(:Threads, Float64, 3)
-environment!(model)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -29,7 +29,7 @@ function init_phases!(phase_ratios, xci, radius)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -52,7 +52,6 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     G0          = 1.0           # elastic shear modulus
     Gi          = G0/(6.0-4.0)  # elastic shear modulus perturbation
     εbg         = 1.0           # background strain-rate
-    # η_reg       = 8e-3          # regularisation "viscosity"
     η_reg       = 1.25e-2       # regularisation "viscosity"
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
@@ -90,17 +89,13 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes       = StokesArrays(ni, ViscoElastic)
+    stokes       = StokesArrays(backend_JR, ni)
     pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-4,  CFL = 0.05 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-    args         = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+    args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
     # Rheology
-    η            = @ones(ni...)
-    η_vep        = similar(η) # effective visco-elasto-plastic viscosity
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
-    )
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # Boundary conditions
     flow_bcs     = FlowBoundaryConditions(;
@@ -132,16 +127,16 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             phase_ratios,
             rheology,
             args,
             dt,
             igg;
-            iterMax          = 150e3,
-            nout             = 1e3,
-            viscosity_cutoff = (-Inf, Inf)
+            kwargs = (;
+                iterMax          = 150e3,
+                nout             = 1e3,
+                viscosity_cutoff = (-Inf, Inf)
+            )
         )
 
         @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -149,7 +144,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
         )
 
-        @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        tensor_invariant!(stokes.ε.II, @strain(stokes)...)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1

@@ -1,10 +1,13 @@
 push!(LOAD_PATH, "..")
 
-using Test, Suppressor
-using Printf, LinearAlgebra, GeoParams, CellArrays, StaticArrays
+using Test, Suppressor, GeoParams
+using JustRelax, JustRelax.JustRelax3D
 using JustRelax
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+
+const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+
 
 using JustPIC
 using JustPIC._3D
@@ -12,10 +15,6 @@ using JustPIC._3D
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-
-# setup ParallelStencil.jl environment
-model = PS_Setup(:Threads, Float64, 3)  #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
-environment!(model)
 
 import JustRelax.@cell
 
@@ -49,24 +48,24 @@ function init_phases!(phases, particles, xc, yc, zc, r)
     @parallel_indices (I...) function init_phases!(phases, px, py, pz, index, center, r)
         @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, I...]) == 0 && continue
+            @cell(index[ip, I...]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, I...]
-            y = JustRelax.@cell py[ip, I...]
-            z = JustRelax.@cell pz[ip, I...]
+            x = @cell px[ip, I...]
+            y = @cell py[ip, I...]
+            z = @cell pz[ip, I...]
 
             # plume - rectangular
             if (((x - center[1]))^2 + ((y - center[2]))^2 + ((z - center[3]))^2) ≤ r^2
-                JustRelax.@cell phases[ip, I...] = 2.0
+                @cell phases[ip, I...] = 2.0
 
             else
-                JustRelax.@cell phases[ip, I...] = 1.0
+                @cell phases[ip, I...] = 1.0
             end
         end
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
 end
 
 function diffusion_3D(;
@@ -121,7 +120,7 @@ function diffusion_3D(;
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend_JR, ni)
     thermal.H .= 1e-6
     # physical parameters
     ρ          = @fill(ρ0, ni...)
@@ -149,14 +148,14 @@ function diffusion_3D(;
     )
     # temperature
     pPhases,     = init_cell_arrays(particles, Val(1))
+    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, center_perturbation..., r)
-    phase_ratios = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, pPhases)
+    phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion
     args       = (; P=P, T=thermal.Tc)
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
+    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
 
     t  = 0.0
     it = 0
@@ -172,11 +171,13 @@ function diffusion_3D(;
             args,
             dt,
             di;
-            igg     = igg,
-            phase   = phase_ratios,
-            iterMax = 10e3,
-            nout    = 1e2,
-            verbose = false,
+            kwargs = (;
+                igg     = igg,
+                phase   = phase_ratios,
+                iterMax = 10e3,
+                nout    = 1e2,
+                verbose = false,
+            )
         )
 
         t  += dt

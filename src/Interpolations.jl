@@ -16,12 +16,17 @@ end
 
 # From cell vertices to cell center
 
-function temperature2center!(thermal::ThermalArrays)
-    @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
+temperature2center!(thermal) = temperature2center!(backend(thermal), thermal)
+function temperature2center!(::CPUBackendTrait, thermal::JustRelax.ThermalArrays)
+    return _temperature2center!(thermal)
+end
+
+function _temperature2center!(thermal::JustRelax.ThermalArrays)
+    @parallel (@idx size(thermal.Tc)...) temperature2center_kernel!(thermal.Tc, thermal.T)
     return nothing
 end
 
-@parallel_indices (i, j) function temperature2center!(
+@parallel_indices (i, j) function temperature2center_kernel!(
     T_center::T, T_vertex::T
 ) where {T<:AbstractArray{_T,2} where {_T<:Real}}
     T_center[i, j] =
@@ -34,7 +39,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j, k) function temperature2center!(
+@parallel_indices (i, j, k) function temperature2center_kernel!(
     T_center::T, T_vertex::T
 ) where {T<:AbstractArray{_T,3} where {_T<:Real}}
     @inline av_T() = _av(T_vertex, i, j, k)
@@ -44,17 +49,34 @@ end
     return nothing
 end
 
-@parallel function vertex2center!(center, vertex)
+function vertex2center!(center, vertex)
+    @parallel vertex2center_kernel!(center, vertex)
+    return nothing
+end
+
+@parallel function vertex2center_kernel!(center, vertex)
     @all(center) = @av(vertex)
     return nothing
 end
 
-@parallel function center2vertex!(vertex, center)
+function center2vertex!(vertex, center)
+    @parallel center2vertex_kernel!(vertex, center)
+    return nothing
+end
+
+@parallel function center2vertex_kernel!(vertex, center)
     @inn(vertex) = @av(center)
     return nothing
 end
 
-@parallel_indices (i, j, k) function center2vertex!(
+function center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
+    @parallel center2vertex_kernel!(
+        vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy
+    )
+    return nothing
+end
+
+@parallel_indices (i, j, k) function center2vertex_kernel!(
     vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy
 )
     i1, j1, k1 = (i, j, k) .+ 1

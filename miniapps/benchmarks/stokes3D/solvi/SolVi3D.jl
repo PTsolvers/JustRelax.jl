@@ -73,7 +73,8 @@ function solVi3D(;
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes    = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(backend, ni)
+    (; η)     = stokes.viscosity
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √3)
 
@@ -84,14 +85,14 @@ function solVi3D(;
     G  = 1.0 # elastic shear modulus
     # dt = η0 / (G * ξ)
     dt = Inf
-    η  = viscosity(ni, di, li, rc, η0, ηi)
+    η .= viscosity(ni, di, li, rc, η0, ηi)
     Gc = @fill(G, ni...)
     Kb = @fill(Inf, ni...)
 
     ## Boundary conditions
-    pureshear_bc!(stokes, di, li, εbg)
+    pureshear_bc!(stokes, xci, xvi, εbg)
     flow_bcs = FlowBoundaryConditions(;
-        free_slip   = (left=false, right=false, top=false, bot=false, back=false, front=false),
+        free_slip   = (left=true, right=true, top=true, bot=true, back=true, front=true),
         no_slip     = (left=false, right=false, top=false, bot=false, back=false, front=false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -105,7 +106,20 @@ function solVi3D(;
     local iters
     while t < ttot
         iters = solve!(
-            stokes, pt_stokes, di, flow_bcs, ρg, η, Kb, Gc, dt, igg; iterMax=5000, nout=100, verbose=false,
+            stokes, 
+            pt_stokes, 
+            di, 
+            flow_bcs, 
+            ρg, 
+            Kb, 
+            Gc, 
+            dt, 
+            igg; 
+            kwargs = (; 
+                iterMax=5000, 
+                nout=100, 
+                verbose=false
+            ),
         )
         t += Δt
     end

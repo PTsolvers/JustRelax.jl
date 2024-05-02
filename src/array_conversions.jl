@@ -1,29 +1,4 @@
-# Device trait system 
-
-abstract type DeviceTrait end
-struct CPUDeviceTrait <: DeviceTrait end
-struct NonCPUDeviceTrait <: DeviceTrait end
-
-@inline iscpu(::Array) = CPUDeviceTrait()
-@inline iscpu(::T) where {T<:AbstractArray} = NonCPUDeviceTrait()
-@inline iscpu(::T) where {T} = throw(ArgumentError("Unknown device"))
-
-@inline iscpu(::Velocity{Array{T,N}}) where {T,N} = CPUDeviceTrait()
-@inline iscpu(::Velocity{<:AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
-
-@inline iscpu(::SymmetricTensor{Array{T,N}}) where {T,N} = CPUDeviceTrait()
-@inline iscpu(::SymmetricTensor{<:AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
-
-@inline iscpu(::Residual{Array{T,N}}) where {T,N} = CPUDeviceTrait()
-@inline iscpu(::Residual{<:AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
-
-@inline iscpu(::ThermalArrays{Array{T,N}}) where {T,N} = CPUDeviceTrait()
-@inline iscpu(::ThermalArrays{<:AbstractArray{T,N}}) where {T,N} = NonCPUDeviceTrait()
-
-@inline iscpu(::StokesArrays{M,A,B,C,Array{T,N},nDim}) where {M,A,B,C,T,N,nDim} =
-    CPUDeviceTrait()
-@inline iscpu(::StokesArrays{M,A,B,C,<:AbstractArray{T,N},nDim}) where {M,A,B,C,T,N,nDim} =
-    NonCPUDeviceTrait()
+import Base: Array
 
 ## Conversion of structs to CPU
 
@@ -31,15 +6,30 @@ struct NonCPUDeviceTrait <: DeviceTrait end
 
 function Array(
     x::T
-) where {T<:Union{StokesArrays,SymmetricTensor,ThermalArrays,Velocity,Residual}}
-    return Array(iscpu(x), x)
+) where {
+    T<:Union{
+        JustRelax.StokesArrays,
+        JustRelax.SymmetricTensor,
+        JustRelax.ThermalArrays,
+        JustRelax.Velocity,
+        JustRelax.Residual,
+    },
+}
+    return Array(backend(x), x)
 end
 
-Array(::CPUDeviceTrait, x) = x
+Array(::CPUBackendTrait, x) = x
 
 function Array(
-    ::NonCPUDeviceTrait, x::T
-) where {T<:Union{SymmetricTensor,ThermalArrays,Velocity,Residual}}
+    ::NonCPUBackendTrait, x::T
+) where {
+    T<:Union{
+        JustRelax.SymmetricTensor,
+        JustRelax.ThermalArrays,
+        JustRelax.Velocity,
+        JustRelax.Residual,
+    },
+}
     nfields = fieldcount(T)
     cpu_fields = ntuple(Val(nfields)) do i
         Base.@_inline_meta
@@ -49,7 +39,7 @@ function Array(
     return T_clean(cpu_fields...)
 end
 
-function Array(::NonCPUDeviceTrait, x::StokesArrays{T,A,B,C,M,nDim}) where {T,A,B,C,M,nDim}
+function Array(::NonCPUBackendTrait, x::JustRelax.StokesArrays)
     nfields = fieldcount(StokesArrays)
     cpu_fields = ntuple(Val(nfields)) do i
         Base.@_inline_meta

@@ -313,11 +313,9 @@ function _solve!(
     end
 
     av_time = wtime0 / (iter - 1) # average time per iteration
-            
+
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(
-        @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-    )
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
@@ -507,11 +505,9 @@ function _solve!(
     av_time = wtime0 / (iter - 1) # average time per iteration
 
     stokes.P .= θ
-    
+
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(
-        @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-    )
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)

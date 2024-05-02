@@ -104,7 +104,7 @@ end
 Load JustRelax necessary modules and define backend.
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-const backend_JR = JustRelax.CPUBackend
+const backend_JR = CPUBackend
 ```
 
 For this specific example we use particles to define the material phases, for which we rely on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). As in `JustRelax.jl`, we need to set up the environment of `JustPIC.jl`. This is done by running/including the following commands:
@@ -113,9 +113,9 @@ For this specific example we use particles to define the material phases, for wh
   using JustPIC
   using JustPIC._2D
 
-  const backend = JustPIC.CPUBackend    # Threads is the default backend
-  const backend = JustPIC.CUDABackend   # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script
-  const backend = JustPIC.AMDGPUBackend # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+  const backend = CPUBackend    # Threads is the default backend
+  const backend = CUDABackend   # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script
+  const backend = AMDGPUBackend # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 ```
 
 We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:

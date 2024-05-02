@@ -1,4 +1,4 @@
-using GeoParams
+using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -80,7 +80,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             Elasticity        = el_inc,
         ),
     )
- 
+
     # Initialize phase ratios -------------------------------
     radius       = 0.1
     phase_ratios = PhaseRatio(ni, length(rheology))
@@ -108,7 +108,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     stokes.V.Vy .= PTArray(backend)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
- 
+
     # Time loop
     t, it      = 0.0, 0
     tmax       = 3.5
@@ -139,7 +139,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         )
         tensor_invariant!(stokes.ε)
         push!(τII, maximum(stokes.τ.xx))
-        
+
         it += 1
         t  += dt
 

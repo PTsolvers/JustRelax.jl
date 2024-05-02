@@ -1,12 +1,9 @@
 using GeoParams, GLMakie, CellArrays
-using JustRelax, JustRelax.DataIO
+using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
-# setup ParallelStencil.jl environment
-model  = PS_Setup(:Threads, Float64, 2)
-environment!(model)
-
+const backend = CPUBackend
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 

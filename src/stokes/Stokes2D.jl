@@ -1,88 +1,27 @@
-## DIMENSION AGNOSTIC KERNELS
-
-@parallel function elastic_iter_params!(
-    dτ_Rho::AbstractArray,
-    Gdτ::AbstractArray,
-    ητ::AbstractArray,
-    Vpdτ::T,
-    G::T,
-    dt::M,
-    Re::T,
-    r::T,
-    max_li::T,
-) where {T,M}
-    @all(dτ_Rho) = Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (G * dt)))
-    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
-    return nothing
-end
-
-@parallel function elastic_iter_params!(
-    dτ_Rho::AbstractArray,
-    Gdτ::AbstractArray,
-    ητ::AbstractArray,
-    Vpdτ::T,
-    G::AbstractArray,
-    dt::M,
-    Re::T,
-    r::T,
-    max_li::T,
-) where {T,M}
-    @all(dτ_Rho) =
-        Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (@all(G) * dt)))
-    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
-    return nothing
-end
-
 ## 2D STOKES MODULE
-
-module Stokes2D
-
-using ImplicitGlobalGrid
-using ..JustRelax
-using CUDA, AMDGPU
-using ParallelStencil
-# using ParallelStencil.FiniteDifferences2D
-using GeoParams, LinearAlgebra, Printf
-
-import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
-import JustRelax:
-    Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
-import JustRelax: compute_maxloc!, solve!
-import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi, backend
-
-@eval @init_parallel_stencil($backend, Float64, 2)
-
-include("../rheology/GeoParams.jl")
-include("StressRotation.jl")
-include("StressKernels.jl")
-include("PressureKernels.jl")
-include("VelocityKernels.jl")
-include("StressKernels.jl")
-
-export solve!
-
-function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
-    τxx, τyy, τxy, τxy_c = stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ.xy_c
-    τxx_o, τyy_o, τxy_o, τxy_o_c = stokes.τ_o.xx,
-    stokes.τ_o.yy, stokes.τ_o.xy,
-    stokes.τ_o.xy_c
-
+function update_τ_o!(stokes::JustRelax.StokesArrays)
     @parallel (@idx size(τxy)) multi_copy!(
-        (τxx_o, τyy_o, τxy_o, τxy_o_c), (τxx, τyy, τxy, τxy_c)
+        @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
     )
     return nothing
 end
 
 ## 2D VISCO-ELASTIC STOKES SOLVER
 
-# viscous solver
-function JustRelax.solve!(
-    stokes::StokesArrays{Viscous,A,B,C,D,2},
-    pt_stokes::PTStokesCoeffs,
+# backend trait
+function solve!(stokes::JustRelax.StokesArrays, args...; kwargs)
+    return solve!(backend(stokes), stokes, args...; kwargs)
+end
+
+# entry point for extensions
+solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...)
+
+function _solve!(
+    stokes::JustRelax.StokesArrays,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs::FlowBoundaryConditions,
     ρg,
-    η,
     K,
     dt,
     igg::IGG;
@@ -90,11 +29,13 @@ function JustRelax.solve!(
     nout=500,
     b_width=(4, 4, 1),
     verbose=true,
-) where {A,B,C,D,T}
+    kwargs...,
+) where {T}
 
     # unpack
     _dx, _dy = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; η) = stokes.viscosity
     ni = size(stokes.P)
 
     # ~preconditioner
@@ -192,6 +133,9 @@ function JustRelax.solve!(
         end
     end
 
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -203,13 +147,12 @@ function JustRelax.solve!(
 end
 
 # visco-elastic solver
-function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
-    pt_stokes::PTStokesCoeffs,
+function _solve!(
+    stokes::JustRelax.StokesArrays,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ρg,
-    η,
     G,
     K,
     dt,
@@ -218,11 +161,13 @@ function JustRelax.solve!(
     nout=500,
     b_width=(4, 4, 1),
     verbose=true,
-) where {A,B,C,D,T}
+    kwargs...,
+) where {T}
 
     # unpack
     _di = inv.(di)
-    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; ϵ, r, θ_dτ) = pt_stokes
+    (; η) = stokes.viscosity
     ni = size(stokes.P)
 
     # ~preconditioner
@@ -306,6 +251,9 @@ function JustRelax.solve!(
         end
     end
 
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -318,29 +266,30 @@ end
 
 # GeoParams: general (visco-elasto-plastic) solver
 
-function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
-    pt_stokes::PTStokesCoeffs,
+function _solve!(
+    stokes::JustRelax.StokesArrays,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ρg,
-    η,
-    η_vep,
     rheology::MaterialParams,
     args,
     dt,
     igg::IGG;
-    viscosity_cutoff=(1e16, 1e24),
+    viscosity_cutoff=(-Inf, Inf),
+    viscosity_relaxation=1e-2,
     iterMax=10e3,
     nout=500,
     b_width=(4, 4, 0),
     verbose=true,
     free_surface=false,
-) where {A,B,C,D,T}
+    kwargs...,
+) where {T}
 
     # unpack
     _di = inv.(di)
-    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; ϵ, r, θ_dτ) = pt_stokes
+    (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
     # ~preconditioner
@@ -378,15 +327,14 @@ function JustRelax.solve!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
             )
 
-            @parallel (@idx ni) compute_ρg!(ρg[2], rheology, args)
+            compute_ρg!(ρg[2], rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            ν = 1e-2
-            @parallel (@idx ni) compute_viscosity!(
-                η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff
+            compute_viscosity!(
+                stokes, args, rheology, viscosity_cutoff; relaxation=viscosity_relaxation
             )
             compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
@@ -408,7 +356,7 @@ function JustRelax.solve!(
                 θ_dτ,
             )
 
-            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
             @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
@@ -474,6 +422,9 @@ function JustRelax.solve!(
 
     stokes.P .= θ
 
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
 
@@ -489,33 +440,33 @@ end
 
 ## With phase ratios
 
-function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
-    pt_stokes::PTStokesCoeffs,
+function _solve!(
+    stokes::JustRelax.StokesArrays,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ρg,
-    η,
-    η_vep,
-    phase_ratios::PhaseRatio,
+    phase_ratios::JustRelax.PhaseRatio,
     rheology,
     args,
     dt,
     igg::IGG;
-    viscosity_cutoff=(1e16, 1e24),
+    viscosity_cutoff=(-Inf, Inf),
+    viscosity_relaxation=1e-2,
     iterMax=50e3,
     iterMin=1e2,
-    viscosity_relaxation=1e-2,
     free_surface=false,
     nout=500,
     b_width=(4, 4, 0),
     verbose=true,
-) where {A,B,C,D,T}
+    kwargs...,
+) where {T}
 
     # unpack
 
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
     # ~preconditioner
@@ -580,9 +531,7 @@ function JustRelax.solve!(
             # stokes.P[1, end] = stokes.P[2, end]
             # stokes.P[end, end] = stokes.P[end - 1, end]
 
-            if rem(iter, 5) == 0
-                @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
-            end
+            compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -592,14 +541,13 @@ function JustRelax.solve!(
                 @copy η0 η
             end
             if do_visc
-                @parallel (@idx ni) compute_viscosity!(
-                    η,
-                    viscosity_relaxation,
-                    phase_ratios.center,
-                    @strain(stokes)...,
+                compute_viscosity!(
+                    stokes,
+                    phase_ratios,
                     args,
                     rheology,
-                    viscosity_cutoff,
+                    viscosity_cutoff;
+                    relaxation=viscosity_relaxation,
                 )
             end
 
@@ -620,9 +568,9 @@ function JustRelax.solve!(
                 dt,
                 θ_dτ,
             )
-            free_surface_bcs!(stokes, flow_bcs)
+            # free_surface_bcs!(stokes, flow_bcs)
 
-            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
             @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
@@ -696,7 +644,9 @@ function JustRelax.solve!(
     end
 
     stokes.P .= θ
-    # @views stokes.P .-= stokes.P[:, end]
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
@@ -711,16 +661,14 @@ function JustRelax.solve!(
     )
 end
 
-function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
-    thermal::ThermalArrays,
-    pt_stokes::PTStokesCoeffs,
+function _solve!(
+    stokes::JustRelax.StokesArrays,
+    thermal::JustRelax.ThermalArrays,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ϕ,
     ρg,
-    η,
-    η_vep,
     phase_v,
     phase_c,
     args_η,
@@ -731,12 +679,14 @@ function JustRelax.solve!(
     nout=500,
     b_width=(4, 4, 1),
     verbose=true,
-) where {A,B,C,D,N,T}
+    kwargs...,
+) where {N,T}
 
     # unpack
 
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
     # ~preconditioner
     ητ = deepcopy(η)
@@ -856,5 +806,3 @@ function JustRelax.solve!(
         norm_∇V=norm_∇V,
     )
 end
-
-end # END OF MODULE

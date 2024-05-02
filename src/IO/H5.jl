@@ -4,13 +4,9 @@ macro namevar(x)
     name = split(string(x), ".")[end]
     return quote
         tmp = $(esc(x))
-        $(esc(name)), _tocpu(tmp)
+        $(esc(name)), Array(tmp)
     end
 end
-
-_tocpu(x) = x
-_tocpu(x::T) where {T<:CuArray} = Array(x)
-_tocpu(x::T) where {T<:ROCArray} = Array(x)
 
 """
     checkpointing(dst, stokes, T, η, time)
@@ -26,7 +22,7 @@ function checkpointing(dst, stokes, T, η, time)
         write(file, @namevar(stokes.V.Vy)...)
         write(file, @namevar(stokes.P)...)
         write(file, @namevar(T)...)
-        write(file, "viscosity", _tocpu(η))
+        write(file, "viscosity", Array(η))
     end
 end
 

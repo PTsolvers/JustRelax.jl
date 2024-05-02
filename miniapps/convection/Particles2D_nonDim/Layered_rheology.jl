@@ -169,19 +169,19 @@ function init_phases!(phases, particles, Lx, d, r, thick_air, CharDim)
             x = JustRelax.@cell px[ip, i, j]
             depth = -(JustRelax.@cell py[ip, i, j]) - nondimensionalize(thick_air * km, CharDim)
             if nondimensionalize(0e0km, CharDim) ≤ depth ≤ nondimensionalize(21km, CharDim)
-                @cell phases[ip, i, j] = 1.0
+                JustRelax.@cell phases[ip, i, j] = 1.0
 
             elseif nondimensionalize(35km, CharDim) ≥ depth >  nondimensionalize(21km, CharDim)
-                @cell phases[ip, i, j] = 2.0
+                JustRelax.@cell phases[ip, i, j] = 2.0
 
             elseif nondimensionalize(90km, CharDim) ≥ depth >  nondimensionalize(35km, CharDim)
-                @cell phases[ip, i, j] = 3.0
+                JustRelax.@cell phases[ip, i, j] = 3.0
 
             elseif depth > nondimensionalize(90km, CharDim)
-                @cell phases[ip, i, j] = 3.0
+                JustRelax.@cell phases[ip, i, j] = 3.0
 
             elseif depth < nondimensionalize(0e0km, CharDim)
-                @cell phases[ip, i, j] = 5.0
+                JustRelax.@cell phases[ip, i, j] = 5.0
 
             end 
 
@@ -193,6 +193,6 @@ function init_phases!(phases, particles, Lx, d, r, thick_air, CharDim)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, CharDim)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, CharDim)
 end
    

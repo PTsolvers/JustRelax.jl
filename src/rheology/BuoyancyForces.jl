@@ -3,9 +3,15 @@
 
 Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`.
 """
-@parallel_indices (I...) function compute_ρg!(ρg, rheology, args)   # index arguments for the current cell cell center
+function compute_ρg!(ρg, rheology, args)
+    ni = size(ρg)
+    @parallel (@idx ni) compute_ρg_kernel!(ρg, rheology, args)
+    return nothing
+end
+
+@parallel_indices (I...) function compute_ρg_kernel!(ρg, rheology, args)
     args_ijk = ntuple_idx(args, I...)
-    ρg[I...] = JustRelax.compute_buoyancy(rheology, args_ijk)
+    ρg[I...] = compute_buoyancy(rheology, args_ijk)
     return nothing
 end
 
@@ -15,9 +21,15 @@ end
 Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`. 
 The `phase_ratios` are used to compute the density of the composite rheology.
 """
-@parallel_indices (I...) function compute_ρg!(ρg, phase_ratios, rheology, args)   # index arguments for the current cell cell center
+function compute_ρg!(ρg, phase_ratios::JustRelax.PhaseRatio, rheology, args)
+    ni = size(ρg)
+    @parallel (@idx ni) compute_ρg_kernel!(ρg, phase_ratios.center, rheology, args)
+    return nothing
+end
+
+@parallel_indices (I...) function compute_ρg_kernel!(ρg, phase_ratios, rheology, args)
     args_ijk = ntuple_idx(args, I...)
-    ρg[I...] = JustRelax.compute_buoyancy(rheology, args_ijk, phase_ratios[I...])
+    ρg[I...] = compute_buoyancy(rheology, args_ijk, phase_ratios[I...])
     return nothing
 end
 

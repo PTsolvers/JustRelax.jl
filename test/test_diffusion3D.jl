@@ -1,14 +1,12 @@
 push!(LOAD_PATH, "..")
 
 using Test, Suppressor
-using GeoParams, CellArrays
-using JustRelax, JustRelax.DataIO
+using GeoParams
+using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
-# setup ParallelStencil.jl environment
-model  = PS_Setup(:Threads, Float64, 3)
-environment!(model)
+const backend = CPUBackend
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j, k) function init_T!(T, z)
@@ -48,10 +46,10 @@ function diffusion_3D(;
     finalize_MPI = false,
 )
 
-    kyr      = 1e3 * 3600 * 24 * 365.25
-    Myr      = 1e6 * 3600 * 24 * 365.25
-    ttot     = 1 * Myr # total simulation time
-    dt       = 50 * kyr # physical time step
+    kyr          = 1e3 * 3600 * 24 * 365.25
+    Myr          = 1e6 * 3600 * 24 * 365.25
+    ttot         = 1 * Myr # total simulation time
+    dt           = 50 * kyr # physical time step
 
     # Physical domain
     ni           = (nx, ny, nz)
@@ -76,7 +74,7 @@ function diffusion_3D(;
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend, ni)
     thermal.H .= 1e-6
     # physical parameters
     ρ          = @fill(ρ0, ni...)
@@ -85,7 +83,7 @@ function diffusion_3D(;
     ρCp        = @. Cp * ρ
 
     # Boundary conditions
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
     )
@@ -95,7 +93,7 @@ function diffusion_3D(;
     # Add thermal perturbation
     δT                  = 100e0 # thermal perturbation
     r                   = 10e3 # thermal perturbation radius
-    center_perturbation = lx/2, ly/2, -lz/2
+    center_perturbation = lx / 2, ly / 2, -lz / 2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
 
     t  = 0.0
@@ -111,9 +109,11 @@ function diffusion_3D(;
             rheology,
             args,
             dt,
-            di,;
-            igg,
-            verbose=false,
+            di;
+            kwargs = (; 
+                igg, 
+                verbose=false
+            ),
         )
 
         t  += dt

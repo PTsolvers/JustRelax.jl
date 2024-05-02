@@ -12,6 +12,11 @@ function runtests()
     nfail = 0
     printstyled("Testing package JustRelax.jl\n"; bold=true, color=:white)
 
+    f0 = ("test_traits.jl", "test_types.jl", "test_arrays_conversions.jl")
+    for f in f0
+        include(f)
+    end
+    
     for f in testfiles
         occursin("burstedde", f) && continue
 
@@ -23,6 +28,7 @@ function runtests()
             nfail += 1
         end
     end
+    
     return nfail
 end
 

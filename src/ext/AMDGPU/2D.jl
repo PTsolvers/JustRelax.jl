@@ -103,31 +103,32 @@ function JR2D.phase_ratios_center(
 end
 
 # Rheology
+
 ## viscosity
-function JR2D.compute_viscosity!(
-    ::AMDGPUBackendTrait, stokes, args, rheology, cutoff; relaxation=1e0
-)
-    return _compute_viscosity!(stokes, relaxation, args, rheology, cutoff)
+function JR2D.compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
 end
+
 function JR2D.compute_viscosity!(
     ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
 )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
+
 function JR2D.compute_viscosity!(η, ν, εII::RocArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
-function compute_viscosity!(
-    ::AMDGPUBackendTrait, stokes, args, rheology, cutoff; relaxation=1e0
-)
-    return _compute_viscosity!(stokes, relaxation, args, rheology, cutoff)
+function compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
 end
+
 function compute_viscosity!(
-    ::AMDGPUBackendTrait, stokes, phase_ratios, args, rheology, cutoff; relaxation=1e0
+    ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
 )
-    return _compute_viscosity!(stokes, relaxation, phase_ratios, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
+
 function compute_viscosity!(η, ν, εII::RocArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
@@ -138,10 +139,10 @@ function JR2D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTens
 end
 
 ## Buoyancy forces
-function JR2D.compute_ρg!(ρg::CuArray, rheology, args)
+function JR2D.compute_ρg!(ρg::RocArray, rheology, args)
     return compute_ρg!(ρg, rheology, args)
 end
-function JR2D.compute_ρg!(ρg::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
+function JR2D.compute_ρg!(ρg::RocArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -154,17 +155,17 @@ function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArr
     return _temperature2center!(thermal)
 end
 
-function JR2D.vertex2center!(center::T, vertex::T) where {T<:CuArray}
+function JR2D.vertex2center!(center::T, vertex::T) where {T<:RocArray}
     return vertex2center!(center, vertex)
 end
 
-function JR2D.center2vertex!(vertex::T, center::T) where {T<:CuArray}
+function JR2D.center2vertex!(vertex::T, center::T) where {T<:RocArray}
     return center2vertex!(vertex, center)
 end
 
 function JR2D.center2vertex!(
     vertex_yz::T, vertex_xz::T, vertex_xy::T, center_yz::T, center_xz::T, center_xy::T
-) where {T<:CuArray}
+) where {T<:RocArray}
     return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
 end
 

@@ -104,30 +104,30 @@ end
 
 # Rheology
 ## viscosity
-function JR3D.compute_viscosity!(
-    ::CUDABackendTrait, stokes, args, rheology, cutoff; relaxation=1e0
-)
-    return _compute_viscosity!(stokes, relaxation, args, rheology, cutoff)
+function JR3D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
 end
+
 function JR3D.compute_viscosity!(
     ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
 )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
+
 function JR3D.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
-function compute_viscosity!(
-    ::CUDABackendTrait, stokes, args, rheology, cutoff; relaxation=1e0
-)
-    return _compute_viscosity!(stokes, relaxation, args, rheology, cutoff)
+function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
 end
+
 function compute_viscosity!(
-    ::CUDABackendTrait, stokes, phase_ratios, args, rheology, cutoff; relaxation=1e0
+    ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
 )
-    return _compute_viscosity!(stokes, relaxation, phase_ratios, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
+
 function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end

@@ -79,6 +79,7 @@ function compute_viscosity!(
         backend(stokes), stokes, relaxation, phase_ratios, args, rheology, cutoff
     )
 end
+
 function compute_viscosity!(
     ::CPUBackendTrait,
     stokes::JustRelax.StokesArrays,

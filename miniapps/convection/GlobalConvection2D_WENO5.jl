@@ -173,13 +173,13 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     ρg               = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
-        compute_ρg!(ρg[2], phase_ratios, rheology, args)
+        compute_ρg!(ρg[2], rheology, args)
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
 
     # Rheology
     viscosity_cutoff = (1e16, 1e24)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_viscosity!(stokes, args, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -212,9 +212,9 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+        compute_ρg!(ρg[end], rheology, (T=thermal.Tc, P=stokes.P))
         compute_viscosity!(
-            stokes, phase_ratios, args, rheology, viscosity_cutoff
+            stokes, args, rheology, viscosity_cutoff
         )
         # ------------------------------
 

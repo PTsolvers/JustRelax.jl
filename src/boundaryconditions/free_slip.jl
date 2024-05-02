@@ -102,8 +102,6 @@ end
     return nothing
 end
 
-
-
 @parallel_indices (j) function free_slip_x!(A::AbstractArray{T,2}) where {T}
     A[1, j] = A[2, j]
     A[end, j] = A[end - 1, j]

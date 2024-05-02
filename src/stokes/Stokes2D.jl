@@ -570,7 +570,7 @@ function _solve!(
 
             @hide_communication b_width begin # communication/computation overlap
                 flow_bcs!(stokes, flow_bcs)
-                
+
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     Vx_on_Vy,

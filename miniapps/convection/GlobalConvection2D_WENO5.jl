@@ -1,7 +1,7 @@
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 import JustRelax.@cell
 
-const backend = JustRelax.CPUBackend
+const backend = CPUBackend
 
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -168,7 +168,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni, ViscoElastic)
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.8 / √2.1)
-    
+
     # Buoyancy forces
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     ρg               = @zeros(ni...), @zeros(ni...)
@@ -176,7 +176,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
-    
+
     # Rheology
     viscosity_cutoff = (1e16, 1e24)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
@@ -209,7 +209,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     local iters
     igg.me == 0 && println("Starting model")
     while (t / (1e6 * 3600 * 24 * 365.25)) < 4.5e3
-        
+
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))

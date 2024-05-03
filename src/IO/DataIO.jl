@@ -9,11 +9,11 @@ import ..JustRelax: Geometry
 
 include("H5.jl")
 
-export save_hdf5, checkpointing, metadata
+export save_hdf5, checkpointing, load_checkpoint, metadata
 
 include("JLD2.jl")
 
-export checkpointing_jld2
+export checkpointing_jld2, load_checkpoint_jld2
 
 include("VTK.jl")
 

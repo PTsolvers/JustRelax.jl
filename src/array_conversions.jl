@@ -13,6 +13,7 @@ function Array(
         JustRelax.ThermalArrays,
         JustRelax.Velocity,
         JustRelax.Residual,
+        JustRelax.Viscosity,
     },
 }
     return Array(backend(x), x)
@@ -28,6 +29,7 @@ function Array(
         JustRelax.ThermalArrays,
         JustRelax.Velocity,
         JustRelax.Residual,
+        JustRelax.Viscosity,
     },
 }
     nfields = fieldcount(T)

@@ -68,7 +68,6 @@ function load_checkpoint(file_path)
     return P, T, Vx, Vy, η, t
 end
 
-
 """
     function save_hdf5(dst, fname, data)
 

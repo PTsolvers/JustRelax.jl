@@ -37,7 +37,7 @@ function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, igg=i
         thermal=Array(thermal),
         particles=particles,
         phases=phases,
-        time= time,
+        time=time,
     )
 end
 

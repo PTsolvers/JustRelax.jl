@@ -85,7 +85,8 @@ end
         (-(τyy[i, j] - τyy_o[i, j]) * η_ij * _Gdt - τyy[i, j] + 2.0 * η_ij * εyy[i, j]) *
         multiplier
     τxy[i, j] +=
-        (-(τxy[i, j] - τxy_o[i, j]) * η_ij * _Gdt - τxy[i, j] + 2.0 * η_ij * av(εxy)) * multiplier
+        (-(τxy[i, j] - τxy_o[i, j]) * η_ij * _Gdt - τxy[i, j] + 2.0 * η_ij * av(εxy)) *
+        multiplier
 
     return nothing
 end
@@ -395,8 +396,7 @@ end
 function update_stress!(
     ::LinearRheologyTrait, stokes, ::Any, ::Any, phase_ratios, rheology, dt, θ_dτ
 )
-
-    dim(::AbstractArray{T, N}) where {T,N} = N
+    dim(::AbstractArray{T,N}) where {T,N} = N
 
     function f!(stokes, ::Val{2})
         center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
@@ -416,7 +416,7 @@ function update_stress!(
         update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
         return nothing
     end
-    
+
     ni = size(phase_ratios.center)
     nDim = Val(dim(stokes.viscosity.η))
 

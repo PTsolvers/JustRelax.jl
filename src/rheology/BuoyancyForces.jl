@@ -89,3 +89,19 @@ Compute the buoyancy forces based on the given rheology, arguments, and phase ra
     return fn_ratio(compute_density, rheology, phase_ratios, args) *
            compute_gravity(rheology[1])
 end
+
+# without phase ratios
+@inline update_ρg!(ρg, rheology, args) =
+    update_ρg!(isconstant(rheology), ρg, rheology, args)
+@inline update_ρg!(::ConstantDensityTrait, ρg, rheology, args) = nothing
+@inline update_ρg!(::NonConstantDensityTrait, ρg, rheology, args) =
+    compute_ρg!(ρg, rheology, args)
+# with phase ratios
+@inline update_ρg!(ρg, phase_ratios::JustRelax.PhaseRatio, rheology, args) =
+    update_ρg!(isconstant(rheology), ρg, phase_ratios, rheology, args)
+@inline update_ρg!(
+    ::ConstantDensityTrait, ρg, phase_ratios::JustRelax.PhaseRatio, rheology, args
+) = nothing
+@inline update_ρg!(
+    ::NonConstantDensityTrait, ρg, phase_ratios::JustRelax.PhaseRatio, rheology, args
+) = compute_ρg!(ρg, phase_ratios, rheology, args)

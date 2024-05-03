@@ -226,7 +226,7 @@ function _solve!(
             )
 
             # Update buoyancy
-            @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
+            update_ρg!(ρg[3], rheology, args)
 
             compute_viscosity!(
                 stokes,
@@ -408,7 +408,7 @@ function _solve!(
             )
 
             # Update buoyancy
-            compute_ρg!(ρg[end], phase_ratios, rheology, args)
+            update_ρg!(ρg[end], phase_ratios, rheology, args)
 
             # Update viscosity
             compute_viscosity!(
@@ -419,7 +419,8 @@ function _solve!(
                 viscosity_cutoff;
                 relaxation=viscosity_relaxation,
             )
-
+            # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
+            
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
                 stokes.τ.II,
@@ -437,7 +438,6 @@ function _solve!(
                 dt,
                 pt_stokes.θ_dτ,
             )
-            # free_surface_bcs!(stokes, flow_bc)
 
             center2vertex!(
                 stokes.τ.yz,

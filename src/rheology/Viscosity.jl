@@ -1,3 +1,35 @@
+# # Traits 
+
+# without phase ratios
+@inline function update_viscosity!(stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation=1e0)
+    update_viscosity!(islinear(rheology), stokes, args, rheology, cutoff; relaxation=relaxation)
+    return nothing
+end
+
+@inline function update_viscosity!(::LinearRheologyTrait, stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation=1e0)
+    return nothing
+end
+
+@inline function update_viscosity!(::NonLinearRheologyTrait, stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation=1e0)
+    compute_viscosity!(stokes, args, rheology, cutoff; relaxation=relaxation)
+    return nothing
+end
+
+# with phase ratios
+@inline function update_viscosity!(stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation=1e0)
+    update_viscosity!(islinear(rheology), stokes, phase_ratios, args, rheology, cutoff; relaxation=relaxation)
+    return nothing
+end
+
+@inline function update_viscosity!(::LinearRheologyTrait, stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation=1e0)
+    return nothing
+end
+
+@inline function update_viscosity!(::NonLinearRheologyTrait, stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation=1e0)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff; relaxation=relaxation)
+    return nothing
+end
+
 ## 2D KERNELS
 function compute_viscosity!(
     stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation=1e0

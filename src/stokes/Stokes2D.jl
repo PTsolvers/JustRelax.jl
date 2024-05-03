@@ -355,7 +355,6 @@ function _solve!(
                 dt,
                 θ_dτ,
             )
-
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
@@ -550,8 +549,6 @@ function _solve!(
                     relaxation=viscosity_relaxation,
                 )
             end
-
-            # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),

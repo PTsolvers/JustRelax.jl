@@ -271,7 +271,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 1) == 0
-            checkpointing(figdir, stokes, thermal.T, η, t)
+            checkpointing(figdir, stokes, thermal.T, t)
 
             if do_vtk
                 JustRelax.velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)

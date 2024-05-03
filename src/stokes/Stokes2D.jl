@@ -320,6 +320,10 @@ function _solve!(
     θ = @zeros(ni...)
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
 
+    # compute buoyancy forces and viscosity
+    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
+
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -501,6 +505,10 @@ function _solve!(
         Aij .= 0.0
     end
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
+
+    # compute buoyancy forces and viscosity
+    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break

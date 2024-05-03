@@ -202,6 +202,10 @@ function _solve!(
     λ = @zeros(ni...)
     θ = @zeros(ni...)
 
+    # compute buoyancy forces and viscosity
+    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
+
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -381,6 +385,10 @@ function _solve!(
     # solver loop
     wtime0 = 0.0
     ητ = deepcopy(η)
+
+    # compute buoyancy forces and viscosity
+    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin

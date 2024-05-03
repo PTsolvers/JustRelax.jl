@@ -79,7 +79,7 @@ end
     return nothing
 end
 
-function compute_viscosity!(η, ν, εII::AbstractArray, args, rheology, cutoff)
+function compute_viscosity!(η::AbstractArray, ν, εII::AbstractArray, args, rheology, cutoff)
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(η, ν, εII, args, rheology, cutoff)
     return nothing

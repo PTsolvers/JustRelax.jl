@@ -1,6 +1,6 @@
 push!(LOAD_PATH, "..")
 
-using Test, Suppressor
+using Test
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
@@ -171,8 +171,8 @@ function Sinking_Block2D()
     dt = compute_dt(stokes, di, igg)
     # ------------------------------
 
-    Vx_v    = @zeros(ni.+1...)
-    Vy_v    = @zeros(ni.+1...)
+    Vx_v     = @zeros(ni.+1...)
+    Vy_v     = @zeros(ni.+1...)
     velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
     velocity = @. √(Vx_v^2 + Vy_v^2 )
 
@@ -182,9 +182,7 @@ function Sinking_Block2D()
 end
 
 @testset "Sinking_Block2D" begin
-    @suppress begin
-        iters, velocity = Sinking_Block2D()
-        @test passed = iters.err_evo1[end] < 1e-5
-        @test maximum(velocity) ≈ 4.841885609356093e-10 atol = 1e-6
-    end
+    iters, velocity = Sinking_Block2D()
+    @test passed = iters.err_evo1[end] < 1e-5
+    @test maximum(velocity) ≈ 4.841885609356093e-10 atol = 1e-6
 end

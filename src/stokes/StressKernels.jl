@@ -429,8 +429,8 @@ function update_stress!(
 end
 
 function update_stress!(
-    ::NonLinearRheologyTrait, stokes, θ, λ::AbstractArray{Any, N}, phase_ratios, rheology, dt, θ_dτ
-) where N
+    ::NonLinearRheologyTrait, stokes, θ, λ::AbstractArray{T, N}, phase_ratios, rheology, dt, θ_dτ
+) where {N,T}
     ni = size(phase_ratios.center)
     nDim = Val(N)
 

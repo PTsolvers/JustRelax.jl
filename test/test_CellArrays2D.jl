@@ -1,5 +1,4 @@
-using Test, StaticArrays, AllocCheck
-using Suppressor
+using Test, StaticArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -21,6 +20,4 @@ using ParallelStencil
         @test (@allocated @cell A[1, 1, 1] = true) === 0
         @test A[1, 1]                              === SA[true, false]
     end
-    # allocs = check_allocs(getindex, (typeof(A), Int64, Int64))
-    # @test isempty(allocs)
 end

@@ -1,6 +1,6 @@
 push!(LOAD_PATH, "..")
 
-using Test, Suppressor
+using Test#, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
@@ -149,11 +149,6 @@ function ShearBand2D()
         tensor_invariant!(stokes.ε)
         push!(τII, maximum(stokes.τ.xx))
 
-        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        @parallel (@idx ni) multi_copy!(
-            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-        )
-
         it += 1
         t  += dt
 
@@ -170,10 +165,10 @@ function ShearBand2D()
 end
 
 @testset "ShearBand2D" begin
-    @suppress begin
+    # @suppress begin
         iters, τII, sol = ShearBand2D()
         @test passed = iters.err_evo1[end] < 1e-6
         @test τII[end] ≈ 1.41706 atol = 1e-4
         @test sol[end] ≈ 1.93960 atol = 1e-4
-    end
+    # end
 end

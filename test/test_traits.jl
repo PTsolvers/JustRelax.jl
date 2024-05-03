@@ -14,7 +14,7 @@ const bk = JustRelax.backend
     @test bk(rand(2,2,2)) === CPUBackendTrait()
 
     # test error handling
-    @test_throws ArgumentError bk(rand()) 
+    @test_throws ArgumentError bk(rand())
     @test_throws ArgumentError bk("potato")
 
     # test JR structs
@@ -24,17 +24,18 @@ const bk = JustRelax.backend
     thermal2 = JR2.ThermalArrays(CPUBackend, ni)
 
     @test bk(stokes2.V) === CPUBackendTrait()
+    @test bk(stokes2.viscosity) === CPUBackendTrait()
     @test bk(stokes2.τ) === CPUBackendTrait()
     @test bk(stokes2.R) === CPUBackendTrait()
     @test bk(stokes2.P) === CPUBackendTrait()
     @test bk(stokes2)   === CPUBackendTrait()
     @test bk(thermal2)  === CPUBackendTrait()
-    
+
     ## 3D
     ni       = 2, 2, 2
     stokes3  = JR3.StokesArrays(CPUBackend, ni)
     thermal3 = JR3.ThermalArrays(CPUBackend, ni)
- 
+
     @test bk(stokes3.V) === CPUBackendTrait()
     @test bk(stokes3.τ) === CPUBackendTrait()
     @test bk(stokes3.R) === CPUBackendTrait()

@@ -1,5 +1,4 @@
 using Test, Suppressor
-using Random: seed!
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = CPUBackend
@@ -44,9 +43,9 @@ using GeoParams
         pT, pPhases      = init_cell_arrays(particles, Val(3))
         time = 1.0
 
-        stokes.viscosity.η .= fill(rand(seed!(1234)))
-        stokes.V.Vy        .= fill(rand(seed!(1234)))
-        thermal.T          .= fill(rand(seed!(1234)))
+        stokes.viscosity.η .= fill(1.0)
+        stokes.V.Vy        .= fill(10)
+        thermal.T          .= fill(100)
 
 
         # Call the function
@@ -59,9 +58,9 @@ using GeoParams
         # Load the data from the file
         load_checkpoint_jld2(fname)
 
-        @test stokes.viscosity.η[1] ≈ 0.325977 rtol = 1e-4
-        @test stokes.V.Vy[1] ≈ 0.325977 rtol = 1e-4
-        @test thermal.T[1] ≈ 0.325977 rtol = 1e-4
+        @test stokes.viscosity.η[1] == 1.0
+        @test stokes.V.Vy[1] == 10
+        @test thermal.T[1] == 100
 
 
         # check the if the hdf5 function also works
@@ -77,9 +76,9 @@ using GeoParams
         stokes.viscosity.η  .= η
         stokes.V.Vy         .= Vy
         thermal.T           .= T
-        @test stokes.viscosity.η[1] ≈ 0.325977 rtol = 1e-4
-        @test stokes.V.Vy[1] ≈ 0.325977 rtol = 1e-4
-        @test thermal.T[1] ≈ 0.325977 rtol = 1e-4
+        @test stokes.viscosity.η[1] == 1.0
+        @test stokes.V.Vy[1] == 10
+        @test thermal.T[1] == 100
 
 
         # Remove the generated directory

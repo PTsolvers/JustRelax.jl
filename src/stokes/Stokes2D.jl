@@ -322,7 +322,7 @@ function _solve!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
@@ -508,7 +508,7 @@ function _solve!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break

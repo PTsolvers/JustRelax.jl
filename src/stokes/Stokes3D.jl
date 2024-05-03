@@ -171,6 +171,7 @@ function _solve!(
     nout=500,
     b_width=(4, 4, 4),
     viscosity_relaxation=1e-2,
+    viscosity_cutoff = (-Inf, Inf),
     verbose=true,
     kwargs...,
 ) where {T}
@@ -204,7 +205,7 @@ function _solve!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # solver loop
     wtime0 = 0.0
@@ -232,7 +233,7 @@ function _solve!(
             # Update buoyancy
             update_ρg!(ρg[3], rheology, args)
 
-            compute_viscosity!(
+            update_viscosity!(
                 stokes,
                 phase_ratios,
                 args,
@@ -388,7 +389,7 @@ function _solve!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
@@ -419,7 +420,7 @@ function _solve!(
             update_ρg!(ρg[end], phase_ratios, rheology, args)
 
             # Update viscosity
-            compute_viscosity!(
+            update_viscosity!(
                 stokes,
                 phase_ratios,
                 args,

@@ -20,7 +20,7 @@ Apply the prescribed heat boundary conditions `bc` on the `T`
 """
 thermal_bcs!(thermal, bcs) = thermal_bcs!(backend(thermal), thermal, bcs)
 function thermal_bcs!(
-    ::CPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs::FlowBoundaryConditions
+    ::CPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs::TemperatureBoundaryConditions
 )
     return thermal_bcs!(thermal.T, bcs)
 end

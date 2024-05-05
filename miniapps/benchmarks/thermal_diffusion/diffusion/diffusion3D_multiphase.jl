@@ -1,20 +1,18 @@
-using Printf, LinearAlgebra, GeoParams, CellArrays, StaticArrays
-using JustRelax
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+using JustRelax, JustRelax.JustRelax3D
+import JustRelax.@cell
 
-using JustPIC
-using JustPIC._3D
+const backend_JR = CPUBackend
+
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 3)
+
+using JustPIC, JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-# setup ParallelStencil.jl environment
-model = PS_Setup(:Threads, Float64, 3)  #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
-environment!(model)
-
-import JustRelax.@cell
+using GeoParams
 
 @parallel_indices (i, j, k) function init_T!(T, z)
     if z[k] == maximum(z)
@@ -63,7 +61,7 @@ function init_phases!(phases, particles, xc, yc, zc, r)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
 end
 
 function diffusion_3D(;
@@ -118,7 +116,7 @@ function diffusion_3D(;
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend_JR, ni)
     thermal.H .= 1e-6
     # physical parameters
     ρ          = @fill(ρ0, ni...)
@@ -144,16 +142,15 @@ function diffusion_3D(;
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni
     )
-    # temperature
     pPhases,     = init_cell_arrays(particles, Val(1))
+    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, center_perturbation..., r)
-    phase_ratios = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, pPhases)
+    phase_ratios_center(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion
     args       = (; P=P, T=thermal.Tc)
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
+    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
 
     t  = 0.0
     it = 0
@@ -169,11 +166,13 @@ function diffusion_3D(;
             args,
             dt,
             di;
-            igg     = igg,
-            phase   = phase_ratios,
-            iterMax = 10e3,
-            nout    = 1e2,
-            verbose = true,
+            kwargs =(;
+                igg     = igg,
+                phase   = phase_ratios,
+                iterMax = 10e3,
+                nout    = 1e2,
+                verbose = true,
+            )
         )
 
         t  += dt

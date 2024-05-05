@@ -30,19 +30,19 @@ function solCx_solution(geometry; η_left=1, η_right=1e6)
     return (vx=vxs, vy=vys, p=ps)
 end
 
-function solcx_error(geometry, stokes::StokesArrays; order=2)
+function solcx_error(geometry, stokes; order=2)
     Li(A, B; order=2) = norm(A .- B, order)
 
     solk     = solCx_solution(geometry)
     gridsize = reduce(*, geometry.di)
-    L2_vx    = Li(stokes.V.Vx[:, 2:(end - 1)], PTArray(solk.vx); order=order) * gridsize
-    L2_vy    = Li(stokes.V.Vy[2:(end - 1), :], PTArray(solk.vy); order=order) * gridsize
-    L2_p     = Li(stokes.P, PTArray(solk.p); order=order) * gridsize
+    L2_vx    = Li(stokes.V.Vx[:, 2:(end - 1)], PTArray(backend)(solk.vx); order=order) * gridsize
+    L2_vy    = Li(stokes.V.Vy[2:(end - 1), :], PTArray(backend)(solk.vy); order=order) * gridsize
+    L2_p     = Li(stokes.P, PTArray(backend)(solk.p); order=order) * gridsize
 
     return L2_vx, L2_vy, L2_p
 end
 
-function plot_solCx(geometry, stokes::StokesArrays, ρ; cmap=:vik, fun=heatmap!)
+function plot_solCx(geometry, stokes, ρ; cmap=:vik, fun=heatmap!)
     f = Figure(; size=(3000, 1800), fontsize=28)
 
     #Density
@@ -79,7 +79,7 @@ function plot_solCx(geometry, stokes::StokesArrays, ρ; cmap=:vik, fun=heatmap!)
     return f
 end
 
-function plot_solCx_error(geometry, stokes::StokesArrays, Δη; cmap=:vik)
+function plot_solCx_error(geometry, stokes, Δη; cmap=:vik)
     solc = solCx_solution(geometry; η_right=Δη)
 
     # Plot

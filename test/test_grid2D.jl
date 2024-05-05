@@ -1,7 +1,4 @@
-using Test, Suppressor, JustRelax
-
-model = PS_Setup(:cpu, Float64, 2)
-environment!(model)
+using Test, Suppressor, JustRelax, JustRelax.JustRelax2D
 
 @testset "Grid2D" begin
     @suppress begin

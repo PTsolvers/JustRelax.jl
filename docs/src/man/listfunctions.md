@@ -2,5 +2,5 @@
 
 Here an overview of all functions:
 ```@autodocs
-Modules = [JustRelax]
+Modules = [JustRelax, JustRelax.JustRelax2D, JustRelax.JustRelax3D, JustRelax.DataIO]
 ```

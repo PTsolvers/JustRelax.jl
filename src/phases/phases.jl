@@ -96,7 +96,7 @@ function phase_ratio_weights(
 
     for i in eachindex(ph)
         # bilinear weight (1-(xᵢ-xc)/dx)*(1-(yᵢ-yc)/dy)
-        p =  getindex.(pxi, i)
+        p = getindex.(pxi, i)
         isnan(first(p)) && continue
         x = @inline bilinear_weight(cell_center, p, di)
         sumw += x # reduce

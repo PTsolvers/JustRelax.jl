@@ -48,11 +48,13 @@ end
     end
 end
 
-function phase_ratios_center(phase_ratios, particles, grid, phases)
-    return phase_ratios_center(backend(phase_ratios), phase_ratios, particles, grid, phases)
+function phase_ratios_center!(phase_ratios, particles, grid, phases)
+    return phase_ratios_center!(
+        backend(phase_ratios), phase_ratios, particles, grid, phases
+    )
 end
 
-function phase_ratios_center(
+function phase_ratios_center!(
     ::CPUBackendTrait, phase_ratios::JustRelax.PhaseRatio, particles, grid::Geometry, phases
 )
     return _phase_ratios_center(phase_ratios, particles, grid, phases)

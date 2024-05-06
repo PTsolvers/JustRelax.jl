@@ -299,7 +299,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 1) == 0
-            checkpointing(figdir, stokes, thermal.T, t)
+            checkpointing_hdf5(figdir, stokes, thermal.T, t)
 
             if do_vtk
                 JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)

@@ -436,7 +436,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         #  # # Plotting -------------------------------------------------------
         if it == 1 || rem(it, 1) == 0
             (; η) = stokes.viscosity
-            checkpointing(figdir, stokes, thermal.T, t)
+            checkpointing_hdf5(figdir, stokes, thermal.T, t)
 
             if igg.me == 0
                 if do_vtk

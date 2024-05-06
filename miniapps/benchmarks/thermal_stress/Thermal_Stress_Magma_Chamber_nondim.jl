@@ -454,7 +454,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
         #  # # Plotting -------------------------------------------------------
         if it == 1 || rem(it, 1) == 0
-            checkpointing(figdir, stokes, thermal.T, t)
+            checkpointing_hdf5(figdir, stokes, thermal.T, t)
 
             if igg.me == 0
                 if do_vtk

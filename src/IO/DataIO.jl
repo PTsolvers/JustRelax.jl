@@ -6,10 +6,11 @@ using JLD2
 using MPI
 
 import ..JustRelax: Geometry
+import ..JustRelax: IGG
 
 include("H5.jl")
 
-export save_hdf5, checkpointing, load_checkpoint, metadata
+export save_hdf5, checkpointing_hdf5, load_checkpoint_hdf5, metadata
 
 include("JLD2.jl")
 

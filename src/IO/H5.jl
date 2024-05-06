@@ -13,7 +13,7 @@ macro namevar(x)
 end
 
 """
-    checkpointing(dst, stokes, T, η, time)
+    checkpointing_hdf5(dst, stokes, T, η, time)
 
 Save necessary data in `dst` as and HDF5 file to restart the model from the state at `time`
 """
@@ -31,7 +31,7 @@ function checkpointing_hdf5(dst, stokes, T, time)
 end
 
 """
-    load_checkpoint(file_path)
+    load_checkpoint_hdf5(file_path)
 
 Load the state of the simulation from an .h5 file.
 
@@ -56,7 +56,7 @@ P, T, Vx, Vy, η, t = load_checkpoint(file_path)
 
 
 """
-function load_checkpoint(file_path)
+function load_checkpoint_hdf5(file_path)
     h5file = h5open(file_path, "r")  # Open the file in read mode
     P = read(h5file["P"])  # Read the stokes variable
     T = read(h5file["T"])  # Read the thermal.T variable

@@ -50,9 +50,10 @@ using GeoParams
 
         # Call the function
         checkpointing_jld2(dst, stokes, thermal, particles, pPhases, time, igg)
+        checkpointing_jld2(dst, stokes, thermal, particles, pPhases, time)
 
         # Check that the file was created
-        fname = joinpath(dst, "checkpoint_rank_$(igg.me).jld2")
+        fname = joinpath(dst, "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2")
         @test isfile(fname)
 
         # Load the data from the file
@@ -71,7 +72,7 @@ using GeoParams
         @test isfile(fname)
 
         # Load the data from the file
-        P, T, Vx, Vy, η, t = load_checkpoint(fname)
+        P, T, Vx, Vy, η, t = load_checkpoint_hdf5(fname)
 
         stokes.viscosity.η  .= η
         stokes.V.Vy         .= Vy

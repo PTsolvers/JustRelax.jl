@@ -2,7 +2,7 @@
     checkpointing_jld2(dst, stokes, thermal, particles, phases, time, igg)
 
 Save necessary data in `dst` as a jld2 file to restart the model from the state at `time`.
-If run in parallel, the file will be named after the corresponidng rank e.g. `checkpoint_rank_0.jld2`
+If run in parallel, the file will be named after the corresponidng rank e.g. `checkpoint0000.jld2`
 and thus can be loaded by the processor while restarting the simulation.
 If you want to restart your simulation from the checkpoint you can use load() and specify the MPI rank
 by providing a dollar sign and the rank number.
@@ -19,26 +19,19 @@ by providing a dollar sign and the rank number.
         igg,
     )
 
-    using JLD2
-    restart = load("path/to/dst/checkpoint_rank_(igg.me).jld2")"
-    stokes = restart["stokes"]
-    thermal = restart["thermal"]
-    particles = restart["particles"]
-    pPhases = restart["phases"]
-    t = restart["time"]
     ```
 """
-checkpoint_name() = "checkpoint.jld2"
-checkpoint_name(igg::IGG) = "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2"
+checkpoint_name(dst) = "$dst/checkpoint.jld2"
+checkpoint_name(dst,igg::IGG) = "$dst/checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2"
 
 function checkpointing_jld2(dst, stokes, thermal, particles, phases, time)
-    fname = checkpoint_name()
+    fname = checkpoint_name(dst)
     checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname)
     return nothing
 end
 
 function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, igg::IGG)
-    fname = checkpoint_name(igg)
+    fname = checkpoint_name(dst,igg)
     checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname)
     return nothing
 end

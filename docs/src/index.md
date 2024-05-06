@@ -18,7 +18,7 @@ The package serves several purposes:
   * It provides a collection of solvers to be used in quickly developing new applications
   * It provides some standardization so that application codes can
 
-     - more easily handle local material properties through the use of [GeoParams.jl]((https://github.com/JuliaGeodynamics/GeoParams.jl))
+     - more easily handle local material properties through the use of [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)
      - more easily switch between a pseudo-transient solver and another solvers (e.g. an explicit thermal solvers)
 
   * It provides a natural repository for contributions of new solvers for use by the larger community

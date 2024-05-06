@@ -22,7 +22,7 @@ by providing a dollar sign and the rank number.
     ```
 """
 checkpoint_name(dst) = "$dst/checkpoint.jld2"
-checkpoint_name(dst,igg::IGG) = "$dst/checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2"
+checkpoint_name(dst, igg::IGG) = "$dst/checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2"
 
 function checkpointing_jld2(dst, stokes, thermal, particles, phases, time)
     fname = checkpoint_name(dst)
@@ -31,7 +31,7 @@ function checkpointing_jld2(dst, stokes, thermal, particles, phases, time)
 end
 
 function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, igg::IGG)
-    fname = checkpoint_name(dst,igg)
+    fname = checkpoint_name(dst, igg)
     checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname)
     return nothing
 end

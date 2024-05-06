@@ -17,7 +17,7 @@ end
 
 Save necessary data in `dst` as and HDF5 file to restart the model from the state at `time`
 """
-function checkpointing(dst, stokes, T, time)
+function checkpointing_hdf5(dst, stokes, T, time)
     !isdir(dst) && mkpath(dst) # creat folder in case it does not exist
     fname = joinpath(dst, "checkpoint")
     h5open("$(fname).h5", "w") do file

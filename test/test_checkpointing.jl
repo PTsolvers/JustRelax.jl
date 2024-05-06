@@ -22,7 +22,7 @@ using GeoParams
         # Physical domain ------------------------------------
         ly           = 1.0       # domain length in y
         lx           = 1.0       # domain length in x
-        nx, ny       = 64, 64
+        nx, ny       = 4, 4
         ni           = nx, ny     # number of cells
         igg          = IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
         li           = lx, ly     # domain length in x- and y-
@@ -40,7 +40,7 @@ using GeoParams
             backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
         )
         # temperature
-        pT, pPhases      = init_cell_arrays(particles, Val(3))
+        pT, pPhases      = init_cell_arrays(particles, Val(2))
         time = 1.0
 
         stokes.viscosity.η .= fill(1.0)
@@ -64,7 +64,7 @@ using GeoParams
 
 
         # check the if the hdf5 function also works
-        checkpointing(dst, stokes, thermal.T, time)
+        checkpointing_hdf5(dst, stokes, thermal.T, time)
 
         # Check that the file was created
         fname = joinpath(dst, "checkpoint.h5")

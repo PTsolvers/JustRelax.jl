@@ -28,10 +28,24 @@ by providing a dollar sign and the rank number.
     t = restart["time"]
     ```
 """
-function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, igg=igg::IGG)
+checkpoint_name() = "checkpoint.jld2"
+checkpoint_name(igg::IGG) = "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2"
+
+function checkpointing_jld2(dst, stokes, thermal, particles, phases, time)
+    fname = checkpoint_name()
+    checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname)
+    return nothing
+end
+
+function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, igg::IGG)
+    fname = checkpoint_name(igg)
+    checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname)
+    return nothing
+end
+
+function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname::String)
     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
-    fname = joinpath(dst, "checkpoint_rank_$(igg.me).jld2")
-    return jldsave(
+    jldsave(
         fname;
         stokes=Array(stokes),
         thermal=Array(thermal),
@@ -39,6 +53,7 @@ function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, igg=i
         phases=phases,
         time=time,
     )
+    return nothing
 end
 
 """

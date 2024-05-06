@@ -392,7 +392,7 @@ fig
 
 ### Final model
 Temperature field
-![Temperatuere](../assets/Blankenbach/Temp.png)
+![Temperature](../assets/Blankenbach/Temp.png)
 
 And time history of the rms-velocity and Nusselt number
 ![time series](../assets/Blankenbach/Time_Series_V_Nu.png)

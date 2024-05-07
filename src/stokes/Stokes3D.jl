@@ -171,7 +171,7 @@ function _solve!(
     nout=500,
     b_width=(4, 4, 4),
     viscosity_relaxation=1e-2,
-    viscosity_cutoff = (-Inf, Inf),
+    viscosity_cutoff=(-Inf, Inf),
     verbose=true,
     kwargs...,
 ) where {T}

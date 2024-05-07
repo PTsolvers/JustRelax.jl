@@ -11,7 +11,7 @@ makedocs(;
 
     warnonly = Documenter.except(:footnote),
     pages=[
-        "Home"      => "man/index.md",
+        "Home"      => "index.md",
         "User guide"=> Any[
             "Installation" => "man/installation.md",
             "Backend"   => "man/backend.md",

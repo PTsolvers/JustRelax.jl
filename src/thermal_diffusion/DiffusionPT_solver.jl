@@ -158,6 +158,9 @@ function _heatdiffusion_PT!(
             )
             thermal_bcs!(thermal.T, thermal_bc)
             update_halo!(thermal.T)
+
+            !isnothing(phase) &&
+                update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
         end
 
         iter += 1

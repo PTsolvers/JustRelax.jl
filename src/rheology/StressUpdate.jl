@@ -127,8 +127,8 @@ end
 
 # update the global arrays τ::NTuple{N, AbstractArray} with the local τij::NTuple{3, Float64} at indices idx::Vararg{Integer, N}
 @generated function correct_stress!(
-    τ, τij::NTuple{N1,T}, idx::Vararg{Integer,N2}
-) where {N1,N2,T}
+    τ, τij::NTuple{N1}, idx::Vararg{Integer,N2}
+) where {N1,N2}
     quote
         Base.@_inline_meta
         Base.@nexprs $N1 i -> τ[i][idx...] = τij[i]

@@ -92,14 +92,14 @@ function thermal_bcs!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays, bc
 end
 
 # Phases
-function JR2D.phase_ratios_center(
+function JR2D.phase_ratios_center!(
     ::AMDGPUBackendTrait,
     phase_ratios::JustRelax.PhaseRatio,
     particles,
     grid::Geometry,
     phases,
 )
-    return _phase_ratios_center(phase_ratios, particles, grid, phases)
+    return _phase_ratios_center!(phase_ratios, particles, grid, phases)
 end
 
 # Rheology
@@ -181,6 +181,44 @@ end
 # Utils
 function JR2D.compute_dt(::AMDGPUBackendTrait, S::JustRelax.StokesArrays, args...)
     return _compute_dt(S, args...)
+end
+
+# Subgrid diffusion
+
+function JR2D.subgrid_characteristic_time!(
+    subgrid_arrays,
+    particles,
+    dt₀::RocArray,
+    phases::JustRelax.PhaseRatio,
+    rheology,
+    thermal::JustRelax.ThermalArrays,
+    stokes::JustRelax.StokesArrays,
+    xci,
+    di,
+)
+    ni = size(stokes.P)
+    @parallel (@idx ni) subgrid_characteristic_time!(
+        dt₀, phases.center, rheology, thermal.Tc, stokes.P, di
+    )
+    return nothing
+end
+
+function JR2D.subgrid_characteristic_time!(
+    subgrid_arrays,
+    particles,
+    dt₀::RocArray,
+    phases::AbstractArray{Int,N},
+    rheology,
+    thermal::JustRelax.ThermalArrays,
+    stokes::JustRelax.StokesArrays,
+    xci,
+    di,
+) where {N}
+    ni = size(stokes.P)
+    @parallel (@idx ni) subgrid_characteristic_time!(
+        dt₀, phases, rheology, thermal.Tc, stokes.P, di
+    )
+    return nothing
 end
 
 end

@@ -126,7 +126,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     pPhases,     = init_cell_arrays(particles, Val(1))
     phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, center_perturbation..., r)
-    phase_ratios_center(phase_ratios, particles, grid, pPhases)
+    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)

@@ -171,8 +171,8 @@ function Sinking_Block2D()
     dt = compute_dt(stokes, di, igg)
     # ------------------------------
 
-    Vx_v    = @zeros(ni.+1...)
-    Vy_v    = @zeros(ni.+1...)
+    Vx_v     = @zeros(ni.+1...)
+    Vy_v     = @zeros(ni.+1...)
     velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
     velocity = @. √(Vx_v^2 + Vy_v^2 )
 

@@ -53,6 +53,44 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function compute_τ!(
+    τxx::AbstractArray{T,2}, # centers
+    τyy, # centers
+    τxy, # centers
+    τxx_o, # centers
+    τyy_o, # centers
+    τxy_o, # centers
+    εxx, # centers
+    εyy, # centers
+    εxy, # vertices
+    η, # centers
+    θ_dτ,
+    dt,
+    phase_center,
+    rheology,
+) where {T}
+    @inline av(A) = _av_a(A, i, j)
+
+    # Normal components
+    phase = phase_center[i, j]
+    _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
+    η_ij = η[i, j]
+
+    multiplier = inv(θ_dτ + η_ij * _Gdt + 1.0)
+
+    τxx[i, j] +=
+        (-(τxx[i, j] - τxx_o[i, j]) * η_ij * _Gdt - τxx[i, j] + 2.0 * η_ij * εxx[i, j]) *
+        multiplier
+    τyy[i, j] +=
+        (-(τyy[i, j] - τyy_o[i, j]) * η_ij * _Gdt - τyy[i, j] + 2.0 * η_ij * εyy[i, j]) *
+        multiplier
+    τxy[i, j] +=
+        (-(τxy[i, j] - τxy_o[i, j]) * η_ij * _Gdt - τxy[i, j] + 2.0 * η_ij * av(εxy)) *
+        multiplier
+
+    return nothing
+end
+
 @parallel_indices (i, j) function compute_τ_vertex!(
     τxy::AbstractArray{T,2}, εxy, η, θ_dτ
 ) where {T}
@@ -343,6 +381,112 @@ end
         τ = xx[I...], yy[I...], zz[I...], gather_yz(yz), gather_xz(xz), gather_xy(xy)
         II[I...] = second_invariant_staggered(τ...)
     end
+
+    return nothing
+end
+
+####
+
+function update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ)
+    return update_stress!(
+        islinear(rheology), stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ
+    )
+end
+
+function update_stress!(
+    ::LinearRheologyTrait, stokes, ::Any, ::Any, phase_ratios, rheology, dt, θ_dτ
+)
+    dim(::AbstractArray{T,N}) where {T,N} = N
+
+    function f!(stokes, ::Val{2})
+        center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+        update_halo!(stokes.τ.xy)
+        return nothing
+    end
+
+    function f!(stokes, ::Val{3})
+        center2vertex!(
+            stokes.τ.yz,
+            stokes.τ.xz,
+            stokes.τ.xy,
+            stokes.τ.yz_c,
+            stokes.τ.xz_c,
+            stokes.τ.xy_c,
+        )
+        update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
+        return nothing
+    end
+
+    ni = size(phase_ratios.center)
+    nDim = Val(dim(stokes.viscosity.η))
+
+    @parallel (@idx ni) compute_τ!(
+        @tensor_center(stokes.τ)...,
+        @tensor_center(stokes.τ_o)...,
+        @strain(stokes)...,
+        stokes.viscosity.η,
+        θ_dτ,
+        dt,
+        phase_ratios.center,
+        tupleize(rheology), # needs to be a tuple
+    )
+
+    f!(stokes, nDim)
+
+    return nothing
+end
+
+function update_stress!(
+    ::NonLinearRheologyTrait,
+    stokes,
+    θ,
+    λ::AbstractArray{T,N},
+    phase_ratios,
+    rheology,
+    dt,
+    θ_dτ,
+) where {N,T}
+    ni = size(phase_ratios.center)
+    nDim = Val(N)
+
+    function f!(stokes, ::Val{2})
+        center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+        update_halo!(stokes.τ.xy)
+        return nothing
+    end
+
+    function f!(stokes, ::Val{3})
+        center2vertex!(
+            stokes.τ.yz,
+            stokes.τ.xz,
+            stokes.τ.xy,
+            stokes.τ.yz_c,
+            stokes.τ.xz_c,
+            stokes.τ.xy_c,
+        )
+        update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
+        return nothing
+    end
+
+    @parallel (@idx ni) compute_τ_nonlinear!(
+        @tensor_center(stokes.τ),
+        stokes.τ.II,
+        @tensor_center(stokes.τ_o),
+        @strain(stokes),
+        @tensor_center(stokes.ε_pl),
+        stokes.EII_pl,
+        stokes.P,
+        θ,
+        stokes.viscosity.η,
+        stokes.viscosity.η_vep,
+        λ,
+        phase_ratios.center,
+        tupleize(rheology), # needs to be a tuple
+        dt,
+        θ_dτ,
+    )
+
+    f!(stokes, nDim)
 
     return nothing
 end

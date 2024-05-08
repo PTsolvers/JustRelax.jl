@@ -1,23 +1,3 @@
-function compute_viscosity!(η, ν, stokes::StokesArrays, args, rheology, cutoff)
-    ni = size(η)
-    @parallel (@idx ni) compute_viscosity!(η, ν, @strain(stokes)..., args, rheology, cutoff)
-end
-
-function compute_viscosity!(η, ν, εII::AbstractArray, args, rheology, cutoff)
-    ni = size(η)
-    @parallel (@idx ni) compute_viscosity!(η, ν, εII, args, rheology, cutoff)
-end
-
-function compute_viscosity!(
-    η, ν, phase_ratios::PhaseRatio, stokes::StokesArrays, args, rheology, cutoff
-)
-    ni = size(η)
-    @parallel (@idx ni) compute_viscosity!(
-        η, ν, phase_ratios.center, @strain(stokes)..., args, rheology, cutoff
-    )
-end
-
-## 2D KERNELS
 function compute_viscosity!(
     stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation=1e0
 )

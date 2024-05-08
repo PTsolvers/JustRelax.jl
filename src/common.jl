@@ -35,7 +35,7 @@ export FlowBoundaryConditions,
 include("MiniKernels.jl")
 
 include("phases/phases.jl")
-export fn_ratio, phase_ratios_center
+export phase_ratios_center!, fn_ratio
 
 include("rheology/BuoyancyForces.jl")
 export compute_ρg!

@@ -117,21 +117,3 @@ function GMG_subduction_2D(nx, ny)
 
     return li, origin, ph, Temp[:,1,:].+273
 end
-
-
-function struct2cpu(a::T) where T<:Union{StokesArrays, SymmetricTensor, ThermalArrays, Velocity, Residual}
-    nfields = fieldcount(T)
-    cpu_fields = ntuple(Val(nfields)) do i 
-        struct2cpu(getfield(a, i))
-    end
-    return T(cpu_fields...)
-end
-
-# @inline struct2cpu(A::Array) = A
-# @inline struct2cpu(A::AbstractArray) = Array(A)
-
-# struct2cpu(stokes)
-
-# foo(::T) where T = T(rand(2,2),rand(2,2))
-# foo(T.name.Typeofwrapper)
-# T.name.Typeofwrapper[1]

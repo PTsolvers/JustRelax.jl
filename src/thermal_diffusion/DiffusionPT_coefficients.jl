@@ -1,19 +1,10 @@
 function PTThermalCoeffs(
-    ::Type{CPUBackend},
-    K,
-    ρCp,
-    dt,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
-    ϵ=1e-8,
-    CFL=0.9 / √3,
-) where {nDim,T}
+    ::Type{CPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
+)
     return PTThermalCoeffs(K, ρCp, dt, di, li; ϵ=ϵ, CFL=CFL)
 end
 
-function PTThermalCoeffs(
-    K, ρCp, dt, di::NTuple{nDim,T}, li::NTuple{nDim,Any}; ϵ=1e-8, CFL=0.9 / √3
-) where {nDim,T}
+function PTThermalCoeffs(K, ρCp, dt, di, li::NTuple; ϵ=1e-8, CFL=0.9 / √3)
     Vpdτ = min(di...) * CFL
     max_lxyz = max(li...)
     max_lxyz2 = max_lxyz^2
@@ -30,25 +21,17 @@ function PTThermalCoeffs(
     args,
     dt,
     ni,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
+    di::NTuple,
+    li::NTuple;
     ϵ=1e-8,
     CFL=0.9 / √3,
-) where {nDim,T}
+)
     return PTThermalCoeffs(rheology, phase_ratios, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 
 function PTThermalCoeffs(
-    rheology,
-    phase_ratios,
-    args,
-    dt,
-    ni,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
-    ϵ=1e-8,
-    CFL=0.9 / √3,
-) where {nDim,T}
+    rheology, phase_ratios, args, dt, ni, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
+)
     Vpdτ = min(di...) * CFL
     max_lxyz = max(li...)
     θr_dτ, dτ_ρ = @zeros(ni...), @zeros(ni...)
@@ -62,22 +45,14 @@ end
 
 # without phase ratios
 function PTThermalCoeffs(
-    ::Type{CPUBackend},
-    rheology,
-    args,
-    dt,
-    ni,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
-    ϵ=1e-8,
-    CFL=0.9 / √3,
-) where {nDim,T}
+    ::Type{CPUBackend}, rheology, args, dt, ni, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
+)
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 
 function PTThermalCoeffs(
-    rheology, args, dt, ni, di::NTuple{nDim,T}, li::NTuple{nDim,Any}; ϵ=1e-8, CFL=0.9 / √3
-) where {nDim,T}
+    rheology, args, dt, ni, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
+)
     Vpdτ = min(di...) * CFL
     max_lxyz = max(li...)
     θr_dτ, dτ_ρ = @zeros(ni...), @zeros(ni...)

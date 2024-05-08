@@ -320,6 +320,10 @@ function _solve!(
     θ = @zeros(ni...)
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
 
+    # compute buoyancy forces and viscosity
+    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -327,13 +331,13 @@ function _solve!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
             )
 
-            compute_ρg!(ρg[2], rheology, args)
+            update_ρg!(ρg[2], rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            compute_viscosity!(
+            update_viscosity!(
                 stokes, args, rheology, viscosity_cutoff; relaxation=viscosity_relaxation
             )
             compute_maxloc!(ητ, η; window=(1, 1))
@@ -354,7 +358,6 @@ function _solve!(
                 dt,
                 θ_dτ,
             )
-
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
@@ -534,7 +537,7 @@ function _solve!(
             # stokes.P[1, end] = stokes.P[2, end]
             # stokes.P[end, end] = stokes.P[end - 1, end]
 
-            compute_ρg!(ρg[2], phase_ratios, rheology, args)
+            update_ρg!(ρg[2], phase_ratios, rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -544,7 +547,7 @@ function _solve!(
                 @copy η0 η
             end
             if do_visc
-                compute_viscosity!(
+                update_viscosity!(
                     stokes,
                     phase_ratios,
                     args,
@@ -571,8 +574,6 @@ function _solve!(
                 dt,
                 θ_dτ,
             )
-            # free_surface_bcs!(stokes, flow_bcs)
-
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
@@ -673,5 +674,4 @@ function _solve!(
         norm_Ry=norm_Ry,
         norm_∇V=norm_∇V,
     )
-
 end

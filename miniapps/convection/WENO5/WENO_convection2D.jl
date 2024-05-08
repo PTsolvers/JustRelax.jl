@@ -120,7 +120,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     r_anomaly        = 25e3   # radius of perturbation
     init_phases!(pPhases, particles, lx; d=abs(yc_anomaly), r=r_anomaly)
     phase_ratios     = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    @parallel (@idx ni) phase_ratios_center!(phase_ratios.center, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -261,7 +261,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # update phase ratios
-        phase_ratios_center(phase_ratios, particles, grid, pPhases)
+        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
         @show it += 1
         t        += dt
 

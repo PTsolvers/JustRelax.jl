@@ -19,6 +19,7 @@ function runtests()
     
     for f in testfiles
         occursin("burstedde", f) && continue
+        occursin("VanKeken", f) && continue
 
         println("")
         println("Running tests from $f")

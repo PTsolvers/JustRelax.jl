@@ -171,6 +171,7 @@ function _solve!(
     nout=500,
     b_width=(4, 4, 4),
     viscosity_relaxation=1e-2,
+    viscosity_cutoff=(-Inf, Inf),
     verbose=true,
     kwargs...,
 ) where {T}
@@ -202,6 +203,10 @@ function _solve!(
     λ = @zeros(ni...)
     θ = @zeros(ni...)
 
+    # compute buoyancy forces and viscosity
+    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -226,9 +231,9 @@ function _solve!(
             )
 
             # Update buoyancy
-            @parallel (@idx ni) compute_ρg!(ρg[3], rheology, args)
+            update_ρg!(ρg[3], rheology, args)
 
-            compute_viscosity!(
+            update_viscosity!(
                 stokes,
                 phase_ratios,
                 args,
@@ -385,6 +390,10 @@ function _solve!(
     wtime0 = 0.0
     ητ = deepcopy(η)
 
+    # compute buoyancy forces and viscosity
+    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
@@ -415,10 +424,10 @@ function _solve!(
             )
 
             # Update buoyancy
-            compute_ρg!(ρg[end], phase_ratios, rheology, args)
+            update_ρg!(ρg[end], phase_ratios, rheology, args)
 
             # Update viscosity
-            compute_viscosity!(
+            update_viscosity!(
                 stokes,
                 phase_ratios,
                 args,
@@ -426,6 +435,7 @@ function _solve!(
                 viscosity_cutoff;
                 relaxation=viscosity_relaxation,
             )
+            # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
             # if !cte_viscosity
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -444,7 +454,6 @@ function _solve!(
                 dt,
                 pt_stokes.θ_dτ,
             )
-            # free_surface_bcs!(stokes, flow_bc)
 
             center2vertex!(
                 stokes.τ.yz,

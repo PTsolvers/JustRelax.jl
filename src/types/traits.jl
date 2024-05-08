@@ -14,6 +14,7 @@ struct AMDGPUBackendTrait <: BackendTrait end
 @inline backend(::JustRelax.Velocity{T}) where {T} = backend(T)
 @inline backend(::JustRelax.SymmetricTensor{T}) where {T} = backend(T)
 @inline backend(::JustRelax.Residual{T}) where {T} = backend(T)
+@inline backend(::JustRelax.Viscosity{T}) where {T} = backend(T)
 @inline backend(::JustRelax.ThermalArrays{T}) where {T} = backend(T)
 @inline backend(x::JustRelax.StokesArrays) = backend(x.P)
 @inline backend(x::JustRelax.PhaseRatio) = backend(x.center.data)

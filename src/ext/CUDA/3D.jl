@@ -93,6 +93,7 @@ end
 
 # Phases
 function JR3D.phase_ratios_center!(
+function JR3D.phase_ratios_center!(
     ::CUDABackendTrait,
     phase_ratios::JustRelax.PhaseRatio,
     particles,
@@ -100,35 +101,37 @@ function JR3D.phase_ratios_center!(
     phases,
 )
     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
+    return _phase_ratios_center!(phase_ratios, particles, grid, phases)
 end
 
 # Rheology
+
 ## viscosity
-function JR3D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff)
+function JR3D.compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff)
     return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
 end
 
 function JR3D.compute_viscosity!(
-    ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
+    ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
 )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
-function JR3D.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
+function JR2D.compute_viscosity!(η, ν, εII::RocArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
-function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff)
+function compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff)
     return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
 end
 
 function compute_viscosity!(
-    ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
+    ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
 )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
-function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
+function compute_viscosity!(η, ν, εII::RocArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
@@ -138,10 +141,10 @@ function JR3D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor
 end
 
 ## Buoyancy forces
-function JR3D.compute_ρg!(ρg::CuArray, rheology, args)
+function JR3D.compute_ρg!(ρg::RocArray, rheology, args)
     return compute_ρg!(ρg, rheology, args)
 end
-function JR3D.compute_ρg!(ρg::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
+function JR3D.compute_ρg!(ρg::RocArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -154,17 +157,17 @@ function temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArray
     return _temperature2center!(thermal)
 end
 
-function JR3D.vertex2center!(center::T, vertex::T) where {T<:CuArray}
+function JR3D.vertex2center!(center::T, vertex::T) where {T<:RocArray}
     return vertex2center!(center, vertex)
 end
 
-function JR3D.center2vertex!(vertex::T, center::T) where {T<:CuArray}
+function JR3D.center2vertex!(vertex::T, center::T) where {T<:RocArray}
     return center2vertex!(vertex, center)
 end
 
 function JR3D.center2vertex!(
     vertex_yz::T, vertex_xz::T, vertex_xy::T, center_yz::T, center_xz::T, center_xy::T
-) where {T<:CuArray}
+) where {T<:RocArray}
     return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
 end
 

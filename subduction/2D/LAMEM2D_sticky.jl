@@ -1,5 +1,5 @@
-# const isCUDA = true
 const isCUDA = false
+# const isCUDA = true
 
 using TimerOutputs
 
@@ -70,29 +70,29 @@ end
 function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
 
     # Physical domain ------------------------------------
-    ni           = nx, ny           # number of cells
-    di           = @. li / ni       # grid steps
-    grid         = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    ni                  = nx, ny           # number of cells
+    di                  = @. li / ni       # grid steps
+    grid                = Geometry(ni, li; origin = origin)
+    (; xci, xvi)        = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    ρbg                = 2.7e3
-    rheology           = init_rheologies(; ρbg = ρbg)
-    rheology_augmented = init_rheologies(; ρbg = 0e0)
-    dt                 = 50e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    ρbg                 = 2.7e3
+    rheology            = init_rheologies(; ρbg = ρbg)
+    rheology_augmented  = init_rheologies(; ρbg = 0e0)
+    dt                  = 50e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell          = 40
-    max_xcell       = 60
-    min_xcell       = 20
-    particles       = init_particles(
+    nxcell              = 40
+    max_xcell           = 60
+    min_xcell           = 20
+    particles           = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
-    subgrid_arrays  = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays      = SubgridDiffusionCellArrays(particles)
     # velocity grids
-    grid_vxi        = velocity_grids(xci, xvi, di)
+    grid_vxi            = velocity_grids(xci, xvi, di)
     # temperature
     pPhases, pT         = init_cell_arrays(particles, Val(2))
     τxx_p, τyy_p, τxy_p = init_cell_arrays(particles, Val(3))
@@ -101,8 +101,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
-    init_phases!(pPhases, phases_device, particles, xvi)
     phase_ratios     = PhaseRatio(backend, ni, length(rheology))
+    init_phases!(pPhases, phases_device, particles, xvi)
     phase_ratios_center!(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
@@ -187,6 +187,26 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         Vy_v = @zeros(ni.+1...)
     end
 
+    # Smooth out thermal field ---------------------------
+    for _ in 1:10
+        heatdiffusion_PT!(
+            thermal,
+            pt_thermal,
+            thermal_bc,
+            rheology_augmented,
+            args,
+            1e6 * 3600 * 24 * 365.25,
+            di;
+            kwargs = (
+                igg     = igg,
+                phase   = phase_ratios,
+                iterMax = 150e3,
+                nout    = 1e2,
+                verbose = true,
+            )
+        )
+    end
+
     T_buffer    = @zeros(ni.+1)
     Told_buffer = similar(T_buffer)
     dt₀         = similar(stokes.P)
@@ -219,8 +239,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     
         args = (; T = thermal.Tc, P = Plitho,  dt=Inf)
         # args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        compute_viscosity!(stokes, phase_ratios, args, rheology, (1e18, 1e24))
-        compute_ρg!(ρg[2], phase_ratios, rheology, args)
+        # compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+        # compute_ρg!(ρg[2], phase_ratios, rheology, args)
         
         # Stokes solver ----------------
         t_stokes = @elapsed begin
@@ -264,7 +284,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 igg     = igg,
                 phase   = phase_ratios,
                 iterMax = 150e3,
-                nout    = 2e3,
+                nout    = 1e2,
                 verbose = true,
             )
         )
@@ -393,7 +413,7 @@ figdir   = "Subduction_LAMEM_2D"
 n        = 128
 nx, ny   = n*6, n
 nx, ny   = 512, 128
-nx, ny   = 32*6, 32
+# nx, ny   = 32*6, 32
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
@@ -401,23 +421,4 @@ else
     igg
 end
 
-# main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
-
-
-# Xv  = [x for x in xvi[1], y in xvi[2]][:];
-# Yv  = [y for x in xvi[1], y in xvi[2]][:];
-# p   = phases_GMG[:];
-
-# scatter!(Xv./1e3, Yv./1e3, color = p, markersize = 10, colormap=:inferno)
-
-# init_phases!(pPhases, phases_device, particles, xvi)
-
-# # Make particles plottable
-# p        = particles.coords
-# ppx, ppy = p
-# pxv      = ppx.data[:]./1e3
-# pyv      = ppy.data[:]./1e3
-# clr      = pPhases.data[:]
-# idxv     = particles.index.data[:];
-
-# scatter!(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

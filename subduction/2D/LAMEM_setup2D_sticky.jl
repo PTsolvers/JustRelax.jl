@@ -86,7 +86,7 @@ function GMG_subduction_2D(nx, ny)
         Phases, 
         Temp, 
         Grid2D; 
-        xlim    =(0, 300), 
+        xlim    =(0, 500), 
         zlim    =(-model_depth, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=30,
         phase   = LithosphericPhases(Layers=[30 80], Phases=[1 2 0], Tlab=1250 ), 

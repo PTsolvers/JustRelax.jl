@@ -2,24 +2,6 @@ using StaticArrays
 
 # ROTATION KERNELS
 
-## Stress Rotation on the particles
-function compute_vorticity!(stokes::StokesArrays, di::NTuple{2})
-    ωxy = stokes.ω.xy_c
-    ni = size(ωxy)
-    @parallel (@idx ni) compute_vorticity!(ωxy, @velocity(stokes)..., inv.(di)...)
-    
-    return nothing
-end
-
-@parallel_indices (i, j) function compute_vorticity!(ωxy, Vx, Vy, _dx, _dy)
-    dx(A) = _d_xa(A, i, j, _dx)
-    dy(A) = _d_ya(A, i, j, _dy)
-
-    ωxy[i, j] = 0.5 * (dx(Vy) - dy(Vx))
-
-    return nothing
-end
-
 function jaumann!(xx, yy, xy, ω, index, dt)
     ni = size(xx)
     @parallel (@idx ni) _jaumann!(xx, yy, xy, ω, index, dt)
@@ -91,7 +73,7 @@ end
 # STRESS ROTATION ON THE PARTICLES
 
 function rotate_stress_particles!(
-    stokes::StokesArrays,
+    stokes::JustRelax.StokesArrays,
     τxx_vertex::T, 
     τyy_vertex::T,
     τxx_o_vertex::T, 
@@ -101,7 +83,7 @@ function rotate_stress_particles!(
     τxy_p::CA,
     vorticity_p::CA,
     particles,
-    grid::Geometry,
+    grid::JustRelax.Geometry,
     dt;
     fn = rotation_matrix!
 ) where {T<:AbstractArray, CA}

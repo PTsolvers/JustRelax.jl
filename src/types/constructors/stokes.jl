@@ -4,7 +4,7 @@ function Velocity(nx::Integer, ny::Integer)
     nVx = (nx + 1, ny + 2)
     nVy = (nx + 2, ny + 1)
 
-    Vx, Vy = @zeros(nVx...), @zeros(nVy)
+    Vx, Vy = @zeros(nVx...), @zeros(nVy...)
     return JustRelax.Velocity(Vx, Vy, nothing)
 end
 
@@ -13,8 +13,24 @@ function Velocity(nx::Integer, ny::Integer, nz::Integer)
     nVy = (nx + 2, ny + 1, nz + 2)
     nVz = (nx + 2, ny + 2, nz + 1)
 
-    Vx, Vy, Vz = @zeros(nVx...), @zeros(nVy), @zeros(nVz)
+    Vx, Vy, Vz = @zeros(nVx...), @zeros(nVy...), @zeros(nVz...)
     return JustRelax.Velocity(Vx, Vy, Vz)
+end
+
+## Vorticity type
+
+function Vorticity(nx::Integer, ny::Integer)
+    xy = @zeros(nx, ny)
+
+    return JustRelax.Vorticity(nothing, nothing, xy)
+end
+
+function Vorticity(nx::Integer, ny::Integer, nz::Integer)
+    yz = @zeros(nx, ny, nz)
+    xz = @zeros(nx, ny, nz)
+    xy = @zeros(nx, ny, nz)
+
+    return JustRelax.Vorticity(yz, xz, xy)
 end
 
 ## Viscosity type
@@ -80,6 +96,7 @@ function StokesArrays(ni::NTuple{N,Integer}) where {N}
     P0 = @zeros(ni...)
     ∇V = @zeros(ni...)
     V = Velocity(ni...)
+    ω = Vorticity(ni...)
     τ = SymmetricTensor(ni...)
     τ_o = SymmetricTensor(ni...)
     ε = SymmetricTensor(ni...)
@@ -88,5 +105,5 @@ function StokesArrays(ni::NTuple{N,Integer}) where {N}
     viscosity = Viscosity(ni)
     R = Residual(ni...)
 
-    return JustRelax.StokesArrays(P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R)
+    return JustRelax.StokesArrays(P, P0, V, ∇V, ω, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R)
 end

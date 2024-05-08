@@ -12,10 +12,10 @@ Velocity(Vx::T, Vy::T) where {T} = Velocity(Vx, Vy, nothing)
 
 Velocity(ni::NTuple{N,Number}) where {N} = Velocity(ni...)
 function Velocity(::Number, ::Number)
-    throw(ArgumentError("Velocity dimensions must be given as integers"))
+    throw(ArgumentError("Dimensions must be given as integers"))
 end
 function Velocity(::Number, ::Number, ::Number)
-    throw(ArgumentError("Velocity dimensions must be given as integers"))
+    throw(ArgumentError("Dimensions must be given as integers"))
 end
 
 ## Viscosity type
@@ -32,7 +32,22 @@ Viscosity(args...) = Viscosity(promote(args...)...)
 Viscosity(nx::T, ny::T) where {T<:Number} = Viscosity((nx, ny))
 Viscosity(nx::T, ny::T, nz::T) where {T<:Number} = Viscosity((nx, ny, nz))
 function Viscosity(::NTuple{N,Number}) where {N}
-    throw(ArgumentError("Viscosity dimensions must be given as integers"))
+    throw(ArgumentError("Dimensions must be given as integers"))
+end
+
+## Vorticity type
+struct Vorticity{T}
+    yz::Union{T,Nothing}
+    xz::Union{T,Nothing}
+    xy::T
+
+    Vorticity(yz::Union{T,Nothing}, xz::Union{T,Nothing}, xy::T) where {T} = new{T}(yz, xz, xy)
+end
+
+Vorticity(nx::T, ny::T) where {T<:Number} = Vorticity((nx, ny))
+Vorticity(nx::T, ny::T, nz::T) where {T<:Number} = Vorticity((nx, ny, nz))
+function Vorticity(::NTuple{N,Number}) where {N}
+    throw(ArgumentError("Dimensions must be given as integers"))
 end
 
 ## SymmetricTensor type
@@ -101,11 +116,12 @@ end
 
 ## StokesArrays type
 
-struct StokesArrays{A,B,C,D,T}
+struct StokesArrays{A,B,C,D,E,T}
     P::T
     P0::T
     V::A
     ∇V::T
+    ω::E
     τ::B
     ε::B
     ε_pl::B

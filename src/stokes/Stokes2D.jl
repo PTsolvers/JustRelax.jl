@@ -509,6 +509,9 @@ function _solve!(
     Plitho = reverse(cumsum(reverse((ρg[2] .+ ρg_bg) .* di[2], dims=2), dims=2), dims=2)
     args.P .= stokes.P .+ Plitho .- minimum(stokes.P)
   
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
+    
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
 

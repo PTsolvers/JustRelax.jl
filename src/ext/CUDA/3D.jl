@@ -93,7 +93,6 @@ end
 
 # Phases
 function JR3D.phase_ratios_center!(
-function JR3D.phase_ratios_center!(
     ::CUDABackendTrait,
     phase_ratios::JustRelax.PhaseRatio,
     particles,

@@ -32,7 +32,7 @@ function init_rheology_nonNewtonian_plastic(; ρbg = 0e0)
 end
 
 function init_rheology_linear(; ρbg = 0e0)
-    lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e20),)),
+    lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e20),))
     init_rheologies(lithosphere_rheology; ρbg = ρbg)
 end
 

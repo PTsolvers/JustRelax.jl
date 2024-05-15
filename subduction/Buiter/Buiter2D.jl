@@ -76,8 +76,15 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Physical properties using GeoParams ----------------
     ρbg                 = 3.2e3 + 1
-    rheology            = init_rheologies(; ρbg = ρbg)
-    rheology_augmented  = init_rheologies(; ρbg = 0e0)
+    rheology            = init_rheology_linear(; ρbg = ρbg)
+    rheology_augmented  = init_rheology_linear(; ρbg = 0e0)
+
+    rheology            = init_rheology_nonNewtonian(; ρbg = ρbg)
+    rheology_augmented  = init_rheology_nonNewtonian(; ρbg = 0e0)
+
+    rheology            = init_rheology_nonNewtonian_plastic(; ρbg = ρbg)
+    rheology_augmented  = init_rheology_nonNewtonian_plastic(; ρbg = 0e0)
+
     dt                  = 50e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -406,7 +413,7 @@ figdir   = "Buiter_2D"
 # nx, ny   = 512, 128
 n        = 128
 nx, ny   = n*6, n
-nx, ny   = 256, 256
+nx, ny   = 512, 256
 # nx, ny   = 128, 128
 # nx, ny   = 32*6, 32
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)

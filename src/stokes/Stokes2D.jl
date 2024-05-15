@@ -505,13 +505,14 @@ function _solve!(
     end
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
     
-    ρg_bg = 2700 * 9.81
-    Plitho = reverse(cumsum(reverse((ρg[2] .+ ρg_bg) .* di[2], dims=2), dims=2), dims=2)
-    args.P .= stokes.P .+ Plitho .- minimum(stokes.P)
-  
+
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
     
+    (; ρbg) = args
+    ρgz_diff  = ρg[2] .- ρbg
+    Plitho    = reverse(cumsum(reverse((ρg[2]) .* di[2], dims=2), dims=2), dims=2)
+  
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
 
@@ -534,6 +535,7 @@ function _solve!(
                 θ_dτ,
                 args,
             )
+            args.P   .= stokes.P .+ Plitho .- minimum(stokes.P)
 
             # stokes.P[1, 1] = stokes.P[2, 1]
             # stokes.P[end, 1] = stokes.P[end - 1, 1]
@@ -541,6 +543,7 @@ function _solve!(
             # stokes.P[end, end] = stokes.P[end - 1, end]
 
             update_ρg!(ρg[2], phase_ratios, rheology, args)
+            @. ρgz_diff = ρg[2] - ρbg
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -593,7 +596,8 @@ function _solve!(
                     stokes.P,
                     @stress(stokes)...,
                     pt_stokes.ηdτ,
-                    ρg...,
+                    ρg[1],
+                    ρgz_diff,
                     ητ,
                     _di...,
                     dt * free_surface,
@@ -620,7 +624,7 @@ function _solve!(
                 stokes.P,
                 @stress(stokes)...,
                 ρg[1],
-                ρg[2],
+                ρgz_diff,
                 _di...,
                 dt * free_surface,
             )

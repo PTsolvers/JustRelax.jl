@@ -15,7 +15,7 @@ Phases        = zeros(Int64, nx, 1, nz);
 Temp          = fill(Tbot, nx, 1, nz);
 ```
 
-In this model we have four material phases given by: 
+In this model we have four material phases with their own phase numbers: 
 
 | Material            | Phase number |
 | :----------------   | :----------: |
@@ -37,6 +37,7 @@ add_box!(
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80,Adiabat=0.4)
 )
 ```
+![](setup_1.png)
 
 Next we add a horizontal 80km thick oceanic lithosphere. Note that we leave a 100km buffer zone next to the vertical boundaries of the domain, to facilitate the sliding of the oceanic plates.
 ```julia
@@ -50,6 +51,7 @@ add_box!(
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80, Adiabat=0.4)
 )
 ```
+![](setup_2.png)
 
 As in the original paper, we add a 8km thick crust on top of the subducting oceanic plate.
 ```julia
@@ -65,6 +67,7 @@ add_box!(
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80, Adiabat=0.4)
 )
 ```
+![](setup_3.png)
 
 And finally we add the subducting slab, whith the trench located at 1430km from the right-hand-side boundary.
 
@@ -80,20 +83,18 @@ add_box!(
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80, Adiabat=0.4)
 )
 ```
+![](setup_4.png)
 
 ```julia
-    heatmap(x,z,Temp[:,1,:])
-
-    surf = Grid2D.z.val .> 0.0 
-    Temp[surf] .= 20.0
-    Phases[surf] .= 3
-
-    Grid2D = addfield(Grid2D,(;Phases, Temp))
-   
-    li = (abs(last(x)-first(x)), abs(last(z)-first(z))).* 1e3
-    origin = (x[1], z[1]) .* 1e3
-
-    ph       = Phases[:,1,:] .+ 1
-
-    li, origin, ph, Temp[:,1,:].+273
+surf = Grid2D.z.val .> 0.0 
+@views Temp[surf] .= 20.0
+@views Phases[surf] .= 3
 ```
+![](setup_5.png)
+
+```julia
+li     = (abs(last(x)-first(x)), abs(last(z)-first(z))) .* 1e3 # in meters
+origin = (x[1], z[1]) .* 1e3 # lower-left corner of the domain
+Phases = Phases[:,1,:] .+ 1  # +1 becayse Julia is 1-indexed
+Temp   = Temp[:,1,:].+273    # in Kelvin
+``` 

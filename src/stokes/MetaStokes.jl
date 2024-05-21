@@ -19,7 +19,6 @@ function make_velocity_struct!(ndim::Integer; name::Symbol=:Velocity)
             function $(name)(ni::NTuple{3,T}) where {T}
                 return new{$PTArray}(@zeros(ni[1]...), @zeros(ni[2]...), @zeros(ni[3]...))
             end
-
         end
         $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = $(name)(args...)
     end
@@ -71,9 +70,9 @@ function make_vorticity_struct!(ndim::Integer)
 
                 return new{$PTArray}(yz_c, xz_c, xy_c, yz_v, xz_v, xy_v)
             end
-
         end
-        VorticityTensor(args::Vararg{T,N}) where {T<:AbstractArray,N} = VorticityTensor(args...)
+        VorticityTensor(args::Vararg{T,N}) where {T<:AbstractArray,N} =
+            VorticityTensor(args...)
     end
 end
 
@@ -134,7 +133,6 @@ function make_symmetrictensor_struct!(nDim::Integer; name::Symbol=:SymmetricTens
                     @zeros(ni...), # II (second invariant)
                 )
             end
-
         end
 
         $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = $(name)(args...)
@@ -163,7 +161,6 @@ function make_residual_struct!(ndim; name::Symbol=:Residual)
                 RP = @zeros(ni[4]...)
                 return new{typeof(Rx)}(Rx, Ry, Rz, RP)
             end
-
         end
         $(name)(args::Vararg{T,N}) where {T<:AbstractArray,N} = $(name)(args...)
     end
@@ -296,7 +293,6 @@ function make_stokes_struct!(; name::Symbol=:StokesArrays)
                     args...
                 )
             end
-            
         end
     end
 end

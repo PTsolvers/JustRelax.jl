@@ -504,15 +504,14 @@ function _solve!(
         Aij .= 0.0
     end
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
-    
 
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
-    
+
     (; ρbg) = args
-    ρgz_diff  = ρg[2] .- ρbg
-    Plitho    = reverse(cumsum(reverse((ρg[2]) .* di[2], dims=2), dims=2), dims=2)
-  
+    ρgz_diff = ρg[2] .- ρbg
+    Plitho = reverse(cumsum(reverse((ρg[2]) .* di[2]; dims=2); dims=2); dims=2)
+
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
 
@@ -535,7 +534,7 @@ function _solve!(
                 θ_dτ,
                 args,
             )
-            args.P   .= stokes.P .+ Plitho .- minimum(stokes.P)
+            args.P .= stokes.P .+ Plitho .- minimum(stokes.P)
 
             # stokes.P[1, 1] = stokes.P[2, 1]
             # stokes.P[end, 1] = stokes.P[end - 1, 1]
@@ -548,7 +547,7 @@ function _solve!(
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-            
+
             if rem(iter, nout) == 0
                 @copy η0 η
             end
@@ -670,7 +669,7 @@ function _solve!(
 
     # @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     # @parallel (@idx ni) multi_copy!(
-        # @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+    # @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
     # )
 
     return (

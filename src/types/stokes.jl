@@ -41,7 +41,9 @@ struct Vorticity{T}
     xz::Union{T,Nothing}
     xy::T
 
-    Vorticity(yz::Union{T,Nothing}, xz::Union{T,Nothing}, xy::T) where {T} = new{T}(yz, xz, xy)
+    function Vorticity(yz::Union{T,Nothing}, xz::Union{T,Nothing}, xy::T) where {T}
+        return new{T}(yz, xz, xy)
+    end
 end
 
 Vorticity(nx::T, ny::T) where {T<:Number} = Vorticity((nx, ny))

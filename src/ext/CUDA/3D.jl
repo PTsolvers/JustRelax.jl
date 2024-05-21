@@ -170,7 +170,9 @@ function JR3D.center2vertex!(
     return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
 end
 
-function JR3D.velocity2vertex!(Vx_v::CuArray, Vy_v::CuArray, Vz_v::CuArray, Vx::CuArray, Vy::CuArray, Vz::CuArray)
+function JR3D.velocity2vertex!(
+    Vx_v::CuArray, Vy_v::CuArray, Vz_v::CuArray, Vx::CuArray, Vy::CuArray, Vz::CuArray
+)
     velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
     return nothing
 end

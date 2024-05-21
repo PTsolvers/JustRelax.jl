@@ -5,7 +5,7 @@ function compute_vorticity!(::CPUBackendTrait, stokes, di)
     ω_xy = stokes.ω.xy
     ni = size(ω_xy)
     @parallel (@idx ni) compute_vorticity!(ω_xy, @velocity(stokes)..., inv.(di)...)
-    
+
     return nothing
 end
 

@@ -20,7 +20,7 @@ The pseudo-transient method consists in augmenting the right-hand-side of the ta
 
 ## Stokes
 
-The psuedo-transient formulation of the Stokes equations yields:
+The pseudo-transient formulation of the Stokes equations yields:
     
 $$\widetilde{\rho}\frac{\partial \boldsymbol{u}}{\partial \psi} + \nabla\cdot\boldsymbol{\tau} - \nabla p = \boldsymbol{f}$$
 

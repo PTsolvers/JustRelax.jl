@@ -69,7 +69,7 @@ add_box!(
 ```
 ![](setup_3.png)
 
-And finally we add the subducting slab, whith the trench located at 1430km from the right-hand-side boundary.
+And finally we add the subducting slab, with the trench located at 1430km from the right-hand-side boundary.
 
 ```julia
 add_box!(
@@ -95,6 +95,6 @@ surf = Grid2D.z.val .> 0.0
 ```julia
 li     = (abs(last(x)-first(x)), abs(last(z)-first(z))) .* 1e3 # in meters
 origin = (x[1], z[1]) .* 1e3 # lower-left corner of the domain
-Phases = Phases[:,1,:] .+ 1  # +1 becayse Julia is 1-indexed
+Phases = Phases[:,1,:] .+ 1  # +1 because Julia is 1-indexed
 Temp   = Temp[:,1,:].+273    # in Kelvin
 ``` 

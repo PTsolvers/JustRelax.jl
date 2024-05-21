@@ -5,7 +5,7 @@ include("no_slip.jl")
 include("pure_shear.jl")
 
 @inline bc_index(x::NTuple{2,T}) where {T} = mapreduce(xi -> max(size(xi)...), max, x)
-@inline bc_index(x::T) where {T<:AbstractArray{<:Any,2}} = max(size(x)...)
+@inline bc_index(x::T) where {T<:AbstractArray} = max(size(x)...)
 
 @inline function bc_index(x::NTuple{3,T}) where {T}
     n = mapreduce(xi -> max(size(xi)...), max, x)

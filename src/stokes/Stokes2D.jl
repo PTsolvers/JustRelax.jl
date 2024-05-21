@@ -345,7 +345,6 @@ function _solve!(
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
-                stokes.τ.II,
                 @tensor(stokes.τ_o),
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -506,9 +505,12 @@ function _solve!(
     end
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
 
-    # compute buoyancy forces and viscosity
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
+
+    (; ρbg) = args
+    ρgz_diff = ρg[2] .- ρbg
+    Plitho = reverse(cumsum(reverse((ρg[2]) .* di[2]; dims=2); dims=2); dims=2)
 
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
@@ -532,6 +534,7 @@ function _solve!(
                 θ_dτ,
                 args,
             )
+            args.P .= stokes.P .+ Plitho .- minimum(stokes.P)
 
             # stokes.P[1, 1] = stokes.P[2, 1]
             # stokes.P[end, 1] = stokes.P[end - 1, 1]
@@ -539,6 +542,7 @@ function _solve!(
             # stokes.P[end, end] = stokes.P[end - 1, end]
 
             update_ρg!(ρg[2], phase_ratios, rheology, args)
+            @. ρgz_diff = ρg[2] - ρbg
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -560,12 +564,12 @@ function _solve!(
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
-                stokes.τ.II,
                 @tensor_center(stokes.τ_o),
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
                 stokes.EII_pl,
-                stokes.P,
+                args.P,
+                # stokes.P,
                 θ,
                 η,
                 η_vep,
@@ -578,6 +582,8 @@ function _solve!(
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
+            # stokes.τ.yy[:, end] .= Plitho[:, end]
+
             @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
                 Vx_on_Vy, stokes.V.Vx
             )
@@ -586,16 +592,19 @@ function _solve!(
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     Vx_on_Vy,
-                    θ,
+                    stokes.P,
                     @stress(stokes)...,
                     pt_stokes.ηdτ,
-                    ρg...,
+                    ρg[1],
+                    ρgz_diff,
                     ητ,
                     _di...,
                     dt * free_surface,
                 )
                 # apply boundary conditions
+                # free_surface_bcs!(stokes, flow_bcs, args, η, rheology, phase_ratios, dt, di)
                 free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
+                # free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end
@@ -613,7 +622,8 @@ function _solve!(
                 Vx_on_Vy,
                 stokes.P,
                 @stress(stokes)...,
-                ρg...,
+                ρg[1],
+                ρgz_diff,
                 _di...,
                 dt * free_surface,
             )
@@ -626,7 +636,7 @@ function _solve!(
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
-            err = maximum_mpi(errs)
+            err = maximum(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
 
@@ -648,13 +658,19 @@ function _solve!(
         end
     end
 
-    stokes.P .= θ
+    # stokes.P .= θ
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+    # compute_vorticity!(stokes, di)
+
+    # @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    # @parallel (@idx ni) multi_copy!(
+    # @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+    # )
 
     return (
         iter=iter,

@@ -68,3 +68,18 @@ const backend = CPUBackend
         @test @views stokes.V.Vx[:  , end] == -stokes.V.Vx[:      , end - 1]
     end
 end
+
+@testset "Temperature boundary conditions 2D" begin
+    ni      = 5, 5 # number of elements
+    thermal = ThermalArrays(ni)
+    # free-slip
+    bcs = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = true, bot = true),
+    )
+    thermal_bcs!(thermal, bcs)
+
+    @test @views thermal.T[  :,   1] == thermal.T[      :,       2]
+    @test @views thermal.T[  :, end] == thermal.T[      :, end - 1]
+    @test @views thermal.T[  1,   :] == thermal.T[      2,       :]
+    @test @views thermal.T[end,   :] == thermal.T[end - 1,       :]
+end

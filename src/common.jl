@@ -35,7 +35,7 @@ export FlowBoundaryConditions,
 include("MiniKernels.jl")
 
 include("phases/phases.jl")
-export fn_ratio, phase_ratios_center!
+export phase_ratios_center!, fn_ratio
 
 include("rheology/BuoyancyForces.jl")
 export compute_ρg!
@@ -59,12 +59,16 @@ export WENO5, WENO_advection!
 
 include("rheology/GeoParams.jl")
 include("rheology/StressUpdate.jl")
-include("stokes/StressRotation.jl")
+include("stokes/StressRotationParticles.jl")
+export rotate_stress_particles!
+
 include("stokes/StressKernels.jl")
 export tensor_invariant!
 
 include("stokes/PressureKernels.jl")
 include("stokes/VelocityKernels.jl")
+include("stokes/VorticityKernels.jl")
+export compute_vorticity!
 
 # thermal diffusion
 

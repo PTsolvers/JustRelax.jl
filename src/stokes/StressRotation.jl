@@ -2,15 +2,6 @@ using StaticArrays
 
 ## Stress Rotation on the particles
 
-@parallel_indices (i, j) function compute_vorticity!(vorticity, Vx, Vy, _dx, _dy)
-    dx(A) = _d_xa(A, i, j, _dx)
-    dy(A) = _d_ya(A, i, j, _dy)
-
-    vorticity[i, j] = 0.5 * (dx(Vy) - dy(Vx))
-
-    return nothing
-end
-
 @parallel_indices (i, j) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
     cell = i, j
 
@@ -96,7 +87,6 @@ end
     Jaumann derivative
 
 τij_o += v_k * ∂τij_o/∂x_k - ω_ij * ∂τkj_o + ∂τkj_o * ω_ij
-
 """
 Base.@propagate_inbounds function rotate_stress!(
     V, τ::NTuple{N,T}, idx, _di, dt

@@ -1,13 +1,24 @@
-# ShearBand benchmark
+# 2D subduction
 
-Shear Band benchmark to test the visco-elasto-plastic rheology implementation in JustRelax.jl
+Model setups taken from [Hummel, et al 2024](https://doi.org/10.5194/se-15-567-2024).
+
+# Model setup
+We will use GeophysicalModelGenerator.jl to generate the initial geometry, material phases, and thermal field of our models.
+
 
 # Initialize packages
 
 Load JustRelax necessary modules and define backend.
 ```julia
+using CUDA
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-const backend_JR = CPUBackend
+const backend_JR = CUDABackend
+```
+
+For this benchmark we will use particles to track the advection of the material phases and their information. For this, we will use [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl)
+```julia
+using JustPIC, JustPIC._2D
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 ```
 
 We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
@@ -53,7 +64,7 @@ dt      = η0/G0/4.0     # assumes Maxwell time of 4
 el_bg   = ConstantElasticity(; G=G0, Kb=4)
 el_inc  = ConstantElasticity(; G=Gi, Kb=4)
 visc    = LinearViscous(; η=η0)
-pl      = DruckerPrager_regularised(;  # regularized plasticity
+pl      = DruckerPrager_regularised(;  # non-regularized plasticity
     C    = C,
     ϕ    = ϕ,
     η_vp = η_reg,
@@ -233,5 +244,4 @@ fig
 ```
 
 ### Final model
-Shear Bands evolution in a 2D visco-elasto-plastic rheology model
-![Shearbands](../assets/movies/DP_nx2058_2D.gif)
+![](990.png)

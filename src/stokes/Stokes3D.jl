@@ -244,7 +244,6 @@ function _solve!(
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
-                stokes.τ.II,
                 @tensor(stokes.τ_o),
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -382,7 +381,11 @@ function _solve!(
     @copy stokes.P0 stokes.P
     λ = @zeros(ni...)
     θ = @zeros(ni...)
+    ητ = deepcopy(η)
 
+    cte_density = is_constant_density(rheology)
+    cte_viscosity = is_constant_viscosity(rheology)
+    do_halo_update = !all(isone, igg.dims)
     # solver loop
     wtime0 = 0.0
     ητ = deepcopy(η)
@@ -395,7 +398,11 @@ function _solve!(
         wtime0 += @elapsed begin
             # ~preconditioner
             compute_maxloc!(ητ, η)
-            update_halo!(ητ)
+            do_halo_update && update_halo!(ητ)
+            # @hide_communication b_width begin # communication/computation overlap
+            #     @parallel compute_maxloc!(ητ, η)
+            #     update_halo!(ητ)
+            # end
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             compute_P!(
@@ -430,9 +437,9 @@ function _solve!(
             )
             # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
+            # if !cte_viscosity
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
-                stokes.τ.II,
                 @tensor_center(stokes.τ_o),
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -456,7 +463,19 @@ function _solve!(
                 stokes.τ.xz_c,
                 stokes.τ.xy_c,
             )
-            update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
+            do_halo_update && update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
+            # else
+            #     @parallel (@idx ni .+ 1) compute_τ!(
+            #         @tensor(stokes.τ)...,
+            #         @tensor(stokes.τ_o)...,
+            #         @tensor(stokes.ε)...,
+            #         η,
+            #         phase_ratios.center,
+            #         tupleize(rheology), # needs to be a tuple
+            #         dt,
+            #         pt_stokes.θ_dτ,
+            #     )
+            # end
 
             # @parallel (@idx ni .+ 1) compute_τ_vertex!(
             #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
@@ -476,7 +495,7 @@ function _solve!(
                 # apply boundary conditions
                 free_surface_bcs!(stokes, flow_bc, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bc)
-                update_halo!(@velocity(stokes)...)
+                do_halo_update && update_halo!(@velocity(stokes)...)
             end
         end
 

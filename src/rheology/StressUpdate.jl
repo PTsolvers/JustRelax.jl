@@ -1,7 +1,6 @@
 # inner kernel to compute the plastic stress update within Pseudo-Transient stress continuation
 function _compute_τ_nonlinear!(
     τ::NTuple{N1,T},
-    τII,
     τ_old::NTuple{N1,T},
     ε::NTuple{N1,T},
     ε_pl::NTuple{N1,T},
@@ -35,7 +34,8 @@ function _compute_τ_nonlinear!(
     # check if yielding; if so, compute plastic strain rate (λdQdτ),
     # plastic stress increment (dτ_pl), and update the plastic
     # multiplier (λ)
-    dτij, λdQdτ = if isyielding(is_pl, τII_trial, τy)
+    failure = isyielding(is_pl, τII_trial, τy)
+    dτij, λdQdτ = if failure
         # derivatives plastic stress correction
         dτ_pl, λ[idx...], λdQdτ = compute_dτ_pl(
             τij, dτij, τy, τII_trial, ηij, λ[idx...], η_reg, dτ_r, volume
@@ -48,11 +48,12 @@ function _compute_τ_nonlinear!(
     end
 
     # fill plastic strain rate tensor
-    update_plastic_strain_rate!(ε_pl, λdQdτ, idx)
+    failure && update_plastic_strain_rate!(ε_pl, λdQdτ, idx)
     # update and correct stress
-    correct_stress!(τ, τij .+ dτij, idx...)
+    correct_stress!(τ, τij, dτij, idx...)
 
-    τII[idx...] = τII_ij = second_invariant(τij...)
+    # τII[idx...] = 
+    τII_ij = second_invariant(τij...)
     η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
 
     return nothing
@@ -71,14 +72,33 @@ end
 
 @inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + fma(ηij, _Gdt, 1.0))
 
-function compute_stress_increment_and_trial(
+# function compute_stress_increment_and_trial(
+#     τij::NTuple{N,T}, τij_o::NTuple{N,T}, ηij, εij::NTuple{N,T}, _Gdt, dτ_r
+# ) where {N,T}
+#     dτij = ntuple(Val(N)) do i
+#         Base.@_inline_meta
+#         dτ_r * fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
+#     end
+#     return dτij, second_invariant((τij .+ dτij)...)
+# end
+
+# Fully unrolled version of the above function. Harder to read but faster
+@generated function compute_stress_increment_and_trial(
     τij::NTuple{N,T}, τij_o::NTuple{N,T}, ηij, εij::NTuple{N,T}, _Gdt, dτ_r
 ) where {N,T}
-    dτij = ntuple(Val(N)) do i
+    quote
         Base.@_inline_meta
-        dτ_r * fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
+        Base.@nexprs $N i -> begin
+            τij_n = τij[i]
+            dτ_i =
+                dτ_r *
+                fma(2.0 * ηij, εij[i], fma(-((τij_n - τij_o[i])) * ηij, _Gdt, -τij_n))
+            pt_τ_i = τij_n + dτ_i
+        end
+        dτij = Base.@ncall $N tuple dτ
+        pt_τII = Base.@ncall $N second_invariant pt_τ
+        return dτij, pt_τII
     end
-    return dτij, second_invariant((τij .+ dτij)...)
 end
 
 function compute_dτ_pl(
@@ -121,6 +141,25 @@ end
 
 @inline function correct_stress!(τxx, τyy, τzz, τyz, τxz, τxy, τij, i, j, k)
     return correct_stress!((τxx, τyy, τzz, τyz, τxz, τxy), τij, i, j, k)
+end
+
+@generated function correct_stress!(
+    τ, τij::NTuple{N1,T}, dτij::NTuple{N1,T}, idx::Vararg{Integer,N2}
+) where {N1,N2,T}
+    quote
+        Base.@_inline_meta
+        Base.@nexprs $N1 i -> τ[i][idx...] = τij[i] + dτij[i]
+    end
+end
+
+@inline function correct_stress!(τxx, τyy, τxy, τij::NTuple, dτij::NTuple, i, j)
+    return correct_stress!((τxx, τyy, τxy), τij, dτij, i, j)
+end
+
+@inline function correct_stress!(
+    τxx, τyy, τzz, τyz, τxz, τxy, τij::NTuple, dτij::NTuple, i, j, k
+)
+    return correct_stress!((τxx, τyy, τzz, τyz, τxz, τxy), τij, dτij, i, j, k)
 end
 
 @inline isplastic(x::AbstractPlasticity) = true

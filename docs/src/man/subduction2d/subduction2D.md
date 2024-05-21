@@ -244,5 +244,4 @@ fig
 ```
 
 ### Final model
-Shear Bands evolution in a 2D visco-elasto-plastic rheology model
-![Shearbands](../assets/movies/DP_nx2058_2D.gif)
+![](990.png)

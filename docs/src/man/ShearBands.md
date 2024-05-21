@@ -10,7 +10,6 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = CPUBackend
 ```
 
-
 We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil
@@ -54,7 +53,7 @@ dt      = η0/G0/4.0     # assumes Maxwell time of 4
 el_bg   = ConstantElasticity(; G=G0, Kb=4)
 el_inc  = ConstantElasticity(; G=Gi, Kb=4)
 visc    = LinearViscous(; η=η0)
-pl      = DruckerPrager_regularised(;  # non-regularized plasticity
+pl      = DruckerPrager_regularised(;  # regularized plasticity
     C    = C,
     ϕ    = ϕ,
     η_vp = η_reg,

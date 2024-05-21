@@ -4,11 +4,12 @@ As described in the original [paper](https://doi.org/10.5194/se-15-567-2024), th
 We will use GeophysicalModelGenerator.jl to generate the initial geometry, material phases, and thermal field of our models. We will start by defining the dimensions and resolution of our model, as well as initializing the `Grid2D` object and two arrays `Phases` and `Temp` that host the material phase (given by an integer) and the thermal field, respectively.
 
 ```julia
-nx, nz        = 512, 218
-Tbot          = 1474.0 # [Celsius]
-model_depth   = 660
-air_thickness = 10
-x             = range(0, 3000, nx);
+nx, nz        = 512, 218 # number of cells per dimension
+Tbot          = 1474.0   # [Celsius]
+model_depth   = 660      # [km]
+air_thickness = 10       # [km]
+Lx            = 3000     # model length [km]
+x             = range(0, Lx, nx);
 z             = range(-model_depth, air_thickness, nz);
 Grid2D        = CartData(xyz_grid(x,0,z))
 Phases        = zeros(Int64, nx, 1, nz);
@@ -31,8 +32,8 @@ add_box!(
     Phases, 
     Temp, 
     Grid2D; 
-    xlim    =(0, 3000),
-    zlim    =(-model_depth, 0.0), 
+    xlim    = (0, Lx),
+    zlim    = (-model_depth, 0.0), 
     phase   = LithosphericPhases(Layers=[], Phases=[0]), 
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80,Adiabat=0.4)
 )
@@ -45,8 +46,8 @@ add_box!(
     Phases, 
     Temp, 
     Grid2D; 
-    xlim    =(100, 3000-100), # with 100 km buffer zones
-    zlim    =(-model_depth, 0.0),
+    xlim    = (100, Lx-100), # 100 km buffer zones on both sides
+    zlim    = (-model_depth, 0.0),
     phase   = LithosphericPhases(Layers=[80], Phases=[1 0]), 
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80, Adiabat=0.4)
 )
@@ -60,8 +61,8 @@ add_box!(
     Phases, 
     Temp, 
     Grid2D; 
-    xlim    =(3000-1430, 3000-200), 
-    zlim    =(-model_depth, 0.0), 
+    xlim    = (Lx-1430, Lx-200), 
+    zlim    = (-model_depth, 0.0), 
     Origin  = nothing, StrikeAngle=0, DipAngle=0,
     phase   = LithosphericPhases(Layers=[8 72], Phases=[2 1 0]), 
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80, Adiabat=0.4)
@@ -76,7 +77,7 @@ add_box!(
     Phases, 
     Temp, 
     Grid2D; 
-    xlim    = (3000-1430, 3000-1430-250), 
+    xlim    = (Lx-1430, Lx-1430-250), 
     zlim    = (-80, 0.0), 
     Origin  = (nothing, StrikeAngle=0, DipAngle=-30),
     phase   = LithosphericPhases(Layers=[8 72], Phases=[2 1 0]), 

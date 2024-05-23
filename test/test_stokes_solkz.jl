@@ -1,11 +1,35 @@
 push!(LOAD_PATH, "..")
 
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+    AMDGPU.allowscalar(true)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+    CUDA.allowscalar(true)
+end
+
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
 
-const backend = CPUBackend
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustRelax.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    JustRelax.CUDABackend
+else
+    JustRelax.CPUbackend
+end
+
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using ParallelStencil
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using ParallelStencil
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    using ParallelStencil
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
 
 include("../miniapps/benchmarks/stokes2D/solkz/SolKz.jl")
 

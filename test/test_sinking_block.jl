@@ -1,14 +1,44 @@
 push!(LOAD_PATH, "..")
 
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+    AMDGPU.allowscalar(true)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+    CUDA.allowscalar(true)
+end
+
+
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2)
 
-const backend_JR = CPUBackend
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using ParallelStencil, ParallelStencil.FiniteDifferences2D
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using ParallelStencil, ParallelStencil.FiniteDifferences2D
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    using ParallelStencil, ParallelStencil.FiniteDifferences2D
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustRelax.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    JustRelax.CUDABackend
+else
+    JustRelax.CPUbackend
+end
 
 using JustPIC, JustPIC._2D
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if ENV["JULIA_JUSTPIC_BACKEND"] === "AMDGPU"
+    JustPIC.AMDGPUBackend
+elseif ENV["JULIA_JUSTPIC_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    JustPIC.CPUBackend
+end
 
 using GeoParams
 

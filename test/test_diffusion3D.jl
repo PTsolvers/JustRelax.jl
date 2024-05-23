@@ -1,12 +1,35 @@
 push!(LOAD_PATH, "..")
 
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+    AMDGPU.allowscalar(true)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+    CUDA.allowscalar(true)
+end
+
 using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax3D
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
 
-const backend = CPUBackend
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using ParallelStencil
+    @init_parallel_stencil(AMDGPU, Float64, 3)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using ParallelStencil
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    using ParallelStencil
+    @init_parallel_stencil(Threads, Float64, 3)
+end
+
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustRelax.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    JustRelax.CUDABackend
+else
+    JustRelax.CPUbackend
+end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j, k) function init_T!(T, z)
@@ -110,8 +133,8 @@ function diffusion_3D(;
             args,
             dt,
             di;
-            kwargs = (; 
-                igg, 
+            kwargs = (;
+                igg,
                 verbose=false
             ),
         )

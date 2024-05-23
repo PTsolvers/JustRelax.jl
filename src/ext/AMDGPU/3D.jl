@@ -15,7 +15,7 @@ import JustRelax:
     IGG,
     BackendTrait,
     CPUBackendTrait,
-    CUDABackendTrait,
+    AMDGPUBackendTrait,
     backend,
     CPUBackend,
     Geometry,
@@ -29,24 +29,24 @@ include("../../common.jl")
 include("../../stokes/Stokes3D.jl")
 
 # Types
-function JR3D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
+function JR3D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N,Integer}) where {N}
     return StokesArrays(ni)
 end
 
-function JR3D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N,Number}) where {N}
+function JR3D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N,Number}) where {N}
     return ThermalArrays(ni...)
 end
 
-function JR3D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number,N}) where {N}
+function JR3D.ThermalArrays(::Type{AMDGPUBackend}, ni::Vararg{Number,N}) where {N}
     return ThermalArrays(ni...)
 end
 
-function JR3D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
+function JR3D.PhaseRatio(::Type{AMDGPUBackend}, ni, num_phases)
     return PhaseRatio(ni, num_phases)
 end
 
 function JR3D.PTThermalCoeffs(
-    ::Type{CUDABackend},
+    ::Type{AMDGPUBackend},
     rheology,
     phase_ratios,
     args,
@@ -61,7 +61,7 @@ function JR3D.PTThermalCoeffs(
 end
 
 function JR3D.PTThermalCoeffs(
-    ::Type{CUDABackend},
+    ::Type{AMDGPUBackend},
     rheology,
     args,
     dt,
@@ -75,25 +75,25 @@ function JR3D.PTThermalCoeffs(
 end
 
 # Boundary conditions
-function JR3D.flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
+function JR3D.flow_bcs!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, bcs)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
-function flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
+function flow_bcs!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, bcs)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
-function JR3D.thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
+function JR3D.thermal_bcs!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
 
-function thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
+function thermal_bcs!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
 
 # Phases
 function JR3D.phase_ratios_center!(
-    ::CUDABackendTrait,
+    ::AMDGPUBackendTrait,
     phase_ratios::JustRelax.PhaseRatio,
     particles,
     grid::Geometry,
@@ -134,7 +134,7 @@ function compute_viscosity!(η, ν, εII::RocArray, args, rheology, cutoff)
 end
 
 ## Stress
-function JR3D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
+function JR3D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
     return _tensor_invariant!(A)
 end
 
@@ -147,11 +147,11 @@ function JR3D.compute_ρg!(ρg::RocArray, phase_ratios::JustRelax.PhaseRatio, rh
 end
 
 # Interpolations
-function JR3D.temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
+function JR3D.temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)
 end
 
-function temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
+function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)
 end
 
@@ -170,16 +170,16 @@ function JR3D.center2vertex!(
 end
 
 # Solvers
-function JR3D.solve!(::CUDABackendTrait, stokes, args...; kwargs)
+function JR3D.solve!(::AMDGPUBackendTrait, stokes, args...; kwargs)
     return _solve!(stokes, args...; kwargs...)
 end
 
-function JR3D.heatdiffusion_PT!(::CUDABackendTrait, thermal, args...; kwargs)
+function JR3D.heatdiffusion_PT!(::AMDGPUBackendTrait, thermal, args...; kwargs)
     return _heatdiffusion_PT!(thermal, args...; kwargs...)
 end
 
 # Utils
-function JR3D.compute_dt(::CUDABackendTrait, S::JustRelax.StokesArrays, args...)
+function JR3D.compute_dt(::AMDGPUBackendTrait, S::JustRelax.StokesArrays, args...)
     return _compute_dt(S, args...)
 end
 

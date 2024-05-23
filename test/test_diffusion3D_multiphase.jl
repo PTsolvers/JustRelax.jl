@@ -1,12 +1,36 @@
 push!(LOAD_PATH, "..")
 
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+    AMDGPU.allowscalar(true)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+    CUDA.allowscalar(true)
+end
+
 using Test, Suppressor, GeoParams
 using JustRelax, JustRelax.JustRelax3D
 using JustRelax
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using ParallelStencil
+    @init_parallel_stencil(AMDGPU, Float64, 3)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using ParallelStencil
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    using ParallelStencil
+    @init_parallel_stencil(Threads, Float64, 3)
+end
+
+
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustRelax.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    JustRelax.CUDABackend
+else
+    JustRelax.CPUbackend
+end
 
 
 using JustPIC
@@ -14,7 +38,13 @@ using JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if ENV["JULIA_JUSTPIC_BACKEND"] === "AMDGPU"
+    JustPIC.AMDGPUBackend
+elseif ENV["JULIA_JUSTPIC_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    JustPIC.CPUBackend
+end
 
 import JustRelax.@cell
 

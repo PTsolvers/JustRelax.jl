@@ -1,7 +1,22 @@
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+    AMDGPU.allowscalar(true)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+    CUDA.allowscalar(true)
+end
+
 using JustRelax, JustRelax.JustRelax2D
 using Test, Suppressor
 
-const backend = CPUBackend
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustRelax.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    JustRelax.CUDABackend
+else
+    JustRelax.CPUbackend
+end
+
 @testset "Boundary Conditions" begin
     @suppress begin
         n       = 5 # number of elements

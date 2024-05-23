@@ -1,11 +1,34 @@
 push!(LOAD_PATH, "..")
 
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+    AMDGPU.allowscalar(true)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+    CUDA.allowscalar(true)
+end
+
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
-const backend_JR = CPUBackend
 
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustRelax.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    JustRelax.CUDABackend
+else
+    JustRelax.CPUbackend
+end
+
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using ParallelStencil
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using ParallelStencil
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    using ParallelStencil
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 
 import JustRelax.@cell
 using GeoParams
@@ -98,7 +121,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
             args,
             dt,
             di;
-            kwargs = (; 
+            kwargs = (;
                 verbose = false
             ),
         )
@@ -115,7 +138,7 @@ end
         nx=32;
         ny=32;
         thermal = diffusion_2D(; nx = nx, ny = ny)
-        
+
         nx_T, ny_T = size(thermal.T)
         @test  thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1823.6076461523571 atol=1e-1
         @test thermal.Tc[  nx >>> 1    ,   nx >>> 1    ] ≈ 1828.3169386441218 atol=1e-1

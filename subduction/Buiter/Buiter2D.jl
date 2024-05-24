@@ -1,5 +1,5 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA 
     using CUDA
@@ -424,3 +424,16 @@ else
 end
 
 main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+
+const DeviceTrait = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    AMDGPUBackendTrait
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackendTrait
+else
+    CPUBackendTrait
+end
+
+const DeviceTrait = CPUBackendTrait
+
+@test bk(Array)       === AMDGPUBackendTrait()
+        

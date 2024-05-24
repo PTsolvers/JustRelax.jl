@@ -16,14 +16,14 @@ Phases        = zeros(Int64, nx, 1, nz);
 Temp          = fill(Tbot, nx, 1, nz);
 ```
 
-In this model we have four material phases with their own phase numbers: 
+In this model we have four material phases with their respective phase numbers: 
 
 | Material            | Phase number |
 | :----------------   | :----------: |
 | asthenosphere       |       0      |
 | oceanic lithosphere |       1      |
 | oceanic crust       |       3      |
-| air                 |       4      |
+| sticky air          |       4      |
 
 We will start by initializing the model as asthenospheric mantle, with a thermal profile given by the half-space cooling model with an age of 80 Myrs.
 

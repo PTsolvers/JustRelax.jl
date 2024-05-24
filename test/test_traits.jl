@@ -55,7 +55,7 @@ end
     @test bk(myrand(2,2,2)) === DeviceTrait()
 
     # test error handling
-    @test_throws ArgumentError bk(myrand())
+    @test_throws ArgumentError bk(rand())
     @test_throws ArgumentError bk("potato")
 
     # test JR structs

@@ -10,13 +10,7 @@ using JustRelax, Test
 import JustRelax.JustRelax2D as JR2
 import JustRelax.JustRelax3D as JR3
 
-const bk = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    AMDGPUBackend
-elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
-else
-    CPUBackend
-end
+const bk = JustRelax.backend
 
 @testset "Traits" begin
     if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"

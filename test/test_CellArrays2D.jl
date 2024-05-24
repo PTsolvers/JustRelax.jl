@@ -8,15 +8,13 @@ end
 
 using Test, StaticArrays
 using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    using ParallelStencil
     @init_parallel_stencil(AMDGPU, Float64, 2)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using ParallelStencil
     @init_parallel_stencil(CUDA, Float64, 2)
 else
-    using ParallelStencil
     @init_parallel_stencil(Threads, Float64, 2)
 end
 

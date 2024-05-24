@@ -11,6 +11,7 @@ using Test, Suppressor
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPUBackend
@@ -21,13 +22,10 @@ else
 end
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    using ParallelStencil, ParallelStencil.FiniteDifferences2D
     @init_parallel_stencil(AMDGPU, Float64, 2)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using ParallelStencil, ParallelStencil.FiniteDifferences2D
     @init_parallel_stencil(CUDA, Float64, 2)
 else
-    using ParallelStencil, ParallelStencil.FiniteDifferences2D
     @init_parallel_stencil(Threads, Float64, 2)
 end
 

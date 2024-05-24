@@ -10,6 +10,7 @@ end
 
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPUBackend
@@ -20,13 +21,10 @@ else
 end
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    using ParallelStencil
     @init_parallel_stencil(AMDGPU, Float64, 2)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using ParallelStencil
     @init_parallel_stencil(CUDA, Float64, 2)
 else
-    using ParallelStencil
     @init_parallel_stencil(Threads, Float64, 2)
 end
 

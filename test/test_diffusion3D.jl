@@ -11,15 +11,13 @@ end
 using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax3D
+using ParallelStencil
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    using ParallelStencil
     @init_parallel_stencil(AMDGPU, Float64, 3)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using ParallelStencil
     @init_parallel_stencil(CUDA, Float64, 3)
 else
-    using ParallelStencil
     @init_parallel_stencil(Threads, Float64, 3)
 end
 

@@ -11,15 +11,13 @@ end
 
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    using ParallelStencil, ParallelStencil.FiniteDifferences2D
     @init_parallel_stencil(AMDGPU, Float64, 2)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using ParallelStencil, ParallelStencil.FiniteDifferences2D
     @init_parallel_stencil(CUDA, Float64, 2)
 else
-    using ParallelStencil, ParallelStencil.FiniteDifferences2D
     @init_parallel_stencil(Threads, Float64, 2)
 end
 

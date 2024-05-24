@@ -9,20 +9,18 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDA.allowscalar(true)
 end
 
-@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    using ParallelStencil
-    @init_parallel_stencil(AMDGPU, Float64, 2)
-elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using ParallelStencil
-    @init_parallel_stencil(CUDA, Float64, 2)
-else
-    using ParallelStencil
-    @init_parallel_stencil(Threads, Float64, 2)
-end
-
 using Printf, LinearAlgebra, GeoParams, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 import JustRelax.@cell
+using ParallelStencil
+
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPUBackend

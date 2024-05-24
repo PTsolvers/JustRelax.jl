@@ -21,7 +21,7 @@ end
 Array(::CPUBackendTrait, x) = x
 
 function Array(
-    ::GPUBackendTrait, x::T
+    ::Union{CUDABackendTrait, AMDGPUBackendTrait}, x::T
 ) where {
     T<:Union{
         JustRelax.SymmetricTensor,
@@ -39,7 +39,7 @@ function Array(
     return T_clean(cpu_fields...)
 end
 
-function Array(::GPUBackendTrait, x::JustRelax.StokesArrays)
+function Array(::Union{CUDABackendTrait, AMDGPUBackendTrait}, x::JustRelax.StokesArrays)
     nfields = fieldcount(StokesArrays)
     cpu_fields = ntuple(Val(nfields)) do i
         Base.@_inline_meta

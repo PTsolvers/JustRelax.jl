@@ -2,22 +2,23 @@ push!(LOAD_PATH, "..")
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
-    AMDGPU.allowscalar(true)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
-    CUDA.allowscalar(true)
 end
 
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
 
-@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 3)
+    AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 3)
+    CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 3)
+    CPUBackend
 end
 
 include("../miniapps/benchmarks/stokes3D/burstedde/Burstedde.jl")

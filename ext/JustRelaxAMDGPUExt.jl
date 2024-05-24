@@ -2,7 +2,7 @@ module JustRelaxAMDGPUExt
 
 using AMDGPU
 using JustRelax: JustRelax
-import JustRelax: PTArray, backend, AMDGPUBackendTrait
+import JustRelax: PTArray, backend, AMDGPUBackendTrait, AMDGPUBackend
 
 PTArray(::Type{AMDGPUBackend}) = RocArray
 

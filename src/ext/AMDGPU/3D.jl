@@ -116,7 +116,7 @@ function JR3D.compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
-function JR2D.compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
+function JR3D.compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 

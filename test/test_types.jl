@@ -29,18 +29,18 @@ const BackendArray = PTArray(backend)
     @test size(R.Rx) == (nx-1, ny)
     @test size(R.Ry) == (nx, ny-1)
     @test size(R.RP) == ni
-    @test R.Rx isa BackendArray
-    @test R.Ry isa BackendArray
-    @test R.RP isa BackendArray
+    @test typeof(R.Rx) <: BackendArray
+    @test typeof(R.Ry) <: BackendArray
+    @test typeof(R.RP) <: BackendArray
     @test_throws MethodError JR2.Residual(10.0, 10.0)
 
     visc = JR2.Viscosity(ni)
     @test size(visc.η)     == ni
     @test size(visc.η_vep) == ni
     @test size(visc.ητ)    == ni
-    @test visc.η     isa BackendArray
-    @test visc.η_vep isa BackendArray
-    @test visc.ητ    isa BackendArray
+    @test typeof(visc.η)     <: BackendArray
+    @test typeof(visc.η_vep) <: BackendArray
+    @test typeof(visc.ητ)    <: BackendArray
     @test_throws MethodError JR2.Viscosity(10.0, 10.0)
 
     v      = JR2.Velocity(ni...)
@@ -52,11 +52,11 @@ const BackendArray = PTArray(backend)
     @test size(tensor.xy_c) == (nx, ny)
     @test size(tensor.II)   == (nx, ny)
 
-    @test tensor.xx   isa BackendArray
-    @test tensor.yy   isa BackendArray
-    @test tensor.xy   isa BackendArray
-    @test tensor.xy_c isa BackendArray
-    @test tensor.II   isa BackendArray
+    @test typeof(tensor.xx)   <: BackendArray
+    @test typeof(tensor.yy)   <: BackendArray
+    @test typeof(tensor.xy)   <: BackendArray
+    @test typeof(tensor.xy_c) <: BackendArray
+    @test typeof(tensor.II)   <: BackendArray
 
     stokes = JR2.StokesArrays(backend, ni)
 
@@ -65,17 +65,17 @@ const BackendArray = PTArray(backend)
     @test size(stokes.∇V)     == ni
     @test size(stokes.EII_pl) == ni
 
-    @test stokes.P          isa BackendArray
-    @test stokes.P0         isa BackendArray
-    @test stokes.∇V         isa BackendArray
-    @test stokes.V          isa JustRelax.Velocity
-    @test stokes.τ          isa JustRelax.SymmetricTensor
-    @test stokes.τ_o        isa JustRelax.SymmetricTensor
-    @test stokes.ε          isa JustRelax.SymmetricTensor
-    @test stokes.ε_pl       isa JustRelax.SymmetricTensor
-    @test stokes.EII_pl     isa BackendArray
-    @test stokes.viscosity  isa JustRelax.Viscosity
-    @test stokes.R          isa JustRelax.Residual
+    @test typeof(stokes.P)      <: BackendArray
+    @test typeof(stokes.P0)     <: BackendArray
+    @test typeof(stokes.∇V)     <: BackendArray
+    @test stokes.V              isa JustRelax.Velocity
+    @test stokes.τ              isa JustRelax.SymmetricTensor
+    @test stokes.τ_o            isa JustRelax.SymmetricTensor
+    @test stokes.ε              isa JustRelax.SymmetricTensor
+    @test stokes.ε_pl           isa JustRelax.SymmetricTensor
+    @test typeof(stokes.EII_pl) <: BackendArray
+    @test stokes.viscosity      isa JustRelax.Viscosity
+    @test stokes.R              isa JustRelax.Residual
 
     @test_throws MethodError JR2.StokesArrays(backend, 10.0, 10.0)
 end
@@ -89,19 +89,19 @@ end
     @test size(R.Ry) == (nx, ny-1, nz)
     @test size(R.Rz) == (nx, ny, nz-1)
     @test size(R.RP) == ni
-    @test R.Rx isa BackendArray
-    @test R.Ry isa BackendArray
-    @test R.Rz isa BackendArray
-    @test R.RP isa BackendArray
+    @test typeof(R.Rx) <: BackendArray
+    @test typeof(R.Ry) <: BackendArray
+    @test typeof(R.Rz) <: BackendArray
+    @test typeof(R.RP) <: BackendArray
     @test_throws MethodError JR3.Residual(1.0, 1.0, 1.0)
 
     visc = JR3.Viscosity(ni)
     @test size(visc.η)     == ni
     @test size(visc.η_vep) == ni
     @test size(visc.ητ)    == ni
-    @test visc.η     isa BackendArray
-    @test visc.η_vep isa BackendArray
-    @test visc.ητ    isa BackendArray
+    @test typeof(visc.η)     <: BackendArray
+    @test typeof(visc.η_vep) <: BackendArray
+    @test typeof(visc.ητ)    <: BackendArray
     @test_throws MethodError JR3.Viscosity(1.0, 1.0, 1.0)
 
     v      = JR3.Velocity(ni...)
@@ -117,15 +117,15 @@ end
     @test size(tensor.xz_c) == ni
     @test size(tensor.II)   == ni
 
-    @test tensor.xx   isa BackendArray
-    @test tensor.yy   isa BackendArray
-    @test tensor.xy   isa BackendArray
-    @test tensor.yz   isa BackendArray
-    @test tensor.xz   isa BackendArray
-    @test tensor.xy_c isa BackendArray
-    @test tensor.yz_c isa BackendArray
-    @test tensor.xz_c isa BackendArray
-    @test tensor.II   isa BackendArray
+    @test typeof(tensor.xx)   <: BackendArray
+    @test typeof(tensor.yy)   <: BackendArray
+    @test typeof(tensor.xy)   <: BackendArray
+    @test typeof(tensor.yz)   <: BackendArray
+    @test typeof(tensor.xz)   <: BackendArray
+    @test typeof(tensor.xy_c) <: BackendArray
+    @test typeof(tensor.yz_c) <: BackendArray
+    @test typeof(tensor.xz_c) <: BackendArray
+    @test typeof(tensor.II)   <: BackendArray
 
     stokes = JR3.StokesArrays(backend, ni)
 
@@ -134,17 +134,17 @@ end
     @test size(stokes.∇V)     == ni
     @test size(stokes.EII_pl) == ni
 
-    @test stokes.P          isa BackendArray
-    @test stokes.P0         isa BackendArray
-    @test stokes.∇V         isa BackendArray
-    @test stokes.V          isa JustRelax.Velocity
-    @test stokes.τ          isa JustRelax.SymmetricTensor
-    @test stokes.τ_o        isa JustRelax.SymmetricTensor
-    @test stokes.ε          isa JustRelax.SymmetricTensor
-    @test stokes.ε_pl       isa JustRelax.SymmetricTensor
-    @test stokes.EII_pl     isa BackendArray
-    @test stokes.viscosity  isa JustRelax.Viscosity
-    @test stokes.R          isa JustRelax.Residual
+    @test typeof(stokes.P)      <: BackendArray
+    @test typeof(stokes.P0)     <: BackendArray
+    @test typeof(stokes.∇V)     <: BackendArray
+    @test stokes.V              isa JustRelax.Velocity
+    @test stokes.τ              isa JustRelax.SymmetricTensor
+    @test stokes.τ_o            isa JustRelax.SymmetricTensor
+    @test stokes.ε              isa JustRelax.SymmetricTensor
+    @test stokes.ε_pl           isa JustRelax.SymmetricTensor
+    @test typeof(stokes.EII_pl) <: BackendArray
+    @test stokes.viscosity      isa JustRelax.Viscosity
+    @test stokes.R              isa JustRelax.Residual
 
     @test_throws MethodError JR3.StokesArrays(backend, 10.0, 10.0)
 end

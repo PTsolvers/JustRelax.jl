@@ -1,9 +1,5 @@
 import Base: Array
 
-## Conversion of structs to CPU
-
-@inline remove_parameters(::T) where {T} = Base.typename(T).wrapper
-
 const JR_T = Union{
     JustRelax.StokesArrays,
     JustRelax.SymmetricTensor,
@@ -12,8 +8,12 @@ const JR_T = Union{
     JustRelax.Residual,
 }
 
-Array(::CPUBackendTrait, x) = x
+## Conversion of structs to CPU
+
+@inline remove_parameters(::T) where {T} = Base.typename(T).wrapper
+
 Array(x::T) where {T<:JR_T} = Array(backend(x), x)
+Array(::CPUBackendTrait, x) = x
 
 function Array(::GPUBackendTrait, x::T) where {T<:JR_T}
     nfields = fieldcount(T)

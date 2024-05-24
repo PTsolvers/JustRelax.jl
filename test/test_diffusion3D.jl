@@ -24,11 +24,11 @@ else
 end
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustRelax.AMDGPUBackend
+    AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    JustRelax.CUDABackend
+    CUDABackend
 else
-    JustRelax.CPUbackend
+    CPUBackend
 end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------

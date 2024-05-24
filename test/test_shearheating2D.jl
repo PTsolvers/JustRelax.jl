@@ -13,11 +13,11 @@ using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustRelax.AMDGPUBackend
+    AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    JustRelax.CUDABackend
+    CUDABackend
 else
-    JustRelax.CPUbackend
+    CPUBackend
 end
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"

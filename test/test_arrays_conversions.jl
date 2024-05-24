@@ -9,11 +9,11 @@ end
 using JustRelax, JustRelax.JustRelax2D, Test
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustRelax.AMDGPUBackend
+    AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    JustRelax.CUDABackend
+    CUDABackend
 else
-    JustRelax.CPUbackend
+    CPUBackend
 end
 
 @testset "Array conversions" begin

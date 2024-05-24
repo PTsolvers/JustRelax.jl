@@ -25,11 +25,11 @@ using JustRelax, JustRelax.JustRelax2D
 import JustRelax.@cell
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustRelax.AMDGPUBackend
+    AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    JustRelax.CUDABackend
+    CUDABackend
 else
-    JustRelax.CPUbackend
+    CPUBackend
 end
 
 using JustPIC, JustPIC._2D

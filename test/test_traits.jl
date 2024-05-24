@@ -11,11 +11,11 @@ import JustRelax.JustRelax2D as JR2
 import JustRelax.JustRelax3D as JR3
 
 const bk = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustRelax.AMDGPUBackend
+    AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    JustRelax.CUDABackend
+    CUDABackend
 else
-    JustRelax.CPUbackend
+    CPUBackend
 end
 
 @testset "Traits" begin
@@ -35,8 +35,8 @@ end
         # test JR structs
         ## 2D
         ni       = 2, 2
-        stokes2  = JR2.StokesArrays(JustRelax.AMDGPUBackend, ni)
-        thermal2 = JR2.ThermalArrays(JustRelax.AMDGPUBackend, ni)
+        stokes2  = JR2.StokesArrays(AMDGPUBackend, ni)
+        thermal2 = JR2.ThermalArrays(AMDGPUBackend, ni)
 
         @test bk(stokes2.V) === AMDGPUBackendTrait()
         @test bk(stokes2.τ) === AMDGPUBackendTrait()
@@ -47,8 +47,8 @@ end
 
         ## 3D
         ni       = 2, 2, 2
-        stokes3  = JR3.StokesArrays(JustRelax.AMDGPUBackend, ni)
-        thermal3 = JR3.ThermalArrays(JustRelax.AMDGPUBackend, ni)
+        stokes3  = JR3.StokesArrays(AMDGPUBackend, ni)
+        thermal3 = JR3.ThermalArrays(AMDGPUBackend, ni)
 
         @test bk(stokes3.V) === AMDGPUBackendTrait()
         @test bk(stokes3.τ) === AMDGPUBackendTrait()
@@ -72,8 +72,8 @@ end
         # test JR structs
         ## 2D
         ni       = 2, 2
-        stokes2  = JR2.StokesArrays(JustRelax.CUDABackend, ni)
-        thermal2 = JR2.ThermalArrays(JustRelax.CUDABackend, ni)
+        stokes2  = JR2.StokesArrays(CUDABackend, ni)
+        thermal2 = JR2.ThermalArrays(CUDABackend, ni)
 
         @test bk(stokes2.V) === CUDABackendTrait()
         @test bk(stokes2.τ) === CUDABackendTrait()
@@ -84,8 +84,8 @@ end
 
         ## 3D
         ni       = 2, 2, 2
-        stokes3  = JR3.StokesArrays(JustRelax.CUDABackend, ni)
-        thermal3 = JR3.ThermalArrays(JustRelax.CUDABackend, ni)
+        stokes3  = JR3.StokesArrays(CUDABackend, ni)
+        thermal3 = JR3.ThermalArrays(CUDABackend, ni)
 
         @test bk(stokes3.V) === CUDABackendTrait()
         @test bk(stokes3.τ) === CUDABackendTrait()
@@ -109,8 +109,8 @@ end
         # test JR structs
         ## 2D
         ni       = 2, 2
-        stokes2  = JR2.StokesArrays(JustRelax.CPUBackend, ni)
-        thermal2 = JR2.ThermalArrays(JustRelax.CPUBackend, ni)
+        stokes2  = JR2.StokesArrays(CPUBackend, ni)
+        thermal2 = JR2.ThermalArrays(CPUBackend, ni)
 
         @test bk(stokes2.V) === CPUBackendTrait()
         @test bk(stokes2.τ) === CPUBackendTrait()
@@ -121,8 +121,8 @@ end
 
         ## 3D
         ni       = 2, 2, 2
-        stokes3  = JR3.StokesArrays(JustRelax.CPUBackend, ni)
-        thermal3 = JR3.ThermalArrays(JustRelax.CPUBackend, ni)
+        stokes3  = JR3.StokesArrays(CPUBackend, ni)
+        thermal3 = JR3.ThermalArrays(CPUBackend, ni)
 
         @test bk(stokes3.V) === CPUBackendTrait()
         @test bk(stokes3.τ) === CPUBackendTrait()

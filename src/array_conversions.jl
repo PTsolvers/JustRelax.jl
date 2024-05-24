@@ -1,12 +1,6 @@
 import Base: Array
 
-const JR_T = Union{
-    JustRelax.StokesArrays,
-    JustRelax.SymmetricTensor,
-    JustRelax.ThermalArrays,
-    JustRelax.Velocity,
-    JustRelax.Residual,
-}
+const JR_T = Union{StokesArrays,SymmetricTensor,ThermalArrays,Velocity,Residual}
 
 ## Conversion of structs to CPU
 

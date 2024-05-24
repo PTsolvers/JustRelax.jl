@@ -38,7 +38,7 @@ else
 end
 
 A, M, V = @static if env_backend === "AMDGPU"
-    RocArray, RocMatrix, RocVector
+    ROCArray, RocMatrix, RocVector
 elseif env_backend === "CUDA"
     CuArray, CuMatrix, CuVector
 else

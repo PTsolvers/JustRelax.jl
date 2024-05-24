@@ -19,7 +19,7 @@ else
 end
 
 A = @static if env_backend === "AMDGPU"
-    RocArray
+    ROCArray
 elseif env_backend === "CUDA"
     CuArray
 else

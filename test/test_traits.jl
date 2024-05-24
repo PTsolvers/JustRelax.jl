@@ -9,8 +9,8 @@ end
 using JustRelax, Test
 import JustRelax.JustRelax2D as JR2
 import JustRelax.JustRelax3D as JR3
-import JR2.AMDGPUBackend, JR2.CUDABackend
-import JR3.AMDGPUBackend, JR3.CUDABackend
+import JR2.AMDGPUBackendTrait, JR2.CUDABackendTrait
+import JR3.AMDGPUBackendTrait, JR3.CUDABackendTrait
 
 const bk = JustRelax.backend
 

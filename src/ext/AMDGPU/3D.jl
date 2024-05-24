@@ -24,7 +24,7 @@ import JustRelax:
 import JustRelax:
     AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
 
-@init_parallel_stencil(CUDA, Float64, 3)
+@init_parallel_stencil(AMDGPU, Float64, 3)
 
 include("../../common.jl")
 include("../../stokes/Stokes3D.jl")

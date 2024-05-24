@@ -18,11 +18,17 @@ end
     ni      = 2, 2
     stokes  = StokesArrays(backend, ni)
     thermal = ThermalArrays(backend, ni)
+    A1      = Array(stokes.V) 
+    A2      = Array(stokes.τ) 
+    A3      = Array(stokes.R) 
+    A4      = Array(stokes.P) 
+    A5      = Array(stokes)   
+    A6      = Array(thermal)  
 
-    @test Array(stokes.V) isa JustRelax.Velocity{Array{T, N}} where {T, N}
-    @test Array(stokes.τ) isa JustRelax.SymmetricTensor{Array{T, N}} where {T, N}
-    @test Array(stokes.R) isa JustRelax.Residual{Array{T, N}} where {T, N}
-    @test Array(stokes.P) isa Array{T, N} where {T, N}
-    @test Array(stokes)   isa JustRelax.StokesArrays
-    @test Array(thermal)  isa JustRelax.ThermalArrays{Array{T, N}} where {T, N}
+    @test typeof(A1) <: JustRelax.Velocity{Array}
+    @test typeof(A2) <: JustRelax.SymmetricTensor{Array}
+    @test typeof(A3) <: JustRelax.Residual{Array}
+    @test typeof(A4) <: Array
+    @test typeof(A5) <: JustRelax.StokesArrays
+    @test typeof(A6) <: JustRelax.ThermalArrays{Array}
 end

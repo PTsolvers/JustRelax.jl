@@ -207,6 +207,10 @@ function _solve!(
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
+    (; ρbg) = args
+    ρgz_diff = ρg[3] .- ρbg
+    Plitho = reverse(cumsum(reverse((ρg[2]) .* di[2]; dims=3); dims=3); dims=3)
+
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -226,12 +230,15 @@ function _solve!(
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
             )
+            args.P .= stokes.P .+ Plitho .- minimum(stokes.P)
+
             @parallel (@idx ni) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
 
             # Update buoyancy
-            update_ρg!(ρg[3], rheology, args)
+            update_ρg!(ρg[end], rheology, args)
+            @. ρgz_diff = ρg[end] - ρbg
 
             update_viscosity!(
                 stokes,
@@ -275,7 +282,9 @@ function _solve!(
                     stokes.R.Ry,
                     stokes.R.Rz,
                     stokes.P,
-                    ρg...,
+                    ρg[1],
+                    ρg[2],
+                    ρgz_diff,
                     @stress(stokes)...,
                     ητ,
                     pt_stokes.ηdτ,
@@ -283,7 +292,7 @@ function _solve!(
                 )
                 # apply boundary conditions
                 flow_bcs!(stokes, flow_bcs)
-                update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+                update_halo!(@velocity(stokes)...)
             end
         end
 

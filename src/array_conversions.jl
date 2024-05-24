@@ -1,6 +1,6 @@
 import Base: Array
 
-const JR_T = Union{StokesArrays,SymmetricTensor,ThermalArrays,Velocity,Residual}
+const JR_T = Union{StokesArrays,SymmetricTensor,ThermalArrays,Velocity,Residual,Viscosity}
 
 ## Conversion of structs to CPU
 

@@ -1,7 +1,7 @@
 module JustRelax3D
 
 using JustRelax: JustRelax
-using CUDA
+using AMDGPU
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences3D

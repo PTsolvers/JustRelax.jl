@@ -30,9 +30,9 @@ else
 end
 
 using JustPIC, JustPIC._2D
-const backend = @static if ENV["JULIA_JUSTPIC_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     JustPIC.AMDGPUBackend
-elseif ENV["JULIA_JUSTPIC_BACKEND"] === "CUDA"
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
     JustPIC.CPUBackend

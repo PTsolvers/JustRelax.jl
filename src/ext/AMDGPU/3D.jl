@@ -18,6 +18,7 @@ import JustRelax:
     AMDGPUBackendTrait,
     backend,
     CPUBackend,
+    AMDGPUBackend,
     Geometry,
     @cell
 import JustRelax:

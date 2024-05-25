@@ -57,20 +57,20 @@ end
 function phase_ratios_center!(
     ::CPUBackendTrait, phase_ratios::JustRelax.PhaseRatio, particles, grid::Geometry, phases
 )
-    return _phase_ratios_center(phase_ratios, particles, grid, phases)
+    return _phase_ratios_center!(phase_ratios, particles, grid, phases)
 end
 
-function _phase_ratios_center(
+function _phase_ratios_center!(
     phase_ratios::JustRelax.PhaseRatio, particles, grid::Geometry, phases
 )
     ni = size(phases)
-    @parallel (@idx ni) phase_ratios_center_kernel(
+    @parallel (@idx ni) phase_ratios_center_kernel!(
         phase_ratios.center, particles.coords, grid.xci, grid.di, phases
     )
     return nothing
 end
 
-@parallel_indices (I...) function phase_ratios_center_kernel(
+@parallel_indices (I...) function phase_ratios_center_kernel!(
     ratio_centers, pxi::NTuple{N,T1}, xci::NTuple{N,T2}, di::NTuple{N,T3}, phases
 ) where {N,T1,T2,T3}
 

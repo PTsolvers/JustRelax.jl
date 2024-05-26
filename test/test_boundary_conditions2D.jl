@@ -1,3 +1,6 @@
+using JustRelax, JustRelax.JustRelax2D
+using Test, Suppressor
+
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -5,10 +8,6 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
 else
     CPUBackend
 end
-
-using JustRelax, JustRelax.JustRelax2D
-using Test, Suppressor
-
 @testset "Boundary Conditions" begin
     if backend === CPUBackend
         @suppress begin

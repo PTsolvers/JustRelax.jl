@@ -126,12 +126,11 @@ end
 
 @testset "Diffusion_2D" begin
     @suppress begin
-        nx=32;
-        ny=32;
+        nx, ny  = 32, 32
         thermal = diffusion_2D(; nx = nx, ny = ny)
 
         nx_T, ny_T = size(thermal.T)
-        @test  thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1823.6076461523571 atol=1e-1
-        @test thermal.Tc[  nx >>> 1    ,   nx >>> 1    ] ≈ 1828.3169386441218 atol=1e-1
+        @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1823.6076461523571 atol=1e-1
+        @test Array(thermal.Tc)[  nx >>> 1    ,   nx >>> 1    ] ≈ 1828.3169386441218 atol=1e-1
     end
 end

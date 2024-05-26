@@ -5,7 +5,6 @@ push!(LOAD_PATH, "..")
 
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
-    CUDA.allowscalar(true)
 end
 
 using Test, Suppressor
@@ -112,7 +111,7 @@ function ShearBand2D()
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatio(ni, length(rheology))
+    phase_ratios = PhaseRatio(backend, ni, length(rheology))
     init_phases!(phase_ratios, xci, radius)
 
     # STOKES ---------------------------------------------

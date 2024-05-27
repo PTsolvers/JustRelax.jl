@@ -261,7 +261,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, z_anomaly, r_anomaly, xvi, sticky_air
     )
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
 
     # STOKES ---------------------------------------------
@@ -422,7 +422,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         particle2grid!(thermal.T, pT, xvi, particles)
         @views thermal.T[:, :, end] .= Tsurf
         @views thermal.T[:, :, 1] .= Tbot
-        thermal_bcs!(thermal.T, thermal_bc)
+        thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
         thermal.ΔT .= thermal.T .- thermal.Told
         vertex2center!(thermal.ΔTc, thermal.ΔT)

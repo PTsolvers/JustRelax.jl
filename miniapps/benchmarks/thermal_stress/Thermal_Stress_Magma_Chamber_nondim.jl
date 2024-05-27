@@ -259,7 +259,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air
     )
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
 
     # STOKES ---------------------------------------------
@@ -440,7 +440,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         @views T_buffer[:, end]        .= Tsurf
         @views T_buffer[:, 1]          .= Tbot
         @views thermal.T[2:end - 1, :] .= T_buffer
-        thermal_bcs!(thermal.T, thermal_bc)
+        thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
         thermal.ΔT .= thermal.T .- thermal.Told
         vertex2center!(thermal.ΔTc, thermal.ΔT)

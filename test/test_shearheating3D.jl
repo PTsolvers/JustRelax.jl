@@ -3,8 +3,10 @@ using Test, Suppressor
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
+    AMDGPU.allowscalar(true)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
+    CUDA.allowscalar(true)
 end
 
 # Benchmark of Duretz et al. 2014
@@ -120,7 +122,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
 
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
     # ----------------------------------------------------
 

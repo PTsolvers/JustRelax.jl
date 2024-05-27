@@ -141,8 +141,8 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
     # Stokes solver ----------------
-    args = (; T = @ones(ni...), P = stokes.P, dt=dτ, ΔTc = @zeros(ni...))
-    olve!(
+    args = (; T = @ones(ni...), P = stokes.P, dt=dt, ΔTc = @zeros(ni...))
+    solve!(
         stokes,
         pt_stokes,
         di,
@@ -165,7 +165,7 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
 
     Vx_v    = @zeros(ni.+1...)
     Vy_v    = @zeros(ni.+1...)
-    JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+    velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
     velocity = @. √(Vx_v^2 + Vy_v^2 )
 
     # Plotting ---------------------

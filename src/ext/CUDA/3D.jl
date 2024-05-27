@@ -46,6 +46,12 @@ function JR3D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
 end
 
 function JR3D.PTThermalCoeffs(
+    ::Type{CUDABackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
+)
+    return PTThermalCoeffs(K, ρCp, dt, di, li; ϵ=ϵ, CFL=CFL)
+end
+
+function JR3D.PTThermalCoeffs(
     ::Type{CUDABackend},
     rheology,
     phase_ratios,

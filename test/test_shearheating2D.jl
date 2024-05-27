@@ -29,7 +29,7 @@ using JustPIC, JustPIC._2D
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     JustPIC.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    JustPIC.CUDABackend
+    CUDABackend
 else
     JustPIC.CPUBackend
 end
@@ -92,8 +92,8 @@ function Shearheating2D()
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 32, 12
-    particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)

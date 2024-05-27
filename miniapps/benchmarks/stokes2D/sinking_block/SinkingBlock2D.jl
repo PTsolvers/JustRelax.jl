@@ -103,8 +103,8 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 12
-    particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     # temperature
     pPhases,      = init_cell_arrays(particles, Val(1))

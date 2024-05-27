@@ -87,8 +87,8 @@ function Shearheating3D(nx=16, ny=16, nz=16)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 10
-    particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
     grid_vx, grid_vy, grid_vz   = velocity_grids(xci, xvi, di)

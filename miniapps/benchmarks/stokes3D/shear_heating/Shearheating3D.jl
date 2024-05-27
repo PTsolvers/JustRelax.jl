@@ -59,8 +59,8 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
-    particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
     grid_vx, grid_vy, grid_vz   = velocity_grids(xci, xvi, di)

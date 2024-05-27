@@ -385,10 +385,6 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         )
         tensor_invariant!(stokes.ε)
 
-        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        @parallel (@idx ni) multi_copy!(
-            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-        )
         dt = compute_dt(stokes, di, dt_diff, igg)
         # --------------------------------
 

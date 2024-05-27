@@ -259,11 +259,6 @@ while t < tmax
     # Compute second invariant of the strain rate tensor
     tensor_invariant!(stokes.ε)
     push!(τII, maximum(stokes.τ.xx))
-    # Update old stresses
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(
-        @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-    )
 
     it += 1
     t  += dt

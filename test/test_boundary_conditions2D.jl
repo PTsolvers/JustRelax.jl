@@ -1,3 +1,9 @@
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
 using Test, Suppressor
 

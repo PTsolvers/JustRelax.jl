@@ -1,14 +1,15 @@
+# BOUNDARY CONDITIONS KERNELS
+include("free_slip.jl")
+include("free_surface.jl")
+include("no_slip.jl")
+include("pure_shear.jl")
+
 @inline bc_index(x::NTuple{2,T}) where {T} = mapreduce(xi -> max(size(xi)...), max, x)
 @inline bc_index(x::T) where {T<:AbstractArray} = max(size(x)...)
 
 @inline function bc_index(x::NTuple{3,T}) where {T}
-    nx, ny, nz = size(x[1])
-    return max((nx, ny), (ny, nz), (nx, nz))
-end
-
-@inline function bc_index(x::T) where {T<:AbstractArray{<:Any,3}}
-    nx, ny, nz = size(x)
-    return max((nx, ny), (ny, nz), (nx, nz))
+    n = mapreduce(xi -> max(size(xi)...), max, x)
+    return n, n
 end
 
 @inline do_bc(bc) = reduce(|, values(bc))
@@ -20,7 +21,7 @@ Apply the prescribed heat boundary conditions `bc` on the `T`
 """
 thermal_bcs!(thermal, bcs) = thermal_bcs!(backend(thermal), thermal, bcs)
 function thermal_bcs!(
-    ::CPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs::FlowBoundaryConditions
+    ::CPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs::TemperatureBoundaryConditions
 )
     return thermal_bcs!(thermal.T, bcs)
 end
@@ -33,6 +34,8 @@ function thermal_bcs!(T::AbstractArray, bcs::TemperatureBoundaryConditions)
 
     return nothing
 end
+
+# @inline thermal_bcs!(thermal::ThermalArrays, bcs::TemperatureBoundaryConditions) = thermal_bcs!(thermal.T, bcs)
 
 """
     flow_bcs!(stokes, bcs::FlowBoundaryConditions, di)
@@ -56,9 +59,3 @@ function _flow_bcs!(bcs, V)
 
     return nothing
 end
-
-# BOUNDARY CONDITIONS KERNELS
-include("free_slip.jl")
-include("free_surface.jl")
-include("no_slip.jl")
-include("pure_shear.jl")

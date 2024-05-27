@@ -54,7 +54,7 @@ function _heatdiffusion_PT!(
                 @qT(thermal)..., @qT2(thermal)..., thermal.T, K, pt_thermal.θr_dτ, _di...
             )
             update_T(nothing, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
-            thermal_bcs!(thermal.T, thermal_bc)
+            thermal_bcs!(thermal, thermal_bc)
             update_halo!(thermal.T)
         end
 
@@ -156,7 +156,7 @@ function _heatdiffusion_PT!(
             update_T(
                 nothing, b_width, thermal, rheology, phases, pt_thermal, _dt, _di, ni, args
             )
-            thermal_bcs!(thermal.T, thermal_bc)
+            thermal_bcs!(thermal, thermal_bc)
             update_halo!(thermal.T)
 
             !isnothing(phase) &&

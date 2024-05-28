@@ -1,7 +1,7 @@
 module JustRelax3D
 
 using JustRelax: JustRelax
-using CUDA
+using AMDGPU
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
@@ -18,12 +18,13 @@ import JustRelax:
     AMDGPUBackendTrait,
     backend,
     CPUBackend,
+    AMDGPUBackend,
     Geometry,
     @cell
 import JustRelax:
     AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
 
-@init_parallel_stencil(CUDA, Float64, 3)
+@init_parallel_stencil(AMDGPU, Float64, 3)
 
 include("../../common.jl")
 include("../../stokes/Stokes3D.jl")
@@ -43,6 +44,12 @@ end
 
 function JR3D.PhaseRatio(::Type{AMDGPUBackend}, ni, num_phases)
     return PhaseRatio(ni, num_phases)
+end
+
+function JR3D.PTThermalCoeffs(
+    ::Type{AMDGPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
+)
+    return PTThermalCoeffs(K, ρCp, dt, di, li; ϵ=ϵ, CFL=CFL)
 end
 
 function JR3D.PTThermalCoeffs(
@@ -115,7 +122,7 @@ function JR3D.compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
-function JR2D.compute_viscosity!(η, ν, εII::RocArray, args, rheology, cutoff)
+function JR3D.compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
@@ -129,7 +136,7 @@ function compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
-function compute_viscosity!(η, ν, εII::RocArray, args, rheology, cutoff)
+function compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
@@ -139,10 +146,10 @@ function JR3D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTens
 end
 
 ## Buoyancy forces
-function JR3D.compute_ρg!(ρg::RocArray, rheology, args)
+function JR3D.compute_ρg!(ρg::ROCArray, rheology, args)
     return compute_ρg!(ρg, rheology, args)
 end
-function JR3D.compute_ρg!(ρg::RocArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
+function JR3D.compute_ρg!(ρg::ROCArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -155,17 +162,17 @@ function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArr
     return _temperature2center!(thermal)
 end
 
-function JR3D.vertex2center!(center::T, vertex::T) where {T<:RocArray}
+function JR3D.vertex2center!(center::T, vertex::T) where {T<:ROCArray}
     return vertex2center!(center, vertex)
 end
 
-function JR3D.center2vertex!(vertex::T, center::T) where {T<:RocArray}
+function JR3D.center2vertex!(vertex::T, center::T) where {T<:ROCArray}
     return center2vertex!(vertex, center)
 end
 
 function JR3D.center2vertex!(
     vertex_yz::T, vertex_xz::T, vertex_xy::T, center_yz::T, center_xz::T, center_xy::T
-) where {T<:RocArray}
+) where {T<:ROCArray}
     return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
 end
 
@@ -186,7 +193,7 @@ end
 function JR3D.subgrid_characteristic_time!(
     subgrid_arrays,
     particles,
-    dt₀::RocArray,
+    dt₀::ROCArray,
     phases::JustRelax.PhaseRatio,
     rheology,
     thermal::JustRelax.ThermalArrays,
@@ -204,7 +211,7 @@ end
 function JR3D.subgrid_characteristic_time!(
     subgrid_arrays,
     particles,
-    dt₀::RocArray,
+    dt₀::ROCArray,
     phases::AbstractArray{Int,N},
     rheology,
     thermal::JustRelax.ThermalArrays,

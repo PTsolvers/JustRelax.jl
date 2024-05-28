@@ -1,19 +1,39 @@
 push!(LOAD_PATH, "..")
 using Test, Suppressor
 
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+end
 
 using Printf, LinearAlgebra, GeoParams, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 import JustRelax.@cell
-const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+using ParallelStencil
+
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 2)
+    CUDABackend
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+    CPUBackend
+end
 
 using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustPIC.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    JustPIC.CUDABackend
+else
+    JustPIC.CPUBackend
+end
 
 # x-length of the domain
 const λ = 0.9142

@@ -187,7 +187,7 @@ flow_bcs      = FlowBoundaryConditions(;
 thermal_bc    = TemperatureBoundaryConditions(;
     no_flux   = (left = true, right = true, top = false, bot = false),
 )
-thermal_bcs!(thermal.T, thermal_bc)
+thermal_bcs!(thermal, thermal_bc)
 thermal.Told .= thermal.T
 ```
 

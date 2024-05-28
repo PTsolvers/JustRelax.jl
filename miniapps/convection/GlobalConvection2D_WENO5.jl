@@ -146,7 +146,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     Tm          = Tp + adiabat * 2890
     Tmin, Tmax  = 300.0, 3.5e3
     @parallel init_T!(thermal.T, xvi[2], κ, Tm, Tp, Tmin, Tmax)
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     # Temperature anomaly
     if thermal_perturbation == :random
         δT          = 5.0               # thermal perturbation (in %)

@@ -2,12 +2,12 @@ module JustRelaxAMDGPUExt
 
 using AMDGPU
 using JustRelax: JustRelax
-import JustRelax: PTArray, backend, AMDGPUBackendTrait
+import JustRelax: PTArray, backend, AMDGPUBackendTrait, AMDGPUBackend
 
-PTArray(::Type{AMDGPUBackend}) = RocArray
+PTArray(::Type{AMDGPUBackend}) = ROCArray
 
-@inline backend(::RocArray) = AMDGPUBackendTrait()
-@inline backend(::Type{<:RocArray}) = AMDGPUBackendTrait()
+@inline backend(::ROCArray) = AMDGPUBackendTrait()
+@inline backend(::Type{<:ROCArray}) = AMDGPUBackendTrait()
 
 include("../src/ext/AMDGPU/2D.jl")
 include("../src/ext/AMDGPU/3D.jl")

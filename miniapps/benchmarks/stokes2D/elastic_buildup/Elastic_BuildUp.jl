@@ -50,13 +50,13 @@ function elastic_buildup(;
 
     ## Setup-specific parameters and fields
     (; η)     = stokes.viscosity
-    η        .= fill(η0, nx, ny)
+    η         .= @fill(η0, ni...)
     g         = 0.0 # gravity
     Gc        = @fill(G, ni...)
     Kb        = @fill(Inf, ni...)
-  
+
     ## Boundary conditions
-    pureshear_bc!(stokes, xci, xvi, εbg)
+    pureshear_bc!(stokes, xci, xvi, εbg, backend)
     flow_bcs  = FlowBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true)
     )
@@ -86,7 +86,7 @@ function elastic_buildup(;
             kwargs = (;
                 iterMax=150e3,
                 nout=1000,
-                b_width=(4, 4, 1),
+                b_width=(4, 4, 0),
                 verbose=true,
             )
         )

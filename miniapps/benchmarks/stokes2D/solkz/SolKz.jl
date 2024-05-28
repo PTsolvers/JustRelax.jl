@@ -106,7 +106,7 @@ function solKz(;
             kwargs = (
                 iterMax = 150e3,
                 nout    = 1e3,
-                b_width = (4, 4, 1),
+                b_width = (4, 4, 0),
                 verbose = true
             ),
         )

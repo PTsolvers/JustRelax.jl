@@ -86,7 +86,7 @@ function elastic_buildup(;
             kwargs = (;
                 iterMax=150e3,
                 nout=1000,
-                b_width=(4, 4, 1),
+                b_width=(4, 4, 0),
                 verbose=true,
             )
         )

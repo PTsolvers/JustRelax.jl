@@ -53,8 +53,8 @@ end
 
 function solCx(
     Δη           = Δη;
-    nx           = 256 - 1,
-    ny           = 256 - 1,
+    nx           = 64,
+    ny           = 64,
     lx           = 1e0,
     ly           = 1e0,
     init_MPI     = true,
@@ -101,8 +101,11 @@ function solCx(
             @parallel smooth!(η2, η, 1.0)
             update_halo!(η2, η)
         end
-        @parallel (1:size(η2, 1)) JustRelax.JustRelax2D.free_slip_y!(η2)
-        η, η2 = η2, η
+        @views η2[1, :]    .= η2[2, :]
+        @views η2[end, :]  .= η2[end-1, :]
+        @views η2[:, 1]    .= η2[:, 2]
+        @views η2[:, end]  .= η2[:, end-1]
+        η, η2               = η2, η # swap   
     end
 
     ## Boundary conditions
@@ -129,7 +132,7 @@ function solCx(
             kwargs = (
                 iterMax = 500e3,
                 nout    = 5e3,
-                b_width = (4, 4, 1),
+                b_width = (4, 4, 0),
                 verbose = true,
             )
         )

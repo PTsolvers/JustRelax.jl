@@ -56,7 +56,7 @@ function elastic_buildup(;
     Kb        = @fill(Inf, ni...)
 
     ## Boundary conditions
-    pureshear_bc!(stokes, xci, xvi, εbg)
+    pureshear_bc!(stokes, xci, xvi, εbg, backend)
     flow_bcs  = FlowBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true)
     )

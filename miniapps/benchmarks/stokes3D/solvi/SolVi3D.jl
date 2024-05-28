@@ -90,7 +90,7 @@ function solVi3D(;
     Kb = @fill(Inf, ni...)
 
     ## Boundary conditions
-    pureshear_bc!(stokes, xci, xvi, εbg)
+    pureshear_bc!(stokes, xci, xvi, εbg, backend)
     flow_bcs = FlowBoundaryConditions(;
         free_slip   = (left=true, right=true, top=true, bot=true, back=true, front=true),
         no_slip     = (left=false, right=false, top=false, bot=false, back=false, front=false),

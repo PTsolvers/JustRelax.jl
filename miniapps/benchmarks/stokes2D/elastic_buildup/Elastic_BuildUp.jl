@@ -50,7 +50,7 @@ function elastic_buildup(;
 
     ## Setup-specific parameters and fields
     (; η)     = stokes.viscosity
-    η         = @fill(η0, ni...)
+    η         .= @fill(η0, ni...)
     g         = 0.0 # gravity
     Gc        = @fill(G, ni...)
     Kb        = @fill(Inf, ni...)

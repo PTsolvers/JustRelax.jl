@@ -58,7 +58,7 @@ function check_convergence_case1()
 end
 
 @testset "solvi3D" begin
-    # @suppress begin
+    @suppress begin
         @test check_convergence_case1()
-    # end
+    end
 end

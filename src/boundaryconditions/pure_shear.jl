@@ -12,7 +12,6 @@ function pureshear_bc!(
 )
     xv, yv, zv = xvi
     xc, yc, zc = xci
-    _T = typeof(stokes.V.Vx)
 
     stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)] .= PTArray(backend)([
         εbg * x for x in xv, y in yc, z in zc

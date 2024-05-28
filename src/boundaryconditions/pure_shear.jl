@@ -8,7 +8,7 @@ function pureshear_bc!(
 end
 
 function pureshear_bc!(
-    stokes::JustRelax.StokesArrays, xci::NTuple{3,T}, xvi::NTuple{3,T}, εbg, backend
+    stokes::JustRelax.StokesArrays, xci::NTuple{3}, xvi::NTuple{3}, εbg, backend
 )
     xv, yv, zv = xvi
     xc, yc, zc = xci

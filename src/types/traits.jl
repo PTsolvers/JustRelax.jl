@@ -1,8 +1,10 @@
 abstract type BackendTrait end
+abstract type GPUBackendTrait <: BackendTrait end
+
 struct CPUBackendTrait <: BackendTrait end
-struct NonCPUBackendTrait <: BackendTrait end
-struct CUDABackendTrait <: BackendTrait end
-struct AMDGPUBackendTrait <: BackendTrait end
+struct NonCPUBackendTrait <: GPUBackendTrait end
+struct CUDABackendTrait <: GPUBackendTrait end
+struct AMDGPUBackendTrait <: GPUBackendTrait end
 
 # AbstractArray's
 @inline backend(::Array) = CPUBackendTrait()

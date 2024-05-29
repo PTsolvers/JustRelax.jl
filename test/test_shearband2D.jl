@@ -1,12 +1,26 @@
 push!(LOAD_PATH, "..")
 
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+end
+
 using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
 
-const backend = CPUBackend
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 2)
+    CUDABackend
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+    CPUBackend
+end
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))

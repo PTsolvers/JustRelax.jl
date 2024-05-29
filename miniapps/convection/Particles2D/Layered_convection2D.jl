@@ -113,7 +113,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 25, 30, 12
     particles        = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     subgrid_arrays   = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -144,7 +144,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     )
     # initialize thermal profile - Half space cooling
     @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], thick_air)
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     Tbot = thermal.T[1, 1]
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air)
     temperature2center!(thermal)

@@ -107,7 +107,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
     yc_anomaly      = -600e3  # origin of thermal anomaly
     r_anomaly       = 100e3    # radius of perturbation
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     thermal.Told    .= thermal.T
     temperature2center!(thermal)
     # ----------------------------------------------------

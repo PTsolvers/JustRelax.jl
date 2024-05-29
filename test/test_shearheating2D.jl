@@ -1,19 +1,42 @@
+push!(LOAD_PATH, "..")
 using Test, Suppressor
+
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+    AMDGPU.allowscalar(true)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+    CUDA.allowscalar(true)
+end
+
 
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax2D
-const backend_JR = CPUBackend
-
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 2)
+    CUDABackend
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+    CPUBackend
+end
 
 using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-# const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustPIC.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    JustPIC.CPUBackend
+end
 
 # Load script dependencies
 using GeoParams
@@ -73,8 +96,8 @@ function Shearheating2D()
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 32, 12
-    particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -105,7 +128,7 @@ function Shearheating2D()
 
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
     # ----------------------------------------------------
 

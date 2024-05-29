@@ -132,7 +132,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     # initialize thermal profile - Half space cooling
     @parallel init_T!(thermal.T, xvi[3])
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, xvi)
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
     # ----------------------------------------------------
 

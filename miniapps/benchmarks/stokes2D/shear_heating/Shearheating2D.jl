@@ -66,8 +66,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 32, 12
-    particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -98,7 +98,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
     # ----------------------------------------------------
 

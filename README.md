@@ -1,7 +1,8 @@
 # JustRelax.jl
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
-![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
+![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)
+[![Build status](https://badge.buildkite.com/6b970b1066dc828a56a75bccc65a8bc896a8bb76012a61fe96.svg)](https://buildkite.com/julialang/justrelax-dot-jl)
 [![codecov](https://codecov.io/gh/PTsolvers/JustRelax.jl/graph/badge.svg?token=4ZJO7ZGT8H)](https://codecov.io/gh/PTsolvers/JustRelax.jl)
 
 
@@ -258,11 +259,6 @@ while t < tmax
     # Compute second invariant of the strain rate tensor
     tensor_invariant!(stokes.ε)
     push!(τII, maximum(stokes.τ.xx))
-    # Update old stresses
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(
-        @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-    )
 
     it += 1
     t  += dt

@@ -18,6 +18,7 @@ import JustRelax:
     AMDGPUBackendTrait,
     backend,
     CPUBackend,
+    AMDGPUBackend,
     Geometry,
     @cell
 import JustRelax:
@@ -43,6 +44,12 @@ end
 
 function JR2D.PhaseRatio(::Type{AMDGPUBackend}, ni, num_phases)
     return PhaseRatio(ni, num_phases)
+end
+
+function JR2D.PTThermalCoeffs(
+    ::Type{AMDGPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
+)
+    return PTThermalCoeffs(K, ρCp, dt, di, li; ϵ=ϵ, CFL=CFL)
 end
 
 function JR2D.PTThermalCoeffs(
@@ -115,7 +122,7 @@ function JR2D.compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
-function JR2D.compute_viscosity!(η, ν, εII::RocArray, args, rheology, cutoff)
+function JR2D.compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
@@ -129,7 +136,7 @@ function compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
-function compute_viscosity!(η, ν, εII::RocArray, args, rheology, cutoff)
+function compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
@@ -139,10 +146,10 @@ function JR2D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTens
 end
 
 ## Buoyancy forces
-function JR2D.compute_ρg!(ρg::RocArray, rheology, args)
+function JR2D.compute_ρg!(ρg::ROCArray, rheology, args)
     return compute_ρg!(ρg, rheology, args)
 end
-function JR2D.compute_ρg!(ρg::RocArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
+function JR2D.compute_ρg!(ρg::ROCArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -155,17 +162,17 @@ function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArr
     return _temperature2center!(thermal)
 end
 
-function JR2D.vertex2center!(center::T, vertex::T) where {T<:RocArray}
+function JR2D.vertex2center!(center::T, vertex::T) where {T<:ROCArray}
     return vertex2center!(center, vertex)
 end
 
-function JR2D.center2vertex!(vertex::T, center::T) where {T<:RocArray}
+function JR2D.center2vertex!(vertex::T, center::T) where {T<:ROCArray}
     return center2vertex!(vertex, center)
 end
 
 function JR2D.center2vertex!(
     vertex_yz::T, vertex_xz::T, vertex_xy::T, center_yz::T, center_xz::T, center_xy::T
-) where {T<:RocArray}
+) where {T<:ROCArray}
     return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
 end
 
@@ -188,7 +195,7 @@ end
 function JR2D.subgrid_characteristic_time!(
     subgrid_arrays,
     particles,
-    dt₀::RocArray,
+    dt₀::ROCArray,
     phases::JustRelax.PhaseRatio,
     rheology,
     thermal::JustRelax.ThermalArrays,
@@ -206,7 +213,7 @@ end
 function JR2D.subgrid_characteristic_time!(
     subgrid_arrays,
     particles,
-    dt₀::RocArray,
+    dt₀::ROCArray,
     phases::AbstractArray{Int,N},
     rheology,
     thermal::JustRelax.ThermalArrays,

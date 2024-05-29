@@ -150,7 +150,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     Tmin, Tmax  = 300.0, 3.5e3
     # thermal.T  .= 1600.0
     @parallel init_T!(thermal.T, xvi[3], κ, Tm, Tp, Tmin, Tmax)
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     # Elliptical temperature anomaly
     if thermal_perturbation == :random
         δT          = 5.0              # thermal perturbation (in %)

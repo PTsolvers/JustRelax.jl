@@ -1,4 +1,28 @@
+using JustRelax
+
+using Pkg
+
 push!(LOAD_PATH, "..")
+
+function parse_flags!(args, flag; default=nothing, typ=typeof(default))
+    for f in args
+        startswith(f, flag) || continue
+
+        if f != flag
+            val = split(f, '=')[2]
+            if !(typ ≡ nothing || typ <: AbstractString)
+                @show typ val
+                val = parse(typ, val)
+            end
+        else
+            val = default
+        end
+
+        filter!(x -> x != f, args)
+        return true, val
+    end
+    return false, default
+end
 
 function runtests()
     testdir = pwd()
@@ -16,7 +40,7 @@ function runtests()
     for f in f0
         include(f)
     end
-    
+
     for f in testfiles
         occursin("burstedde", f) && continue
         occursin("VanKeken", f) && continue
@@ -29,8 +53,20 @@ function runtests()
             nfail += 1
         end
     end
-    
+
     return nfail
+end
+
+_, backend_name = parse_flags!(ARGS, "--backend"; default="CPU", typ=String)
+
+@static if backend_name == "AMDGPU"
+    Pkg.add("AMDGPU")
+    ENV["JULIA_JUSTRELAX_BACKEND"] = "AMDGPU"
+elseif backend_name == "CUDA"
+    Pkg.add("CUDA")
+    ENV["JULIA_JUSTRELAX_BACKEND"] = "CUDA"
+elseif backend_name == "CPU"
+    ENV["JULIA_JUSTRELAX_BACKEND"] = "CPU"
 end
 
 exit(runtests())

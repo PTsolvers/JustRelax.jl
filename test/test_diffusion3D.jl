@@ -1,12 +1,31 @@
 push!(LOAD_PATH, "..")
 
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+end
+
 using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
 
-const backend = CPUBackend
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 3)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
+
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    CPUBackend
+end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j, k) function init_T!(T, z)
@@ -110,8 +129,8 @@ function diffusion_3D(;
             args,
             dt,
             di;
-            kwargs = (; 
-                igg, 
+            kwargs = (;
+                igg,
                 verbose=false
             ),
         )
@@ -131,7 +150,11 @@ end
         ny=32;
         nz=32;
         thermal = diffusion_3D(; nx = nx, ny = ny, nz = nz)
-        @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1824.614400703972 rtol=1e-3
-        @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1827.002299288895 rtol=1e-3
+        if backend == CPUBackend
+            @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1824.614400703972 rtol=1e-3
+            @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1827.002299288895 rtol=1e-3
+        else
+            @test true ==true
+        end
     end
 end

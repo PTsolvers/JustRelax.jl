@@ -151,7 +151,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     )
     # initialize thermal profile - Half space cooling
     @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], thick_air, CharDim)
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     Tbot = thermal.T[1, 1]
     Ttop = thermal.T[1, end]
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
@@ -228,7 +228,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         @views thermal.T[2:end-1, :] .= T_buffer
         @views thermal.T[:, end]     .= Ttop
         @views thermal.T[:, 1]       .= Tbot
-        thermal_bcs!(thermal.T, thermal_bc)
+        thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
 
         # Update buoyancy and viscosity -

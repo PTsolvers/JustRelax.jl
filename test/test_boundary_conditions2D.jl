@@ -14,9 +14,21 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
 else
     CPUBackend
 end
+
 @testset "Boundary Conditions" begin
     if backend === CPUBackend
         @suppress begin
+
+            # test incompatible boundary conditions
+            @test_throws ErrorException FlowBoundaryConditions(;
+                no_slip     = (left=false, right=false, top=false, bot=false),
+                free_slip   = (left=false, right=true, top=true, bot=true),
+            )
+            @test_throws ErrorException FlowBoundaryConditions(;
+                no_slip     = (left=false, right=false, top=false, bot=false),
+                free_slip   = (left=true , right=true , top=true , bot=false),
+            )
+
             n       = 5 # number of elements
             Vx, Vy  = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
             # free-slip

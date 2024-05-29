@@ -28,7 +28,7 @@ JustRelaxAMDGPUExt = "AMDGPU"
 JustRelaxCUDAExt = "CUDA"
 
 [compat]
-AMDGPU = "0.8"
+AMDGPU = "0.8, 0.9"
 Adapt = "4"
 CUDA = "~5.3.5"
 CellArrays = "0.2"

@@ -29,13 +29,15 @@ struct FlowBoundaryConditions{T,nD} <: AbstractBoundaryConditions
     end
 end
 
-function check_flow_bcs(no_slip::T, free_slip::T) where T
+function check_flow_bcs(no_slip::T, free_slip::T) where {T}
     v1 = values(no_slip)
     v2 = values(free_slip)
-    k  = keys(no_slip)
+    k = keys(no_slip)
     for (v1, v2, k) in zip(v1, v2, k)
         if v1 == v2
-            error("Incompatible boundary conditions. The $k boundary condition can't be the same for no_slip and free_slip")
+            error(
+                "Incompatible boundary conditions. The $k boundary condition can't be the same for no_slip and free_slip",
+            )
         end
     end
 end

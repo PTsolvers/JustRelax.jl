@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA 
     using CUDA
@@ -32,21 +32,9 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-# import ParallelStencil.INDICES
-# const idx_j = INDICES[3]
-# macro all_j(A)
-#     return esc(:($A[$idx_j]))
-# end
-
-# @parallel function init_P!(P, ρg, z, sticky_air)
-#     @all(P) = @all(ρg)
-#     # @all(P) = abs(@all(ρg) * (@all_j(z) + sticky_air)) * <((@all_j(z) + sticky_air), 0.0)
-#     return nothing
-# end
 
 function init_phases!(phases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, sticky_air,top, bottom)
     ni = size(phases)
@@ -150,8 +138,8 @@ function init_rheology(CharDim; is_compressible = false)
         #Name="UpperCrust"
         SetMaterialParams(;
             Phase             = 1,
-            Density           = ConstantDensity(; ρ=2650kg / m^3),
-            # Density           = PT_Density(; ρ0=2650kg / m^3, α=3e-5 / K, T0=0.0C, β=β_rock / Pa),
+            # Density           = ConstantDensity(; ρ=2650kg / m^3),
+            Density           = PT_Density(; ρ0=2650kg / m^3, α=3e-5 / K, T0=0.0C, β=β_rock / Pa),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1050J / kg / K),
             Conductivity      = ConstantConductivity(; k=3.0Watt / K / m),
             LatentHeat        = ConstantLatentHeat(; Q_L=350e3J / kg),
@@ -166,8 +154,8 @@ function init_rheology(CharDim; is_compressible = false)
         #Name="Magma"
         SetMaterialParams(;
             Phase             = 2,
-            # Density           = PT_Density(; ρ0=2650kg / m^3, T0=0.0C, β=β_magma / Pa),
-            Density           = ConstantDensity(; ρ=2625kg / m^3),
+            Density           = PT_Density(; ρ0=2650kg / m^3, T0=0.0C, β=β_magma / Pa),
+            # Density           = ConstantDensity(; ρ=2625kg / m^3),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1050J / kg / K),
             Conductivity      = ConstantConductivity(; k=1.5Watt / K / m),
             LatentHeat        = ConstantLatentHeat(; Q_L=350e3J / kg),
@@ -446,21 +434,19 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         t += dt
 
         #  # # Plotting -------------------------------------------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 10) == 0
             (; η) = stokes.viscosity
             # checkpointing(figdir, stokes, thermal.T, η, t)
 
             if igg.me == 0
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+                
                     data_v = (;
                         T  = Array(ustrip.(dimensionalize(thermal.T, C, CharDim))),
                         τxy= Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
                         εxy= Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
-                        Vx = Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
-                        Vy = Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
-                        Vz = Array(ustrip.(dimensionalize(Vz_v, cm/yr, CharDim))),
-                    )
+                     )
                     data_c = (;
                         P   = Array(ustrip.(dimensionalize(stokes.P,MPa,CharDim))),
                         τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa,CharDim))),
@@ -474,9 +460,9 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                         η   = Array(ustrip.(dimensionalize(η,Pa*s,CharDim))),
                     )
                     velocity_v = (
-                        Array(Vx_v),
-                        Array(Vy_v),
-                        Array(Vz_v),
+                        Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
+                        Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
+                        Array(ustrip.(dimensionalize(Vz_v, cm/yr, CharDim))),
                     )
                     save_vtk(
                         joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -488,22 +474,22 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                     )
                 end
 
-                let
-                    Zv  = [z for _ in 1:nx+1, _ in 1:ny+1, z in ustrip.(dimensionalize(xvi[3],km,CharDim))][:]
-                    Z   = [z for _ in 1:nx  , _ in 1:ny  , z in ustrip.(dimensionalize(xci[3],km,CharDim))][:]
-                    fig = Figure(; size=(1200, 900))
-                    ax1 = Axis(fig[1, 1]; aspect = 2 / 3, title="T")
-                    ax2 = Axis(fig[1, 2]; aspect = 2 / 3, title="Pressure")
-                    a3  = Axis(fig[2, 1]; aspect = 2 / 3, title="τII")
+                # let
+                #     Zv  = [z for _ in 1:nx+1, _ in 1:ny+1, z in ustrip.(dimensionalize(xvi[3],km,CharDim))][:]
+                #     Z   = [z for _ in 1:nx  , _ in 1:ny  , z in ustrip.(dimensionalize(xci[3],km,CharDim))][:]
+                #     fig = Figure(; size=(1200, 900))
+                #     ax1 = Axis(fig[1, 1]; aspect = 2 / 3, title="T")
+                #     ax2 = Axis(fig[1, 2]; aspect = 2 / 3, title="Pressure")
+                #     a3  = Axis(fig[2, 1]; aspect = 2 / 3, title="τII")
 
-                    scatter!(ax1, ustrip.(dimensionalize((Array(thermal.T)), C, CharDim))[:]  , Zv, markersize = 4)
-                    scatter!(ax2, ustrip.(dimensionalize((Array(stokes.P)), MPa, CharDim))[:] , Z , markersize = 4)
-                    scatter!(a3,  ustrip.(dimensionalize(Array(stokes.τ.II), MPa, CharDim))[:], Z , markersize = 4)
+                #     scatter!(ax1, ustrip.(dimensionalize((Array(thermal.T)), C, CharDim))[:]  , Zv, markersize = 4)
+                #     scatter!(ax2, ustrip.(dimensionalize((Array(stokes.P)), MPa, CharDim))[:] , Z , markersize = 4)
+                #     scatter!(a3,  ustrip.(dimensionalize(Array(stokes.τ.II), MPa, CharDim))[:], Z , markersize = 4)
 
-                    hideydecorations!(ax2)
-                    save(joinpath(figdir, "pressure_profile_$it.png"), fig)
-                    fig
-                end
+                #     hideydecorations!(ax2)
+                #     save(joinpath(figdir, "pressure_profile_$it.png"), fig)
+                #     fig
+                # end
             end
         end
     end
@@ -513,9 +499,9 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 end
 
 figdir = "/scratch/snx3000/ademonts/Blober"
-figdir = "Blober"
+figdir = "Blober100"
 do_vtk = true # set to true to generate VTK files for ParaView
-n      = 32
+n      = 100
 nx     = n
 ny     = n
 nz     = n
@@ -526,4 +512,4 @@ else
 end
 
 # run main script
-# main3D(igg; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk = do_vtk);
+main3D(igg; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk = do_vtk);

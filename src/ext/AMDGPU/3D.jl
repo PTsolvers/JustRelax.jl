@@ -176,6 +176,13 @@ function JR3D.center2vertex!(
     return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
 end
 
+function JR3D.velocity2vertex!(
+    Vx_v::ROCArray, Vy_v::ROCArray, Vz_v::ROCArray, Vx::ROCArray, Vy::ROCArray, Vz::ROCArray
+)
+    velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
+    return nothing
+end
+
 # Solvers
 function JR3D.solve!(::AMDGPUBackendTrait, stokes, args...; kwargs)
     return _solve!(stokes, args...; kwargs...)

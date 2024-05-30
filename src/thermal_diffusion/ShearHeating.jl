@@ -1,4 +1,8 @@
-function compute_shear_heating!(thermal, stokes, rheology, dt)
+function compute_shear_heating!(thermal, args...)
+    return compute_shear_heating!(backend(thermal), thermal, args...)
+end
+
+function compute_shear_heating!(::CPUBackendTrait, thermal, stokes, rheology, dt)
     ni = size(thermal.shear_heating)
     @parallel (ni) compute_shear_heating_kernel!(
         thermal.shear_heating,
@@ -22,7 +26,7 @@ end
 end
 
 function compute_shear_heating!(
-    thermal, stokes, phase_ratios::JustRelax.PhaseRatio, rheology, dt
+    ::CPUBackendTrait, thermal, stokes, phase_ratios::JustRelax.PhaseRatio, rheology, dt
 )
     ni = size(thermal.shear_heating)
     @parallel (@idx ni) compute_shear_heating_kernel!(

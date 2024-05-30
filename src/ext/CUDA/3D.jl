@@ -175,6 +175,13 @@ function JR3D.center2vertex!(
     return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
 end
 
+function JR3D.velocity2vertex!(
+    Vx_v::CuArray, Vy_v::CuArray, Vz_v::CuArray, Vx::CuArray, Vy::CuArray, Vz::CuArray
+)
+    velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
+    return nothing
+end
+
 # Solvers
 function JR3D.solve!(::CUDABackendTrait, stokes, args...; kwargs)
     return _solve!(stokes, args...; kwargs...)
@@ -221,6 +228,37 @@ function JR3D.subgrid_characteristic_time!(
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases, rheology, thermal.Tc, stokes.P, di
+    )
+    return nothing
+end
+
+# shear heating
+
+function JR3D.compute_shear_heating!(::CUDABackendTrait, thermal, stokes, rheology, dt)
+    ni = size(thermal.shear_heating)
+    @parallel (ni) compute_shear_heating_kernel!(
+        thermal.shear_heating,
+        @tensor_center(stokes.τ),
+        @tensor_center(stokes.τ_o),
+        @strain(stokes),
+        rheology,
+        dt,
+    )
+    return nothing
+end
+
+function JR3D.compute_shear_heating!(
+    ::CUDABackendTrait, thermal, stokes, phase_ratios::JustRelax.PhaseRatio, rheology, dt
+)
+    ni = size(thermal.shear_heating)
+    @parallel (@idx ni) compute_shear_heating_kernel!(
+        thermal.shear_heating,
+        @tensor_center(stokes.τ),
+        @tensor_center(stokes.τ_o),
+        @strain(stokes),
+        phase_ratios.center,
+        rheology,
+        dt,
     )
     return nothing
 end

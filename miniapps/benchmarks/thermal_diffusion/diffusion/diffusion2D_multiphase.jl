@@ -1,21 +1,11 @@
-using Printf, LinearAlgebra, GeoParams, SpecialFunctions, CellArrays, StaticArrays
-using JustRelax
+using JustRelax, JustRelax.JustRelax2D
+const backend_JR = CPUBackend
+
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-using JustPIC
-using JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-
-# setup ParallelStencil.jl environment
-model = PS_Setup(:Threads, Float64, 2)  #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
-environment!(model)
-
 import JustRelax.@cell
-
+using GeoParams
 
 distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
 
@@ -65,7 +55,7 @@ function init_phases!(phases, particles, xc, yc, r)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
 end
 
 @parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
@@ -115,7 +105,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     args       = (; P=P)
 
     ## Allocate arrays needed for every Thermal Diffusion
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend_JR, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
@@ -126,26 +116,25 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     r                   = 10e3 # thermal perturbation radius
     center_perturbation = lx/2, -ly/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
-    @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
+    temperature2center!(thermal)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1
-    particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
-    # temperature
     pPhases,     = init_cell_arrays(particles, Val(1))
+    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, center_perturbation..., r)
-    phase_ratios = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) JustRelax.phase_ratios_center(phase_ratios.center, pPhases)
+    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
 
     # PT coefficients for thermal diffusion
     args       = (; P=P, T=thermal.Tc)
-    pt_thermal = JustRelax.PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.65 / √2
+    pt_thermal = PTThermalCoeffs(
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.65 / √2
     )
 
     # Time loop
@@ -161,9 +150,11 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
             args,
             dt,
             di;
-            phase   = phase_ratios,
-            iterMax = 1e3,
-            nout    = 10,
+            kwargs = (;
+                phase   = phase_ratios,
+                iterMax = 1e3,
+                nout    = 10,
+            )
         )
 
         it += 1

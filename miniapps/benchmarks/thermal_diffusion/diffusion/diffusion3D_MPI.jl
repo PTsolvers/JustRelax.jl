@@ -1,14 +1,10 @@
-using JustRelax, GeoParams
-using GLMakie
+using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64, 3) or (AMDGPU, Float64, 3)
+@init_parallel_stencil(Threads, Float64, 3)
 
-# setup ParallelStencil.jl environment
-dimension = 3 # 2 | 3
-device = :cpu # :cpu | :CUDA | :AMDGPU
-precision = Float64
-model = PS_Setup(device, precision, dimension)
-environment!(model)
+const backend = CPUBackend
+
+using GLMakie, GeoParams
 
 @parallel_indices (i, j, k) function init_T!(T, z, lz)
     if z[k] ≥ 0.0
@@ -62,13 +58,12 @@ function diffusion_3D(;
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
-
     # Define the thermal parameters with GeoParams
     rheology = SetMaterialParams(;
-        Phase        = 1,
-        Density      = PT_Density(; ρ0=3.1e3, β=0.0, T0=0.0, α = 1.5e-5),
-        HeatCapacity = ConstantHeatCapacity(; Cp=Cp0),
-        Conductivity = ConstantConductivity(; k=K0),
+    Phase        = 1,
+    Density      = PT_Density(; ρ0=3.1e3, β=0.0, T0=0.0, α = 1.5e-5),
+    HeatCapacity = ConstantHeatCapacity(; Cp=Cp0),
+    Conductivity = ConstantConductivity(; k=K0),
     )
 
     # fields needed to compute density on the fly
@@ -77,7 +72,7 @@ function diffusion_3D(;
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend, ni)
     thermal.H .= 1e-6
     # physical parameters
     ρ          = @fill(ρ0, ni...)
@@ -86,19 +81,17 @@ function diffusion_3D(;
     ρCp        = @. Cp * ρ
 
     # Boundary conditions
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
     thermal_bc = TemperatureBoundaryConditions(;
-        no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
+    no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
     )
 
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3], lz)
-
-    # return nothing
+    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])
 
     # Add thermal perturbation
     δT                  = 100e0 # thermal perturbation
     r                   = 10e3 # thermal perturbation radius
-    center_perturbation = lx/2, ly/2, -lz/2
+    center_perturbation = lx / 2, ly / 2, -lz / 2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
 
     # Visualization global arrays
@@ -120,8 +113,10 @@ function diffusion_3D(;
             rheology,
             args,
             dt,
-            di,;
-            igg
+            di;
+            kwargs = (; 
+                igg, 
+            )
         )
 
         @views T_nohalo .= Array(thermal.T[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo

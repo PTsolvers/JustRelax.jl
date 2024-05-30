@@ -1,88 +1,27 @@
-## DIMENSION AGNOSTIC KERNELS
-
-@parallel function elastic_iter_params!(
-    dτ_Rho::AbstractArray,
-    Gdτ::AbstractArray,
-    ητ::AbstractArray,
-    Vpdτ::T,
-    G::T,
-    dt::M,
-    Re::T,
-    r::T,
-    max_li::T,
-) where {T,M}
-    @all(dτ_Rho) = Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (G * dt)))
-    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
-    return nothing
-end
-
-@parallel function elastic_iter_params!(
-    dτ_Rho::AbstractArray,
-    Gdτ::AbstractArray,
-    ητ::AbstractArray,
-    Vpdτ::T,
-    G::AbstractArray,
-    dt::M,
-    Re::T,
-    r::T,
-    max_li::T,
-) where {T,M}
-    @all(dτ_Rho) =
-        Vpdτ * max_li / Re / (one(T) / (one(T) / @all(ητ) + one(T) / (@all(G) * dt)))
-    @all(Gdτ) = Vpdτ^2 / @all(dτ_Rho) / (r + T(2.0))
-    return nothing
-end
-
 ## 2D STOKES MODULE
-
-module Stokes2D
-
-using ImplicitGlobalGrid
-using ..JustRelax
-using CUDA, AMDGPU
-using ParallelStencil
-# using ParallelStencil.FiniteDifferences2D
-using GeoParams, LinearAlgebra, Printf
-
-import JustRelax: elastic_iter_params!, PTArray, Velocity, SymmetricTensor
-import JustRelax:
-    Residual, StokesArrays, PTStokesCoeffs, AbstractStokesModel, ViscoElastic, IGG
-import JustRelax: compute_maxloc!, solve!
-import JustRelax: mean_mpi, norm_mpi, maximum_mpi, minimum_mpi, backend
-
-@eval @init_parallel_stencil($backend, Float64, 2)
-
-include("../rheology/GeoParams.jl")
-include("StressRotation.jl")
-include("StressKernels.jl")
-include("PressureKernels.jl")
-include("VelocityKernels.jl")
-include("StressKernels.jl")
-
-export solve!
-
-function update_τ_o!(stokes::StokesArrays{ViscoElastic,A,B,C,D,2}) where {A,B,C,D}
-    τxx, τyy, τxy, τxy_c = stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.τ.xy_c
-    τxx_o, τyy_o, τxy_o, τxy_o_c = stokes.τ_o.xx,
-    stokes.τ_o.yy, stokes.τ_o.xy,
-    stokes.τ_o.xy_c
-
+function update_τ_o!(stokes::JustRelax.StokesArrays)
     @parallel (@idx size(τxy)) multi_copy!(
-        (τxx_o, τyy_o, τxy_o, τxy_o_c), (τxx, τyy, τxy, τxy_c)
+        @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
     )
     return nothing
 end
 
 ## 2D VISCO-ELASTIC STOKES SOLVER
 
-# viscous solver
-function JustRelax.solve!(
-    stokes::StokesArrays{Viscous,A,B,C,D,2},
-    pt_stokes::PTStokesCoeffs,
+# backend trait
+function solve!(stokes::JustRelax.StokesArrays, args...; kwargs)
+    return solve!(backend(stokes), stokes, args...; kwargs)
+end
+
+# entry point for extensions
+solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...)
+
+function _solve!(
+    stokes::JustRelax.StokesArrays,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs::FlowBoundaryConditions,
     ρg,
-    η,
     K,
     dt,
     igg::IGG;
@@ -90,11 +29,13 @@ function JustRelax.solve!(
     nout=500,
     b_width=(4, 4, 1),
     verbose=true,
-) where {A,B,C,D,T}
+    kwargs...,
+) where {T}
 
     # unpack
     _dx, _dy = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; η) = stokes.viscosity
     ni = size(stokes.P)
 
     # ~preconditioner
@@ -192,6 +133,9 @@ function JustRelax.solve!(
         end
     end
 
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -203,13 +147,12 @@ function JustRelax.solve!(
 end
 
 # visco-elastic solver
-function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
-    pt_stokes::PTStokesCoeffs,
+function _solve!(
+    stokes::JustRelax.StokesArrays,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ρg,
-    η,
     G,
     K,
     dt,
@@ -218,11 +161,13 @@ function JustRelax.solve!(
     nout=500,
     b_width=(4, 4, 1),
     verbose=true,
-) where {A,B,C,D,T}
+    kwargs...,
+) where {T}
 
     # unpack
     _di = inv.(di)
-    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; ϵ, r, θ_dτ) = pt_stokes
+    (; η) = stokes.viscosity
     ni = size(stokes.P)
 
     # ~preconditioner
@@ -306,6 +251,9 @@ function JustRelax.solve!(
         end
     end
 
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -318,29 +266,30 @@ end
 
 # GeoParams: general (visco-elasto-plastic) solver
 
-function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
-    pt_stokes::PTStokesCoeffs,
+function _solve!(
+    stokes::JustRelax.StokesArrays,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ρg,
-    η,
-    η_vep,
     rheology::MaterialParams,
     args,
     dt,
     igg::IGG;
-    viscosity_cutoff=(1e16, 1e24),
+    viscosity_cutoff=(-Inf, Inf),
+    viscosity_relaxation=1e-2,
     iterMax=10e3,
     nout=500,
     b_width=(4, 4, 0),
     verbose=true,
     free_surface=false,
-) where {A,B,C,D,T}
+    kwargs...,
+) where {T}
 
     # unpack
     _di = inv.(di)
-    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; ϵ, r, θ_dτ) = pt_stokes
+    (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
     # ~preconditioner
@@ -371,6 +320,10 @@ function JustRelax.solve!(
     θ = @zeros(ni...)
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
 
+    # compute buoyancy forces and viscosity
+    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -378,15 +331,14 @@ function JustRelax.solve!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
             )
 
-            @parallel (@idx ni) compute_ρg!(ρg[2], rheology, args)
+            update_ρg!(ρg[2], rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            ν = 1e-2
-            @parallel (@idx ni) compute_viscosity!(
-                η, ν, @strain(stokes)..., args, rheology, viscosity_cutoff
+            update_viscosity!(
+                stokes, args, rheology, viscosity_cutoff; relaxation=viscosity_relaxation
             )
             compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
@@ -407,8 +359,7 @@ function JustRelax.solve!(
                 dt,
                 θ_dτ,
             )
-
-            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
             @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
@@ -474,6 +425,9 @@ function JustRelax.solve!(
 
     stokes.P .= θ
 
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
 
@@ -489,33 +443,33 @@ end
 
 ## With phase ratios
 
-function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
-    pt_stokes::PTStokesCoeffs,
+function _solve!(
+    stokes::JustRelax.StokesArrays,
+    pt_stokes,
     di::NTuple{2,T},
     flow_bcs,
     ρg,
-    η,
-    η_vep,
-    phase_ratios::PhaseRatio,
+    phase_ratios::JustRelax.PhaseRatio,
     rheology,
     args,
     dt,
     igg::IGG;
-    viscosity_cutoff=(1e16, 1e24),
+    viscosity_cutoff=(-Inf, Inf),
+    viscosity_relaxation=1e-2,
     iterMax=50e3,
     iterMin=1e2,
-    viscosity_relaxation=1e-2,
     free_surface=false,
     nout=500,
     b_width=(4, 4, 0),
     verbose=true,
-) where {A,B,C,D,T}
+    kwargs...,
+) where {T}
 
     # unpack
 
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
     # ~preconditioner
@@ -552,6 +506,10 @@ function JustRelax.solve!(
     end
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
 
+    # compute buoyancy forces and viscosity
+    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
 
@@ -580,9 +538,7 @@ function JustRelax.solve!(
             # stokes.P[1, end] = stokes.P[2, end]
             # stokes.P[end, end] = stokes.P[end - 1, end]
 
-            if rem(iter, 5) == 0
-                @parallel (@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
-            end
+            update_ρg!(ρg[2], phase_ratios, rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -592,14 +548,13 @@ function JustRelax.solve!(
                 @copy η0 η
             end
             if do_visc
-                @parallel (@idx ni) compute_viscosity!(
-                    η,
-                    viscosity_relaxation,
-                    phase_ratios.center,
-                    @strain(stokes)...,
+                update_viscosity!(
+                    stokes,
+                    phase_ratios,
                     args,
                     rheology,
-                    viscosity_cutoff,
+                    viscosity_cutoff;
+                    relaxation=viscosity_relaxation,
                 )
             end
 
@@ -620,9 +575,7 @@ function JustRelax.solve!(
                 dt,
                 θ_dτ,
             )
-            free_surface_bcs!(stokes, flow_bcs)
-
-            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
             @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
@@ -696,7 +649,9 @@ function JustRelax.solve!(
     end
 
     stokes.P .= θ
-    # @views stokes.P .-= stokes.P[:, end]
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
@@ -710,151 +665,3 @@ function JustRelax.solve!(
         norm_∇V=norm_∇V,
     )
 end
-
-function JustRelax.solve!(
-    stokes::StokesArrays{ViscoElastic,A,B,C,D,2},
-    thermal::ThermalArrays,
-    pt_stokes::PTStokesCoeffs,
-    di::NTuple{2,T},
-    flow_bcs,
-    ϕ,
-    ρg,
-    η,
-    η_vep,
-    phase_v,
-    phase_c,
-    args_η,
-    rheology::NTuple{N,MaterialParams},
-    dt,
-    igg::IGG;
-    iterMax=10e3,
-    nout=500,
-    b_width=(4, 4, 1),
-    verbose=true,
-) where {A,B,C,D,N,T}
-
-    # unpack
-
-    _di = inv.(di)
-    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
-    ni = size(stokes.P)
-    # ~preconditioner
-    ητ = deepcopy(η)
-    # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η; window=(1, 1))
-    update_halo!(ητ)
-    # end
-
-    # errors
-    err = 2 * ϵ
-    iter = 0
-    err_evo1 = Float64[]
-    err_evo2 = Float64[]
-    norm_Rx = Float64[]
-    norm_Ry = Float64[]
-    norm_∇V = Float64[]
-
-    # solver loop
-    wtime0 = 0.0
-    while iter < 2 || (err > ϵ && iter ≤ iterMax)
-        wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
-            @parallel (@idx ni) compute_P!(
-                stokes.P,
-                stokes.P0,
-                stokes.R.RP,
-                stokes.∇V,
-                η,
-                rheology,
-                phase_c,
-                dt,
-                r,
-                θ_dτ,
-            )
-            @parallel (@idx ni .+ 1) compute_strain_rate!(
-                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
-            )
-            @parallel (@idx ni) compute_ρg!(
-                ρg[end], ϕ, rheology, (T=thermal.Tc, P=stokes.P)
-            )
-            @parallel (@idx ni) compute_τ_gp!(
-                @tensor_center(stokes.τ),
-                stokes.τ.II,
-                @tensor(stokes.τ_o),
-                @strain(stokes),
-                η,
-                η_vep,
-                thermal.T,
-                phase_v,
-                phase_c,
-                args_η,
-                rheology, # needs to be a tuple
-                dt,
-                θ_dτ,
-            )
-            @parallel center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            @hide_communication b_width begin # communication/computation overlap
-                @parallel compute_V!(
-                    @velocity(stokes)...,
-                    stokes.P,
-                    @stress(stokes)...,
-                    pt_stokes.ηdτ,
-                    ρg...,
-                    ητ,
-                    _di...,
-                    dt,
-                )
-                # apply boundary conditions boundary conditions
-                flow_bcs!(stokes, flow_bcs)
-                update_halo!(stokes.V.Vx, stokes.V.Vy)
-            end
-        end
-
-        iter += 1
-        if iter % nout == 0 && iter > 1
-            @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx,
-                stokes.R.Ry,
-                @velocity(stokes)...,
-                stokes.P,
-                @stress(stokes)...,
-                ρg...,
-                _di...,
-                dt,
-            )
-            errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
-            push!(norm_Rx, errs[1])
-            push!(norm_Ry, errs[2])
-            push!(norm_∇V, errs[3])
-            err = maximum_mpi(errs)
-            push!(err_evo1, err)
-            push!(err_evo2, iter)
-            if igg.me == 0 && (verbose || iter == iterMax)
-                @printf(
-                    "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
-                    iter,
-                    err,
-                    norm_Rx[end],
-                    norm_Ry[end],
-                    norm_∇V[end]
-                )
-            end
-            isnan(err) && error("NaN(s)")
-        end
-
-        if igg.me == 0 && err ≤ ϵ
-            println("Pseudo-transient iterations converged in $iter iterations")
-        end
-    end
-
-    return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_∇V=norm_∇V,
-    )
-end
-
-end # END OF MODULE

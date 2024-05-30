@@ -1,20 +1,17 @@
 # using CUDA
-using JustRelax, JustRelax.DataIO
-import JustRelax.@cell
-
-# setup ParallelStencil.jl environment
-model = PS_Setup(:Threads, Float64, 2)
-environment!(model)
+using JustRelax, JustRelax.JustRelax2D
+const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
 const backend = CPUBackend
 
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using LinearAlgebra, GeoParams, GLMakie
 
+## START OF HELPER FUNCTION ----------------------------------------------------------
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
         @all(A) = @inn_x(B)
@@ -36,31 +33,32 @@ end
 
 function init_phases!(phases, particles, A)
     ni = size(phases)
-    
+
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, A)
-        
-        f(x, A, λ) = A * sin(π*x/λ)
-        
+
+        f(x, A, λ) = A * sin(π * x / λ)
+
         @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
             JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
             x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j]) 
-            @cell phases[ip, i, j] = 2.0
-            
+            depth = -(JustRelax.@cell py[ip, i, j])
+            JustRelax.@cell phases[ip, i, j] = 2.0
+
             if 0e0 ≤ depth ≤ 100e3
-                @cell phases[ip, i, j] = 1.0
+                JustRelax.@cell phases[ip, i, j] = 1.0
 
             elseif depth > (-f(x, A, 500e3) + (200e3 - A))
-                @cell phases[ip, i, j] = 3.0          
+                JustRelax.@cell phases[ip, i, j] = 3.0
+
             end
 
         end
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, A)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, A)
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
@@ -116,54 +114,36 @@ function RT_2D(igg, nx, ny)
     pT, pPhases      = init_cell_arrays(particles, Val(2))
     particle_args    = (pT, pPhases)
 
-    # Elliptical temperature anomaly 
+    # Elliptical temperature anomaly
     A             = 5e3    # Amplitude of the anomaly
+    phase_ratios  = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, A)
-    phase_ratios  = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
+    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-8,  CFL = 0.95 / √2.1)
+    stokes           = StokesArrays(backend_JR, ni)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal          = ThermalArrays(ni)
+    thermal          = ThermalArrays(backend_JR, ni)
     # ----------------------------------------------------
-   
+
     # Buoyancy forces & rheology
     ρg               = @zeros(ni...), @zeros(ni...)
-    η                = @ones(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
-    @parallel (@idx ni) compute_viscosity!(
-        η, 0.0, phase_ratios.center, @strain(stokes)..., args, rheology, (1e19, 1e24)
-    )
-    η_vep            = copy(η)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
-    flow_bcs         = FlowBoundaryConditions(; 
+    flow_bcs         = FlowBoundaryConditions(;
         free_slip    = (left =  true, right =  true, top =  true, bot = false),
         no_slip      = (left = false, right = false, top = false, bot =  true),
         free_surface = true,
     )
-
-    # Plot initial T and η profiles
-    let
-        Y   = [y for x in xci[1], y in xci[2]][:]
-        fig = Figure(size = (1200, 900))
-        ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-        ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        scatter!(ax1, Array(ρg[2][:]./9.81), Y./1e3)
-        scatter!(ax2, Array(log10.(η[:])), Y./1e3)
-        ylims!(ax1, minimum(xvi[2])./1e3, 0)
-        ylims!(ax2, minimum(xvi[2])./1e3, 0)
-        hideydecorations!(ax2)
-        fig
-    end
 
     Vx_v = @zeros(ni.+1...)
     Vy_v = @zeros(ni.+1...)
@@ -172,37 +152,31 @@ function RT_2D(igg, nx, ny)
     take(figdir)
 
     # Time loop
-    t, it = 0.0, 0
-    dt = 1e3 * (3600 * 24 * 365.25)
-    dt_max = 50e3 * (3600 * 24 * 365.25)
-    while it < 500 # run only for 5 Myrs
+    t, it   = 0.0, 0
+    dt      = 1e3 * (3600 * 24 * 365.25)
+    dt_max  = 50e3 * (3600 * 24 * 365.25)
+    while it < 500
 
         # Stokes solver ----------------
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        
-        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P))
-        @parallel (@idx ni) compute_viscosity!(
-            η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
-        )
         solve!(
             stokes,
             pt_stokes,
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             phase_ratios,
             rheology,
             args,
             dt,
             igg;
-            iterMax              = 150e3,
-            iterMin              =   5e3,
-            viscosity_relaxation =  1e-2,
-            nout                 =   5e3,
-            free_surface         =  true,
-            viscosity_cutoff     = (-Inf, Inf)
+            kwargs = (
+                iterMax              =  50e3,
+                iterMin              =   1e3,
+                viscosity_relaxation =  1e-2,
+                nout                 =   5e3,
+                free_surface         =  true,
+                viscosity_cutoff     = (-Inf, Inf)
+            )
         )
         dt = if it ≤ 10
             min(compute_dt(stokes, di),  1e3 * (3600 * 24 * 365.25))
@@ -217,21 +191,19 @@ function RT_2D(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
+        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)        
+        move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
-        inject = check_injection(particles)
-        inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        # @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, particles.coords, xci, di, pPhases)
-    
+        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+
         @show it += 1
         t        += dt
 
         if it == 1 || rem(it, 5) == 0
-            JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 2
 
             p        = particles.coords
@@ -243,25 +215,24 @@ function RT_2D(igg, nx, ny)
             fig = Figure(size = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(t/(1e3 * 3600 * 24 *365.25)) Kyrs")
             scatter!(
-                ax, 
-                pxv, pyv, 
-                color=clr, 
+                ax,
+                pxv, pyv,
+                color=clr,
                 colormap = :lajolla,
                 markersize = 3
             )
             arrows!(
                 ax,
-                xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))..., 
+                xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
                 lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
                 color = :darkblue,
             )
             fig
             save(joinpath(figdir, "$(it).png"), fig)
-
         end
 
     end
-    return 
+    return
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
@@ -275,4 +246,4 @@ else
     igg
 end
 
-RT_2D(igg, nx, ny)
+# RT_2D(igg, nx, ny)

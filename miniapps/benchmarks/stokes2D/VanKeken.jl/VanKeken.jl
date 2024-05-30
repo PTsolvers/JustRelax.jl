@@ -1,42 +1,27 @@
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
-using Printf, LinearAlgebra, GeoParams, GLMakie, CellArrays
-using JustRelax, JustRelax.DataIO#, CSV, DataFrames
+using Printf, LinearAlgebra, GeoParams, CellArrays
+using JustRelax, JustRelax.JustRelax2D
 import JustRelax.@cell
-using JustPIC
-using JustPIC._2D
+const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+
+using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-# setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
-environment!(model)
-
 # x-length of the domain
 const λ = 0.9142
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    esc(:($A[$idx_j]))
-end
-
-# Initial pressure guess
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
-    return nothing
-end
-
 # Initialize phases on the particles
 function init_phases!(phases, particles)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
-        @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
+        @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
             JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
@@ -53,10 +38,9 @@ function init_phases!(phases, particles)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index)
 end
 # END OF HELPER FUNCTIONS --------------------------------------------------------
-
 
 # MAIN SCRIPT --------------------------------------------------------------------
 function main2D(igg; ny=64, nx=64, figdir="model_figs")
@@ -91,7 +75,7 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
     )
 
     # Initialize particles -------------------------------
-    nxcell, max_p, min_p = 40, 60, 20
+    nxcell, max_p, min_p = 40, 80, 20
     particles            = init_particles(
         backend, nxcell, max_p, min_p, xvi..., di..., nx, ny
     )
@@ -100,27 +84,22 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
     # temperature
     pPhases,             = init_cell_arrays(particles, Val(1))
     particle_args        = (pPhases, )
+    phase_ratios         = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles)
-    phase_ratios         = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes               = StokesArrays(ni, ViscoElastic)
-    pt_stokes            = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √2.1)
+    stokes               = StokesArrays(backend_JR, ni)
+    pt_stokes            = PTStokesCoeffs(li, di; r=1e0, ϵ=1e-8,  CFL = 1 / √2.1)
 
     # Buoyancy forces
     ρg                   = @zeros(ni...), @zeros(ni...)
-    args                 = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
-    @parallel (JustRelax.@idx ni) JustRelax.compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
-    @parallel init_P!(stokes.P, ρg[2], xci[2])
+    args                 = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
     # Rheology
-    η                    = @ones(ni...)
-    η_vep                = similar(η) # effective visco-elasto-plastic viscosity
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
-    )
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
     flow_bcs             = FlowBoundaryConditions(;
@@ -150,7 +129,7 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
     while t < tmax
 
         # Update buoyancy
-        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+        compute_ρg!(ρg[2], phase_ratios, rheology, args)
         # ------------------------------
 
         # Stokes solver ----------------
@@ -160,16 +139,16 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             phase_ratios,
             rheology,
             args,
-            dt, ## dt needs to be a number! not 0 or Inf
+            dt,
             igg;
-            iterMax          = 10e3,
-            nout             = 50,
-            viscosity_cutoff = (-Inf, Inf)
+            kwargs = (
+                iterMax          = 10e3,
+                nout             = 50,
+                viscosity_cutoff = (-Inf, Inf)
+            )
         )
         dt = compute_dt(stokes, di) / 10
         # ------------------------------
@@ -185,15 +164,13 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
         # ------------------------------
 
         # advect particles in space
-        advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
+        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
         # # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-        # check if we need to inject particles
-        inject = check_injection(particles)
         # inject && break
-        inject && inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 
         @show it += 1
         t        += dt

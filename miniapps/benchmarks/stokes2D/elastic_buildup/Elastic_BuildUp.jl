@@ -42,20 +42,21 @@ function elastic_buildup(;
     kyr       = 1e3 * yr
     ttot      = endtime * kyr # total simulation time
 
+    ## Allocate arrays needed for every Stokes problem
+    # general stokes arrays
+    stokes    = StokesArrays(backend, ni)
+    # general numerical coeffs for PT stokes
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, CFL=1 / √2.1)
+
     ## Setup-specific parameters and fields
-    η         = fill(η0, nx, ny)
+    (; η)     = stokes.viscosity
+    η         .= @fill(η0, ni...)
     g         = 0.0 # gravity
     Gc        = @fill(G, ni...)
     Kb        = @fill(Inf, ni...)
 
-    ## Allocate arrays needed for every Stokes problem
-    # general stokes arrays
-    stokes    = StokesArrays(ni, ViscoElastic)
-    # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, CFL=1 / √2.1)
-
     ## Boundary conditions
-    pureshear_bc!(stokes, xci, xvi, εbg)
+    pureshear_bc!(stokes, xci, xvi, εbg, backend)
     flow_bcs  = FlowBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true)
     )
@@ -78,20 +79,16 @@ function elastic_buildup(;
             di,
             flow_bcs,
             ρg,
-            η,
             Gc,
             Kb,
             dt,
             igg;
-            iterMax=150e3,
-            nout=1000,
-            b_width=(4, 4, 1),
-            verbose=true,
-        )
-
-        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        @parallel (@idx ni) multi_copy!(
-            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+            kwargs = (;
+                iterMax=150e3,
+                nout=1000,
+                b_width=(4, 4, 0),
+                verbose=true,
+            )
         )
 
         t  += dt

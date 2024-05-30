@@ -15,8 +15,4 @@ jobs:
             echo "GLMakie dependency found, failing the test."
             exit 1
           fi
-          if grep -q "JustPIC" ./Project.toml; then
-            echo "JustPIC dependency found, failing the test."
-            exit 1
-          fi
-          echo "Neither GLMakie nor JustPIC dependencies found."
+          echo "Neither GLMakie dependencies found."

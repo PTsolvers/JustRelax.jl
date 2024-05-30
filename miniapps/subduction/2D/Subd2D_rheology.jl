@@ -1,17 +1,17 @@
 using GeoParams.Dislocation
 using GeoParams.Diffusion
 
-function init_rheology_nonNewtonian(; ρbg = 0e0)
+function init_rheology_nonNewtonian()
     #dislocation laws
     disl_wet_olivine  = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
     # diffusion laws
     diff_wet_olivine  = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
 
     lithosphere_rheology = CompositeRheology( (disl_wet_olivine, diff_wet_olivine))
-    init_rheologies(lithosphere_rheology; ρbg = ρbg)
+    init_rheologies(lithosphere_rheology)
 end
 
-function init_rheology_nonNewtonian_plastic(; ρbg = 0e0)
+function init_rheology_nonNewtonian_plastic()
     #dislocation laws
     disl_wet_olivine  = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
     # diffusion laws
@@ -28,29 +28,15 @@ function init_rheology_nonNewtonian_plastic(; ρbg = 0e0)
                     DruckerPrager_regularised(; C = C_wet_olivine, ϕ = ϕ_wet_olivine, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
                 ) 
             )
-    init_rheologies(lithosphere_rheology; ρbg = ρbg)
+    init_rheologies(lithosphere_rheology)
 end
 
-function init_rheology_linear(; ρbg = 0e0)
+function init_rheology_linear()
     lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e20),))
-    init_rheologies(lithosphere_rheology; ρbg = ρbg)
+    init_rheologies(lithosphere_rheology)
 end
 
-function init_rheologies(lithosphere_rheology; ρbg = 0e0)
-    # #dislocation laws
-    # disl_wet_olivine  = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
-    # # diffusion laws
-    # diff_wet_olivine  = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
-
-    # ϕ_wet_olivine   = asind(0.1)
-    # C_wet_olivine   = 1e6 
-    
-    # ϕ_oceanic_crust_upper = asind(0.1)
-    # C_oceanic_crust_upper = 0.3e6 
-    
-    # # soft_C  = LinearSoftening((C_oceanic_litho*0.05, C_oceanic_litho), (0.1, 0.5))
-    
-    # elasticity = ConstantElasticity(; G=5e10, ν=0.5)
+function init_rheologies(lithosphere_rheology)
     # common physical properties
     α     = 2.4e-5 # 1 / K
     Cp    = 750  # J / kg K
@@ -60,7 +46,7 @@ function init_rheologies(lithosphere_rheology; ρbg = 0e0)
         # Name = "Asthenoshpere",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = ConstantDensity(; ρ=3.2e3-ρbg),
+            Density           = ConstantDensity(; ρ=3.2e3),
             HeatCapacity      = ConstantHeatCapacity(; Cp = Cp),
             Conductivity      = ConstantConductivity(; k  = 2.5),
             CompositeRheology = CompositeRheology( (LinearViscous(; η=1e20),)),
@@ -69,22 +55,15 @@ function init_rheologies(lithosphere_rheology; ρbg = 0e0)
         # Name              = "Oceanic lithosphere",
         SetMaterialParams(;
             Phase             = 2,
-            Density           = PT_Density(; ρ0=3.2e3-ρbg, α = α, β = 0e0, T0 = 273+1474),
+            Density           = PT_Density(; ρ0=3.2e3, α = α, β = 0e0, T0 = 273+1474),
             HeatCapacity      = ConstantHeatCapacity(; Cp = Cp),
             Conductivity      = ConstantConductivity(; k  = 2.5),
-            # CompositeRheology = CompositeRheology( 
-            #     (
-            #         disl_wet_olivine,
-            #         diff_wet_olivine,
-            #         DruckerPrager_regularised(; C = C_wet_olivine, ϕ = ϕ_wet_olivine, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-            #     ) 
-            # ),
             CompositeRheology = lithosphere_rheology,
         ),
         # Name              = "oceanic crust",
         SetMaterialParams(;
             Phase             = 3,
-            Density           = ConstantDensity(; ρ=3.2e3-ρbg),
+            Density           = ConstantDensity(; ρ=3.2e3),
             HeatCapacity      = ConstantHeatCapacity(; Cp = Cp),
             Conductivity      = ConstantConductivity(; k  = 2.5),
             CompositeRheology = CompositeRheology( (LinearViscous(; η=1e20),)),
@@ -92,7 +71,7 @@ function init_rheologies(lithosphere_rheology; ρbg = 0e0)
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase             = 4,
-            Density           = ConstantDensity(; ρ=100-ρbg), # water density
+            Density           = ConstantDensity(; ρ=100), # water density
             HeatCapacity      = ConstantHeatCapacity(; Cp=3e3),
             Conductivity      = ConstantConductivity(; k=1.0),
             CompositeRheology = CompositeRheology((LinearViscous(; η=1e19),)),

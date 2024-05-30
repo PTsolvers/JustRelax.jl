@@ -75,16 +75,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    ρbg                 = 3.2e3 + 1
-    rheology            = init_rheology_linear(; ρbg = ρbg)
-    rheology_augmented  = init_rheology_linear(; ρbg = 0e0)
-
-    rheology            = init_rheology_nonNewtonian(; ρbg = ρbg)
-    rheology_augmented  = init_rheology_nonNewtonian(; ρbg = 0e0)
-
-    rheology            = init_rheology_nonNewtonian_plastic(; ρbg = ρbg)
-    rheology_augmented  = init_rheology_nonNewtonian_plastic(; ρbg = 0e0)
-
+    rheology            = init_rheology_linear()
     dt                  = 50e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -133,15 +124,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(2))
-    # for _ in 1:2
-        # compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        # JustRelax.Stokes2D.init_P!(stokes.P, ρg[2], xci[2])
-    # end
     compute_ρg!(ρg[2], phase_ratios, rheology_augmented, (T=thermal.Tc, P=stokes.P))
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
-    
-    # ρg_bg  = ρbg * 9.81
-    # Plitho = reverse(cumsum(reverse((ρg[2] .+ ρg_bg).* di[2], dims=2), dims=2), dims=2)
 
     # Rheology
     args0            = (T=thermal.Tc, P=stokes.P, dt = Inf)
@@ -160,24 +144,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
-    
-    # Plot initial T and η profiles
-    # let
-    #     Yv  = [y for x in xvi[1], y in xvi[2]][:]
-    #     Y   = [y for x in xci[1], y in xci[2]][:]
-    #     fig = Figure(size = (1200, 900))
-    #     ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-    #     ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-    #     scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-    #     scatter!(ax2, Array(log10.(stokes.viscosity.η[:])), Y./1e3)
-    #     # scatter!(ax2, Array(stokes.P[:]), Y./1e3)
-    #     # scatter!(ax2, Array(Plitho[:]), Y./1e3)
-    #     ylims!(ax1, minimum(xvi[2])./1e3, 0)
-    #     ylims!(ax2, minimum(xvi[2])./1e3, 0)
-    #     hideydecorations!(ax2)
-    #     # save(joinpath(figdir, "initial_profile.png"), fig)
-    #     fig
-    # end
 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -225,12 +191,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Time loop
     t, it = 0.0, 0
 
-    # Vertice arrays of normal components of the stress tensor
-    # τxx_vertex, τyy_vertex = @zeros(ni.+1...), @zeros(ni.+1...)
-    # τxx_o_vertex, τyy_o_vertex = @zeros(ni.+1...), @zeros(ni.+1...)
-    
-    while it < 1 #000 # run only for 5 Myrs
-    # while (t/(1e6 * 3600 * 24 *365.25)) < 5 # run only for 5 Myrs
+    while it < 1000 # run only for 5 Myrs
         
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -240,15 +201,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
         
-        # Update buoyancy and viscosity -
-        # Plitho .= reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2)
-        # Plitho .= stokes.P .+ Plitho .- minimum(stokes.P)
-    
-        # args = (; T = thermal.Tc, P = Plitho,  dt=Inf, ρbg = ρbg * 9.81)
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        # compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
-        # compute_ρg!(ρg[2], phase_ratios, rheology, args)
-        
+         
         # Stokes solver ----------------
         t_stokes = @elapsed begin
             out = solve!(
@@ -309,24 +263,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-        # JustRelax.Stokes2D.rotate_stress_particles!(
-        #     stokes,
-        #     τxx_vertex, 
-        #     τyy_vertex,
-        #     τxx_o_vertex, 
-        #     τyy_o_vertex,
-        #     τxx_p, 
-        #     τyy_p, 
-        #     τxy_p,
-        #     vorticity_p,
-        #     particles,
-        #     grid,
-        #     dt
-        # )
 
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
-        # inject_particles_phase!(particles, pPhases, (pT, τxx_p, τyy_p, τxy_p, vorticity_p), (T_buffer, τxx_vertex, τyy_vertex, stokes.τ.xy, stokes.ω.xy_v), xvi)
         # update phase ratios
         phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 
@@ -408,14 +347,9 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-figdir   = "Buiter_2D"
-# nx, ny   = 512, 256
-# nx, ny   = 512, 128
+figdir   = "Subduction2D"
 n        = 128
-nx, ny   = n*6, n
 nx, ny   = 512, 256
-# nx, ny   = 128, 128
-# nx, ny   = 32*6, 32
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)

@@ -117,7 +117,6 @@ function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, zc_anomaly, r_an
     )
         depth = -z[k] - sticky_air
         @inbounds if ((x[i] - xc_anomaly)^2 + (y[j] - yc_anomaly)^2 + (depth + zc_anomaly)^2 ≤ r_anomaly^2)
-            # T[i, j, k] *= δT / 100 + 1
             T[i, j, k] = δT
         end
         return nothing
@@ -153,17 +152,11 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
         β_rock   = inv(get_Kb(el))
         β_magma  = inv(get_Kb(el_magma))
     end
-    # if steady_state == true
-        creep_rock  = LinearViscous(; η=1e18 * Pa * s)
-        creep_magma = LinearViscous(; η=1e18 * Pa * s)
-        creep_air   = LinearViscous(; η=1e18 * Pa * s)
-    # else
-    #     creep_rock  = DislocationCreep(; A=1.67e-24, n=3.5, E=1.87e5, V=6e-6, r=0.0, R=8.3145)
-    #     creep_magma = DislocationCreep(; A=1.67e-24, n=3.5, E=1.87e5, V=6e-6, r=0.0, R=8.3145)
-    #     creep_air   = LinearViscous(; η=1e18 * Pa * s)
-        β_rock      = 6.0e-11
-        β_magma     = 6.0e-11
-    # end
+    creep_rock  = LinearViscous(; η=1e18 * Pa * s)
+    creep_magma = LinearViscous(; η=1e18 * Pa * s)
+    creep_air   = LinearViscous(; η=1e18 * Pa * s)
+    β_rock      = 6.0e-11
+    β_magma     = 6.0e-11
     g = 9.81m/s^2
     rheology = (
         #Name="UpperCrust"
@@ -301,7 +294,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
 
-
     # Buoyancy force & viscosity
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
@@ -363,7 +355,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     while it < 25
 
         # Update buoyancy and viscosity -
-        # args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
         compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -388,17 +379,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
             )
         )
         tensor_invariant!(stokes.ε)
-
         dt = compute_dt(stokes, di, dt_diff, igg) * 0.8
         # --------------------------------
-
-        # compute_shear_heating!(
-        #     thermal,
-        #     stokes,
-        #     phase_ratios,
-        #     rheology, # needs to be a tuple
-        #     dt,
-        # )
 
         # Thermal solver ---------------
         heatdiffusion_PT!(

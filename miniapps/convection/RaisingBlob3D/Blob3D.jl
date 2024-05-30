@@ -514,7 +514,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     return nothing
 end
 
-figdir = "Bloberino"
+figdir = "Blob3D"
 do_vtk = true # set to true to generate VTK files for ParaView
 n      = 64
 nx     = n

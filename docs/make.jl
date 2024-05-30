@@ -19,8 +19,13 @@ makedocs(;
             "Advection" => "man/advection.md",
             ],
         "Examples"  => Any[
-            "Blankenbach" => "man/Blankenbach.md",
-            "Shear Bands" => "man/ShearBands.md",
+            "Blankenbach"   => "man/Blankenbach.md",
+            "Shear Bands"   => "man/ShearBands.md",
+            "Subduction 2D" => Any[
+                "Model setup"          => "man/subduction2D/setup.md",
+                "Rheology"             => "man/subduction2D/rheology.md",
+                "Setting up the model" => "man/subduction2D/subduction2D.md",
+                ]
             ],
         "List of functions" => "man/listfunctions.md",
     ],

@@ -1,4 +1,6 @@
-compute_shear_heating!(thermal, args...) = compute_shear_heating!(backend(thermal), thermal, args...)
+function compute_shear_heating!(thermal, args...)
+    return compute_shear_heating!(backend(thermal), thermal, args...)
+end
 
 function compute_shear_heating!(::CPUBackendTrait, thermal, stokes, rheology, dt)
     ni = size(thermal.shear_heating)

@@ -24,10 +24,10 @@ const backend = CUDABackend # Options: JustPIC.CPUBackend, CUDABackend, JustPIC.
 We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil
-@init_parallel_stencil(CUDA, Float64, 2) 
+@init_parallel_stencil(CUDA, Float64, 2)
 ```
-### Helper function 
-We first define a helper function that will be useful later on 
+### Helper function
+We first define a helper function that will be useful later on
 
 ```julia
 function copyinn_x!(A, B)
@@ -94,8 +94,8 @@ thermal_bc       = TemperatureBoundaryConditions(;
     no_flux      = (left = true, right = true, top = false, bot = false),
 )
 thermal_bcs!(thermal, thermal_bc)
-@views thermal.T[:, end] .= Ttop 
-@views thermal.T[:, 1]   .= Tbot 
+@views thermal.T[:, end] .= Ttop
+@views thermal.T[:, 1]   .= Tbot
 temperature2center!(thermal)
 ```
 
@@ -137,7 +137,7 @@ pt_thermal = PTThermalCoeffs(
 ```
 
 ## Just before solving the problem...
-Because we have ghost nodes on the thermal field `thermal.T`, we need to copy the thermal field to a buffer array without those ghost nodes, and interpolate the temperature to the particles. This is because `JustPIC.jl` does not support ghost nodes yet.   
+Because we have ghost nodes on the thermal field `thermal.T`, we need to copy the thermal field to a buffer array without those ghost nodes, and interpolate the temperature to the particles. This is because `JustPIC.jl` does not support ghost nodes yet.
 ```julia
 T_buffer    = @zeros(ni.+1)
 Told_buffer = similar(T_buffer)
@@ -259,7 +259,7 @@ save_vtk(
     velocity_v
 )
 ```
-      
+
 ### Final model
 Solution after 990 time steps
-![](990.png)
+![](../../assets/Subduction2D_990.png)

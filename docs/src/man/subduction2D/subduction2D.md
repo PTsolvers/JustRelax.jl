@@ -10,15 +10,15 @@ We will use GeophysicalModelGenerator.jl to generate the initial geometry, mater
 
 Load JustRelax necessary modules and define backend.
 ```julia
-using CUDA
+using CUDA # comment this out if you are not using CUDA; or load AMDGPU.jl if you are using an AMD GPU
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-const backend_JR = CUDABackend
+const backend_JR = CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBackend
 ```
 
 For this benchmark we will use particles to track the advection of the material phases and their information. For this, we will use [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl)
 ```julia
 using JustPIC, JustPIC._2D
-const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CUDABackend # Options: JustPIC.CPUBackend, CUDABackend, JustPIC.AMDGPUBackend
 ```
 
 We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
@@ -26,7 +26,7 @@ We will also use `ParallelStencil.jl` to write some device-agnostic helper funct
 using ParallelStencil
 @init_parallel_stencil(CUDA, Float64, 2) 
 ```
-### Helper functions 
+### Helper function 
 We first define a helper function that will be useful later on 
 
 ```julia
@@ -44,33 +44,38 @@ end
 
 ## Model domain
 ```julia
-ni            = nx, ny           # number of cells
+nx, ny        = 256, 128         # number of cells in x and y directions
+ni            = nx, ny
 di            = @. li / ni       # grid steps
 grid          = Geometry(ni, li; origin = origin)
 (; xci, xvi)  = grid # nodes at the center and vertices of the cells
 ```
 
 ## Physical properties using GeoParams
-```julia
-    rheology            = init_rheology_linear()
-```
+For the rheology we will use the `rheology` object we created in the previous section.
 
 ## Initialize particles
 ```julia
-nxcell              = 40
-max_xcell           = 60
-min_xcell           = 20
+nxcell              = 40 # initial number of particles per cell
+max_xcell           = 60 # maximum number of particles per cell
+min_xcell           = 20 # minimum number of particles per cell
 particles           = init_particles(
     backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
 )
 subgrid_arrays      = SubgridDiffusionCellArrays(particles)
-# velocity grids
+# velocity staggered grids
 grid_vxi            = velocity_grids(xci, xvi, di)
-# material phase & temperature
+```
+
+We will like to advect two fields, the temperature `pT` and the material phases of each particle `pPhases`. We will initialize these fields as `CellArray` objects:
+```julia
 pPhases, pT         = init_cell_arrays(particles, Val(2))
 particle_args       = (pT, pPhases)
+```
 
 # Assign particles phases anomaly
+Now we assign the material phases from the arrays we computed with help of `GeophysicalModelGenerator.jl`
+```julia
 phases_device    = PTArray(backend)(phases_GMG)
 phase_ratios     = PhaseRatio(backend, ni, length(rheology))
 init_phases!(pPhases, phases_device, particles, xvi)
@@ -78,7 +83,7 @@ phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 ```
 
 ## Temperature profile
-
+We need to copy the thermal field from the `GeophysicalModelGenerator.jl` object to the `thermal` that contains all the arrays related to the thermal field.
 ```julia
 Ttop             = 20 + 273
 Tbot             = maximum(T_GMG)
@@ -115,11 +120,11 @@ compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 ```
 
 ## Boundary conditions
+We we will use free slip boundary conditions on all sides
 ```julia
 # Boundary conditions
 flow_bcs         = FlowBoundaryConditions(;
     free_slip    = (left = true , right = true , top = true , bot = true),
-    free_surface = false,
 )
 ```
 
@@ -131,8 +136,9 @@ pt_thermal = PTThermalCoeffs(
 ```
 
 ## Just before solving the problem...
+Because we have ghost nodes on the thermal field `thermal.T`, we need to copy the thermal field to a buffer array without those ghost nodes, and interpolate the temperature to the particles. This is because `JustPIC.jl` does not support ghost nodes yet.   
 ```julia
- T_buffer    = @zeros(ni.+1)
+T_buffer    = @zeros(ni.+1)
 Told_buffer = similar(T_buffer)
 dt₀         = similar(stokes.P)
 for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
@@ -223,10 +229,10 @@ inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
 phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 ```
 
-6. Save data as VTK to visualize later with ParaView
+6. **Optional:** Save data as VTK to visualize it later with [ParaView](https://www.paraview.org/)
 ```julia
-Vx_v         = @zeros(ni.+1...)
-Vy_v         = @zeros(ni.+1...)
+Vx_v = @zeros(ni.+1...)
+Vy_v = @zeros(ni.+1...)
 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...) # interpolate velocity from staggered grid to vertices
 data_v = (; # data @ vertices
     T   = Array(T_buffer),

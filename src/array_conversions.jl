@@ -6,34 +6,11 @@ const JR_T = Union{StokesArrays,SymmetricTensor,ThermalArrays,Velocity,Residual,
 
 @inline remove_parameters(::T) where {T} = Base.typename(T).wrapper
 
-function Array(
-    x::T
-) where {
-    T<:Union{
-        JustRelax.StokesArrays,
-        JustRelax.SymmetricTensor,
-        JustRelax.ThermalArrays,
-        JustRelax.Velocity,
-        JustRelax.Residual,
-        JustRelax.Viscosity,
-    },
-}
-    return Array(backend(x), x)
-end
-
+Array(x::T) where {T<:JR_T} = Array(backend(x), x)
+Array(::Nothing) = nothing
 Array(::CPUBackendTrait, x) = x
 
-function Array(
-    ::NonCPUBackendTrait, x::T
-) where {
-    T<:Union{
-        JustRelax.SymmetricTensor,
-        JustRelax.ThermalArrays,
-        JustRelax.Velocity,
-        JustRelax.Residual,
-        JustRelax.Viscosity,
-    },
-}
+function Array(::GPUBackendTrait, x::T) where {T<:JR_T}
     nfields = fieldcount(T)
     cpu_fields = ntuple(Val(nfields)) do i
         Base.@_inline_meta

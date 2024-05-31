@@ -59,8 +59,9 @@ For the rheology we will use the `rheology` object we created in the previous se
 nxcell              = 40 # initial number of particles per cell
 max_xcell           = 60 # maximum number of particles per cell
 min_xcell           = 20 # minimum number of particles per cell
-particles           = init_particles(
-    backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+    particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, xvi...
+    )
 )
 subgrid_arrays      = SubgridDiffusionCellArrays(particles)
 # velocity staggered grids

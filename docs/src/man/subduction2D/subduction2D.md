@@ -18,230 +18,241 @@ const backend_JR = CUDABackend
 For this benchmark we will use particles to track the advection of the material phases and their information. For this, we will use [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl)
 ```julia
 using JustPIC, JustPIC._2D
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 ```
 
 We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+@init_parallel_stencil(CUDA, Float64, 2) 
 ```
-and will use [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl/tree/main) to define and compute physical properties of the materials:
+### Helper functions 
+We first define a helper function that will be useful later on 
+
 ```julia
-using GeoParams
+function copyinn_x!(A, B)
+    @parallel function f_x(A, B)
+        @all(A) = @inn_x(B)
+        return nothing
+    end
+
+    @parallel f_x(A, B)
+end
 ```
 
 # Script
 
 ## Model domain
 ```julia
-nx = ny      = 64                       # number of cells per dimension
-igg          = IGG(
-    init_global_grid(nx, ny, 1; init_MPI= true)...
-)                                       # initialize MPI grid
-ly           = 1.0                      # domain length in y
-lx           = ly                       # domain length in x
-ni           = nx, ny                   # number of cells
-li           = lx, ly                   # domain length in x- and y-
-di           = @. li / ni               # grid step in x- and -y
-origin       = 0.0, 0.0                 # origin coordinates
-grid         = Geometry(ni, li; origin = origin)
-(; xci, xvi) = grid                     # nodes at the center and vertices of the cells
-dt           = Inf
+ni            = nx, ny           # number of cells
+di            = @. li / ni       # grid steps
+grid          = Geometry(ni, li; origin = origin)
+(; xci, xvi)  = grid # nodes at the center and vertices of the cells
 ```
 
 ## Physical properties using GeoParams
 ```julia
-τ_y     = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-ϕ       = 30            # friction angle
-C       = τ_y           # Cohesion
-η0      = 1.0           # viscosity
-G0      = 1.0           # elastic shear modulus
-Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
-εbg     = 1.0           # background strain-rate
-η_reg   = 8e-3          # regularisation "viscosity"
-dt      = η0/G0/4.0     # assumes Maxwell time of 4
-el_bg   = ConstantElasticity(; G=G0, Kb=4)
-el_inc  = ConstantElasticity(; G=Gi, Kb=4)
-visc    = LinearViscous(; η=η0)
-pl      = DruckerPrager_regularised(;  # non-regularized plasticity
-    C    = C,
-    ϕ    = ϕ,
-    η_vp = η_reg,
-    Ψ    = 0
+    rheology            = init_rheology_linear()
+```
+
+## Initialize particles
+```julia
+nxcell              = 40
+max_xcell           = 60
+min_xcell           = 20
+particles           = init_particles(
+    backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
 )
-```
-## Rheology
-```julia
-    rheology = (
-        # Low density phase
-        SetMaterialParams(;
-            Phase             = 1,
-            Density           = ConstantDensity(; ρ = 0.0),
-            Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc, el_bg, pl)),
-            Elasticity        = el_bg,
+subgrid_arrays      = SubgridDiffusionCellArrays(particles)
+# velocity grids
+grid_vxi            = velocity_grids(xci, xvi, di)
+# material phase & temperature
+pPhases, pT         = init_cell_arrays(particles, Val(2))
+particle_args       = (pT, pPhases)
 
-        ),
-        # High density phase
-        SetMaterialParams(;
-            Density           = ConstantDensity(; ρ = 0.0),
-            Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc, el_inc, pl)),
-            Elasticity        = el_inc,
-        ),
-    )
+# Assign particles phases anomaly
+phases_device    = PTArray(backend)(phases_GMG)
+phase_ratios     = PhaseRatio(backend, ni, length(rheology))
+init_phases!(pPhases, phases_device, particles, xvi)
+phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 ```
 
-# Phase anomaly
+## Temperature profile
 
-Helper function to initialize material phases with `ParallelStencil.jl`
 ```julia
-function init_phases!(phase_ratios, xci, radius)
-    ni      = size(phase_ratios.center)
-    origin  = 0.5, 0.5
-
-    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
-        x, y = xc[i], yc[j]
-        if ((x-o_x)^2 + (y-o_y)^2) > radius^2
-            JustRelax.@cell phases[1, i, j] = 1.0
-            JustRelax.@cell phases[2, i, j] = 0.0
-
-        else
-            JustRelax.@cell phases[1, i, j] = 0.0
-            JustRelax.@cell phases[2, i, j] = 1.0
-        end
-        return nothing
-    end
-
-    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
-end
-
-```
-
-and finally we need the phase ratios at the cell centers:
-```julia
-phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
-init_phases!(phase_ratios, xci, radius)
+Ttop             = 20 + 273
+Tbot             = maximum(T_GMG)
+thermal          = ThermalArrays(backend, ni)
+@views thermal.T[2:end-1, :] .= PTArray(backend)(T_GMG)
+thermal_bc       = TemperatureBoundaryConditions(;
+    no_flux      = (left = true, right = true, top = false, bot = false),
+)
+thermal_bcs!(thermal, thermal_bc)
+@views thermal.T[:, end] .= Ttop 
+@views thermal.T[:, 1]   .= Tbot 
+temperature2center!(thermal)
 ```
 
 ## Stokes arrays
-
 Stokes arrays object
 ```julia
-stokes = StokesArrays(backend_JR, ni)
+stokes           = StokesArrays(backend, ni)
+pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
 ```
 
-## Initialize viscosity fields
-
-We initialize the buoyancy forces and viscosity
+## Buoyancy forces and lithostatic pressure
 ```julia
-ρg               = @zeros(ni...), @zeros(ni...)
-η                = @ones(ni...)
-args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-compute_ρg!(ρg[2], phase_ratios, rheology, args)
-compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+ρg        = ntuple(_ -> @zeros(ni...), Val(2))
+compute_ρg!(ρg[2], phase_ratios, rheology_augmented, (T=thermal.Tc, P=stokes.P))
+stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
 ```
-where `(-Inf, Inf)` is the viscosity cutoff.
+
+## Viscosity
+```julia
+args0            = (T=thermal.Tc, P=stokes.P, dt = Inf)
+viscosity_cutoff = (1e17, 1e24)
+compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
+```
 
 ## Boundary conditions
 ```julia
-    flow_bcs     = FlowBoundaryConditions(;
-        free_slip = (left = true, right = true, top = true, bot = true),
-        no_slip   = (left = false, right = false, top = false, bot=false),
-    )
-    stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
-    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
-
+# Boundary conditions
+flow_bcs         = FlowBoundaryConditions(;
+    free_slip    = (left = true , right = true , top = true , bot = true),
+    free_surface = false,
+)
 ```
 
 ## Pseuo-transient coefficients
 ```julia
-pt_stokes   = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
+pt_thermal = PTThermalCoeffs(
+    backend, rheology_augmented, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √3
+)
 ```
 
 ## Just before solving the problem...
-In this benchmark we want to keep track of τII, the total time `ttot`, and the analytical elastic solution `sol`
 ```julia
- solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
-```
-and store their time history in the vectors:
-```julia
-    τII        = Float64[]
-    sol        = Float64[]
-    ttot       = Float64[]
+ T_buffer    = @zeros(ni.+1)
+Told_buffer = similar(T_buffer)
+dt₀         = similar(stokes.P)
+for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+    copyinn_x!(dst, src)
+end
+grid2particle!(pT, xvi, T_buffer, particles)
 ```
 
 ## Advancing one time step
 
-1. Solve stokes
+1. Interpolate fields from particle to grid vertices
 ```julia
-solve!(
-    stokes,
-    pt_stokes,
-    di,
-    flow_bcs,
-    ρg,
-    phase_ratios,
-    rheology,
+particle2grid!(T_buffer, pT, xvi, particles)
+@views T_buffer[:, end]      .= Ttop
+@views T_buffer[:, 1]        .= Tbot
+@views thermal.T[2:end-1, :] .= T_buffer
+thermal_bcs!(thermal, thermal_bc)
+temperature2center!(thermal)
+```
+2. Solve stokes
+```julia
+ t_stokes = @elapsed begin
+    out = solve!(
+        stokes,
+        pt_stokes,
+        di,
+        flow_bcs,
+        ρg,
+        phase_ratios,
+        rheology_augmented,
+        args,
+        dt,
+        igg;
+        kwargs = (
+            iterMax          = 150e3,
+            nout             = 1e3,
+            viscosity_cutoff = viscosity_cutoff,
+            free_surface     = false,
+            viscosity_relaxation = 1e-2
+        )
+    );
+end
+println("Stokes solver time             ")
+println("   Total time:      $t_stokes s")
+println("   Time/iteration:  $(t_stokes / out.iter) s")
+```
+3. Update time step
+```julia
+dt = compute_dt(stokes, di) * 0.8
+```
+
+4. Thermal solver and subgrid diffusion
+```julia
+heatdiffusion_PT!(
+    thermal,
+    pt_thermal,
+    thermal_bc,
+    rheology_augmented,
     args,
     dt,
-    igg;
-    kwargs = (;
-        iterMax          = 150e3,
-        nout             = 200,
-        viscosity_cutoff = (-Inf, Inf),
-        verbose          = true
+    di;
+    kwargs = (
+        igg     = igg,
+        phase   = phase_ratios,
+        iterMax = 50e3,
+        nout    = 1e2,
+        verbose = true,
     )
 )
-```
-2. calculate the second invariant and push to history vectors
-```julia
-tensor_invariant!(stokes.ε)
-push!(τII, maximum(stokes.τ.xx))
-
-@parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-@parallel (@idx ni) multi_copy!(
-    @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
+subgrid_characteristic_time!(
+    subgrid_arrays, particles, dt₀, phase_ratios, rheology_augmented, thermal, stokes, xci, di
 )
-
-it += 1
-t  += dt
-
-push!(sol, solution(εbg, t, G0, η0))
-push!(ttot, t)
+centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+subgrid_diffusion!(
+    pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi,  di, dt
+)
 ```
-# Visualization
-We will use `Makie.jl` to visualize the results
+
+5. Particles advection
 ```julia
-using GLMakie
+# advect particles in space
+advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+# advect particles in memory
+move_particles!(particles, xvi, particle_args)
+# check if we need to inject particles
+inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+# update phase ratios
+phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 ```
 
-## Fields
+6. Save data as VTK to visualize later with ParaView
 ```julia
- # visualisation of high density inclusion
-th    = 0:pi/50:3*pi;
-xunit = @. radius * cos(th) + 0.5;
-yunit = @. radius * sin(th) + 0.5;
-
-fig   = Figure(size = (1600, 1600), title = "t = $t")
-ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}", titlesize=35)
-ax2   = Axis(fig[2,1], aspect = 1, title = L"E_{II}", titlesize=35)
-ax3   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize=35)
-ax4   = Axis(fig[2,2], aspect = 1)
-heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
-heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
-lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-lines!(ax4, ttot, τII, color = :black)
-lines!(ax4, ttot, sol, color = :red)
-hidexdecorations!(ax1)
-hidexdecorations!(ax3)
-save(joinpath(figdir, "$(it).png"), fig)
-fig
+Vx_v         = @zeros(ni.+1...)
+Vy_v         = @zeros(ni.+1...)
+velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...) # interpolate velocity from staggered grid to vertices
+data_v = (; # data @ vertices
+    T   = Array(T_buffer),
+    τII = Array(stokes.τ.II),
+    εII = Array(stokes.ε.II),
+    Vx  = Array(Vx_v),
+    Vy  = Array(Vy_v),
+)
+data_c = (; # data @ centers
+    P   = Array(stokes.P),
+    η   = Array(stokes.viscosity.η_vep),
+)
+velocity_v = ( # velocity vector field
+    Array(Vx_v),
+    Array(Vy_v),
+)
+save_vtk(
+    joinpath(@__DIR__, "vtk_" * lpad("$it", 6, "0")),
+    xvi,
+    xci,
+    data_v,
+    data_c,
+    velocity_v
+)
 ```
-
+      
 ### Final model
+Solution after 990 time steps
 ![](990.png)

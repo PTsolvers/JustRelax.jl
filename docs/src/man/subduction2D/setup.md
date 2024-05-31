@@ -1,5 +1,5 @@
 # Model setup
-As described in the original [paper](https://doi.org/10.5194/se-15-567-2024), the domain consists of a Cartesian box of $\Omega \in [0, 3000] \times [0, -660]$ km, with two 80km thick oceanic plates over the asthenospheric mantle. 
+As described in the original [paper](https://doi.org/10.5194/se-15-567-2024), the domain consists of a Cartesian box of $\Omega \in [0, 3000] \times [0, -660]$ km, with two 80 km thick oceanic plates over the asthenospheric mantle. 
 
 We will use GeophysicalModelGenerator.jl to generate the initial geometry, material phases, and thermal field of our models. We will start by defining the dimensions and resolution of our model, as well as initializing the `Grid2D` object and two arrays `Phases` and `Temp` that host the material phase (given by an integer) and the thermal field, respectively.
 
@@ -40,7 +40,7 @@ add_box!(
 ```
 ![](setup_1.png)
 
-Next we add a horizontal 80km thick oceanic lithosphere. Note that we leave a 100km buffer zone next to the vertical boundaries of the domain, to facilitate the sliding of the oceanic plates.
+Next we add a horizontal 80 km thick oceanic lithosphere. Note that we leave a 100 km buffer zone next to the vertical boundaries of the domain, to facilitate the sliding of the oceanic plates.
 ```julia
 add_box!(
     Phases, 
@@ -87,8 +87,8 @@ add_box!(
 ![](setup_4.png)
 
 ```julia
-surf = Grid2D.z.val .> 0.0 
-@views Temp[surf] .= 20.0
+surf                 = Grid2D.z.val .> 0.0 
+@views Temp[surf]   .= 20.0
 @views Phases[surf] .= 3
 ```
 ![](setup_5.png)

@@ -61,6 +61,7 @@ using GeoParams
         @test stokes.viscosity.η[1] == 1.0
         @test stokes.V.Vy[1] == 10
         @test thermal.T[1] == 100
+        @test stokes.V.Vz == nothing
 
 
         # check the if the hdf5 function also works
@@ -71,7 +72,7 @@ using GeoParams
         @test isfile(fname)
 
         # Load the data from the file
-        P, T, Vx, Vy, η, t = load_checkpoint_hdf5(fname)
+        P, T, Vx, Vy, Vz, η, t = load_checkpoint_hdf5(fname)
 
         stokes.viscosity.η  .= η
         stokes.V.Vy         .= Vy
@@ -79,7 +80,7 @@ using GeoParams
         @test stokes.viscosity.η[1] == 1.0
         @test stokes.V.Vy[1] == 10
         @test thermal.T[1] == 100
-
+        @test Vz == nothing
 
         # Remove the generated directory
         rm(dst, recursive=true)

@@ -31,6 +31,7 @@ using GeoParams
         grid         = Geometry(ni, li; origin = origin)
         (; xci, xvi) = grid
 
+        # 2D case
         dst = "test_checkpoint"
         stokes  = StokesArrays(backend_JR, ni)
         thermal = ThermalArrays(backend_JR, ni)
@@ -61,7 +62,7 @@ using GeoParams
         @test stokes.viscosity.η[1] == 1.0
         @test stokes.V.Vy[1] == 10
         @test thermal.T[1] == 100
-        @test stokes.V.Vz == nothing
+        @test isnothing(stokes.V.Vz)
 
 
         # check the if the hdf5 function also works
@@ -80,7 +81,58 @@ using GeoParams
         @test stokes.viscosity.η[1] == 1.0
         @test stokes.V.Vy[1] == 10
         @test thermal.T[1] == 100
-        @test Vz == nothing
+        @test isnothing(Vz)
+
+        # 3D case
+        stokes  = StokesArrays(backend_JR, (nx,ny,1))
+        thermal = ThermalArrays(backend_JR,  (nx,ny,1))
+
+        nxcell, max_xcell, min_xcell = 20, 32, 12
+        particles = init_particles(
+            backend, nxcell, max_xcell, min_xcell, xvi...)
+        # temperature
+        pT, pPhases      = init_cell_arrays(particles, Val(2))
+        time = 1.0
+
+        stokes.viscosity.η .= fill(1.0)
+        stokes.V.Vy        .= fill(10)
+        thermal.T          .= fill(100)
+
+
+        # Call the function
+        checkpointing_jld2(dst, stokes, thermal, particles, pPhases, time, igg)
+        checkpointing_jld2(dst, stokes, thermal, particles, pPhases, time)
+
+        # Check that the file was created
+        fname = joinpath(dst, "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2")
+        @test isfile(fname)
+
+        # Load the data from the file
+        load_checkpoint_jld2(fname)
+
+        @test stokes.viscosity.η[1] == 1.0
+        @test stokes.V.Vy[1] == 10
+        @test thermal.T[1] == 100
+        @test !isnothing(stokes.V.Vz)
+
+
+        # check the if the hdf5 function also works
+        checkpointing_hdf5(dst, stokes, thermal.T, time)
+
+        # Check that the file was created
+        fname = joinpath(dst, "checkpoint.h5")
+        @test isfile(fname)
+
+        # Load the data from the file
+        P, T, Vx, Vy, Vz, η, t = load_checkpoint_hdf5(fname)
+
+        stokes.viscosity.η  .= η
+        stokes.V.Vy         .= Vy
+        thermal.T           .= T
+        @test stokes.viscosity.η[1] == 1.0
+        @test stokes.V.Vy[1] == 10
+        @test thermal.T[1] == 100
+        @test !isnothing(Vz)
 
         # Remove the generated directory
         rm(dst, recursive=true)

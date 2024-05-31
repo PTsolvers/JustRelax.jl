@@ -24,7 +24,7 @@ function checkpointing_hdf5(dst, stokes, T, time)
         write(file, @namevar(time)...)
         write(file, @namevar(stokes.V.Vx)...)
         write(file, @namevar(stokes.V.Vy)...)
-        if stokes.V.Vz == !isnothing
+        if !isnothing(stokes.V.Vz)
             write(file, @namevar(stokes.V.Vz)...)
         end
         write(file, @namevar(stokes.P)...)

@@ -24,7 +24,7 @@ using GeoParams
         lx           = 1.0       # domain length in x
         nx, ny       = 4, 4
         ni           = nx, ny     # number of cells
-        igg          = IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
+        igg          = IGG(init_global_grid(nx, ny, 1; init_MPI= false)...)
         li           = lx, ly     # domain length in x- and y-
         di           = @. li / ni # grid step in x- and -y
         origin       = 0.0, -ly   # origin coordinates (15km f sticky air layer)

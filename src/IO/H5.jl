@@ -24,6 +24,7 @@ function checkpointing_hdf5(dst, stokes, T, time)
         write(file, @namevar(time)...)
         write(file, @namevar(stokes.V.Vx)...)
         write(file, @namevar(stokes.V.Vy)...)
+        write(file, @namevar(stokes.V.Vz)...)
         write(file, @namevar(stokes.P)...)
         write(file, @namevar(stokes.viscosity.η)...)
         write(file, @namevar(T)...)
@@ -62,6 +63,7 @@ function load_checkpoint_hdf5(file_path)
     T = read(h5file["T"])  # Read the thermal.T variable
     Vx = read(h5file["Vx"])  # Read the stokes.V.Vx variable
     Vy = read(h5file["Vy"])  # Read the stokes.V.Vy variable
+    Vy = read(h5file["Vz"])  # Read the stokes.V.Vz variable
     η = read(h5file["η"])  # Read the stokes.viscosity.η variable
     t = read(h5file["time"])  # Read the t variable
     close(h5file)  # Close the file

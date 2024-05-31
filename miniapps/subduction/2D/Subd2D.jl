@@ -38,7 +38,6 @@ using GeoParams, GLMakie, CellArrays
 # Load file with all the rheology configurations
 include("Subd2D_setup.jl")
 include("Subd2D_rheology.jl")
-# include("LAMEM_setup2D.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -89,11 +88,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     subgrid_arrays      = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vxi            = velocity_grids(xci, xvi, di)
-    # temperature
+    # material phase & temperature
     pPhases, pT         = init_cell_arrays(particles, Val(2))
-    τxx_p, τyy_p, τxy_p = init_cell_arrays(particles, Val(3))
-    vorticity_p,        = init_cell_arrays(particles, Val(1))
-    particle_args       = (pT, τxx_p, τyy_p, τxy_p, vorticity_p, pPhases)
+    particle_args       = (pT, pPhases)
     
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)

@@ -36,7 +36,6 @@ function checkpointing_jld2(dst, stokes, thermal, time, igg::IGG)
     return nothing
 end
 
-
 function checkpointing_jld2(dst, stokes, thermal, time, fname::String)
     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
 
@@ -44,14 +43,9 @@ function checkpointing_jld2(dst, stokes, thermal, time, fname::String)
     mktempdir() do tmpdir
         # Save the checkpoint file in the temporary directory
         tmpfname = joinpath(tmpdir, basename(fname))
-        jldsave(
-            tmpfname;
-            stokes=Array(stokes),
-            thermal=Array(thermal),
-            time=time,
-        )
+        jldsave(tmpfname; stokes=Array(stokes), thermal=Array(thermal), time=time)
         # Move the checkpoint file from the temporary directory to the destination directory
-        mv(tmpfname, fname, force=true)
+        mv(tmpfname, fname; force=true)
     end
 
     return nothing

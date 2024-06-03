@@ -37,7 +37,7 @@ function checkpointing_hdf5(dst, stokes, T, time)
             write(file, @namevar(T)...)
         end
         # Move the checkpoint file from the temporary directory to the destination directory
-        mv("$(tmpfname).h5", "$(fname).h5", force=true)
+        mv("$(tmpfname).h5", "$(fname).h5"; force=true)
     end
 
     return nothing

@@ -36,19 +36,38 @@ function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, igg::
     return nothing
 end
 
+# function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname::String)
+#     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
+#     jldsave(
+#         fname;
+#         stokes=Array(stokes),
+#         thermal=Array(thermal),
+#         time=time,
+#     )
+#     return nothing
+# end
+
+# using FilePathsBase: basename
+
 function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname::String)
     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
-    jldsave(
-        fname;
-        stokes=Array(stokes),
-        thermal=Array(thermal),
-        particles=particles,
-        phases=phases,
-        time=time,
-    )
+
+    # Create a temporary directory
+    mktempdir() do tmpdir
+        # Save the checkpoint file in the temporary directory
+        tmpfname = joinpath(tmpdir, basename(fname))
+        jldsave(
+            tmpfname;
+            stokes=Array(stokes),
+            thermal=Array(thermal),
+            time=time,
+        )
+        # Move the checkpoint file from the temporary directory to the destination directory
+        mv(tmpfname, fname, force=true)
+    end
+
     return nothing
 end
-
 """
     load_checkpoint_jld2(file_path)
 
@@ -68,10 +87,8 @@ function load_checkpoint_jld2(file_path)
     restart = load(file_path)  # Load the file
     stokes = restart["stokes"]  # Read the stokes variable
     thermal = restart["thermal"]  # Read the thermal variable
-    particles = restart["particles"]  # Read the particles variable
-    phases = restart["phases"]  # Read the phases variable
     time = restart["time"]  # Read the time variable
-    return stokes, thermal, particles, phases, time
+    return stokes, thermal, time
 end
 
 # Use the function

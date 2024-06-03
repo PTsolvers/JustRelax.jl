@@ -20,17 +20,27 @@ Save necessary data in `dst` as and HDF5 file to restart the model from the stat
 function checkpointing_hdf5(dst, stokes, T, time)
     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
     fname = joinpath(dst, "checkpoint")
-    h5open("$(fname).h5", "w") do file
-        write(file, @namevar(time)...)
-        write(file, @namevar(stokes.V.Vx)...)
-        write(file, @namevar(stokes.V.Vy)...)
-        if !isnothing(stokes.V.Vz)
-            write(file, @namevar(stokes.V.Vz)...)
+
+    # Create a temporary directory
+    mktempdir() do tmpdir
+        # Save the checkpoint file in the temporary directory
+        tmpfname = joinpath(tmpdir, basename(fname))
+        h5open("$(tmpfname).h5", "w") do file
+            write(file, @namevar(time)...)
+            write(file, @namevar(stokes.V.Vx)...)
+            write(file, @namevar(stokes.V.Vy)...)
+            if !isnothing(stokes.V.Vz)
+                write(file, @namevar(stokes.V.Vz)...)
+            end
+            write(file, @namevar(stokes.P)...)
+            write(file, @namevar(stokes.viscosity.η)...)
+            write(file, @namevar(T)...)
         end
-        write(file, @namevar(stokes.P)...)
-        write(file, @namevar(stokes.viscosity.η)...)
-        write(file, @namevar(T)...)
+        # Move the checkpoint file from the temporary directory to the destination directory
+        mv("$(tmpfname).h5", "$(fname).h5", force=true)
     end
+
+    return nothing
 end
 
 """

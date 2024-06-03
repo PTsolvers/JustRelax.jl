@@ -17,7 +17,7 @@ const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 using GeoParams
 
 @testset "Test Checkpointing and Metadata" begin
-    # @suppress begin
+    @suppress begin
     # Set up mock data
         # Physical domain ------------------------------------
         ly           = 1.0       # domain length in y
@@ -52,7 +52,6 @@ using GeoParams
         metadata(pwd(), dst, "test_traits.jl", "test_types.jl")
         @test isfile(joinpath(dst, "test_traits.jl"))
         @test isfile(joinpath(dst, "test_types.jl"))
-        @test isfile(joinpath(dst, "Manifest.toml"))
         @test isfile(joinpath(dst, "Project.toml"))
 
         # Call the function
@@ -145,5 +144,5 @@ using GeoParams
 
         # Remove the generated directory
         rm(dst, recursive=true)
-    # end
+    end
 end

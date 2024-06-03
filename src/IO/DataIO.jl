@@ -23,21 +23,21 @@ export VTKDataSeries, append!, save_vtk
 export metadata
 
 """
-    metadata(src, file, dst)
+    metadata(src, dst, files...)
 
-Copy `file`, Manifest.toml, and, Project.toml from `src` to `dst`
+Copy `files...`, Manifest.toml, and Project.toml from `src` to `dst`
 """
-function metadata(src, file, dst)
+function metadata(src, dst, files...)
     @assert dst != pwd()
     if !ispath(dst)
         println("Created $dst folder")
         mkpath(dst)
     end
-    for f in (file, "Manifest.toml", "Project.toml")
-        !isfile(f) && continue
+    for f in vcat(collect(files), ["Manifest.toml", "Project.toml"])
+        !isfile(joinpath(f)) && continue
         newfile = joinpath(dst, basename(f))
         isfile(newfile) && rm(newfile)
-        cp(joinpath(src, f), newfile)
+        cp(joinpath(src,f), newfile)
     end
 end
 

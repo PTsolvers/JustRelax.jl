@@ -109,6 +109,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
+    # IO -------------------------------------------------
+    take(figdir)
+
     # Time loop
     t, it      = 0.0, 0
     tmax       = 3.5

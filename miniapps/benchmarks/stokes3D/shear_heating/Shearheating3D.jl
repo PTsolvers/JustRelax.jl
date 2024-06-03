@@ -234,7 +234,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
 
             # Data I/O and plotting ---------------------
             if it == 1 || rem(it, 10) == 0
-                # checkpointing(figdir, stokes, thermal.T, η, t)
+                checkpointing_hdf5(figdir, stokes, thermal.T, t)
 
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)

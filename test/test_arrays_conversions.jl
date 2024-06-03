@@ -19,11 +19,11 @@ end
     stokes  = StokesArrays(backend, ni)
     thermal = ThermalArrays(backend, ni)
     A1      = Array(stokes.V)
-    A2      = Array(stokes.τ) 
-    A3      = Array(stokes.R) 
-    A4      = Array(stokes.P) 
+    A2      = Array(stokes.τ)
+    A3      = Array(stokes.R)
+    A4      = Array(stokes.P)
     A5      = Array(stokes)
-    A6      = Array(thermal)  
+    A6      = Array(thermal)
 
     @test typeof(A1) <: JustRelax.Velocity{<:Array}
     @test typeof(A2) <: JustRelax.SymmetricTensor{<:Array}

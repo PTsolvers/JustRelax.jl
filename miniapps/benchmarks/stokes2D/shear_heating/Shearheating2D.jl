@@ -1,6 +1,6 @@
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
-using JustRelax, JustRelax.JustRelax2D
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -13,7 +13,7 @@ using JustPIC, JustPIC._2D
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using GeoParams
+using GeoParams, GLMakie
 
 # Load file with all the rheology configurations
 include("Shearheating_rheology.jl")
@@ -247,73 +247,73 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         # update phase ratios
         phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 
-            @show it += 1
-            t        += dt
+        @show it += 1
+        t        += dt
 
-            # Data I/O and plotting ---------------------
-            if it == 1 || rem(it, 10) == 0
-                checkpointing(figdir, stokes, thermal.T, stokes.viscosity.η, t)
+        # Data I/O and plotting ---------------------
+        if it == 1 || rem(it, 10) == 0
+            checkpointing_hdf5(figdir, stokes, thermal.T, t)
 
-                if do_vtk
-                    JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-                    data_v = (;
-                        T   = Array(thermal.T[2:end-1, :]),
-                        τxy = Array(stokes.τ.xy),
-                        εxy = Array(stokes.ε.xy),
-                        Vx  = Array(Vx_v),
-                        Vy  = Array(Vy_v),
-                    )
-                    data_c = (;
-                        P   = Array(stokes.P),
-                        τxx = Array(stokes.τ.xx),
-                        τyy = Array(stokes.τ.yy),
-                        εxx = Array(stokes.ε.xx),
-                        εyy = Array(stokes.ε.yy),
-                        η   = Array(stokes.viscosity.η),
-                    )
-                    do_vtk(
-                        joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                        xvi,
-                        xci,
-                        data_v,
-                        data_c
-                    )
-                end
-
-                # Make particles plottable
-                p        = particles.coords
-                ppx, ppy = p
-                pxv      = ppx.data[:]./1e3
-                pyv      = ppy.data[:]./1e3
-                clr      = pPhases.data[:]
-                idxv     = particles.index.data[:];
-
-                # Make Makie figure
-                fig = Figure(size = (900, 900), title = "t = $t")
-                ax1 = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-                ax2 = Axis(fig[2,1], aspect = ar, title = "Shear heating [W/m3]")
-                ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
-                ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
-                # Plot temperature
-                h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:].-273.0) , colormap=:batlow)
-                # Plot particles phase
-                h2  = heatmap!(ax2, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.shear_heating) , colormap=:batlow)
-                # Plot 2nd invariant of strain rate
-                h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
-                # Plot effective viscosity
-                h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-                hidexdecorations!(ax1)
-                hidexdecorations!(ax2)
-                hidexdecorations!(ax3)
-                Colorbar(fig[1,2], h1)
-                Colorbar(fig[2,2], h2)
-                Colorbar(fig[1,4], h3)
-                Colorbar(fig[2,4], h4)
-                linkaxes!(ax1, ax2, ax3, ax4)
-                save(joinpath(figdir, "$(it).png"), fig)
-                fig
+            if do_vtk
+                JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                data_v = (;
+                    T   = Array(thermal.T[2:end-1, :]),
+                    τxy = Array(stokes.τ.xy),
+                    εxy = Array(stokes.ε.xy),
+                    Vx  = Array(Vx_v),
+                    Vy  = Array(Vy_v),
+                )
+                data_c = (;
+                    P   = Array(stokes.P),
+                    τxx = Array(stokes.τ.xx),
+                    τyy = Array(stokes.τ.yy),
+                    εxx = Array(stokes.ε.xx),
+                    εyy = Array(stokes.ε.yy),
+                    η   = Array(stokes.viscosity.η),
+                )
+                do_vtk(
+                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                    xvi,
+                    xci,
+                    data_v,
+                    data_c
+                )
             end
-            # ------------------------------
+
+            # Make particles plottable
+            p        = particles.coords
+            ppx, ppy = p
+            pxv      = ppx.data[:]./1e3
+            pyv      = ppy.data[:]./1e3
+            clr      = pPhases.data[:]
+            idxv     = particles.index.data[:];
+
+            # Make Makie figure
+            fig = Figure(size = (900, 900), title = "t = $t")
+            ax1 = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+            ax2 = Axis(fig[2,1], aspect = ar, title = "Shear heating [W/m3]")
+            ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
+            ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+            # Plot temperature
+            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:].-273.0) , colormap=:batlow)
+            # Plot particles phase
+            h2  = heatmap!(ax2, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.shear_heating) , colormap=:batlow)
+            # Plot 2nd invariant of strain rate
+            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            # Plot effective viscosity
+            h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax2)
+            hidexdecorations!(ax3)
+            Colorbar(fig[1,2], h1)
+            Colorbar(fig[2,2], h2)
+            Colorbar(fig[1,4], h3)
+            Colorbar(fig[2,4], h4)
+            linkaxes!(ax1, ax2, ax3, ax4)
+            save(joinpath(figdir, "$(it).png"), fig)
+            fig
+        end
+        # ------------------------------
 
       end
 

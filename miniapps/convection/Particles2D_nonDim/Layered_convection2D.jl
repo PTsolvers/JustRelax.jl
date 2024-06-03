@@ -198,7 +198,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv)
-        scatter!(ax2, Array(log10.(A[:])), Y)
+        scatter!(ax2, Array(log10.(stokes.viscosity.η[:])), Y)
         ylims!(ax1, minimum(xvi[2]), 0)
         ylims!(ax2, minimum(xvi[2]), 0)
         hideydecorations!(ax2)
@@ -305,7 +305,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 25) == 0
-            checkpointing(figdir, stokes, thermal.T, η, t)
+            checkpointing_hdf5(figdir, stokes, thermal.T, t)
 
             if do_vtk
                 JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -380,7 +380,7 @@ end
 figdir   = "Plume2D"
 do_vtk = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 128
+n        = 64
 nx       = n*ar - 2
 ny       = n - 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

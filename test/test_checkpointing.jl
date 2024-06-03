@@ -16,7 +16,7 @@ const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 # Load script dependencies
 using GeoParams
 
-@testset "Test checkpointing" begin
+@testset "Test Checkpointing and Metadata" begin
     @suppress begin
     # Set up mock data
         # Physical domain ------------------------------------
@@ -42,38 +42,46 @@ using GeoParams
         # temperature
         pT, pPhases      = init_cell_arrays(particles, Val(2))
         time = 1.0
+        dt = 0.1
 
-        stokes.viscosity.η .= fill(1.0)
-        stokes.V.Vy        .= fill(10)
-        thermal.T          .= fill(100)
+        stokes.viscosity.η .= @fill(1.0)
+        stokes.V.Vy        .= @fill(10)
+        thermal.T          .= @fill(100)
 
+        # Save metadata to directory
+        metadata(pwd(), dst, "test_traits.jl", "test_types.jl")
+        @test isfile(joinpath(dst, "test_traits.jl"))
+        @test isfile(joinpath(dst, "test_types.jl"))
+        @test isfile(joinpath(dst, "Manifest.toml"))
+        @test isfile(joinpath(dst, "Project.toml"))
 
         # Call the function
-        checkpointing_jld2(dst, stokes, thermal, time, igg)
-        checkpointing_jld2(dst, stokes, thermal, time)
+        checkpointing_jld2(dst, stokes, thermal, time, dt, igg)
+        checkpointing_jld2(dst, stokes, thermal, time, dt)
 
         # Check that the file was created
         fname = joinpath(dst, "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2")
         @test isfile(fname)
 
         # Load the data from the file
-        load_checkpoint_jld2(fname)
+        stokes1, thermal1, t, dt1 = load_checkpoint_jld2(fname)
 
-        @test stokes.viscosity.η[1] == 1.0
-        @test stokes.V.Vy[1] == 10
-        @test thermal.T[1] == 100
+        @test stokes1.viscosity.η[1] == 1.0
+        @test stokes1.V.Vy[1] == 10
+        @test thermal1.T[1] == 100
         @test isnothing(stokes.V.Vz)
+        @test dt1 == 0.1
 
 
         # check the if the hdf5 function also works
-        checkpointing_hdf5(dst, stokes, thermal.T, time)
+        checkpointing_hdf5(dst, stokes, thermal.T, time, dt)
 
         # Check that the file was created
         fname = joinpath(dst, "checkpoint.h5")
         @test isfile(fname)
 
         # Load the data from the file
-        P, T, Vx, Vy, Vz, η, t = load_checkpoint_hdf5(fname)
+        P, T, Vx, Vy, Vz, η, t, dt = load_checkpoint_hdf5(fname)
 
         stokes.viscosity.η  .= η
         stokes.V.Vy         .= Vy
@@ -82,6 +90,7 @@ using GeoParams
         @test stokes.V.Vy[1] == 10
         @test thermal.T[1] == 100
         @test isnothing(Vz)
+        @test dt == 0.1
 
         # 3D case
         stokes  = StokesArrays(backend_JR, (nx,ny,1))
@@ -100,8 +109,8 @@ using GeoParams
 
 
         # Call the function
-        checkpointing_jld2(dst, stokes, thermal, time, igg)
-        checkpointing_jld2(dst, stokes, thermal, time)
+        checkpointing_jld2(dst, stokes, thermal, time, dt, igg)
+        checkpointing_jld2(dst, stokes, thermal, time, dt)
 
         # Check that the file was created
         fname = joinpath(dst, "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2")
@@ -117,14 +126,14 @@ using GeoParams
 
 
         # check the if the hdf5 function also works
-        checkpointing_hdf5(dst, stokes, thermal.T, time)
+        checkpointing_hdf5(dst, stokes, thermal.T, time, dt)
 
         # Check that the file was created
         fname = joinpath(dst, "checkpoint.h5")
         @test isfile(fname)
 
         # Load the data from the file
-        P, T, Vx, Vy, Vz, η, t = load_checkpoint_hdf5(fname)
+        P, T, Vx, Vy, Vz, η, t, dt = load_checkpoint_hdf5(fname)
 
         stokes.viscosity.η  .= η
         stokes.V.Vy         .= Vy

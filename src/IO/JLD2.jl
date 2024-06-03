@@ -1,5 +1,5 @@
 """
-    checkpointing_jld2(dst, stokes, thermal, particles, phases, time, igg)
+    checkpointing_jld2(dst, stokes, thermal, time, igg)
 
 Save necessary data in `dst` as a jld2 file to restart the model from the state at `time`.
 If run in parallel, the file will be named after the corresponidng rank e.g. `checkpoint0000.jld2`
@@ -24,32 +24,20 @@ by providing a dollar sign and the rank number.
 checkpoint_name(dst) = "$dst/checkpoint.jld2"
 checkpoint_name(dst, igg::IGG) = "$dst/checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2"
 
-function checkpointing_jld2(dst, stokes, thermal, particles, phases, time)
+function checkpointing_jld2(dst, stokes, thermal, time)
     fname = checkpoint_name(dst)
-    checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname)
+    checkpointing_jld2(dst, stokes, thermal, time, fname)
     return nothing
 end
 
-function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, igg::IGG)
+function checkpointing_jld2(dst, stokes, thermal, time, igg::IGG)
     fname = checkpoint_name(dst, igg)
-    checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname)
+    checkpointing_jld2(dst, stokes, thermal, time, fname)
     return nothing
 end
 
-# function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname::String)
-#     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
-#     jldsave(
-#         fname;
-#         stokes=Array(stokes),
-#         thermal=Array(thermal),
-#         time=time,
-#     )
-#     return nothing
-# end
 
-# using FilePathsBase: basename
-
-function checkpointing_jld2(dst, stokes, thermal, particles, phases, time, fname::String)
+function checkpointing_jld2(dst, stokes, thermal, time, fname::String)
     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
 
     # Create a temporary directory

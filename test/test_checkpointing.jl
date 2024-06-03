@@ -49,8 +49,8 @@ using GeoParams
 
 
         # Call the function
-        checkpointing_jld2(dst, stokes, thermal, particles, pPhases, time, igg)
-        checkpointing_jld2(dst, stokes, thermal, particles, pPhases, time)
+        checkpointing_jld2(dst, stokes, thermal, time, igg)
+        checkpointing_jld2(dst, stokes, thermal, time)
 
         # Check that the file was created
         fname = joinpath(dst, "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2")
@@ -100,8 +100,8 @@ using GeoParams
 
 
         # Call the function
-        checkpointing_jld2(dst, stokes, thermal, particles, pPhases, time, igg)
-        checkpointing_jld2(dst, stokes, thermal, particles, pPhases, time)
+        checkpointing_jld2(dst, stokes, thermal, time, igg)
+        checkpointing_jld2(dst, stokes, thermal, time)
 
         # Check that the file was created
         fname = joinpath(dst, "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2")

@@ -35,8 +35,8 @@ macro all_j(A)
     return esc(:($A[$idx_j]))
 end
 
-@parallel_indices (i, j) function init_P!(P, ρg, z, dz)
-    P[i, j] = sum(abs(ρg[i, jj] * z[jj]) for jj in j:size(P, 2)) * dz
+@parallel function init_P!(P, ρg, z)
+    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
     return nothing
 end
 
@@ -226,7 +226,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 15
-    particles        = init_particles(backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...)
+    particles        = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
     subgrid_arrays   = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -297,7 +297,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        @parallel init_P!(stokes.P, ρg[2], xci[2], di[2])
+        @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
 
     # Arguments for functions
@@ -450,11 +450,11 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
         #  # # Plotting -------------------------------------------------------
         if it == 1 || rem(it, 1) == 0
-            checkpointing_hdf5(figdir, stokes, thermal.T, t)
+            checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
             if igg.me == 0
                 if do_vtk
-                    JustRelax.JustRelax2D.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                    velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                     data_v = (;
                         T   = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
                         τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
@@ -470,7 +470,11 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                         εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1,CharDim))),
                         εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1,CharDim))),
                         εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim))),
-                        η   = Array(ustrip.(dimensionalize(η,Pa*s,CharDim))),
+                        η   = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep,Pa*s,CharDim))),
+                    )
+                    velocity_v = (
+                        Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
+                        Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
                     )
                     save_vtk(
                         joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -478,6 +482,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                         xci,
                         data_v,
                         data_c,
+                        velocity_v
                     )
                 end
 
@@ -583,7 +588,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                     ax2,
                     ustrip.(dimensionalize(xci[1],km,CharDim)),
                     ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize((Array(log10.(η_vep))),Pa*s,CharDim));
+                    ustrip.(dimensionalize((Array(log10.(stokes.viscosity.η_vep))),Pa*s,CharDim));
                     colormap=:glasgow,
                     colorrange=(log10(1e16), log10(1e24)),
                 )
@@ -689,6 +694,7 @@ end
 figdir = "Thermal_stresses_around_cooling_magma"
 do_vtk = true # set to true to generate VTK files for ParaView
 n      = 64
+ar     = 2
 nx     = n * ar - 2
 ny     = n - 2
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

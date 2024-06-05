@@ -308,28 +308,35 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
             checkpointing_hdf5(figdir, stokes, thermal.T, t)
 
             if do_vtk
-                JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T   = Array(thermal.T[2:end-1, :]),
-                    τxy = Array(stokes.τ.xy),
-                    εxy = Array(stokes.ε.xy),
-                    Vx  = Array(Vx_v),
-                    Vy  = Array(Vy_v),
+                    T   = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
+                    τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
+                    εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
+                    Vx  = Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
+                    Vy  = Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
                 )
                 data_c = (;
-                    P   = Array(stokes.P),
-                    τxx = Array(stokes.τ.xx),
-                    τyy = Array(stokes.τ.yy),
-                    εxx = Array(stokes.ε.xx),
-                    εyy = Array(stokes.ε.yy),
-                    η   = Array(η),
+                    P   = Array(ustrip.(dimensionalize(stokes.P,MPa,CharDim))),
+                    τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa,CharDim))),
+                    τyy = Array(ustrip.(dimensionalize(stokes.τ.yy,MPa,CharDim))),
+                    τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
+                    εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1,CharDim))),
+                    εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1,CharDim))),
+                    εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim))),
+                    η   = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep,Pa*s,CharDim))),
                 )
-                do_vtk(
+                velocity_v = (
+                    Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
+                    Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
+                )
+                save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
                     xci,
                     data_v,
-                    data_c
+                    data_c,
+                    velocity_v
                 )
             end
 
@@ -350,13 +357,13 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
             ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:]) , colormap=:batlow)
+            h1  = heatmap!(ax1, xvi[1], xvi[2], Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))) , colormap=:batlow)
             # Plot particles phase
             h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:grayC)
             # Plot 2nd invariant of strain rate
-            h3  = heatmap!(ax3, xci[1], xci[2], Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            h3  = heatmap!(ax3, xci[1], xci[2], Array(log10.(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim)))) , colormap=:batlow)
             # Plot effective viscosity
-            h4  = heatmap!(ax4, xci[1], xci[2], Array(log10.(η_vep)) , colormap=:batlow)
+            h4  = heatmap!(ax4, xci[1], xci[2], Array(log10.(ustrip.(dimensionalize(stokes.viscosity.η_vep,Pa*s,CharDim)))) , colormap=:batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)

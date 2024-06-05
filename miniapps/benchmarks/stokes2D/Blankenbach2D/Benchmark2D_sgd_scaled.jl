@@ -279,28 +279,35 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
         if it == 1 || rem(it, 200) == 0 || it == nit || any(isnan.(thermal.T))
 
             if do_vtk
-                JustRelax.JustRelax2D.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T   = Array(thermal.T[2:end-1, :]),
-                    τxy = Array(stokes.τ.xy),
-                    εxy = Array(stokes.ε.xy),
-                    Vx  = Array(Vx_v),
-                    Vy  = Array(Vy_v),
+                    T   = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
+                    τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
+                    εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
+                    Vx  = Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
+                    Vy  = Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
                 )
                 data_c = (;
-                    P   = Array(stokes.P),
-                    τxx = Array(stokes.τ.xx),
-                    τyy = Array(stokes.τ.yy),
-                    εxx = Array(stokes.ε.xx),
-                    εyy = Array(stokes.ε.yy),
-                    η   = Array(η),
+                    P   = Array(ustrip.(dimensionalize(stokes.P,MPa,CharDim))),
+                    τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa,CharDim))),
+                    τyy = Array(ustrip.(dimensionalize(stokes.τ.yy,MPa,CharDim))),
+                    τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
+                    εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1,CharDim))),
+                    εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1,CharDim))),
+                    εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim))),
+                    η   = Array(ustrip.(dimensionalize(stokes.viscosity.η,Pa*s,CharDim))),
+                )
+                velocity_v = (
+                    Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
+                    Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
                     xci,
                     data_v,
-                    data_c
+                    data_c,
+                    velocity_v
                 )
             end
 

@@ -274,13 +274,14 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             checkpointing_hdf5(figdir, stokes, thermal.T, t)
 
             if do_vtk
-                JustRelax.velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+                velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
                     T   = Array(thermal.T),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
                     Vx  = Array(Vx_v),
                     Vy  = Array(Vy_v),
+                    Vz  = Array(Vz_v),
                 )
                 data_c = (;
                     Tc  = Array(thermal.Tc),
@@ -289,14 +290,20 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                     τyy = Array(stokes.τ.yy),
                     εxx = Array(stokes.ε.xx),
                     εyy = Array(stokes.ε.yy),
-                    η   = Array(log10.(η)),
+                    η   = Array(log10.(stokes.viscosity.η_vep)),
                 )
-                do_vtk(
+                velocity_v = (
+                    Array(Vx_v),
+                    Array(Vy_v),
+                    Array(Vz_v),
+                )
+                save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
                     xci,
                     data_v,
-                    data_c
+                    data_c,
+                    velocity_v
                 )
             end
 

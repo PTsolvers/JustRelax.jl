@@ -48,6 +48,6 @@ include("JustRelax_CPU.jl")
 include("IO/DataIO.jl")
 
 include("array_conversions.jl")
-export Array
+export Array, copy
 
 end # module

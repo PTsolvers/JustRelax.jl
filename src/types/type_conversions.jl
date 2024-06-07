@@ -22,7 +22,7 @@ end
 
 function copy(x::T) where {T<:JR_T}
     nfields = fieldcount(T)
-    fields  = ntuple(Val(nfields)) do i
+    fields = ntuple(Val(nfields)) do i
         Base.@_inline_meta
         field = getfield(x, i)
         field === nothing ? nothing : copy(field)

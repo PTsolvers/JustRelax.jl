@@ -1,4 +1,4 @@
-import Base: Array
+import Base: Array, copy
 
 const JR_T = Union{StokesArrays,SymmetricTensor,ThermalArrays,Velocity,Residual,Viscosity}
 
@@ -18,4 +18,15 @@ function Array(::GPUBackendTrait, x::T) where {T<:JR_T}
     end
     T_clean = remove_parameters(x)
     return T_clean(cpu_fields...)
+end
+
+function copy(x::T) where {T<:JR_T}
+    nfields = fieldcount(T)
+    fields = ntuple(Val(nfields)) do i
+        Base.@_inline_meta
+        field = getfield(x, i)
+        field === nothing ? nothing : copy(field)
+    end
+    T_clean = remove_parameters(x)
+    return T_clean(fields...)
 end

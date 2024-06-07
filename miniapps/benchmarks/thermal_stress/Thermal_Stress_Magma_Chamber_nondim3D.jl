@@ -226,7 +226,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     nxcell           = 20
     max_xcell        = 40
     min_xcell        = 15
-    particles        = init_particles(backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...)
+    particles        = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
     subgrid_arrays   = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vxi         = velocity_grids(xci, xvi, di)
@@ -433,7 +433,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         #  # # Plotting -------------------------------------------------------
         if it == 1 || rem(it, 1) == 0
             (; η) = stokes.viscosity
-            checkpointing_hdf5(figdir, stokes, thermal.T, t)
+            checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
             if igg.me == 0
                 if do_vtk
@@ -456,7 +456,12 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                         εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1,CharDim))),
                         εzz = Array(ustrip.(dimensionalize(stokes.ε.zz, s^-1,CharDim))),
                         εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim))),
-                        η   = Array(ustrip.(dimensionalize(η,Pa*s,CharDim))),
+                        η   = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep,Pa*s,CharDim))),
+                    )
+                    velocity_v = (
+                        Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
+                        Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
+                        Array(ustrip.(dimensionalize(Vz_v, cm/yr, CharDim))),
                     )
                     save_vtk(
                         joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -464,6 +469,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                         xci,
                         data_v,
                         data_c,
+                        velocity_v
                     )
                 end
 

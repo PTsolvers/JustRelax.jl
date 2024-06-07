@@ -1,14 +1,14 @@
 # const isCUDA = false
 const isCUDA = true
 
-@static if isCUDA 
+@static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 import JustRelax.@cell
 
-const backend = @static if isCUDA 
+const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -16,7 +16,7 @@ end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-@static if isCUDA 
+@static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
 else
     @init_parallel_stencil(Threads, Float64, 2)
@@ -26,7 +26,7 @@ using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend_JP = @static if isCUDA 
+const backend_JP = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -62,7 +62,7 @@ end
     return nothing
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
- 
+
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
 
@@ -91,7 +91,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # material phase & temperature
     pPhases, pT         = init_cell_arrays(particles, Val(2))
     particle_args       = (pT, pPhases)
-    
+
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
     phase_ratios     = PhaseRatio(backend, ni, length(rheology))
@@ -114,8 +114,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         no_flux      = (left = true, right = true, top = false, bot = false),
     )
     thermal_bcs!(thermal, thermal_bc)
-    @views thermal.T[:, end] .= Ttop 
-    @views thermal.T[:, 1]   .= Tbot 
+    @views thermal.T[:, end] .= Ttop
+    @views thermal.T[:, 1]   .= Tbot
     temperature2center!(thermal)
     # ----------------------------------------------------
 
@@ -189,7 +189,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     t, it = 0.0, 0
 
     while it < 1000 # run only for 5 Myrs
-        
+
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end]      .= Ttop
@@ -197,9 +197,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         @views thermal.T[2:end-1, :] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
-        
+
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-         
+
         # Stokes solver ----------------
         t_stokes = @elapsed begin
             out = solve!(

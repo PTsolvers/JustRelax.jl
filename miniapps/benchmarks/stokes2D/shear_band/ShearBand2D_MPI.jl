@@ -173,7 +173,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
         # Gather MPI arrays
         @views τII_nohalo .= Array(stokes.τ.II[2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        @views η_vep_nohalo .= Array(η_vep[2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         @views εII_nohalo .= Array(stokes.ε.II[2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         gather!(τII_nohalo, τII_v)
         gather!(η_vep_nohalo, η_vep_v)

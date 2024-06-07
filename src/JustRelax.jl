@@ -47,7 +47,7 @@ include("JustRelax_CPU.jl")
 
 include("IO/DataIO.jl")
 
-include("array_conversions.jl")
+include("types/type_conversions.jl")
 export Array, copy
 
 end # module

@@ -14,10 +14,11 @@ else
     CPUBackend
 end
 
-@testset "Array conversions" begin
-    ni      = 2, 2
-    stokes  = StokesArrays(backend, ni)
-    thermal = ThermalArrays(backend, ni)
+ni      = 2, 2
+stokes  = StokesArrays(backend, ni)
+thermal = ThermalArrays(backend, ni)
+
+@testset "Type conversions" begin
     A1      = Array(stokes.V)
     A2      = Array(stokes.τ)
     A3      = Array(stokes.R)
@@ -33,31 +34,18 @@ end
     @test typeof(A6) <: JustRelax.ThermalArrays{<:Array}
 end
 
-# const JR_T = Union{
-#     JustRelax.StokesArrays,
-#     JustRelax.SymmetricTensor,
-#     JustRelax.ThermalArrays,
-#     JustRelax.Velocity,
-#     JustRelax.Residual
-# }
+@testset "Type copy" begin
+    A1      = copy(stokes.V)
+    A2      = copy(stokes.τ)
+    A3      = copy(stokes.R)
+    A4      = copy(stokes.P)
+    A5      = copy(stokes)
+    A6      = copy(thermal)
 
-# @inline remove_parameters(::T) where {T} = Base.typename(T).wrapper
-
-# foo(x::T) where {T} = foo(JustRelax.backend(x), x)
-# foo(x::Array) = x
-# foo(::Nothing) = nothing
-
-# function foo(::Any, x::T) where {T<:JR_T}
-#     nfields = fieldcount(T)
-#     cpu_fields = ntuple(Val(nfields)) do i
-#         Base.@_inline_meta
-#         @show i
-#         foo(getfield(x, i))
-#     end
-#     T_clean = remove_parameters(x)
-#     return T_clean(cpu_fields...)
-# end
-
-# foo(stokes.V)
-
-# pot = 29
+    @test typeof(A1) <: JustRelax.Velocity
+    @test typeof(A2) <: JustRelax.SymmetricTensor
+    @test typeof(A3) <: JustRelax.Residual
+    @test typeof(A4) <: Array
+    @test typeof(A5) <: JustRelax.StokesArrays
+    @test typeof(A6) <: JustRelax.ThermalArrays
+end

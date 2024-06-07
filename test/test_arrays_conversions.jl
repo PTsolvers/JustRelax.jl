@@ -45,7 +45,7 @@ end
     @test typeof(A1) <: JustRelax.Velocity
     @test typeof(A2) <: JustRelax.SymmetricTensor
     @test typeof(A3) <: JustRelax.Residual
-    @test typeof(A4) <: Array
+    @test typeof(A4) <: typeof(stokes.P)
     @test typeof(A5) <: JustRelax.StokesArrays
     @test typeof(A6) <: JustRelax.ThermalArrays
 end

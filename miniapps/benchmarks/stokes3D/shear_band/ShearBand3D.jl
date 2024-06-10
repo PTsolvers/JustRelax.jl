@@ -151,19 +151,31 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
         println("it = $it; t = $t \n")
 
-        data_v = (;)
-        data_c = (;
+        velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+        data_v = (;
+            T   = Array(T_buffer),
             τII = Array(stokes.τ.II),
             εII = Array(stokes.ε.II),
-            logεII = Array(log10.(stokes.ε.II)),
-            η   = Array(η_vep),
+            Vx  = Array(Vx_v),
+            Vy  = Array(Vy_v),
+            Vz  = Array(Vz_v),
         )
-        do_vtk(
-            joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
+        data_c = (;
+            P   = Array(stokes.P),
+            η   = Array(stokes.viscosity.η_vep),
+        )
+        velocity_v = (
+            Array(Vx_v),
+            Array(Vy_v),
+            Array(Vz_v),
+        )
+        save_vtk(
+            joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
             xvi,
             xci,
             data_v,
-            data_c
+            data_c,
+            velocity_v
         )
 
         # visualisation

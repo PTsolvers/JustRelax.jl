@@ -252,10 +252,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 10) == 0
-            checkpointing_hdf5(figdir, stokes, thermal.T, t)
+            checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
             if do_vtk
-                JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
                     T   = Array(thermal.T[2:end-1, :]),
                     τxy = Array(stokes.τ.xy),
@@ -269,14 +269,19 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
                     τyy = Array(stokes.τ.yy),
                     εxx = Array(stokes.ε.xx),
                     εyy = Array(stokes.ε.yy),
-                    η   = Array(stokes.viscosity.η),
+                    η   = Array(stokes.viscosity.η_vep),
                 )
-                do_vtk(
+                velocity_v = (
+                    Array(Vx_v),
+                    Array(Vy_v),
+                )
+                save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
                     xci,
                     data_v,
-                    data_c
+                    data_c,
+                    velocity_v
                 )
             end
 

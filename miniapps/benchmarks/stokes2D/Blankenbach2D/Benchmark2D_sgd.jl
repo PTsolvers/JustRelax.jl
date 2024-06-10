@@ -289,7 +289,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
         if it == 1 || rem(it, 200) == 0 || it == nit
 
             if do_vtk
-                JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
                     T   = Array(thermal.T[2:end-1, :]),
                     τxy = Array(stokes.τ.xy),
@@ -303,14 +303,19 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
                     τyy = Array(stokes.τ.yy),
                     εxx = Array(stokes.ε.xx),
                     εyy = Array(stokes.ε.yy),
-                    η   = Array(η),
+                    η   = Array(stokes.viscosity.η),
+                )
+                velocity_v = (
+                    Array(Vx_v),
+                    Array(Vy_v),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
                     xci,
                     data_v,
-                    data_c
+                    data_c,
+                    velocity_v
                 )
             end
 

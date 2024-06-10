@@ -234,32 +234,35 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
 
             # Data I/O and plotting ---------------------
             if it == 1 || rem(it, 10) == 0
-                checkpointing_hdf5(figdir, stokes, thermal.T, t)
+                checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                     data_v = (;
-                        T   = Array(thermal.T),
-                        τxy = Array(stokes.τ.xy),
-                        εxy = Array(stokes.ε.xy),
+                        T   = Array(T_buffer),
+                        τII = Array(stokes.τ.II),
+                        εII = Array(stokes.ε.II),
                         Vx  = Array(Vx_v),
                         Vy  = Array(Vy_v),
+                        Vz  = Array(Vz_v),
                     )
                     data_c = (;
                         Tc  = Array(thermal.Tc),
                         P   = Array(stokes.P),
-                        τxx = Array(stokes.τ.xx),
-                        τyy = Array(stokes.τ.yy),
-                        εxx = Array(stokes.ε.xx),
-                        εyy = Array(stokes.ε.yy),
-                        η   = Array(log10.(η)),
+                        η   = Array(stokes.viscosity.η_vep),
                     )
-                    do_vtk(
+                    velocity_v = (
+                        Array(Vx_v),
+                        Array(Vy_v),
+                        Array(Vz_v),
+                    )
+                    save_vtk(
                         joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                         xvi,
                         xci,
                         data_v,
-                        data_c
+                        data_c,
+                        velocity_v
                     )
                 end
 
@@ -278,7 +281,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                 # Plot 2nd invariant of strain rate
                 h3      = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
                 # Plot effective viscosity
-                h4      = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:, slice_j, :])) , colormap=:batlow)
+                h4      = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.viscosity.η_vep[:, slice_j, :])) , colormap=:batlow)
                 hidexdecorations!(ax1)
                 hidexdecorations!(ax2)
                 hidexdecorations!(ax3)

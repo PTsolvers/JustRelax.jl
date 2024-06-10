@@ -1,14 +1,11 @@
-using Printf, GeoParams, GLMakie, CellArrays
-using JustRelax, JustRelax.DataIO
+using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+import JustRelax.@cell
+const backend_JR = CPUBackend
+
+using GeoParams, GLMakie
+
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
-
-# setup ParallelStencil.jl environment
-dimension = 3 # 2 | 3
-device = :cpu # :cpu | :CUDA | :AMDGPU
-precision = Float64
-model = PS_Setup(device, precision, dimension)
-environment!(model)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -21,18 +18,17 @@ function init_phases!(phase_ratios, xci, radius)
     @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
         x, y, z = xc[i], yc[j], zc[k]
         if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
-            JustRelax.@cell phases[1, i, j, k] = 1.0
-            JustRelax.@cell phases[2, i, j, k] = 0.0
+            @cell phases[1, i, j, k] = 1.0
+            @cell phases[2, i, j, k] = 0.0
 
         else
-            JustRelax.@cell phases[1, i, j, k] = 0.0
-            JustRelax.@cell phases[2, i, j, k] = 1.0
-
+            @cell phases[1, i, j, k] = 0.0
+            @cell phases[2, i, j, k] = 1.0
         end
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -91,31 +87,27 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     phase_ratios = PhaseRatio(ni, length(rheology))
     init_phases!(phase_ratios, xci, radius)
 
-    # STOKES ---------------------------------------------
+     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes       = StokesArrays(ni, ViscoElastic)
+    stokes       = StokesArrays(backend_JR, ni)
     pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-4,  CFL = 0.05 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-    args         = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+    args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
     # Rheology
-    η            = @ones(ni...)
-    η_vep        = similar(η) # effective visco-elasto-plastic viscosity
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
-    )
+    cutoff_visc = -Inf, Inf
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # Boundary conditions
     flow_bcs     = FlowBoundaryConditions(;
         free_slip   = (left = true , right = true , top = true , bot = true , back = true , front = true),
         no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
-        periodicity = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
-    stokes.V.Vx .= PTArray([ x*εbg/2 for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
-    stokes.V.Vy .= PTArray([ y*εbg/2 for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
-    stokes.V.Vz .= PTArray([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
+    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg/2 for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
+    stokes.V.Vy .= PTArray(backend_JR)([ y*εbg/2 for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
+    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+    update_halo!(@velocity(stokes)...)
 
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -143,28 +135,26 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     ttot  = Float64[]
 
     while t < tmax
-        # Stokes solver ----------------
-        solve!(
+       # Stokes solver ----------------
+       solve!(
             stokes,
             pt_stokes,
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             phase_ratios,
             rheology,
             args,
             dt,
             igg;
-            verbose          = false,
-            iterMax          = 75e3,
-            nout             = 1e3,
-            viscosity_cutoff = (-Inf, Inf)
+            kwargs = (;
+                iterMax          = 150e3,
+                nout             = 1e3,
+                viscosity_cutoff = (-Inf, Inf)
+            )
         )
 
-
-        @parallel (JustRelax.@idx ni) JustRelax.Stokes3D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        tensor_invariant!(stokes.ε)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -210,7 +200,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n      = 16
+n      = 32
 nx     = n
 ny     = n
 nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32

@@ -92,10 +92,7 @@ function _heatdiffusion_PT!(
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
     temperature2center!(thermal)
 
-    return (
-        iter_count=iter_count,
-        norm_ResT=norm_ResT,
-    )
+    return (iter_count=iter_count, norm_ResT=norm_ResT)
 end
 
 """
@@ -202,10 +199,7 @@ function _heatdiffusion_PT!(
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
     temperature2center!(thermal)
 
-    return (
-        iter_count=iter_count,
-        norm_ResT=norm_ResT,
-    )
+    return (iter_count=iter_count, norm_ResT=norm_ResT)
 end
 
 @inline flux_range(nx, ny) = @idx (nx + 3, ny + 1)

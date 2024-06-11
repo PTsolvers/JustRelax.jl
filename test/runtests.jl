@@ -41,6 +41,8 @@ function runtests()
         include(f)
     end
 
+    testfiles = [f for f in testfiles if basename(f) ∉ f0]
+
     for f in testfiles
         occursin("burstedde", f) && continue
         occursin("VanKeken", f) && continue

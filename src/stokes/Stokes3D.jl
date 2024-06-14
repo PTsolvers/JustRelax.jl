@@ -257,6 +257,7 @@ function _solve!(
                 tupleize(rheology), # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
+                args,
             )
 
             @parallel (@idx ni .+ 1) compute_τ_vertex!(
@@ -446,6 +447,7 @@ function _solve!(
                 tupleize(rheology), # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
+                args,
             )
 
             center2vertex!(

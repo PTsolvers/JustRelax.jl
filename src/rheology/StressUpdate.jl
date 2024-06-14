@@ -145,8 +145,21 @@ end
 end
 
 function plastic_params_phase(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio
+    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio, kwargs
 ) where {N}
+    return plastic_params_phase(rheology, EII, ratio; kwargs...)
+end
+
+function plastic_params_phase(
+    rheology::NTuple{N,AbstractMaterialParamsStruct},
+    EII,
+    ratio;
+    perturbation_C=nothing,
+    kwargs...,
+) where {N}
+    @inline perturbation(::Nothing) = 1.0
+    @inline perturbation(x::Real) = x
+
     data = _plastic_params_phase(rheology, EII, ratio)
     # average over phases
     is_pl = false
@@ -154,7 +167,7 @@ function plastic_params_phase(
     for n in 1:N
         ratio_n = ratio[n]
         data[n][1] && (is_pl = true)
-        C += data[n][2] * ratio_n
+        C += data[n][2] * ratio_n * perturbation(perturbation_C)
         sinϕ += data[n][3] * ratio_n
         cosϕ += data[n][4] * ratio_n
         sinψ += data[n][5] * ratio_n

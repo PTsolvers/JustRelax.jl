@@ -253,6 +253,7 @@ end
     rheology,
     dt,
     θ_dτ,
+    args,
 )
 
     # numerics
@@ -261,7 +262,7 @@ end
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     # get plastic parameters (if any...)
-    is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], 1)
+    is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], 1, ntuple_idx(args, I...))
 
     # plastic volumetric change K * dt * sinϕ * sinψ
     K = get_bulk_modulus(rheology[1])
@@ -295,6 +296,7 @@ end
     rheology,
     dt,
     θ_dτ,
+    args,
 )
     # numerics
     ηij = @inbounds η[I...]
@@ -387,16 +389,16 @@ end
 
 ####
 
-function update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ)
+function update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ, args)
     return update_stress!(
-        islinear(rheology), stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ
+        islinear(rheology), stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ, args,
     )
 end
 
 function update_stress!(
-    ::LinearRheologyTrait, stokes, ::Any, ::Any, phase_ratios, rheology, dt, θ_dτ
+    ::LinearRheologyTrait, stokes, ::Any, ::Any, phase_ratios, rheology, dt, θ_dτ, args,
 )
-    dim(::AbstractArray{T,N}) where {T,N} = N
+    dim(::AbstractArray{T,N}) where {T,N} = Val(N)
 
     function f!(stokes, ::Val{2})
         center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
@@ -418,7 +420,7 @@ function update_stress!(
     end
 
     ni = size(phase_ratios.center)
-    nDim = Val(dim(stokes.viscosity.η))
+    nDim = dim(stokes.viscosity.η)
 
     @parallel (@idx ni) compute_τ!(
         @tensor_center(stokes.τ)...,
@@ -445,6 +447,7 @@ function update_stress!(
     rheology,
     dt,
     θ_dτ,
+    args,
 ) where {N,T}
     ni = size(phase_ratios.center)
     nDim = Val(N)

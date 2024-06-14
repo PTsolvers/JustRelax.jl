@@ -358,6 +358,7 @@ function _solve!(
                 tupleize(rheology), # needs to be a tuple
                 dt,
                 θ_dτ,
+                args,
             )
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
@@ -574,6 +575,7 @@ function _solve!(
                 tupleize(rheology), # needs to be a tuple
                 dt,
                 θ_dτ,
+                args,
             )
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)

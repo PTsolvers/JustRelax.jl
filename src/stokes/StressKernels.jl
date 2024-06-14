@@ -262,7 +262,9 @@ end
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     # get plastic parameters (if any...)
-    is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], 1, ntuple_idx(args, I...))
+    is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(
+        rheology, EII[I...], 1, ntuple_idx(args, I...)
+    )
 
     # plastic volumetric change K * dt * sinϕ * sinψ
     K = get_bulk_modulus(rheology[1])
@@ -391,12 +393,12 @@ end
 
 function update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ, args)
     return update_stress!(
-        islinear(rheology), stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ, args,
+        islinear(rheology), stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ, args
     )
 end
 
 function update_stress!(
-    ::LinearRheologyTrait, stokes, ::Any, ::Any, phase_ratios, rheology, dt, θ_dτ, args,
+    ::LinearRheologyTrait, stokes, ::Any, ::Any, phase_ratios, rheology, dt, θ_dτ, args
 )
     dim(::AbstractArray{T,N}) where {T,N} = Val(N)
 

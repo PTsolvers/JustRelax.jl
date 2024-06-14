@@ -62,6 +62,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         η_vp = η_reg,
         Ψ    = 0
     )
+
     rheology = (
         # Low density phase
         SetMaterialParams(;
@@ -74,18 +75,22 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         ),
         # High density phase
         SetMaterialParams(;
+            Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology((visc, el_inc, pl)),
             Elasticity        = el_inc,
         ),
     )
+    
+    # perturbation array for the cohesion
+    perturbation_C = @rand(ni...)
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
     phase_ratios = PhaseRatio(ni, length(rheology))
     init_phases!(phase_ratios, xci, radius)
-
+    
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
@@ -93,7 +98,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
-    args      = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args      = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
     # Rheology
     compute_viscosity!(
@@ -181,7 +186,7 @@ end
 n      = 128
 nx     = n
 ny     = n
-figdir = "ShearBands2Dc"
+figdir = "ShearBands2D"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

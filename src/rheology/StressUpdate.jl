@@ -147,13 +147,16 @@ end
 function plastic_params_phase(
     rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio, kwargs
 ) where {N}
-    plastic_params_phase(rheology, EII, ratio; kwargs...)
+    return plastic_params_phase(rheology, EII, ratio; kwargs...)
 end
 
 function plastic_params_phase(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio; perturbation_C = nothing, kwargs...
+    rheology::NTuple{N,AbstractMaterialParamsStruct},
+    EII,
+    ratio;
+    perturbation_C=nothing,
+    kwargs...,
 ) where {N}
-
     @inline perturbation(::Nothing) = 1.0
     @inline perturbation(x::Real) = x
 

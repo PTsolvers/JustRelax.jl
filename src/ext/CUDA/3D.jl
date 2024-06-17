@@ -33,6 +33,14 @@ function JR3D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
     return StokesArrays(ni)
 end
 
+function JR3D.velocity2displacement!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
+    return _velocity2displacement!(stokes, dt)
+end
+
+function JR3D.displacement2velocity!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
+    return _displacement2velocity!(stokes, dt)
+end
+
 function JR3D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N,Number}) where {N}
     return ThermalArrays(ni...)
 end
@@ -78,6 +86,17 @@ function JR3D.PTThermalCoeffs(
     CFL=0.9 / √3,
 ) where {nDim,T}
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
+end
+
+function JR3D.update_pt_thermal_arrays!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray},
+    phase_ratios::JustRelax.PhaseRatio,
+    rheology,
+    args,
+    _dt,
+) where {T}
+    update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)
+    return nothing
 end
 
 # Boundary conditions

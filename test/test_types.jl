@@ -34,6 +34,7 @@ const BackendArray = PTArray(backend)
     @test typeof(stokes.P0)     <: BackendArray
     @test typeof(stokes.∇V)     <: BackendArray
     @test stokes.V              isa JustRelax.Velocity
+    @test stokes.U              isa JustRelax.Displacement
     @test stokes.τ              isa JustRelax.SymmetricTensor
     @test stokes.τ_o            isa JustRelax.SymmetricTensor
     @test stokes.ε              isa JustRelax.SymmetricTensor
@@ -62,7 +63,6 @@ const BackendArray = PTArray(backend)
     @test typeof(visc.ητ)    <: BackendArray
     @test_throws MethodError JR2.Viscosity(10.0, 10.0)
 
-    v      = stokes.V
     tensor = stokes.τ
 
     @test size(tensor.xx)   == (nx, ny)
@@ -77,9 +77,21 @@ const BackendArray = PTArray(backend)
     @test typeof(tensor.xy_c) <: BackendArray
     @test typeof(tensor.II)   <: BackendArray
 
-   
-
     @test_throws MethodError JR2.StokesArrays(backend, 10.0, 10.0)
+end
+
+@testset "2D Displacement" begin
+    ni = nx, ny = (2, 2)
+    stokes = JR2.StokesArrays(backend, ni)
+
+    stokes.V.Vx .= 1.0
+    stokes.V.Vy .= 1.0
+
+    JR2.velocity2displacement!(stokes, 10)
+    @test all(stokes.U.Ux.==0.1)
+
+    JR2.displacement2velocity!(stokes, 5)
+    @test all(stokes.V.Vx.==0.5)
 end
 
 @testset "3D allocators" begin
@@ -96,6 +108,7 @@ end
     @test typeof(stokes.P0)     <: BackendArray
     @test typeof(stokes.∇V)     <: BackendArray
     @test stokes.V              isa JustRelax.Velocity
+    @test stokes.U              isa JustRelax.Displacement
     @test stokes.τ              isa JustRelax.SymmetricTensor
     @test stokes.τ_o            isa JustRelax.SymmetricTensor
     @test stokes.ε              isa JustRelax.SymmetricTensor
@@ -125,7 +138,6 @@ end
     @test typeof(visc.ητ)    <: BackendArray
     @test_throws MethodError JR3.Viscosity(1.0, 1.0, 1.0)
 
-    v      = stokes.V
     tensor = stokes.τ
 
     @test size(tensor.xx)   == ni
@@ -149,4 +161,19 @@ end
     @test typeof(tensor.II)   <: BackendArray
 
     @test_throws MethodError JR3.StokesArrays(backend, 10.0, 10.0)
+end
+
+@testset "3D Displacement" begin
+    ni = nx, ny, nz = (2, 2, 2)
+    stokes = JR3.StokesArrays(backend, ni)
+
+    stokes.V.Vx .= 1.0
+    stokes.V.Vy .= 1.0
+    stokes.V.Vz .= 1.0
+
+    JR3.velocity2displacement!(stokes, 10)
+    @test all(stokes.U.Ux.==0.1)
+
+    JR3.displacement2velocity!(stokes, 5)
+    @test all(stokes.V.Vx.==0.5)
 end

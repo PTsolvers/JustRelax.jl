@@ -28,6 +28,9 @@ export @allocate,
     multi_copy!,
     take
 
+include("types/displacement.jl")
+export velocity2displacement!, displacement2velocity!
+
 include("boundaryconditions/BoundaryConditions.jl")
 export FlowBoundaryConditions,
     TemperatureBoundaryConditions, flow_bcs!, thermal_bcs!, pureshear_bc!, apply_free_slip!

@@ -14,6 +14,7 @@ struct AMDGPUBackendTrait <: GPUBackendTrait end
 
 # Custom struct's
 @inline backend(::JustRelax.Velocity{T}) where {T} = backend(T)
+@inline backend(::JustRelax.Displacement{T}) where {T} = backend(T)
 @inline backend(::JustRelax.SymmetricTensor{T}) where {T} = backend(T)
 @inline backend(::JustRelax.Residual{T}) where {T} = backend(T)
 @inline backend(::JustRelax.Viscosity{T}) where {T} = backend(T)

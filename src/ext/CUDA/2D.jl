@@ -33,6 +33,14 @@ function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
     return StokesArrays(ni)
 end
 
+function JR2D.velocity2displacement!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
+    return _velocity2displacement!(stokes, dt)
+end
+
+function JR2D.displacement2velocity!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
+    return _displacement2velocity!(stokes, dt)
+end
+
 function JR2D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N,Number}) where {N}
     return ThermalArrays(ni...)
 end
@@ -109,6 +117,7 @@ function JR2D.phase_ratios_center!(
 end
 
 # Rheology
+
 ## viscosity
 function JR2D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff)
     return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
@@ -147,6 +156,7 @@ end
 function JR2D.compute_ρg!(ρg::CuArray, rheology, args)
     return compute_ρg!(ρg, rheology, args)
 end
+
 function JR2D.compute_ρg!(ρg::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end

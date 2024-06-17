@@ -1,3 +1,5 @@
+ENV["JULIA_JUSTRELAX_BACKEND"] = "CUDA"
+
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -80,6 +82,20 @@ const BackendArray = PTArray(backend)
     @test_throws MethodError JR2.StokesArrays(backend, 10.0, 10.0)
 end
 
+@testset "2D Displacement" begin
+    ni = nx, ny = (2, 2)
+    stokes = JR2.StokesArrays(backend, ni)
+
+    stokes.V.Vx .= 1.0
+    stokes.V.Vy .= 1.0
+
+    JR2.velocity2displacement!(stokes, 10)
+    @test all(stokes.U.Ux.==0.1)
+
+    JR2.displacement2velocity!(stokes, 5)
+    @test all(stokes.V.Vx.==0.5)
+end
+
 @testset "3D allocators" begin
     ni = nx, ny, nz = (2, 2, 2)
 
@@ -147,4 +163,19 @@ end
     @test typeof(tensor.II)   <: BackendArray
 
     @test_throws MethodError JR3.StokesArrays(backend, 10.0, 10.0)
+end
+
+@testset "3D Displacement" begin
+    ni = nx, ny, nz = (2, 2, 2)
+    stokes = JR3.StokesArrays(backend, ni)
+
+    stokes.V.Vx .= 1.0
+    stokes.V.Vy .= 1.0
+    stokes.V.Vz .= 1.0
+
+    JR3.velocity2displacement!(stokes, 10)
+    @test all(stokes.U.Ux.==0.1)
+
+    JR3.displacement2velocity!(stokes, 5)
+    @test all(stokes.V.Vx.==0.5)
 end

@@ -24,7 +24,7 @@ function Displacement(nx::Integer, ny::Integer)
     nUy = (nx + 2, ny + 1)
 
     Ux, Uy = @zeros(nUx...), @zeros(nUy)
-    return JustRelax.Displacement(Vx, Vy, nothing)
+    return JustRelax.Displacement(Ux, Uy, nothing)
 end
 
 function Displacement(nx::Integer, ny::Integer, nz::Integer)

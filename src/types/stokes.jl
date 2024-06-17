@@ -28,7 +28,7 @@ struct Displacement{T}
     Displacement(Ux::T, Uy::T, Uz::Union{T,Nothing}) where {T} = new{T}(Ux, Uy, Uz)
 end
 
-Displacement(Vx::T, Vy::T) where {T} = Displacement(Ux, Uy, nothing)
+Displacement(Ux::T, Uy::T) where {T} = Displacement(Ux, Uy, nothing)
 
 Displacement(ni::NTuple{N,Number}) where {N} = Displacement(ni...)
 function Displacement(::Number, ::Number)

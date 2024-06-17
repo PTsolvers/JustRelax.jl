@@ -34,6 +34,7 @@ const BackendArray = PTArray(backend)
     @test typeof(stokes.P0)     <: BackendArray
     @test typeof(stokes.∇V)     <: BackendArray
     @test stokes.V              isa JustRelax.Velocity
+    @test stokes.U              isa JustRelax.Displacement
     @test stokes.τ              isa JustRelax.SymmetricTensor
     @test stokes.τ_o            isa JustRelax.SymmetricTensor
     @test stokes.ε              isa JustRelax.SymmetricTensor
@@ -62,7 +63,6 @@ const BackendArray = PTArray(backend)
     @test typeof(visc.ητ)    <: BackendArray
     @test_throws MethodError JR2.Viscosity(10.0, 10.0)
 
-    v      = stokes.V
     tensor = stokes.τ
 
     @test size(tensor.xx)   == (nx, ny)
@@ -76,8 +76,6 @@ const BackendArray = PTArray(backend)
     @test typeof(tensor.xy)   <: BackendArray
     @test typeof(tensor.xy_c) <: BackendArray
     @test typeof(tensor.II)   <: BackendArray
-
-   
 
     @test_throws MethodError JR2.StokesArrays(backend, 10.0, 10.0)
 end
@@ -96,6 +94,7 @@ end
     @test typeof(stokes.P0)     <: BackendArray
     @test typeof(stokes.∇V)     <: BackendArray
     @test stokes.V              isa JustRelax.Velocity
+    @test stokes.U              isa JustRelax.Displacement
     @test stokes.τ              isa JustRelax.SymmetricTensor
     @test stokes.τ_o            isa JustRelax.SymmetricTensor
     @test stokes.ε              isa JustRelax.SymmetricTensor
@@ -125,7 +124,6 @@ end
     @test typeof(visc.ητ)    <: BackendArray
     @test_throws MethodError JR3.Viscosity(1.0, 1.0, 1.0)
 
-    v      = stokes.V
     tensor = stokes.τ
 
     @test size(tensor.xx)   == ni

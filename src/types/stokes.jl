@@ -18,6 +18,26 @@ function Velocity(::Number, ::Number, ::Number)
     throw(ArgumentError("Velocity dimensions must be given as integers"))
 end
 
+## Displacement type
+
+struct Displacement{T}
+    Ux::T
+    Uy::T
+    Uz::Union{T,Nothing}
+
+    Displacement(Ux::T, Uy::T, Uz::Union{T,Nothing}) where {T} = new{T}(Ux, Uy, Uz)
+end
+
+Displacement(Vx::T, Vy::T) where {T} = Displacement(Ux, Uy, nothing)
+
+Displacement(ni::NTuple{N,Number}) where {N} = Displacement(ni...)
+function Displacement(::Number, ::Number)
+    throw(ArgumentError("Displacement dimensions must be given as integers"))
+end
+function Displacement(::Number, ::Number, ::Number)
+    throw(ArgumentError("Displacement dimensions must be given as integers"))
+end
+
 ## Viscosity type
 
 struct Viscosity{T}
@@ -101,7 +121,7 @@ end
 
 ## StokesArrays type
 
-struct StokesArrays{A,B,C,D,T}
+struct StokesArrays{A,B,C,D,E,T}
     P::T
     P0::T
     V::A
@@ -113,6 +133,7 @@ struct StokesArrays{A,B,C,D,T}
     viscosity::D
     τ_o::Union{B,Nothing}
     R::C
+    U::E
 end
 
 function StokesArrays(::Type{CPUBackend}, ni::Vararg{Integer,N}) where {N}

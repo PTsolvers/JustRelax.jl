@@ -80,6 +80,11 @@ function JR3D.PTThermalCoeffs(
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 
+function JR3D.update_pt_thermal_arrays!(pt_thermal::JustRelax.PTThermalCoeffs{T, <:CuArray}, phase_ratios::JustRelax.PhaseRatio, rheology, args, _dt) where T
+    update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)
+    return nothing
+end
+
 # Boundary conditions
 function JR3D.flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
     return _flow_bcs!(bcs, @velocity(stokes))

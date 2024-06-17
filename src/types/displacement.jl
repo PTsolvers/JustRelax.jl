@@ -4,13 +4,15 @@ function velocity2displacement!(stokes::JustRelax.StokesArrays, dt)
 end
 
 function velocity2displacement!(stokes::JustRelax.StokesArrays, ::CPUBackendTrait, dt)
-    _velocity2displacement!(stokes, dt)
+    return _velocity2displacement!(stokes, dt)
 end
 
 function _velocity2displacement!(stokes::JustRelax.StokesArrays, dt)
     ni = size(stokes.P)
     (; V, U) = stokes
-    @parallel (@idx ni.+2)  _velocity2displacement!(V.Vx, V.Vy, V.Vz, U.Ux, U.Uy, U.Uz, 1 / dt)
+    @parallel (@idx ni .+ 2) _velocity2displacement!(
+        V.Vx, V.Vy, V.Vz, U.Ux, U.Uy, U.Uz, 1 / dt
+    )
     return nothing
 end
 
@@ -33,13 +35,13 @@ function displacement2velocity!(stokes::JustRelax.StokesArrays, dt)
 end
 
 function displacement2velocity!(stokes::JustRelax.StokesArrays, ::CPUBackendTrait, dt)
-    _displacement2velocity!(stokes, dt)
+    return _displacement2velocity!(stokes, dt)
 end
 
 function _displacement2velocity!(stokes::JustRelax.StokesArrays, dt)
     ni = size(stokes.P)
     (; V, U) = stokes
-    @parallel (@idx ni.+2) _displacement2velocity!(U.Ux, U.Uy, U.Uz, V.Vx, V.Vy, V.Vz, dt)
+    @parallel (@idx ni .+ 2) _displacement2velocity!(U.Ux, U.Uy, U.Uz, V.Vx, V.Vy, V.Vz, dt)
     return nothing
 end
 

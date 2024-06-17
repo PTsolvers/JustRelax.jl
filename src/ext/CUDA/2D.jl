@@ -34,11 +34,11 @@ function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
 end
 
 function JR2D.velocity2displacement!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
-    _velocity2displacement!(stokes, dt)
+    return _velocity2displacement!(stokes, dt)
 end
 
 function JR2D.displacement2velocity!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
-    _displacement2velocity!(stokes, dt)
+    return _displacement2velocity!(stokes, dt)
 end
 
 function JR2D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N,Number}) where {N}

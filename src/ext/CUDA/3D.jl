@@ -33,6 +33,14 @@ function JR3D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
     return StokesArrays(ni)
 end
 
+function JR3D.velocity2displacement!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
+    _velocity2displacement!(stokes, dt)
+end
+
+function JR3D.displacement2velocity!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
+    _displacement2velocity!(stokes, dt)
+end
+
 function JR3D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N,Number}) where {N}
     return ThermalArrays(ni...)
 end

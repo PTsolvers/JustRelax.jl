@@ -34,6 +34,14 @@ function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N,Integer}) where {
     return StokesArrays(ni)
 end
 
+function JR2D.velocity2displacement!(stokes::JustRelax.StokesArrays, ::AMDGPUBackendTrait, dt)
+    _velocity2displacement!(stokes, dt)
+end
+
+function JR2D.displacement2velocity!(stokes::JustRelax.StokesArrays, ::AMDGPUBackendTrait, dt)
+    _displacement2velocity!(stokes, dt)
+end
+
 function JR2D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N,Number}) where {N}
     return ThermalArrays(ni...)
 end

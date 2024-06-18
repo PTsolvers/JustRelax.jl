@@ -16,9 +16,9 @@ function pureshear_bc!(
     stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)] .= PTArray(backend)([
         εbg * x for x in xv, y in yc, z in zc
     ])
-    stokes.V.Vy[2:(end - 1), :, 2:(end - 1)] .= PTArray(backend)([
-        εbg * y for x in xc, y in xv, z in zc
-    ])
+    # stokes.V.Vy[2:(end - 1), :, 2:(end - 1)] .= PTArray(backend)([
+    #     εbg * y for x in xc, y in xv, z in zc
+    # ])
     stokes.V.Vz[2:(end - 1), 2:(end - 1), :] .= PTArray(backend)([
         -εbg * z for x in xc, y in xc, z in zv
     ])

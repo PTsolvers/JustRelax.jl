@@ -51,5 +51,5 @@ end
     @test typeof(S5) <: JustRelax.StokesArrays
     @test typeof(S6) <: JustRelax.Displacement
     @test typeof(S7) <: JustRelax.Vorticity
-    @test typeof(T2) <: JustRelax.ThermalArrays
+    @test typeof(T1) <: JustRelax.ThermalArrays
 end

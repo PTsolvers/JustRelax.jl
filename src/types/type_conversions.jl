@@ -1,7 +1,14 @@
 import Base: Array, copy
 
 const JR_T = Union{
-    StokesArrays,SymmetricTensor,ThermalArrays,Velocity,Displacement,Vorticity,Residual,Viscosity
+    StokesArrays,
+    SymmetricTensor,
+    ThermalArrays,
+    Velocity,
+    Displacement,
+    Vorticity,
+    Residual,
+    Viscosity,
 }
 
 ## Conversion of structs to CPU
@@ -30,7 +37,7 @@ function copy(x::T) where {T<:JR_T}
     nfields = fieldcount(T)
     fields = ntuple(Val(nfields)) do i
         Base.@_inline_meta
-        field = getfield(x, i) |> copy
+        field = copy(getfield(x, i))
         # field === nothing ? nothing : copy(field)
     end
     T_clean = remove_parameters(x)

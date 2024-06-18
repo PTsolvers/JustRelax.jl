@@ -13,12 +13,19 @@ struct AMDGPUBackendTrait <: GPUBackendTrait end
 @inline backend(::Type{<:AbstractArray}) = NonCPUBackendTrait()
 
 # Custom struct's
-@inline backend(::JustRelax.Velocity{T}) where {T} = backend(T)
-@inline backend(::JustRelax.Displacement{T}) where {T} = backend(T)
-@inline backend(::JustRelax.SymmetricTensor{T}) where {T} = backend(T)
-@inline backend(::JustRelax.Residual{T}) where {T} = backend(T)
-@inline backend(::JustRelax.Viscosity{T}) where {T} = backend(T)
-@inline backend(::JustRelax.ThermalArrays{T}) where {T} = backend(T)
+
+for type in (
+    JustRelax.Velocity,
+    JustRelax.Displacement,
+    JustRelax.Vorticity,
+    JustRelax.SymmetricTensor,
+    JustRelax.Residual,
+    JustRelax.Viscosity,
+    JustRelax.ThermalArrays,
+)
+    @eval @inline backend(::$(type){T}) where {T} = backend(T)
+end
+
 @inline backend(x::JustRelax.StokesArrays) = backend(x.P)
 @inline backend(x::JustRelax.PhaseRatio) = backend(x.center.data)
 

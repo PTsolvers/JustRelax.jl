@@ -36,6 +36,22 @@ function Displacement(nx::Integer, ny::Integer, nz::Integer)
     return JustRelax.Displacement(Ux, Uy, Uz)
 end
 
+## Vorticity type
+
+function Vorticity(nx::Integer, ny::Integer)
+    xy = @zeros(nx, ny)
+
+    return JustRelax.Vorticity(nothing, nothing, xy)
+end
+
+function Vorticity(nx::Integer, ny::Integer, nz::Integer)
+    yz = @zeros(nx, ny, nz)
+    xz = @zeros(nx, ny, nz)
+    xy = @zeros(nx, ny, nz)
+
+    return JustRelax.Vorticity(yz, xz, xy)
+end
+
 ## Viscosity type
 
 function Viscosity(ni::NTuple{N,Integer}) where {N}
@@ -100,6 +116,7 @@ function StokesArrays(ni::NTuple{N,Integer}) where {N}
     ∇V = @zeros(ni...)
     V = Velocity(ni...)
     U = Displacement(ni...)
+    ω = Vorticity(ni...)
     τ = SymmetricTensor(ni...)
     τ_o = SymmetricTensor(ni...)
     ε = SymmetricTensor(ni...)
@@ -108,5 +125,5 @@ function StokesArrays(ni::NTuple{N,Integer}) where {N}
     viscosity = Viscosity(ni)
     R = Residual(ni...)
 
-    return JustRelax.StokesArrays(P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U)
+    return JustRelax.StokesArrays(P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω)
 end

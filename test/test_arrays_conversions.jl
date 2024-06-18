@@ -25,6 +25,8 @@ thermal = ThermalArrays(backend, ni)
     A4      = Array(stokes.P)
     A5      = Array(stokes)
     A6      = Array(thermal)
+    A7      = Array(stokes.U)
+    A8      = Array(stokes.ω)
 
     @test typeof(A1) <: JustRelax.Velocity{<:Array}
     @test typeof(A2) <: JustRelax.SymmetricTensor{<:Array}
@@ -32,20 +34,26 @@ thermal = ThermalArrays(backend, ni)
     @test typeof(A4) <: Array
     @test typeof(A5) <: JustRelax.StokesArrays
     @test typeof(A6) <: JustRelax.ThermalArrays{<:Array}
+    @test typeof(A7) <: JustRelax.Displacement{<:Array}
+    @test typeof(A8) <: JustRelax.Vorticity{<:Array}
 end
 
 @testset "Type copy" begin
-    A1      = copy(stokes.V)
-    A2      = copy(stokes.τ)
-    A3      = copy(stokes.R)
-    A4      = copy(stokes.P)
-    A5      = copy(stokes)
-    A6      = copy(thermal)
-
-    @test typeof(A1) <: JustRelax.Velocity
-    @test typeof(A2) <: JustRelax.SymmetricTensor
-    @test typeof(A3) <: JustRelax.Residual
-    @test typeof(A4) <: typeof(stokes.P)
-    @test typeof(A5) <: JustRelax.StokesArrays
-    @test typeof(A6) <: JustRelax.ThermalArrays
+    S1      = copy(stokes.V)
+    S2      = copy(stokes.τ)
+    S3      = copy(stokes.R)
+    S4      = copy(stokes.P)
+    S5      = copy(stokes)
+    S6      = copy(stokes.U)
+    S7      = copy(stokes.ω)
+    T1      = copy(thermal)
+        
+    @test typeof(S1) <: JustRelax.Velocity
+    @test typeof(S2) <: JustRelax.SymmetricTensor
+    @test typeof(S3) <: JustRelax.Residual
+    @test typeof(S4) <: typeof(stokes.P)
+    @test typeof(S5) <: JustRelax.StokesArrays
+    @test typeof(S6) <: JustRelax.Displacement
+    @test typeof(S7) <: JustRelax.Vorticity
+    @test typeof(T1) <: JustRelax.ThermalArrays
 end

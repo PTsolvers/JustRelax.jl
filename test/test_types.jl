@@ -35,6 +35,7 @@ const BackendArray = PTArray(backend)
     @test typeof(stokes.∇V)     <: BackendArray
     @test stokes.V              isa JustRelax.Velocity
     @test stokes.U              isa JustRelax.Displacement
+    @test stokes.ω              isa JustRelax.Vorticity
     @test stokes.τ              isa JustRelax.SymmetricTensor
     @test stokes.τ_o            isa JustRelax.SymmetricTensor
     @test stokes.ε              isa JustRelax.SymmetricTensor
@@ -98,7 +99,7 @@ end
     ni = nx, ny, nz = (2, 2, 2)
 
     stokes = JR3.StokesArrays(backend, ni)
-
+    
     @test size(stokes.P)      == ni
     @test size(stokes.P0)     == ni
     @test size(stokes.∇V)     == ni
@@ -109,6 +110,7 @@ end
     @test typeof(stokes.∇V)     <: BackendArray
     @test stokes.V              isa JustRelax.Velocity
     @test stokes.U              isa JustRelax.Displacement
+    @test stokes.ω              isa JustRelax.Vorticity
     @test stokes.τ              isa JustRelax.SymmetricTensor
     @test stokes.τ_o            isa JustRelax.SymmetricTensor
     @test stokes.ε              isa JustRelax.SymmetricTensor

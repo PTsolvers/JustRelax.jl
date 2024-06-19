@@ -5,8 +5,8 @@ function init_rheology(CharDim; is_compressible = false)
     # plasticity setup
     do_DP   = true          # do_DP=false: Von Mises, do_DP=true: Drucker-Prager (friction angle)
     η_reg   = 1.0e16Pa*s    # regularisation "viscosity" for Drucker-Prager
-    Coh     = 10.0MPa       # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ       = 10.0 * do_DP  # friction angle
+    Coh     = 5.0MPa       # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ       = 5.0 * do_DP  # friction angle
     G0      = 6.0e11Pa      # elastic shear modulus
     G_magma = 6.0e11Pa      # elastic shear modulus perturbation
 
@@ -24,9 +24,9 @@ function init_rheology(CharDim; is_compressible = false)
         β_rock   = inv(get_Kb(el))
         β_magma  = inv(get_Kb(el_magma))
     end
-    creep_rock  = LinearViscous(; η=1e21 * Pa * s)
+    creep_rock  = LinearViscous(; η=1e24 * Pa * s)
     creep_magma = LinearViscous(; η=1e18 * Pa * s)
-    creep_air   = LinearViscous(; η=1e20 * Pa * s)
+    creep_air   = LinearViscous(; η=1e21 * Pa * s)
     g           = 9.81m/s^2
 
     rheology = (
@@ -76,7 +76,7 @@ function init_rheology(CharDim; is_compressible = false)
         #Name="Sticky Air"
         SetMaterialParams(;
             Phase             = 4,
-            Density           = ConstantDensity(ρ = 1000kg/m^3,),
+            Density           = ConstantDensity(ρ = 100kg/m^3,),
             # Density           = ConstantDensity(ρ=1kg/m^3,),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1000J / kg / K),
             Conductivity      = ConstantConductivity(; k=15Watt / K / m),

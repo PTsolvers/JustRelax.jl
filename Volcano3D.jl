@@ -235,9 +235,9 @@ function main3D(
             dt,
             igg;
             kwargs = (;
-                iterMax          = 50e3,#50e3,
+                iterMax          = 150e3,#50e3,
                 free_surface     = false,
-                nout             = 1e3,#5e3,
+                nout             = 2e3,#5e3,
                 viscosity_cutoff = cutoff_visc,
             )
         )
@@ -294,7 +294,7 @@ function main3D(
         t += dt
 
         #  # # Plotting -------------------------------------------------------
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || rem(it, 1) == 0
             (; η) = stokes.viscosity
             # checkpointing(figdir, stokes, thermal.T, η, t)
 
@@ -316,7 +316,7 @@ function main3D(
                         εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1,CharDim))),
                         εzz = Array(ustrip.(dimensionalize(stokes.ε.zz, s^-1,CharDim))),
                         εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim))),
-                        η   = Array(ustrip.(dimensionalize(stokes.viscosity.η,Pa*s,CharDim))),
+                        η   = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep,Pa*s,CharDim))),
                     )
                     velocity_v = (
                         Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),

@@ -79,7 +79,7 @@ function init_rheology(CharDim; is_compressible = false)
             Density           = ConstantDensity(ρ = 100kg/m^3,),
             # Density           = ConstantDensity(ρ=1kg/m^3,),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1000J / kg / K),
-            Conductivity      = ConstantConductivity(; k=15Watt / K / m),
+            Conductivity      = ConstantConductivity(; k=1e-1Watt / K / m),
             LatentHeat        = ConstantLatentHeat(; Q_L=0.0J / kg),
             ShearHeat         = ConstantShearheating(0.0NoUnits),
             CompositeRheology = CompositeRheology((creep_air,)),

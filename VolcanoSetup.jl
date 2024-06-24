@@ -3,31 +3,29 @@ using GeophysicalModelGenerator, GMT
 using Interpolations
 
 function Etna_topo(N)
-    Topo = import_topo([14.5, 15.5, 37.2, 38.2], file="@earth_relief_01m")
+    # import topo from GMT's server
+    Topo = import_topo([14.5, 15.5, 37.2, 38.2], file="@earth_relief_03s")
+    # extract 2D array with the topographic elevation
     surf = Topo.depth.val[:,:,1]
+    # l = maximum(abs.(Topo.depth.val))
 
-    l = maximum(abs.(Topo.depth.val))
-    # heatmap(Topo.depth.val[:,:,1], colormap=:oleron, colorrange= (-l,l))
-    # GLMakie.surface(surf, colormap=:oleron, colorrange= (-l,l))
-
-    ##
+    # our model is in [km] -> need to convert from lat-long
     x = LinRange(14.5, 15.5, N) |> collect
     y = LinRange(37.2, 38.2, N) |> collect
-
     X = (
         Topo.lon.val[:, 1, 1],
         Topo.lat.val[1, :, 1],
     )
 
+    # interpolate from GMT's surface to the resolution nx × ny resolution of our grid
     itp = interpolate(X, surf, Gridded(Linear()))
     surf_interp = [itp(x, y) for x in x, y in y]
 
-    # GLMakie.surface(surf_interp, colormap=:oleron, colorrange= (-l,l))
-
+    # compute the x and y size of our cartesian model
     lat_dist  = extrema(X[1]) |> collect |> diff |> first |> abs
     long_dist = extrema(X[2]) |> collect |> diff |> first |> abs
-    Ly        = lat_dist * 110.574
-    Lx        = long_dist * 111.320*cos(lat_dist)
+    Lx        = lat_dist * 110.574
+    Ly        = long_dist * 111.320*cos(lat_dist)
     
     return surf_interp, Lx, Ly
 end
@@ -38,14 +36,14 @@ function volcano_setup(N)
     nx = ny = nz = N
     x = range(-Lx / 2, Lx / 2, nx);
     y = range(-Ly / 2, Ly / 2, ny);
-    z = range(-50, 10, nz);
+    z = range(-40, 10, nz);
     Grid = CartData(xyz_grid(x,y,z));
 
     # Now we create an integer array that will hold the `Phases` information (which usually refers to the material or rock type in the simulation)
-    Phases = fill(4, nx, ny, nz);
+    Phases = fill(1, nx, ny, nz);
 
     # In many (geodynamic) models, one also has to define the temperature, so lets define it as well
-    Temp = fill(1350.0, nx, ny, nz);
+    Temp = fill(20.0, nx, ny, nz);
 
     lith = LithosphericPhases(Layers=[15 45 100], Phases=[1 2 3])
 
@@ -56,11 +54,6 @@ function volcano_setup(N)
         phase = lith, 
         T = HalfspaceCoolingTemp(Age=20)
     )
-        
-    id = falses(nx, ny, nz)
-    for k in axes(topo_volcano,3), j in axes(topo_volcano, 2), i in axes(topo_volcano,1)
-        id[i, j, k] = Grid.z.val[i, j, k] > topo_volcano[i, j]
-    end
 
     # add_volcano!(Phases, Temp, Grid;
     #     volcanic_phase  = 1,
@@ -78,6 +71,14 @@ function volcano_setup(N)
         axes   = (5, 5, 2.5),
         phase  = ConstantPhase(3),
     )
+
+    # id = falses(nx, ny, nz)
+    for k in axes(Grid.z.val, 3), j in axes(topo_volcano, 2), i in axes(topo_volcano,1)
+        # id[i, j, k] = Grid.z.val[i, j, k] > topo_volcano[i, j]
+        if Grid.z.val[i, j, k] > topo_volcano[i, j]
+            Phases[i, j, k] = 4
+        end
+    end
 
     @. Temp[Phases == 3] += 500
     @. Temp[Phases == 4]  = 20 

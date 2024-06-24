@@ -1,5 +1,5 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA 
     using CUDA
@@ -126,7 +126,7 @@ function main3D(
     )
     εbg = nondimensionalize(1e-15 / s, CharDim)
     pureshear_bc!(
-        stokes, xci, xvi, εbg, backend
+        stokes, xci, xvi, εbg, backend_JR
     )
 
     flow_bcs = FlowBoundaryConditions(;
@@ -316,7 +316,9 @@ function main3D(
                         εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1,CharDim))),
                         εzz = Array(ustrip.(dimensionalize(stokes.ε.zz, s^-1,CharDim))),
                         εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim))),
-                        η   = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep,Pa*s,CharDim))),
+                        ρ   = Array(ustrip.(dimensionalize(ρg[end] ./ rheology[1].Gravity[1].g.val,kg/m^3,CharDim))),
+                        η   = Array(ustrip.(dimensionalize(stokes.viscosity.η,Pa*s,CharDim))),
+                        η_vep = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep,Pa*s,CharDim))),
                     )
                     velocity_v = (
                         Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
@@ -361,7 +363,7 @@ end
 
 figdir = "Volcano3D"
 do_vtk = true # set to true to generate VTK files for ParaView
-n      = 50
+n      = 256
 nx     = n
 ny     = n
 nz     = n
@@ -373,4 +375,4 @@ else
 end
 
 # run main script
-main3D(igg, li_GMG, origin_GMG, phases_GMG, T_GMG; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk = do_vtk);
+# main3D(igg, li_GMG, origin_GMG, phases_GMG, T_GMG; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk = do_vtk);

@@ -174,7 +174,7 @@ end
             compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt +
             av(H) +
             av(shear_heating) +
-            adiabatic[I...]
+            adiabatic[i, j, k] * T_ijk
         )
     return nothing
 end
@@ -242,7 +242,7 @@ end
         (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
         av(H) +
         av(shear_heating) +
-        adiabatic[I...]
+        adiabatic[i, j, k] * T_ijk
 
     return nothing
 end
@@ -442,7 +442,7 @@ end
             (-(d_xa(qTx) + d_ya(qTy))) - ρCp * (T_ij - Told[i + 1, j + 1]) * _dt +
             av(H) +
             av(shear_heating) +
-            adiabatic[i, j]
+            adiabatic[i, j] * T[i + 1, j + 1]
         )
     return nothing
 end
@@ -515,7 +515,7 @@ end
         -ρCp * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
         av(H) +
         av(shear_heating) +
-        adiabatic[i, j]
+        adiabatic[i, j] * T[i + 1, j + 1]
 
     return nothing
 end

@@ -394,7 +394,7 @@ end
             (-(d_xa(qTx) + d_ya(qTy))) -
             av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt +
             av(H) +
-            av(shear_heating) 
+            av(shear_heating)
         )
     return nothing
 end
@@ -558,57 +558,51 @@ function update_T(
     )
 end
 
-@parallel_indices (i,j,k) function adiabatic_heating(A, Vx, Vy, Vz, P, rheology, phases, _dx, _dy, _dz)
+@parallel_indices (i, j, k) function adiabatic_heating(
+    A, Vx, Vy, Vz, P, rheology, phases, _dx, _dy, _dz
+)
     I = i, j, k
     I1 = i1, j1, k1 = I .+ 1
     @inbounds begin
-        α = (
-            compute_α(rheology, getindex_phase(phases, I...)) +
-            compute_α(rheology, getindex_phase(phases, i , j1,  k)) +
-            compute_α(rheology, getindex_phase(phases, i1, j ,  k)) +
-            compute_α(rheology, getindex_phase(phases, i1, j1,  k)) +
-            compute_α(rheology, getindex_phase(phases, i , j1, k1)) +
-            compute_α(rheology, getindex_phase(phases, i1, j , k1)) +
-            compute_α(rheology, getindex_phase(phases, i1, j1, k1)) +
-            compute_α(rheology, getindex_phase(phases, I1...))
-        ) * 0.125
+        α =
+            (
+                compute_α(rheology, getindex_phase(phases, I...)) +
+                compute_α(rheology, getindex_phase(phases, i, j1, k)) +
+                compute_α(rheology, getindex_phase(phases, i1, j, k)) +
+                compute_α(rheology, getindex_phase(phases, i1, j1, k)) +
+                compute_α(rheology, getindex_phase(phases, i, j1, k1)) +
+                compute_α(rheology, getindex_phase(phases, i1, j, k1)) +
+                compute_α(rheology, getindex_phase(phases, i1, j1, k1)) +
+                compute_α(rheology, getindex_phase(phases, I1...))
+            ) * 0.125
         # cache P around T node
-        P111 = P[I...] 
+        P111 = P[I...]
         P112 = P[i, j, k1]
-        P121 = P[i, j1, k] 
+        P121 = P[i, j1, k]
         P122 = P[i, j1, k1]
-        P211 = P[i1, j, k] 
+        P211 = P[i1, j, k]
         P212 = P[i1, j, k1]
-        P221 = P[i1, j1, k] 
+        P221 = P[i1, j1, k]
         P222 = P[i1, j1, k1]
         # P averages
-        Px_L = (P111 + P121 + P112 + P122) * 0.25 
-        Px_R = (P211 + P221 + P212 + P222) * 0.25 
-        Py_F = (P111 + P211 + P112 + P212) * 0.25 
-        Py_B = (P121 + P221 + P122 + P222) * 0.25 
-        Pz_B = (P111 + P211 + P121 + P221) * 0.25 
-        Pz_T = (P112 + P212 + P122 + P222) * 0.25 
+        Px_L = (P111 + P121 + P112 + P122) * 0.25
+        Px_R = (P211 + P221 + P212 + P222) * 0.25
+        Py_F = (P111 + P211 + P112 + P212) * 0.25
+        Py_B = (P121 + P221 + P122 + P222) * 0.25
+        Pz_B = (P111 + P211 + P121 + P221) * 0.25
+        Pz_T = (P112 + P212 + P122 + P222) * 0.25
         # Vx average
-        Vx_av = 0.25 *(
-            Vx[I1...] +
-            Vx[i1, j1    , k1 + 1] +
-            Vx[i1, j1 + 1, k1    ] +
-            Vx[i1, j1 + 1, k1 + 1]
-        )
+        Vx_av =
+            0.25 *
+            (Vx[I1...] + Vx[i1, j1, k1 + 1] + Vx[i1, j1 + 1, k1] + Vx[i1, j1 + 1, k1 + 1])
         # Vy average
-        Vy_av = 0.25 *(
-            Vy[I1...] +
-            Vy[i1 + 1, j1, k1    ] +
-            Vy[i1    , j1, k1 + 1] +
-            Vy[i1 + 1, j1, k1 + 1]
-        )
+        Vy_av =
+            0.25 *
+            (Vy[I1...] + Vy[i1 + 1, j1, k1] + Vy[i1, j1, k1 + 1] + Vy[i1 + 1, j1, k1 + 1])
         # Vz average
-        Vz_av = 0.25 *(
-            Vz[I1...] +
-            Vz[i1 + 1, j1    , k1] +
-            Vz[i1    , j1 + 1, k1] +
-            Vz[i1 + 1, j1 + 1, k1]
-        )
+        Vz_av =
+            0.25 *
+            (Vz[I1...] + Vz[i1 + 1, j1, k1] + Vz[i1, j1 + 1, k1] + Vz[i1 + 1, j1 + 1, k1])
         dPdx = Vx_av * (Px_R - Px_L) * _dx
         dPdy = Vy_av * (Py_B - Py_F) * _dy
         dPdz = Vz_av * (Pz_T - Pz_B) * _dz
@@ -617,26 +611,29 @@ end
     return nothing
 end
 
-@parallel_indices (i,j) function adiabatic_heating(A, Vx, Vy, P, rheology, phases, _dx, _dy)
+@parallel_indices (i, j) function adiabatic_heating(
+    A, Vx, Vy, P, rheology, phases, _dx, _dy
+)
     I = i, j
     I1 = i1, j1 = I .+ 1
     @inbounds begin
-        α = (
-            compute_α(rheology, getindex_phase(phases, I... )) +
-            compute_α(rheology, getindex_phase(phases, i, j1)) +
-            compute_α(rheology, getindex_phase(phases, i1, j)) +
-            compute_α(rheology, getindex_phase(phases, I1...))
-        ) * 0.25
+        α =
+            (
+                compute_α(rheology, getindex_phase(phases, I...)) +
+                compute_α(rheology, getindex_phase(phases, i, j1)) +
+                compute_α(rheology, getindex_phase(phases, i1, j)) +
+                compute_α(rheology, getindex_phase(phases, I1...))
+            ) * 0.25
         # cache P around T node
-        P11 = P[I...] 
+        P11 = P[I...]
         P12 = P[i, j1]
         P21 = P[i1, j]
         P22 = P[i1, j1]
         # P averages
-        Px_L = (P11 + P12) * 0.5 
-        Px_R = (P21 + P22) * 0.5 
-        Py_T = (P12 + P22) * 0.5 
-        Py_B = (P11 + P21) * 0.5 
+        Px_L = (P11 + P12) * 0.5
+        Px_R = (P21 + P22) * 0.5
+        Py_T = (P12 + P22) * 0.5
+        Py_B = (P11 + P21) * 0.5
         # Vx average
         Vx_av = (Vx[I1...] + Vx[i1, j1 + 1]) * 0.5
         # Vy average
@@ -649,9 +646,11 @@ end
 end
 
 function adiabatic_heating!(thermal, stokes, rheology, phases, di)
-    idx = @idx (size(stokes.P).-1)
+    idx = @idx (size(stokes.P) .- 1)
     _di = inv.(di)
-    @parallel idx adiabatic_heating(thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases,_di...)
+    @parallel idx adiabatic_heating(
+        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, _di...
+    )
 end
 
-@inline adiabatic_heating!(thermal, ::Nothing, ::Vararg{Any, N}) where N = nothing
+@inline adiabatic_heating!(thermal, ::Nothing, ::Vararg{Any,N}) where {N} = nothing

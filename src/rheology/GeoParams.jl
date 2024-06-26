@@ -1,4 +1,4 @@
-function get_bulk_modulus(args::Vararg{Any, N}) where N
+function get_bulk_modulus(args::Vararg{Any,N}) where {N}
     Kb = GeoParams.get_Kb(args...)
     if isnan(Kb) || iszero(Kb)
         return Inf
@@ -6,7 +6,7 @@ function get_bulk_modulus(args::Vararg{Any, N}) where N
     return Kb
 end
 
-function get_shear_modulus(args::Vararg{Any, N}) where N
+function get_shear_modulus(args::Vararg{Any,N}) where {N}
     Kb = GeoParams.get_G(args...)
     if isnan(Kb) || iszero(Kb)
         return Inf
@@ -14,7 +14,7 @@ function get_shear_modulus(args::Vararg{Any, N}) where N
     return Kb
 end
 
-get_thermal_expansion(args::Vararg{Any, N}) where N = get_α(args...)
+get_thermal_expansion(args::Vararg{Any,N}) where {N} = get_α(args...)
 
 @inline get_α(p::MaterialParams) = get_α(p.Density[1])
 @inline get_α(p::ConstantDensity) = 0.0

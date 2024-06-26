@@ -114,9 +114,9 @@ end
 # α
 
 function compute_α(rheology, phase::SArray)
-    fn_ratio(get_α, rheology, phase)
+    return fn_ratio(get_α, rheology, phase)
 end
 
-function compute_α(rheology, phase::Union{Int, Nothing})
-    compute_phase(get_α, rheology, phase)
+function compute_α(rheology, phase::Union{Int,Nothing})
+    return compute_phase(get_α, rheology, phase)
 end

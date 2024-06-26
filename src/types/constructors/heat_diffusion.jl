@@ -59,6 +59,21 @@ function ThermalArrays(nx::Integer, ny::Integer, nz::Integer)
     qTz2 = @zeros(nx - 1, ny - 1, nz)
     ResT = @zeros(nx - 1, ny - 1, nz - 1)
     return JustRelax.ThermalArrays(
-        T, Tc, Told, ΔT, ΔTc, adiabatic, dT_dt, qTx, qTy, qTz, qTx2, qTy2, qTz2, H, shear_heating, ResT
+        T,
+        Tc,
+        Told,
+        ΔT,
+        ΔTc,
+        adiabatic,
+        dT_dt,
+        qTx,
+        qTy,
+        qTz,
+        qTx2,
+        qTy2,
+        qTz2,
+        H,
+        shear_heating,
+        ResT,
     )
 end

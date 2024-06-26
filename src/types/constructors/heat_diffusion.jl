@@ -10,6 +10,7 @@ function ThermalArrays(nx::Integer, ny::Integer)
     T = @zeros(nx + 3, ny + 1)
     ΔT = @zeros(nx + 3, ny + 1)
     ΔTc = @zeros(nx, ny)
+    adiabatic = @zeros(nx + 1, ny - 1)
     Told = @zeros(nx + 3, ny + 1)
     Tc = @zeros(nx, ny)
     H = @zeros(nx, ny)
@@ -26,6 +27,7 @@ function ThermalArrays(nx::Integer, ny::Integer)
         Told,
         ΔT,
         ΔTc,
+        adiabatic,
         dT_dt,
         qTx,
         qTy,
@@ -43,6 +45,7 @@ function ThermalArrays(nx::Integer, ny::Integer, nz::Integer)
     T = @zeros(nx + 1, ny + 1, nz + 1)
     ΔT = @zeros(nx + 1, ny + 1, nz + 1)
     ΔTc = @zeros(nx, ny, ny)
+    adiabatic = @zeros(nx - 1, ny - 1, nz - 1)
     Told = @zeros(nx + 1, ny + 1, nz + 1)
     Tc = @zeros(nx, ny, nz)
     H = @zeros(nx, ny, nz)
@@ -56,6 +59,6 @@ function ThermalArrays(nx::Integer, ny::Integer, nz::Integer)
     qTz2 = @zeros(nx - 1, ny - 1, nz)
     ResT = @zeros(nx - 1, ny - 1, nz - 1)
     return JustRelax.ThermalArrays(
-        T, Tc, Told, ΔT, ΔTc, dT_dt, qTx, qTy, qTz, qTx2, qTy2, qTz2, H, shear_heating, ResT
+        T, Tc, Told, ΔT, ΔTc, adiabatic, dT_dt, qTx, qTy, qTz, qTx2, qTy2, qTz2, H, shear_heating, ResT
     )
 end

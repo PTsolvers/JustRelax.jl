@@ -28,11 +28,20 @@ end
     return fn(rheology, phase, args)
 end
 
+@inline function compute_phase(fn::F, rheology, phase::Int) where {F}
+    return fn(rheology, phase, args)
+end
+
 @inline function compute_phase(fn::F, rheology, phase::SVector, args) where {F}
     return fn_ratio(fn, rheology, phase, args)
 end
 
+@inline function compute_phase(fn::F, rheology, phase::SVector) where {F}
+    return fn_ratio(fn, rheology, phase)
+end
+
 @inline compute_phase(fn::F, rheology, ::Nothing, args) where {F} = fn(rheology, args)
+@inline compute_phase(fn::F, rheology, ::Nothing) where {F} = fn(rheology)
 
 @inline Base.@propagate_inbounds function getindex_phase(
     phase::AbstractArray, I::Vararg{Int,N}
@@ -100,4 +109,14 @@ end
 
 @inline function compute_ρCp(rheology, ρ, phase_ratios::SArray, args)
     return fn_ratio(compute_heatcapacity, rheology, phase_ratios, args) * ρ
+end
+
+# α
+
+function compute_α(rheology, phase::SArray)
+    return fn_ratio(get_α, rheology, phase)
+end
+
+function compute_α(rheology, phase::Union{Int,Nothing})
+    return compute_phase(get_α, rheology, phase)
 end

@@ -110,6 +110,7 @@ function _heatdiffusion_PT!(
     di;
     igg=nothing,
     phase=nothing,
+    stokes=nothing,
     b_width=(4, 4, 4),
     iterMax=50e3,
     nout=1e3,
@@ -126,6 +127,9 @@ function _heatdiffusion_PT!(
     ni = size(thermal.Tc)
     @copy thermal.Told thermal.T
     !isnothing(phase) && update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
+
+    # compute constant part of the adiabatic heating term
+    adiabatic_heating!(thermal, stokes, rheology, phases, di)
 
     # errors
     iter_count = Int64[]
@@ -174,6 +178,7 @@ function _heatdiffusion_PT!(
                     @qT2(thermal)...,
                     thermal.H,
                     thermal.shear_heating,
+                    thermal.adiabatic,
                     rheology,
                     phases,
                     _dt,

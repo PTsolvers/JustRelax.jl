@@ -256,11 +256,8 @@ In-place interpolation of the velocity field `Vx`, `Vy`, `Vz` from a staggered g
 onto the pre-allocated `Vx_d`, `Vy_d`, `Vz_d` 3D arrays located at the grid vertices.
 """
 function velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
-    # infer size of grid
-    nx, ny, nz = size(Vx)
-    nv_x, nv_y, nv_z = nx - 1, ny - 2, nz - 2
     # interpolate to cell vertices
-    @parallel (@idx nv_x nv_y nv_z) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
+    @parallel (@idx size(Vx_v)) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
 
     return nothing
 end

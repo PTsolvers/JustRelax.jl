@@ -86,10 +86,6 @@ end
         if bc.top
             (i ≤ size(Az, 1)) && (j ≤ size(Az, 2)) && (Az[i, j, end] = 0.0)
         end
-        # corners
-        # bc.bot && (Ax[1, 1] = 0.0; Ax[1, 1] = 0.0)
-        # bc.left && bc.bot && (Ax[1, 1] = 0.0)
-        # bc.right && bc.top && (Ay[end, end] = 0.0)
     end
     return nothing
 end

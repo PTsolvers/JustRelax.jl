@@ -25,7 +25,6 @@ end
                 free_slip   = (left=false, right=true, front=true, back=true, top=true, bot=true),
             )
             
-
             # test with StokesArrays
             ni           = 5, 5, 5
             stokes       = StokesArrays(backend, ni)

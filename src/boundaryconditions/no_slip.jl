@@ -33,8 +33,12 @@ end
         end
         if bc.right
             (i ≤ size(Ax, 2)) && (j ≤ size(Ax, 3)) && (Ax[end, i, j] = 0.0)
-            (1 < i < size(Ay, 2)) && (1 < j < size(Ay, 3)) && (Ay[end, i, j] = -Ay[end-1, i, j])
-            (1 < i < size(Az, 2)) && (1 < j < size(Az, 3)) && (Az[end, i, j] = -Az[end-1, i, j])
+            (1 < i < size(Ay, 2)) &&
+                (1 < j < size(Ay, 3)) &&
+                (Ay[end, i, j] = -Ay[end - 1, i, j])
+            (1 < i < size(Az, 2)) &&
+                (1 < j < size(Az, 3)) &&
+                (Az[end, i, j] = -Az[end - 1, i, j])
         end
 
         if bc.front
@@ -44,8 +48,12 @@ end
         end
         if bc.back
             (i ≤ size(Ay, 1)) && (i ≤ size(Ay, 2)) && (Ay[i, end, j] = 0.0)
-            (1 < i < size(Ax, 1)) && (1 < j < size(Ax, 3)) && (Ax[i, end, j] = -Ax[i, end-1, j])
-            (1 < i < size(Az, 1)) && (1 < j < size(Az, 3)) && (Az[i, end, j] = -Az[i, end-1, j])
+            (1 < i < size(Ax, 1)) &&
+                (1 < j < size(Ax, 3)) &&
+                (Ax[i, end, j] = -Ax[i, end - 1, j])
+            (1 < i < size(Az, 1)) &&
+                (1 < j < size(Az, 3)) &&
+                (Az[i, end, j] = -Az[i, end - 1, j])
         end
 
         if bc.bot
@@ -55,8 +63,12 @@ end
         end
         if bc.top
             (i ≤ size(Az, 1)) && (j ≤ size(Az, 3)) && (Az[i, j, end] = 0.0)
-            (1 < i < size(Ax, 1)) && (1 < j < size(Ax, 2)) && (Ax[i, j, end] = -Ax[i, j, end-1])
-            (1 < i < size(Ay, 1)) && (1 < j < size(Ay, 2)) && (Ay[i, j, end] = -Ay[i, j, end-1])
+            (1 < i < size(Ax, 1)) &&
+                (1 < j < size(Ax, 2)) &&
+                (Ax[i, j, end] = -Ax[i, j, end - 1])
+            (1 < i < size(Ay, 1)) &&
+                (1 < j < size(Ay, 2)) &&
+                (Ay[i, j, end] = -Ay[i, j, end - 1])
         end
 
         # corners

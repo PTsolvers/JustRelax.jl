@@ -32,8 +32,15 @@ include("types/displacement.jl")
 export velocity2displacement!, displacement2velocity!
 
 include("boundaryconditions/BoundaryConditions.jl")
-export FlowBoundaryConditions,
-    TemperatureBoundaryConditions, flow_bcs!, thermal_bcs!, pureshear_bc!, apply_free_slip!
+export  AbstractBoundaryConditions,
+        TemperatureBoundaryConditions,
+        AbstractFlowBoundaryConditions,
+        DisplacementBoundaryConditions,
+        VelocityBoundaryConditions,
+        flow_bcs!,
+        thermal_bcs!,
+        pureshear_bc!,
+        apply_free_slip!
 
 include("MiniKernels.jl")
 
@@ -58,7 +65,7 @@ export vertex2center!, center2vertex!, temperature2center!, velocity2vertex!
 include("advection/weno5.jl")
 export WENO5, WENO_advection!
 
-# Stokes 
+# Stokes
 
 include("rheology/GeoParams.jl")
 include("rheology/StressUpdate.jl")

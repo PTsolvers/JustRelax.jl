@@ -21,7 +21,12 @@ import JustRelax:
     Geometry,
     @cell
 import JustRelax:
-    AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
+AbstractBoundaryConditions,
+TemperatureBoundaryConditions,
+AbstractFlowBoundaryConditions,
+DisplacementBoundaryConditions,
+VelocityBoundaryConditions
+
 
 @init_parallel_stencil(CUDA, Float64, 3)
 
@@ -100,12 +105,21 @@ function JR3D.update_pt_thermal_arrays!(
 end
 
 # Boundary conditions
-function JR3D.flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
+function JR3D.flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
-function flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
+function flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions)
     return _flow_bcs!(bcs, @velocity(stokes))
+end
+
+# Boundary conditions
+function JR3D.flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions)
+    return _flow_bcs!(bcs, @displacement(stokes))
+end
+
+function flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions)
+    return _flow_bcs!(bcs, @displacement(stokes))
 end
 
 function JR3D.thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)

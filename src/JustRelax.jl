@@ -32,7 +32,11 @@ include("types/phases.jl")
 # export PhaseRatio
 
 include("boundaryconditions/types.jl")
-export TemperatureBoundaryConditions, FlowBoundaryConditions
+export     AbstractBoundaryConditions,
+           TemperatureBoundaryConditions,
+           AbstractFlowBoundaryConditions,
+           DisplacementBoundaryConditions,
+           VelocityBoundaryConditions
 
 include("types/traits.jl")
 export BackendTrait, CPUBackendTrait, NonCPUBackendTrait

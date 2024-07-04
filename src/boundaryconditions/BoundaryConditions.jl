@@ -54,7 +54,7 @@ function _flow_bcs!(bcs, V)
     n = bc_index(V)
     # no slip boundary conditions
     # do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip))
-    if do_bc(bcs.no_slip) 
+    if do_bc(bcs.no_slip)
         @parallel (@idx n) no_slip1!(V..., bcs.no_slip)
         @parallel (@idx n) no_slip2!(V..., bcs.no_slip)
     end

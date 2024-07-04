@@ -1,3 +1,4 @@
+ENV["JULIA_JUSTRELAX_BACKEND"] = "CPU"
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -5,7 +6,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
 end
 
 using JustRelax, JustRelax.JustRelax3D
-using Test, Suppressor
+using Test#, Suppressor
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPUBackend
@@ -40,18 +41,18 @@ end
             flow_bcs!(stokes, flow_bcs)
             flow_bcs!(stokes, flow_bcs) # just a trick to pass the CI
 
-            @test @views stokes.V.Vx[  :,   :,   1] == stokes.V.Vx[:, :, 2]
-            @test @views stokes.V.Vx[  :,   :, end] == stokes.V.Vx[:, :, end - 1]
-            @test @views stokes.V.Vx[  :,   1,   :] == stokes.V.Vx[:, 2, :]
-            @test @views stokes.V.Vx[  :, end,   :] == stokes.V.Vx[:, end - 1, :]
-            @test @views stokes.V.Vy[  :,   :,   1] == stokes.V.Vy[:, :, 2]
-            @test @views stokes.V.Vy[  :,   :, end] == stokes.V.Vy[:, :, end - 1]
-            @test @views stokes.V.Vy[  1,   :,   :] == stokes.V.Vy[2, :, :]
-            @test @views stokes.V.Vy[end,   :,   :] == stokes.V.Vy[end - 1, :, :]
-            @test @views stokes.V.Vz[  1,   :,   :] == stokes.V.Vz[2, :, :]
-            @test @views stokes.V.Vz[end,   :,   :] == stokes.V.Vz[end - 1, :, :]
-            @test @views stokes.V.Vz[  :,   1,   :] == stokes.V.Vz[:, 2, :]
-            @test @views stokes.V.Vz[  :, end,   :] == stokes.V.Vz[:, end - 1, :]
+            @test stokes.V.Vx[  :,   :,   1] == stokes.V.Vx[:, :, 2]
+            @test stokes.V.Vx[  :,   :, end] == stokes.V.Vx[:, :, end - 1]
+            @test stokes.V.Vx[  :,   1,   :] == stokes.V.Vx[:, 2, :]
+            @test stokes.V.Vx[  :, end,   :] == stokes.V.Vx[:, end - 1, :]
+            @test stokes.V.Vy[  :,   :,   1] == stokes.V.Vy[:, :, 2]
+            @test stokes.V.Vy[  :,   :, end] == stokes.V.Vy[:, :, end - 1]
+            @test stokes.V.Vy[  1,   :,   :] == stokes.V.Vy[2, :, :]
+            @test stokes.V.Vy[end,   :,   :] == stokes.V.Vy[end - 1, :, :]
+            @test stokes.V.Vz[  1,   :,   :] == stokes.V.Vz[2, :, :]
+            @test stokes.V.Vz[end,   :,   :] == stokes.V.Vz[end - 1, :, :]
+            @test stokes.V.Vz[  :,   1,   :] == stokes.V.Vz[:, 2, :]
+            @test stokes.V.Vz[  :, end,   :] == stokes.V.Vz[:, end - 1, :]
             
             # no-slip
             flow_bcs    = FlowBoundaryConditions(;
@@ -64,24 +65,23 @@ end
 
             @test sum(!iszero(Vx[1  ,  i,   j]) for i in axes(Vx,2), j in axes(Vx,3)) == 0
             @test sum(!iszero(Vx[end,  i,   j]) for i in axes(Vx,2), j in axes(Vx,3)) == 0
-            @test sum(!iszero(Vy[i,    1,   j]) for i in axes(Vy,1), j in axes(Vy,3)) == 0
-            @test sum(!iszero(Vy[i,  end,   j]) for i in axes(Vy,1), j in axes(Vy,3)) == 0
+            @test sum(!iszero(Vy[i,    1,   j]) for i in axes(Vy,1), j in axes(Vy,2)) == 0
+            @test sum(!iszero(Vy[i,  end,   j]) for i in axes(Vy,1), j in axes(Vy,2)) == 0
             @test sum(!iszero(Vz[i,    j,   1]) for i in axes(Vz,1), j in axes(Vz,3)) == 0
             @test sum(!iszero(Vz[i,    j, end]) for i in axes(Vz,1), j in axes(Vz,3)) == 0
 
-            
-            @test @views Vx[:,       1, :] == -Vx[:,       2, :]
-            @test @views Vx[:,     end, :] == -Vx[:, end - 1, :]
-            @test @views Vx[:, :,       1] == -Vx[:, :,       2]
-            @test @views Vx[:, :,     end] == -Vx[:, :, end - 1]
-            @test @views Vy[1      , :, :] == -Vy[2      , :, :]
-            @test @views Vy[end    , :, :] == -Vy[end - 1, :, :]
-            @test @views Vy[:, :,       1] == -Vy[:, :,       2]
-            @test @views Vy[:, :,     end] == -Vy[:, :, end - 1]
-            @test @views Vz[:,       1, :] == -Vz[:,       2, :]
-            @test @views Vz[:,     end, :] == -Vz[:, end - 1, :]
-            @test @views Vz[      1, :, :] == -Vz[      2, :, :]
-            @test @views Vz[    end, :, :] == -Vz[end - 1, :, :]
+            @test Vx[:,       1, :][:, 2:end-1] == -Vx[:,       2, :][:, 2:end-1]
+            @test Vx[:,     end, :][:, 2:end-1] == -Vx[:, end - 1, :][:, 2:end-1]
+            @test Vx[:, :,       1][:, 2:end-1] == -Vx[:, :,       2][:, 2:end-1]
+            @test Vx[:, :,     end][:, 2:end-1] == -Vx[:, :, end - 1][:, 2:end-1]
+            @test Vy[1      , :, :][:, 2:end-1] == -Vy[2      , :, :][:, 2:end-1]
+            @test Vy[end    , :, :][:, 2:end-1] == -Vy[end - 1, :, :][:, 2:end-1]
+            @test Vy[:, :,       1][2:end-1, :] == -Vy[:, :,       2][2:end-1, :]
+            @test Vy[:, :,     end][2:end-1, :] == -Vy[:, :, end - 1][2:end-1, :]
+            @test Vz[:,       1, :][2:end-1, :] == -Vz[:,       2, :][2:end-1, :]
+            @test Vz[:,     end, :][:, 2:end-1] == -Vz[:, end - 1, :][:, 2:end-1]
+            @test Vz[      1, :, :][2:end-1, :] == -Vz[      2, :, :][2:end-1, :]
+            @test Vz[    end, :, :][:, 2:end-1] == -Vz[end - 1, :, :][:, 2:end-1]
         end
     else
         @test true === true

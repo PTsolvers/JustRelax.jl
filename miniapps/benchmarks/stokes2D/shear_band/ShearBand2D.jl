@@ -112,7 +112,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     stokes.V.Vx .= PTArray(backend)([ x*εbg for x in xvi[1], _ in 1:ny+2])
     stokes.V.Vy .= PTArray(backend)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
     # IO -------------------------------------------------
     take(figdir)

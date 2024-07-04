@@ -55,7 +55,7 @@ function _solve!(
     norm_∇V = Float64[]
 
     # convert displacement to velocity
-    displacement2velocity!(stokes, dt)
+    displacement2velocity!(stokes, dt, flow_bcs)
 
     # solver loop
     wtime0 = 0.0
@@ -155,7 +155,7 @@ function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
-    flow_bcs,
+    flow_bcs::AbstractFlowBoundaryConditions,
     ρg,
     G,
     K,
@@ -191,7 +191,7 @@ function _solve!(
     norm_∇V = Float64[]
 
     # convert displacement to velocity
-    displacement2velocity!(stokes, dt)
+    displacement2velocity!(stokes, dt, flow_bcs)
 
     # solver loop
     wtime0 = 0.0
@@ -278,7 +278,7 @@ function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
-    flow_bcs,
+    flow_bcs::AbstractFlowBoundaryConditions,
     ρg,
     rheology::MaterialParams,
     args,
@@ -333,7 +333,7 @@ function _solve!(
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
-    displacement2velocity!(stokes, dt)
+    displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
@@ -460,7 +460,7 @@ function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
-    flow_bcs,
+    flow_bcs::AbstractFlowBoundaryConditions,
     ρg,
     phase_ratios::JustRelax.PhaseRatio,
     rheology,
@@ -522,7 +522,7 @@ function _solve!(
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
-    displacement2velocity!(stokes, dt)
+    displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break

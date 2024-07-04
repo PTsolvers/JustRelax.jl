@@ -29,6 +29,15 @@ end
     return nothing
 end
 
+function displacement2velocity!(stokes,dt, flow_bcs::AbstractFlowBoundaryConditions)
+    if typeof(flow_bcs) <: DisplacementBoundaryConditions
+        displacement2velocity!(stokes, backend(stokes), dt)
+        return nothing
+    elseif typeof(flow_bcs) <: VelocityBoundaryConditions
+        return nothing
+    end
+end
+
 function displacement2velocity!(stokes::JustRelax.StokesArrays, dt)
     displacement2velocity!(stokes, backend(stokes), dt)
     return nothing

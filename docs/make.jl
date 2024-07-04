@@ -16,6 +16,7 @@ makedocs(;
             "Installation" => "man/installation.md",
             "Backend"   => "man/backend.md",
             "Equations" => "man/equations.md",
+            "Boundary conditions" => "man/boundary_conditions.md",
             "Advection" => "man/advection.md",
             ],
         "Examples"  => Any[

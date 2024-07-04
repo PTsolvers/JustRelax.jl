@@ -66,18 +66,18 @@ end
         @test sum(!iszero(Vy[i,  end,   j]) for i in axes(Vy,1), j in axes(Vy,2)) == 0
         @test sum(!iszero(Vz[i,    j,   1]) for i in axes(Vz,1), j in axes(Vz,3)) == 0
         @test sum(!iszero(Vz[i,    j, end]) for i in axes(Vz,1), j in axes(Vz,3)) == 0
-        @test @views Vx[:,       1, :] == -Vx[:,       2, :]
-        @test @views Vx[:,     end, :] == -Vx[:, end - 1, :]
-        @test @views Vx[:, :,       1] == -Vx[:, :,       2]
-        @test @views Vx[:, :,     end] == -Vx[:, :, end - 1]
-        @test @views Vy[1      , :, :] == -Vy[2      , :, :]
-        @test @views Vy[end    , :, :] == -Vy[end - 1, :, :]
-        @test @views Vy[:, :,       1] == -Vy[:, :,       2]
-        @test @views Vy[:, :,     end] == -Vy[:, :, end - 1]
-        @test @views Vz[:,       1, :] == -Vz[:,       2, :]
-        @test @views Vz[:,     end, :] == -Vz[:, end - 1, :]
-        @test @views Vz[      1, :, :] == -Vz[      2, :, :]
-        @test @views Vz[    end, :, :] == -Vz[end - 1, :, :]
+        @test @views Vx[  :,   1,   :] == -Vx[      :,       2,       :]
+        @test @views Vx[  :, end,   :] == -Vx[      :, end - 1,       :]
+        @test @views Vx[  :,   :,   1] == -Vx[      :,       :,       2]
+        @test @views Vx[  :,   :, end] == -Vx[      :,       :, end - 1]
+        @test @views Vy[  1,   :,   :] == -Vy[      2,       :,       :]
+        @test @views Vy[end,   :,   :] == -Vy[end - 1,       :,       :]
+        @test @views Vy[  :,   :,   1] == -Vy[      :,       :,       2]
+        @test @views Vy[  :,   :, end] == -Vy[      :,       :, end - 1]
+        @test @views Vz[  :,   1,   :] == -Vz[      :,       2,       :]
+        @test @views Vz[  :, end,   :] == -Vz[      :, end - 1,       :]
+        @test @views Vz[  1,   :,   :] == -Vz[      2,       :,       :]
+        @test @views Vz[end,   :,   :] == -Vz[end - 1,       :,       :]
     else
         @test true === true
     end

@@ -37,14 +37,6 @@ function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
     return StokesArrays(ni)
 end
 
-function JR2D.velocity2displacement!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
-    return _velocity2displacement!(stokes, dt)
-end
-
-function JR2D.displacement2velocity!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
-    return _displacement2velocity!(stokes, dt)
-end
-
 function JR2D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N,Number}) where {N}
     return ThermalArrays(ni...)
 end
@@ -201,6 +193,14 @@ function JR2D.velocity2vertex!(
 )
     velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=ghost_nodes)
     return nothing
+end
+
+function JR2D.velocity2displacement!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _velocity2displacement!(stokes, dt)
+end
+
+function JR2D.displacement2velocity!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _displacement2velocity!(stokes, dt)
 end
 
 # Solvers

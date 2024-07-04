@@ -38,18 +38,6 @@ function JR3D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N,Integer}) where {
     return StokesArrays(ni)
 end
 
-function JR3D.velocity2displacement!(
-    stokes::JustRelax.StokesArrays, ::AMDGPUBackendTrait, dt
-)
-    return _velocity2displacement!(stokes, dt)
-end
-
-function JR3D.displacement2velocity!(
-    stokes::JustRelax.StokesArrays, ::AMDGPUBackendTrait, dt
-)
-    return _displacement2velocity!(stokes, dt)
-end
-
 function JR3D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N,Number}) where {N}
     return ThermalArrays(ni...)
 end
@@ -207,6 +195,17 @@ function JR3D.velocity2vertex!(
     return nothing
 end
 
+function JR3D.velocity2displacement!(
+    ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt
+)
+    return _velocity2displacement!(stokes, dt)
+end
+
+function JR3D.displacement2velocity!(
+    ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt
+)
+    return _displacement2velocity!(stokes, dt)
+end
 # Solvers
 function JR3D.solve!(::AMDGPUBackendTrait, stokes, args...; kwargs)
     return _solve!(stokes, args...; kwargs...)

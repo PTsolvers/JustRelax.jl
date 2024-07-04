@@ -88,7 +88,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatio(ni, length(rheology))
+    phase_ratios = PhaseRatio(backend, ni, length(rheology))
     init_phases!(phase_ratios, xci, radius)
 
     # STOKES ---------------------------------------------

@@ -1,22 +1,21 @@
-function velocity2displacement!(stokes::JustRelax.StokesArrays, dt)
-    velocity2displacement!(stokes, backend(stokes), dt)
-    return nothing
-end
+# Velocity to displacement interpolation
+velocity2displacement!(stokes, dt) = velocity2displacement!(backend(stokes), stokes, dt)
 
-function velocity2displacement!(stokes::JustRelax.StokesArrays, ::CPUBackendTrait, dt)
+
+function velocity2displacement!(::CPUBackendTrait, stokes::JustRelax.StokesArrays, dt)
     return _velocity2displacement!(stokes, dt)
 end
 
 function _velocity2displacement!(stokes::JustRelax.StokesArrays, dt)
     ni = size(stokes.P)
     (; V, U) = stokes
-    @parallel (@idx ni .+ 2) _velocity2displacement!(
+    @parallel (@idx ni .+ 2) _velocity2displacement_kernel!(
         V.Vx, V.Vy, V.Vz, U.Ux, U.Uy, U.Uz, dt
     )
     return nothing
 end
 
-@parallel_indices (I...) function _velocity2displacement!(Vx, Vy, Vz, Ux, Uy, Uz, dt)
+@parallel_indices (I...) function _velocity2displacement_kernel!(Vx, Vy, Vz, Ux, Uy, Uz, dt)
     if all(I .≤ size(Ux))
         Ux[I...] = Vx[I...] * dt
     end
@@ -29,32 +28,22 @@ end
     return nothing
 end
 
-function displacement2velocity!(stokes,dt, flow_bcs::AbstractFlowBoundaryConditions)
-    if typeof(flow_bcs) <: DisplacementBoundaryConditions
-        displacement2velocity!(stokes, backend(stokes), dt)
-        return nothing
-    elseif typeof(flow_bcs) <: VelocityBoundaryConditions
-        return nothing
-    end
-end
+# Displacement to velocity interpolation
 
-function displacement2velocity!(stokes::JustRelax.StokesArrays, dt)
-    displacement2velocity!(stokes, backend(stokes), dt)
-    return nothing
-end
+displacement2velocity!(stokes, dt) =  displacement2velocity!(backend(stokes), stokes::JustRelax.StokesArrays, dt)
 
-function displacement2velocity!(stokes::JustRelax.StokesArrays, ::CPUBackendTrait, dt)
+function displacement2velocity!(::CPUBackendTrait, stokes::JustRelax.StokesArrays, dt)
     return _displacement2velocity!(stokes, dt)
 end
 
 function _displacement2velocity!(stokes::JustRelax.StokesArrays, dt)
     ni = size(stokes.P)
     (; V, U) = stokes
-    @parallel (@idx ni .+ 2) _displacement2velocity!(U.Ux, U.Uy, U.Uz, V.Vx, V.Vy, V.Vz, 1 / dt)
+    @parallel (@idx ni .+ 2) _displacement2velocity_kernel!(U.Ux, U.Uy, U.Uz, V.Vx, V.Vy, V.Vz, 1 / dt)
     return nothing
 end
 
-@parallel_indices (I...) function _displacement2velocity!(Ux, Uy, Uz, Vx, Vy, Vz, _dt)
+@parallel_indices (I...) function _displacement2velocity_kernel!(Ux, Uy, Uz, Vx, Vy, Vz, _dt)
     if all(I .≤ size(Ux))
         Vx[I...] = Ux[I...] * _dt
     end
@@ -65,4 +54,13 @@ end
         Vz[I...] = Uz[I...] * _dt
     end
     return nothing
+end
+
+function displacement2velocity!(stokes,dt, flow_bcs::AbstractFlowBoundaryConditions)
+    if typeof(flow_bcs) <: DisplacementBoundaryConditions
+        displacement2velocity!(backend(stokes), stokes, dt)
+        return nothing
+    elseif typeof(flow_bcs) <: VelocityBoundaryConditions
+        return nothing
+    end
 end

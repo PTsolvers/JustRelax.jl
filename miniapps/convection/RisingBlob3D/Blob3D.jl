@@ -1,14 +1,14 @@
 # const isCUDA = false
 const isCUDA = true
 
-@static if isCUDA 
+@static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 import JustRelax.@cell
 
-const backend_JR = @static if isCUDA 
+const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -16,7 +16,7 @@ end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
 
-@static if isCUDA 
+@static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 3)
 else
     @init_parallel_stencil(Threads, Float64, 3)
@@ -26,7 +26,7 @@ using JustPIC, JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = @static if isCUDA 
+const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -286,7 +286,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.8 / √3.1
     )
 
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip    = (left=true, right=true, front=true, back=true, top=true, bot=true),
         no_slip      = (left=false, right=false, front=false, back=false, top=false, bot=false),
         free_surface = true,

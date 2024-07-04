@@ -102,12 +102,12 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
-    flow_bcs             = FlowBoundaryConditions(;
+    flow_bcs             = VelocityBoundaryConditions(;
         free_slip = (left =  true, right =  true, top = false, bot = false),
         no_slip   = (left = false, right = false, top =  true, bot =  true),
     )
     flow_bcs!(stokes, flow_bcs)
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored

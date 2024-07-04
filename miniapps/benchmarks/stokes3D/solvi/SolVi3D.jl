@@ -91,12 +91,12 @@ function solVi3D(;
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg, backend)
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip   = (left=true, right=true, top=true, bot=true, back=true, front=true),
         no_slip     = (left=false, right=false, top=false, bot=false, back=false, front=false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+    update_halo!(@velocity(stokes)...)
 
     ## Body forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
@@ -106,18 +106,18 @@ function solVi3D(;
     local iters
     while t < ttot
         iters = solve!(
-            stokes, 
-            pt_stokes, 
-            di, 
-            flow_bcs, 
-            ρg, 
-            Kb, 
-            Gc, 
-            dt, 
-            igg; 
-            kwargs = (; 
-                iterMax=5000, 
-                nout=100, 
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            Kb,
+            Gc,
+            dt,
+            igg;
+            kwargs = (;
+                iterMax=5000,
+                nout=100,
                 verbose=false
             ),
         )

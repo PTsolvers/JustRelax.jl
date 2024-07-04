@@ -214,17 +214,29 @@ compute_ρg!(ρg[2], phase_ratios, rheology, args)
 compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
 ```
 
-Define pure shear velocity boundary conditions
+Define pure shear velocity boundary conditions or displacement boundary conditions. The boundary conditions are applied with `flow_bcs!` and the halo is updated with `update_halo!`.
 ```julia
 # Boundary conditions
-flow_bcs     = FlowBoundaryConditions(;
+flow_bcs     = VelocityBoundaryConditions(;
     free_slip = (left = true, right = true, top = true, bot = true),
     no_slip   = (left = false, right = false, top = false, bot=false),
 )
 stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
 stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
 flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-update_halo!(stokes.V.Vx, stokes.V.Vy)
+update_halo!(@velocity(stokes)...)
+```
+```julia
+# Boundary conditions
+flow_bcs     = DisplacementBoundaryConditions(;
+free_slip = (left = true, right = true, top = true, bot = true),
+no_slip   = (left = false, right = false, top = false, bot=false),
+)
+stokes.U.Ux .= PTArray(backend)([ x*εbg*lx*dt for x in xvi[1], _ in 1:ny+2])
+stokes.U.Uy .= PTArray(backend)([-y*εbg*ly*dt for _ in 1:nx+2, y in xvi[2]])
+flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+displacement2velocity!(stokes, dt)   # convert displacement to velocity
+update_halo!(@velocity(stokes)...)
 ```
 Pseudo-transient Stokes solver and visualisation of the results. The visualisation is done with [GLMakie.jl](https://github.com/MakieOrg/Makie.jl).
 

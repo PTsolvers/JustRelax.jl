@@ -181,7 +181,7 @@ where `(-Inf, Inf)` is the viscosity cutoff.
 
 ## Boundary conditions
 ```julia
-flow_bcs      = FlowBoundaryConditions(;
+flow_bcs      = VelocityBoundaryConditions(;
     free_slip = (left = true, right=true, top=true, bot=true),
 )
 thermal_bc    = TemperatureBoundaryConditions(;

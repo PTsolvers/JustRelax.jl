@@ -300,10 +300,15 @@ function _solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
-            push!(norm_Rx, maximum_mpi(abs.(stokes.R.Rx)))
-            push!(norm_Ry, maximum_mpi(abs.(stokes.R.Ry)))
-            push!(norm_Rz, maximum_mpi(abs.(stokes.R.Rz)))
-            push!(norm_∇V, maximum_mpi(abs.(stokes.R.RP)))
+            # push!(norm_Rx, maximum_mpi(abs.(stokes.R.Rx)))
+            # push!(norm_Ry, maximum_mpi(abs.(stokes.R.Ry)))
+            # push!(norm_Rz, maximum_mpi(abs.(stokes.R.Rz)))
+            # push!(norm_∇V, maximum_mpi(abs.(stokes.R.RP)))
+            push!(norm_Rx, norm_mpi(stokes.R.Rx) / length(stokes.R.Rx))
+            push!(norm_Ry, norm_mpi(stokes.R.Ry) / length(stokes.R.Ry))
+            push!(norm_Rz, norm_mpi(stokes.R.Rz) / length(stokes.R.Rz))
+            push!(norm_∇V, norm_mpi(stokes.R.RP) / length(stokes.R.RP))
+
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)
@@ -500,9 +505,9 @@ function _solve!(
         if iter % nout == 0 && iter > 1
             cont += 1
             for (norm_Ri, Ri) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R))
-                push!(norm_Ri, maximum(abs.(Ri)))
+                push!(norm_Ri, norm_mpi(Ri) / length(Ri))
             end
-            push!(norm_∇V, maximum(abs.(stokes.R.RP)))
+            push!(norm_∇V, norm_mpi(stokes.R.RP) / length(stokes.R.RP))
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)

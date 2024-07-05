@@ -134,30 +134,56 @@ end
     end
 
     if all((i, j) .< size(Vy) .- 1)
+        # θ = 1.0
+        # # Interpolate Vx into Vy node
+        # Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
+        # # Vertical velocity
+        # Vyᵢⱼ = Vy[i + 1, j + 1]
+        # # Get necessary buoyancy forces
+        # i_W, i_E = max(i - 1, 1), min(i + 1, nx)
+        # j_N = min(j + 1, ny)
+        # ρg_stencil = (
+        #     ρgy[i_W, j], ρgy[i, j], ρgy[i_E, j], ρgy[i_W, j_N], ρgy[i, j_N], ρgy[i_E, j_N]
+        # )
+        # ρg_W = (ρg_stencil[1] + ρg_stencil[2] + ρg_stencil[4] + ρg_stencil[5]) * 0.25
+        # ρg_E = (ρg_stencil[2] + ρg_stencil[3] + ρg_stencil[5] + ρg_stencil[6]) * 0.25
+        # ρg_S = ρg_stencil[2]
+        # ρg_N = ρg_stencil[5]
+        # # Spatial derivatives
+        # ∂ρg∂x = (ρg_E - ρg_W) * _dx
+        # ∂ρg∂y = (ρg_N - ρg_S) * _dy
+        # # correction term
+        # ρg_correction = (Vxᵢⱼ * ∂ρg∂x + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+
+        # Vy[i + 1, j + 1] +=
+        #     (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy) - ρg_correction) * ηdτ /
+        #     av_ya(ητ)
+
         θ = 1.0
-        # Interpolate Vx into Vy node
+        # Interpolated Vx into Vy node (includes density gradient)
         Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
         # Vertical velocity
         Vyᵢⱼ = Vy[i + 1, j + 1]
         # Get necessary buoyancy forces
-        i_W, i_E = max(i - 1, 1), min(i + 1, nx)
+        # i_W, i_E = max(i - 1, 1), min(i + 1, nx)
         j_N = min(j + 1, ny)
-        ρg_stencil = (
-            ρgy[i_W, j], ρgy[i, j], ρgy[i_E, j], ρgy[i_W, j_N], ρgy[i, j_N], ρgy[i_E, j_N]
-        )
-        ρg_W = (ρg_stencil[1] + ρg_stencil[2] + ρg_stencil[4] + ρg_stencil[5]) * 0.25
-        ρg_E = (ρg_stencil[2] + ρg_stencil[3] + ρg_stencil[5] + ρg_stencil[6]) * 0.25
-        ρg_S = ρg_stencil[2]
-        ρg_N = ρg_stencil[5]
+        # ρg_stencil = (
+        #     ρgy[i_W, j], ρgy[i, j], ρgy[i_E, j], ρgy[i_W, j_N], ρgy[i, j_N], ρgy[i_E, j_N]
+        # )
+        # ρg_W = (ρg_stencil[1] + ρg_stencil[2] + ρg_stencil[4] + ρg_stencil[5]) * 0.25
+        # ρg_E = (ρg_stencil[2] + ρg_stencil[3] + ρg_stencil[5] + ρg_stencil[6]) * 0.25
+        ρg_S = ρgy[i, j]
+        ρg_N = ρgy[i, j_N]
         # Spatial derivatives
-        ∂ρg∂x = (ρg_E - ρg_W) * _dx
+        # ∂ρg∂x = (ρg_E - ρg_W) * _dx
         ∂ρg∂y = (ρg_N - ρg_S) * _dy
         # correction term
-        ρg_correction = (Vxᵢⱼ * ∂ρg∂x + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+        ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
 
         Vy[i + 1, j + 1] +=
             (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy) + ρg_correction) * ηdτ /
             av_ya(ητ)
+            
     end
 
     return nothing
@@ -265,33 +291,48 @@ end
             Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
         end
         if all((i, j) .≤ size(Ry))
+            # θ = 1.0
+            # Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
+            # # Vertical velocity
+            # Vyᵢⱼ = Vy[i + 1, j + 1]
+            # # Get necessary buoyancy forces
+            # i_W, i_E = max(i - 1, 1), min(i + 1, nx)
+            # j_N = min(j + 1, ny)
+            # ρg_stencil = (
+            #     ρgy[i_W, j],
+            #     ρgy[i, j],
+            #     ρgy[i_E, j],
+            #     ρgy[i_W, j_N],
+            #     ρgy[i, j_N],
+            #     ρgy[i_E, j_N],
+            # )
+            # ρg_W = (ρg_stencil[1] + ρg_stencil[2] + ρg_stencil[4] + ρg_stencil[5]) * 0.25
+            # ρg_E = (ρg_stencil[2] + ρg_stencil[3] + ρg_stencil[5] + ρg_stencil[6]) * 0.25
+            # ρg_S = ρg_stencil[2]
+            # ρg_N = ρg_stencil[5]
+            # # Spatial derivatives
+            # ∂ρg∂x = (ρg_E - ρg_W) * _dx
+            # ∂ρg∂y = (ρg_N - ρg_S) * _dy
+            # # correction term
+            # ρg_correction = (Vxᵢⱼ * ∂ρg∂x + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+            # Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + ρg_correction
+            # # Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
+
             θ = 1.0
-            #     0.25 * (Vx[i, j + 1] + Vx[i + 1, j + 1] + Vx[i, j + 2] + Vx[i + 1, j + 2])
+            # Interpolated Vx into Vy node (includes density gradient)
             Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
             # Vertical velocity
             Vyᵢⱼ = Vy[i + 1, j + 1]
             # Get necessary buoyancy forces
-            i_W, i_E = max(i - 1, 1), min(i + 1, nx)
             j_N = min(j + 1, ny)
-            ρg_stencil = (
-                ρgy[i_W, j],
-                ρgy[i, j],
-                ρgy[i_E, j],
-                ρgy[i_W, j_N],
-                ρgy[i, j_N],
-                ρgy[i_E, j_N],
-            )
-            ρg_W = (ρg_stencil[1] + ρg_stencil[2] + ρg_stencil[4] + ρg_stencil[5]) * 0.25
-            ρg_E = (ρg_stencil[2] + ρg_stencil[3] + ρg_stencil[5] + ρg_stencil[6]) * 0.25
-            ρg_S = ρg_stencil[2]
-            ρg_N = ρg_stencil[5]
+            ρg_S = ρgy[i, j]
+            ρg_N = ρgy[i, j_N]
             # Spatial derivatives
-            ∂ρg∂x = (ρg_E - ρg_W) * _dx
             ∂ρg∂y = (ρg_N - ρg_S) * _dy
             # correction term
-            ρg_correction = (Vxᵢⱼ * ∂ρg∂x + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+            ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+    
             Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + ρg_correction
-            # Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
         end
     end
 

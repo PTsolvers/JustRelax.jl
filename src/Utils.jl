@@ -115,7 +115,8 @@ macro displacement(A)
     end
 end
 
-@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,2}}) where {T} = U.Ux, U.Uy
+@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,2}}) where {T} =
+    U.Ux, U.Uy
 @inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,3}}) where {T} =
     U.Ux, U.Uy, U.Uz
 

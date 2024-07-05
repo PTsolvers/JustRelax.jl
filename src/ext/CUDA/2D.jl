@@ -85,19 +85,27 @@ function JR2D.PTThermalCoeffs(
 end
 
 # Boundary conditions
-function JR2D.flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions)
+function JR2D.flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
+)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
-function flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions)
+function flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
+)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
-function JR2D.flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions)
+function JR2D.flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
+)
     return _flow_bcs!(bcs, @displacement(stokes))
 end
 
-function flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions)
+function flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
+)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 

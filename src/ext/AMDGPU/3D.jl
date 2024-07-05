@@ -213,7 +213,19 @@ function JR3D.velocity2displacement!(
     return _velocity2displacement!(stokes, dt)
 end
 
+function velocity2displacement!(
+    ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt
+)
+    return _velocity2displacement!(stokes, dt)
+end
+
 function JR3D.displacement2velocity!(
+    ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt
+)
+    return _displacement2velocity!(stokes, dt)
+end
+
+function displacement2velocity!(
     ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt
 )
     return _displacement2velocity!(stokes, dt)

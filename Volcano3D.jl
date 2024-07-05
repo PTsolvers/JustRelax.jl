@@ -156,7 +156,6 @@ function main3D(
             )
         )
     end
-
     # Buoyancy force & viscosity
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
@@ -178,26 +177,26 @@ function main3D(
     # ----------------------------------------------------
 
     # Plot initial T and η profiles
-    let
-        Zv = [z for _ in xvi[1], _ in xvi[2], z in xvi[3]][:]
-        Z  = [z for _ in xci[1], _ in xci[2], z in xci[3]][:]
-        fig = Figure(; size=(1200, 900))
-        ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
-        ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
-        scatter!(
-            ax1,
-            Array(ustrip.(dimensionalize(thermal.T[:], C, CharDim))),
-            ustrip.(dimensionalize(Zv, km, CharDim)),
-        )
-        scatter!(
-            ax2,
-            Array(ustrip.(dimensionalize(stokes.P[:], MPa, CharDim))),
-            ustrip.(dimensionalize(Z, km, CharDim)),
-        )
-        hideydecorations!(ax2)
-        # save(joinpath(figdir, "initial_profile.png"), fig)
-        fig
-    end
+    # let
+    #     Zv = [z for _ in xvi[1], _ in xvi[2], z in xvi[3]][:]
+    #     Z  = [z for _ in xci[1], _ in xci[2], z in xci[3]][:]
+    #     fig = Figure(; size=(1200, 900))
+    #     ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
+    #     ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
+    #     scatter!(
+    #         ax1,
+    #         Array(ustrip.(dimensionalize(thermal.T[:], C, CharDim))),
+    #         ustrip.(dimensionalize(Zv, km, CharDim)),
+    #     )
+    #     scatter!(
+    #         ax2,
+    #         Array(ustrip.(dimensionalize(stokes.P[:], MPa, CharDim))),
+    #         ustrip.(dimensionalize(Z, km, CharDim)),
+    #     )
+    #     hideydecorations!(ax2)
+    #     # save(joinpath(figdir, "initial_profile.png"), fig)
+    #     fig
+    # end
 
     # Time loop
     t, it = 0.0, 0
@@ -242,7 +241,7 @@ function main3D(
             )
         )
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di, dt_diff, igg) * 0.8
+        dt = compute_dt(stokes, di, dt_diff, igg) * 0.75
         # --------------------------------
 
         # Thermal solver ---------------
@@ -363,7 +362,7 @@ end
 
 figdir = "Volcano3D"
 do_vtk = true # set to true to generate VTK files for ParaView
-n      = 256
+n      = 32
 nx     = n
 ny     = n
 nz     = n
@@ -375,4 +374,4 @@ else
 end
 
 # run main script
-# main3D(igg, li_GMG, origin_GMG, phases_GMG, T_GMG; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk = do_vtk);
+main3D(igg, li_GMG, origin_GMG, phases_GMG, T_GMG; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk = do_vtk);

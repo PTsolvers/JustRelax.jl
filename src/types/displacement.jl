@@ -30,7 +30,7 @@ end
 
 # Displacement to velocity interpolation
 
-displacement2velocity!(stokes, dt) =  displacement2velocity!(backend(stokes), stokes::JustRelax.StokesArrays, dt)
+displacement2velocity!(stokes, dt) =  displacement2velocity!(backend(stokes), stokes, dt)
 
 function displacement2velocity!(::CPUBackendTrait, stokes::JustRelax.StokesArrays, dt)
     return _displacement2velocity!(stokes, dt)

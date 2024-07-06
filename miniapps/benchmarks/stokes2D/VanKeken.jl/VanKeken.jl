@@ -6,6 +6,8 @@ using JustRelax, JustRelax.JustRelax2D
 import JustRelax.@cell
 const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
+using GLMakie
+
 using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,

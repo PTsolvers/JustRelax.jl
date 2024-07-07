@@ -625,8 +625,10 @@ function _solve!(
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (
-                norm_mpi(@views stokes.R.Rx[2:end-1, 2:end-1]) / length(stokes.R.Rx),
-                norm_mpi(@views stokes.R.Ry[2:end-1, 2:end-1]) / length(stokes.R.Ry),
+                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                length(stokes.R.Rx),
+                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                length(stokes.R.Ry),
                 norm_mpi(stokes.R.RP) / length(stokes.R.RP),
             )
             push!(norm_Rx, errs[1])

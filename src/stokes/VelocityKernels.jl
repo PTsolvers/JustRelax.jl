@@ -183,7 +183,6 @@ end
         Vy[i + 1, j + 1] +=
             (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy) + ρg_correction) * ηdτ /
             av_ya(ητ)
-            
     end
 
     return nothing
@@ -331,7 +330,7 @@ end
             ∂ρg∂y = (ρg_N - ρg_S) * _dy
             # correction term
             ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
-    
+
             Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + ρg_correction
         end
     end

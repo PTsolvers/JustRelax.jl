@@ -578,10 +578,14 @@ function _solve!(
                 args,
             )
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            update_halo!(stokes.τ.xy)
+            # update_halo!(stokes.τ.xy)
 
-            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
-                Vx_on_Vy, stokes.V.Vx
+            # @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
+            #     Vx_on_Vy, stokes.V.Vx
+            # )
+
+            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
+                Vx_on_Vy, stokes.V.Vx, ρg[2], _di[1]
             )
 
             @hide_communication b_width begin # communication/computation overlap
@@ -599,7 +603,7 @@ function _solve!(
                 # apply boundary conditions
                 free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
-                update_halo!(@velocity(stokes)...)
+                # update_halo!(@velocity(stokes)...)
             end
         end
 
@@ -621,8 +625,10 @@ function _solve!(
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (
-                norm_mpi(stokes.R.Rx) / length(stokes.R.Rx),
-                norm_mpi(stokes.R.Ry) / length(stokes.R.Ry),
+                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                length(stokes.R.Rx),
+                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                length(stokes.R.Ry),
                 norm_mpi(stokes.R.RP) / length(stokes.R.RP),
             )
             push!(norm_Rx, errs[1])

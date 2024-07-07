@@ -6,11 +6,21 @@ Interpolates the values of `Vx` onto the grid points of `Vy`.
 # Arguments
 - `Vx_on_Vy::AbstractArray`: `Vx` at `Vy` grid points.
 - `Vx::AbstractArray`: `Vx` at its staggered grid points.
-
-
 """
 @parallel_indices (i, j) function interp_Vx_on_Vy!(Vx_on_Vy, Vx)
     Vx_on_Vy[i + 1, j] = 0.25 * (Vx[i, j] + Vx[i + 1, j] + Vx[i, j + 1] + Vx[i + 1, j + 1])
+    return nothing
+end
+
+@parallel_indices (i, j) function interp_Vx∂ρ∂x_on_Vy!(Vx_on_Vy, Vx, ρg, _dx)
+    nx, ny = size(ρg)
+    ii = clamp(i, 1, nx)
+    ii1 = clamp(i + 1, 1, nx)
+    jj = clamp(j, 1, ny)
+    Vx_on_Vy[i + 1, j] =
+        (0.25 * (Vx[i, j] + Vx[i + 1, j] + Vx[i, j + 1] + Vx[i + 1, j + 1])) *
+        (ρg[ii1, jj] - ρg[ii, jj]) *
+        _dx
     return nothing
 end
 

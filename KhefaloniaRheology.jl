@@ -21,7 +21,7 @@ function init_rheologies(; is_plastic = true)
     # β_sublithospheric_mantle    = inv(get_Kb(el_sublithospheric_mantle))
 
     # Physical properties using GeoParams ----------------
-    η_reg     = 1e16
+    η_reg     = 1e17
     cohesion  = 15e6
     friction  = 20
     pl_crust  = DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity

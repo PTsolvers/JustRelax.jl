@@ -83,7 +83,7 @@ function Khefalonia__setup(N)
     # @. Temp               = max(Temp, 20)
     Grid = addfield(Grid,(; Phases, Temp))
 
-    li     = abs(last(x)-first(x)),  abs(last(z)-first(z))
+    li     = (abs(last(x)-first(x)),  abs(last(z)-first(z))) .* 1e3
     origin = x[1], z[1]
 
     ph      = Phases

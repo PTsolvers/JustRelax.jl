@@ -131,7 +131,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=0.5 / √2
+        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=1e-2 / √2
     )
 
     # Boundary conditions
@@ -224,7 +224,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                     iterMax          = 50e3,
                     nout             = 1e3,
                     viscosity_cutoff = viscosity_cutoff,
-                    free_surface     = false,
+                    free_surface     = true,
                     viscosity_relaxation = 1e-2
                 )
             );
@@ -285,6 +285,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 data_v = (;
                     T   = Array(T_buffer),
                     τII = Array(stokes.τ.II),
+                    τxx = Array(stokes.τ.xx),
+                    τyy = Array(stokes.τ.yy),
                     εII = Array(stokes.ε.II),
                     Vx  = Array(Vx_v),
                     Vy  = Array(Vy_v),

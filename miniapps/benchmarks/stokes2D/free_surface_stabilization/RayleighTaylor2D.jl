@@ -106,7 +106,7 @@ function RT_2D(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 10
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
+        backend, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -237,7 +237,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n        = 100
+n        = 50
 nx       = n
 ny       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -246,4 +246,4 @@ else
     igg
 end
 
-# RT_2D(igg, nx, ny)
+RT_2D(igg, nx, ny)

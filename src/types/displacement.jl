@@ -59,11 +59,6 @@ end
     return nothing
 end
 
-function displacement2velocity!(stokes, dt, flow_bcs::AbstractFlowBoundaryConditions)
-    if typeof(flow_bcs) <: DisplacementBoundaryConditions
-        displacement2velocity!(backend(stokes), stokes, dt)
-        return nothing
-    elseif typeof(flow_bcs) <: VelocityBoundaryConditions
-        return nothing
-    end
-end
+displacement2velocity!(stokes, dt, <:DisplacementBoundaryConditions) = displacement2velocity!(backend(stokes), stokes, dt)
+displacement2velocity!(::Any, ::Any, <:VelocityBoundaryConditions) = nothing
+displacement2velocity!(::Any, ::Any, ::T) where T = throw(ArgumentError("Unknown boundary conditions type: $T"))

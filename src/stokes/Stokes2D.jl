@@ -20,7 +20,7 @@ function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
-    flow_bcs::FlowBoundaryConditions,
+    flow_bcs::AbstractFlowBoundaryConditions,
     ρg,
     K,
     dt,
@@ -54,6 +54,9 @@ function _solve!(
     norm_Ry = Float64[]
     norm_∇V = Float64[]
 
+    # convert displacement to velocity
+    displacement2velocity!(stokes, dt, flow_bcs)
+
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -82,6 +85,7 @@ function _solve!(
                     dt,
                 )
                 # apply boundary conditions
+                velocity2displacement!(stokes, dt)
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end
@@ -151,7 +155,7 @@ function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
-    flow_bcs,
+    flow_bcs::AbstractFlowBoundaryConditions,
     ρg,
     G,
     K,
@@ -186,6 +190,9 @@ function _solve!(
     norm_Ry = Float64[]
     norm_∇V = Float64[]
 
+    # convert displacement to velocity
+    displacement2velocity!(stokes, dt, flow_bcs)
+
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -217,8 +224,9 @@ function _solve!(
                     _di...,
                 )
                 # free slip boundary conditions
+                velocity2displacement!(stokes, dt)
                 flow_bcs!(stokes, flow_bcs)
-                update_halo!(stokes.V.Vx, stokes.V.Vy)
+                update_halo!(@velocity(stokes)...)
             end
         end
 
@@ -270,7 +278,7 @@ function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
-    flow_bcs,
+    flow_bcs::AbstractFlowBoundaryConditions,
     ρg,
     rheology::MaterialParams,
     args,
@@ -323,6 +331,9 @@ function _solve!(
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+
+    # convert displacement to velocity
+    displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
@@ -380,8 +391,9 @@ function _solve!(
                     dt * free_surface,
                 )
                 # apply boundary conditions
+                velocity2displacement!(stokes, dt)
                 flow_bcs!(stokes, flow_bcs)
-                update_halo!(stokes.V.Vx, stokes.V.Vy)
+                update_halo!(@velocity(stokes)...)
             end
         end
 
@@ -424,7 +436,7 @@ function _solve!(
         end
     end
 
-    stokes.P .= θ
+    stokes.P .= θ # θ = P + plastic_overpressure
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
@@ -448,7 +460,7 @@ function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{2,T},
-    flow_bcs,
+    flow_bcs::AbstractFlowBoundaryConditions,
     ρg,
     phase_ratios::JustRelax.PhaseRatio,
     rheology,
@@ -510,6 +522,7 @@ function _solve!(
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
@@ -578,10 +591,14 @@ function _solve!(
                 args,
             )
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            update_halo!(stokes.τ.xy)
+            # update_halo!(stokes.τ.xy)
 
-            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
-                Vx_on_Vy, stokes.V.Vx
+            # @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
+            #     Vx_on_Vy, stokes.V.Vx
+            # )
+
+            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
+                Vx_on_Vy, stokes.V.Vx, ρg[2], _di[1]
             )
 
             @hide_communication b_width begin # communication/computation overlap
@@ -597,9 +614,10 @@ function _solve!(
                     dt * free_surface,
                 )
                 # apply boundary conditions
+                velocity2displacement!(stokes, dt)
                 free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
-                update_halo!(@velocity(stokes)...)
+                # update_halo!(@velocity(stokes)...)
             end
         end
 
@@ -621,8 +639,10 @@ function _solve!(
             )
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (
-                norm_mpi(stokes.R.Rx) / length(stokes.R.Rx),
-                norm_mpi(stokes.R.Ry) / length(stokes.R.Ry),
+                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                length(stokes.R.Rx),
+                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                length(stokes.R.Ry),
                 norm_mpi(stokes.R.RP) / length(stokes.R.RP),
             )
             push!(norm_Rx, errs[1])
@@ -650,7 +670,7 @@ function _solve!(
         end
     end
 
-    stokes.P .= θ
+    stokes.P .= θ # θ = P + plastic_overpressure
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))

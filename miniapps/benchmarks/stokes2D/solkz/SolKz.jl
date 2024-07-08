@@ -83,11 +83,11 @@ function solKz(;
     Kb        = @fill(Inf, ni...)
 
     ## Boundary conditions
-    flow_bcs  = FlowBoundaryConditions(;
+    flow_bcs  = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true)
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
     # Physical time loop
     t = 0.0

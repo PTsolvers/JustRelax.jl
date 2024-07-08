@@ -141,7 +141,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
     )
 
     # Boundary conditions
-    flow_bcs         = FlowBoundaryConditions(;
+    flow_bcs         = VelocityBoundaryConditions(;
         free_slip    = (left = true , right = true , top = true , bot = true , front = true , back = true ),
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
@@ -151,7 +151,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
     stokes.V.Vy .= PTArray(backend_JR)([ -(y - ly/2) * εbg for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
     stokes.V.Vz .= PTArray(backend_JR)([  (lz - abs(z)) * εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+    update_halo!(@velocity(stokes)...)
 
     grid2particle!(pT, xvi, thermal.T, particles)
 

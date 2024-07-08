@@ -105,6 +105,22 @@ end
     V.Vx, V.Vy, V.Vz
 
 """
+    @displacement(U)
+
+Unpacks the displacement arrays `U` from the StokesArrays `A`.
+"""
+macro displacement(A)
+    return quote
+        unpack_displacement(($(esc(A))).U)
+    end
+end
+
+@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,2}}) where {T} =
+    U.Ux, U.Uy
+@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,3}}) where {T} =
+    U.Ux, U.Uy, U.Uz
+
+"""
     @qT(V)
 
 Unpacks the flux arrays `qT_i` from the ThermalArrays `A`.

@@ -105,15 +105,15 @@ function solCx(
         @views η2[end, :]  .= η2[end-1, :]
         @views η2[:, 1]    .= η2[:, 2]
         @views η2[:, end]  .= η2[:, end-1]
-        η, η2               = η2, η # swap   
+        η, η2               = η2, η # swap
     end
 
     ## Boundary conditions
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot= true)
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
     # Physical time loop
     t = 0.0

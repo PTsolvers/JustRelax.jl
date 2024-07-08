@@ -6,6 +6,8 @@ using JustRelax, JustRelax.JustRelax2D
 import JustRelax.@cell
 const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
+using GLMakie
+
 using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
@@ -75,9 +77,9 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
     )
 
     # Initialize particles -------------------------------
-    nxcell, max_p, min_p = 40, 80, 20
+    nxcell, max_p, min_p = 20, 30, 10
     particles            = init_particles(
-        backend, nxcell, max_p, min_p, xvi..., di..., nx, ny
+        backend, nxcell, max_p, min_p, xvi, di, ni
     )
     # velocity grids
     grid_vx, grid_vy     = velocity_grids(xci, xvi, di)
@@ -102,12 +104,12 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
-    flow_bcs             = FlowBoundaryConditions(;
+    flow_bcs             = VelocityBoundaryConditions(;
         free_slip = (left =  true, right =  true, top = false, bot = false),
         no_slip   = (left = false, right = false, top =  true, bot =  true),
     )
     flow_bcs!(stokes, flow_bcs)
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -146,16 +148,16 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
             igg;
             kwargs = (
                 iterMax          = 10e3,
-                nout             = 50,
+                nout             = 1e3,
                 viscosity_cutoff = (-Inf, Inf)
             )
         )
-        dt = compute_dt(stokes, di) / 10
+        dt = compute_dt(stokes, di) * 0.8
         # ------------------------------
 
         # Compute U rms ---------------
         Urms_it = let
-            JustRelax.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
+            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
             sum(Vx_v.^2) * prod(di) |> sqrt
         end
@@ -176,7 +178,7 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
         t        += dt
 
         # Plotting ---------------------
-        if it == 1 || rem(it, 1000) == 0 || t >= tmax
+        if it == 1 || rem(it, 25) == 0 || t >= tmax
             fig = Figure(size = (1000, 1000), title = "t = $t")
             ax1 = Axis(fig[1,1], aspect = 1/λ, title = "t=$t")
             heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :oleron)
@@ -193,9 +195,9 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
 end
 
 figdir = "VanKeken"
-n      = 128 + 2
-nx     = n - 2
-ny     = n - 2
+n      = 64
+nx     = n
+ny     = n
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

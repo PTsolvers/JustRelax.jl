@@ -184,7 +184,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     compute_viscosity!(stokes, args, rheology, (1e18, 1e24))
 
     # Boundary conditions
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip   = (left=true , right=true , top=true , bot=true , front=true , back=true ),
         no_slip     = (left=false, right=false, top=false, bot=false, front=false, back=false),
     )

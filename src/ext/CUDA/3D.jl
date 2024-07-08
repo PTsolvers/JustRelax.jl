@@ -21,7 +21,11 @@ import JustRelax:
     Geometry,
     @cell
 import JustRelax:
-    AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
+    AbstractBoundaryConditions,
+    TemperatureBoundaryConditions,
+    AbstractFlowBoundaryConditions,
+    DisplacementBoundaryConditions,
+    VelocityBoundaryConditions
 
 @init_parallel_stencil(CUDA, Float64, 3)
 
@@ -31,14 +35,6 @@ include("../../stokes/Stokes3D.jl")
 # Types
 function JR3D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
     return StokesArrays(ni)
-end
-
-function JR3D.velocity2displacement!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
-    return _velocity2displacement!(stokes, dt)
-end
-
-function JR3D.displacement2velocity!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
-    return _displacement2velocity!(stokes, dt)
 end
 
 function JR3D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N,Number}) where {N}
@@ -100,12 +96,29 @@ function JR3D.update_pt_thermal_arrays!(
 end
 
 # Boundary conditions
-function JR3D.flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
+function JR3D.flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
+)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
-function flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
+function flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
+)
     return _flow_bcs!(bcs, @velocity(stokes))
+end
+
+# Boundary conditions
+function JR3D.flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
+)
+    return _flow_bcs!(bcs, @displacement(stokes))
+end
+
+function flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
+)
+    return _flow_bcs!(bcs, @displacement(stokes))
 end
 
 function JR3D.thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
@@ -199,6 +212,22 @@ function JR3D.velocity2vertex!(
 )
     velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
     return nothing
+end
+
+function JR3D.velocity2displacement!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _velocity2displacement!(stokes, dt)
+end
+
+function velocity2displacement!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _velocity2displacement!(stokes, dt)
+end
+
+function JR3D.displacement2velocity!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _displacement2velocity!(stokes, dt)
+end
+
+function displacement2velocity!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _displacement2velocity!(stokes, dt)
 end
 
 # Solvers

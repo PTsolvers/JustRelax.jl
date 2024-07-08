@@ -135,7 +135,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     )
 
     # Boundary conditions
-    flow_bcs         = FlowBoundaryConditions(;
+    flow_bcs         = VelocityBoundaryConditions(;
         free_slip    = (left = true , right = true , top = true , bot = true),
         free_surface = false,
     )

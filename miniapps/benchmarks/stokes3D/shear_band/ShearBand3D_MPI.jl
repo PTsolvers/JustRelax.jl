@@ -99,7 +99,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # Boundary conditions
-    flow_bcs     = FlowBoundaryConditions(;
+    flow_bcs     = VelocityBoundaryConditions(;
         free_slip   = (left = true , right = true , top = true , bot = true , back = true , front = true),
         no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )

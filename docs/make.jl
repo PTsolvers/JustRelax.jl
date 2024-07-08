@@ -7,6 +7,9 @@ JR_root_dir = dirname(@__DIR__)
 license = read(joinpath(JR_root_dir, "LICENSE.md"), String)
 write(joinpath(@__DIR__, "src", "man", "license.md"), license)
 
+security = read(joinpath(JR_root_dir, "SECURITY.md"), String)
+write(joinpath(@__DIR__, "src", "man", "security.md"), security)
+
 # Copy list of authors to not need to synchronize it manually
 authors_text = read(joinpath(JR_root_dir, "AUTHORS.md"), String)
 # authors_text = replace(authors_text, "in the [LICENSE.md](LICENSE.md) file" => "under [License](@ref)")
@@ -94,6 +97,7 @@ makedocs(;
         "Authors" => "man/authors.md",
         "Contributing" => "man/contributing.md",
         "Code of Conduct" => "man/code_of_conduct.md",
+        "Security" => "man/security.md",
         "License" => "man/license.md"
     ],
 )

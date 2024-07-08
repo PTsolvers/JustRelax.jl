@@ -122,11 +122,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(2))
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
+    stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
 
     # Rheology
     args0            = (T=thermal.Tc, P=stokes.P, dt = Inf)
-    viscosity_cutoff = (1e17, 1e24)
+    viscosity_cutoff = (1e17, 1e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
@@ -139,6 +139,13 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         free_slip    = (left = true , right = true , top = true , bot = true),
         free_surface = false,
     )
+    # pureshear_bc!(stokes, xci, xvi, -1e18, backend)
+
+    εbg = -1e-15
+    stokes.V.Vx[:, 2:(end - 1)] .= PTArray(backend)([y < 0 ? εbg * x : 0 for x in xvi[1], y in xci[2]])
+    stokes.V.Vy[2:(end - 1), :] .= PTArray(backend)([y < 0 ? -εbg * y : 0 for x in xci[1], y in xvi[2]])
+    # stokes.V.Vy[:, end-1]       .= 0
+    
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -158,24 +165,24 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     end
 
     # Smooth out thermal field ---------------------------
-    for _ in 1:1
-        heatdiffusion_PT!(
-            thermal,
-            pt_thermal,
-            thermal_bc,
-            rheology,
-            args0,
-            dt,
-            di;
-            kwargs = (
-                igg     = igg,
-                phase   = phase_ratios,
-                iterMax = 10e3,
-                nout    = 1e3,
-                verbose = true,
-            )
-        )
-    end
+    # for _ in 1:1
+    #     heatdiffusion_PT!(
+    #         thermal,
+    #         pt_thermal,
+    #         thermal_bc,
+    #         rheology,
+    #         args0,
+    #         dt,
+    #         di;
+    #         kwargs = (
+    #             igg     = igg,
+    #             phase   = phase_ratios,
+    #             iterMax = 10e3,
+    #             nout    = 1e3,
+    #             verbose = true,
+    #         )
+    #     )
+    # end
 
     T_buffer    = @zeros(ni.+1)
     Told_buffer = similar(T_buffer)
@@ -214,7 +221,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 dt,
                 igg;
                 kwargs = (
-                    iterMax          = 150e3,
+                    iterMax          = 50e3,
                     nout             = 1e3,
                     viscosity_cutoff = viscosity_cutoff,
                     free_surface     = false,
@@ -241,8 +248,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             kwargs = (
                 igg     = igg,
                 phase   = phase_ratios,
-                iterMax = 50e3,
-                nout    = 1e2,
+                iterMax = 10e3,
+                nout    = 1e3,
                 verbose = true,
             )
         )
@@ -270,7 +277,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 1) == 0
             # checkpointing(figdir, stokes, thermal.T, η, t)
             (; η_vep, η) = stokes.viscosity
             if do_vtk
@@ -317,13 +324,13 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
+            h1  = GLMakie.heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
             # Plot particles phase
-            h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+            h2  = GLMakie.scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
             # Plot 2nd invariant of strain rate
-            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            h3  = GLMakie.heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
             # Plot effective viscosity
-            h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:batlow)
+            h4  = GLMakie.heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -354,4 +361,4 @@ else
     igg
 end
 
-# main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

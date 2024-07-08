@@ -40,7 +40,7 @@ function Khefalonia__setup(N)
     ny = 2
     x = range(-Lx / 2, Lx / 2, nx);
     y = range(-Ly / 2, Ly / 2, ny);
-    z = range(-25, 5, nz);
+    z = range(-14.5, 5, nz);
     Grid = CartData(xyz_grid(x,y,z));
 
     # Now we create an integer array that will hold the `Phases` information (which usually refers to the material or rock type in the simulation)
@@ -83,8 +83,8 @@ function Khefalonia__setup(N)
     # @. Temp               = max(Temp, 20)
     Grid = addfield(Grid,(; Phases, Temp))
 
-    li     = abs(last(x)-first(x)),  abs(last(y)-first(y))
-    origin = x[1], y[1]
+    li     = abs(last(x)-first(x)),  abs(last(z)-first(z))
+    origin = x[1], z[1]
 
     ph      = Phases
     T       = Temp

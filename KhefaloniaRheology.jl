@@ -22,8 +22,8 @@ function init_rheologies(; is_plastic = true)
 
     # Physical properties using GeoParams ----------------
     η_reg     = 1e16
-    cohesion  = 3e6
-    friction  = asind(0.2)
+    cohesion  = 15e6
+    friction  = 20
     pl_crust  = DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     
     # crust
@@ -81,7 +81,6 @@ function init_rheologies(; is_plastic = true)
         ),
     )
 end
-
 
 function init_phases!(phases, phase_grid, particles, xvi)
     ni = size(phases)

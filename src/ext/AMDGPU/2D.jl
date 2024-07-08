@@ -22,7 +22,11 @@ import JustRelax:
     Geometry,
     @cell
 import JustRelax:
-    AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
+    AbstractBoundaryConditions,
+    TemperatureBoundaryConditions,
+    AbstractFlowBoundaryConditions,
+    DisplacementBoundaryConditions,
+    VelocityBoundaryConditions
 
 @init_parallel_stencil(AMDGPU, Float64, 2)
 
@@ -32,18 +36,6 @@ include("../../stokes/Stokes2D.jl")
 # Types
 function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N,Integer}) where {N}
     return StokesArrays(ni)
-end
-
-function JR2D.velocity2displacement!(
-    stokes::JustRelax.StokesArrays, ::AMDGPUBackendTrait, dt
-)
-    return _velocity2displacement!(stokes, dt)
-end
-
-function JR2D.displacement2velocity!(
-    stokes::JustRelax.StokesArrays, ::AMDGPUBackendTrait, dt
-)
-    return _displacement2velocity!(stokes, dt)
 end
 
 function JR2D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N,Number}) where {N}
@@ -94,12 +86,32 @@ function JR2D.PTThermalCoeffs(
 end
 
 # Boundary conditions
-function JR2D.flow_bcs!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, bcs)
+function JR2D.flow_bcs!(
+    ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
+)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
-function flow_bcs!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, bcs)
+function flow_bcs!(
+    ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
+)
     return _flow_bcs!(bcs, @velocity(stokes))
+end
+
+function JR2D.flow_bcs!(
+    ::AMDGPUBackendTrait,
+    stokes::JustRelax.StokesArrays,
+    bcs::DisplacementBoundaryConditions,
+)
+    return _flow_bcs!(bcs, @displacement(stokes))
+end
+
+function flow_bcs!(
+    ::AMDGPUBackendTrait,
+    stokes::JustRelax.StokesArrays,
+    bcs::DisplacementBoundaryConditions,
+)
+    return _flow_bcs!(bcs, @displacement(stokes))
 end
 
 function JR2D.thermal_bcs!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs)
@@ -193,6 +205,26 @@ function JR2D.velocity2vertex!(
 )
     velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=ghost_nodes)
     return nothing
+end
+
+function JR2D.velocity2displacement!(
+    ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt
+)
+    return _velocity2displacement!(stokes, dt)
+end
+
+function velocity2displacement!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _velocity2displacement!(stokes, dt)
+end
+
+function JR2D.displacement2velocity!(
+    ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt
+)
+    return _displacement2velocity!(stokes, dt)
+end
+
+function displacement2velocity!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _displacement2velocity!(stokes, dt)
 end
 
 # Solvers

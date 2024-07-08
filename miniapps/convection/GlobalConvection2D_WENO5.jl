@@ -187,7 +187,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     )
 
     # Boundary conditions
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip   = (left = true , right = true , top = true , bot = true),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions

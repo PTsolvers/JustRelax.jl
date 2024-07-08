@@ -281,12 +281,12 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         (abs(y) - sticky_air) * εbg * (abs(y) > sticky_air) for _ in 1:(nx + 2), y in xvi[2]
     ])
 
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip    = (left=true, right=true, top=true, bot=true),
         free_surface = true,
     )
     flow_bcs!(stokes, flow_bcs)
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
     η = @ones(ni...) # initialise viscosity
 

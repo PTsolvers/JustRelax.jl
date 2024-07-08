@@ -1,4 +1,4 @@
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -82,15 +82,15 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             Elasticity        = el_inc,
         ),
     )
-    
+
     # perturbation array for the cohesion
     perturbation_C = @rand(ni...)
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatio(ni, length(rheology))
+    phase_ratios = PhaseRatio(backend, ni, length(rheology))
     init_phases!(phase_ratios, xci, radius)
-    
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
@@ -105,14 +105,14 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
     # Boundary conditions
-    flow_bcs     = FlowBoundaryConditions(;
+    flow_bcs     = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
     stokes.V.Vx .= PTArray(backend)([ x*εbg for x in xvi[1], _ in 1:ny+2])
     stokes.V.Vy .= PTArray(backend)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
     # IO -------------------------------------------------
     take(figdir)

@@ -124,7 +124,7 @@ compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 We we will use free slip boundary conditions on all sides
 ```julia
 # Boundary conditions
-flow_bcs         = FlowBoundaryConditions(;
+flow_bcs         = VelocityBoundaryConditions(;
     free_slip    = (left = true , right = true , top = true , bot = true),
 )
 ```

@@ -89,17 +89,17 @@ end
     stokes.V.Vy .= 1.0
 
     JR2.velocity2displacement!(stokes, 10)
-    @test all(stokes.U.Ux.==0.1)
+    @test all(stokes.U.Ux.== 10)
 
     JR2.displacement2velocity!(stokes, 5)
-    @test all(stokes.V.Vx.==0.5)
+    @test all(stokes.V.Vx.==2.0)
 end
 
 @testset "3D allocators" begin
     ni = nx, ny, nz = (2, 2, 2)
 
     stokes = JR3.StokesArrays(backend, ni)
-    
+
     @test size(stokes.P)      == ni
     @test size(stokes.P0)     == ni
     @test size(stokes.∇V)     == ni
@@ -174,8 +174,8 @@ end
     stokes.V.Vz .= 1.0
 
     JR3.velocity2displacement!(stokes, 10)
-    @test all(stokes.U.Ux.==0.1)
+    @test all(stokes.U.Ux.==10.0)
 
     JR3.displacement2velocity!(stokes, 5)
-    @test all(stokes.V.Vx.==0.5)
+    @test all(stokes.V.Vx.==2.0)
 end

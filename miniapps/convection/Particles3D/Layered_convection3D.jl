@@ -1,19 +1,38 @@
+# const isCUDA = false
+const isCUDA = true
+
+@static if isCUDA 
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 import JustRelax.@cell
 
-const backend_JR = CPUBackend
+const backend_JR = @static if isCUDA 
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
+
+@static if isCUDA 
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
 
 using JustPIC, JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if isCUDA 
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
-# Load script dependencies
-using Printf, GeoParams, GLMakie, GeoParams
+using GeoParams
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
@@ -99,7 +118,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 25, 35, 8
     particles                   = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        backend, nxcell, max_xcell, min_xcell, xvi, di, ni,
     )
     subgrid_arrays              = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -115,7 +134,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     r_anomaly        = 50e3   # radius of perturbation
     init_phases!(pPhases, particles, lx, ly; d=abs(zc_anomaly), r=r_anomaly)
     phase_ratios     = PhaseRatio(backend_JR, ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center!(phase_ratios.center, particles.coords, xci, di, pPhases)
+    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -142,6 +161,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     @parallel init_P!(stokes.P, ρg[end], xci[end])
 
     # Rheology
+    args = (; T=thermal.Tc, P=stokes.P, dt=dt)
     viscosity_cutoff = (1e18, 1e24)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
@@ -156,7 +176,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+    update_halo!(@velocity(stokes)...)
 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -167,21 +187,21 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     take(figdir)
     # ----------------------------------------------------
 
-    # Plot initial T and η profiles
-    fig = let
-        Zv  = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-        Z   = [z for x in xci[1], y in xci[2], z in xci[3]][:]
-        fig = Figure(size = (1200, 900))
-        ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
-        ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        lines!(ax1, Array(thermal.T[:]), Zv./1e3)
-        lines!(ax2, Array(log10.(η[:])), Z./1e3)
-        ylims!(ax1, minimum(xvi[3])./1e3, 0)
-        ylims!(ax2, minimum(xvi[3])./1e3, 0)
-        hideydecorations!(ax2)
-        save(joinpath(figdir, "initial_profile.png"), fig)
-        fig
-    end
+    # # Plot initial T and η profiles
+    # fig = let
+    #     Zv  = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
+    #     Z   = [z for x in xci[1], y in xci[2], z in xci[3]][:]
+    #     fig = Figure(size = (1200, 900))
+    #     ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
+    #     ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
+    #     lines!(ax1, Array(thermal.T[:]), Zv./1e3)
+    #     lines!(ax2, Array(log10.(η[:])), Z./1e3)
+    #     ylims!(ax1, minimum(xvi[3])./1e3, 0)
+    #     ylims!(ax2, minimum(xvi[3])./1e3, 0)
+    #     hideydecorations!(ax2)
+    #     save(joinpath(figdir, "initial_profile.png"), fig)
+    #     fig
+    # end
 
     grid2particle!(pT, xvi, thermal.T, particles)
     dt₀         = similar(stokes.P)
@@ -227,7 +247,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             )
         );
         tensor_invariant!(stokes.ε)
-        dt   = compute_dt(stokes, di, dt_diff) / 2
+        dt   = compute_dt(stokes, di, dt_diff) * 0.9
         # ------------------------------
 
         # Thermal solver ---------------
@@ -279,9 +299,9 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                     T   = Array(thermal.T),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
-                    Vx  = Array(Vx_v),
-                    Vy  = Array(Vy_v),
-                    Vz  = Array(Vz_v),
+                    # Vx  = Array(Vx_v),
+                    # Vy  = Array(Vy_v),
+                    # Vz  = Array(Vz_v),
                 )
                 data_c = (;
                     Tc  = Array(thermal.Tc),
@@ -290,7 +310,8 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                     τyy = Array(stokes.τ.yy),
                     εxx = Array(stokes.ε.xx),
                     εyy = Array(stokes.ε.yy),
-                    η   = Array(log10.(stokes.viscosity.η_vep)),
+                    ηvep= Array(stokes.viscosity.η_vep),
+                    η   = Array(stokes.viscosity.η),
                 )
                 velocity_v = (
                     Array(Vx_v),
@@ -307,30 +328,30 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                 )
             end
 
-            slice_j = ny >>> 1
-            # Make Makie figure
-            fig = Figure(size = (1400, 1800), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "τII [MPa]")
-            ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
-            ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
-            # Plot temperature
-            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, slice_j, :]) , colormap=:lajolla)
-            # Plot particles phase
-            h2  = heatmap!(ax2, xci[1].*1e-3, xci[3].*1e-3, Array(stokes.τ.II[:, slice_j, :].*1e-6) , colormap=:batlow)
-            # Plot 2nd invariant of strain rate
-            h3  = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
-            # Plot effective viscosity
-            h4  = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:, slice_j, :])) , colormap=:batlow)
-            hideydecorations!(ax3)
-            hideydecorations!(ax4)
-            Colorbar(fig[1,2], h1)
-            Colorbar(fig[2,2], h2)
-            Colorbar(fig[1,4], h3)
-            Colorbar(fig[2,4], h4)
-            linkaxes!(ax1, ax2, ax3, ax4)
-            save(joinpath(figdir, "$(it).png"), fig)
-            fig
+            # slice_j = ny >>> 1
+            # # Make Makie figure
+            # fig = Figure(size = (1400, 1800), title = "t = $t")
+            # ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+            # ax2 = Axis(fig[2,1], aspect = ar, title = "τII [MPa]")
+            # ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
+            # ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+            # # Plot temperature
+            # h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, slice_j, :]) , colormap=:lajolla)
+            # # Plot particles phase
+            # h2  = heatmap!(ax2, xci[1].*1e-3, xci[3].*1e-3, Array(stokes.τ.II[:, slice_j, :].*1e-6) , colormap=:batlow)
+            # # Plot 2nd invariant of strain rate
+            # h3  = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
+            # # Plot effective viscosity
+            # h4  = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:, slice_j, :])) , colormap=:batlow)
+            # hideydecorations!(ax3)
+            # hideydecorations!(ax4)
+            # Colorbar(fig[1,2], h1)
+            # Colorbar(fig[2,2], h2)
+            # Colorbar(fig[1,4], h3)
+            # Colorbar(fig[2,4], h4)
+            # linkaxes!(ax1, ax2, ax3, ax4)
+            # save(joinpath(figdir, "$(it).png"), fig)
+            # fig
         end
         # ------------------------------
 
@@ -342,7 +363,7 @@ end
 
 do_vtk   = true # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
-n        = 32
+n        = 50
 nx       = n
 ny       = n
 nz       = n
@@ -354,4 +375,4 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir   = "Plume3D_$n"
-# main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

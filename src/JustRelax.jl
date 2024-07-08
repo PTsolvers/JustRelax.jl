@@ -33,8 +33,7 @@ include("types/phases.jl")
 
 include("boundaryconditions/types.jl")
 export TemperatureBoundaryConditions,
-    DisplacementBoundaryConditions,
-    VelocityBoundaryConditions
+    DisplacementBoundaryConditions, VelocityBoundaryConditions
 
 include("types/traits.jl")
 export BackendTrait, CPUBackendTrait, NonCPUBackendTrait

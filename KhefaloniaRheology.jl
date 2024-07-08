@@ -23,7 +23,7 @@ function init_rheologies(; is_plastic = true)
     # Physical properties using GeoParams ----------------
     η_reg     = 1e17
     cohesion  = 15e6
-    friction  = 20
+    friction  = 10
     pl_crust  = DruckerPrager_regularised(; C = cohesion, ϕ=friction, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
     
     # crust

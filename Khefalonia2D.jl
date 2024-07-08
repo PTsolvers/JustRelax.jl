@@ -75,7 +75,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Physical properties using GeoParams ----------------
     rheology            = init_rheologies()
-    dt                  = 1e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt = dtmax          = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -233,7 +233,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
         tensor_invariant!(stokes.ε)
-        dt   = compute_dt(stokes, di) * 0.8
         # ------------------------------
 
         # Thermal solver ---------------
@@ -253,6 +252,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 verbose = true,
             )
         )
+        dt   = min(dtmax, compute_dt(stokes, di) * 0.5)
+
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
         )
@@ -283,17 +284,17 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T   = Array(T_buffer),
-                    τII = Array(stokes.τ.II),
-                    τxx = Array(stokes.τ.xx),
-                    τyy = Array(stokes.τ.yy),
-                    εII = Array(stokes.ε.II),
+                    T   = Array(T_buffer),        
                     Vx  = Array(Vx_v),
                     Vy  = Array(Vy_v),
                 )
                 data_c = (;
                     P   = Array(stokes.P),
                     η   = Array(η_vep),
+                    τII = Array(stokes.τ.II),
+                    τxx = Array(stokes.τ.xx),
+                    τyy = Array(stokes.τ.yy),
+                    εII = Array(stokes.ε.II),
                 )
                 velocity_v = (
                     Array(Vx_v),

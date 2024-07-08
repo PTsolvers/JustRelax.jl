@@ -59,6 +59,6 @@ end
     return nothing
 end
 
-displacement2velocity!(stokes, dt, <:DisplacementBoundaryConditions) = displacement2velocity!(backend(stokes), stokes, dt)
-displacement2velocity!(::Any, ::Any, <:VelocityBoundaryConditions) = nothing
+displacement2velocity!(stokes, dt, ::DisplacementBoundaryConditions) = displacement2velocity!(backend(stokes), stokes, dt)
+displacement2velocity!(::Any, ::Any, ::VelocityBoundaryConditions) = nothing
 displacement2velocity!(::Any, ::Any, ::T) where T = throw(ArgumentError("Unknown boundary conditions type: $T"))

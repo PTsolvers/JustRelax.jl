@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA 
     using CUDA
@@ -32,7 +32,7 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-using GeoParams, GLMakie, CellArrays
+using GeoParams, GLMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -269,19 +269,19 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend_JR, ni) # initialise stokes arrays with the defined regime
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-5, CFL=0.9 / √3.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-3, CFL=0.9 / √3.1)
     # ----------------------------------------------------
 
     args = (; T=thermal.Tc, P=stokes.P, dt=dt)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-1/ √3.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-3, CFL=1e-1/ √3.1
     )
 
     flow_bcs = FlowBoundaryConditions(;
-        # no_slip      = (left=true, right=true, front=true, back=true, top=true, bot=true),
-        # free_slip    = (left=false, right=false, front=false, back=false, top=false, bot=false),
-        no_slip        = (left=false, right=false, front=false, back=false, top=false, bot=false),
-        free_slip      = (left=true, right=true, front=true, back=true, top=true, bot=true),        
+        no_slip      = (left=true, right=true, front=true, back=true, top=true, bot=true),
+        free_slip    = (left=false, right=false, front=false, back=false, top=false, bot=false),
+        # no_slip        = (left=false, right=false, front=false, back=false, top=false, bot=false),
+        # free_slip      = (left=true, right=true, front=true, back=true, top=true, bot=true),        
     )
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
@@ -344,7 +344,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     @copy thermal.Told thermal.T
     Tsurf, Tbot  = extrema(thermal.T)
 
-    while it < 10
+    while it < 50
 
         # Update buoyancy and viscosity -
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf)
@@ -436,6 +436,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                         εxy= Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                     )
                     data_c = (;
+                        Tc  = Array(thermal.Tc),
                         P   = Array(ustrip.(dimensionalize(stokes.P,MPa,CharDim))),
                         τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa,CharDim))),
                         τyy = Array(ustrip.(dimensionalize(stokes.τ.yy,MPa,CharDim))),

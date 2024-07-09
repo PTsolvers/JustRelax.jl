@@ -290,7 +290,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 5) == 0
             checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
             if do_vtk

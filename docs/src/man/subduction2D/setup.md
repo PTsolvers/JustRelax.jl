@@ -38,7 +38,8 @@ add_box!(
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80,Adiabat=0.4)
 )
 ```
-![](../../assets/Subduction2D_setup_4.png)
+<img src="../../assets/Subduction2D_setup_1.png" width="750"  />
+
 
 Next we add a horizontal 80 km thick oceanic lithosphere. Note that we leave a 100 km buffer zone next to the vertical boundaries of the domain, to facilitate the sliding of the oceanic plates.
 ```julia
@@ -52,7 +53,7 @@ add_box!(
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80, Adiabat=0.4)
 )
 ```
-![](../../assets/Subduction2D_setup_2.png)
+<img src="../../assets/Subduction2D_setup_2.png" width="750"  />
 
 As in the original paper, we add a 8km thick crust on top of the subducting oceanic plate.
 ```julia
@@ -68,9 +69,9 @@ add_box!(
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80, Adiabat=0.4)
 )
 ```
-![](../../assets/Subduction2D_setup_3.png)
+<img src="../../assets/Subduction2D_setup_3.png" width="750"  />
 
-And finally we add the subducting slab, with the trench located at 1430km from the right-hand-side boundary.
+And we add the subducting slab, with the trench located at 1430km from the right-hand-side boundary.
 
 ```julia
 add_box!(
@@ -84,18 +85,12 @@ add_box!(
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80, Adiabat=0.4)
 )
 ```
-![](../../assets/Subduction2D_setup_4.png)
+<img src="../../assets/Subduction2D_setup_4.png" width="750"  />
 
+To finish, we set every cell above the surface to be sticky air, with a temperature of 20°C.
 ```julia
 surf                 = Grid2D.z.val .> 0.0
-@views Temp[surf]   .= 20.0
 @views Phases[surf] .= 3
+@views Temp[surf]   .= 20.0
 ```
-![](../../assets/Subduction2D_setup_5.png)
-
-```julia
-li     = (abs(last(x)-first(x)), abs(last(z)-first(z))) .* 1e3 # in meters
-origin = (x[1], z[1]) .* 1e3 # lower-left corner of the domain
-Phases = Phases[:,1,:] .+ 1  # +1 because Julia is 1-indexed
-Temp   = Temp[:,1,:].+273    # in Kelvin
-```
+<img src="../../assets/Subduction2D_setup_5.png" width="750"  />

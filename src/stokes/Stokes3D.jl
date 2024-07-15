@@ -238,16 +238,17 @@ function _solve!(
             )
 
             # Update buoyancy
-            update_ρg!(ρg[3], rheology, args)
-
-            update_viscosity!(
-                stokes,
-                phase_ratios,
-                args,
-                rheology,
-                viscosity_cutoff;
-                relaxation=viscosity_relaxation,
-            )
+            if iter == 1 || rem(iter, 5) == 0
+                update_ρg!(ρg[end], phase_ratios, rheology, args)
+                update_viscosity!(
+                    stokes,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff;
+                    relaxation=viscosity_relaxation,
+                )
+            end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -298,13 +299,9 @@ function _solve!(
         end
 
         iter += 1
-        if iter % nout == 0 && iter > 1
+        @views if iter % nout == 0 && iter > 1
             cont += 1
-            # push!(norm_Rx, maximum_mpi(abs.(stokes.R.Rx)))
-            # push!(norm_Ry, maximum_mpi(abs.(stokes.R.Ry)))
-            # push!(norm_Rz, maximum_mpi(abs.(stokes.R.Rz)))
-            # push!(norm_∇V, maximum_mpi(abs.(stokes.R.RP)))
-            push!(
+               push!(
                 norm_Rx,
                 norm_mpi(stokes.R.Rx[2:(end - 1), 2:(end - 1), 2:(end - 1)]) /
                 length(stokes.R.Rx),
@@ -419,7 +416,7 @@ function _solve!(
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
-
+    errvisc = Inf
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
@@ -445,18 +442,28 @@ function _solve!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
             )
 
-            # Update buoyancy
-            update_ρg!(ρg[end], phase_ratios, rheology, args)
-
-            # Update viscosity
-            update_viscosity!(
-                stokes,
-                phase_ratios,
-                args,
-                rheology,
-                viscosity_cutoff;
-                relaxation=viscosity_relaxation,
-            )
+            if iter == 1 || rem(iter, 5) == 0
+                update_ρg!(ρg[end], phase_ratios, rheology, args)
+            end
+            if iter > 1 || iter % (nout ÷ 2) == 0
+                copyto!(stokes.ε.II, η)
+            end
+            if errvisc > 1e-6
+                update_viscosity!(
+                    stokes,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff;
+                    relaxation=viscosity_relaxation,
+                )
+                compute_maxloc!(ητ, η)
+                update_halo!(ητ)
+            end
+            if iter > 1 || iter % (nout ÷ 2) == 0
+                @. stokes.ε.II = (stokes.ε.II-η) / η
+                errvisc = norm(stokes.ε.II)
+            end
             # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -517,7 +524,7 @@ function _solve!(
         if iter % nout == 0 && iter > 1
             cont += 1
             for (norm_Ri, Ri) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R))
-                push!(
+                @views push!(
                     norm_Ri,
                     norm_mpi(Ri[2:(end - 1), 2:(end - 1), 2:(end - 1)]) / length(Ri),
                 )

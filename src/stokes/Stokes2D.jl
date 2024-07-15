@@ -337,22 +337,28 @@ function _solve!(
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
+            compute_maxloc!(ητ, η; window=(1, 1))
+            update_halo!(ητ)
+
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
             )
-
-            update_ρg!(ρg[2], rheology, args)
-
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-
-            update_viscosity!(
-                stokes, args, rheology, viscosity_cutoff; relaxation=viscosity_relaxation
-            )
-            compute_maxloc!(ητ, η; window=(1, 1))
-            update_halo!(ητ)
+            
+            # if iter == 1 || rem(iter, 5) == 0
+                update_ρg!(ρg[end], phase_ratios, rheology, args)
+                update_viscosity!(
+                    stokes,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff;
+                    relaxation = viscosity_relaxation,
+                )
+            # end
 
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
@@ -511,8 +517,6 @@ function _solve!(
     wtime0 = 0.0
     θ = @zeros(ni...)
     λ = @zeros(ni...)
-    η0 = deepcopy(η)
-    do_visc = true
 
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
@@ -523,14 +527,15 @@ function _solve!(
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
-
+    
+    # use this array as buffer
+    copyto!(stokes.ε.II, η)
+    errvisc =  Inf
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
 
         wtime0 += @elapsed begin
-            compute_maxloc!(ητ, η; window=(1, 1))
-            update_halo!(ητ)
-
+            
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
             compute_P!(
@@ -547,21 +552,18 @@ function _solve!(
                 args,
             )
 
-            # stokes.P[1, 1] = stokes.P[2, 1]
-            # stokes.P[end, 1] = stokes.P[end - 1, 1]
-            # stokes.P[1, end] = stokes.P[2, end]
-            # stokes.P[end, end] = stokes.P[end - 1, end]
-
-            update_ρg!(ρg[2], phase_ratios, rheology, args)
-
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            if rem(iter, nout) == 0
-                @copy η0 η
+            if iter == 1 || rem(iter, 5) == 0
+                update_ρg!(ρg[end], phase_ratios, rheology, args)
             end
-            if do_visc
+            
+            if iter > 1 || iter % (nout ÷ 2) == 0
+                copyto!(stokes.ε.II, η)
+            end
+            if errvisc > 1e-6
                 update_viscosity!(
                     stokes,
                     phase_ratios,
@@ -570,8 +572,14 @@ function _solve!(
                     viscosity_cutoff;
                     relaxation=viscosity_relaxation,
                 )
+                compute_maxloc!(ητ, η; window=(1, 1))
+                update_halo!(ητ)
             end
-
+            if iter > 1 || iter % (nout ÷ 2) == 0
+                @. stokes.ε.II = (stokes.ε.II-η) / η
+                errvisc = norm(stokes.ε.II)
+            end
+            
             @parallel (@idx ni) compute_τ_nonlinear!(
                 @tensor_center(stokes.τ),
                 stokes.τ.II,
@@ -591,11 +599,7 @@ function _solve!(
                 args,
             )
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            # update_halo!(stokes.τ.xy)
-
-            # @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
-            #     Vx_on_Vy, stokes.V.Vx
-            # )
+            update_halo!(stokes.τ.xy)
 
             @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
                 Vx_on_Vy, stokes.V.Vx, ρg[2], _di[1]
@@ -617,15 +621,13 @@ function _solve!(
                 velocity2displacement!(stokes, dt)
                 free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
-                # update_halo!(@velocity(stokes)...)
+                update_halo!(@velocity(stokes)...)
             end
         end
 
         iter += 1
 
         if iter % nout == 0 && iter > 1
-            er_η = norm_mpi(@.(log10(η) - log10(η0)))
-            er_η < 1e-3 && (do_visc = false)
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,

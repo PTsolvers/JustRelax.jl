@@ -24,7 +24,7 @@ function init_rheology(CharDim; is_compressible = false)
         β_rock   = inv(get_Kb(el))
         β_magma  = inv(get_Kb(el_magma))
     end
-    creep_rock  = LinearViscous(; η=1e24 * Pa * s)
+    creep_rock  = LinearViscous(; η=1e23 * Pa * s)
     creep_magma = LinearViscous(; η=1e18 * Pa * s)
     creep_air   = LinearViscous(; η=1e21 * Pa * s)
     g           = 9.81m/s^2

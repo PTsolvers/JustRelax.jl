@@ -122,14 +122,14 @@ function main3D(
 
     args = (; T=thermal.Tc, P=stokes.P, dt=dt)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 1e-1 / √3.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 1e-2 / √3.1
     )
     εbg = nondimensionalize(1e-15 / s, CharDim)
     pureshear_bc!(
         stokes, xci, xvi, εbg, backend_JR
     )
 
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip    = (left=true, right=true, front=true, back=true, top=true, bot=true),
         no_slip      = (left=false, right=false, front=false, back=false, top=false, bot=false),
         free_surface = true,
@@ -137,25 +137,26 @@ function main3D(
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
 
-    # Thermal solver ---------------
-    for _ in 1:5
-        heatdiffusion_PT!(
-            thermal,
-            pt_thermal,
-            thermal_bc,
-            rheology,
-            args,
-            dt,
-            di;
-            kwargs =(;
-                igg     = igg,
-                phase   = phase_ratios,
-                iterMax = 5e3,
-                nout    = 5e1,
-                verbose = false,
-            )
-        )
-    end
+    # # Thermal solver ---------------
+    # for _ in 1:5
+    #     heatdiffusion_PT!(
+    #         thermal,
+    #         pt_thermal,
+    #         thermal_bc,
+    #         rheology,
+    #         args,
+    #         dt,
+    #         di;
+    #         kwargs =(;
+    #             igg     = igg,
+    #             phase   = phase_ratios,
+    #             iterMax = 5e3,
+    #             nout    = 5e1,
+    #             verbose = false,
+    #         )
+    #     )
+    # end
+    
     # Buoyancy force & viscosity
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
@@ -176,27 +177,6 @@ function main3D(
     take(figdir)
     # ----------------------------------------------------
 
-    # Plot initial T and η profiles
-    # let
-    #     Zv = [z for _ in xvi[1], _ in xvi[2], z in xvi[3]][:]
-    #     Z  = [z for _ in xci[1], _ in xci[2], z in xci[3]][:]
-    #     fig = Figure(; size=(1200, 900))
-    #     ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
-    #     ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
-    #     scatter!(
-    #         ax1,
-    #         Array(ustrip.(dimensionalize(thermal.T[:], C, CharDim))),
-    #         ustrip.(dimensionalize(Zv, km, CharDim)),
-    #     )
-    #     scatter!(
-    #         ax2,
-    #         Array(ustrip.(dimensionalize(stokes.P[:], MPa, CharDim))),
-    #         ustrip.(dimensionalize(Z, km, CharDim)),
-    #     )
-    #     hideydecorations!(ax2)
-    #     # save(joinpath(figdir, "initial_profile.png"), fig)
-    #     fig
-    # end
 
     # Time loop
     t, it = 0.0, 0
@@ -362,7 +342,7 @@ end
 
 figdir = "Volcano3D"
 do_vtk = true # set to true to generate VTK files for ParaView
-n      = 32
+n      = 64
 nx     = n
 ny     = n
 nz     = n

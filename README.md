@@ -63,44 +63,8 @@ The test will take a while, so grab a :coffee: or :tea:
 
 This example displays how the package can be used to simulate shear band localisation. The example is based on the [ShearBands2D.jl](miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl).
 
-```julia
-using GeoParams, CellArrays, GLMakie
-using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
 
-const backend = CPUBackend
-
-# HELPER FUNCTIONS ---------------------------------------------------------------
-solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
-
-```
-The function `init_phases!` initializes the phases within cell arrays. The function is parallelized with the `@parallel_indices` macro from [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl). In this case, this is the only function that needs to be tailored to the specific problem, everything else is handled by `JustRelax.jl` itself.
-
-```julia
-# Initialize phases on the particles
-function init_phases!(phase_ratios, xci, radius)
-    ni      = size(phase_ratios.center)
-    origin  = 0.5, 0.5
-
-    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
-        x, y = xc[i], yc[j]
-        if ((x-o_x)^2 + (y-o_y)^2) > radius^2
-            JustRelax.@cell phases[1, i, j] = 1.0
-            JustRelax.@cell phases[2, i, j] = 0.0
-
-        else
-            JustRelax.@cell phases[1, i, j] = 0.0
-            JustRelax.@cell phases[2, i, j] = 1.0
-        end
-        return nothing
-    end
-
-    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
-end
-```
-
-# Initialize packages
+### Load packages
 
 Load JustRelax necessary modules and define backend.
 ```julia
@@ -129,6 +93,9 @@ and will use [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl/tre
 using GeoParams
 ```
 
+## Model setup
+
+
 For the initial setup, you will need to specify the number of nodes in x- and y- direction `nx` and `ny` as well as the directory where the figures are stored (`figdir`). The initialisation of the global grid and MPI environment is done with `igg = IGG(init_global_grid(nx, ny, 0; init_MPI = true)...)`:
 
 ```julia
@@ -154,7 +121,10 @@ grid         = Geometry(ni, li; origin = origin)
 (; xci, xvi) = grid                     # nodes at the center and vertices of the cells
 dt           = Inf
 ```
-Initialisation of the rheology with [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). The rheology can be tailored to the specific problem with different creep laws and material parameters (see [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) or the miniapps in the [convection folder](miniapps/convection).
+
+### Initialisation of the rheology with [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). 
+
+The rheology can be tailored to the specific problem with different creep laws and material parameters or the miniapps in the [convection folder](miniapps/convection).
 
 ```julia
 # Physical properties using GeoParams ----------------
@@ -194,7 +164,35 @@ rheology = (
     ),
 )
 ```
-Initialisation of the Stokes arrays and the necessary allocations. The rheology is computed with `compute_viscosity!` which is a function from `JustRelax.jl` and computes the viscosity according to the strain rate and the phase ratios.
+
+Since we have two material phases, we need their phase ratio at the cell centers. For that purpose, we define a helper `init_phases!`. This function is parallelized with the `@parallel_indices` macro from [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl). In this case, this is the only function that needs to be tailored to the specific problem, everything else is handled by `JustRelax.jl` itself.
+
+```julia
+# Initialize phases on the particles
+function init_phases!(phase_ratios, xci, radius)
+    ni      = size(phase_ratios.center)
+    origin  = 0.5, 0.5
+
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
+        x, y = xc[i], yc[j]
+        if ((x-o_x)^2 + (y-o_y)^2) > radius^2
+            JustRelax.@cell phases[1, i, j] = 1.0
+            JustRelax.@cell phases[2, i, j] = 0.0
+
+        else
+            JustRelax.@cell phases[1, i, j] = 0.0
+            JustRelax.@cell phases[2, i, j] = 1.0
+        end
+        return nothing
+    end
+
+    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+end
+```
+
+### Initialisation of the Stokes arrays and buoyancy forces
+
+The rheology is computed with `compute_viscosity!` which is a function from `JustRelax.jl` and computes the viscosity according to the strain rate and the phase ratios.
 
 ```julia
 # Initialize phase ratios -------------------------------
@@ -214,9 +212,11 @@ compute_ρg!(ρg[2], phase_ratios, rheology, args)
 compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
 ```
 
-Define pure shear velocity boundary conditions or displacement boundary conditions. The boundary conditions are applied with `flow_bcs!` and the halo is updated with `update_halo!`.
+### Boundary conditions
+
+The boundary conditions for this example are pure sher velocity conditions with free slip in al the boundaries. conditions. The boundary conditions are applied with `flow_bcs!` and the halo is updated with `update_halo!`.
+
 ```julia
-# Boundary conditions
 flow_bcs     = VelocityBoundaryConditions(;
     free_slip = (left = true, right = true, top = true, bot = true),
     no_slip   = (left = false, right = false, top = false, bot=false),
@@ -224,8 +224,9 @@ flow_bcs     = VelocityBoundaryConditions(;
 stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
 stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
 flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-update_halo!(@velocity(stokes)...)
 ```
+
+Alternatively, we can also use boundary conditions in terms of displacements:
 ```julia
 # Boundary conditions
 flow_bcs     = DisplacementBoundaryConditions(;
@@ -238,11 +239,11 @@ flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 displacement2velocity!(stokes, dt)   # convert displacement to velocity
 update_halo!(@velocity(stokes)...)
 ```
-Pseudo-transient Stokes solver and visualisation of the results. The visualisation is done with [GLMakie.jl](https://github.com/MakieOrg/Makie.jl).
+
+Finally we can build out time-steping iterations where we solve the pseudo-transient stokes equations with `solve!`. The visualisation is done with [GLMakie.jl](https://github.com/MakieOrg/Makie.jl).
 
 ```julia
-# if it does not exist, make a folder where figures are stored
-take(figdir)
+take(figdir) # if it does not exist, make a folder where figures are stored
 
 # Time loop
 t, it, tmax    = 0.0, 0,  3.5
@@ -275,7 +276,8 @@ while t < tmax
     it += 1
     t  += dt
 
-    push!(sol, solution(εbg, t, G0, η0))
+    analytical_solution = εbg * η * (1 - exp(-G0 * t / η0))
+    push!(sol, analytical_solution)
     push!(ttot, t)
 
     println("it = $it; t = $t \n")

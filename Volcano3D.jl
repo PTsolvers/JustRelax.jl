@@ -346,12 +346,13 @@ n      = 64
 nx     = n
 ny     = n
 nz     = n
-li_GMG, origin_GMG, phases_GMG, T_GMG = volcano_setup(n+1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI=true)...)
 else
     igg
 end
+
+li_GMG, origin_GMG, phases_GMG, T_GMG = volcano_setup(n+1)
 
 # run main script
 main3D(igg, li_GMG, origin_GMG, phases_GMG, T_GMG; figdir=figdir, nx=nx, ny=ny, nz=nz, do_vtk = do_vtk);

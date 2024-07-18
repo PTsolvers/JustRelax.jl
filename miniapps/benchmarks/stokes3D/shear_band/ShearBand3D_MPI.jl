@@ -1,11 +1,37 @@
+const isCUDA = false
+
+@static if isCUDA 
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 import JustRelax.@cell
-const backend_JR = CPUBackend
 
-using GeoParams, GLMakie
+const backend_JR = @static if isCUDA 
+    CUDABackend          # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
+
+@static if isCUDA 
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
+
+using JustPIC, JustPIC._3D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = @static if isCUDA 
+    CUDABackend        # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using GeoParams, GLMakie, CellArrays
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -99,16 +125,16 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # Boundary conditions
-    flow_bcs     = VelocityBoundaryConditions(;
-        free_slip   = (left = true , right = true , top = true , bot = true , back = true , front = true),
-        no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
+    flow_bcs      = VelocityBoundaryConditions(;
+        free_slip = (left = true , right = true , top = true , bot = true , back = true , front = true),
+        no_slip   = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
-    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg/2 for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
-    stokes.V.Vy .= PTArray(backend_JR)([ y*εbg/2 for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
-    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
+    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg  for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
+    stokes.V.Vy .= PTArray(backend_JR)([ 0      for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
+    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg  for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
-
+    
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)
@@ -200,14 +226,15 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n      = 32
+n      = 18
 nx     = n
 ny     = n
 nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
-figdir = "ShearBand3D"
+figdir = "ShearBand3D_MPI"
 igg    = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)
 else
     igg
 end
+
 main(igg; figdir = figdir, nx = nx, ny = ny, nz = nz);

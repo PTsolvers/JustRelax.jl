@@ -1,4 +1,4 @@
-<h1> <img src="./docs/src/assets/JustRelax_logo_no_text.png" alt="JustRelax.jl" width="50"> JustRelax.jl </h1>
+<h1> <img src="./docs/src/assets/logo.png" alt="JustRelax.jl" width="50"> JustRelax.jl </h1>
 
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)

@@ -1,10 +1,12 @@
-# JustRelax.jl
+<h1> <img src="./docs/src/assets/JustRelax_logo_no_text.png" alt="JustRelax.jl" width="50"> JustRelax.jl </h1>
+
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
 ![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)
 [![Build status](https://badge.buildkite.com/6b970b1066dc828a56a75bccc65a8bc896a8bb76012a61fe96.svg)](https://buildkite.com/julialang/justrelax-dot-jl)
 [![codecov](https://codecov.io/gh/PTsolvers/JustRelax.jl/graph/badge.svg?token=4ZJO7ZGT8H)](https://codecov.io/gh/PTsolvers/JustRelax.jl)
 
+<p align="center"><img src="./docs/src/assets/JustRelax_logo_text.png" alt="JustRelax.jl" width="400"></p>
 
 :warning: This Package is still under active development
 - The API is still subject to change.
@@ -75,12 +77,12 @@ const backend_JR = CPUBackend
 For this specific example we use particles to define the material phases, for which we rely on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl). As in `JustRelax.jl`, we need to set up the environment of `JustPIC.jl`. This is done by running/including the following commands:
 
 ```julia
-  using JustPIC
-  using JustPIC._2D
+using JustPIC
+using JustPIC._2D
 
-  const backend = CPUBackend    # Threads is the default backend
-  const backend = CUDABackend   # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script
-  const backend = AMDGPUBackend # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = CPUBackend    # Threads is the default backend
+const backend = CUDABackend   # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script
+const backend = AMDGPUBackend # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 ```
 
 We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
@@ -122,7 +124,7 @@ grid         = Geometry(ni, li; origin = origin)
 dt           = Inf
 ```
 
-### Initialisation of the rheology with [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl). 
+### Initialisation of the rheology with [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl).
 
 The rheology can be tailored to the specific problem with different creep laws and material parameters or the miniapps in the [convection folder](miniapps/convection).
 

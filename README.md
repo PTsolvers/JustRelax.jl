@@ -6,7 +6,7 @@
 [![Build status](https://badge.buildkite.com/6b970b1066dc828a56a75bccc65a8bc896a8bb76012a61fe96.svg)](https://buildkite.com/julialang/justrelax-dot-jl)
 [![codecov](https://codecov.io/gh/PTsolvers/JustRelax.jl/graph/badge.svg?token=4ZJO7ZGT8H)](https://codecov.io/gh/PTsolvers/JustRelax.jl)
 
-<p align="center"><img src="./docs/src/assets/JustRelax_logo_text.png" alt="JustRelax.jl" width="400"></p>
+<p align="center"><img src="./docs/src/assets/logo.png" alt="JustRelax.jl" width="400"></p>
 
 :warning: This Package is still under active development
 - The API is still subject to change.

@@ -1,4 +1,6 @@
-# JustRelax.jl
+```@meta
+CurrentModule = JustRelax
+```# JustRelax.jl
 
 Need to solve a very large multi-physics problem on many GPUs in parallel? Just Relax!
 

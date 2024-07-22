@@ -71,7 +71,8 @@ makedocs(;
     sitename="JustRelax.jl",
     authors="Albert de Montserrat, Pascal Aellig and contributors",
     modules=[JustRelax],
-    format=Documenter.HTML(; prettyurls=get(ENV, "CI", nothing) == "true",
+    format=Documenter.HTML(; assets = ["assets/favicon.ico"],
+    prettyurls=get(ENV, "CI", nothing) == "true",
     size_threshold_ignore = ["man/listfunctions.md"]), # easier local build
 
     warnonly = Documenter.except(:footnote),

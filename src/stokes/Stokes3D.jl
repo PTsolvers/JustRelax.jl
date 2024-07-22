@@ -267,17 +267,30 @@ function _solve!(
                 args,
             )
 
-            @parallel (@idx ni .+ 1) compute_τ_vertex!(
-                @shear(stokes.τ)...,
-                @shear(stokes.τ_o)...,
-                @shear(stokes.ε)...,
-                η_vep,
-                G,
-                dt,
-                pt_stokes.θ_dτ,
+            center2vertex!(
+                stokes.τ.yz,
+                stokes.τ.xz,
+                stokes.τ.xy,
+                stokes.τ.yz_c,
+                stokes.τ.xz_c,
+                stokes.τ.xy_c,
             )
+            # update_halo!(stokes.τ.yz)
+            # update_halo!(stokes.τ.xz)
+            # update_halo!(stokes.τ.xy)
+            update_halo!(stokes.τ.xy, stokes.τ.yz,stokes.τ.xz)
 
-            @hide_communication b_width begin # communication/computation overlap
+            # @parallel (@idx ni .+ 1) compute_τ_vertex!(
+            #     @shear(stokes.τ)...,
+            #     @shear(stokes.τ_o)...,
+            #     @shear(stokes.ε)...,
+            #     η_vep,
+            #     G,
+            #     dt,
+            #     pt_stokes.θ_dτ,
+            # )
+
+            # @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     stokes.R.Rx,
@@ -291,36 +304,25 @@ function _solve!(
                     _di...,
                 )
                 # apply boundary conditions
-                velocity2displacement!(stokes, dt)
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
-            end
+                # update_halo!(stokes.V.Vx)
+                # update_halo!(stokes.V.Vy)
+                # update_halo!(stokes.V.Vz)
+            # end
         end
+        velocity2displacement!(stokes, dt)
 
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
-            # push!(norm_Rx, maximum_mpi(abs.(stokes.R.Rx)))
-            # push!(norm_Ry, maximum_mpi(abs.(stokes.R.Ry)))
-            # push!(norm_Rz, maximum_mpi(abs.(stokes.R.Rz)))
-            # push!(norm_∇V, maximum_mpi(abs.(stokes.R.RP)))
-            push!(
-                norm_Rx,
-                norm_mpi(stokes.R.Rx[2:(end - 1), 2:(end - 1), 2:(end - 1)]) /
-                length(stokes.R.Rx),
-            )
-            push!(
-                norm_Ry,
-                norm_mpi(stokes.R.Ry[2:(end - 1), 2:(end - 1), 2:(end - 1)]) /
-                length(stokes.R.Ry),
-            )
-            push!(
-                norm_Rz,
-                norm_mpi(stokes.R.Rz[2:(end - 1), 2:(end - 1), 2:(end - 1)]) /
-                length(stokes.R.Rz),
-            )
-            push!(norm_∇V, norm_mpi(stokes.R.RP) / length(stokes.R.RP))
-
+            for (norm_Ri, Ri) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R))
+                push!(
+                    norm_Ri,
+                    norm_mpi(Ri[2:(end - 1), 2:(end - 1), 2:(end - 1)]) / (length(Ri) * igg.nprocs),
+                )
+            end
+            push!(norm_∇V, norm_mpi(stokes.R.RP) / (length(stokes.R.RP) * igg.nprocs ))
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)
@@ -486,13 +488,16 @@ function _solve!(
                 stokes.τ.xz_c,
                 stokes.τ.xy_c,
             )
+            # update_halo!(stokes.τ.yz)
+            # update_halo!(stokes.τ.xz)
+            # update_halo!(stokes.τ.xy)
             update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
 
             # @parallel (@idx ni .+ 1) compute_τ_vertex!(
             #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
             # )
 
-            @hide_communication b_width begin # communication/computation overlap
+            # @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     @residuals(stokes.R)...,
@@ -504,14 +509,15 @@ function _solve!(
                     _di...,
                 )
                 # apply boundary conditions
-                velocity2displacement!(stokes, dt)
-                free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
+                # free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
-                update_halo!(@velocity(stokes)...)
-            end
+                update_halo!(stokes.V.Vx)
+                update_halo!(stokes.V.Vy)
+                update_halo!(stokes.V.Vz)
+                # update_halo!(@velocity(stokes)...)
+            # end
         end
-
-        stokes.P .= θ
+        velocity2displacement!(stokes, dt)
 
         iter += 1
         if iter % nout == 0 && iter > 1
@@ -519,10 +525,10 @@ function _solve!(
             for (norm_Ri, Ri) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R))
                 push!(
                     norm_Ri,
-                    norm_mpi(Ri[2:(end - 1), 2:(end - 1), 2:(end - 1)]) / length(Ri),
+                    norm_mpi(Ri[2:(end - 1), 2:(end - 1), 2:(end - 1)]) / (length(Ri) * igg.nprocs),
                 )
             end
-            push!(norm_∇V, norm_mpi(stokes.R.RP) / length(stokes.R.RP))
+            push!(norm_∇V, norm_mpi(stokes.R.RP) / (length(stokes.R.RP) * igg.nprocs ))
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)

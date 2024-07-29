@@ -1,28 +1,25 @@
 # Selecting the backend
 
-JustRelax supports three backends: CPU, and CUDA and AMD GPU cards. To use the default CPU backend, simply load JustRelax:
+JustRelax supports three backends: the default CPU backend, and two GPU backends for Nvidia and AMD GPUs. The default CPU backend is selected upon loading JustRelax:
 
 ```julia
 using JustRelax
 ```
 
-The GPU backends are implemented as extensions, so it is enough to load the appropriate GPU Pkg before loading JustRelax. That is, to use CUDA cards:
+The GPU backends are implemented as extensions, and can be selected upon loading the appropriate GPU package before loading JustRelax. If running on Nvidia GPUs, use the [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) package:
 ```julia
 using CUDA, JustRelax
 ```
-and for AMD cards:
+and if running on AMD GPUs, use the [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl) package:
 ```julia
 using AMDGPU, JustRelax
 ```
 
-Two and three dimensional solvers are implemented in different submodules, which also need to be loaded. To use the two-dimensional backend:
-
+Two and three dimensional solvers are implemented in different submodules, which also need to be loaded. To access the two-dimensional module:
 ```julia
 using JustRelax.JustRelax2D
 ```
-
-and for the three-dimensional backend:
-
+and for the three-dimensional module:
 ```julia
 using JustRelax.JustRelax3D
 ```

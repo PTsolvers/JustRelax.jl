@@ -10,7 +10,7 @@ developed within the [GPU4GEO project](https://www.pasc-ch.org/projects/2021-202
 The package relies on other packages as building blocks and parallelisation tools:
 
 * [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) - device agnostic parallel kernels
-* [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) - (CUDA-aware) MPI communication
+* [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) - (GPU-aware) distributed parallelisation (MPI)
 * [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl) - Material physics
 * [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) - Particle-in-cell advection
 

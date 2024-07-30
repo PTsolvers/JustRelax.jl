@@ -12,7 +12,7 @@ $\widetilde{\theta}\frac{\partial q}{\partial \psi} + q  = -K\nabla T$
 
 ## Stokes equations
 
- For example, the psuedo-transient formulation of the Stokes equations yields:
+ For example, the pseudo-transient formulation of the Stokes equations yields:
 
 $\widetilde{\rho}\frac{\partial \boldsymbol{u}}{\partial \psi} + \nabla\cdot\boldsymbol{\tau} - \nabla p = \boldsymbol{f}$
 

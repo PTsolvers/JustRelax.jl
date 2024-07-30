@@ -12,6 +12,7 @@ provided substantial additions or modifications. Together, these two groups form
 * [Pascal Aellig](https://github.com/aelligp),
   Institute for Geosciences, Johannes Gutenberg University Mainz, Germany
 
+
 ## Contributors
 The following people contributed major additions or modifications to `JustRelax.jl` and
 are listed in alphabetical order:

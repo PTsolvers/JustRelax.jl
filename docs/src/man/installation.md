@@ -1,6 +1,6 @@
-# Installation 
+# Installation
 
-`JustRelax` is a registered package and can be added as follows:
+`JustRelax.jl` is a registered package and can be added as follows:
 
 ```julia
 using Pkg; Pkg.add("JustRelax")
@@ -20,4 +20,4 @@ using JustRelax
 julia> ]
   pkg> test JustRelax
 ```
-The test will take a while, so grab a :coffee: or :tea:
+The test will take a while, so grab a ☕️ or 🍵

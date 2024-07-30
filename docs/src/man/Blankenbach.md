@@ -4,7 +4,7 @@ Thermal convection benchmark from  [Blankenbach et al., 1989](https://academic.o
 
 # Initialize packages
 
-Load JustRelax necessary modules and define backend.
+Load `JustRelax.jl` necessary modules and define backend.
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = CPUBackend
@@ -16,7 +16,7 @@ using JustPIC, JustPIC._2D
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 ```
 
-We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
+We will also use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -88,7 +88,7 @@ yc_anomaly = 1 / 3   # origin of thermal anomaly
 r_anomaly  = 0.1 / 2 # radius of perturbation
 ```
 
-Helper function to initialize material phases with `ParallelStencil.jl`
+Helper function to initialize material phases with [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl)
 ```julia
 function init_phases!(phases, particles)
     ni = size(phases)
@@ -138,7 +138,7 @@ thermal = ThermalArrays(backend_JR, ni)
 
 ## Initialize thermal profile and viscosity fields
 
-To initialize the thermal profile we use `ParallelStencil.jl` again
+To initialize the thermal profile we use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) again
 ```julia
 @parallel_indices (i, j) function init_T!(T, y)
     T[i, j] = 1 - y[j]

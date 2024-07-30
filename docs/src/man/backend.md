@@ -1,6 +1,6 @@
 # Selecting the backend
 
-JustRelax supports three backends: the default CPU backend, and two GPU backends for Nvidia and AMD GPUs. The default CPU backend is selected upon loading JustRelax:
+`JustRelax.jl` supports three backends: the default CPU backend, and two GPU backends for Nvidia and AMD GPUs. The default CPU backend is selected upon loading JustRelax:
 
 ```julia
 using JustRelax

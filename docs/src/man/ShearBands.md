@@ -1,17 +1,17 @@
 # ShearBand benchmark
 
-Shear Band benchmark to test the visco-elasto-plastic rheology implementation in JustRelax.jl
+Shear Band benchmark to test the visco-elasto-plastic rheology implementation in `JustRelax.jl`
 
 # Initialize packages
 
-Load JustRelax necessary modules and define backend.
+Load `JustRelax.jl` necessary modules and define backend.
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = CPUBackend
 ```
 
 
-We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
+We will also use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -85,7 +85,7 @@ pl      = DruckerPrager_regularised(;  # non-regularized plasticity
 
 # Phase anomaly
 
-Helper function to initialize material phases with `ParallelStencil.jl`
+Helper function to initialize material phases with [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl)
 ```julia
 function init_phases!(phase_ratios, xci, radius)
     ni      = size(phase_ratios.center)
@@ -200,7 +200,7 @@ push!(sol, solution(εbg, t, G0, η0))
 push!(ttot, t)
 ```
 # Visualization
-We will use `Makie.jl` to visualize the results
+We will use [Makie.jl](https://github.com/MakieOrg/Makie.jl) to visualize the results
 ```julia
 using GLMakie
 ```

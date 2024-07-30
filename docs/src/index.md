@@ -17,7 +17,7 @@ The package relies on other packages as building blocks and parallelisation tool
 
 The package serves several purposes:
 
-  * It provides a collection of solvers to be used in quickly developing new applications
+  * It provides a collection of solvers to be used in prototyping new applications
   * It provides some standardization so that application codes can
 
      - more easily handle local material properties through the use of [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)

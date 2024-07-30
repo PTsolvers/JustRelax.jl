@@ -1,10 +1,10 @@
 # Pseudo-transient iterative method
-The pseudo-transient method consists in augmenting the right-hand-side of the target PDE with a pseudo-time derivative (where $\psi$ is the pseudo-time) of the primary variables. We then solve the resulting system of equations with an iterative method. The pseudo-time derivative is then gradually reduced, until the original PDE is solved and the changes in the primary variables are below a preset tolerance.  
+The pseudo-transient method consists in augmenting the right-hand-side of the target PDE with a pseudo-time derivative (where $\psi$ is the pseudo-time) of the primary variables. We then solve the resulting system of equations with an iterative method. The pseudo-time derivative is then gradually reduced, until the original PDE is solved and the changes in the primary variables are below a preset tolerance.
 
 ## Heat diffusion
 The pseudo-transient heat-diffusion equation is:
 
-$\widetilde{\rho}\frac{\partial T}{\partial \psi} + \rho C_p \frac{\partial T}{\partial t} = \nabla(K\nabla T) = -\nabla q$
+$\widetilde{\rho}\frac{\partial T}{\partial \psi} + \rho C_p \frac{\partial T}{\partial t} = \nabla \cdot (K\nabla T) = -\nabla q$
 
 We use a second order pseudo-transient scheme were continuation is also done on the flux, so that:
 
@@ -32,4 +32,4 @@ and
 
 $\widetilde{V} = \sqrt{ \frac{\widetilde{K} +2\widetilde{G}}{\widetilde{\rho}}}, \qquad r = \frac{\widetilde{K}}{\widetilde{G}}, \qquad Re = \frac{\widetilde{\rho}\widetilde{V}L}{\eta}$
 
-where the P-wave $\widetilde{V}=V_p$ is the characteristic velocity scale for Stokes, and $Re$ is the Reynolds number. 
+where the P-wave $\widetilde{V}=V_p$ is the characteristic velocity scale for Stokes, and $Re$ is the Reynolds number.

@@ -23,5 +23,3 @@ are listed in alphabetical order:
 * Patrick Sanan
 * Hendrik Ranocha
 * Ludovic Räss
-* Ivan Utkin
-* Samuel Omlin

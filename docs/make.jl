@@ -58,12 +58,10 @@ open(joinpath(@__DIR__, "src", "man", "contributing.md"), "w") do io
     ```
     """)
     # Write the modified contents
-    println(io, "# [Contributing](@id contributing)")
-    println(io, "")
     for line in eachline(joinpath(dirname(@__DIR__), "CONTRIBUTING.md"))
       line = replace(line, "[LICENSE.md](LICENSE.md)" => "[License](@ref)")
       line = replace(line, "[AUTHORS.md](AUTHORS.md)" => "[Authors](@ref)")
-      println(io, "> ", line)
+      println(io,line)
     end
   end
 @info "Making documentation..."

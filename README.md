@@ -62,7 +62,7 @@ The test will take a while, so grab a :coffee: or :tea:
 
 ## Miniapps
 
-Available miniapps can be found [here](miniapps) and will be updated regularly. The miniapps are designed to be simple and easy to understand, while still providing a good basis for more complex applications. The miniapps are designed to be run on a single node, but can be easily extended to run on multiple nodes using [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) and [MPI.jl](https://github.com/JuliaParallel/MPI.jl).
+Available miniapps can be found in the [miniapps folder](miniapps) and will be updated regularly. The miniapps are designed to be simple and easy to understand, while still providing a good basis for more complex applications. The miniapps are designed to be run on a single node, but can be easily extended to run on multiple nodes using [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) and [MPI.jl](https://github.com/JuliaParallel/MPI.jl).
 
 
 ## Benchmarks

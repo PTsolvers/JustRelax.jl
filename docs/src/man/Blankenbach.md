@@ -2,9 +2,9 @@
 
 Thermal convection benchmark from  [Blankenbach et al., 1989](https://academic.oup.com/gji/article/98/1/23/622167)
 
-# Initialize packages
+## Initialize packages
 
-Load JustRelax necessary modules and define backend.
+Load `JustRelax.jl` necessary modules and define backend.
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = CPUBackend
@@ -16,7 +16,7 @@ using JustPIC, JustPIC._2D
 const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 ```
 
-We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
+We will also use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -26,9 +26,9 @@ and will use [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl/tre
 using GeoParams
 ```
 
-# Script
+## Script
 
-## Model domain
+### Model domain
 ```julia
 nx = ny      = 51                       # number of cells per dimension
 nit          = 6e3
@@ -46,7 +46,7 @@ grid         = Geometry(ni, li; origin = origin)
 dt = dt_diff = 0.9 * min(di...)^2 / 4.0 # diffusive CFL timestep limiter
 ```
 
-## Rheology
+### Rheology
 ```julia
 rheology = (
     SetMaterialParams(;
@@ -61,7 +61,7 @@ rheology = (
 )
 ```
 
-## Initialize particles
+### Initialize particles
 ```julia
 nxcell              = 24 # initial number of perticles per cell
 max_xcell           = 35 # maximum number of perticles per cell
@@ -81,14 +81,14 @@ pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
 particle_args    = (pT, pT0, pPhases)
 ```
 
-# Temperature anomaly
+### Temperature anomaly
 ```julia
 xc_anomaly = 0.0     # origin of thermal anomaly
 yc_anomaly = 1 / 3   # origin of thermal anomaly
 r_anomaly  = 0.1 / 2 # radius of perturbation
 ```
 
-Helper function to initialize material phases with `ParallelStencil.jl`
+Helper function to initialize material phases with [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl)
 ```julia
 function init_phases!(phases, particles)
     ni = size(phases)
@@ -124,7 +124,7 @@ phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
 phase_ratios_center(phase_ratios, particles, grid, pPhases)
 ```
 
-## Stokes and heat diffusion arrays
+### Stokes and heat diffusion arrays
 
 Stokes arrays object
 ```julia
@@ -136,9 +136,9 @@ and the correspondent heat diffusion one
 thermal = ThermalArrays(backend_JR, ni)
 ```
 
-## Initialize thermal profile and viscosity fields
+### Initialize thermal profile and viscosity fields
 
-To initialize the thermal profile we use `ParallelStencil.jl` again
+To initialize the thermal profile we use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) again
 ```julia
 @parallel_indices (i, j) function init_T!(T, y)
     T[i, j] = 1 - y[j]
@@ -179,7 +179,7 @@ compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
 ```
 where `(-Inf, Inf)` is the viscosity cutoff.
 
-## Boundary conditions
+### Boundary conditions
 ```julia
 flow_bcs      = VelocityBoundaryConditions(;
     free_slip = (left = true, right=true, top=true, bot=true),
@@ -191,7 +191,7 @@ thermal_bcs!(thermal, thermal_bc)
 thermal.Told .= thermal.T
 ```
 
-## Pseuo-transient coefficients
+### Pseuo-transient coefficients
 ```julia
 pt_stokes   = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
 pt_thermal  = PTThermalCoeffs(
@@ -199,7 +199,7 @@ pt_thermal  = PTThermalCoeffs(
 )
 ```
 
-## Just before solving the problem...
+### Just before solving the problem...
 We need to allocate some arrays to be able to do the subgrid diffusion of the temperature field at the particles level:
 ```julia
 T_buffer    = @zeros(ni.+1)     # without the ghost nodes at the x-direction
@@ -226,11 +226,11 @@ end
 
 In this benchmark we want to keep track of the time `trms`, the rms-velocity `Urms`
 
-$$ U_{rms} = \sqrt{ \int_{\Omega} (V_x^2 + V_y^2 ) d\Omega} $$
+$U_{rms} = \sqrt{\int_{\Omega} (V_x^2 + V_y^2 ) d\Omega}$
 
 and the Nusselt number at the top of the model `Nu_top`
 
-$$ Nu_{top} = \int \frac{\partial T}{\partial x} dx $$
+$Nu_{top} = \int \frac{\partial T}{\partial x} dx$
 
 And we will store their time history in the vectors:
 ```julia
@@ -246,7 +246,7 @@ Vx_v = @zeros(ni.+1...)
 Vy_v = @zeros(ni.+1...)
 ```
 
-## Advancing one time step
+### Advancing one time step
 
 1. Solve stokes
 ```julia
@@ -314,7 +314,6 @@ inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
 # update phase ratios
 phase_ratios_center(phase_ratios, particles, grid, pPhases)
 ```
-
 5.  Interpolate `T` back to the grid
 ```julia
 # interpolate fields from particle to grid vertices
@@ -325,7 +324,6 @@ particle2grid!(T_buffer, pT, xvi, particles)
 flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 temperature2center!(thermal)
 ```
-
 6. Update buoyancy forces and viscosity
 ```julia
 args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
@@ -348,13 +346,13 @@ push!(Urms, Urms_it)
 push!(trms, t)
 ```
 
-# Visualization
-We will use `Makie.jl` to visualize the results
+### Visualization
+We will use [Makie.jl](https://github.com/MakieOrg/Makie.jl) to visualize the results
 ```julia
 using GLMakie
 ```
 
-## Fields
+### Fields
 ```julia
 # Make particles plottable
 p        = particles.coords

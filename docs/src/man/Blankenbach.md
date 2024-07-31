@@ -226,11 +226,11 @@ end
 
 In this benchmark we want to keep track of the time `trms`, the rms-velocity `Urms`
 
-$$ U_{rms} = \sqrt{ \int_{\Omega} (V_x^2 + V_y^2 ) d\Omega} $$
+$U_{rms} = \sqrt{\int_{\Omega} (V_x^2 + V_y^2 ) d\Omega}$
 
 and the Nusselt number at the top of the model `Nu_top`
 
-$$ Nu_{top} = \int \frac{\partial T}{\partial x} dx $$
+$Nu_{top} = \int \frac{\partial T}{\partial x} dx$
 
 And we will store their time history in the vectors:
 ```julia
@@ -347,7 +347,7 @@ push!(trms, t)
 ```
 
 ### Visualization
-We will use `Makie.jl` to visualize the results
+We will use [Makie.jl](https://github.com/MakieOrg/Makie.jl) to visualize the results
 ```julia
 using GLMakie
 ```

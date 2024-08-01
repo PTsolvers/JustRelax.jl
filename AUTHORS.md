@@ -1,8 +1,8 @@
 # Authors
 
-`JustRelax.jl`'s development is coordinated by a group of *principal developers*,
+[JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl)'s development is coordinated by a group of *principal developers*,
 who are also its main contributors and who can be contacted in case of
-questions about `JustRelax.jl`. In addition, there are *contributors* who have
+questions about [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl). In addition, there are *contributors* who have
 provided substantial additions or modifications. Together, these two groups form
 "The JustRelax.jl Authors".
 
@@ -14,7 +14,7 @@ provided substantial additions or modifications. Together, these two groups form
 
 
 ## Contributors
-The following people contributed major additions or modifications to `JustRelax.jl` and
+The following people contributed major additions or modifications to [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) and
 are listed in alphabetical order:
 
 * Sidney Beeler

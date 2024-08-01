@@ -4,7 +4,7 @@ CurrentModule = JustRelax
 
 Need to solve a very large multi-physics problem on many GPUs in parallel? Just Relax!
 
-`JustRelax.jl` is a collection of accelerated iterative pseudo-transient solvers using MPI and multiple CPU or GPU backends. It's part of the [PTSolvers organisation](https://ptsolvers.github.io) and
+[JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) is a collection of accelerated iterative pseudo-transient solvers using MPI and multiple CPU or GPU backends. It's part of the [PTSolvers organisation](https://ptsolvers.github.io) and
 developed within the [GPU4GEO project](https://www.pasc-ch.org/projects/2021-2024/gpu4geo/). Current publications, outreach and news can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
 
 The package relies on other packages as building blocks and parallelisation tools:

@@ -54,6 +54,11 @@ end
     @test bk(myrand(2,2))   === DeviceTrait()
     @test bk(myrand(2,2,2)) === DeviceTrait()
 
+    # test PTArray
+    @test PTArray(backend) === A
+    @test_throws ArgumentError PTArray(bk(rand()))
+    @test_throws ArgumentError PTArray(bk("potato"))
+
     # test error handling
     @test_throws ArgumentError bk(rand())
     @test_throws ArgumentError bk("potato")

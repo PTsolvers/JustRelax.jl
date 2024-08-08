@@ -116,7 +116,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes       = StokesArrays(backend_JR, ni)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-6,  CFL = 0.05 / √3.1)
+    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-6,  CFL = 0.5 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
@@ -179,32 +179,34 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         println("it = $it; t = $t \n")
 
         # visualisation
-        slice_j = ny >>> 1
-        fig     = Figure(size = (1600, 1600), title = "t = $t")
-        ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
-        ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
-        ax3     = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
-        ax4     = Axis(fig[2,2], aspect = 1)
-        heatmap!(ax1, xci[1], xci[3], Array(stokes.τ.II[:, slice_j, :]) , colormap=:batlow)
-        heatmap!(ax2, xci[1], xci[3], Array(log10.(stokes.viscosity.η_vep)[:, slice_j, :]) , colormap=:batlow)
-        heatmap!(ax3, xci[1], xci[3], Array(log10.(stokes.ε.II)[:, slice_j, :]) , colormap=:batlow)
-        lines!(ax4, ttot, τII, color = :black)
-        lines!(ax4, ttot, sol, color = :red)
-        hidexdecorations!(ax1)
-        hidexdecorations!(ax3)
-        
-        for ax in (ax1, ax2, ax3)
-            xlims!(ax, (0, 1))
-            ylims!(ax, (0, 1))
+        if igg.me == 0
+            slice_j = ny >>> 1
+            fig     = Figure(size = (1600, 1600), title = "t = $t")
+            ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
+            ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
+            ax3     = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
+            ax4     = Axis(fig[2,2], aspect = 1)
+            heatmap!(ax1, xci[1], xci[3], Array(stokes.τ.II[:, slice_j, :]) , colormap=:batlow)
+            heatmap!(ax2, xci[1], xci[3], Array(log10.(stokes.viscosity.η_vep)[:, slice_j, :]) , colormap=:batlow)
+            heatmap!(ax3, xci[1], xci[3], Array(log10.(stokes.ε.II)[:, slice_j, :]) , colormap=:batlow)
+            lines!(ax4, ttot, τII, color = :black)
+            lines!(ax4, ttot, sol, color = :red)
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax3)
+            
+            for ax in (ax1, ax2, ax3)
+                xlims!(ax, (0, 1))
+                ylims!(ax, (0, 1))
+            end
+            save(joinpath(figdir, "$(it).png"), fig)
         end
-        save(joinpath(figdir, "$(it).png"), fig)
     end
 
     return nothing
 end
 
-n            = 32
-nx = ny = nz = n
+n            = 32 + 4
+nx = ny = nz = n #÷ 2
 figdir       = "ShearBand3D_noMPI"
 igg          = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)

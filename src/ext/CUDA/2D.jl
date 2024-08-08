@@ -106,7 +106,7 @@ end
 function flow_bcs!(
     ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
 )
-    return _flow_bcs!(bcs, @velocity(stokes))
+    return _flow_bcs!(bcs, @displacement(stokes))
 end
 
 function JR2D.thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)

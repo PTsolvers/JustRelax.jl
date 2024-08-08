@@ -15,6 +15,7 @@ export @allocate,
     @velocity,
     @displacement,
     @strain,
+    @strain_plastic,
     @stress,
     @tensor,
     @shear,
@@ -27,7 +28,10 @@ export @allocate,
     @residuals,
     compute_dt,
     multi_copy!,
-    take
+    take,
+    detect_args_size,
+    _tuple,
+    indices
 
 include("types/displacement.jl")
 export velocity2displacement!, displacement2velocity!
@@ -46,7 +50,7 @@ export AbstractBoundaryConditions,
 include("MiniKernels.jl")
 
 include("phases/phases.jl")
-export fn_ratio, phase_ratios_center!
+export fn_ratio, phase_ratios_center!, numphases, nphases
 
 include("rheology/BuoyancyForces.jl")
 export compute_ρg!

@@ -54,6 +54,16 @@ end
     @test bk(myrand(2,2))   === DeviceTrait()
     @test bk(myrand(2,2,2)) === DeviceTrait()
 
+    # test PTArray
+    if env_backend !== "AMDGPU" && env_backend !== "CUDA"
+        @test PTArray()        === A
+    else
+        @test true === true
+    end
+    @test PTArray(backend) === A
+    @test_throws ArgumentError PTArray(bk(rand()))
+    @test_throws ArgumentError PTArray(bk("potato"))
+
     # test error handling
     @test_throws ArgumentError bk(rand())
     @test_throws ArgumentError bk("potato")

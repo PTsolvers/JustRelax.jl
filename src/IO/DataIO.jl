@@ -10,7 +10,13 @@ import ..JustRelax: IGG
 
 include("H5.jl")
 
-export save_hdf5, checkpointing_hdf5, load_checkpoint_hdf5, metadata
+export save_hdf5,
+    checkpointing_hdf5,
+    load_checkpoint_hdf5,
+    metadata,
+    center_coordinates,
+    vertex_coordinates,
+    save_data
 
 include("JLD2.jl")
 

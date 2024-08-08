@@ -11,6 +11,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
 [weakdeps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
@@ -29,4 +30,5 @@ StaticArrays = "1"
 Statistics = "1"
 Suppressor = "0.2"
 TOML = "1"
+WriteVTK = "1.18, 1.19"
 julia = "1.9, 1.10"

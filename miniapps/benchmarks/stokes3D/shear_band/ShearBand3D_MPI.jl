@@ -1,11 +1,38 @@
+const isCUDA = false
+using JLD2
+
+@static if isCUDA 
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 import JustRelax.@cell
-const backend_JR = CPUBackend
 
-using GeoParams, GLMakie
+const backend_JR = @static if isCUDA 
+    CUDABackend          # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
+
+@static if isCUDA 
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
+
+using JustPIC, JustPIC._3D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = @static if isCUDA 
+    CUDABackend        # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using GeoParams, GLMakie, CellArrays
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -17,7 +44,7 @@ function init_phases!(phase_ratios, xci, radius)
 
     @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
         x, y, z = xc[i], yc[j], zc[k]
-        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
+        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius^2
             @cell phases[1, i, j, k] = 1.0
             @cell phases[2, i, j, k] = 0.0
 
@@ -83,14 +110,15 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     )
 
     # Initialize phase ratios -------------------------------
-    radius       = 0.01
-    phase_ratios = PhaseRatio(ni, length(rheology))
+    radius       = 0.1
+    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
+
     init_phases!(phase_ratios, xci, radius)
 
      # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes       = StokesArrays(backend_JR, ni)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-4,  CFL = 0.05 / √3.1)
+    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-6,  CFL = 0.5 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
@@ -99,16 +127,16 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # Boundary conditions
-    flow_bcs     = VelocityBoundaryConditions(;
-        free_slip   = (left = true , right = true , top = true , bot = true , back = true , front = true),
-        no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
+    flow_bcs      = VelocityBoundaryConditions(;
+        free_slip = (left = true , right = true , top = true , bot = true , back = true , front = true),
+        no_slip   = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
-    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg/2 for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
-    stokes.V.Vy .= PTArray(backend_JR)([ y*εbg/2 for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
-    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
+    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg  for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
+    stokes.V.Vy .= PTArray(backend_JR)([ 0      for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
+    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg  for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
-
+    
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)
@@ -134,6 +162,22 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     sol   = Float64[]
     ttot  = Float64[]
 
+    Vx_v = @zeros(ni .+ 1...)
+    Vy_v = @zeros(ni .+ 1...)
+    Vz_v = @zeros(ni .+ 1...)
+
+    println("
+    rank $(igg.me): 
+        ni = $(size(stokes.P))
+        dxi = $di
+        xvi[1] = $(xvi[1])
+        xvi[2] = $(xvi[2])
+        xvi[3] = $(xvi[3])
+    ")
+
+    out = joinpath(figdir, "rank_$(igg.me)")
+    !isdir(out) && mkpath(out)
+
     while t < tmax
        # Stokes solver ----------------
        solve!(
@@ -148,10 +192,15 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             dt,
             igg;
             kwargs = (;
-                iterMax          = 150e3,
+                iterMax          = 15e3,
                 nout             = 1e3,
                 viscosity_cutoff = (-Inf, Inf)
             )
+        )
+
+        jldsave(
+            joinpath(out, "it_" * lpad("$it", 6, "0") * ".jld2"),
+            stokes=stokes
         )
 
         tensor_invariant!(stokes.ε)
@@ -172,6 +221,37 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         gather!(τII_nohalo, τII_v)
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
+
+        # velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+        # data_v = (;
+        #     τxy= stokes.τ.xy,
+        #     εxy= stokes.ε.xy,
+        # )
+        # data_c = (;
+        #     P   = stokes.P,
+        #     τxx = stokes.τ.xx,
+        #     τyy = stokes.τ.yy,
+        #     τzz = stokes.τ.zz,
+        #     τII = stokes.τ.II,
+        #     εxx = stokes.ε.xx,
+        #     εyy = stokes.ε.yy,
+        #     εzz = stokes.ε.zz,
+        #     εII = stokes.ε.II,
+        #     η   = stokes.viscosity.η,
+        # )
+        # velocity_v = (
+        #     Vx_v,
+        #     Vy_v,
+        #     Vz_v,
+        # )
+        # save_vtk(
+        #     joinpath(figdir, "vtk_rank_$(igg.me)_" * lpad("$it", 6, "0")),
+        #     xvi,
+        #     xci,
+        #     data_v,
+        #     data_c,
+        #     velocity_v
+        # )
 
         # visualisation
         th    = 0:pi/50:3*pi;
@@ -200,14 +280,17 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n      = 32
-nx     = n
-ny     = n
-nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
-figdir = "ShearBand3D"
+n      = 24
+nx     = n * 2
+ny     = n * 2
+nz     = n * 2 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
+figdir = "ShearBand3D_MPI_1rank"
+# figdir = "ShearBand3D_MPI_1rank"
 igg    = if !(JustRelax.MPI.Initialized())
+    # IGG(init_global_grid(((nx, ny, nz) .+ 1)...; init_MPI = true, select_device=false)...)
     IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)
 else
     igg
 end
+
 main(igg; figdir = figdir, nx = nx, ny = ny, nz = nz);

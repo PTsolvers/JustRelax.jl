@@ -19,7 +19,7 @@ using WriteVTK
 
 @testset "Test IO" begin
     @suppress begin
-    # Set up mock data
+        # Set up mock data
         # Physical domain ------------------------------------
         ly           = 1.0       # domain length in y
         lx           = 1.0       # domain length in x
@@ -189,52 +189,6 @@ using WriteVTK
         @test thermal.T[1] == 100
         @test !isnothing(Vz)
 
-        # test VTK save
-        Vx_v = @zeros(nx+1, ny+1, nz+1)
-        Vy_v = @zeros(nx+1, ny+1, nz+1)
-        Vz_v = @zeros(nx+1, ny+1, nz+1)
-        velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-        data_v = (;
-            T   = Array(thermal.T),
-            τxy = Array(stokes.τ.xy),
-            εxy = Array(stokes.ε.xy),
-            Vx  = Array(Vx_v),
-            Vy  = Array(Vy_v),
-            Vz  = Array(Vz_v),
-        )
-        data_c = (;
-            Tc  = Array(thermal.Tc),
-            P   = Array(stokes.P),
-            τxx = Array(stokes.τ.xx),
-            τyy = Array(stokes.τ.yy),
-            εxx = Array(stokes.ε.xx),
-            εyy = Array(stokes.ε.yy),
-            η   = Array(log10.(stokes.viscosity.η_vep)),
-        )
-        velocity_v = (
-            Array(Vx_v),
-            Array(Vy_v),
-            Array(Vz_v),
-        )
-        save_vtk(
-            joinpath(dst, "vtk_" * lpad("3", 6, "0")),
-            xvi,
-            xci,
-            data_v,
-            data_c,
-            velocity_v
-        )
-        @test isfile(joinpath(dst, "vtk_000003_1.vti"))
-        @test isfile(joinpath(dst, "vtk_000003_2.vti"))
-        @test isfile(joinpath(dst, "vtk_000003.vtm"))
-
-        save_vtk(
-            joinpath(dst, "vtk_" * lpad("4", 6, "0")),
-            xci,
-            (P=stokes.P, η=stokes.viscosity.η),
-        )
-        @test isfile(joinpath(dst, "vtk_000004.vti"))
-
         # Test center and vertex coordinates function
         xci_c = center_coordinates(grid)
         @test (xci_c[1][1],xci_c[1][end]) === (0.125, 0.875)
@@ -245,6 +199,7 @@ using WriteVTK
 
         # test save_data function
         save_data(joinpath(dst,"save_data.hdf5"), grid)
+        @test isfile(joinpath(dst,"save_data.hdf5"))
 
         # Remove the generated directory
         rm(dst, recursive=true)

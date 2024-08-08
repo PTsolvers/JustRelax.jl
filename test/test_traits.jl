@@ -55,7 +55,7 @@ end
     @test bk(myrand(2,2,2)) === DeviceTrait()
 
     # test PTArray
-    if env_backend !== "AMDGPU" || env_backend !== "CUDA"
+    if env_backend !== "AMDGPU" && env_backend !== "CUDA"
         @test PTArray()        === A
     else
         @test true === true

@@ -15,14 +15,15 @@ const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
 using GeoParams
+using WriteVTK
 
-@testset "Test Checkpointing and Metadata" begin
+@testset "Test IO" begin
     @suppress begin
     # Set up mock data
         # Physical domain ------------------------------------
         ly           = 1.0       # domain length in y
         lx           = 1.0       # domain length in x
-        nx, ny       = 4, 4
+        nx, ny, nz   = 4, 4, 4   # number of cells
         ni           = nx, ny     # number of cells
         igg          = IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
         li           = lx, ly     # domain length in x- and y-
@@ -32,7 +33,7 @@ using GeoParams
         (; xci, xvi) = grid
 
         # 2D case
-        dst = "test_checkpoint"
+        dst = "test_IO"
         stokes  = StokesArrays(backend_JR, ni)
         thermal = ThermalArrays(backend_JR, ni)
 
@@ -91,9 +92,54 @@ using GeoParams
         @test isnothing(Vz)
         @test dt == 0.1
 
+        # test VTK save
+        Vx_v = @zeros(ni.+1...)
+        Vy_v = @zeros(ni.+1...)
+        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        data_v = (;
+            T   = Array(thermal.T),
+            τII = Array(stokes.τ.II),
+            εII = Array(stokes.ε.II),
+            Vx  = Array(Vx_v),
+            Vy  = Array(Vy_v),
+        )
+        data_c = (;
+            P   = Array(stokes.P),
+            η   = Array(stokes.viscosity.η),
+        )
+        velocity_v = (
+            Array(Vx_v),
+            Array(Vy_v),
+        )
+        save_vtk(
+            joinpath(dst, "vtk_" * lpad("1", 6, "0")),
+            xvi,
+            xci,
+            data_v,
+            data_c,
+            velocity_v
+        )
+        @test isfile(joinpath(dst, "vtk_000001_1.vti"))
+        @test isfile(joinpath(dst, "vtk_000001_2.vti"))
+        @test isfile(joinpath(dst, "vtk_000001.vtm"))
+
+        save_vtk(
+            joinpath(dst, "vtk_" * lpad("2", 6, "0")),
+            xci,
+            (P=stokes.P, η=stokes.viscosity.η),
+        )
+        @test isfile(joinpath(dst, "vtk_000002.vti"))
+
+        # VTK data series
+        vtk = VTKDataSeries(joinpath(dst, "vtk_series"), xci)
+        @test vtk isa VTKDataSeries
+
+        DataIO.append!(vtk, (Vy=stokes.V.Vy, η=stokes.viscosity.η), dt, time)
+        @test isfile(joinpath(dst, "vtk_series.pvd"))
+
         # 3D case
-        stokes  = StokesArrays(backend_JR, (nx,ny,1))
-        thermal = ThermalArrays(backend_JR,  (nx,ny,1))
+        stokes  = StokesArrays(backend_JR, (nx,ny,nz))
+        thermal = ThermalArrays(backend_JR,  (nx,ny,nz))
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(
@@ -101,6 +147,7 @@ using GeoParams
         # temperature
         pT, pPhases      = init_cell_arrays(particles, Val(2))
         time = 1.0
+        dt = 0.1
 
         stokes.viscosity.η .= fill(1.0)
         stokes.V.Vy        .= fill(10)
@@ -141,6 +188,63 @@ using GeoParams
         @test stokes.V.Vy[1] == 10
         @test thermal.T[1] == 100
         @test !isnothing(Vz)
+
+        # test VTK save
+        Vx_v = @zeros(nx+1, ny+1, nz+1)
+        Vy_v = @zeros(nx+1, ny+1, nz+1)
+        Vz_v = @zeros(nx+1, ny+1, nz+1)
+        velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+        data_v = (;
+            T   = Array(thermal.T),
+            τxy = Array(stokes.τ.xy),
+            εxy = Array(stokes.ε.xy),
+            Vx  = Array(Vx_v),
+            Vy  = Array(Vy_v),
+            Vz  = Array(Vz_v),
+        )
+        data_c = (;
+            Tc  = Array(thermal.Tc),
+            P   = Array(stokes.P),
+            τxx = Array(stokes.τ.xx),
+            τyy = Array(stokes.τ.yy),
+            εxx = Array(stokes.ε.xx),
+            εyy = Array(stokes.ε.yy),
+            η   = Array(log10.(stokes.viscosity.η_vep)),
+        )
+        velocity_v = (
+            Array(Vx_v),
+            Array(Vy_v),
+            Array(Vz_v),
+        )
+        save_vtk(
+            joinpath(dst, "vtk_" * lpad("3", 6, "0")),
+            xvi,
+            xci,
+            data_v,
+            data_c,
+            velocity_v
+        )
+        @test isfile(joinpath(dst, "vtk_000003_1.vti"))
+        @test isfile(joinpath(dst, "vtk_000003_2.vti"))
+        @test isfile(joinpath(dst, "vtk_000003.vtm"))
+
+        save_vtk(
+            joinpath(dst, "vtk_" * lpad("4", 6, "0")),
+            xci,
+            (P=stokes.P, η=stokes.viscosity.η),
+        )
+        @test isfile(joinpath(dst, "vtk_000004.vti"))
+
+        # Test center and vertex coordinates function
+        xci_c = center_coordinates(grid)
+        @test (xci_c[1][1],xci_c[1][end]) === (0.125, 0.875)
+        @test (xci_c[2][1],xci_c[2][end]) === (-0.875,-0.125)
+        xvi_v = vertex_coordinates(grid)
+        @test (xvi_v[1][1],xvi_v[1][end]) === (0.0, 1.0)
+        @test (xvi_v[2][1],xvi_v[2][end]) === (-1.0, 0.0)
+
+        # test save_data function
+        save_data(joinpath(dst,"save_data.hdf5"), grid)
 
         # Remove the generated directory
         rm(dst, recursive=true)

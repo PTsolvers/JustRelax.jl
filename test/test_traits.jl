@@ -56,6 +56,7 @@ end
 
     # test PTArray
     @test PTArray(backend) === A
+    @test PTArray()        === A
     @test_throws ArgumentError PTArray(bk(rand()))
     @test_throws ArgumentError PTArray(bk("potato"))
 

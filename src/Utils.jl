@@ -26,7 +26,7 @@ end
 
 multi_copyto!(B::AbstractArray, A::AbstractArray) = copyto!(B, A)
 
-function detect_arsg_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
+function detect_args_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
     ntuple(Val(Dims)) do i
         Base.@_inline_meta
         s = ntuple(Val(N)) do j

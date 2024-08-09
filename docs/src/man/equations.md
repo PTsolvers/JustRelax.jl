@@ -57,7 +57,7 @@ where the P-wave $\widetilde{V}=V_p$ is the characteristic velocity scale for St
 
 | Symbol               | Parameter                     |
 | :------------------- | :---------------------------: |
-| $psi$                | Pseudo time step              |
+| $\psi$                | Pseudo time step              |
 | $\widetilde{K}$      | Pseudo bulk modulus           |
 | $\widetilde{G}$      | Pseudo shear modulus          |
 | $\widetilde{V}$      | Characteristic velocity scale |

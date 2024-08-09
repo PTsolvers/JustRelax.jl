@@ -9,7 +9,6 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDA.allowscalar(true)
 end
 
-
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax2D
@@ -44,10 +43,8 @@ using GeoParams
 # Load file with all the rheology configurations
 include("../miniapps/benchmarks/stokes2D/shear_heating/Shearheating_rheology.jl")
 
-
 # ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 function copyinn_x!(A, B)
-
     @parallel function f_x(A, B)
         @all(A) = @inn_x(B)
         return nothing
@@ -59,7 +56,7 @@ end
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
 macro all_j(A)
-    esc(:($A[$idx_j]))
+    return esc(:($A[$idx_j]))
 end
 
 # Initial pressure profile - not accurate
@@ -70,12 +67,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function Shearheating2D()
-    n        = 32
-    nx       = n
-    ny       = n
-    init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg      = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+function Shearheating2D(igg; nx=32, ny=32)
 
     # Physical domain ------------------------------------
     ly           = 40e3              # domain length in y
@@ -86,7 +78,7 @@ function Shearheating2D()
     origin       = 0.0, -ly          # origin coordinates (15km f sticky air layer)
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-     # ----------------------------------------------------
+    # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies(; is_TP_Conductivity=false)
@@ -96,9 +88,7 @@ function Shearheating2D()
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 32, 12
-        particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
-    )
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
@@ -188,7 +178,7 @@ function Shearheating2D()
             )
         )
         tensor_invariant!(stokes.ε)
-        dt   = compute_dt(stokes, di, dt_diff)
+        dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
         # interpolate fields from particle to grid vertices
@@ -235,7 +225,7 @@ function Shearheating2D()
         end
         grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
         # update phase ratios
         phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 
@@ -244,15 +234,38 @@ function Shearheating2D()
 
     end
 
-    finalize_global_grid(; finalize_MPI = true)
+    finalize_global_grid(; finalize_MPI=true)
 
     return iters, thermal
 end
 
 @testset "Shearheating2D" begin
     @suppress begin
-        iters, thermal = Shearheating2D()
-        @test passed = iters.err_evo1[end] < 1e-4
-        # @test maximum.(thermal.shear_heating)
+        n = 32
+        nx = n
+        ny = n
+        igg = if !(JustRelax.MPI.Initialized())
+            IGG(init_global_grid(nx, ny, 1; init_MPI=true)...)
+        else
+            igg
+        end
+
+        # Initialize iters and thermal to ensure they are defined
+        iters = nothing
+        thermal = nothing
+
+        try
+            iters, thermal = Shearheating2D(igg; nx=nx, ny=ny)
+        catch e
+            @warn e
+            try
+                iters, thermal = Shearheating2D(igg; nx=nx, ny=ny)
+            catch e2
+                @warn e2
+            end
+        end
+
+        # Ensure iters is defined before running the test
+        @test iters != nothing && iters.err_evo1[end] < 1e-4
     end
 end

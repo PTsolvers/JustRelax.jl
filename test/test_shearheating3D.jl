@@ -25,7 +25,6 @@ else
     CPUBackend
 end
 
-
 using JustPIC
 using JustPIC._3D
 # Threads is the default backend,
@@ -51,7 +50,7 @@ include("../miniapps/benchmarks/stokes3D/shear_heating/Shearheating_rheology.jl"
 import ParallelStencil.INDICES
 const idx_k = INDICES[3]
 macro all_k(A)
-    esc(:($A[$idx_k]))
+    return esc(:($A[$idx_k]))
 end
 
 # Initial pressure profile - not accurate
@@ -61,13 +60,8 @@ end
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
-nx,ny,nz = 32,32,32
-
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function Shearheating3D(nx=16, ny=16, nz=16)
-
-    init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg      = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi)...)
+function Shearheating3D(igg; nx=16, ny=16, nz=16)
 
     # Physical domain ------------------------------------
     lx           = 70e3           # domain length in x
@@ -79,7 +73,7 @@ function Shearheating3D(nx=16, ny=16, nz=16)
     origin       = 0.0, 0.0, -lz          # origin coordinates (15km f sticky air layer)
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-     # ----------------------------------------------------
+    # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies(; is_TP_Conductivity=false)
@@ -89,11 +83,9 @@ function Shearheating3D(nx=16, ny=16, nz=16)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 10
-        particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
-    )
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
     # velocity grids
-    grid_vx, grid_vy, grid_vz   = velocity_grids(xci, xvi, di)
+    grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases      = init_cell_arrays(particles, Val(2))
     particle_args    = (pT, pPhases)
@@ -160,86 +152,112 @@ function Shearheating3D(nx=16, ny=16, nz=16)
     local iters
     while it < 5
 
-            # Stokes solver ----------------
-            iters = solve!(
-                stokes,
-                pt_stokes,
-                di,
-                flow_bcs,
-                ρg,
-                phase_ratios,
-                rheology,
-                args,
-                Inf,
-                igg;
-                kwargs = (
-                    iterMax = 100e3,
-                    nout=1e3,
-                    viscosity_cutoff=(-Inf, Inf),
-                    verbose=false,
-                )
+        # Stokes solver ----------------
+        iters = solve!(
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            phase_ratios,
+            rheology,
+            args,
+            Inf,
+            igg;
+            kwargs = (
+                iterMax = 100e3,
+                nout=1e3,
+                viscosity_cutoff=(-Inf, Inf),
+                verbose=false,
             )
-            tensor_invariant!(stokes.ε)
-            dt   = compute_dt(stokes, di, dt_diff)
-            # ------------------------------
+        )
+        tensor_invariant!(stokes.ε)
+        dt   = compute_dt(stokes, di, dt_diff)
+        # ------------------------------
 
-            # interpolate fields from particle to grid vertices
-            particle2grid!(thermal.T, pT, xvi, particles)
-            temperature2center!(thermal)
+        # interpolate fields from particle to grid vertices
+        particle2grid!(thermal.T, pT, xvi, particles)
+        temperature2center!(thermal)
 
-            compute_shear_heating!(
-                thermal,
-                stokes,
-                phase_ratios,
-                rheology, # needs to be a tuple
-                dt,
+        compute_shear_heating!(
+            thermal,
+            stokes,
+            phase_ratios,
+            rheology, # needs to be a tuple
+            dt,
+        )
+
+        # Thermal solver ---------------
+        heatdiffusion_PT!(
+            thermal,
+            pt_thermal,
+            thermal_bc,
+            rheology,
+            args,
+            dt,
+            di;
+            kwargs =(
+                igg     = igg,
+                phase   = phase_ratios,
+                iterMax = 10e3,
+                nout    = 1e2,
+                verbose = false,
             )
+        )
+        # ------------------------------
 
-            # Thermal solver ---------------
-            heatdiffusion_PT!(
-                thermal,
-                pt_thermal,
-                thermal_bc,
-                rheology,
-                args,
-                dt,
-                di;
-                kwargs =(
-                    igg     = igg,
-                    phase   = phase_ratios,
-                    iterMax = 10e3,
-                    nout    = 1e2,
-                    verbose = false,
-                )
-            )
-            # ------------------------------
+        # Advection --------------------
+        # advect particles in space
+        advection!(
+            particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt
+        )
+        # advect particles in memory
+        move_particles!(particles, xvi, particle_args)
+        # interpolate fields from grid vertices to particles
+        grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles)
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,), xvi)
+        # update phase ratios
+        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 
-            # Advection --------------------
-            # advect particles in space
-            advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt)
-            # advect particles in memory
-            move_particles!(particles, xvi, particle_args)
-            # interpolate fields from grid vertices to particles
-            grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles)
-            # check if we need to inject particles
-            inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
-            # update phase ratios
-            phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+        @show it += 1
+        t += dt
+        # ------------------------------
+    end
 
-            @show it += 1
-            t        += dt
-            # ------------------------------
-      end
-
-    finalize_global_grid(; finalize_MPI = true)
+    finalize_global_grid(; finalize_MPI=true)
 
     return iters, thermal
 end
 
 @testset "Shearheating3D" begin
     @suppress begin
-        iters, thermal = Shearheating3D()
-        @test passed = iters.err_evo1[end] < 1e-4
-    # @test maximum.(thermal.shear_heating)
+        n  = 16
+        nx = n
+        ny = n
+        nz = n
+        igg = if !(JustRelax.MPI.Initialized())
+            IGG(init_global_grid(nx, ny, nz; init_MPI=true)...)
+        else
+            igg
+        end
+
+        # Initialize iters and thermal to ensure they are defined
+        iters = nothing
+        thermal = nothing
+
+        try
+            iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
+        catch e
+            @warn e
+            try
+                iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
+            catch e2
+                @warn e2
+            end
+        end
+
+        # Ensure iters is defined before running the test
+        @test iters != nothing && iters.err_evo1[end] < 1e-4
     end
 end

@@ -428,7 +428,8 @@ function compute_dt(::CPUBackendTrait, S::JustRelax.StokesArrays, args...)
     return _compute_dt(S, args...)
 end
 
-@inline _compute_dt(S::JustRelax.StokesArrays, di) = _compute_dt(@velocity(S), di, Inf, maximum)
+@inline _compute_dt(S::JustRelax.StokesArrays, di) =
+    _compute_dt(@velocity(S), di, Inf, maximum)
 
 @inline _compute_dt(S::JustRelax.StokesArrays, di, dt_diff) =
     _compute_dt(@velocity(S), di, dt_diff, maximum)
@@ -436,7 +437,7 @@ end
 @inline _compute_dt(S::JustRelax.StokesArrays, di, dt_diff, ::IGG) =
     _compute_dt(@velocity(S), di, dt_diff, maximum_mpi)
 
-@inline function _compute_dt(V::NTuple, di, dt_diff, max_fun::F) where F<:Function
+@inline function _compute_dt(V::NTuple, di, dt_diff, max_fun::F) where {F<:Function}
     n = inv(length(V) + 0.1)
     dt_adv = mapreduce(x -> x[1] * inv(max_fun(abs.(x[2]))), max, zip(di, V)) * n
     return min(dt_diff, dt_adv)

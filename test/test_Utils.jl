@@ -6,7 +6,16 @@ end
 using Test
 using Statistics
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-import JustRelax.JustRelax2D: detect_args_size, _tuple, continuation_linear, continuation_log, assign!, mean_mpi, norm_mpi, minimum_mpi, maximum_mpi
+import JustRelax.JustRelax2D:
+    detect_args_size,
+    _tuple,
+    continuation_linear,
+    continuation_log,
+    assign!,
+    mean_mpi,
+    norm_mpi,
+    minimum_mpi,
+    maximum_mpi
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
@@ -53,11 +62,10 @@ end
         thermal = ThermalArrays(backend_JR, ni)
         take(dst)
         @test isdir(dst)
-        rm(dst, recursive=true)
+        rm(dst; recursive=true)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
-        particles = init_particles(
-            backend, nxcell, max_xcell, min_xcell, xvi...)
+        particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
         # temperature
         pT, pPhases      = init_cell_arrays(particles, Val(2))
         time = 1.0
@@ -76,7 +84,7 @@ end
         @test @tensor(stokes.τ_o) == @tensor(stokes.τ)
 
         @test _tuple(stokes.τ) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
-        @test _tuple(stokes.V) === (stokes.V.Vx,stokes.V.Vy)
+        @test _tuple(stokes.V) === (stokes.V.Vx, stokes.V.Vy)
 
         @test @velocity(stokes) === (stokes.V.Vx, stokes.V.Vy)
         @test @displacement(stokes) === (stokes.U.Ux, stokes.U.Uy)
@@ -98,7 +106,7 @@ end
 
         # other functions
         dt_diff = 0.1
-        @test compute_dt(stokes, di, dt_diff,igg) === 0.1
+        @test compute_dt(stokes, di, dt_diff, igg) === 0.011904761904761904
         @test compute_dt(stokes, di, dt_diff) === 0.011904761904761904
         @test compute_dt(stokes, di) ≈ 0.011904761904761904
         @test continuation_log(1.0, 0.8, 0.05) ≈ 0.8089757207980266
@@ -118,8 +126,8 @@ end
         thermal = ThermalArrays(backend_JR, ni)
 
         stokes.viscosity.η .= @fill(1.0)
-        stokes.V.Vy        .= @fill(10)
-        thermal.T          .= @fill(100)
+        stokes.V.Vy .= @fill(10)
+        thermal.T .= @fill(100)
         # Stokes
         @test _tuple(stokes.τ) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c)
         @test _tuple(stokes.V) === (stokes.V.Vx,stokes.V.Vy, stokes.V.Vz)
@@ -144,7 +152,7 @@ end
 
         # other functions
         dt_diff = 0.1
-        @test compute_dt(stokes, di, dt_diff,igg) === 0.1
+        @test compute_dt(stokes, di, dt_diff, igg) === 0.008064516129032258
         @test compute_dt(stokes, di, dt_diff) ≈ 0.008064516129032258
         @test compute_dt(stokes, di) ≈ 0.008064516129032258
 

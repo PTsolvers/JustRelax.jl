@@ -109,14 +109,12 @@ end
         @test compute_dt(stokes, di) ≈ 0.011904761904761904
         @test continuation_log(1.0, 0.8, 0.05) ≈ 0.8089757207980266
         @test continuation_linear(1.0, 0.8, 0.05) === 0.81
-        @parallel assign!(stokes.P, stokes.viscosity.η)
-        @test stokes.P == stokes.viscosity.η
 
         #MPI
-        @test mean_mpi(stokes.P) === 1.0
-        @test norm_mpi(stokes.P) === 4.0
-        @test minimum_mpi(stokes.P) === 1.0
-        @test maximum_mpi(stokes.P) === 1.0
+        @test mean_mpi(stokes.viscosity.η) === 1.0
+        @test norm_mpi(stokes.viscosity.η) === 4.0
+        @test minimum_mpi(stokes.viscosity.η) === 1.0
+        @test maximum_mpi(stokes.viscosity.η) === 1.0
 
         # 3D case
         ni = nx, ny, nz

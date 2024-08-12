@@ -82,7 +82,7 @@ end
 function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
 
     # initialize MPI
-    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = JustRelax.MPI.Initialized() ? false : true)...)
+    # igg = IGG(init_global_grid(nx, ny, 1; init_MPI = JustRelax.MPI.Initialized() ? false : true)...)
 
     # Physical domain ------------------------------------
     ly           = 2890e3
@@ -90,7 +90,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     origin       = 0.0, -ly                         # origin coordinates
     ni           = nx, ny                           # number of cells
     li           = lx, ly                           # domain length in x- and y-
-    di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    di           = @. li / ni                       # grid step in x- and -y
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------

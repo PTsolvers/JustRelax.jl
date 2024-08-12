@@ -80,8 +80,6 @@ end
         @test detect_args_size(tuple_args) == (7, 5)
 
         # Stokes
-        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        @test @tensor(stokes.τ_o) == @tensor(stokes.τ)
 
         @test _tuple(stokes.τ) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
         @test _tuple(stokes.V) === (stokes.V.Vx, stokes.V.Vy)

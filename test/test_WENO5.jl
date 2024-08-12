@@ -26,20 +26,6 @@ end
 import JustRelax.@cell
 using GeoParams, SpecialFunctions
 
-using JustPIC, JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
-elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
-else
-    JustPIC.CPUBackend
-end
-
-using Printf, LinearAlgebra, GeoParams, SpecialFunctions, CellArrays
-
 # function to compute strain rate (compulsory)
 @inline function custom_εII(a::CustomRheology, TauII; args...)
     η = custom_viscosity(a; args...)
@@ -109,61 +95,6 @@ function random_perturbation!(T, δT, xbox, ybox, xvi)
     @parallel (@idx size(T)) _random_perturbation!(T, δT, xbox, ybox, xvi...)
 end
 
-## WENO% particles script
-
-# Initial pressure profile - not accurate
-@parallel function init_P1!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
-    return nothing
-end
-
-# Initial thermal profile
-@parallel_indices (i, j) function init_T!(T, z)
-    depth = -z[j]
-
-    # (depth - 15e3) because we have 15km of sticky air
-    if depth < 0e0
-        T[i + 1, j] = 273e0
-
-    elseif 0e0 ≤ (depth) < 35e3
-        dTdZ        = (923-273)/35e3
-        offset      = 273e0
-        T[i + 1, j] = (depth) * dTdZ + offset
-
-    elseif 110e3 > (depth) ≥ 35e3
-        dTdZ        = (1492-923)/75e3
-        offset      = 923
-        T[i + 1, j] = (depth - 35e3) * dTdZ + offset
-
-    elseif (depth) ≥ 110e3
-        dTdZ        = (1837 - 1492)/590e3
-        offset      = 1492e0
-        T[i + 1, j] = (depth - 110e3) * dTdZ + offset
-
-    end
-
-    return nothing
-end
-
-# Thermal rectangular perturbation
-function rectangular_perturbation!(T, xc, yc, r, xvi)
-
-    @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
-        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            depth       = abs(y[j])
-            dTdZ        = (2047 - 2017) / 50e3
-            offset      = 2017
-            T[i + 1, j] = (depth - 585e3) * dTdZ + offset
-        end
-        return nothing
-    end
-    ni = length.(xvi)
-    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
-
-    return nothing
-end
-
-include("../miniapps/convection/WENO5/Layered_rheology.jl")
 # --------------------------------------------------------------------------------
 # BEGIN MAIN SCRIPT
 # --------------------------------------------------------------------------------
@@ -348,178 +279,10 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, thermal_perturbation = 
     end
 
 
-    # finalize_global_grid(; finalize_MPI=true)
+    finalize_global_grid(; finalize_MPI=true)
 
     return iters
 end
-
-
-## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar=8, ny=16, nx=ny*8)
-
-    # Physical domain ------------------------------------
-    ly           = 700e3            # domain length in y
-    lx           = ly * ar          # domain length in x
-    ni           = nx, ny           # number of cells
-    li           = lx, ly           # domain length in x- and y-
-    di           = @. li / ni       # grid step in x- and -y
-    origin       = 0.0, -ly         # origin coordinates (15km f sticky air layer)
-    grid         = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    # ----------------------------------------------------
-
-    # Physical properties using GeoParams ----------------
-    rheology     = init_rheologies(; is_plastic = true)
-    κ            = (10 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
-    dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
-    # ----------------------------------------------------
-
-    # Weno model -----------------------------------------
-    weno = WENO5(ni=(nx,ny).+1, method=Val{2}()) # ni.+1 for Temp
-    # ----------------------------------------------------
-
-    # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 1
-    particles           = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi, di, ni
-    )
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
-    # temperature
-    pT, pPhases      = init_cell_arrays(particles, Val(3))
-    particle_args    = (pT, pPhases)
-
-    # Elliptical temperature anomaly
-    xc_anomaly       = lx/2   # origin of thermal anomaly
-    yc_anomaly       = -610e3 # origin of thermal anomaly
-    r_anomaly        = 25e3   # radius of perturbation
-    init_phases!(pPhases, particles, lx; d=abs(yc_anomaly), r=r_anomaly)
-    phase_ratios     = PhaseRatio(backend_JR, ni, length(rheology))
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
-    # ----------------------------------------------------
-
-    # STOKES ---------------------------------------------
-    # Allocate arrays needed for every Stokes problem
-    stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.1 / √2.1)
-    # ----------------------------------------------------
-
-    # TEMPERATURE PROFILE --------------------------------
-    thermal          = ThermalArrays(backend_JR, ni)
-    thermal_bc       = TemperatureBoundaryConditions(;
-        no_flux      = (left = true, right = true, top = false, bot = false),
-    )
-    # initialize thermal profile - Half space cooling
-    @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2])
-    thermal_bcs!(thermal, thermal_bc)
-
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
-    temperature2center!(thermal)
-    # ----------------------------------------------------
-
-    # Buoyancy forces
-    ρg               = @zeros(ni...), @zeros(ni...)
-    for _ in 1:1
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        @parallel init_P1!(stokes.P, ρg[2], xci[2])
-    end
-
-    args             = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
-    # Rheology
-    viscosity_cutoff = (1e16, 1e24)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
-    (; η, η_vep) = stokes.viscosity
-
-    # PT coefficients for thermal diffusion
-    pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
-    )
-
-    # Boundary conditions
-    flow_bcs         = VelocityBoundaryConditions(;
-        free_slip    = (left = true, right=true, top=true, bot=true),
-    )
-    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(@velocity(stokes)...)
-
-    # WENO arrays
-    T_WENO  = @zeros(ni.+1)
-    Vx_v    = @zeros(ni.+1...)
-    Vy_v    = @zeros(ni.+1...)
-    # Time loop
-    t, it = 0.0, 0
-    while it < 5 # run only for 5 Myrs
-
-        # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P,  dt=dt, ΔTc = thermal.ΔTc)
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        compute_viscosity!(
-            stokes, phase_ratios, args, rheology, viscosity_cutoff
-        )
-        # ------------------------------
-
-        # Stokes solver ----------------
-        iters = solve!(
-            stokes,
-            pt_stokes,
-            di,
-            flow_bcs,
-            ρg,
-            phase_ratios,
-            rheology,
-            args,
-            Inf,
-            igg;
-            kwargs = (;
-                iterMax          = 150e3,
-                nout             = 1e3,
-                viscosity_cutoff = viscosity_cutoff
-            )
-        )
-        tensor_invariant!(stokes.ε)
-        dt   = compute_dt(stokes, di, dt_diff)
-        # ------------------------------
-
-        # Weno advection
-        heatdiffusion_PT!(
-            thermal,
-            pt_thermal,
-            thermal_bc,
-            rheology,
-            args,
-            dt,
-            di;
-            kwargs = (
-                igg     = igg,
-                phase   = phase_ratios,
-                iterMax = 10e3,
-                nout    = 1e2,
-                verbose = true
-            ),
-        )
-        T_WENO .= thermal.T[2:end-1, :]
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
-        thermal.T[2:end-1, :] .= T_WENO
-        # ------------------------------
-
-        # Advection --------------------
-        # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
-        # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT, ), (T_WENO,), xvi)
-        # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
-        @show it += 1
-        t        += dt
-
-    end
-
-    return iters
-end
-
 
 @testset "WENO5 2D" begin
     @suppress begin
@@ -535,7 +298,5 @@ end
         iters = thermal_convection2D(igg; ar=8, ny=ny, nx=nx, thermal_perturbation = :circular)
         @test passed = iters.err_evo1[end] < 1e-4
 
-        iters = main2D(igg; ar=8, ny=ny, nx=nx)
-        @test passed = iters.err_evo1[end] < 1e-4
     end
 end

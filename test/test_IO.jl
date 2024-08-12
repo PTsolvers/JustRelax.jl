@@ -138,8 +138,9 @@ using WriteVTK
         @test isfile(joinpath(dst, "vtk_series.pvd"))
 
         # 3D case
-        stokes  = StokesArrays(backend_JR, (nx,ny,nz))
-        thermal = ThermalArrays(backend_JR,  (nx,ny,nz))
+        ni = nx, ny, nz
+        stokes  = StokesArrays(backend_JR, ni)
+        thermal = ThermalArrays(backend_JR,  ni)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(

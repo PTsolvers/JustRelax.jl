@@ -15,7 +15,7 @@ export @allocate,
     @velocity,
     @displacement,
     @strain,
-    @strain_plastic,
+    @plastic_strain,
     @stress,
     @tensor,
     @shear,
@@ -28,10 +28,7 @@ export @allocate,
     @residuals,
     compute_dt,
     multi_copy!,
-    take,
-    detect_args_size,
-    _tuple,
-    indices
+    take
 
 include("types/displacement.jl")
 export velocity2displacement!, displacement2velocity!

@@ -165,12 +165,12 @@ macro strain(A)
 end
 
 """
-    @strain_plastic(A)
+    @plastic_strain(A)
 
 Unpacks the plastic strain rate tensor `ε_pl` from the StokesArrays `A`, where its components are defined in the staggered grid.
 Shear components are unpack following Voigt's notation.
 """
-macro strain_plastic(A)
+macro plastic_strain(A)
     return quote
         unpack_tensor_stag(($(esc(A))).ε_pl)
     end
@@ -467,7 +467,7 @@ end
 
 @inline function _compute_dt(V::NTuple, di, dt_diff, I::IGG)
     n = inv(length(V) + 0.1)
-    dt_adv = mapreduce(x -> x[1] * inv(maximum_mpi(abs.(x[2]))), max, zip(di, V)) * n
+    dt_adv = mapreduce(x -> x[1] * inv(maximum_mpi(abs.(x[2]))), min, zip(di, V)) * n
     return min(dt_diff, dt_adv)
 end
 

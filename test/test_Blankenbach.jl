@@ -297,7 +297,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 @testset "Blankenbach 2D" begin
-    @supress begin
+    @suppress begin
 
         nx, ny   = 32, 32           # number of cells
         igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

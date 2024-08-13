@@ -41,8 +41,7 @@ export AbstractBoundaryConditions,
     VelocityBoundaryConditions,
     flow_bcs!,
     thermal_bcs!,
-    pureshear_bc!,
-    apply_free_slip!
+    pureshear_bc!
 
 include("MiniKernels.jl")
 

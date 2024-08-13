@@ -63,7 +63,7 @@ function PTThermalCoeffs(
         θr_dτ, dτ_ρ, rheology, args, max_lxyz, Vpdτ, inv(dt)
     )
 
-    # return JustRelax.PTThermalCoeffs(CFL, ϵ, max_lxyz, max_lxyz^2, Vpdτ, θr_dτ, dτ_ρ)
+    return JustRelax.PTThermalCoeffs(CFL, ϵ, max_lxyz, max_lxyz^2, Vpdτ, θr_dτ, dτ_ρ)
 end
 
 @parallel_indices (I...) function compute_pt_thermal_arrays!(

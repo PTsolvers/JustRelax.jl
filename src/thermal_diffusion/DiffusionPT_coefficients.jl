@@ -47,7 +47,15 @@ end
 
 # without phase ratios
 function PTThermalCoeffs(
-    ::Type{CPUBackend}, rheology::MaterialParams, args, dt, ni, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
+    ::Type{CPUBackend},
+    rheology::MaterialParams,
+    args,
+    dt,
+    ni,
+    di::NTuple,
+    li::NTuple;
+    ϵ=1e-8,
+    CFL=0.9 / √3,
 )
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end

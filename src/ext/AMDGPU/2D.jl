@@ -72,16 +72,8 @@ function JR2D.PTThermalCoeffs(
 end
 
 function JR2D.PTThermalCoeffs(
-    ::Type{AMDGPUBackend},
-    rheology,
-    args,
-    dt,
-    ni,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
-    ϵ=1e-8,
-    CFL=0.9 / √3,
-) where {nDim,T}
+    ::Type{AMDGPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √2
+)
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 

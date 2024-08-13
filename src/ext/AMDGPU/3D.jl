@@ -72,7 +72,7 @@ function JR3D.PTThermalCoeffs(
 end
 
 function JR3D.PTThermalCoeffs(
-    ::Type{AMDGPUBackend}, 
+    ::Type{AMDGPUBackend},
     rheology::MaterialParams,
     args,
     dt,

@@ -79,7 +79,7 @@ add_box!(
     Grid2D;
     xlim    = (Lx-1430, Lx-1430-250),
     zlim    = (-80, 0.0),
-    Origin  = (nothing, StrikeAngle=0, DipAngle=-30),
+    Origin  = nothing, StrikeAngle=0, DipAngle=-30,
     phase   = LithosphericPhases(Layers=[8 72], Phases=[2 1 0]),
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80, Adiabat=0.4)
 )

@@ -1,0 +1,91 @@
+push!(LOAD_PATH, "..")
+
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+    AMDGPU.allowscalar(true)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+    CUDA.allowscalar(true)
+end
+
+using Test
+using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 2)
+    CUDABackend
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+    CPUBackend
+end
+
+import JustRelax.JustRelax2D: interp_Vx∂ρ∂x_on_Vy!, interp_Vx_on_Vy!
+
+
+@testset "Interpolations" begin
+
+        # Set up mock data
+        # Physical domain ------------------------------------
+        ly           = 1.0       # domain length in y
+        lx           = 1.0       # domain length in x
+        nx, ny, nz   = 4, 4, 4   # number of cells
+        ni           = nx, ny     # number of cells
+        igg          = IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
+        li           = lx, ly     # domain length in x- and y-
+        di           = @. li / ni # grid step in x- and -y
+        origin       = 0.0, -ly   # origin coordinates (15km f sticky air layer)
+        grid         = Geometry(ni, li; origin = origin)
+        (; xci, xvi) = grid
+
+
+        # 2D case
+        stokes  = StokesArrays(backend_JR, ni)
+        thermal = ThermalArrays(backend_JR, ni)
+        ρg      = @ones(ni)
+        Vx_on_Vy = @zeros(size(stokes.V.Vy))
+
+        stokes.viscosity.η .= @fill(1.0)
+        stokes.V.Vy        .= @fill(10)
+        thermal.T          .= @fill(100)
+        thermal.Told       .= @fill(50)
+        stokes.τ.xy_c      .= @fill(1.0)
+        temperature2center!(thermal)
+
+
+        @test thermal.Tc[1,1] == 100
+
+        thermal.ΔT .= thermal.T .- thermal.Told
+        vertex2center!(thermal.ΔTc, thermal.ΔT)
+        @test thermal.ΔTc[1,1] == 50
+
+        center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+        @test stokes.τ.xy[2,2] == 1.0
+
+        Vx_v = @ones(ni.+1...)
+        Vy_v = @ones(ni.+1...)
+
+        velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
+        @test Vx_v[1,1] == 0.0
+        @test Vy_v[1,1] == 10.0
+
+        Vx_v = @ones(ni.+1...)
+        Vy_v = @ones(ni.+1...)
+        velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=false)
+        @test Vx_v[1,1] == 0.0
+        @test Vy_v[1,1] == 10.0
+
+        @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
+            Vx_on_Vy, stokes.V.Vx
+        )
+        @test Vx_on_Vy[2,2] == 0.0
+
+        @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
+            Vx_on_Vy, stokes.V.Vx, ρg, inv(di[1])
+        )
+        @test Vx_on_Vy[2,2] == 0.0
+
+end

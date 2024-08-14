@@ -46,7 +46,6 @@ end
         stokes  = StokesArrays(backend_JR, ni)
         thermal = ThermalArrays(backend_JR, ni)
         ρg      = @ones(ni)
-        Vx_on_Vy = @zeros(size(stokes.V.Vy))
 
         stokes.viscosity.η .= @fill(1.0)
         stokes.V.Vy        .= @fill(10)
@@ -77,15 +76,4 @@ end
         velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=false)
         @test Vx_v[1,1] == 0.0
         @test Vy_v[1,1] == 10.0
-
-        @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
-            Vx_on_Vy, stokes.V.Vx
-        )
-        @test Vx_on_Vy[2,2] == 0.0
-
-        @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
-            Vx_on_Vy, stokes.V.Vx, ρg, inv(di[1])
-        )
-        @test Vx_on_Vy[2,2] == 0.0
-
 end

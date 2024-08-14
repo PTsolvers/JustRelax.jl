@@ -35,7 +35,12 @@ using WriteVTK
         # 2D case
         dst = "test_IO"
         stokes  = StokesArrays(backend_JR, ni)
+
+        thermal = ThermalArrays(backend_JR, 4,4)
+        @test size(thermal.Tc) === (4,4)
+
         thermal = ThermalArrays(backend_JR, ni)
+        @test size(thermal.Tc) === (4,4)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(
@@ -140,7 +145,11 @@ using WriteVTK
         # 3D case
         ni = nx, ny, nz
         stokes  = StokesArrays(backend_JR, ni)
-        thermal = ThermalArrays(backend_JR,  ni)
+
+        thermal = ThermalArrays(backend_JR, 4,4,4)
+        @test size(thermal.Tc) === (4,4,4)
+        thermal = ThermalArrays(backend_JR, ni)
+        @test size(thermal.Tc) === (4,4,4)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(

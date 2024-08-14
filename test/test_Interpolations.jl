@@ -10,6 +10,7 @@ end
 
 using Test
 using JustRelax, JustRelax.JustRelax2D
+import JustRelax.JustRelax2D: interp_Vx∂ρ∂x_on_Vy!, interp_Vx_on_Vy!
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
@@ -23,7 +24,6 @@ else
     CPUBackend
 end
 
-import JustRelax.JustRelax2D: interp_Vx∂ρ∂x_on_Vy!, interp_Vx_on_Vy!
 
 
 @testset "Interpolations" begin

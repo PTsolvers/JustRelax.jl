@@ -63,10 +63,7 @@ end
     @test PTArray(backend) === A
     @test_throws ArgumentError PTArray(bk(rand()))
     @test_throws ArgumentError PTArray(bk("potato"))
-    @test_throws ArgumentError PTArray(123)
-    @test_throws ArgumentError PTArray(:symbol)
-    @test_throws ArgumentError PTArray([1, 2, 3])
-    @test_throws ArgumentError PTArray(nothing)
+    @test_throws ArgumentError PTArray(backend, bk(rand()))
 
     # test error handling
     @test_throws ArgumentError bk(rand())

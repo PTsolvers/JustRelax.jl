@@ -34,7 +34,6 @@ struct Geometry{nDim,T}
     function Geometry(
         ni::NTuple{nDim,Integer}, li::NTuple{nDim,T}; origin=ntuple(_ -> 0.0, Val(nDim))
     ) where {nDim,T}
-
         isMPI = ImplicitGlobalGrid.grid_is_initialized()
 
         Li, maxLi, di, xci, xvi, grid_v = if isMPI
@@ -42,14 +41,12 @@ struct Geometry{nDim,T}
         else
             geometry_nonMPI(ni, li, origin)
         end
-        
+
         return new{nDim,Float64}(ni, Li, origin, maxLi, di, xci, xvi, grid_v)
     end
 end
 
-function geometry_MPI(
-    ni::NTuple{nDim,Integer}, li::NTuple{nDim,T}, origin
-) where {nDim,T}
+function geometry_MPI(ni::NTuple{nDim,Integer}, li::NTuple{nDim,T}, origin) where {nDim,T}
     f_g = (nx_g, ny_g, nz_g)
     ni_g = ntuple(i -> f_g[i](), Val(nDim))
     Li = Float64.(li)
@@ -70,8 +67,9 @@ function geometry_nonMPI(
     return Li, max(Li...), di, xci, xvi, grid_v
 end
 
-function lazy_grid_MPI(di::NTuple{N,T1}, ni; origin=ntuple(_ -> zero(T1), Val(N))) where {N,T1}
-    
+function lazy_grid_MPI(
+    di::NTuple{N,T1}, ni; origin=ntuple(_ -> zero(T1), Val(N))
+) where {N,T1}
     f_g = (x_g, y_g, z_g)
 
     # nodes at the center of the grid cells
@@ -102,7 +100,9 @@ function lazy_grid_MPI(di::NTuple{N,T1}, ni; origin=ntuple(_ -> zero(T1), Val(N)
     return xci, xvi
 end
 
-function lazy_grid(di::NTuple{N,T1}, ni, Li; origin=ntuple(_ -> zero(T1), Val(N))) where {N,T1}
+function lazy_grid(
+    di::NTuple{N,T1}, ni, Li; origin=ntuple(_ -> zero(T1), Val(N))
+) where {N,T1}
 
     # nodes at the center of the grid cells
     xci = ntuple(Val(N)) do i
@@ -118,7 +118,6 @@ function lazy_grid(di::NTuple{N,T1}, ni, Li; origin=ntuple(_ -> zero(T1), Val(N)
 
     return xci, xvi
 end
-
 
 # Velocity helper grids for the particle advection
 

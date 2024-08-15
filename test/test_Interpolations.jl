@@ -47,11 +47,11 @@ end
         thermal = ThermalArrays(backend_JR, ni)
         ρg      = @ones(ni)
 
-        stokes.viscosity.η .= @fill(1.0)
-        stokes.V.Vy        .= @fill(10)
-        thermal.T          .= @fill(100)
-        thermal.Told       .= @fill(50)
-        stokes.τ.xy_c      .= @fill(1.0)
+        stokes.viscosity.η .= 1
+        stokes.V.Vy        .= 10
+        thermal.T          .= 100
+        thermal.Told       .= 50
+        stokes.τ.xy_c      .= 1
         temperature2center!(thermal)
 
 
@@ -62,18 +62,18 @@ end
         @test thermal.ΔTc[1,1] == 50
 
         center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-        @test stokes.τ.xy[2,2] == 1.0
+        @test stokes.τ.xy[2,2] == 1
 
         Vx_v = @ones(ni.+1...)
         Vy_v = @ones(ni.+1...)
 
         velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
-        @test Vx_v[1,1] == 0.0
-        @test Vy_v[1,1] == 10.0
+        @test iszero(Vx_v[1,1])
+        @test Vy_v[1,1] == 10
 
         Vx_v = @ones(ni.+1...)
         Vy_v = @ones(ni.+1...)
         velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=false)
-        @test Vx_v[1,1] == 0.0
-        @test Vy_v[1,1] == 10.0
+        @test iszero(Vx_v[1,1])
+        @test Vy_v[1,1] == 10
 end

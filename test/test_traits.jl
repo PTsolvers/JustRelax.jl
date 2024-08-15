@@ -56,7 +56,7 @@ end
 
     # test PTArray
     if env_backend !== "AMDGPU" && env_backend !== "CUDA"
-        @test PTArray()        === A
+        @test PTArray() === A
     else
         @test true === true
     end

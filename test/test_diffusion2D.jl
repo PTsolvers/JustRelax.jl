@@ -8,7 +8,7 @@ end
 
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)

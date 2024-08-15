@@ -15,6 +15,7 @@ export @allocate,
     @velocity,
     @displacement,
     @strain,
+    @plastic_strain,
     @stress,
     @tensor,
     @shear,
@@ -40,13 +41,12 @@ export AbstractBoundaryConditions,
     VelocityBoundaryConditions,
     flow_bcs!,
     thermal_bcs!,
-    pureshear_bc!,
-    apply_free_slip!
+    pureshear_bc!
 
 include("MiniKernels.jl")
 
 include("phases/phases.jl")
-export fn_ratio, phase_ratios_center!
+export fn_ratio, phase_ratios_center!, numphases, nphases
 
 include("rheology/BuoyancyForces.jl")
 export compute_ρg!

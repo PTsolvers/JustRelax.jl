@@ -6,6 +6,7 @@ using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
+using Statistics
 using MPI
 
 import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend
@@ -33,6 +34,7 @@ using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
+using Statistics
 using MPI
 
 import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend

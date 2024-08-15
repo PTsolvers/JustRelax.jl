@@ -72,15 +72,15 @@ end
 
 function JR3D.PTThermalCoeffs(
     ::Type{CUDABackend},
-    rheology,
+    rheology::MaterialParams,
     args,
     dt,
     ni,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
+    di::NTuple,
+    li::NTuple;
     ϵ=1e-8,
     CFL=0.9 / √3,
-) where {nDim,T}
+)
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 

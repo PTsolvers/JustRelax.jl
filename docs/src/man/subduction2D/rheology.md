@@ -18,6 +18,8 @@ density_lithosphere = PT_Density(; ρ0=3.2e3, α = α, β = 0e0, T0 = 273+1474)
 We will run the case where the rheology is given by a combination of dislocation and diffusion creep for wet olivine,
 
 ```julia
+using GeoParams.Dislocation
+using GeoParams.Diffusion
 disl_wet_olivine  = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
 diff_wet_olivine  = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
 ```

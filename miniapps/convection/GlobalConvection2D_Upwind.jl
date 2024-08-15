@@ -82,7 +82,6 @@ end
 function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
 
     # initialize MPI
-    # igg = IGG(init_global_grid(nx, ny, 1; init_MPI = JustRelax.MPI.Initialized() ? false : true)...)
 
     # Physical domain ------------------------------------
     ly           = 2890e3

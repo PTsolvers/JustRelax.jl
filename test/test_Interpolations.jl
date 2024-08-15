@@ -34,9 +34,8 @@ end
         lx           = 1.0       # domain length in x
         nx, ny, nz   = 4, 4, 4   # number of cells
         ni           = nx, ny     # number of cells
-        igg          = IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
-        li           = lx, ly     # domain length in x- and y-
-        di           = @. li / ni # grid step in x- and -y
+        li           = lx, ly     # domain length in x- and y-direction
+        di           = @. li / ni # grid step in x- and y-direction
         origin       = 0.0, -ly   # origin coordinates (15km f sticky air layer)
         grid         = Geometry(ni, li; origin = origin)
         (; xci, xvi) = grid

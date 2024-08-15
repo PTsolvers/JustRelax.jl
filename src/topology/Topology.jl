@@ -34,18 +34,44 @@ struct Geometry{nDim,T}
     function Geometry(
         ni::NTuple{nDim,Integer}, li::NTuple{nDim,T}; origin=ntuple(_ -> 0.0, Val(nDim))
     ) where {nDim,T}
-        f_g = (nx_g, ny_g, nz_g)
-        ni_g = ntuple(i -> f_g[i](), Val(nDim))
-        Li = Float64.(li)
-        di = Li ./ ni_g
 
-        xci, xvi = lazy_grid(di, ni; origin=origin)
-        grid_v = velocity_grids(xci, xvi, di)
-        return new{nDim,Float64}(ni, Li, origin, max(Li...), di, xci, xvi, grid_v)
+        isMPI = ImplicitGlobalGrid.grid_is_initialized()
+
+        Li, maxLi, di, xci, xvi, grid_v = if isMPI
+            geometry_MPI(ni, li, origin)
+        else
+            geometry_nonMPI(ni, li, origin)
+        end
+        
+        return new{nDim,Float64}(ni, Li, origin, maxLi, di, xci, xvi, grid_v)
     end
 end
 
-function lazy_grid(di::NTuple{N,T1}, ni; origin=ntuple(_ -> zero(T1), Val(N))) where {N,T1}
+function geometry_MPI(
+    ni::NTuple{nDim,Integer}, li::NTuple{nDim,T}, origin
+) where {nDim,T}
+    f_g = (nx_g, ny_g, nz_g)
+    ni_g = ntuple(i -> f_g[i](), Val(nDim))
+    Li = Float64.(li)
+    di = Li ./ ni_g
+    xci, xvi = lazy_grid_MPI(di, ni; origin=origin)
+    grid_v = velocity_grids(xci, xvi, di)
+    return Li, max(Li...), di, xci, xvi, grid_v
+end
+
+function geometry_nonMPI(
+    ni::NTuple{nDim,Integer}, li::NTuple{nDim,T}, origin
+) where {nDim,T}
+    Li = Float64.(li)
+    di = Li ./ ni
+
+    xci, xvi = lazy_grid(di, ni, Li; origin=origin)
+    grid_v = velocity_grids(xci, xvi, di)
+    return Li, max(Li...), di, xci, xvi, grid_v
+end
+
+function lazy_grid_MPI(di::NTuple{N,T1}, ni; origin=ntuple(_ -> zero(T1), Val(N))) where {N,T1}
+    
     f_g = (x_g, y_g, z_g)
 
     # nodes at the center of the grid cells
@@ -75,6 +101,24 @@ function lazy_grid(di::NTuple{N,T1}, ni; origin=ntuple(_ -> zero(T1), Val(N))) w
 
     return xci, xvi
 end
+
+function lazy_grid(di::NTuple{N,T1}, ni, Li; origin=ntuple(_ -> zero(T1), Val(N))) where {N,T1}
+
+    # nodes at the center of the grid cells
+    xci = ntuple(Val(N)) do i
+        Base.@_inline_meta
+        @inbounds LinRange(origin[i] + di[i] / 2, Li[i] + di[i] / 2, ni[i])
+    end
+
+    # nodes at the vertices of the grid cells
+    xvi = ntuple(Val(N)) do i
+        Base.@_inline_meta
+        @inbounds LinRange(origin[i], Li[i], ni[i] + 1)
+    end
+
+    return xci, xvi
+end
+
 
 # Velocity helper grids for the particle advection
 

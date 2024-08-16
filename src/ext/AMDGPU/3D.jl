@@ -89,7 +89,7 @@ function JR3D.update_thermal_coeffs!(
     pt_thermal::JustRelax.PTThermalCoeffs{T,<:RocArray}, rheology, phase_ratios, args, dt
 ) where {T}
     ni = size(pt_thermal.dτ_ρ)
-    @parallel (@idx ni) JustRelax2D.compute_pt_thermal_arrays!(
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
         pt_thermal.θr_dτ,
         pt_thermal.dτ_ρ,
         rheology,
@@ -106,7 +106,7 @@ function JR3D.update_thermal_coeffs!(
     pt_thermal::JustRelax.PTThermalCoeffs{T,<:RocArray}, rheology, args, dt
 ) where {T}
     ni = size(pt_thermal.dτ_ρ)
-    @parallel (@idx ni) JustRelax2D.compute_pt_thermal_arrays!(
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
         pt_thermal.θr_dτ,
         pt_thermal.dτ_ρ,
         rheology,
@@ -122,7 +122,7 @@ function JR3D.update_thermal_coeffs!(
     pt_thermal::JustRelax.PTThermalCoeffs{T,<:RocArray}, rheology, ::Nothing, args, dt
 ) where {T}
     ni = size(pt_thermal.dτ_ρ)
-    @parallel (@idx ni) JustRelax2D.compute_pt_thermal_arrays!(
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
         pt_thermal.θr_dτ,
         pt_thermal.dτ_ρ,
         rheology,

@@ -121,3 +121,27 @@ function _compute_pt_thermal_arrays!(
 
     return nothing
 end
+
+function update_thermal_coeffs!(pt_thermal::JustRelax.PTThermalCoeffs, rheology, phase_ratios, args, dt)
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) JustRelax2D.compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ, pt_thermal.dτ_ρ, rheology, phase_ratios.center, args, pt_thermal.max_lxyz, pt_thermal.Vpdτ, inv(dt)
+    )
+    return nothing
+end
+
+function update_thermal_coeffs!(pt_thermal::JustRelax.PTThermalCoeffs, rheology, args, dt)
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) JustRelax2D.compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ, pt_thermal.dτ_ρ, rheology, args, pt_thermal.max_lxyz, pt_thermal.Vpdτ, inv(dt)
+    )
+    return nothing
+end
+
+function update_thermal_coeffs!(pt_thermal::JustRelax.PTThermalCoeffs, rheology, ::Nothing, args, dt)
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) JustRelax2D.compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ, pt_thermal.dτ_ρ, rheology, args, pt_thermal.max_lxyz, pt_thermal.Vpdτ, inv(dt)
+    )
+    return nothing
+end

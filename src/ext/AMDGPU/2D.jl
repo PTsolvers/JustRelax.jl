@@ -96,7 +96,7 @@ function JR2D.update_thermal_coeffs!(
         phase_ratios.center,
         args,
         pt_thermal.max_lxyz,
-        pt_thermal.Vpdτ,4
+        pt_thermal.Vpdτ,
         inv(dt),
     )
     return nothing

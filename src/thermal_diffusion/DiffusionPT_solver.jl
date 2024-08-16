@@ -147,6 +147,7 @@ function _heatdiffusion_PT!(
 
     while err > ϵ && iter < iterMax
         wtime0 += @elapsed begin
+            update_thermal_coeffs!(pt_thermal, rheology, phase, args, dt)
             @parallel flux_range(ni...) compute_flux!(
                 @qT(thermal)...,
                 @qT2(thermal)...,

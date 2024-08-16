@@ -127,14 +127,15 @@ end
     d_za(A) = _d_za(A, I..., _dz)
 
     I1 = I .+ 1
-    T[I1...] +=
-        av(dτ_ρ) * (
-            (-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) -
-            av(ρCp) * (T[I1...] - Told[I1...]) * _dt
-        ) +
-        av(H) +
-        av(shear_heating)
-
+    T[I1...] =
+        (
+            av(dτ_ρ) * (
+                -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
+                Told[I1...] * av(ρCp) * _dt +
+                av(H) +
+                av(shear_heating)
+            ) + T[I1...]
+        ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
     return nothing
 end
 
@@ -166,16 +167,18 @@ end
     T_ijk = T[I...]
     args_ijk = (; T=T_ijk, P=av(args.P))
     phase_ijk = getindex_phase(phase, i, j, k)
+    ρCp = compute_ρCp(rheology, phase_ijk, args_ijk)
 
     T[I...] =
-        T_ijk +
-        av(dτ_ρ) * (
-            (-(d_xa(qTx) + d_ya(qTy) + d_za(qTz))) -
-            compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt +
-            av(H) +
-            av(shear_heating) +
-            adiabatic[i, j, k] * T_ijk
-        )
+        (
+            av(dτ_ρ) * (
+                -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
+                Told[I...] * ρCp * _dt +
+                av(H) +
+                av(shear_heating) +
+                adiabatic[i, j] * T_ijk
+            ) + T_ijk
+        ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
     return nothing
 end
 
@@ -371,82 +374,6 @@ end
     return nothing
 end
 
-# @parallel_indices (i, j) function update_T!(
-#     T::AbstractArray{_T,2}, Told, qTx, qTy, H, shear_heating, ρCp, dτ_ρ, _dt, _dx, _dy
-# ) where {_T}
-#     nx, ny = size(ρCp)
-
-#     d_xa(A) = _d_xa(A, i, j, _dx)
-#     d_ya(A) = _d_ya(A, i, j, _dy)
-#     #! format: off
-#     function av(A)
-#         (
-#             A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
-#             A[clamp(i - 1, 1, nx), j] +
-#             A[i, clamp(j - 1, 1, ny)] +
-#             A[i, j]
-#         ) * 0.25
-#     end
-#     #! format: on
-
-#     T[i + 1, j + 1] +=
-#         av(dτ_ρ) * (
-#             (-(d_xa(qTx) + d_ya(qTy))) -
-#             av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt +
-#             av(H) +
-#             av(shear_heating)
-#         )
-#     return nothing
-# end
-
-
-# @parallel_indices (i, j) function update_T!(
-#     T::AbstractArray{_T,2},
-#     Told,
-#     qTx,
-#     qTy,
-#     H,
-#     shear_heating,
-#     adiabatic,
-#     rheology,
-#     phase,
-#     dτ_ρ,
-#     _dt,
-#     _dx,
-#     _dy,
-#     args::NamedTuple,
-# ) where {_T}
-#     nx, ny = size(args.P)
-
-#     i0 = clamp(i - 1, 1, nx)
-#     i1 = clamp(i, 1, nx)
-#     j0 = clamp(j - 1, 1, ny)
-#     j1 = clamp(j, 1, ny)
-
-#     d_xa(A) = _d_xa(A, i, j, _dx)
-#     d_ya(A) = _d_ya(A, i, j, _dy)
-#     av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
-
-#     T_ij = T[i + 1, j + 1]
-#     args_ij = (; T=T_ij, P=av(args.P))
-
-#     ρCp =
-#         (
-#             compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
-#             compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
-#             compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
-#             compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
-#         ) * 0.25
-
-#     T[i + 1, j + 1] +=
-#         av(dτ_ρ) * (
-#             (-(d_xa(qTx) + d_ya(qTy))) - ρCp * (T_ij - Told[i + 1, j + 1]) * _dt +
-#             av(H) +
-#             av(shear_heating) +
-#             adiabatic[i, j] * T[i + 1, j + 1]
-#         )
-#     return nothing
-# end
 
 @parallel_indices (i, j) function update_T!(
     T::AbstractArray{_T,2}, Told, qTx, qTy, H, shear_heating, ρCp, dτ_ρ, _dt, _dx, _dy

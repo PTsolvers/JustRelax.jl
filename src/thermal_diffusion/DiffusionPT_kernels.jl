@@ -374,7 +374,6 @@ end
     return nothing
 end
 
-
 @parallel_indices (i, j) function update_T!(
     T::AbstractArray{_T,2}, Told, qTx, qTy, H, shear_heating, ρCp, dτ_ρ, _dt, _dx, _dy
 ) where {_T}

@@ -109,14 +109,14 @@ function _compute_P!(P, P0, ∇V, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
     RP = fma(-(P - P0), _Kdt, -∇V)
     ψ = 1 / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
-    P = ((fma(P0, _Kdt, -∇V)) * ψ + P) / (1 + _Kdt * ψ)
-    # P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
+    # P = ((fma(P0, _Kdt, -∇V)) * ψ + P) / (1 + _Kdt * ψ)
+    P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
     return RP, P
 end
 
 function _compute_P!(P, P0, ∇V, ΔTc, α, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
-    _dt = inv(dt)    
+    _dt = inv(dt)
     RP = fma(-(P - P0), _Kdt, (-∇V + (α * (ΔTc * _dt))))
     ψ = 1 / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
     P = ((fma(P0, _Kdt, (-∇V + (α * (ΔTc * _dt))))) * ψ + P) / (1 + _Kdt * ψ)

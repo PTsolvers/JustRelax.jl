@@ -3,7 +3,8 @@
 @parallel_indices (i, j) function compute_τ!(
     τxx::AbstractArray{T,2}, τyy, τxy, εxx, εyy, εxy, η, θ_dτ
 ) where {T}
-    @inline av(A) = _harm_a(A, i, j)
+    @inline av(A) = _av_a(A, i, j)
+    @inline harm(A) = _harm_a(A, i, j)
 
     denominator = inv(θ_dτ + 1.0)
     η_ij = η[i, j]
@@ -41,7 +42,7 @@ end
 
     # Shear components
     if all((i, j) .< size(τxy) .- 1)
-        av_η_ij = harm(η)
+        av_η_ij = av(η)
         _av_Gdt = inv(av(G) * dt)
         denominator = inv(θ_dτ + av_η_ij * _av_Gdt + 1.0)
         τxy[i + 1, j + 1] +=

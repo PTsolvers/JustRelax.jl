@@ -54,6 +54,9 @@ export compute_ρg!
 include("rheology/Viscosity.jl")
 export compute_viscosity!
 
+include("rheology/Melting.jl")
+export compute_melt_fraction!
+
 # include("thermal_diffusion/DiffusionExplicit.jl")
 # export ThermalParameters
 

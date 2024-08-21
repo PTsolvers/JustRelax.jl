@@ -84,6 +84,55 @@ function JR2D.PTThermalCoeffs(
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 
+function JR2D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, phase_ratios, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        phase_ratios.center,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
+function JR2D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
+function JR2D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, ::Nothing, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
 # Boundary conditions
 function JR2D.flow_bcs!(
     ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions

@@ -4,7 +4,7 @@ function compute_melt_fraction!(ϕ, rheology, args)
 end
 
 @parallel_indices (I...) function compute_melt_fraction_kernel!(ϕ, rheology, args)
-    ϕ[I...] = compute_melt_frac(rheology, (;T=args.T[I...]))
+    ϕ[I...] = compute_melt_frac(rheology, (; T=args.T[I...]))
     return nothing
 end
 
@@ -17,8 +17,10 @@ function compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
     @parallel (@idx ni) compute_melt_fraction_kernel!(ϕ, phase_ratios, rheology, args)
 end
 
-@parallel_indices (I...) function compute_melt_fraction_kernel!(ϕ, phase_ratios, rheology, args)
-    ϕ[I...] = compute_melt_frac(rheology, (;T=args.T[I...]), phase_ratios[I...])
+@parallel_indices (I...) function compute_melt_fraction_kernel!(
+    ϕ, phase_ratios, rheology, args
+)
+    ϕ[I...] = compute_melt_frac(rheology, (; T=args.T[I...]), phase_ratios[I...])
     return nothing
 end
 

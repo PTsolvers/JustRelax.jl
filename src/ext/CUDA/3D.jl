@@ -238,7 +238,9 @@ function JR3D.compute_melt_fraction!(ϕ::CuArray, rheology, args)
     return compute_melt_fraction!(ϕ, rheology, args)
 end
 
-function JR3D.compute_melt_fraction!(ϕ::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
+function JR3D.compute_melt_fraction!(
+    ϕ::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args
+)
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 

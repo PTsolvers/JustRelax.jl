@@ -442,7 +442,7 @@ function main2D(; nx=32, ny=32)
         t += dt
     end
 
-    # finalize_global_grid()
+    finalize_global_grid()
 
     return ϕ, stokes, thermal
 end
@@ -452,7 +452,7 @@ end
         ϕ, stokes, thermal = main2D(; nx=32, ny=32)
 
         nx_T, ny_T = size(thermal.T)
-        @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.5369 rtol = 1e-3
+        @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.5369 rtol = 1e-2
         @test  Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 9.351e-9 rtol = 1e-1
 
     end

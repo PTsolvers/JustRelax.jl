@@ -14,13 +14,21 @@ end
 
 @parallel_indices (i, j) function interp_Vx∂ρ∂x_on_Vy!(Vx_on_Vy, Vx, ρg, _dx)
     nx, ny = size(ρg)
-    ii = clamp(i, 1, nx)
-    ii1 = clamp(i + 1, 1, nx)
-    jj = clamp(j, 1, ny)
+
+    iW = clamp(i - 1, 1, nx)
+    iE = clamp(i + 1, 1, nx)
+    jS = clamp(j - 1, 1, ny)
+    jN = clamp(j, 1, ny)
+
+    # OPTION 1
+    ρg_L = 0.25 * (ρg[iW, jS] + ρg[i, jS] + ρg[iW, jN] + ρg[i, jN])
+    ρg_R = 0.25 * (ρg[iE, jS] + ρg[i, jS] + ρg[iE, jN] + ρg[i, jN])
+
     Vx_on_Vy[i + 1, j] =
         (0.25 * (Vx[i, j] + Vx[i + 1, j] + Vx[i, j + 1] + Vx[i + 1, j + 1])) *
-        (ρg[ii1, jj] - ρg[ii, jj]) *
+        (ρg_R - ρg_L) *
         _dx
+
     return nothing
 end
 

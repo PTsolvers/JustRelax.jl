@@ -25,7 +25,7 @@ function init_phases!(phase_ratios, xci, radius)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -102,7 +102,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
     # Boundary conditions
-    flow_bcs     = FlowBoundaryConditions(;
+    flow_bcs     = DisplacementBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
@@ -183,7 +183,7 @@ end
 n      = 128
 nx     = n
 ny     = n
-figdir = "ShearBands2D_lin_softening"
+figdir = "Shearband_Displacement"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

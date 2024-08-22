@@ -9,6 +9,7 @@ using GeoParams
 using HDF5
 using CellArrays
 using StaticArrays
+using Statistics
 
 function solve!() end
 
@@ -32,7 +33,8 @@ include("types/phases.jl")
 # export PhaseRatio
 
 include("boundaryconditions/types.jl")
-export TemperatureBoundaryConditions, FlowBoundaryConditions
+export TemperatureBoundaryConditions,
+    DisplacementBoundaryConditions, VelocityBoundaryConditions
 
 include("types/traits.jl")
 export BackendTrait, CPUBackendTrait, NonCPUBackendTrait

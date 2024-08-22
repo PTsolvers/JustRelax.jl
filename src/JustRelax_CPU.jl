@@ -6,12 +6,17 @@ using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
+using Statistics
 using MPI
 
 import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend
 import JustRelax: PTStokesCoeffs
 import JustRelax:
-    AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
+    AbstractBoundaryConditions,
+    TemperatureBoundaryConditions,
+    AbstractFlowBoundaryConditions,
+    DisplacementBoundaryConditions,
+    VelocityBoundaryConditions
 
 @init_parallel_stencil(Threads, Float64, 2)
 
@@ -29,12 +34,17 @@ using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
+using Statistics
 using MPI
 
 import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend
 import JustRelax: PTStokesCoeffs
 import JustRelax:
-    AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
+    AbstractBoundaryConditions,
+    TemperatureBoundaryConditions,
+    AbstractFlowBoundaryConditions,
+    DisplacementBoundaryConditions,
+    VelocityBoundaryConditions
 
 @init_parallel_stencil(Threads, Float64, 3)
 

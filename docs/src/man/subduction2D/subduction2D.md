@@ -1,9 +1,9 @@
 # 2D subduction
 
-Model setups taken from [Hummel, et al 2024](https://doi.org/10.5194/se-15-567-2024).
+Model setups taken from [Hummel et al 2024](https://doi.org/10.5194/se-15-567-2024).
 
 # Model setup
-We will use GeophysicalModelGenerator.jl to generate the initial geometry, material phases, and thermal field of our models.
+We will use [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl) to generate the initial geometry, material phases, and thermal field of our models.
 
 
 # Initialize packages
@@ -21,7 +21,7 @@ using JustPIC, JustPIC._2D
 const backend = CUDABackend # Options: JustPIC.CPUBackend, CUDABackend, JustPIC.AMDGPUBackend
 ```
 
-We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
+We will also use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil
 @init_parallel_stencil(CUDA, Float64, 2)
@@ -75,7 +75,7 @@ particle_args       = (pT, pPhases)
 ```
 
 # Assign particles phases anomaly
-Now we assign the material phases from the arrays we computed with help of `GeophysicalModelGenerator.jl`
+Now we assign the material phases from the arrays we computed with help of [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl)
 ```julia
 phases_device    = PTArray(backend)(phases_GMG)
 phase_ratios     = PhaseRatio(backend, ni, length(rheology))
@@ -84,7 +84,7 @@ phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 ```
 
 ## Temperature profile
-We need to copy the thermal field from the `GeophysicalModelGenerator.jl` object to the `thermal` that contains all the arrays related to the thermal field.
+We need to copy the thermal field from the [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl) object to the `thermal` that contains all the arrays related to the thermal field.
 ```julia
 Ttop             = 20 + 273
 Tbot             = maximum(T_GMG)
@@ -124,7 +124,7 @@ compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 We we will use free slip boundary conditions on all sides
 ```julia
 # Boundary conditions
-flow_bcs         = FlowBoundaryConditions(;
+flow_bcs         = VelocityBoundaryConditions(;
     free_slip    = (left = true , right = true , top = true , bot = true),
 )
 ```
@@ -137,7 +137,7 @@ pt_thermal = PTThermalCoeffs(
 ```
 
 ## Just before solving the problem...
-Because we have ghost nodes on the thermal field `thermal.T`, we need to copy the thermal field to a buffer array without those ghost nodes, and interpolate the temperature to the particles. This is because `JustPIC.jl` does not support ghost nodes yet.
+Because we have ghost nodes on the thermal field `thermal.T`, we need to copy the thermal field to a buffer array without those ghost nodes, and interpolate the temperature to the particles. This is because [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) does not support ghost nodes yet.
 ```julia
 T_buffer    = @zeros(ni.+1)
 Told_buffer = similar(T_buffer)

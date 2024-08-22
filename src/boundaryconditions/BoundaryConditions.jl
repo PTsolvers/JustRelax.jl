@@ -38,14 +38,25 @@ end
 # @inline thermal_bcs!(thermal::ThermalArrays, bcs::TemperatureBoundaryConditions) = thermal_bcs!(thermal.T, bcs)
 
 """
-    flow_bcs!(stokes, bcs::FlowBoundaryConditions, di)
+    flow_bcs!(stokes, bcs::VelocityBoundaryConditions)
 
 Apply the prescribed flow boundary conditions `bc` on the `stokes`
 """
 flow_bcs!(stokes, bcs) = flow_bcs!(backend(stokes), stokes, bcs)
-function flow_bcs!(::CPUBackendTrait, stokes, bcs)
+
+function flow_bcs!(::CPUBackendTrait, stokes, bcs::VelocityBoundaryConditions)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
+
+"""
+    flow_bcs!(stokes, bcs::DisplacementBoundaryConditions)
+
+Apply the prescribed flow boundary conditions `bc` on the `stokes`
+"""
+function flow_bcs!(::CPUBackendTrait, stokes, bcs::DisplacementBoundaryConditions)
+    return _flow_bcs!(bcs, @displacement(stokes))
+end
+
 function flow_bcs!(bcs, V::Vararg{T,N}) where {T,N}
     return _flow_bcs!(bcs, tuple(V...))
 end
@@ -53,7 +64,12 @@ end
 function _flow_bcs!(bcs, V)
     n = bc_index(V)
     # no slip boundary conditions
-    do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip))
+    # do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip))
+    if do_bc(bcs.no_slip)
+        # @parallel (@idx n) no_slip1!(V..., bcs.no_slip)
+        # @parallel (@idx n) no_slip2!(V..., bcs.no_slip)
+        no_slip!(V..., bcs.no_slip)
+    end
     # free slip boundary conditions
     do_bc(bcs.free_slip) && (@parallel (@idx n) free_slip!(V..., bcs.free_slip))
 

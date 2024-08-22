@@ -13,7 +13,9 @@ export @allocate,
     @idx,
     @copy,
     @velocity,
+    @displacement,
     @strain,
+    @plastic_strain,
     @stress,
     @tensor,
     @shear,
@@ -32,13 +34,19 @@ include("types/displacement.jl")
 export velocity2displacement!, displacement2velocity!
 
 include("boundaryconditions/BoundaryConditions.jl")
-export FlowBoundaryConditions,
-    TemperatureBoundaryConditions, flow_bcs!, thermal_bcs!, pureshear_bc!, apply_free_slip!
+export AbstractBoundaryConditions,
+    TemperatureBoundaryConditions,
+    AbstractFlowBoundaryConditions,
+    DisplacementBoundaryConditions,
+    VelocityBoundaryConditions,
+    flow_bcs!,
+    thermal_bcs!,
+    pureshear_bc!
 
 include("MiniKernels.jl")
 
 include("phases/phases.jl")
-export fn_ratio, phase_ratios_center!
+export fn_ratio, phase_ratios_center!, numphases, nphases
 
 include("rheology/BuoyancyForces.jl")
 export compute_ρg!
@@ -58,7 +66,7 @@ export vertex2center!, center2vertex!, temperature2center!, velocity2vertex!
 include("advection/weno5.jl")
 export WENO5, WENO_advection!
 
-# Stokes 
+# Stokes
 
 include("rheology/GeoParams.jl")
 include("rheology/StressUpdate.jl")

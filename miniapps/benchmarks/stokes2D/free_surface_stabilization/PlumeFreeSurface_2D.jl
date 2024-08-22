@@ -141,7 +141,7 @@ function main(igg, nx, ny)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
-    flow_bcs         = FlowBoundaryConditions(;
+    flow_bcs         = VelocityBoundaryConditions(;
         free_slip    = (left = true, right = true, top = true, bot = true),
         free_surface = true
     )

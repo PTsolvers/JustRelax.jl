@@ -6,11 +6,29 @@ Interpolates the values of `Vx` onto the grid points of `Vy`.
 # Arguments
 - `Vx_on_Vy::AbstractArray`: `Vx` at `Vy` grid points.
 - `Vx::AbstractArray`: `Vx` at its staggered grid points.
-
-
 """
 @parallel_indices (i, j) function interp_Vx_on_Vy!(Vx_on_Vy, Vx)
     Vx_on_Vy[i + 1, j] = 0.25 * (Vx[i, j] + Vx[i + 1, j] + Vx[i, j + 1] + Vx[i + 1, j + 1])
+    return nothing
+end
+
+@parallel_indices (i, j) function interp_Vx∂ρ∂x_on_Vy!(Vx_on_Vy, Vx, ρg, _dx)
+    nx, ny = size(ρg)
+
+    iW = clamp(i - 1, 1, nx)
+    iE = clamp(i + 1, 1, nx)
+    jS = clamp(j - 1, 1, ny)
+    jN = clamp(j, 1, ny)
+
+    # OPTION 1
+    ρg_L = 0.25 * (ρg[iW, jS] + ρg[i, jS] + ρg[iW, jN] + ρg[i, jN])
+    ρg_R = 0.25 * (ρg[iE, jS] + ρg[i, jS] + ρg[iE, jN] + ρg[i, jN])
+
+    Vx_on_Vy[i + 1, j] =
+        (0.25 * (Vx[i, j] + Vx[i + 1, j] + Vx[i, j + 1] + Vx[i + 1, j + 1])) *
+        (ρg_R - ρg_L) *
+        _dx
+
     return nothing
 end
 
@@ -258,21 +276,31 @@ onto the pre-allocated `Vx_d`, `Vy_d`, `Vz_d` 3D arrays located at the grid vert
 function velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
     # infer size of grid
     nx, ny, nz = size(Vx)
+    n = max(nx, ny, nz)
     nv_x, nv_y, nv_z = nx - 1, ny - 2, nz - 2
     # interpolate to cell vertices
-    @parallel (@idx nv_x nv_y nv_z) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
+    @parallel (@idx n, n, n) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
 
     return nothing
 end
 
 @parallel_indices (i, j, k) function _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
     @inbounds begin
-        Vx_v[i, j, k] =
-            0.25 * (Vx[i, j, k] + Vx[i, j + 1, k] + Vx[i, j, k + 1] + Vx[i, j + 1, k + 1])
-        Vy_v[i, j, k] =
-            0.25 * (Vy[i, j, k] + Vy[i + 1, j, k] + Vy[i, j, k + 1] + Vy[i + 1, j, k + 1])
-        Vz_v[i, j, k] =
-            0.25 * (Vz[i, j, k] + Vz[i, j + 1, k] + Vz[i + 1, j, k] + Vz[i + 1, j + 1, k])
+        if all((i, j, k) .≤ size(Vx))
+            Vx_v[i, j, k] =
+                0.25 *
+                (Vx[i, j, k] + Vx[i, j + 1, k] + Vx[i, j, k + 1] + Vx[i, j + 1, k + 1])
+        end
+        if all((i, j, k) .≤ size(Vy))
+            Vy_v[i, j, k] =
+                0.25 *
+                (Vy[i, j, k] + Vy[i + 1, j, k] + Vy[i, j, k + 1] + Vy[i + 1, j, k + 1])
+        end
+        if all((i, j, k) .≤ size(Vz))
+            Vz_v[i, j, k] =
+                0.25 *
+                (Vz[i, j, k] + Vz[i, j + 1, k] + Vz[i + 1, j, k] + Vz[i + 1, j + 1, k])
+        end
     end
     return nothing
 end

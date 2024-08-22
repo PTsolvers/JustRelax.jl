@@ -161,12 +161,12 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     @views thermal.T[:, 1]   .= Tmax
     @views thermal.T[:, end] .= Tmin
     update_halo!(thermal.T)
-    @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
+    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes    = StokesArrays(backend, ni, ViscoElastic)
+    stokes    = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.8 / √2.1)
 
     # Buoyancy forces
@@ -187,7 +187,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     )
 
     # Boundary conditions
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip   = (left = true , right = true , top = true , bot = true),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions

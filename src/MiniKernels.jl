@@ -17,6 +17,9 @@ const T2 = AbstractArray{T,2} where {T}
 @inline function _harm(A::T, i, j) where {T<:T2}
     return eltype(A)(4) * mysum(inv, A, (i + 1):(i + 2), (j + 1):(j + 2))
 end
+@inline function _harm_a(A::T, i, j) where {T<:T2}
+    return eltype(A)(4) * mysum(inv, A, (i):(i + 1), (j):(j + 1))
+end
 @inline function _harm_xa(A::T, i, j) where {T<:T2}
     return eltype(A)(2) * (inv(A[i + 1, j]) + inv(A[i, j]))
 end

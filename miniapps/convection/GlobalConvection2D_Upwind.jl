@@ -82,7 +82,6 @@ end
 function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
 
     # initialize MPI
-    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = JustRelax.MPI.Initialized() ? false : true)...)
 
     # Physical domain ------------------------------------
     ly           = 2890e3
@@ -90,7 +89,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     origin       = 0.0, -ly                         # origin coordinates
     ni           = nx, ny                           # number of cells
     li           = lx, ly                           # domain length in x- and y-
-    di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    di           = @. li / ni                       # grid step in x- and -y
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
@@ -181,11 +180,11 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     compute_viscosity!(stokes, args, rheology, viscosity_cutoff)
 
     # Boundary conditions
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip   = (left = true, right=true, top=true, bot=true),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
     # ----------------------------------------------------
 
     # IO -------------------------------------------------

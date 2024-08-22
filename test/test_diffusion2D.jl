@@ -8,7 +8,7 @@ end
 
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
@@ -74,7 +74,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     )
     # fields needed to compute density on the fly
     P          = @zeros(ni...)
-    args       = (; P=P)
+    args       = (; P=P, T=@zeros(ni.+1...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal    = ThermalArrays(backend_JR, ni)
@@ -85,7 +85,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     K          = @fill(K0, ni...)
     ρCp        = @. Cp * ρ
 
-    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li)
+    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )

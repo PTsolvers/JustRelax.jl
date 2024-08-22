@@ -4,6 +4,7 @@
     τxx::AbstractArray{T,2}, τyy, τxy, εxx, εyy, εxy, η, θ_dτ
 ) where {T}
     @inline av(A) = _av_a(A, i, j)
+    @inline harm(A) = _harm_a(A, i, j)
 
     denominator = inv(θ_dτ + 1.0)
     η_ij = η[i, j]
@@ -26,6 +27,7 @@ end
     τxx::AbstractArray{T,2}, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
 ) where {T}
     @inline av(A) = _av_a(A, i, j)
+    @inline harm(A) = _harm_a(A, i, j)
 
     # Normal components
     _Gdt = inv(G[i, j] * dt)
@@ -95,11 +97,12 @@ end
     τxy::AbstractArray{T,2}, εxy, η, θ_dτ
 ) where {T}
     @inline av(A) = _av_a(A, i, j)
+    @inline harm(A) = _harm_a(A, i, j)
 
     # Shear components
     if all((i, j) .< size(τxy) .- 1)
         I = i + 1, j + 1
-        av_η_ij = av(η)
+        av_η_ij = harm(η)
         denominator = inv(θ_dτ + 1.0)
 
         τxy[I...] += (-τxy[I...] + 2.0 * av_η_ij * εxy[I...]) * denominator

@@ -1,17 +1,16 @@
 # ShearBand benchmark
 
-Shear Band benchmark to test the visco-elasto-plastic rheology implementation in JustRelax.jl
+Shear Band benchmark to test the visco-elasto-plastic rheology implementation in [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl)
 
-# Initialize packages
+## Initialize packages
 
-Load JustRelax necessary modules and define backend.
+Load [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) necessary modules and define backend.
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = CPUBackend
 ```
 
-
-We will also use `ParallelStencil.jl` to write some device-agnostic helper functions:
+We will also use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -21,9 +20,9 @@ and will use [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl/tre
 using GeoParams
 ```
 
-# Script
+## Script
 
-## Model domain
+### Model domain
 ```julia
 nx = ny      = 64                       # number of cells per dimension
 igg          = IGG(
@@ -40,7 +39,7 @@ grid         = Geometry(ni, li; origin = origin)
 dt           = Inf
 ```
 
-## Physical properties using GeoParams
+### Physical properties using GeoParams
 ```julia
 τ_y     = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
 ϕ       = 30            # friction angle
@@ -61,7 +60,7 @@ pl      = DruckerPrager_regularised(;  # non-regularized plasticity
     Ψ    = 0
 )
 ```
-## Rheology
+### Rheology
 ```julia
     rheology = (
         # Low density phase
@@ -83,9 +82,8 @@ pl      = DruckerPrager_regularised(;  # non-regularized plasticity
     )
 ```
 
-# Phase anomaly
-
-Helper function to initialize material phases with `ParallelStencil.jl`
+### Phase anomaly
+Helper function to initialize material phases with [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl)
 ```julia
 function init_phases!(phase_ratios, xci, radius)
     ni      = size(phase_ratios.center)
@@ -115,14 +113,14 @@ phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
 init_phases!(phase_ratios, xci, radius)
 ```
 
-## Stokes arrays
+### Stokes arrays
 
 Stokes arrays object
 ```julia
 stokes = StokesArrays(backend_JR, ni)
 ```
 
-## Initialize viscosity fields
+### Initialize viscosity fields
 
 We initialize the buoyancy forces and viscosity
 ```julia
@@ -134,25 +132,25 @@ compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
 ```
 where `(-Inf, Inf)` is the viscosity cutoff.
 
-## Boundary conditions
+### Boundary conditions
 ```julia
-    flow_bcs     = FlowBoundaryConditions(;
+    flow_bcs     = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
-    stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray(backend_JR)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
 ```
 
-## Pseuo-transient coefficients
+### Pseuo-transient coefficients
 ```julia
 pt_stokes   = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
 ```
 
-## Just before solving the problem...
+### Just before solving the problem...
 In this benchmark we want to keep track of τII, the total time `ttot`, and the analytical elastic solution `sol`
 ```julia
  solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -164,7 +162,7 @@ and store their time history in the vectors:
     ttot       = Float64[]
 ```
 
-## Advancing one time step
+### Advancing one time step
 
 1. Solve stokes
 ```julia
@@ -199,8 +197,8 @@ t  += dt
 push!(sol, solution(εbg, t, G0, η0))
 push!(ttot, t)
 ```
-# Visualization
-We will use `Makie.jl` to visualize the results
+## Visualization
+We will use [Makie.jl](https://github.com/MakieOrg/Makie.jl) to visualize the results
 ```julia
 using GLMakie
 ```

@@ -113,14 +113,14 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     K = @fill(Inf, ni...)
 
     ## Boundary conditions
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
         no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
     )
     # impose analytical velocity at the boundaries of the domain
     velocity!(stokes, xci, xvi)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+    update_halo!(@velocity(stokes)...)
     # Physical time loop
     t = 0.0
 

@@ -1,23 +1,29 @@
-# Installation 
+# Installation
 
-`JustRelax` is a registered package and can be added as follows:
+[JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) is a registered package and can be added as follows:
 
 ```julia
 using Pkg; Pkg.add("JustRelax")
 ```
 or
-
-```julia
+```julia-repl
 julia> ]
+
 (@v1.10) pkg> add JustRelax
 ```
 
-However, as the API is changing and not every feature leads to a new release, one can also do `add JustRelax#main` which will clone the main branch of the repository.
-After installation, you can test the package by running the following commands:
+!!! info "Install from a specific branch"
+    However, as the API is changing and not every new feature leads to a new release, one can also clone the main branch of the repository:
+    ```julia
+    add JustRelax#main
+    ```
 
-```julia
+After installation, you can test the package by running the following commands:
+```julia-repl
 using JustRelax
+
 julia> ]
-  pkg> test JustRelax
+
+(@v1.10) pkg> test JustRelax
 ```
-The test will take a while, so grab a :coffee: or :tea:
+The test will take a while, so grab a ☕️ or 🍵

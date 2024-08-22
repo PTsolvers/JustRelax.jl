@@ -1,7 +1,7 @@
 # Model setup
 As described in the original [paper](https://doi.org/10.5194/se-15-567-2024), the domain consists of a Cartesian box of $\Omega \in [0, 3000] \times [0, -660]$ km, with two 80 km thick oceanic plates over the asthenospheric mantle.
 
-We will use GeophysicalModelGenerator.jl to generate the initial geometry, material phases, and thermal field of our models. We will start by defining the dimensions and resolution of our model, as well as initializing the `Grid2D` object and two arrays `Phases` and `Temp` that host the material phase (given by an integer) and the thermal field, respectively.
+We will use [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl) to generate the initial geometry, material phases, and thermal field of our models. We will start by defining the dimensions and resolution of our model, as well as initializing the `Grid2D` object and two arrays `Phases` and `Temp` that host the material phase (given by an integer) and the thermal field, respectively.
 
 ```julia
 nx, nz        = 512, 218 # number of cells per dimension
@@ -79,7 +79,7 @@ add_box!(
     Grid2D;
     xlim    = (Lx-1430, Lx-1430-250),
     zlim    = (-80, 0.0),
-    Origin  = (nothing, StrikeAngle=0, DipAngle=-30),
+    Origin  = nothing, StrikeAngle=0, DipAngle=-30,
     phase   = LithosphericPhases(Layers=[8 72], Phases=[2 1 0]),
     T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=80, Adiabat=0.4)
 )

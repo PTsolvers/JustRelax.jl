@@ -21,7 +21,11 @@ import JustRelax:
     Geometry,
     @cell
 import JustRelax:
-    AbstractBoundaryConditions, TemperatureBoundaryConditions, FlowBoundaryConditions
+    AbstractBoundaryConditions,
+    TemperatureBoundaryConditions,
+    AbstractFlowBoundaryConditions,
+    DisplacementBoundaryConditions,
+    VelocityBoundaryConditions
 
 @init_parallel_stencil(CUDA, Float64, 2)
 
@@ -31,14 +35,6 @@ include("../../stokes/Stokes2D.jl")
 # Types
 function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
     return StokesArrays(ni)
-end
-
-function JR2D.velocity2displacement!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
-    return _velocity2displacement!(stokes, dt)
-end
-
-function JR2D.displacement2velocity!(stokes::JustRelax.StokesArrays, ::CUDABackendTrait, dt)
-    return _displacement2velocity!(stokes, dt)
 end
 
 function JR2D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N,Number}) where {N}
@@ -76,25 +72,90 @@ end
 
 function JR2D.PTThermalCoeffs(
     ::Type{CUDABackend},
-    rheology,
+    rheology::MaterialParams,
     args,
     dt,
     ni,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
+    di::NTuple,
+    li::NTuple;
     ϵ=1e-8,
     CFL=0.9 / √3,
-) where {nDim,T}
+)
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 
+function JR2D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, phase_ratios, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        phase_ratios.center,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
+function JR2D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
+function JR2D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, ::Nothing, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
 # Boundary conditions
-function JR2D.flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
+function JR2D.flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
+)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
-function flow_bcs!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs)
+function flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
+)
     return _flow_bcs!(bcs, @velocity(stokes))
+end
+
+function JR2D.flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
+)
+    return _flow_bcs!(bcs, @displacement(stokes))
+end
+
+function flow_bcs!(
+    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
+)
+    return _flow_bcs!(bcs, @displacement(stokes))
 end
 
 function JR2D.thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
@@ -189,6 +250,22 @@ function JR2D.velocity2vertex!(
 )
     velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=ghost_nodes)
     return nothing
+end
+
+function JR2D.velocity2displacement!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _velocity2displacement!(stokes, dt)
+end
+
+function velocity2displacement!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _velocity2displacement!(stokes, dt)
+end
+
+function JR2D.displacement2velocity!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _displacement2velocity!(stokes, dt)
+end
+
+function displacement2velocity!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)
+    return _displacement2velocity!(stokes, dt)
 end
 
 # Solvers

@@ -4,6 +4,7 @@ struct ThermalArrays{_T}
     Told::_T
     ΔT::_T
     ΔTc::_T
+    adiabatic::_T # adiabatic term α (u ⋅ ∇P)
     dT_dt::_T
     qTx::_T
     qTy::_T

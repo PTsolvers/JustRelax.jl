@@ -1,22 +1,46 @@
-using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-import JustRelax.@cell
-const backend_JR = CPUBackend
+push!(LOAD_PATH, "..")
 
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+    AMDGPU.allowscalar(true)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+    CUDA.allowscalar(true)
+end
 
-using JustPIC
-using JustPIC._2D
+using Test, Suppressor
+using GeoParams
+using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil,  ParallelStencil.FiniteDifferences2D
+
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 2)
+    CUDABackend
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+    CPUBackend
+end
+
+using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustPIC.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    JustPIC.CPUBackend
+end
 
-using Printf, Statistics, LinearAlgebra, GeoParams, GLMakie, CellArrays
-using StaticArrays
-using ImplicitGlobalGrid
-using MPI: MPI
-using WriteVTK
+import JustRelax.@cell
+
+# Load script dependencies
+using Printf, Statistics, LinearAlgebra, CellArrays, StaticArrays
+
 
 # -----------------------------------------------------------------------------------------
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -147,6 +171,8 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
         creep_rock  = DislocationCreep(; A=1.67e-24, n=3.5, E=1.87e5, V=6e-6, r=0.0, R=8.3145)
         creep_magma = DislocationCreep(; A=1.67e-24, n=3.5, E=1.87e5, V=6e-6, r=0.0, R=8.3145)
         creep_air   = LinearViscous(; η=1e18 * Pa * s)
+        β_rock      = 6.0e-11
+        β_magma     = 6.0e-11
     end
     g = 9.81m/s^2
     rheology = (
@@ -167,7 +193,7 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
 
         #Name="Magma"
         SetMaterialParams(;
-            Phase             = 2,
+            Phase             = 1,
             Density           = PT_Density(; ρ0=2650kg / m^3, T0=0.0C, β=β_magma / Pa),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1050J / kg / K),
             Conductivity      = ConstantConductivity(; k=1.5Watt / K / m),
@@ -182,7 +208,7 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
 
         #Name="Sticky Air"
         SetMaterialParams(;
-            Phase             = 3,
+            Phase             = 1,
             Density           = ConstantDensity(ρ=1kg/m^3,),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1000J / kg / K),
             Conductivity      = ConstantConductivity(; k=15Watt / K / m),
@@ -197,7 +223,10 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
 end
 
 
-function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
+function main2D(igg; nx=32, ny=32)
+
+    init_mpi = JustRelax.MPI.Initialized() ? false : true
+    igg      = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
     # Characteristic lengths
     CharDim      = GEO_units(;length=12.5km, viscosity=1e21, temperature = 1e3C)
@@ -284,13 +313,13 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         free_surface = true,
     )
     flow_bcs!(stokes, flow_bcs)
-    update_halo!(@velocity(stokes)...)
-
-    η = @ones(ni...) # initialise viscosity
 
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
-    η_vep = copy(η)
 
+    ϕ = @zeros(ni...)
+    compute_melt_fraction!(
+        ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
+    )
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
@@ -302,45 +331,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     args = (; T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
     @copy thermal.Told thermal.T
 
-    # IO ------------------------------------------------
-    # if it does not exist, make folder where figures are stored
-    if do_vtk
-        vtk_dir = joinpath(figdir, "vtk")
-        take(vtk_dir)
-    end
-    take(figdir)
-    # ----------------------------------------------------
-
-    # Plot initial T and η profiles
-    let
-        Yv = [y for x in xvi[1], y in xvi[2]][:]
-        Y  = [y for x in xci[1], y in xci[2]][:]
-        fig = Figure(; size=(1200, 900))
-        ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
-        ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
-        scatter!(
-            ax1,
-            ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])), C, CharDim))[:],
-            ustrip.(dimensionalize(Yv, km, CharDim)),
-        )
-        scatter!(
-            ax2,
-            # Array(ρg[2][:]),
-            Array(ustrip.(dimensionalize(stokes.P[:], MPa, CharDim))),
-            # ustrip.(dimensionalize(Y, km, CharDim)),
-        )
-        hideydecorations!(ax2)
-        save(joinpath(figdir, "initial_profile.png"), fig)
-        fig
-    end
-
     # Time loop
     t, it = 0.0, 0
-    local Vx_v, Vy_v
-    if do_vtk
-        Vx_v = @zeros(ni .+ 1...)
-        Vy_v = @zeros(ni .+ 1...)
-    end
 
     T_buffer    = @zeros(ni.+1)
     Told_buffer = similar(T_buffer)
@@ -354,8 +346,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     P_init        = deepcopy(stokes.P)
     Tsurf         = thermal.T[1, end]
     Tbot          = thermal.T[1, 1]
+    local ϕ, stokes, thermal
 
-    while it < 25
+    while it < 1
 
         # Update buoyancy and viscosity -
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
@@ -423,7 +416,9 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
             pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, particles, xvi,  di, dt
         )
         # ------------------------------
-
+        compute_melt_fraction!(
+            ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
+        )
         # Advection --------------------
         # advect particles in space
         advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
@@ -445,261 +440,20 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
         @show it += 1
         t += dt
-
-        #  # # Plotting -------------------------------------------------------
-        if it == 1 || rem(it, 1) == 0
-            checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
-
-            if igg.me == 0
-                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-                if do_vtk
-                    data_v = (;
-                        T   = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
-                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
-                        εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
-                        Vx  = Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
-                        Vy  = Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
-                    )
-                    data_c = (;
-                        P   = Array(ustrip.(dimensionalize(stokes.P,MPa,CharDim))),
-                        τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa,CharDim))),
-                        τyy = Array(ustrip.(dimensionalize(stokes.τ.yy,MPa,CharDim))),
-                        τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
-                        εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1,CharDim))),
-                        εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1,CharDim))),
-                        εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim))),
-                        η   = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep,Pa*s,CharDim))),
-                    )
-                    velocity_v = (
-                        Array(ustrip.(dimensionalize(Vx_v,cm/yr,CharDim))),
-                        Array(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))),
-                    )
-                    save_vtk(
-                        joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                        xvi,
-                        xci,
-                        data_v,
-                        data_c,
-                        velocity_v
-                    )
-                end
-
-                t_dim = (dimensionalize(t, yr, CharDim).val / 1e3)
-                t_Kyrs = t_dim * 1e3
-                # Make Makie figure
-                fig = Figure(; size=(2000, 1800), createmissing=true)
-                ar  = li[1] / li[2]
-
-                ax0 = Axis(
-                    fig[1, 1:2];
-                    aspect=ar,
-                    title="t = $(round(ustrip.(t_Kyrs); digits=3)) Kyrs",
-                    titlesize=50,
-                    height=0.0,
-                )
-                ax0.ylabelvisible      = false
-                ax0.xlabelvisible      = false
-                ax0.xgridvisible       = false
-                ax0.ygridvisible       = false
-                ax0.xticksvisible      = false
-                ax0.yticksvisible      = false
-                ax0.yminorticksvisible = false
-                ax0.xminorticksvisible = false
-                ax0.xgridcolor         = :white
-                ax0.ygridcolor         = :white
-                ax0.ytickcolor         = :white
-                ax0.xtickcolor         = :white
-                ax0.yticklabelcolor    = :white
-                ax0.xticklabelcolor    = :white
-                ax0.yticklabelsize     = 0
-                ax0.xticklabelsize     = 0
-                ax0.xlabelcolor        = :white
-                ax0.ylabelcolor        = :white
-
-                ax1 = Axis(
-                    fig[2, 1][1, 1];
-                    aspect=ar,
-                    title=L"T [\mathrm{C}]",
-                    titlesize=40,
-                    yticklabelsize=25,
-                    xticklabelsize=25,
-                    xlabelsize=25,
-                    )
-                ax2 = Axis(
-                    fig[2, 2][1, 1];
-                    aspect=ar,
-                    title=L"Viscosity [\mathrm{Pa s}]",
-                    xlabel="Width [km]",
-                    titlesize=40,
-                    yticklabelsize=25,
-                    xticklabelsize=25,
-                    xlabelsize=25,
-                )
-                ax3 = Axis(
-                    fig[3, 1][1, 1];
-                    aspect=ar,
-                    title=L"ΔP [MPa]",
-                    titlesize=40,
-                    yticklabelsize=25,
-                    xticklabelsize=25,
-                    xlabelsize=25,
-                )
-                ax4 = Axis(
-                    fig[3, 2][1, 1];
-                    aspect=ar,
-                    title=L"P [MPa]",
-                    titlesize=40,
-                    yticklabelsize=25,
-                    xticklabelsize=25,
-                    xlabelsize=25,
-                )
-                ax5 = Axis(
-                    fig[4, 1][1, 1];
-                    aspect=ar,
-                    title=L"\log_{10}(\dot{\varepsilon}_{\textrm{II}}) [\mathrm{s}^{-1}]",
-                    xlabel="Width [km]",
-                    titlesize=40,
-                    yticklabelsize=25,
-                    xticklabelsize=25,
-                    xlabelsize=25,
-                )
-                ax6 = Axis(
-                    fig[4, 2][1, 1];
-                    aspect=ar,
-                    title=L"\tau_{\textrm{II}} [MPa]",
-                    xlabel="Width [km]",
-                    titlesize=40,
-                    yticklabelsize=25,
-                    xticklabelsize=25,
-                    xlabelsize=25,
-                )
-                # Plot temperature
-                p1 = heatmap!(
-                    ax1,
-                    ustrip.(dimensionalize(xvi[1],km,CharDim)),
-                    ustrip.(dimensionalize(xvi[2],km,CharDim)),
-                    ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])),C,CharDim));
-                    colormap=:batlow,
-                )
-                # Plot effective viscosity
-                p2 = heatmap!(
-                    ax2,
-                    ustrip.(dimensionalize(xci[1],km,CharDim)),
-                    ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize((Array(log10.(stokes.viscosity.η_vep))),Pa*s,CharDim));
-                    colormap=:glasgow,
-                    colorrange=(log10(1e16), log10(1e24)),
-                )
-                arrows!(
-                    ax2,
-                    ustrip.(dimensionalize(xvi[1],km,CharDim))[1:5:end-1],
-                    ustrip.(dimensionalize(xvi[2],km,CharDim))[1:5:end-1],
-                    Array.((ustrip.(dimensionalize(Vx_v, cm/yr, CharDim))[1:5:end-1, 1:5:end-1],
-                    ustrip.(dimensionalize(Vy_v, cm/yr, CharDim))[1:5:end-1, 1:5:end-1]))...,
-                    lengthscale = 1 / max(maximum(ustrip.(dimensionalize(Vx_v, cm/yr, CharDim))),
-                    maximum(ustrip.(dimensionalize(Vy_v, cm/yr, CharDim)))),
-                    color = :red,
-                )
-                # Plot Pressure difference
-                p3 = heatmap!(
-                    ax3,
-                    ustrip.(dimensionalize(xci[1],km,CharDim)),
-                    ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize((Array((stokes.P .- P_init))),MPa,CharDim));
-                    colormap=:roma,
-                )
-                # Plot Pressure difference
-                p4 = heatmap!(
-                    ax4,
-                    ustrip.(dimensionalize(xci[1],km,CharDim)),
-                    ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize((Array((stokes.P))),MPa,CharDim));
-                    colormap=:roma,
-                )
-                # Plot 2nd invariant of strain rate
-                p5 = heatmap!(
-                    ax5,
-                    ustrip.(dimensionalize(xci[1],km,CharDim)),
-                    ustrip.(dimensionalize(xci[2],km,CharDim)),
-                   log10.(ustrip.(dimensionalize(Array((stokes.ε.II)),s^-1,CharDim)));
-                    colormap=:roma,
-                )
-                # Plot 2nd invariant of stress
-                p6 = heatmap!(
-                    ax6,
-                    ustrip.(dimensionalize(xci[1],km,CharDim)),
-                    ustrip.(dimensionalize(xci[2],km,CharDim)),
-                    ustrip.(dimensionalize(Array((stokes.τ.II)),MPa,CharDim));
-                    colormap=:batlow,
-                )
-                hidexdecorations!(ax1)
-                hidexdecorations!(ax2)
-                hidexdecorations!(ax3)
-                Colorbar(
-                    fig[2, 1][1, 2], p1; height=Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                Colorbar(
-                    fig[2, 2][1, 2], p2; height=Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                Colorbar(
-                    fig[3, 1][1, 2], p3; height=Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                Colorbar(
-                    fig[3, 2][1, 2], p4; height=Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                Colorbar(
-                    fig[4, 1][1, 2], p5; height=Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                Colorbar(
-                    fig[4, 2][1, 2], p6; height=Relative(0.7), ticklabelsize=25, ticksize=15
-                )
-                rowgap!(fig.layout, 1)
-                colgap!(fig.layout, 1)
-                colgap!(fig.layout, 1)
-                colgap!(fig.layout, 1)
-                figsave = joinpath(figdir, @sprintf("%06d.png", it))
-                save(figsave, fig)
-                fig
-
-                let
-                    Yv = [y for x in ustrip.(dimensionalize(xvi[1],km,CharDim)), y in ustrip.(dimensionalize(xvi[2],km,CharDim))][:]
-                    Y = [y for x in ustrip.(dimensionalize(xci[1],km,CharDim)), y in ustrip.(dimensionalize(xci[2],km,CharDim))][:]
-                    fig = Figure(; size=(1200, 900))
-                    ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
-                    ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
-                    a3 = Axis(fig[2, 1]; aspect=2 / 3, title="τII")
-
-                    scatter!(ax1, ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])), C, CharDim))[:],
-                    ustrip.(dimensionalize(Yv, km, CharDim)))
-                    lines!(ax2, ustrip.(dimensionalize((Array((stokes.P))),MPa,CharDim))[:],
-                    ustrip.(dimensionalize(Y, km, CharDim)))
-                    scatter!(a3, ustrip.(dimensionalize(Array((stokes.τ.II)),MPa,CharDim))[:],
-                    ustrip.(dimensionalize(Y, km, CharDim)))
-
-                    hideydecorations!(ax2)
-                    save(joinpath(figdir, "pressure_profile_$it.png"), fig)
-                    fig
-                end
-            end
-        end
     end
 
-    finalize_global_grid()
+    # finalize_global_grid()
 
-    return nothing
+    return ϕ, stokes, thermal
 end
 
-figdir = "Thermal_stresses_around_cooling_magma"
-do_vtk = true # set to true to generate VTK files for ParaView
-n      = 64
-ar     = 2
-nx     = n * ar - 2
-ny     = n - 2
-igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI=true)...)
-else
-    igg
-end
+@testset "thermal stresses" begin
+    @suppress begin
+        ϕ, stokes, thermal = main2D(igg; nx=32, ny=32)
 
-# run main script
-main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=do_vtk);
+        nx_T, ny_T = size(thermal.T)
+        @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.5369 rtol = 1e-3
+        @test  Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 9.351e-9 rtol = 1e-1
+
+    end
+end

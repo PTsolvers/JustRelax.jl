@@ -131,7 +131,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=1e-2 / √2
+        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=0.98 / √2.1
     )
 
     # Boundary conditions
@@ -141,7 +141,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     )
     # pureshear_bc!(stokes, xci, xvi, -1e18, backend)
 
-    εbg = -1e-15
+    εbg = +1e-15
     stokes.V.Vx[:, 2:(end - 1)] .= PTArray(backend)([y < 0 ? εbg * x : 0 for x in xvi[1], y in xci[2]])
     stokes.V.Vy[2:(end - 1), :] .= PTArray(backend)([y < 0 ? -εbg * y : 0 for x in xci[1], y in xvi[2]])
     # stokes.V.Vy[:, end-1]       .= 0
@@ -354,10 +354,10 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-figdir   = "Khefalonia2D"
-n        = 128
-nx, ny   = n,n
-li, origin, phases_GMG, T_GMG = Khefalonia__setup(n+1)
+figdir   = "Khefalonia2D_extension"
+# n        = 128
+nx, ny   = 600, 300
+li, origin, phases_GMG, T_GMG = Khefalonia_setup(n+1, n+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else

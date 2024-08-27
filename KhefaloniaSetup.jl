@@ -8,9 +8,9 @@ function Khefalonia_topo(N)
     # Topo = import_topo([20, 21, 38.3, 38.5], file="@earth_relief_03s")
     # extract 2D array with the topographic elevation
     surf = Topo.depth.val[:,:,1]
-    l = maximum(abs.(Topo.depth.val))
-    heatmap(surf, colorrange=(-l,l), colormap=:oleron )
-    # GLMakie.surface(surf, colorrange=(-l,l), colormap=:oleron )
+    # l = maximum(abs.(Topo.depth.val))
+    # heatmap(surf, colorrange=(-l,l), colormap=:oleron )
+    # # GLMakie.surface(surf, colorrange=(-l,l), colormap=:oleron )
 
     # our model is in [km] -> need to convert from lat-long
     x = LinRange(20.4, 20.8, N) |> collect
@@ -33,14 +33,16 @@ function Khefalonia_topo(N)
     return surf_interp, Lx, Ly, surf_interp[:, 30]
 end
 
-function Khefalonia__setup(N)
-    surf, Lx, Ly, topo = Khefalonia_topo(N)
+function Khefalonia_setup(Nx, Nz)
+    surf, Lx, Ly, topo = Khefalonia_topo(Nx)
 
-    nx = nz = N 
-    ny = 2
+    nx = Nx 
+    nz = Nz
+    ny = 10
     x = range(-Lx / 2, Lx / 2, nx);
-    y = range(-Ly / 2, Ly / 2, ny);
-    z = range(-14.5, 5, nz);
+    y = range(-eps(), eps(), ny);
+    z = range(-18, 5, nz);
+    # z = range(-14.5, 5, nz);
     Grid = CartData(xyz_grid(x,y,z));
 
     # Now we create an integer array that will hold the `Phases` information (which usually refers to the material or rock type in the simulation)
@@ -49,37 +51,102 @@ function Khefalonia__setup(N)
     # In many (geodynamic) models, one also has to define the temperature, so lets define it as well
     Temp = fill(20.0, nx, ny, nz);
 
-    lith = LithosphericPhases(Layers=[15 45 100], Phases=[1 2 3])
+    lith = LithosphericPhases(Layers=[20 45 100], Phases=[1 2 3])
 
     add_box!(Phases, Temp, Grid; 
-        xlim=(-Lx, Lx), 
-        ylim=(-Ly, Ly), 
-        zlim=(-60.0, 0.0), 
+        xlim  =(-Lx, Lx), 
+        ylim  =(-Ly, Ly), 
+        zlim  =(-60.0, 0.0), 
         phase = lith, 
-        T = HalfspaceCoolingTemp(Age=20)
+        T     = HalfspaceCoolingTemp(Age=20)
     )
    
-    # add_ellipsoid!(Phases, Temp, Grid; 
-    #     cen    = (0, 0, -12.5), 
-    #     axes   = (5, 5, 2.5),
-    #     phase  = ConstantPhase(3),
-    # )
+
+    add_ellipsoid!(Phases, Temp, Grid; 
+        cen    = (0, 0, -6), 
+        axes   = (0.75, 1, 0.75),
+        phase  = ConstantPhase(3),
+        # T  = ConstantTemp(150),
+    )
 
     # id = falses(nx, ny, nz)
     for k in axes(Grid.z.val, 3), j in axes(topo, 2), i in axes(topo,1)
         # id[i, j, k] = Grid.z.val[i, j, k] > topo_volcano[i, j]
         if Grid.z.val[i, j, k] > topo[i]
             if Grid.z.val[i, j, k]> 0 
-                Phases[i, j, k] = 3 # air
+                Phases[i, j, k] = 4 # air
             else
-                Phases[i, j, k] = 4 # water
+                Phases[i, j, k] = 5 # water
             end
             Temp[i, j, k] = 20
         end
     end
 
-    # @. Temp[Phases == 3]  = 20
-    # @. Temp[Phases == 4]  = 20 
+    # @. Temp[Phases == 3]   = 20
+    # @. Temp[Phases == 4]   = 20 
+    # @. Temp[Phases == 10]   += 100
+    # @. Phases[Phases == 10]  = 1 
+    # @. Temp               = max(Temp, 20)
+    @views @. Temp[Phases == 3]   += 50
+
+    Grid = addfield(Grid,(; Phases, Temp))
+
+    li     = (abs(last(x)-first(x)),  abs(last(z)-first(z))) .* 1e3
+    origin = (x[1], z[1]) .* 1e3
+
+    ph      = Phases
+    T       = Temp
+
+    return li, origin, ph[:,1,:], T[:,1,:] .+ 273
+end
+
+
+function flat_setup(Nx, Nz)
+
+    Lx = Ly = 30
+    nx = Nx 
+    nz = Nz
+    ny = 10
+    x = range(-Lx / 2, Lx / 2, nx);
+    y = range(-eps(), eps(), ny);
+    z = range(-18, 4, nz);
+    # z = range(-14.5, 5, nz);
+    Grid = CartData(xyz_grid(x,y,z));
+
+    # Now we create an integer array that will hold the `Phases` information (which usually refers to the material or rock type in the simulation)
+    Phases = fill(1, nx, ny, nz);
+
+    # In many (geodynamic) models, one also has to define the temperature, so lets define it as well
+    Temp = fill(20.0, nx, ny, nz);
+
+    lith = LithosphericPhases(Layers=[20 45 100], Phases=[1 2 3])
+
+    add_box!(Phases, Temp, Grid; 
+        xlim  =(-Lx, Lx), 
+        ylim  =(-Ly, Ly), 
+        zlim  =(-60.0, 0.0), 
+        phase = lith, 
+        T     = HalfspaceCoolingTemp(Age=20)
+    )
+   
+    add_ellipsoid!(Phases, Temp, Grid; 
+        cen    = (0, 0, -2), 
+        axes   = (1, 1, 1) .* 0.5,
+        phase  = ConstantPhase(3),
+        # T  = ConstantTemp(150),
+    )
+
+    for I in eachindex(Grid.z.val)
+        if Grid.z.val[I...] > 0 
+            Phases[I...] = 4 # air
+            Temp[I...] = 20
+        end
+    end
+
+    # @. Temp[Phases == 3]   = 20
+    # @. Temp[Phases == 4]   = 20 
+    @views @. Temp[Phases == 3]   += 50
+    # @. Phases[Phases == 3]  = 1
     # @. Temp               = max(Temp, 20)
     Grid = addfield(Grid,(; Phases, Temp))
 

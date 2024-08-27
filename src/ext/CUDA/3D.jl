@@ -233,6 +233,17 @@ function JR3D.compute_ρg!(ρg::CuArray, phase_ratios::JustRelax.PhaseRatio, rhe
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
+## Melt fraction
+function JR3D.compute_melt_fraction!(ϕ::CuArray, rheology, args)
+    return compute_melt_fraction!(ϕ, rheology, args)
+end
+
+function JR3D.compute_melt_fraction!(
+    ϕ::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args
+)
+    return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
+end
+
 # Interpolations
 function JR3D.temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)

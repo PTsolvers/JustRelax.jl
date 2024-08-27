@@ -226,6 +226,17 @@ function JR2D.compute_ρg!(ρg::ROCArray, phase_ratios::JustRelax.PhaseRatio, rh
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
+## Melt fraction
+function JR2D.compute_melt_fraction!(ϕ::ROCArray, rheology, args)
+    return compute_melt_fraction!(ϕ, rheology, args)
+end
+
+function JR2D.compute_melt_fraction!(
+    ϕ::ROCArray, phase_ratios::JustRelax.PhaseRatio, rheology, args
+)
+    return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
+end
+
 # Interpolations
 function JR2D.temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)

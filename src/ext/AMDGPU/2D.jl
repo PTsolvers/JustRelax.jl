@@ -73,16 +73,65 @@ end
 
 function JR2D.PTThermalCoeffs(
     ::Type{AMDGPUBackend},
-    rheology,
+    rheology::MaterialParams,
     args,
     dt,
     ni,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
+    di::NTuple,
+    li::NTuple;
     ϵ=1e-8,
     CFL=0.9 / √3,
-) where {nDim,T}
+)
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
+end
+
+function JR2D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:ROCArray}, rheology, phase_ratios, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        phase_ratios.center,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
+function JR2D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:ROCArray}, rheology, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
+function JR2D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:ROCArray}, rheology, ::Nothing, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
 end
 
 # Boundary conditions
@@ -175,6 +224,17 @@ function JR2D.compute_ρg!(ρg::ROCArray, rheology, args)
 end
 function JR2D.compute_ρg!(ρg::ROCArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
     return compute_ρg!(ρg, phase_ratios, rheology, args)
+end
+
+## Melt fraction
+function JR2D.compute_melt_fraction!(ϕ::ROCArray, rheology, args)
+    return compute_melt_fraction!(ϕ, rheology, args)
+end
+
+function JR2D.compute_melt_fraction!(
+    ϕ::ROCArray, phase_ratios::JustRelax.PhaseRatio, rheology, args
+)
+    return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
 # Interpolations

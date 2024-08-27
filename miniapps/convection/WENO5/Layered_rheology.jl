@@ -156,5 +156,5 @@ function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
 end

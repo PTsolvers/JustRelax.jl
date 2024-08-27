@@ -11,9 +11,11 @@ function PTThermalCoeffs(K, ρCp, dt, di, li::NTuple; ϵ=1e-8, CFL=0.9 / √3)
     Re = @. π + √(π * π + ρCp * max_lxyz2 / K / dt) # Numerical Reynolds number
     θr_dτ = @. max_lxyz / Vpdτ / Re
     dτ_ρ = @. Vpdτ * max_lxyz / K / Re
+
     return JustRelax.PTThermalCoeffs(CFL, ϵ, max_lxyz, max_lxyz2, Vpdτ, θr_dτ, dτ_ρ)
 end
 
+# with phase ratios
 function PTThermalCoeffs(
     ::Type{CPUBackend},
     rheology,
@@ -45,13 +47,21 @@ end
 
 # without phase ratios
 function PTThermalCoeffs(
-    ::Type{CPUBackend}, rheology, args, dt, ni, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
+    ::Type{CPUBackend},
+    rheology::MaterialParams,
+    args,
+    dt,
+    ni,
+    di::NTuple,
+    li::NTuple;
+    ϵ=1e-8,
+    CFL=0.9 / √3,
 )
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 
 function PTThermalCoeffs(
-    rheology, args, dt, ni, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
+    rheology::MaterialParams, args, dt, ni, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
 )
     Vpdτ = min(di...) * CFL
     max_lxyz = max(li...)
@@ -109,5 +119,52 @@ function _compute_pt_thermal_arrays!(
     θr_dτ[Idx...] = max_lxyz / Vpdτ * _Re
     dτ_ρ[Idx...] = Vpdτ * max_lxyz * _K * _Re
 
+    return nothing
+end
+
+function update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs, rheology, phase_ratios, args, dt
+)
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        phase_ratios.center,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
+function update_thermal_coeffs!(pt_thermal::JustRelax.PTThermalCoeffs, rheology, args, dt)
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
+function update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs, rheology, ::Nothing, args, dt
+)
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
     return nothing
 end

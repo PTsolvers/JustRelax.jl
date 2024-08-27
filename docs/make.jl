@@ -58,12 +58,10 @@ open(joinpath(@__DIR__, "src", "man", "contributing.md"), "w") do io
     ```
     """)
     # Write the modified contents
-    println(io, "# [Contributing](@id contributing)")
-    println(io, "")
     for line in eachline(joinpath(dirname(@__DIR__), "CONTRIBUTING.md"))
       line = replace(line, "[LICENSE.md](LICENSE.md)" => "[License](@ref)")
       line = replace(line, "[AUTHORS.md](AUTHORS.md)" => "[Authors](@ref)")
-      println(io, "> ", line)
+      println(io,line)
     end
   end
 @info "Making documentation..."
@@ -71,7 +69,8 @@ makedocs(;
     sitename="JustRelax.jl",
     authors="Albert de Montserrat, Pascal Aellig and contributors",
     modules=[JustRelax],
-    format=Documenter.HTML(; prettyurls=get(ENV, "CI", nothing) == "true",
+    format=Documenter.HTML(; assets = ["assets/favicon.ico"],
+    prettyurls=get(ENV, "CI", nothing) == "true",
     size_threshold_ignore = ["man/listfunctions.md"]), # easier local build
 
     warnonly = Documenter.except(:footnote),

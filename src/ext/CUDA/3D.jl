@@ -72,15 +72,15 @@ end
 
 function JR3D.PTThermalCoeffs(
     ::Type{CUDABackend},
-    rheology,
+    rheology::MaterialParams,
     args,
     dt,
     ni,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
+    di::NTuple,
+    li::NTuple;
     ϵ=1e-8,
     CFL=0.9 / √3,
-) where {nDim,T}
+)
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
 end
 
@@ -92,6 +92,55 @@ function JR3D.update_pt_thermal_arrays!(
     _dt,
 ) where {T}
     update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)
+    return nothing
+end
+
+function JR3D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, phase_ratios, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        phase_ratios.center,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
+function JR3D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
+    return nothing
+end
+
+function JR3D.update_thermal_coeffs!(
+    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, ::Nothing, args, dt
+) where {T}
+    ni = size(pt_thermal.dτ_ρ)
+    @parallel (@idx ni) compute_pt_thermal_arrays!(
+        pt_thermal.θr_dτ,
+        pt_thermal.dτ_ρ,
+        rheology,
+        args,
+        pt_thermal.max_lxyz,
+        pt_thermal.Vpdτ,
+        inv(dt),
+    )
     return nothing
 end
 
@@ -182,6 +231,17 @@ function JR3D.compute_ρg!(ρg::CuArray, rheology, args)
 end
 function JR3D.compute_ρg!(ρg::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
     return compute_ρg!(ρg, phase_ratios, rheology, args)
+end
+
+## Melt fraction
+function JR3D.compute_melt_fraction!(ϕ::CuArray, rheology, args)
+    return compute_melt_fraction!(ϕ, rheology, args)
+end
+
+function JR3D.compute_melt_fraction!(
+    ϕ::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args
+)
+    return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
 # Interpolations

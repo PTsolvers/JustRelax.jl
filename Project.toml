@@ -1,7 +1,7 @@
 name = "JustRelax"
 uuid = "34418575-392d-4e26-8c6d-96b0910afa06"
 authors = ["Albert De Montserrat <albertdemontserratnavarro@erdw.ethz.ch>, Pascal Aellig <paellig@uni-mainz.de>"]
-version = "0.3.0"
+version = "0.3.1"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -29,7 +29,7 @@ JustRelaxAMDGPUExt = "AMDGPU"
 JustRelaxCUDAExt = "CUDA"
 
 [compat]
-AMDGPU = "0.8, 0.9"
+AMDGPU = "0.8, 0.9, 1"
 Adapt = "4"
 CUDA = "~5.3.5"
 CellArrays = "0.2"
@@ -39,11 +39,11 @@ ImplicitGlobalGrid = "0.15.0"
 JLD2 = "0.4"
 MPI = "0.20"
 MuladdMacro = "0.2"
-ParallelStencil = "0.12"
+ParallelStencil = "0.12, 0.13"
 Reexport = "1.2.2"
 StaticArrays = "1"
 Statistics = "1"
-WriteVTK = "1.18"
+WriteVTK = "1.18, 1.19"
 julia = "1.9, 1.10"
 
 [extras]

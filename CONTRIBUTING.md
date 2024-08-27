@@ -1,12 +1,12 @@
 # Contributing
 
-JustRelax.jl is an open-source project and we are very happy to accept contributions
-from the community. Please feel free to open issues or submit patches (preferably
-as pull requests) any time. For planned larger contributions, it is often
+[JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) is an open-source project and we are very happy to accept contributions
+from the community. Please feel free to [open issues](https://github.com/PTsolvers/JustRelax.jl/issues/new) or submit patches (preferably
+as [pull requests](https://github.com/PTsolvers/JustRelax.jl/pulls)) any time. For planned larger contributions, it is often
 beneficial to get in contact with one of the principal developers first (see
 [AUTHORS.md](AUTHORS.md)).
 
-JustRelax.jl and its contributions are licensed under the MIT license. As a contributor, you certify that all your
+[JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) and its contributions are licensed under the MIT license. As a contributor, you certify that all your
 contributions are in conformance with the *Developer Certificate of Origin
 (Version 1.1)*, which is reproduced below.
 

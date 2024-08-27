@@ -9,6 +9,7 @@ using GeoParams
 using HDF5
 using CellArrays
 using StaticArrays
+using Statistics
 
 function solve!() end
 

@@ -165,7 +165,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     # PT coefficients for thermal diffusion
     args       = (; P=P, T=thermal.Tc)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.65 / √2
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.95 / √2
     )
 
     # Time loop
@@ -193,19 +193,20 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
         t  += dt
     end
 
-    return thermal
+    return thermal, phase_ratios
 end
 
 @testset "Diffusion_2D_Multiphase" begin
     @suppress begin
         nx=32;
         ny=32;
-        thermal = diffusion_2D(; nx = nx, ny = ny)
+        thermal, phase_ratios = diffusion_2D(; nx = nx, ny = ny)
 
         nx_T, ny_T = size(thermal.T)
         if backend_JR === CPUBackend
             @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1819.2297931741878 atol=1e-1
             @test thermal.Tc[ nx >>> 1    ,   nx >>> 1    ] ≈ 1824.3532934301472 atol=1e-1
+            @test nphases(phase_ratios)=== Val{2}()
         else
             @test true == true
         end

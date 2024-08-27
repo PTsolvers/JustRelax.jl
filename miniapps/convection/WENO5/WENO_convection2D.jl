@@ -105,9 +105,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
-    particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni
-    )
+    particles        = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...);
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
@@ -119,8 +117,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     yc_anomaly       = -610e3 # origin of thermal anomaly
     r_anomaly        = 25e3   # radius of perturbation
     init_phases!(pPhases, particles, lx; d=abs(yc_anomaly), r=r_anomaly)
-    phase_ratios     = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center!(phase_ratios.center, pPhases)
+    phase_ratios     = PhaseRatio(backend_JR, ni, length(rheology))
+    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -157,7 +155,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
     )
 
     # Boundary conditions
@@ -209,7 +207,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         # ------------------------------
 
         # Stokes solver ----------------
-        solve!(
+        iters = solve!(
             stokes,
             pt_stokes,
             di,
@@ -248,7 +246,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
             ),
         )
         T_WENO .= thermal.T[2:end-1, :]
-        JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
         WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
         thermal.T[2:end-1, :] .= T_WENO
         # ------------------------------
@@ -259,7 +257,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT, ), (T_WENO,), xvi)
         # update phase ratios
         phase_ratios_center!(phase_ratios, particles, grid, pPhases)
         @show it += 1
@@ -279,7 +277,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     end
 
-    return nothing
+    return iters
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 

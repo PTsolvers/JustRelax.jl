@@ -18,7 +18,7 @@ get_thermal_expansion(args::Vararg{Any,N}) where {N} = get_α(args...)
 
 function get_α(rho::MeltDependent_Density; ϕ::T=0.0, kwargs...) where {T}
     αsolid = get_α(rho.ρsolid)
-    αmelt  = get_α(rho.ρmelt)
+    αmelt = get_α(rho.ρmelt)
     return ϕ * αmelt + (1 - ϕ) * αsolid
 end
 

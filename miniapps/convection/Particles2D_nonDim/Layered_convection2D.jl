@@ -120,7 +120,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 25, 30, 8
     particles        = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     subgrid_arrays   = SubgridDiffusionCellArrays(particles)
     # velocity grids

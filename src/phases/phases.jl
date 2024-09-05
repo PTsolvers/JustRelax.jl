@@ -124,16 +124,16 @@ end
 
     for offsetᵢ in -1:0, offsetⱼ in -1:0, offsetₖ in -1:0
         offsets = offsetᵢ, offsetⱼ, offsetₖ
-        cell_index = ntuple(Val(3)) do i 
+        cell_index = ntuple(Val(3)) do i
             clamp(I[i] + offsets[i], 1, ni[i])
-        end        
+        end
         # phase ratios weights (∑w = 1.0)
         w = phase_ratio_weights(
-            getindex.(pxi, cell_index...), 
-            phases[cell_index...], 
-            cell_vertex, 
-            di, 
-            nphases(ratio_vertices)
+            getindex.(pxi, cell_index...),
+            phases[cell_index...],
+            cell_vertex,
+            di,
+            nphases(ratio_vertices),
         )
         # update phase ratios array
         for k in 1:numphases(ratio_vertices)
@@ -151,19 +151,19 @@ end
     # index corresponding to the cell center
     cell_vertex = ntuple(i -> xvi[i][I[i]], Val(2))
     nx, ny = size(phases)
-    
+
     for offsetᵢ in -1:0, offsetⱼ in -1:0
         offsets = offsetᵢ, offsetⱼ, offsetₖ
-        cell_index = ntuple(Val(2)) do i 
+        cell_index = ntuple(Val(2)) do i
             clamp(I[i] + offsets[i], 1, ni[i])
-        end        
+        end
         # phase ratios weights (∑w = 1.0)
         w = phase_ratio_weights(
-            getindex.(pxi, cell_index...), 
-            phases[cell_index...], 
-            cell_vertex, 
-            di, 
-            nphases(ratio_vertices)
+            getindex.(pxi, cell_index...),
+            phases[cell_index...],
+            cell_vertex,
+            di,
+            nphases(ratio_vertices),
         )
         # update phase ratios array
         for k in 1:numphases(ratio_vertices)

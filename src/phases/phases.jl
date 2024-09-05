@@ -48,6 +48,8 @@ end
     end
 end
 
+## Kernels to compute phase ratios at the centers
+
 function phase_ratios_center!(phase_ratios, particles, grid, phases)
     return phase_ratios_center!(
         backend(phase_ratios), phase_ratios, particles, grid, phases
@@ -87,6 +89,92 @@ end
 
     return nothing
 end
+
+## Kernels to compute phase ratios at the vertices
+
+function phase_ratios_vertex!(phase_ratios, particles, grid, phases)
+    return phase_ratios_vertex!(
+        backend(phase_ratios), phase_ratios, particles, grid, phases
+    )
+end
+
+function phase_ratios_vertex!(
+    ::CPUBackendTrait, phase_ratios::JustRelax.PhaseRatio, particles, grid::Geometry, phases
+)
+    return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
+end
+
+function _phase_ratios_vertex!(
+    phase_ratios::JustRelax.PhaseRatio, particles, grid::Geometry, phases
+)
+    ni = size(phases) .+ 1
+    @parallel (@idx ni) phase_ratios_vertex_kernel!(
+        phase_ratios.vertex, particles.coords, grid.xvi, grid.di, phases
+    )
+    return nothing
+end
+
+@parallel_indices (I...) function phase_ratios_vertex_kernel!(
+    ratio_vertices, pxi::NTuple{3,T1}, xvi::NTuple{3,T2}, di::NTuple{3,T3}, phases
+) where {T1,T2,T3}
+
+    # # index corresponding to the cell center
+    cell_vertex = ntuple(i -> xvi[i][I[i]], Val(3))
+    ni = size(phases)
+
+    for offsetᵢ in -1:0, offsetⱼ in -1:0, offsetₖ in -1:0
+        offsets = offsetᵢ, offsetⱼ, offsetₖ
+        cell_index = ntuple(Val(3)) do i 
+            clamp(I[i] + offsets[i], 1, ni[i])
+        end        
+        # phase ratios weights (∑w = 1.0)
+        w = phase_ratio_weights(
+            getindex.(pxi, cell_index...), 
+            phases[cell_index...], 
+            cell_vertex, 
+            di, 
+            nphases(ratio_vertices)
+        )
+        # update phase ratios array
+        for k in 1:numphases(ratio_vertices)
+            @cell ratio_vertices[k, I...] = w[k]
+        end
+    end
+
+    return nothing
+end
+
+@parallel_indices (I...) function phase_ratios_vertex_kernel!(
+    ratio_vertices, pxi::NTuple{2,T1}, xvi::NTuple{2,T2}, di::NTuple{2,T3}, phases
+) where {T1,T2,T3}
+
+    # index corresponding to the cell center
+    cell_vertex = ntuple(i -> xvi[i][I[i]], Val(2))
+    nx, ny = size(phases)
+    
+    for offsetᵢ in -1:0, offsetⱼ in -1:0
+        offsets = offsetᵢ, offsetⱼ, offsetₖ
+        cell_index = ntuple(Val(2)) do i 
+            clamp(I[i] + offsets[i], 1, ni[i])
+        end        
+        # phase ratios weights (∑w = 1.0)
+        w = phase_ratio_weights(
+            getindex.(pxi, cell_index...), 
+            phases[cell_index...], 
+            cell_vertex, 
+            di, 
+            nphases(ratio_vertices)
+        )
+        # update phase ratios array
+        for k in 1:numphases(ratio_vertices)
+            @cell ratio_vertices[k, I...] = w[k]
+        end
+    end
+
+    return nothing
+end
+
+## interpolation kernels
 
 function phase_ratio_weights(
     pxi::NTuple{NP,C}, ph::SVector{N1,T}, cell_center, di, ::Val{NC}

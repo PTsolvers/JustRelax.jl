@@ -19,7 +19,8 @@ jobs:
           # - 'nightly'
         os:
           - ubuntu-latest
-          - macOS-latest
+          - macOS-latest # M-Series Chip
+          - macOS-13 # Intel Chip
           - windows-latest
         arch:
           - x64

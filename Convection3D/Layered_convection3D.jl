@@ -124,10 +124,10 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     zc = nondimensionalize(2000km, CharDim)
     r  = di[1] * 2
     rz  = di[3] * 3
-    rectangular_perturbation!(thermal.T,  lx/3,  ly/3, zc, r, rz, xvi)
-    rectangular_perturbation!(thermal.T, -lx/3,  ly/3, zc, r, rz, xvi)
-    rectangular_perturbation!(thermal.T,  lx/3, -ly/3, zc, r, rz, xvi)
-    rectangular_perturbation!(thermal.T, -lx/3, -ly/3, zc, r, rz, xvi)
+    rectangular_perturbation!(thermal.T, lx /3, ly /3, zc, r, rz, xvi)
+    rectangular_perturbation!(thermal.T, lx*2/3, ly*2/3, zc, r, rz, xvi)
+    rectangular_perturbation!(thermal.T, lx /3, ly*2/3, zc, r, rz, xvi)
+    rectangular_perturbation!(thermal.T, lx*2/3, ly /3, zc, r, rz, xvi)
 
     # thermal.T[3:end-2, 3:end-2, 3:end-2] .*= (1 .+ 0.1 * @rand(ni.-3...))
 
@@ -359,4 +359,4 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir   = "Paul3D_$n"
-main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+# main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

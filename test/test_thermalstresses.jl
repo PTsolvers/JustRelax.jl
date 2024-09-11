@@ -297,7 +297,7 @@ function main2D(; nx=32, ny=32)
 
     args = (; T=thermal.Tc, P=stokes.P, dt=dt)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.8 / √2.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.9 / √2.1
     )
 
     # Pure shear far-field boundary conditions

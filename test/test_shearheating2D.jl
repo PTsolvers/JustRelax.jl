@@ -87,7 +87,7 @@ function Shearheating2D(igg; nx=32, ny=32)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 32, 12
+    nxcell, max_xcell, min_xcell = 20, 50, 12
     particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -133,7 +133,7 @@ function Shearheating2D(igg; nx=32, ny=32)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1e-3 / √2.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1 / √2.1
     )
 
     # Boundary conditions
@@ -181,12 +181,6 @@ function Shearheating2D(igg; nx=32, ny=32)
         dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]      .= 273.0 + 400
-        @views thermal.T[2:end-1, :] .= T_buffer
-        temperature2center!(thermal)
-
         compute_shear_heating!(
             thermal,
             stokes,
@@ -229,6 +223,12 @@ function Shearheating2D(igg; nx=32, ny=32)
         # update phase ratios
         phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 
+        # interpolate fields from particle to grid vertices
+        particle2grid!(T_buffer, pT, xvi, particles)
+        @views T_buffer[:, end]      .= 273.0 + 400
+        @views thermal.T[2:end-1, :] .= T_buffer
+        temperature2center!(thermal)
+          
         @show it += 1
         t        += dt
 

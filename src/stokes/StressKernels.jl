@@ -1,4 +1,20 @@
 # Viscous
+function compute_stress_increment(
+    τij::Real, τij_o::Real, ηij, εij::Real, _Gdt, dτ_r
+)
+    dτij = dτ_r * fma(2.0 * ηij, εij, fma(-((τij - τij_o)) * ηij, _Gdt, -τij))
+    return dτij
+end
+
+function compute_stress_increment(
+    τij::NTuple{N}, τij_o::NTuple{N}, ηij, εij::NTuple{N}, _Gdt, dτ_r
+) where {N}
+    dτij = ntuple(Val(N)) do i
+        Base.@_inline_meta
+        dτ_r * fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
+    end
+    return dτij
+end
 
 @parallel_indices (i, j) function compute_τ!(
     τxx::AbstractArray{T,2}, τyy, τxy, εxx, εyy, εxy, η, θ_dτ
@@ -6,18 +22,22 @@
     @inline av(A) = _av_a(A, i, j)
     @inline harm(A) = _harm_a(A, i, j)
 
-    denominator = inv(θ_dτ + 1.0)
-    η_ij = η[i, j]
+    _Gdt = 0
+    ηij = η[i, j]
+    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
-    # Normal components
-    τxx[i, j] += (-τxx[i, j] + 2.0 * η_ij * εxx[i, j]) * denominator
-    τyy[i, j] += (-τyy[i, j] + 2.0 * η_ij * εyy[i, j]) * denominator
-    # Shear components
+    Δτxx = compute_stress_increment(τxx[i, j], 0e0, ηij, εxx[i, j], _Gdt, dτ_r)
+    τxx[i, j] += Δτxx
+
+    Δτyy = compute_stress_increment(τyy[i, j], 0e0, ηij, εyy[i, j], _Gdt, dτ_r)
+    τyy[i, j] += Δτyy
+
     if all((i, j) .< size(τxy) .- 1)
-        τxy[i + 1, j + 1] +=
-            (-τxy[i + 1, j + 1] + 2.0 * av(η) * εxy[i + 1, j + 1]) * denominator
+        ηij = av(η)
+        dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
+        Δτxy = compute_stress_increment(τxy[i+1, j+1], 0e0, ηij, εxy[i+1, j+1], _Gdt, dτ_r)
+        τxy[i+1, j+1] += Δτxy
     end
-
     return nothing
 end
 
@@ -29,27 +49,22 @@ end
     @inline av(A) = _av_a(A, i, j)
     @inline harm(A) = _harm_a(A, i, j)
 
-    # Normal components
     _Gdt = inv(G[i, j] * dt)
-    η_ij = η[i, j]
-    denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-    τxx[i, j] +=
-        (-(τxx[i, j] - τxx_o[i, j]) * η_ij * _Gdt - τxx[i, j] + 2.0 * η_ij * εxx[i, j]) *
-        denominator
-    τyy[i, j] +=
-        (-(τyy[i, j] - τyy_o[i, j]) * η_ij * _Gdt - τyy[i, j] + 2.0 * η_ij * εyy[i, j]) *
-        denominator
+    ηij = η[i, j]
+    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
-    # Shear components
+    Δτxx = compute_stress_increment(τxx[i, j], τxx_o[i, j], ηij, εxx[i, j], _Gdt, dτ_r)
+    τxx[i, j] += Δτxx
+
+    Δτyy = compute_stress_increment(τyy[i, j], τyy_o[i, j], ηij, εyy[i, j], _Gdt, dτ_r)
+    τyy[i, j] += Δτyy
+
     if all((i, j) .< size(τxy) .- 1)
-        av_η_ij = av(η)
-        _av_Gdt = inv(av(G) * dt)
-        denominator = inv(θ_dτ + av_η_ij * _av_Gdt + 1.0)
-        τxy[i + 1, j + 1] +=
-            (
-                -(τxy[i + 1, j + 1] - τxy_o[i + 1, j + 1]) * av_η_ij * _av_Gdt +
-                2.0 * av_η_ij * εxy[i + 1, j + 1]
-            ) * denominator
+        ηij = av(η)
+        _Gdt = inv(av(G) * dt)
+        dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
+        Δτxy = compute_stress_increment(τxy[i+1, j+1], τxy_o[i + 1, j + 1], ηij, εxy[i+1, j+1], _Gdt, dτ_r)
+        τxy[i+1, j+1] += Δτxy
     end
 
     return nothing

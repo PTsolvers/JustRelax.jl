@@ -1,7 +1,5 @@
 # Viscous
-function compute_stress_increment(
-    τij::Real, τij_o::Real, ηij, εij::Real, _Gdt, dτ_r
-)
+function compute_stress_increment(τij::Real, τij_o::Real, ηij, εij::Real, _Gdt, dτ_r)
     dτij = dτ_r * fma(2.0 * ηij, εij, fma(-((τij - τij_o)) * ηij, _Gdt, -τij))
     return dτij
 end
@@ -35,8 +33,10 @@ end
     if all((i, j) .< size(τxy) .- 1)
         ηij = av(η)
         dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
-        Δτxy = compute_stress_increment(τxy[i+1, j+1], 0e0, ηij, εxy[i+1, j+1], _Gdt, dτ_r)
-        τxy[i+1, j+1] += Δτxy
+        Δτxy = compute_stress_increment(
+            τxy[i + 1, j + 1], 0e0, ηij, εxy[i + 1, j + 1], _Gdt, dτ_r
+        )
+        τxy[i + 1, j + 1] += Δτxy
     end
     return nothing
 end
@@ -63,8 +63,10 @@ end
         ηij = av(η)
         _Gdt = inv(av(G) * dt)
         dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
-        Δτxy = compute_stress_increment(τxy[i+1, j+1], τxy_o[i + 1, j + 1], ηij, εxy[i+1, j+1], _Gdt, dτ_r)
-        τxy[i+1, j+1] += Δτxy
+        Δτxy = compute_stress_increment(
+            τxy[i + 1, j + 1], τxy_o[i + 1, j + 1], ηij, εxy[i + 1, j + 1], _Gdt, dτ_r
+        )
+        τxy[i + 1, j + 1] += Δτxy
     end
 
     return nothing
@@ -161,59 +163,48 @@ end
     @inbounds begin
         if all((i, j, k) .≤ size(τxx))
             _Gdt = inv(get(G) * dt)
-            η_ij = get(η)
-            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
+            ηij = get(η)
+            dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
+
             # Compute τ_xx
-            τxx[i, j, k] +=
-                (
-                    -(get(τxx) - get(τxx_o)) * η_ij * _Gdt - get(τxx) +
-                    2.0 * η_ij * get(εxx)
-                ) * denominator
+            Δτxx = compute_stress_increment(get(τxx), get(τxx_o), ηij, get(εxx), _Gdt, dτ_r)
+            τxx[i, j, k] += Δτxx
             # Compute τ_yy
-            τyy[i, j, k] +=
-                (
-                    -(get(τyy) - get(τyy_o)) * η_ij * _Gdt - get(τyy) +
-                    2.0 * η_ij * get(εyy)
-                ) * denominator
+            Δτyy = compute_stress_increment(get(τyy), get(τyy_o), ηij, get(εyy), _Gdt, dτ_r)
+            τyy[i, j, k] += Δτyy
             # Compute τ_zz
-            τzz[i, j, k] +=
-                (
-                    -(get(τzz) - get(τzz_o)) * η_ij * _Gdt - get(τzz) +
-                    2.0 * η_ij * get(εzz)
-                ) * denominator
+            Δτzz = compute_stress_increment(get(τzz), get(τzz_o), ηij, get(εzz), _Gdt, dτ_r)
+            τzz[i, j, k] += Δτzz
         end
         # Compute τ_xy
         if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
-            _Gdt = inv(harm_xy(G) * dt)
-            η_ij = harm_xy(η)
-            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-            τxy[i, j, k] +=
-                (
-                    -(get(τxy) - get(τxy_o)) * η_ij * _Gdt - get(τxy) +
-                    2.0 * η_ij * get(εxy)
-                ) * denominator
+            ηij = av_xy(η)
+            _Gdt = inv(av_xy(G) * dt)
+            dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
+            Δτxy = compute_stress_increment(
+                τxy[i, j, k], τxy_o[i, j, k], ηij, εxy[i, j, k], _Gdt, dτ_r
+            )
+            τxy[i, j, k] += Δτxy
         end
         # Compute τ_xz
         if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
-            _Gdt = inv(harm_xz(G) * dt)
-            η_ij = harm_xz(η)
-            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-            τxz[i, j, k] +=
-                (
-                    -(get(τxz) - get(τxz_o)) * η_ij * _Gdt - get(τxz) +
-                    2.0 * η_ij * get(εxz)
-                ) * denominator
+            ηij = av_xz(η)
+            _Gdt = inv(av_xz(G) * dt)
+            dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
+            Δτxz = compute_stress_increment(
+                τxz[i, j, k], τxz_o[i, j, k], ηij, εxz[i, j, k], _Gdt, dτ_r
+            )
+            τxz[i, j, k] += Δτxz
         end
         # Compute τ_yz
         if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
-            _Gdt = inv(harm_yz(G) * dt)
-            η_ij = harm_yz(η)
-            denominator = inv(θ_dτ + η_ij * _Gdt + 1.0)
-            τyz[i, j, k] +=
-                (
-                    -(get(τyz) - get(τyz_o)) * η_ij * _Gdt - get(τyz) +
-                    2.0 * η_ij * get(εyz)
-                ) * denominator
+            ηij = av_yz(η)
+            _Gdt = inv(av_yz(G) * dt)
+            dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
+            Δτyz = compute_stress_increment(
+                τyz[i, j, k], τyz_o[i, j, k], ηij, εyz[i, j, k], _Gdt, dτ_r
+            )
+            τyz[i, j, k] += Δτyz
         end
     end
     return nothing

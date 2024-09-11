@@ -68,9 +68,7 @@ function _solve!(
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.RP, stokes.∇V, η, K, dt, r, θ_dτ
             )
-            @parallel (@idx ni) compute_τ!(
-                @stress(stokes)..., @strain(stokes)..., η, θ_dτ
-            )
+            @parallel (@idx ni) compute_τ!(@stress(stokes)..., @strain(stokes)..., η, θ_dτ)
             @hide_communication b_width begin
                 @parallel compute_V!(
                     @velocity(stokes)...,
@@ -196,7 +194,7 @@ function _solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
-            
+
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, ητ, K, dt, r, θ_dτ
             )
@@ -576,35 +574,27 @@ function _solve!(
                 )
             end
 
-            # @parallel (@idx ni) compute_τ_nonlinear!(
-            #     @tensor_center(stokes.τ),
-            #     stokes.τ.II,
-            #     @tensor_center(stokes.τ_o),
-            #     @strain(stokes),
-            #     @tensor_center(stokes.ε_pl),
-            #     stokes.EII_pl,
-            #     stokes.P,
-            #     θ,
-            #     η,
-            #     η_vep,
-            #     λ,
-            #     phase_ratios.center,
-            #     tupleize(rheology), # needs to be a tuple
-            #     dt,
-            #     θ_dτ,
-            #     args,
-            # )
-
-            # center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            # update_halo!(stokes.τ.xy)
-    
-            @parallel (@idx ni) compute_τ!(
-                @stress(stokes)...,
-                @strain(stokes)...,
+            @parallel (@idx ni) compute_τ_nonlinear!(
+                @tensor_center(stokes.τ),
+                stokes.τ.II,
+                @tensor_center(stokes.τ_o),
+                @strain(stokes),
+                @tensor_center(stokes.ε_pl),
+                stokes.EII_pl,
+                stokes.P,
+                θ,
                 η,
+                η_vep,
+                λ,
+                phase_ratios.center,
+                tupleize(rheology), # needs to be a tuple
+                dt,
                 θ_dτ,
+                args,
             )
-            θ .= stokes.P
+
+            center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
+            update_halo!(stokes.τ.xy)
 
             # @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
             #     Vx_on_Vy, stokes.V.Vx

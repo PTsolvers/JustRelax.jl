@@ -1,5 +1,4 @@
 push!(LOAD_PATH, "..")
-
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -182,7 +181,7 @@ end
     @suppress begin
         iters, τII, sol = ShearBand2D()
         @test passed = iters.err_evo1[end] < 1e-6
-        @test τII[end] ≈ 1.41706 atol = 1e-4
+        @test τII[end] ≈ 1.4360739032832368 atol = 1e-4
         @test sol[end] ≈ 1.93960 atol = 1e-4
     end
 end

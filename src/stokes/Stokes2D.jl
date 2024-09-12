@@ -524,8 +524,6 @@ function _solve!(
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
 
-    # Gv = ones(size(stokes.P))
-
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
 
@@ -673,7 +671,7 @@ function _solve!(
         end
     end
 
-    # stokes.P .= θ # θ = P + plastic_overpressure
+    stokes.P .= θ # θ = P + plastic_overpressure
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))

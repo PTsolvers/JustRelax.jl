@@ -189,6 +189,16 @@ function JR3D.phase_ratios_center!(
     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
 end
 
+function JR3D.phase_ratios_vertex!(
+    ::CUDABackendTrait,
+    phase_ratios::JustRelax.PhaseRatio,
+    particles,
+    grid::Geometry,
+    phases,
+)
+    return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
+end
+
 # Rheology
 
 ## viscosity

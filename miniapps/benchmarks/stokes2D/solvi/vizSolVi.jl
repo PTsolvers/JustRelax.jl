@@ -1,7 +1,8 @@
+using ExactFieldSolutions
+
 # Analytical solution found in:
 #     D. W. Schmid and Y. Y. Podladchikov. Analytical solutions for deformable elliptical inclusions in
 #     general shear. Geophysical Journal International, 155(1):269–288, 2003.
-
 
 function solvi_solution(geometry, Δη, rc, εbg)
     # Pressure
@@ -53,31 +54,6 @@ function solvi_solution(geometry, Δη, rc, εbg)
     end
     return (p=P, vx=Vx, vy=Vy)
 end
-
-# function solvi_solution(geometry, η0, ηi, εbg, rc)
-#     # element center
-#     xci, yci = geometry.xci
-#     xc = [xc for xc in xci, _ in yci] .- (xci[end] - xci[1]) / 2
-#     yc = [yc for _ in xci, yc in yci] .- (yci[end] - yci[1]) / 2
-#     # element vertices
-#     xvi, yvi = geometry.xvi
-#     xv_x = [xc for xc in xvi, _ in yci] .- (xvi[end] - xvi[1]) / 2 # for vx
-#     yv_x = [yc for _ in xvi, yc in yci] .- (yci[end] - yci[1]) / 2 # for vx
-
-#     xv_y = [xc for xc in xci, _ in yvi] .- (xci[end] - xci[1]) / 2 # for vy
-#     yv_y = [yc for _ in xci, yc in yvi] .- (yvi[end] - yvi[1]) / 2 # for vy
-
-#     # pressure analytical solution
-#     ps, = _solvi_solution(xc, yc; ηm=η0, ηc=ηi, ε=εbg, rc=rc)
-#     # x-velocity analytical solution
-#     _, va = _solvi_solution(xv_x, yv_x; ηm=η0, ηc=ηi, ε=εbg, rc=rc)
-#     vxs = real.(va)
-#     # y-velocity analytical solution
-#     _, va = _solvi_solution(xv_y, yv_y; ηm=η0, ηc=ηi, ε=εbg, rc=rc)
-#     vys = imag.(va)
-
-#     return (p=ps, vx=-vxs, vy=-vys)
-# end
 
 function Li_error(geometry, stokes, Δη, εbg, rc, ; order=2)
 
@@ -239,20 +215,3 @@ end
 err2(A::AbstractArray, B::AbstractArray) = @. √(((A - B)^2))
 
 err1(A::AbstractArray, B::AbstractArray) = @. abs(A - B)
-
-using ExactFieldSolutions
-
-
-# solP, solVx, solVy = solvi_solution(geometry)
-
-# errP = log10.(err2(Array(stokes.P), solP));
-# heatmap(errP)
-
-# errVx = log10.(err2(Array(stokes.V.Vx[:, 2:end-1]), solVx));
-# heatmap(errVx)
-
-# errVy = log10.(err2(Array(stokes.V.Vy[2:end-1, :]), solVy));
-# heatmap(errVy)
-
-
-

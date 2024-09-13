@@ -150,10 +150,10 @@ end
 
     # index corresponding to the cell center
     cell_vertex = ntuple(i -> xvi[i][I[i]], Val(2))
-    nx, ny = size(phases)
+    ni = size(phases)
 
     for offsetᵢ in -1:0, offsetⱼ in -1:0
-        offsets = offsetᵢ, offsetⱼ, offsetₖ
+        offsets = offsetᵢ, offsetⱼ
         cell_index = ntuple(Val(2)) do i
             clamp(I[i] + offsets[i], 1, ni[i])
         end

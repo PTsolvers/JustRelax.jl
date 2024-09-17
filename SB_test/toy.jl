@@ -112,44 +112,96 @@ end
     return
 end
 
-function update_stresses2!((;εxx_ve,εyy_ve,εxy_ve,εII_ve,Pr,Pr_c,εxx,εyy,εxy,εxyv,dτxx,dτyy,dτxy,τxx,τyy,τxy,τxyv,τxx_old,τyy_old,τxy_old,Vx,Vy,∇V,η,ητ,G,F,λ,dQdτxx,dQdτyy,dQdτxy,τII,η_vep,dτ_r,Fchk,dPr,Pr_old),K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy)
-    I = i, j 
-    
+# function update_stresses_loop!(
+#     (;
+#         Pr,Pr_c,
+#         εxx, εyy, εxy, εxyv,
+#         τxx, τyy, τxy, τxyv,
+#         τxx_old, τyy_old, τxy_old,
+#         Vx, Vy, ∇V,
+#         η, ητ, G,
+#         F, λ,
+#         τII, η_vep, Fchk, Pr_old
+#     )
+#     ,K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy
+# )
+@views function update_stresses_loop!((;εxx_ve,εyy_ve,εxy_ve,εII_ve,Pr,Pr_c,εxx,εyy,εxy,εxyv,dτxx,dτyy,dτxy,τxx,τyy,τxy,τxyv,τxx_old,τyy_old,τxy_old,Vx,Vy,∇V,η,ητ,G,F,λ,dQdτxx,dQdτyy,dQdτxy,τII,η_vep,dτ_r,Fchk,dPr,Pr_old),K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy)
+
     θ_dτ    = lτ*(r+2.0)/(re_mech*vdτ)
-    dτ_r    = 1.0./(θ_dτ .+ η[I...]./(G[I...].*dt) .+ 1.0)
-    # ∇V     .= diff(Vx[:, 2:end-1],dims=1)./dx .+ diff(Vy[2:end-1, :],dims=2)./dy
-    # dPr    .= .-∇V .- (Pr .- Pr_old)./K./dt
-    # # Pr    .+= r/θ_dτ.*η.*dPr                      # explicit
-    # Pr    .+= dPr./(1.0./(r/θ_dτ.*η) .+ 1.0./K./dt) # implicit
-    # # strain rates
-    εxx_ij   = εxx[I...]
-    εyy_ij   = εyy[I...]
-    εxy_ij   = 0.25 * (εxyv[i,j] + εxyv[i+1,j] + εxyv[i,j+1] + εxyv[i+1,j+1] )
-    # εxyv    = εxyv[I...]
-    # visco-elastic strain rates
-    εxx_ve  = εxx .+ 0.5.*τxx_old[I...]./(G[I...].*dt)
-    εyy_ve  = εyy .+ 0.5.*τyy_old[I...]./(G[I...].*dt)
-    εxy_ve  = εxy .+ 0.5.*τxy_old[I...]./(G[I...].*dt)
-    εII_ve  = sqrt.(0.5.*(εxx_ve.^2 .+ εyy_ve.^2) .+ εxy_ve.^2)
-    # stress increments
-    dτxx   = (.-(τxx[I...] .- τxx_old[I...]).*η[I...]./(G[I...].*d[I...]t) .- τxx[I...] .+ 2.0.*η[I...].*εxx_ij).*dτ_r
-    dτyy   = (.-(τyy[I...] .- τyy_old[I...]).*η[I...]./(G[I...].*d[I...]t) .- τyy[I...] .+ 2.0.*η[I...].*εyy_ij).*dτ_r
-    dτxy   = (.-(τxy[I...] .- τxy_old[I...]).*η[I...]./(G[I...].*d[I...]t) .- τxy[I...] .+ 2.0.*η[I...].*εxy_ij).*dτ_r
-    τII[I...] = √(0.5*((τxx[I...]+dτxx).^2 + (τyy[I...]+dτyy)^2) + (τxy+dτxy)^2)
-    # yield function
-    F       = τII[I...] - τ_y .- Pr[I...]*sinϕ
-    λ[I...] = (1.0 - relλ)*λ[I...] + relλ*(max.(F,0.0)/(η[I...]*dτ_r + η_reg))
-    dQdτxx  = 0.5.*(τxx[I...]+dτxx)/τII[I...]
-    dQdτyy  = 0.5.*(τyy[I...]+dτyy)/τII[I...]
-    dQdτxy  =      (τxy[I...]+dτxy)/τII[I...]
-    # Pr_c   .= Pr .+ K.*dt.*λ.*sinψ
-    τxx[I...] += (-(τxx[I...] - τxx_old[I...])*η[I...]/(G[I...]*dt) - τxx + 2.0*η*(εxx[I...] -     λ[I...]*dQdτxx))*dτ_r
-    τyy[I...] += (-(τyy[I...] - τyy_old[I...])*η[I...]/(G[I...]*dt) - τyy + 2.0*η*(εyy[I...] -     λ[I...]*dQdτyy))*dτ_r
-    τxy[I...] += (-(τxy[I...] - τxy_old[I...])*η[I...]/(G[I...]*dt) - τxy + 2.0*η*(εxy[I...] - 0.5*λ[I...]*dQdτxy))*dτ_r
-    # τxyv[2:end-1,2:end-1] .= ameanxy(τxy)
-    τII[I...] = sqrt.(0.5.*(τxx.^2 .+ τyy.^2) .+ τxy.^2)
-    # Fchk   .= τII .- τ_y .- Pr_c.*sinϕ .- λ.*η_reg
-    η_vep[I...]  = τII ./ 2.0 ./ εII_ve
+
+    for j in axes(Pr,2), i in axes(Pr,1)
+        I        = i,j
+        
+        dτ_r[I...]    = 1.0/(θ_dτ + η[I...] /(G[I...]*dt) + 1.0)
+        dPr[I...]     = -∇V[I...] - (Pr[I...] - Pr_old[I...])/K/dt
+        Pr[I...]     += dPr[I...]/(1.0/(r/θ_dτ*η[I...]) + 1.0/K/dt) # implicit
+        # strain rates
+        εxy[I...]     = 0.25 * (εxyv[I...] + εxyv[i+1,j] + εxyv[i,j+1] + εxyv[I.+1...])
+        # visco-elastic strain rates
+        εxx_ve[I...]  = εxx[I...] + 0.5*τxx_old[I...]/(G[I...]*dt)
+        εyy_ve[I...]  = εyy[I...] + 0.5*τyy_old[I...]/(G[I...]*dt)
+        εxy_ve[I...]  = εxy[I...] + 0.5*τxy_old[I...]/(G[I...]*dt)
+        εII_ve[I...]  = √(0.5*(εxx_ve[I...]^2 + εyy_ve[I...]^2) + εxy_ve[I...]^2)
+        # stress increments
+        dτxx[I...]   = (-(τxx[I...] - τxx_old[I...]) * η[I...] / (G[I...]*dt) - τxx[I...] .+ 2.0 * η[I...] * εxx[I...]) * dτ_r[I...]
+        dτyy[I...]   = (-(τyy[I...] - τyy_old[I...]) * η[I...] / (G[I...]*dt) - τyy[I...] .+ 2.0 * η[I...] * εyy[I...]) * dτ_r[I...]
+        dτxy[I...]   = (-(τxy[I...] - τxy_old[I...]) * η[I...] / (G[I...]*dt) - τxy[I...] .+ 2.0 * η[I...] * εxy[I...]) * dτ_r[I...]
+        τII[I...]    = √(0.5*((τxx[I...] + dτxx[I...])^2 + (τyy[I...] + dτyy[I...])^2) + (τxy[I...] + dτxy[I...])^2)
+        # yield function
+        F[I...]       = τII[I...]  - τ_y - Pr[I...] *sinϕ
+        λ[I...]       = (1.0 - relλ)*λ[I...]  + relλ.*(max(F[I...],0.0)/(η[I...] *dτ_r[I...] + η_reg + K*dt*sinϕ*sinψ))
+        dQdτxx[I...]  = 0.5 *(τxx[I...] + dτxx[I...]) / τII[I...]
+        dQdτyy[I...]  = 0.5 *(τyy[I...] + dτyy[I...]) / τII[I...]
+        dQdτxy[I...]  =      (τxy[I...] + dτxy[I...]) / τII[I...]
+        Pr_c[I...] = Pr[I...]  + K*dt*λ[I...] *sinψ
+        τxx[I...] += (-(τxx[I...]  - τxx_old[I...] )*η[I...] /(G[I...] *dt) - τxx[I...]  + 2.0 * η[I...]  *(εxx[I...] -     λ[I...] *dQdτxx[I...] ))*dτ_r[I...]
+        τyy[I...] += (-(τyy[I...]  - τyy_old[I...] )*η[I...] /(G[I...] *dt) - τyy[I...]  + 2.0 * η[I...]  *(εyy[I...] -     λ[I...] *dQdτyy[I...] ))*dτ_r[I...]
+        τxy[I...] += (-(τxy[I...]  - τxy_old[I...] )*η[I...] /(G[I...] *dt) - τxy[I...]  + 2.0 * η[I...]  *(εxy[I...] - 0.5*λ[I...] *dQdτxy[I...] ))*dτ_r[I...]
+        τII[I...] = √(0.5*((τxx[I...] )^2 + (τyy[I...] )^2) + (τxy[I...])^2)
+        Fchk[I...]  = τII[I...] - τ_y - Pr_c[I...]*sinϕ - λ[I...]*η_reg
+        η_vep[I...] = τII[I...] / 2.0 / εII_ve[I...]
+    end
+    τxyv[2:end-1,2:end-1] .= ameanxy(τxy)
+    return
+end
+
+@views function update_stresses_loop2!((;εxx_ve,εyy_ve,εxy_ve,εII_ve,Pr,Pr_c,εxx,εyy,εxy,εxyv,dτxx,dτyy,dτxy,τxx,τyy,τxy,τxyv,τxx_old,τyy_old,τxy_old,Vx,Vy,∇V,η,ητ,G,F,λ,dQdτxx,dQdτyy,dQdτxy,τII,η_vep,dτ_r,Fchk,dPr,Pr_old),K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy)
+
+    θ_dτ    = lτ*(r+2.0)/(re_mech*vdτ)
+
+    for j in axes(Pr,2), i in axes(Pr,1)
+        I        = i,j
+        
+        dτ_r0         = 1.0/(θ_dτ + η[I...] /(G[I...]*dt) + 1.0)
+        dPr[I...] = dPr0          = -∇V[I...] - (Pr[I...] - Pr_old[I...])/K/dt
+        Pr[I...]     += dPr0/(1.0/(r/θ_dτ*η[I...]) + 1.0/K/dt) # implicit
+        # strain rates
+        εxy[I...]     = 0.25 * (εxyv[I...] + εxyv[i+1,j] + εxyv[i,j+1] + εxyv[I.+1...])
+        # visco-elastic strain rates
+        εxx_ve[I...]  = εxx[I...] + 0.5*τxx_old[I...]/(G[I...]*dt)
+        εyy_ve[I...]  = εyy[I...] + 0.5*τyy_old[I...]/(G[I...]*dt)
+        εxy_ve[I...]  = εxy[I...] + 0.5*τxy_old[I...]/(G[I...]*dt)
+        εII_ve[I...]  = √(0.5*(εxx_ve[I...]^2 + εyy_ve[I...]^2) + εxy_ve[I...]^2)
+        # stress increments
+        dτxx[I...]   = (-(τxx[I...] - τxx_old[I...]) * η[I...] / (G[I...]*dt) - τxx[I...] .+ 2.0 * η[I...] * εxx[I...]) * dτ_r0
+        dτyy[I...]   = (-(τyy[I...] - τyy_old[I...]) * η[I...] / (G[I...]*dt) - τyy[I...] .+ 2.0 * η[I...] * εyy[I...]) * dτ_r0
+        dτxy[I...]   = (-(τxy[I...] - τxy_old[I...]) * η[I...] / (G[I...]*dt) - τxy[I...] .+ 2.0 * η[I...] * εxy[I...]) * dτ_r0
+        τII[I...]    = √(0.5*((τxx[I...] + dτxx[I...])^2 + (τyy[I...] + dτyy[I...])^2) + (τxy[I...] + dτxy[I...])^2)
+        # yield function
+        F[I...]       = τII[I...]  - τ_y - Pr[I...] *sinϕ
+        λ[I...]       = (1.0 - relλ)*λ[I...]  + relλ.*(max(F[I...],0.0)/(η[I...] *dτ_r0 + η_reg + K*dt*sinϕ*sinψ))
+        dQdτxx[I...]  = 0.5 *(τxx[I...] + dτxx[I...]) / τII[I...]
+        dQdτyy[I...]  = 0.5 *(τyy[I...] + dτyy[I...]) / τII[I...]
+        dQdτxy[I...]  =      (τxy[I...] + dτxy[I...]) / τII[I...]
+        Pr_c[I...] = Pr[I...]  + K*dt*λ[I...] *sinψ
+        τxx[I...] += (-(τxx[I...]  - τxx_old[I...] )*η[I...] /(G[I...] *dt) - τxx[I...]  + 2.0 * η[I...]  *(εxx[I...] -     λ[I...] *dQdτxx[I...] ))*dτ_r0
+        τyy[I...] += (-(τyy[I...]  - τyy_old[I...] )*η[I...] /(G[I...] *dt) - τyy[I...]  + 2.0 * η[I...]  *(εyy[I...] -     λ[I...] *dQdτyy[I...] ))*dτ_r0
+        τxy[I...] += (-(τxy[I...]  - τxy_old[I...] )*η[I...] /(G[I...] *dt) - τxy[I...]  + 2.0 * η[I...]  *(εxy[I...] - 0.5*λ[I...] *dQdτxy[I...] ))*dτ_r0
+        τII[I...] = √(0.5*((τxx[I...] )^2 + (τyy[I...] )^2) + (τxy[I...])^2)
+        Fchk[I...]  = τII[I...] - τ_y - Pr_c[I...]*sinϕ - λ[I...]*η_reg
+        η_vep[I...] = τII[I...] / 2.0 / εII_ve[I...]
+    end
+    τxyv[2:end-1,2:end-1] .= ameanxy(τxy)
     return
 end
 
@@ -388,7 +440,8 @@ function main()
                 (;),
             )
 
-            update_stresses!(fields,K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy)
+            # update_stresses!(fields,K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy)
+            update_stresses_loop2!(fields,K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy)
             
             # @parallel (@idx ni) JR.compute_τ_nonlinear!(
             #     (fields.τxx, fields.τyy, fields.τxy),

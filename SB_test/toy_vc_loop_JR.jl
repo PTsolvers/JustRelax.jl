@@ -61,7 +61,7 @@ function init_phases!(phase_ratios, xci, xvi, radius)
     return nothing
 end
 
-@views function update_iteration_params!((;η,ητ,η_vep))
+@views function update_iteration_params!(η, ητ)
     # ητ[2:end-1,2:end-1] .= maxloc(amean.(η,η_vep)./2)
     ητ[2:end-1,2:end-1] .= maxloc(η); bc2!(ητ)
     return
@@ -376,6 +376,24 @@ end
     return
 end
 
+@views function update_old!(
+        τxx_old, τyy_old, τxy_old, 
+        τxx, τyy, τxy,
+        τxyv_old, τxyv,
+        Pr_c, Pr, Pr_old,
+        λ , λv
+)
+    τxx_old .= τxx
+    τyy_old .= τyy
+    τxy_old .= τxy
+    τxyv_old .= τxyv
+    Pr      .= Pr_c
+    Pr_old  .= Pr
+    λ       .= 0.0
+    λv      .= 0.0
+    return
+end
+
 @views function c2v!(C, V)
     C[2:end-1, 2:end-1] .= average(V)  
     boundaries!(C)
@@ -569,6 +587,12 @@ end
     return
 end
 
+@views function compute_residuals!(r_Vx, r_Vy, Pr_c, τxx, τyy ,τxyv, dx, dy)
+    r_Vx .= diff(.-Pr_c[:,2:end-1].+τxx[:,2:end-1],dims=1)./dx .+ diff(τxyv[2:end-1,2:end-1],dims=2)./dy
+    r_Vy .= diff(.-Pr_c[2:end-1,:].+τyy[2:end-1,:],dims=2)./dy .+ diff(τxyv[2:end-1,2:end-1],dims=1)./dx
+    return
+end
+
 function main()
 
     # MAIN SCRIPT --------------------------------------------------------------------
@@ -685,20 +709,20 @@ function main()
     θ = @zeros(ni...)
     # array allocation
     fields = (
-        Vx         = stokes.V.Vx,
-        Vy         = stokes.V.Vy,
-        Pr         = stokes.P,
-        Pr_c       = zeros(nx  ,ny  ),
-        Pr_old     = stokes.P0,
-        ∇V         = stokes.∇V,
-        τxx        = stokes.τ.xx,
-        τyy        = stokes.τ.yy,
-        τxy        = stokes.τ.xy_c,
-        τxyv       = stokes.τ.xy,
-        τxx_old    = stokes.τ_o.xx,
-        τyy_old    = stokes.τ_o.yy,
-        τxy_old    = stokes.τ_o.xy_c,
-        τII        = stokes.τ.II,
+        # Vx         = stokes.V.Vx,
+        # Vy         = stokes.V.Vy,
+        # Pr         = stokes.P,
+        # Pr_c       = zeros(nx  ,ny  ),
+        # Pr_old     = stokes.P0,
+        # ∇V         = stokes.∇V,
+        # τxx        = stokes.τ.xx,
+        # τyy        = stokes.τ.yy,
+        # τxy        = stokes.τ.xy_c,
+        # τxyv       = stokes.τ.xy,
+        # τxx_old    = stokes.τ_o.xx,
+        # τyy_old    = stokes.τ_o.yy,
+        # τxy_old    = stokes.τ_o.xy_c,
+        # τII        = stokes.τ.II,
         Vmag       = zeros(nx  ,ny  ),
         dPr        = zeros(nx  ,ny  ),
         r_Vx       = zeros(nx-1,ny-2),
@@ -746,37 +770,54 @@ function main()
     fields.G .= [x^2 + y^2 ≥ radius^2 ? G0 : Gi for x in xci[1], y in xci[2]]
     fields.Gv.= [x^2 + y^2 ≥ radius^2 ? G0 : Gi for x in xvi[1], y in xvi[2]]
 
-    fields.Vx[:, 2:end-1]  .=   εbg.*Xvx
-    fields.Vy[2:end-1, :]  .= .-εbg.*Yvy
+    stokes.viscosity.η     .= 1
+    stokes.viscosity.η_vep .= 1
 
-    fields.Vx[:, 1]   .=   fields.Vx[:, 2]
-    fields.Vx[:, end] .=   fields.Vx[:, end-1]
-    fields.Vy[1, :]   .=   fields.Vy[2,:]
-    fields.Vy[end, :] .=   fields.Vy[end-1,:]
+    stokes.V.Vx[:, 2:end-1]  .=   εbg.*Xvx
+    stokes.V.Vy[2:end-1, :]  .= .-εbg.*Yvy
+
+    stokes.V.Vx[:, 1]   .= stokes.V.Vx[:, 2]
+    stokes.V.Vx[:, end] .= stokes.V.Vx[:, end-1]
+    stokes.V.Vy[1, :]   .= stokes.V.Vy[2,:]
+    stokes.V.Vy[end, :] .= stokes.V.Vy[end-1,:]
 
     iter_evo = Float64[]; errs_evo = ElasticMatrix{Float64}(undef,length(ϵtol),0)
     opts = (aspect_ratio=1, xlims=extrema(xc), ylims=extrema(yc), c=:turbo, framestyle=:box)
     t = 0.0; evo_t=[]; evo_τxx=[]
     # time loop
     _di = inv.((dx,dy))
+    θ = zeros(ni...)
+
     for it = 1:nt
         @printf("it=%d\n",it)
-        update_old!(fields)
+        
+        update_old!(
+            @tensor_center(stokes.τ_o)..., 
+            @tensor_center(stokes.τ)...,
+            stokes.τ_o.xy, stokes.τ.xy,
+            stokes.P, θ, stokes.P0,
+            fields.λ, fields.λv
+        )
+
         errs = 2.0.*ϵtol; iter = 1
         resize!(iter_evo,0); resize!(errs_evo,length(ϵtol),0)
+        
+        copyto!(θ, stokes.P)
         while any(errs .>= ϵtol) && iter <= maxiter
-            update_iteration_params!(fields)
+            # update_iteration_params!(fields)
+            update_iteration_params!(stokes.viscosity.η, fields.ητ)
             
-            @parallel (@idx ni) JR.compute_∇V!(fields.∇V, fields.Vx, fields.Vy, _di...)
+            @parallel (@idx ni) JR.compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+            
             @parallel (@idx ni .+ 1) JR.compute_strain_rate!(
-                fields.εxx, fields.εyy, fields.εxyv, fields.∇V, fields.Vx, fields.Vy, _di...
+                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
             
             JR.compute_P!(
-                fields.Pr,
-                fields.Pr_old,
-                fields.dPr,
-                fields.∇V,
+                θ,
+                stokes.P0,
+                stokes.R.RP,
+                stokes.∇V,
                 fields.ητ,
                 rheology,
                 phase_ratios.center,
@@ -786,56 +827,20 @@ function main()
                 (;),
             )
 
-            # update_stresses!(fields,K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy)
-            # update_stresses_loop!(fields,K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy)
-            # update_stresses2!(fields,K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy, rheology, phase_center)
-
-            # update_stresses3!(
-            #     (fields.εxx, fields.εyy, fields.εxyv),
-            #     (fields.τxx, fields.τyy, fields.τxy),
-            #     (fields.τxx_old, fields.τyy_old, fields.τxy_old),
-            #     fields,K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy, rheology, phase_center
-            # )
-
-            # update_stresses4!(
-            #     (fields.εxx, fields.εyy, fields.εxyv),
-            #     (fields.τxx, fields.τyy, fields.τxy),
-            #     (fields.τxx_old, fields.τyy_old, fields.τxy_old),
-            #     fields.Pr,
-            #     fields.Pr_c,
-            #     fields.η,
-            #     fields.λ,
-            #     fields.τII,
-            #     fields.η_vep, 
-            #     fields.Fchk, 
-            #     relλ,dt,
-            #     re_mech,vdτ,lτ,r,
-            #     rheology, phase_center
-            # )
-            # fields.τxyv[2:end-1,2:end-1] .= ameanxy(fields.τxy)
-
-            # # update_stresses_vc!(fields,K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy)
-
-            # update_stresses_vc_loop2!(
-            #     fields, 
-            #     K,τ_y,sinϕ,sinψ,η_reg,relλ,dt,re_mech,vdτ,lτ,r,dx,dy, phase_ratios.vertex, rheology
-            # )
-
             @parallel (@idx ni.+1) update_stresses_center_vertex_ps!(
-                (fields.εxx, fields.εyy, fields.εxyv),
-                (fields.τxx, fields.τyy, fields.τxy),
-                (fields.τxyv,),
-                (fields.τxx_old, fields.τyy_old, fields.τxy_old),
-                (fields.τxyv_old,),
-                fields.Pr,
-                fields.Pr_c,
-                fields.η,
+                @strain(stokes),
+                @tensor_center(stokes.τ),
+                (stokes.τ.xy,),
+                @tensor_center(stokes.τ_o),
+                (stokes.τ_o.xy,),
+                θ,
+                stokes.P,
+                stokes.viscosity.η,
                 fields.λ,
                 fields.λv,
-                fields.τII,
-                fields.η_vep, 
+                stokes.τ.II,
+                stokes.viscosity.η_vep, 
                 fields.Fchk, 
-                τ_y,
                 relλ,
                 dt,
                 re_mech, 
@@ -848,36 +853,38 @@ function main()
             )
 
             @parallel JR.compute_V!(
-                fields.Vx, fields.Vy,
-                fields.Pr_c,
-                fields.τxx, fields.τyy, fields.τxyv,
+                @velocity(stokes)...,
+                stokes.P,
+                @stress(stokes)...,
                 vdτ*lτ/re_mech,
                 ρg...,
                 fields.ητ,
                 _di...,
             )  
 
-            fields.Vx[:, 1]   .= fields.Vx[:, 2]
-            fields.Vx[:, end] .= fields.Vx[:, end-1]
-            fields.Vy[1, :]   .= fields.Vy[2,:]
-            fields.Vy[end, :] .= fields.Vy[end-1,:]
+            stokes.V.Vx[:, 1]   .= stokes.V.Vx[:, 2]
+            stokes.V.Vx[:, end] .= stokes.V.Vx[:, end-1]
+            stokes.V.Vy[1, :]   .= stokes.V.Vy[2,:]
+            stokes.V.Vy[end, :] .= stokes.V.Vy[end-1,:]
 
             if iter % ncheck == 0
                 # update residuals
-                compute_residuals!(fields,dx,dy)
-                errs = maximum.((abs.(fields.r_Vx),abs.(fields.r_Vy),abs.(fields.dPr)))
+                # compute_residuals!(fields,dx,dy)
+                compute_residuals!(fields.r_Vx, fields.r_Vy, stokes.P, @stress(stokes)..., dx, dy)
+                 
+                errs = maximum.((abs.(fields.r_Vx),abs.(fields.r_Vy),abs.(stokes.R.RP)))
                 push!(iter_evo,iter/max(nx,ny));append!(errs_evo,errs)
                 @printf("  iter/nx=%.3f,errs=[ %1.3e, %1.3e, %1.3e ] (Fchk=%1.2e)\n",iter/max(nx,ny),errs...,maximum(fields.Fchk))
             end
             iter += 1
         end
         t += dt
-        push!(evo_t,t); push!(evo_τxx,maximum(fields.τxx))
+        push!(evo_t,t); push!(evo_τxx,maximum(stokes.τ.xx))
         # visualisation
         # fields.Vmag .= sqrt.(ameanx(fields.Vx).^2 + ameany(fields.Vy).^2)
-        p1=heatmap(xc,yc,ameanx(fields.Vx[:, 2:end-1])',title="Vx";opts...)
-        p2=heatmap(xc,yc,fields.η_vep',title="η_vep";opts...)
-        p3=heatmap(xc,yc,fields.τII',title="τII";opts...)
+        p1=heatmap(xc,yc,ameanx(stokes.V.Vx[:, 2:end-1])',title="Vx";opts...)
+        p2=heatmap(xc,yc,stokes.viscosity.η_vep',title="η_vep";opts...)
+        p3=heatmap(xc,yc,stokes.τ.II',title="τII";opts...)
         p4=plot(evo_t,evo_τxx,legend=false,xlabel="time",ylabel="max(τxx)",linewidth=0,markershape=:circle,markersize=3,framestyle=:box)
         display(plot(p1,p2,p3,p4,layout=(2,2)))
     end
@@ -913,30 +920,30 @@ main()
 #     phase_ratios.vertex,
 # )
 
-# # ProfileCanvas.@profview for _ in 1:100
-@parallel (@idx ni.+1) update_stresses_center_vertex_ps!(
-    (fields.εxx, fields.εyy, fields.εxyv),
-    (fields.τxx, fields.τyy, fields.τxy),
-    (fields.τxyv,),
-    (fields.τxx_old, fields.τyy_old, fields.τxy_old),
-    (fields.τxyv_old,),
-    fields.Pr,
-    fields.Pr_c,
-    fields.η,
-    fields.λ,
-    fields.λv,
-    fields.τII,
-    fields.η_vep, 
-    fields.Fchk, 
-    τ_y,
-    relλ,
-    dt,
-    re_mech, 
-    vdτ, 
-    lτ,
-    r,
-    rheology, 
-    phase_ratios.center,
-    phase_ratios.vertex,
-)
-# end
+# # # ProfileCanvas.@profview for _ in 1:100
+# @parallel (@idx ni.+1) update_stresses_center_vertex_ps!(
+#     (fields.εxx, fields.εyy, fields.εxyv),
+#     (fields.τxx, fields.τyy, fields.τxy),
+#     (fields.τxyv,),
+#     (fields.τxx_old, fields.τyy_old, fields.τxy_old),
+#     (fields.τxyv_old,),
+#     fields.Pr,
+#     fields.Pr_c,
+#     fields.η,
+#     fields.λ,
+#     fields.λv,
+#     fields.τII,
+#     fields.η_vep, 
+#     fields.Fchk, 
+#     τ_y,
+#     relλ,
+#     dt,
+#     re_mech, 
+#     vdτ, 
+#     lτ,
+#     r,
+#     rheology, 
+#     phase_ratios.center,
+#     phase_ratios.vertex,
+# )
+# # end

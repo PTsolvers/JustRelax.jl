@@ -509,10 +509,10 @@ function _solve!(
     # solver loop
     @copy stokes.P0 stokes.P
     wtime0 = 0.0
-    relλ   = 0.2
-    θ  = copy(stokes.P)
-    λ  = @zeros(ni...)
-    λv = @zeros(ni.+1...)
+    relλ = 0.2
+    θ = copy(stokes.P)
+    λ = @zeros(ni...)
+    λv = @zeros(ni .+ 1...)
     η0 = deepcopy(η)
     do_visc = true
 
@@ -569,7 +569,7 @@ function _solve!(
                 )
             end
 
-            @parallel (@idx ni.+1) update_stresses_center_vertex_ps!(
+            @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
                 @strain(stokes),
                 @tensor_center(stokes.τ),
                 (stokes.τ.xy,),
@@ -581,11 +581,11 @@ function _solve!(
                 λ,
                 λv,
                 stokes.τ.II,
-                stokes.viscosity.η_vep, 
+                stokes.viscosity.η_vep,
                 relλ,
                 dt,
                 θ_dτ,
-                rheology, 
+                rheology,
                 phase_ratios.center,
                 phase_ratios.vertex,
             )

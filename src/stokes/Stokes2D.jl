@@ -509,8 +509,10 @@ function _solve!(
     # solver loop
     @copy stokes.P0 stokes.P
     wtime0 = 0.0
-    θ = @zeros(ni...)
-    λ = @zeros(ni...)
+    relλ   = 0.2
+    θ  = copy(stokes.P)
+    λ  = @zeros(ni...)
+    λv = @zeros(ni.+1...)
     η0 = deepcopy(η)
     do_visc = true
 
@@ -534,7 +536,7 @@ function _solve!(
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
             compute_P!(
-                stokes.P,
+                θ,
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
@@ -546,11 +548,6 @@ function _solve!(
                 θ_dτ,
                 args,
             )
-
-            # stokes.P[1, 1] = stokes.P[2, 1]
-            # stokes.P[end, 1] = stokes.P[end - 1, 1]
-            # stokes.P[1, end] = stokes.P[2, end]
-            # stokes.P[end, end] = stokes.P[end - 1, end]
 
             update_ρg!(ρg[2], phase_ratios, rheology, args)
 
@@ -572,30 +569,26 @@ function _solve!(
                 )
             end
 
-            @parallel (@idx ni) compute_τ_nonlinear!(
-                @tensor_center(stokes.τ),
-                stokes.τ.II,
-                @tensor_center(stokes.τ_o),
+            @parallel (@idx ni.+1) update_stresses_center_vertex_ps!(
                 @strain(stokes),
-                @tensor_center(stokes.ε_pl),
-                stokes.EII_pl,
-                stokes.P,
+                @tensor_center(stokes.τ),
+                (stokes.τ.xy,),
+                @tensor_center(stokes.τ_o),
+                (stokes.τ_o.xy,),
                 θ,
-                η,
-                η_vep,
+                stokes.P,
+                stokes.viscosity.η,
                 λ,
-                phase_ratios.center,
-                tupleize(rheology), # needs to be a tuple
+                λv,
+                stokes.τ.II,
+                stokes.viscosity.η_vep, 
+                relλ,
                 dt,
                 θ_dτ,
-                args,
+                rheology, 
+                phase_ratios.center,
+                phase_ratios.vertex,
             )
-            center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-            # update_halo!(stokes.τ.xy)
-
-            # @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
-            #     Vx_on_Vy, stokes.V.Vx
-            # )
 
             @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
                 Vx_on_Vy, stokes.V.Vx, ρg[2], _di[1]
@@ -605,7 +598,7 @@ function _solve!(
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     Vx_on_Vy,
-                    θ,
+                    stokes.P,
                     @stress(stokes)...,
                     pt_stokes.ηdτ,
                     ρg...,
@@ -617,7 +610,7 @@ function _solve!(
                 velocity2displacement!(stokes, dt)
                 free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
-                # update_halo!(@velocity(stokes)...)
+                update_halo!(@velocity(stokes)...)
             end
         end
 
@@ -669,8 +662,6 @@ function _solve!(
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
-
-    stokes.P .= θ # θ = P + plastic_overpressure
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))

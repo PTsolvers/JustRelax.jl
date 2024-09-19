@@ -8,7 +8,7 @@ const backend = CPUBackend
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, radius)
+function init_phases!(phase_ratios, xci, xvi, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5
 
@@ -26,6 +26,8 @@ function init_phases!(phase_ratios, xci, radius)
     end
 
     @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+    @parallel (@idx ni.+1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    return nothing
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -86,7 +88,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # Initialize phase ratios -------------------------------
     radius       = 0.1
     phase_ratios = PhaseRatio(backend, ni, length(rheology))
-    init_phases!(phase_ratios, xci, radius)
+    init_phases!(phase_ratios, xci, xvi, radius)
 
      # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -102,7 +104,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
     # Boundary conditions
-    flow_bcs     = DisplacementBoundaryConditions(;
+    flow_bcs     = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
@@ -140,7 +142,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             kwargs = (
                 verbose          = false,
                 iterMax          = 50e3,
-                nout             = 1e2,
+                nout             = 1e3,
                 viscosity_cutoff = (-Inf, Inf)
             )
         )

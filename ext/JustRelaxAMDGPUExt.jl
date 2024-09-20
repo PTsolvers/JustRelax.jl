@@ -1,6 +1,7 @@
 module JustRelaxAMDGPUExt
 
 using AMDGPU
+using JustPIC
 using JustRelax: JustRelax
 import JustRelax: PTArray, backend, AMDGPUBackendTrait, AMDGPUBackend
 

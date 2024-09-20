@@ -34,7 +34,7 @@ else
     JustPIC.CPUBackend
 end
 
-import JustRelax.@cell
+
 
 distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
 
@@ -68,17 +68,17 @@ function init_phases!(phases, particles, xc, yc, r)
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, center, r)
         @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+            @index(index[ip, i, j]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, i, j]
-            y = JustRelax.@cell py[ip, i, j]
+            x = @index px[ip, i, j]
+            y = @index py[ip, i, j]
 
             # plume - rectangular
             if (((x - center[1] ))^2 + ((y - center[2]))^2) ≤ r^2
-                JustRelax.@cell phases[ip, i, j] = 2.0
+                @index phases[ip, i, j] = 2.0
 
             else
-                JustRelax.@cell phases[ip, i, j] = 1.0
+                @index phases[ip, i, j] = 1.0
             end
         end
         return nothing
@@ -156,8 +156,8 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     # temperature
     pPhases,     = init_cell_arrays(particles, Val(1))
     init_phases!(pPhases, particles, center_perturbation..., r)
-    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
     # ----------------------------------------------------
 
     @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)

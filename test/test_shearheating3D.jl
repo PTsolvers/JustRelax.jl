@@ -37,7 +37,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
 else
     JustPIC.CPUBackend
 end
-import JustRelax.@cell
+
 
 # Load script dependencies
 using Printf, GeoParams
@@ -95,9 +95,9 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
     yc_anomaly       = ly/2   # origin of thermal anomaly
     zc_anomaly       = 40e3  # origin of thermal anomaly
     r_anomaly        = 3e3    # radius of perturbation
-    phase_ratios     = PhaseRatio(backend_JR, ni, length(rheology))
+    phase_ratios     = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -218,7 +218,7 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
 
         @show it += 1
         t += dt
@@ -259,5 +259,6 @@ end
 
         # Ensure iters is defined before running the test
         @test iters != nothing && iters.err_evo1[end] < 1e-4
+        @test any(x -> x < 0, thermal.shear_heating) == false
     end
 end

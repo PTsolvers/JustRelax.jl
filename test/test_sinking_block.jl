@@ -61,12 +61,12 @@ function init_phases!(phases, particles, xc, yc, r)
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, xc, yc, r)
         @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+            @index(index[ip, i, j]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j])
+            x = @index px[ip, i, j]
+            depth = -(@index py[ip, i, j])
             # plume - rectangular
-            JustRelax.@cell phases[ip, i, j] = if ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
+            @index phases[ip, i, j] = if ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
                 2.0
             else
                 1.0
@@ -145,9 +145,9 @@ function Sinking_Block2D()
     xc_anomaly   =  250e3   # origin of thermal anomaly
     yc_anomaly   = -(ly-400e3) # origin of thermal anomaly
     r_anomaly    =  50e3   # radius of perturbation
-    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem

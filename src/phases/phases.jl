@@ -131,10 +131,10 @@ end
         end
 
         for ip in cellaxes(phases)
-            p = @index(pxi[1][ip, cell_index...]), @index(pxi[2][ip, cell_index...]), @index(pxi[3][ip, cell_index...])
+            p = @cell(pxi[1][ip, cell_index...]), @cell(pxi[2][ip, cell_index...]), @cell(pxi[3][ip, cell_index...])
             any(isnan, p) && continue
             x = @inline bilinear_weight(cell_vertex, p, di)
-            ph_local =  @index phases[ip, cell_index...]
+            ph_local =  @cell phases[ip, cell_index...]
             # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
             w = w .+ x .* ntuple(j -> (ph_local == j), NC)
         end
@@ -142,7 +142,7 @@ end
 
     w = w .* inv(sum(w))
     for ip in cellaxes(ratio_vertices)
-        @index ratio_vertices[ip, I...] = w[ip]
+        @cell ratio_vertices[ip, I...] = w[ip]
     end
 
     return nothing
@@ -165,10 +165,10 @@ end
         end
 
         for ip in cellaxes(phases)
-            p = @index(pxi[1][ip, cell_index...]), @index(pxi[2][ip, cell_index...])
+            p = @cell(pxi[1][ip, cell_index...]), @cell(pxi[2][ip, cell_index...])
             any(isnan, p) && continue
             x = @inline bilinear_weight(cell_vertex, p, di)
-            ph_local =  @index phases[ip, cell_index...]
+            ph_local =  @cell phases[ip, cell_index...]
             # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
             w = w .+ x .* ntuple(j -> (ph_local == j), NC)
         end
@@ -176,7 +176,7 @@ end
     
     w = w .* inv(sum(w))
     for ip in cellaxes(ratio_vertices)
-        @index ratio_vertices[ip, I...] = w[ip]
+        @cell ratio_vertices[ip, I...] = w[ip]
     end
 
     return nothing

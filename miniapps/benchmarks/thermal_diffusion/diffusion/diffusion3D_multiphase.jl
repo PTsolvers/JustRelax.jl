@@ -42,7 +42,7 @@ function init_phases!(phases, particles, xc, yc, zc, r)
     center = xc, yc, zc
 
     @parallel_indices (I...) function init_phases!(phases, px, py, pz, index, center, r)
-        @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
+        @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, I...]) == 0 && continue
 

@@ -57,7 +57,7 @@ function init_phases!(phases, particles, Lx, d, r)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx, d)
-        @inbounds for ip in JustRelax.cellaxes(phases)
+        @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
 

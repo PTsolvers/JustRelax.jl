@@ -38,7 +38,7 @@ function init_phases!(phases, particles)
         r=100e3
         f(x, A, λ) = A * sin(π*x/λ)
 
-        @inbounds for ip in JustRelax.cellaxes(phases)
+        @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
 

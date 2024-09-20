@@ -1,8 +1,8 @@
 module JustRelax2D
 
 using JustRelax: JustRelax
-using JustPIC, JustPIC._2D
 using CUDA
+using JustPIC, JustPIC._2D
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -22,12 +22,7 @@ import JustRelax:
     DisplacementBoundaryConditions,
     VelocityBoundaryConditions
 
-import JustPIC:
-    @index,
-    @index,
-    PhaseRatios,
-    phase_ratios_center!,
-    phase_ratios_vertex!,
+import JustPIC._2D:
     numphases,
     nphases
 
@@ -49,9 +44,9 @@ function JR2D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number,N}) where {N}
     return ThermalArrays(ni...)
 end
 
-function JR2D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
-    return PhaseRatio(ni, num_phases)
-end
+# function JR2D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
+#     return PhaseRatio(ni, num_phases)
+# end
 
 function JR2D.PTThermalCoeffs(
     ::Type{CUDABackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
@@ -170,30 +165,19 @@ function thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
 
-# Phases
-function JR2D.phase_ratios_center!(
-    ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
-)
-    return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-end
+# # Phases
+# function JR2D.phase_ratios_center!(
+#     ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
+# )
+#     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
+# end
 
-function JR2D.phase_ratios_vertex!(
-    ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
-)
-    return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-end
+# function JR2D.phase_ratios_vertex!(
+#     ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
+# )
+#     return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
+# end
 
-function JR2D.phase_ratios_center!(
-    ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
-)
-    return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-end
-
-function JR2D.phase_ratios_vertex!(
-    ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
-)
-    return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-end
 
 # Rheology
 

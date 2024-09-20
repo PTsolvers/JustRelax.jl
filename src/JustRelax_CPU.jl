@@ -20,11 +20,6 @@ import JustRelax:
     VelocityBoundaryConditions
 
 import JustPIC._2D:
-    @index,
-    @index,
-    PhaseRatios,
-    phase_ratios_center!,
-    phase_ratios_vertex!,
     numphases,
     nphases
 
@@ -58,11 +53,6 @@ import JustRelax:
     VelocityBoundaryConditions
 
 import JustPIC._3D:
-    @index,
-    @index,
-    PhaseRatios,
-    phase_ratios_center!,
-    phase_ratios_vertex!,
     numphases,
     nphases
 

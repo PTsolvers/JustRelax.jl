@@ -1,7 +1,6 @@
 module JustRelaxCUDAExt
 
 using CUDA
-using JustPIC
 using JustRelax: JustRelax
 import JustRelax: PTArray, backend, CUDABackendTrait
 

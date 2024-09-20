@@ -1,8 +1,8 @@
 module JustRelax2D
 
 using JustRelax: JustRelax
-using JustPIC, JustPIC._2D
 using AMDGPU
+using JustPIC, JustPIC._2D
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -29,14 +29,9 @@ import JustRelax:
     DisplacementBoundaryConditions,
     VelocityBoundaryConditions
 
-import JustPIC:
-    @index,
-    @index,
-    PhaseRatios,
+import JustPIC._2D:
     nphases,
-    numphases,
-    phase_ratios_center!,
-    phase_ratios_vertex!
+    numphases
 
 @init_parallel_stencil(AMDGPU, Float64, 2)
 
@@ -56,9 +51,9 @@ function JR2D.ThermalArrays(::Type{AMDGPUBackend}, ni::Vararg{Number,N}) where {
     return ThermalArrays(ni...)
 end
 
-function JR2D.PhaseRatio(::Type{AMDGPUBackend}, ni, num_phases)
-    return PhaseRatio(ni, num_phases)
-end
+# function JR2D.PhaseRatio(::Type{AMDGPUBackend}, ni, num_phases)
+#     return PhaseRatio(ni, num_phases)
+# end
 
 function JR2D.PTThermalCoeffs(
     ::Type{AMDGPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
@@ -181,18 +176,18 @@ function thermal_bcs!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays, bc
     return thermal_bcs!(thermal.T, bcs)
 end
 
-# Phases
-function JR2D.phase_ratios_center!(
-    ::AMDGPUBackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
-)
-    return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-end
+# # Phases
+# function JR2D.phase_ratios_center!(
+#     ::AMDGPUBackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
+# )
+#     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
+# end
 
-function JR2D.phase_ratios_vertex!(
-    ::AMDGPUBackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
-)
-    return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-end
+# function JR2D.phase_ratios_vertex!(
+#     ::AMDGPUBackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
+# )
+#     return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
+# end
 
 # Rheology
 

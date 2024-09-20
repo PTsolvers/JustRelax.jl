@@ -1,8 +1,8 @@
 module JustRelax3D
 
 using JustRelax: JustRelax
-using JustPIC, JustPIC._2D
 using CUDA
+using JustPIC, JustPIC._3D
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
@@ -21,12 +21,7 @@ import JustRelax:
     DisplacementBoundaryConditions,
     VelocityBoundaryConditions
 
-import JustPIC:
-    @index,
-    @index,
-    PhaseRatios,
-    phase_ratios_center!,
-    phase_ratios_vertex!,
+import JustPIC._3D:
     numphases,
     nphases
 
@@ -48,9 +43,9 @@ function JR3D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number,N}) where {N}
     return ThermalArrays(ni...)
 end
 
-function JR3D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
-    return PhaseRatio(ni, num_phases)
-end
+# function JR3D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
+#     return PhaseRatio(ni, num_phases)
+# end
 
 function JR3D.PTThermalCoeffs(
     ::Type{CUDABackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
@@ -188,30 +183,18 @@ function thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
 
-# Phases
-function JR3D.phase_ratios_center!(
-    ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
-)
-    return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-end
+# # Phases
+# function JR3D.phase_ratios_center!(
+#     ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
+# )
+#     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
+# end
 
-function JR3D.phase_ratios_vertex!(
-    ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
-)
-    return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-end
-
-function JR3D.phase_ratios_center!(
-    ::CUDABackendTrait, phase_ratios, particles, grid::Geometry, phases
-)
-    return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-end
-
-function JR3D.phase_ratios_vertex!(
-    ::CUDABackendTrait, phase_ratios, particles, grid::Geometry, phases
-)
-    return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-end
+# function JR3D.phase_ratios_vertex!(
+#     ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
+# )
+#     return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
+# end
 
 # Rheology
 
@@ -351,23 +334,6 @@ function JR3D.subgrid_characteristic_time!(
     return nothing
 end
 
-function JR3D.subgrid_characteristic_time!(
-    subgrid_arrays,
-    particles,
-    dt₀::CuArray,
-    phases,
-    rheology,
-    thermal::JustRelax.ThermalArrays,
-    stokes::JustRelax.StokesArrays,
-    xci,
-    di,
-)
-    ni = size(stokes.P)
-    @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.Tc, stokes.P, di
-    )
-    return nothing
-end
 
 function JR3D.subgrid_characteristic_time!(
     subgrid_arrays,

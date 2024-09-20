@@ -88,7 +88,7 @@ end
 
     ni = size(phases)
 
-    for ip in JustRelax.cellaxes(phases)
+    for ip in cellaxes(phases)
         # quick escape
         @index(index[ip, I...]) == 0 && continue
 

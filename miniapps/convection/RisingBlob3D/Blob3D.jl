@@ -54,7 +54,7 @@ function init_phases!(phases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_a
     @parallel_indices (I...) function init_phases!(
         phases, px, py, pz, index, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, sticky_air, top, bottom
     )
-        @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
+        @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, I...]) == 0 && continue
 

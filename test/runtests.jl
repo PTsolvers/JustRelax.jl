@@ -59,7 +59,7 @@ function runtests()
     return nfail
 end
 
-_, backend_name = parse_flags!(ARGS, "--backend"; default="CPU", typ=String)
+_, backend_name = parse_flags!(ARGS, "--backend"; default="CUDA", typ=String)
 
 @static if backend_name == "AMDGPU"
     Pkg.add("AMDGPU")

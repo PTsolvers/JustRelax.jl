@@ -19,9 +19,7 @@ import JustRelax:
     DisplacementBoundaryConditions,
     VelocityBoundaryConditions
 
-import JustPIC._2D:
-    numphases,
-    nphases
+import JustPIC._2D: numphases, nphases
 
 @init_parallel_stencil(Threads, Float64, 2)
 
@@ -52,9 +50,7 @@ import JustRelax:
     DisplacementBoundaryConditions,
     VelocityBoundaryConditions
 
-import JustPIC._3D:
-    numphases,
-    nphases
+import JustPIC._3D: numphases, nphases
 
 @init_parallel_stencil(Threads, Float64, 3)
 

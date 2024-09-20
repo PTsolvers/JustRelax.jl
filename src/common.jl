@@ -4,7 +4,6 @@ export StokesArrays, PTStokesCoeffs
 include("types/constructors/heat_diffusion.jl")
 export ThermalArrays, PTThermalCoeffs
 
-
 include("Utils.jl")
 export @allocate,
     @add,

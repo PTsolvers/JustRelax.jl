@@ -169,12 +169,7 @@ function compute_viscosity!(
 end
 
 function _compute_viscosity!(
-    stokes::JustRelax.StokesArrays,
-    ν,
-    phase_ratios::PhaseRatios,
-    args,
-    rheology,
-    cutoff,
+    stokes::JustRelax.StokesArrays, ν, phase_ratios::PhaseRatios, args, rheology, cutoff
 )
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(

@@ -99,9 +99,8 @@ end
 # with phase ratios
 @inline update_ρg!(ρg::AbstractArray, phase_ratios::PhaseRatios, rheology, args) =
     update_ρg!(isconstant(rheology), ρg, phase_ratios, rheology, args)
-@inline update_ρg!(
-    ::ConstantDensityTrait, ρg, phase_ratios::PhaseRatios, rheology, args
-) = nothing
+@inline update_ρg!(::ConstantDensityTrait, ρg, phase_ratios::PhaseRatios, rheology, args) =
+    nothing
 @inline update_ρg!(
     ::NonConstantDensityTrait, ρg, phase_ratios::PhaseRatios, rheology, args
 ) = compute_ρg!(ρg, phase_ratios, rheology, args)

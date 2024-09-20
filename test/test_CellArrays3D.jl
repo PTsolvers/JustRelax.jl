@@ -1,5 +1,5 @@
 
-using Test, StaticArrays, AllocCheck
+using Test, StaticArrays
 using Suppressor
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"

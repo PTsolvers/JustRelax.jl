@@ -401,7 +401,7 @@ function JustRelax.solve!(
     thermal::JustRelax.ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     rheology::NTuple{N,AbstractMaterialParamsStruct},
-    phase_ratios::JustRelax.PhaseRatio,
+    phase_ratios::PhaseRatios,
     args::NamedTuple,
     di::NTuple{2,_T},
     dt,
@@ -874,7 +874,7 @@ function JustRelax.solve!(
     thermal::JustRelax.ThermalArrays{M},
     thermal_bc::TemperatureBoundaryConditions,
     rheology::NTuple{N,AbstractMaterialParamsStruct},
-    phase_ratios::JustRelax.PhaseRatio,
+    phase_ratios::PhaseRatios,
     args::NamedTuple,
     di::NTuple{3,_T},
     dt;

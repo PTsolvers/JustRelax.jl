@@ -462,7 +462,7 @@ function _solve!(
     di::NTuple{2,T},
     flow_bcs::AbstractFlowBoundaryConditions,
     ρg,
-    phase_ratios::JustRelax.PhaseRatio,
+    phase_ratios::PhaseRatios,
     rheology,
     args,
     dt,

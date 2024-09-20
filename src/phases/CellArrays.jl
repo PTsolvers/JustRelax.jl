@@ -119,14 +119,14 @@ end
 
 ## convenience macros
 
-macro cell(ex)
-    ex = if ex.head === (:(=))
-        _set(ex)
-    else
-        _get(ex)
-    end
-    return :($(esc(ex)))
-end
+# macro cell(ex)
+#     ex = if ex.head === (:(=))
+#         _set(ex)
+#     else
+#         _get(ex)
+#     end
+#     return :($(esc(ex)))
+# end
 
 @inline _get(ex) = Expr(:call, element, ex.args...)
 

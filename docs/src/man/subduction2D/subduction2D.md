@@ -78,7 +78,7 @@ particle_args       = (pT, pPhases)
 Now we assign the material phases from the arrays we computed with help of [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl)
 ```julia
 phases_device    = PTArray(backend)(phases_GMG)
-phase_ratios     = phase_ratios = PhaseRatios(backend, length(rheology), ni);
+phase_ratios     = PhaseRatios(backend, length(rheology), ni);
 init_phases!(pPhases, phases_device, particles, xvi)
 phase_ratios_center!(phase_ratios, particles, xci, pPhases)
 ```

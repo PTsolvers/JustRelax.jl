@@ -73,8 +73,8 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     yc_anomaly       = ly/2   # origin of thermal anomaly
     zc_anomaly       = 40e3  # origin of thermal anomaly
     r_anomaly        = 3e3    # radius of perturbation
-    init_phases!(backend_JR, pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
-    phase_ratios     = PhaseRatio(ni, length(rheology))
+    init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
+    phase_ratios     = PhaseRatio(backend, length(rheology), ni)
     phase_ratios_center!(phase_ratios, particles, xci, pPhases)
     # ----------------------------------------------------
 

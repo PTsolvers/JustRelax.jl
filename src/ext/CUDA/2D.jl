@@ -22,9 +22,7 @@ import JustRelax:
     DisplacementBoundaryConditions,
     VelocityBoundaryConditions
 
-import JustPIC._2D:
-    numphases,
-    nphases
+import JustPIC._2D: numphases, nphases
 
 @init_parallel_stencil(CUDA, Float64, 2)
 
@@ -167,17 +165,16 @@ end
 
 # # Phases
 # function JR2D.phase_ratios_center!(
-#     ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
+#     ::CUDABackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
 # )
 #     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
 # end
 
 # function JR2D.phase_ratios_vertex!(
-#     ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
+#     ::CUDABackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
 # )
 #     return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
 # end
-
 
 # Rheology
 
@@ -220,7 +217,7 @@ function JR2D.compute_ρg!(ρg::CuArray, rheology, args)
     return compute_ρg!(ρg, rheology, args)
 end
 
-function JR2D.compute_ρg!(ρg::CuArray, phase_ratios::PhaseRatios, rheology, args)
+function JR2D.compute_ρg!(ρg::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args)
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -229,7 +226,9 @@ function JR2D.compute_melt_fraction!(ϕ::CuArray, rheology, args)
     return compute_melt_fraction!(ϕ, rheology, args)
 end
 
-function JR2D.compute_melt_fraction!(ϕ::CuArray, phase_ratios::PhaseRatios, rheology, args)
+function JR2D.compute_melt_fraction!(
+    ϕ::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
+)
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
@@ -299,7 +298,7 @@ function JR2D.subgrid_characteristic_time!(
     subgrid_arrays,
     particles,
     dt₀::CuArray,
-    phases::PhaseRatios,
+    phases::JustPIC.PhaseRatios,
     rheology,
     thermal::JustRelax.ThermalArrays,
     stokes::JustRelax.StokesArrays,
@@ -347,7 +346,7 @@ function JR2D.compute_shear_heating!(::CUDABackendTrait, thermal, stokes, rheolo
 end
 
 function JR2D.compute_shear_heating!(
-    ::CUDABackendTrait, thermal, stokes, phase_ratios::PhaseRatios, rheology, dt
+    ::CUDABackendTrait, thermal, stokes, phase_ratios::JustPIC.PhaseRatios, rheology, dt
 )
     ni = size(thermal.shear_heating)
     @parallel (@idx ni) compute_shear_heating_kernel!(

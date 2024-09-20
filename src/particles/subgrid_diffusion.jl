@@ -4,7 +4,7 @@ function subgrid_characteristic_time!(
     subgrid_arrays,
     particles,
     dt₀,
-    phases::PhaseRatios,
+    phases::JustPIC.PhaseRatios,
     rheology,
     thermal::JustRelax.ThermalArrays,
     stokes::JustRelax.StokesArrays,

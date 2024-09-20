@@ -371,7 +371,7 @@ function _solve!(
     di::NTuple{3,T},
     flow_bcs::AbstractFlowBoundaryConditions,
     ρg,
-    phase_ratios::PhaseRatios,
+    phase_ratios::JustPIC.PhaseRatios,
     rheology::NTuple{N,AbstractMaterialParamsStruct},
     args,
     dt,

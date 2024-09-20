@@ -1,12 +1,12 @@
 ## Phases
 
-@inline get_phase(x::PhaseRatios) = x.center
+@inline get_phase(x::JustPIC.PhaseRatios) = x.center
 @inline get_phase(x) = x
 
 # update_pt_thermal_arrays!(::Vararg{Any,N}) where {N} = nothing
 
 function update_pt_thermal_arrays!(
-    pt_thermal, phase_ratios::PhaseRatios, rheology, args, _dt
+    pt_thermal, phase_ratios::JustPIC.PhaseRatios, rheology, args, _dt
 )
     ni = size(phase_ratios.center)
 

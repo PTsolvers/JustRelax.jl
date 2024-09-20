@@ -21,9 +21,7 @@ import JustRelax:
     DisplacementBoundaryConditions,
     VelocityBoundaryConditions
 
-import JustPIC._3D:
-    numphases,
-    nphases
+import JustPIC._3D: numphases, nphases
 
 @init_parallel_stencil(CUDA, Float64, 3)
 
@@ -84,7 +82,7 @@ end
 
 function JR3D.update_pt_thermal_arrays!(
     pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray},
-    phase_ratios::PhaseRatios,
+    phase_ratios::JustPIC.PhaseRatios,
     rheology,
     args,
     _dt,
@@ -185,13 +183,13 @@ end
 
 # # Phases
 # function JR3D.phase_ratios_center!(
-#     ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
+#     ::CUDABackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
 # )
 #     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
 # end
 
 # function JR3D.phase_ratios_vertex!(
-#     ::CUDABackendTrait, phase_ratios::PhaseRatios, particles, grid::Geometry, phases
+#     ::CUDABackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
 # )
 #     return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
 # end
@@ -236,7 +234,7 @@ end
 function JR3D.compute_ρg!(ρg::CuArray, rheology, args)
     return compute_ρg!(ρg, rheology, args)
 end
-function JR3D.compute_ρg!(ρg::CuArray, phase_ratios::PhaseRatios, rheology, args)
+function JR3D.compute_ρg!(ρg::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args)
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 function JR3D.compute_ρg!(ρg::CuArray, phase_ratios, rheology, args)
@@ -248,7 +246,9 @@ function JR3D.compute_melt_fraction!(ϕ::CuArray, rheology, args)
     return compute_melt_fraction!(ϕ, rheology, args)
 end
 
-function JR3D.compute_melt_fraction!(ϕ::CuArray, phase_ratios::PhaseRatios, rheology, args)
+function JR3D.compute_melt_fraction!(
+    ϕ::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
+)
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
@@ -320,7 +320,7 @@ function JR3D.subgrid_characteristic_time!(
     subgrid_arrays,
     particles,
     dt₀::CuArray,
-    phases::PhaseRatios,
+    phases::JustPIC.PhaseRatios,
     rheology,
     thermal::JustRelax.ThermalArrays,
     stokes::JustRelax.StokesArrays,
@@ -333,7 +333,6 @@ function JR3D.subgrid_characteristic_time!(
     )
     return nothing
 end
-
 
 function JR3D.subgrid_characteristic_time!(
     subgrid_arrays,
@@ -369,7 +368,7 @@ function JR3D.compute_shear_heating!(::CUDABackendTrait, thermal, stokes, rheolo
 end
 
 function JR3D.compute_shear_heating!(
-    ::CUDABackendTrait, thermal, stokes, phase_ratios::PhaseRatios, rheology, dt
+    ::CUDABackendTrait, thermal, stokes, phase_ratios::JustPIC.PhaseRatios, rheology, dt
 )
     ni = size(thermal.shear_heating)
     @parallel (@idx ni) compute_shear_heating_kernel!(

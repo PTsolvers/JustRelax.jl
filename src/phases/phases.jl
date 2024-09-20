@@ -115,7 +115,7 @@ function _phase_ratios_vertex!(
 end
 
 @parallel_indices (I...) function phase_ratios_vertex_kernel!(
-    ratio_vertices, pxi::NTuple{3}, xvi::NTuple{3}, di::NTuple{3, T}, phases
+    ratio_vertices, pxi::NTuple{3}, xvi::NTuple{3}, di::NTuple{3,T}, phases
 ) where {T}
 
     # index corresponding to the cell center
@@ -131,10 +131,12 @@ end
         end
 
         for ip in cellaxes(phases)
-            p = @cell(pxi[1][ip, cell_index...]), @cell(pxi[2][ip, cell_index...]), @cell(pxi[3][ip, cell_index...])
+            p = @cell(pxi[1][ip, cell_index...]),
+            @cell(pxi[2][ip, cell_index...]),
+            @cell(pxi[3][ip, cell_index...])
             any(isnan, p) && continue
             x = @inline bilinear_weight(cell_vertex, p, di)
-            ph_local =  @cell phases[ip, cell_index...]
+            ph_local = @cell phases[ip, cell_index...]
             # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
             w = w .+ x .* ntuple(j -> (ph_local == j), NC)
         end
@@ -149,7 +151,7 @@ end
 end
 
 @parallel_indices (I...) function phase_ratios_vertex_kernel!(
-    ratio_vertices, pxi::NTuple{2}, xvi::NTuple{2}, di::NTuple{2, T}, phases
+    ratio_vertices, pxi::NTuple{2}, xvi::NTuple{2}, di::NTuple{2,T}, phases
 ) where {T}
 
     # index corresponding to the cell center
@@ -168,12 +170,12 @@ end
             p = @cell(pxi[1][ip, cell_index...]), @cell(pxi[2][ip, cell_index...])
             any(isnan, p) && continue
             x = @inline bilinear_weight(cell_vertex, p, di)
-            ph_local =  @cell phases[ip, cell_index...]
+            ph_local = @cell phases[ip, cell_index...]
             # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
             w = w .+ x .* ntuple(j -> (ph_local == j), NC)
         end
     end
-    
+
     w = w .* inv(sum(w))
     for ip in cellaxes(ratio_vertices)
         @cell ratio_vertices[ip, I...] = w[ip]

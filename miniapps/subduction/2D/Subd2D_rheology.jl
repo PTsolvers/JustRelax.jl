@@ -18,15 +18,15 @@ function init_rheology_nonNewtonian_plastic()
     diff_wet_olivine  = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
     # plasticity
     ϕ_wet_olivine   = asind(0.1)
-    C_wet_olivine   = 1e6 
+    C_wet_olivine   = 1e6
     η_reg           = 1e19
 
-    lithosphere_rheology = CompositeRheology( 
+    lithosphere_rheology = CompositeRheology(
                 (
                     disl_wet_olivine,
                     diff_wet_olivine,
                     DruckerPrager_regularised(; C = C_wet_olivine, ϕ = ϕ_wet_olivine, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
-                ) 
+                )
             )
     init_rheologies(lithosphere_rheology)
 end
@@ -90,10 +90,10 @@ end
 
     for ip in JustRelax.cellaxes(phases)
         # quick escape
-        @cell(index[ip, I...]) == 0 && continue
+        @index(index[ip, I...]) == 0 && continue
 
-        pᵢ = ntuple(Val(N)) do i 
-            @cell pcoords[i][ip, I...]
+        pᵢ = ntuple(Val(N)) do i
+            @index pcoords[i][ip, I...]
         end
 
         d = Inf # distance to the nearest particle
@@ -106,8 +106,8 @@ end
             !(jj ≤ ni[2]) && continue
 
             xvᵢ = (
-                xvi[1][ii], 
-                xvi[2][jj], 
+                xvi[1][ii],
+                xvi[2][jj],
             )
             d_ijk = √(sum((pᵢ[i] - xvᵢ[i])^2 for i in 1:N))
             if d_ijk < d
@@ -115,7 +115,7 @@ end
                 particle_phase = phase_grid[ii, jj]
             end
         end
-        @cell phases[ip, I...] = Float64(particle_phase)
+        @index phases[ip, I...] = Float64(particle_phase)
     end
 
     return nothing

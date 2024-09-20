@@ -6,7 +6,7 @@ const isCUDA = true
 end
 
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
-import JustRelax.@cell
+
 
 const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -56,22 +56,22 @@ function init_phases!(phases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_a
     )
         @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, I...]) == 0 && continue
+            @index(index[ip, I...]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, I...]
-            y = JustRelax.@cell py[ip, I...]
-            z = -(JustRelax.@cell pz[ip, I...]) - sticky_air
+            x = @index px[ip, I...]
+            y = @index py[ip, I...]
+            z = -(@index pz[ip, I...]) - sticky_air
             if top ≤ z ≤ bottom
-                @cell phases[ip, I...] = 1.0 # crust
+                @index phases[ip, I...] = 1.0 # crust
             end
 
             # thermal anomaly - circular
             if ((x - xc_anomaly)^2 + (y - yc_anomaly)^2 + (z + zc_anomaly)^2 ≤ r_anomaly^2)
-                JustRelax.@cell phases[ip, I...] = 2.0
+                @index phases[ip, I...] = 2.0
             end
 
             if z < top
-                JustRelax.@cell phases[ip, I...] = 3.0
+                @index phases[ip, I...] = 3.0
             end
         end
         return nothing
@@ -251,9 +251,9 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     # z_anomaly    = nondimensionalize(-5km,CharDim)  # origin of the small thermal anomaly
     r_anomaly    = nondimensionalize(1.5km, CharDim)             # radius of perturbation
     anomaly      = nondimensionalize((750 + 273)K, CharDim)               # thermal perturbation (in K)
-    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, z_anomaly, r_anomaly, sticky_air, nondimensionalize(0.0km,CharDim), nondimensionalize(20km,CharDim))
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
 
     # Initialisation of thermal profile
     thermal     = ThermalArrays(backend_JR, ni) # initialise thermal arrays and boundary conditions
@@ -417,7 +417,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
 
         particle2grid!(thermal.T, pT, xvi, particles)
         # @views thermal.T[:, :, end] .= Tsurf

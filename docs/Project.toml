@@ -1,0 +1,7 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+JustRelax = "34418575-392d-4e26-8c6d-96b0910afa06"
+
+[compat]
+Documenter = "1"
+JustRelax = "0.2, 0.3"

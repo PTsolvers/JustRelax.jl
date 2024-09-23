@@ -13,7 +13,7 @@ end
 function solCx_viscosity(xci, ni, di; Δη=1e6)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x      = PTArray([xci for xci in xc, _ in yc])
+    x      = PTArray(backend)([xci for xci in xc, _ in yc])
     η      = @zeros(ni...)
 
     _viscosity(x, Δη) = ifelse(x ≤ 0.5, 1e0, Δη)
@@ -33,9 +33,9 @@ end
 function solCx_density(xci, ni, di)
     xc, yc = xci
     # make grid array (will be eaten by GC)
-    x      = PTArray([xci for xci in xc, _ in yc])
-    y      = PTArray([yci for _ in xc, yci in yc])
-    ρ      = PTArray(zeros(ni))
+    x      = PTArray(backend)([xci for xci in xc, _ in yc])
+    y      = PTArray(backend)([yci for _ in xc, yci in yc])
+    ρ      = PTArray(backend)(zeros(ni))
 
     _density(x, y) = -sin(π * y) * cos(π * x)
 
@@ -53,8 +53,8 @@ end
 
 function solCx(
     Δη           = Δη;
-    nx           = 256 - 1,
-    ny           = 256 - 1,
+    nx           = 64,
+    ny           = 64,
     lx           = 1e0,
     ly           = 1e0,
     init_MPI     = true,
@@ -80,18 +80,19 @@ function solCx(
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes    = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di; CFL = 1 / √2.1, ϵ = 1e-8)
 
     ## Setup-specific parameters and fields
-    η         = solCx_viscosity(xci, ni, di; Δη = Δη) # viscosity field
-    ρ         = solCx_density(xci, ni, di)
-    fy        = ρ .* g
-    ρg        = @zeros(ni...), fy
-    dt        = Inf
-    G         = @fill(Inf, ni...)
-    K         = @fill(Inf, ni...)
+    (; η)       = stokes.viscosity
+    η          .= solCx_viscosity(xci, ni, di; Δη = Δη) # viscosity field
+    ρ           = solCx_density(xci, ni, di)
+    fy          = ρ .* g
+    ρg          = @zeros(ni...), fy
+    dt          = 1
+    G           = @fill(Inf, ni...)
+    K           = @fill(Inf, ni...)
 
     # smooth viscosity jump (otherwise no convergence for Δη > ~15)
     η2        = deepcopy(η)
@@ -100,16 +101,19 @@ function solCx(
             @parallel smooth!(η2, η, 1.0)
             update_halo!(η2, η)
         end
-        @parallel (1:size(η2, 1)) free_slip_y!(η2)
-        η, η2 = η2, η
+        @views η2[1, :]    .= η2[2, :]
+        @views η2[end, :]  .= η2[end-1, :]
+        @views η2[:, 1]    .= η2[:, 2]
+        @views η2[:, end]  .= η2[:, end-1]
+        η, η2               = η2, η # swap
     end
 
     ## Boundary conditions
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot= true)
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
     # Physical time loop
     t = 0.0
@@ -121,15 +125,16 @@ function solCx(
             di,
             flow_bcs,
             ρg,
-            η,
             G,
             K,
-            Inf,
+            0.1,
             igg;
-            iterMax = 500e3,
-            nout    = 5e3,
-            b_width = (4, 4, 1),
-            verbose = false,
+            kwargs = (
+                iterMax = 500e3,
+                nout    = 5e3,
+                b_width = (4, 4, 0),
+                verbose = true,
+            )
         )
         t += Δt
     end

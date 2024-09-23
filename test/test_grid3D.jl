@@ -1,7 +1,10 @@
-using Test, Suppressor, JustRelax
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+end
 
-model = PS_Setup(:cpu, Float64, 3)
-environment!(model)
+using Test, Suppressor, JustRelax, JustRelax.JustRelax3D
 
 @testset "Grid3D" begin
     @suppress begin

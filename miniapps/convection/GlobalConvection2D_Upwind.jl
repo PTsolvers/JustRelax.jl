@@ -1,10 +1,8 @@
-using JustRelax
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+const backend_JR = CPUBackend
 
-# setup ParallelStencil.jl environment
-model = PS_Setup(:threads, Float64, 2)
-environment!(model)
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
 
@@ -84,7 +82,6 @@ end
 function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
 
     # initialize MPI
-    igg = IGG(init_global_grid(nx, ny, 0; init_MPI = JustRelax.MPI.Initialized() ? false : true)...)
 
     # Physical domain ------------------------------------
     ly           = 2890e3
@@ -92,7 +89,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     origin       = 0.0, -ly                         # origin coordinates
     ni           = nx, ny                           # number of cells
     li           = lx, ly                           # domain length in x- and y-
-    di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    di           = @. li / ni                       # grid step in x- and -y
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
@@ -136,10 +133,9 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend_JR, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux     = (left = true, right = true, top = false, bot = false),
-        periodicity = (left = false, right = false, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
     adiabat     = 0.3 # adiabatic gradient
@@ -147,7 +143,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     Tm          = Tp + adiabat * 2890
     Tmin, Tmax  = 300.0, 3.5e3
     @parallel init_T!(thermal.T, xvi[2], κ, Tm, Tp, Tmin, Tmax)
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     # Temperature anomaly
     if thermal_perturbation == :random
         δT          = 5.0               # thermal perturbation (in %)
@@ -161,41 +157,39 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     end
     @views thermal.T[:, 1]   .= Tmax
     @views thermal.T[:, end] .= Tmin
-    @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
+    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes    = StokesArrays(ni, ViscoElastic)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.8 / √2.1)
+    stokes           = StokesArrays(backend_JR, ni)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-7,  CFL = 0.9 / √2.1)
+
+    args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
     for _ in 1:2
-        @parallel (@idx ni) compute_ρg!(ρg[2], rheology, (T=thermal.Tc, P=stokes.P))
+        compute_ρg!(ρg[2], rheology, (T=thermal.Tc, P=stokes.P))
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
 
     # Rheology
-    η               = @ones(ni...)
-    depth           = PTArray([y for x in xci[1], y in xci[2]])
-    args            = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
+    depth           = PTArray(backend_JR)([y for x in xci[1], y in xci[2]])
+    args            = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = dt, ΔTc = thermal.ΔTc)
     viscosity_cutoff = 1e18, 1e23
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, @strain(stokes)..., args, rheology, viscosity_cutoff
-    )
-    η_vep           = deepcopy(η)
+    compute_viscosity!(stokes, args, rheology, viscosity_cutoff)
+
     # Boundary conditions
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip   = (left = true, right=true, top=true, bot=true),
-        periodicity = (left = false, right = false, top = false, bot = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
     # ----------------------------------------------------
 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
-    !isdir(figdir) && mkpath(figdir)
+    take(figdir)
     # ----------------------------------------------------
 
     # Plot initial T and η profiles
@@ -206,7 +200,7 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         lines!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-        lines!(ax2, Array(log10.(η[:])), Y./1e3)
+        lines!(ax2, Array(log10.(stokes.viscosity.η[:])), Y./1e3)
         ylims!(ax1, -2890, 0)
         ylims!(ax2, -2890, 0)
         hideydecorations!(ax2)
@@ -219,22 +213,23 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
     local iters
     while (t / (1e6 * 3600 * 24 * 365.25)) < 4.5e3
         # Stokes solver ----------------
-        args = (; T = thermal.Tc, P = stokes.P, depth = depth, dt=Inf)
+        args = (; T = thermal.Tc, P = stokes.P, depth = depth, dt=dt, ΔTc = thermal.ΔTc)
         iters = solve!(
             stokes,
             pt_stokes,
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             rheology,
             args,
             dt,
             igg;
-            iterMax=50e3,
-            nout=1e3,
-            viscosity_cutoff = viscosity_cutoff
+            kwargs = (
+                viscosity_cutoff = viscosity_cutoff,
+                iterMax = 10e3,
+                nout    = 1e2,
+                verbose = true
+            ),
         );
         dt = compute_dt(stokes, di, dt_diff, igg)
         # ------------------------------
@@ -263,14 +258,14 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
         # Plotting ---------------------
         if it == 1 || rem(it, 10) == 0
             fig = Figure(size = (1000, 1000), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
-            ax3 = Axis(fig[3,1], aspect = ar, title = "τII [MPa]")
-            ax4 = Axis(fig[4,1], aspect = ar, title = "log10(η)")
+            ax1 = Axis(fig[1,1], aspect = DataAspect(), title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+            ax2 = Axis(fig[2,1], aspect = DataAspect(), title = "Vy [m/s]")
+            ax3 = Axis(fig[3,1], aspect = DataAspect(), title = "τII [MPa]")
+            ax4 = Axis(fig[4,1], aspect = DataAspect(), title = "log10(η)")
             h1 = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T) , colormap=:batlow)
             h2 = heatmap!(ax2, xci[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy[2:end-1,:]) , colormap=:batlow)
             h3 = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II.*1e-6) , colormap=:batlow)
-            h4 = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:batlow)
+            h4 = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -290,7 +285,7 @@ end
 
 function run()
     figdir = "figs2D_test"
-    ar     = 8 # aspect ratio
+    ar     = 2 # aspect ratio
     n      = 128
     nx     = n*ar - 2
     ny     = n - 2

@@ -1,14 +1,28 @@
 push!(LOAD_PATH, "..")
 
-using Test, Suppressor
-using GeoParams, CellArrays
-using JustRelax, JustRelax.DataIO
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+end
 
-# setup ParallelStencil.jl environment
-model  = PS_Setup(:Threads, Float64, 2)
-environment!(model)
+using Test, Suppressor
+using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 2)
+    CUDABackend
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+    CPUBackend
+end
+
+import JustRelax.@cell
+using GeoParams
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j) function init_T!(T, z)
@@ -33,15 +47,15 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
+
 # MAIN SCRIPT --------------------------------------------------------------------
 function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, K0=3.0)
     kyr      = 1e3 * 3600 * 24 * 365.25
     Myr      = 1e3 * kyr
     ttot     = 1 * Myr # total simulation time
     dt       = 50 * kyr # physical time step
-
     init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg    = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+    igg      = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
     # Physical domain
     ni           = (nx, ny)
@@ -60,10 +74,10 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     )
     # fields needed to compute density on the fly
     P          = @zeros(ni...)
-    args       = (; P=P)
+    args       = (; P=P, T=@zeros(ni.+1...))
 
     ## Allocate arrays needed for every Thermal Diffusion
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend_JR, ni)
     thermal.H .= 1e-6 # radiogenic heat production
     # physical parameters
     ρ          = @fill(ρ0, ni...)
@@ -71,7 +85,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     K          = @fill(K0, ni...)
     ρCp        = @. Cp * ρ
 
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li)
+    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
@@ -98,7 +112,9 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
             args,
             dt,
             di;
-            verbose=false,
+            kwargs = (;
+                verbose = false
+            ),
         )
 
         t  += dt
@@ -110,10 +126,11 @@ end
 
 @testset "Diffusion_2D" begin
     @suppress begin
-        nx=32;
-        ny=32;
+        nx, ny  = 32, 32
         thermal = diffusion_2D(; nx = nx, ny = ny)
-        @test thermal.T[Int(ceil(size(thermal.T)[1]/2)), Int(ceil(size(thermal.T)[2]/2))] ≈ 1823.6076461523571 atol=1e-1
-        @test thermal.Tc[Int(ceil(size(thermal.Tc)[1]/2)), Int(ceil(size(thermal.Tc)[2]/2))] ≈ 1828.3169386441218 atol=1e-1
+
+        nx_T, ny_T = size(thermal.T)
+        @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1823.6076461523571 atol=1e-1
+        @test Array(thermal.Tc)[  nx >>> 1    ,   nx >>> 1    ] ≈ 1828.3169386441218 atol=1e-1
     end
 end

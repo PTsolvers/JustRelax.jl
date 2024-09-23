@@ -1,10 +1,10 @@
-using JustRelax, JustRelax.DataIO
+using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+import JustRelax.@cell
+
+const backend_JR = CPUBackend
+
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3) #or (CUDA, Float64, 3) or (AMDGPU, Float64, 3)
-
-# setup ParallelStencil.jl environment
-model = PS_Setup(:Threads, Float64, 3) #or (:CUDA, Float64, 3) or (:AMDGPU, Float64, 3)
-environment!(model)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
 
@@ -24,7 +24,6 @@ end
 @inline function custom_viscosity(a::CustomRheology; P=0.0, T=273.0, depth=0.0, kwargs...)
     (; η0, Ea, Va, T0, R, cutoff) = a.args
     η = η0 * exp((Ea + P * Va) / (R * T) - Ea / (R * T0))
-    # correction = (depth ≤ 660e3) + (2740e3 ≥ depth > 660e3) * 1e1  + (depth > 2740e3) * 1e-2
     correction = (depth ≤ 660e3) + (2740e3 ≥ depth > 660e3) * 1e1  + (depth > 2700e3) * 1e-1
     η = clamp(η * correction, cutoff...)
 end
@@ -90,18 +89,19 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI = JustRelax.MPI.Initialized() ? false : true)...)
 
     # Physical domain ------------------------------------
-    lz       = 2890e3
-    lx = ly  = lz * ar
-    origin   = 0.0, 0.0, -lz                        # origin coordinates
-    ni       = nx, ny, nz                           # number of cells
-    li       = lx, ly, lz                           # domain length in x- and y-
-    di       = @. li / (nx_g(), ny_g(), nz_g())     # grid step in x- and -y
-    xci, xvi = lazy_grid(di, li, ni; origin=origin) # nodes at the center and vertices of the cells
+    lz           = 2890e3
+    lx = ly      = lz * ar
+    origin       = 0.0, 0.0, -lz                        # origin coordinates
+    ni           = nx, ny, nz                           # number of cells
+    li           = lx, ly, lz                           # domain length in x- and y-
+    di           = @. li / (nx_g(), ny_g(), nz_g())     # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # create rheology struct
     v_args = (; η0=5e20, Ea=200e3, Va=2.6e-6, T0=1.6e3, R=8.3145, cutoff=(1e16, 1e25))
-    creep = CustomRheology(custom_εII, custom_τII, v_args)
+    creep  = CustomRheology(custom_εII, custom_τII, v_args)
 
     # Physical properties using GeoParams ----------------
     η_reg     = 1e18
@@ -139,10 +139,9 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend, ni)
     thermal_bc = TemperatureBoundaryConditions(;
-        no_flux     = (left = true, right = true, top = false, bot = false, front=true, back=true),
-        periodicity = (left = false, right = false, top = false, bot = false, front=false, back=false),
+        no_flux = (left = true, right = true, top = false, bot = false, front=true, back=true),
     )
     # initialize thermal profile - Half space cooling
     adiabat     = 0.3 # adiabatic gradient
@@ -151,7 +150,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     Tmin, Tmax  = 300.0, 3.5e3
     # thermal.T  .= 1600.0
     @parallel init_T!(thermal.T, xvi[3], κ, Tm, Tp, Tmin, Tmax)
-    thermal_bcs!(thermal.T, thermal_bc)
+    thermal_bcs!(thermal, thermal_bc)
     # Elliptical temperature anomaly
     if thermal_perturbation == :random
         δT          = 5.0              # thermal perturbation (in %)
@@ -167,35 +166,30 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
 
     @views thermal.T[:, :, 1]   .= Tmax
     @views thermal.T[:, :, end] .= Tmin
-    @parallel (@idx ni) temperature2center!(thermal.Tc, thermal.T)
+    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes          = StokesArrays(ni, ViscoElastic)
+    stokes          = StokesArrays(backend, ni)
     pt_stokes       = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1.0 / √3.1)
     # Buoyancy forces
     ρg              = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     for _ in 1:2
-        @parallel (@idx ni) compute_ρg!(ρg[3], rheology, (T=thermal.Tc, P=stokes.P))
+        compute_ρg!(ρg[3], rheology, (T=thermal.Tc, P=stokes.P))
         @parallel init_P!(stokes.P, ρg[3], xci[3])
     end
     # Rheology
-    η               = @ones(ni...)
-    depth           = PTArray([abs(z) for x in xci[1], y in xci[2], z in xci[3]])
     args            = (; T = thermal.Tc, P = stokes.P, depth = depth, dt = Inf)
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0,  @strain(stokes)..., args, rheology, (1e18, 1e24)
-    )
-    η_vep           = deepcopy(η)
+    compute_viscosity!(stokes, args, rheology, (1e18, 1e24))
+
     # Boundary conditions
-    flow_bcs = FlowBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip   = (left=true , right=true , top=true , bot=true , front=true , back=true ),
         no_slip     = (left=false, right=false, top=false, bot=false, front=false, back=false),
-        periodicity = (left=false, right=false, top=false, bot=false, front=false, back=false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+    update_halo!(@velocity(stokes)...)
     # ----------------------------------------------------
 
     # IO -------------------------------------------------
@@ -213,7 +207,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         scatter!(ax1, Array(thermal.T[:]), Zv./1e3)
-        scatter!(ax2, Array(log10.(η[:])), Z./1e3 )
+        scatter!(ax2, Array(log10.(stokes.viscosity.η[:])), Z./1e3 )
         ylims!(ax1, minimum(xvi[3])./1e3, 0)
         ylims!(ax2, minimum(xvi[3])./1e3, 0)
         hideydecorations!(ax2)
@@ -237,14 +231,14 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             rheology,
             args,
             Inf,
             igg;
-            iterMax=150e3,
-            nout=2e3,
+            kwargs = (;
+                iterMax=150e3,
+                nout=2e3,
+            )
         );
 
         println("starting non linear iterations")
@@ -283,7 +277,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
             h1 = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:,slice_j,:]) , colormap=:batlow)
             h2 = heatmap!(ax2, xci[1].*1e-3, xvi[3].*1e-3, Array(stokes.V.Vz[:,slice_j,:]) , colormap=:batlow)
             h3 = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(stokes.τ.II[:,slice_j,:].*1e-6) , colormap=:batlow)
-            h4 = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:,slice_j,:])) , colormap=:batlow)
+            h4 = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.viscosity.η_vep[:,slice_j,:])) , colormap=:batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -305,15 +299,10 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     return (ni=ni, xci=xci, li=li, di=di), thermal
 end
 
-# function run()
-    figdir = "figs3D_test"
-    ar     = 3 # aspect ratio
-    n      = 32
-    nx     = n*ar - 2
-    ny     = nx
-    nz     = n - 2
-
-#     thermal_convection3D(; figdir=figdir, ar=ar,nx=nx, ny=ny, nz=nz);
-# end
-
-# run()
+figdir = "figs3D_test"
+ar     = 3 # aspect ratio
+n      = 32
+nx     = n*ar - 2
+ny     = nx
+nz     = n - 2
+thermal_convection3D(; figdir=figdir, ar=ar,nx=nx, ny=ny, nz=nz);

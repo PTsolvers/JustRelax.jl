@@ -1,12 +1,9 @@
 using GeoParams, GLMakie, CellArrays
-using JustRelax, JustRelax.DataIO
+using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
-# setup ParallelStencil.jl environment
-model  = PS_Setup(:Threads, Float64, 2)
-environment!(model)
-
+const backend = CPUBackend
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
@@ -28,7 +25,7 @@ function init_phases!(phase_ratios, xci, radius)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -88,12 +85,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatio(ni, length(rheology))
+    phase_ratios = PhaseRatio(backend, ni, length(rheology))
     init_phases!(phase_ratios, xci, radius)
 
-    # STOKES ---------------------------------------------
+     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes    = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1)
 
     # Buoyancy forces
@@ -101,19 +98,16 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     args      = (; T = @zeros(ni...), P = stokes.P, dt = dt)
 
     # Rheology
-    η         = @ones(ni...)
-    η_vep     = similar(η) # effective visco-elasto-plastic viscosity
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, args, rheology, (-Inf, Inf)
+    compute_viscosity!(
+        stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
-
     # Boundary conditions
-    flow_bcs     = FlowBoundaryConditions(;
+    flow_bcs     = DisplacementBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
-    stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend)([ x*εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray(backend)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
@@ -138,25 +132,20 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             phase_ratios,
             rheology,
             args,
             dt,
             igg;
-            verbose          = false,
-            iterMax          = 50e3,
-            nout             = 1e2,
-            viscosity_cutoff = (-Inf, Inf)
+            kwargs = (
+                verbose          = false,
+                iterMax          = 50e3,
+                nout             = 1e2,
+                viscosity_cutoff = (-Inf, Inf)
+            )
         )
-        @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
+        tensor_invariant!(stokes.ε)
         push!(τII, maximum(stokes.τ.xx))
-
-        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-        @parallel (@idx ni) multi_copy!(
-            @tensor_center(stokes.τ_o), @tensor_center(stokes.τ)
-        )
 
         it += 1
         t  += dt
@@ -194,7 +183,7 @@ end
 n      = 128
 nx     = n
 ny     = n
-figdir = "ShearBands2D_lin_softening"
+figdir = "Shearband_Displacement"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

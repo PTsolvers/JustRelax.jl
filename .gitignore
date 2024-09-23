@@ -1,6 +1,11 @@
+# Pkg
 Manifest.toml
 
-# VSCode
+# documentation
+docs/build/
+docs/site/
+
+# VS code
 /.vscode
 
 # Jupyter
@@ -21,3 +26,4 @@ Manifest.toml
 *.vti
 *.vtm
 *.h5
+*.jld2

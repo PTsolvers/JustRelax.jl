@@ -69,17 +69,17 @@ function solVi(;
     ηi        = Δη # inclusion viscosity
     η         = solvi_viscosity(ni, di, li, rc, η0, ηi) # viscosity field
     ρg        = @zeros(ni...), @zeros(ni...)
-    dt        = Inf
+    dt        = 0.1
     G         = @fill(Inf, ni...)
     Kb        = @fill(Inf, ni...)
 
     ## Boundary conditions
     pureshear_bc!(stokes, xci, xvi, εbg)
-    flow_bcs  = FlowBoundaryConditions(;
+    flow_bcs  = VelocityBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true)
     )
     flow_bcs!(stokes,flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
     # Physical time loop
     t = 0.0

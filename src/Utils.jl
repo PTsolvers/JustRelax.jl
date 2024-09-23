@@ -26,7 +26,7 @@ end
 
 multi_copyto!(B::AbstractArray, A::AbstractArray) = copyto!(B, A)
 
-function detect_arsg_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
+function detect_args_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
     ntuple(Val(Dims)) do i
         Base.@_inline_meta
         s = ntuple(Val(N)) do j
@@ -81,10 +81,11 @@ macro tuple(A)
     end
 end
 
-@inline _tuple(V::Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
-@inline _tuple(V::Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
-@inline _tuple(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx, A.yy, A.xy_c
-@inline function _tuple(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+@inline _tuple(V::JustRelax.Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
+@inline _tuple(V::JustRelax.Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
+@inline _tuple(A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}) where {T} =
+    A.xx, A.yy, A.xy_c
+@inline function _tuple(A::JustRelax.SymmetricTensor{<:AbstractArray{T,3}}) where {T}
     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
 end
 
@@ -99,8 +100,25 @@ macro velocity(A)
     end
 end
 
-@inline unpack_velocity(V::Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
-@inline unpack_velocity(V::Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
+@inline unpack_velocity(V::JustRelax.Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
+@inline unpack_velocity(V::JustRelax.Velocity{<:AbstractArray{T,3}}) where {T} =
+    V.Vx, V.Vy, V.Vz
+
+"""
+    @displacement(U)
+
+Unpacks the displacement arrays `U` from the StokesArrays `A`.
+"""
+macro displacement(A)
+    return quote
+        unpack_displacement(($(esc(A))).U)
+    end
+end
+
+@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,2}}) where {T} =
+    U.Ux, U.Uy
+@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,3}}) where {T} =
+    U.Ux, U.Uy, U.Uz
 
 """
     @qT(V)
@@ -113,8 +131,9 @@ macro qT(A)
     end
 end
 
-@inline unpack_qT(A::ThermalArrays{<:AbstractArray{T,2}}) where {T} = A.qTx, A.qTy
-@inline unpack_qT(A::ThermalArrays{<:AbstractArray{T,3}}) where {T} = A.qTx, A.qTy, A.qTz
+@inline unpack_qT(A::JustRelax.ThermalArrays{<:AbstractArray{T,2}}) where {T} = A.qTx, A.qTy
+@inline unpack_qT(A::JustRelax.ThermalArrays{<:AbstractArray{T,3}}) where {T} =
+    A.qTx, A.qTy, A.qTz
 
 """
     @qT2(V)
@@ -127,8 +146,9 @@ macro qT2(A)
     end
 end
 
-@inline unpack_qT2(A::ThermalArrays{<:AbstractArray{T,2}}) where {T} = A.qTx2, A.qTy2
-@inline function unpack_qT2(A::ThermalArrays{<:AbstractArray{T,3}}) where {T}
+@inline unpack_qT2(A::JustRelax.ThermalArrays{<:AbstractArray{T,2}}) where {T} =
+    A.qTx2, A.qTy2
+@inline function unpack_qT2(A::JustRelax.ThermalArrays{<:AbstractArray{T,3}}) where {T}
     return A.qTx2, A.qTy2, A.qTz2
 end
 
@@ -145,12 +165,12 @@ macro strain(A)
 end
 
 """
-    @strain_plastic(A)
+    @plastic_strain(A)
 
 Unpacks the plastic strain rate tensor `ε_pl` from the StokesArrays `A`, where its components are defined in the staggered grid.
 Shear components are unpack following Voigt's notation.
 """
-macro strain_plastic(A)
+macro plastic_strain(A)
     return quote
         unpack_tensor_stag(($(esc(A))).ε_pl)
     end
@@ -180,10 +200,14 @@ macro tensor(A)
     end
 end
 
-@inline function unpack_tensor_stag(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T}
+@inline function unpack_tensor_stag(
+    A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}
+) where {T}
     return A.xx, A.yy, A.xy
 end
-@inline function unpack_tensor_stag(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+@inline function unpack_tensor_stag(
+    A::JustRelax.SymmetricTensor{<:AbstractArray{T,3}}
+) where {T}
     return A.xx, A.yy, A.zz, A.yz, A.xz, A.xy
 end
 
@@ -200,12 +224,12 @@ macro shear(A)
 end
 
 @inline function unpack_shear_components_stag(
-    A::SymmetricTensor{<:AbstractArray{T,2}}
+    A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}
 ) where {T}
     return A.xy
 end
 @inline function unpack_shear_components_stag(
-    A::SymmetricTensor{<:AbstractArray{T,3}}
+    A::JustRelax.SymmetricTensor{<:AbstractArray{T,3}}
 ) where {T}
     return A.yz, A.xz, A.xy
 end
@@ -223,7 +247,7 @@ macro normal(A)
 end
 
 @generated function unpack_normal_components_stag(
-    A::SymmetricTensor{<:AbstractArray{T,N}}
+    A::JustRelax.SymmetricTensor{<:AbstractArray{T,N}}
 ) where {T,N}
     syms = (:xx, :yy, :zz)
     quote
@@ -269,10 +293,14 @@ macro tensor_center(A)
     end
 end
 
-@inline function unpack_tensor_center(A::SymmetricTensor{<:AbstractArray{T,2}}) where {T}
+@inline function unpack_tensor_center(
+    A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}
+) where {T}
     return A.xx, A.yy, A.xy_c
 end
-@inline function unpack_tensor_center(A::SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+@inline function unpack_tensor_center(
+    A::JustRelax.SymmetricTensor{<:AbstractArray{T,3}}
+) where {T}
     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
 end
 
@@ -287,10 +315,10 @@ macro residuals(A)
     end
 end
 
-@inline function unpack_residuals(A::Residual{<:AbstractArray{T,2}}) where {T}
+@inline function unpack_residuals(A::JustRelax.Residual{<:AbstractArray{T,2}}) where {T}
     return A.Rx, A.Ry
 end
-@inline function unpack_residuals(A::Residual{<:AbstractArray{T,3}}) where {T}
+@inline function unpack_residuals(A::JustRelax.Residual{<:AbstractArray{T,3}}) where {T}
     return A.Rx, A.Ry, A.Rz
 end
 
@@ -388,48 +416,33 @@ macro unpack(x)
 end
 
 """
-    compute_dt(S::StokesArrays, di)
+    compute_dt(S::JustRelax.StokesArrays, args...)
 
-Compute the time step `dt` for the velocity field `S.V` for a regular grid with grid spacing `di`.
+Compute the time step `dt` for the simulation.
 """
-@inline compute_dt(S::StokesArrays, di) = compute_dt(@velocity(S), di, Inf)
-
-"""
-    compute_dt(S::StokesArrays, di, dt_diff)
-
-Compute the time step `dt` for the velocity field `S.V` and the diffusive maximum time step
-`dt_diff` for a regular gridwith grid spacing `di`.
-"""
-@inline compute_dt(S::StokesArrays, di, dt_diff) = compute_dt(@velocity(S), di, dt_diff)
-
-@inline function compute_dt(V::NTuple, di, dt_diff)
-    n = inv(length(V) + 0.1)
-    dt_adv = mapreduce(x -> x[1] * inv(maximum_mpi(abs.(x[2]))), min, zip(di, V)) * n
-    return min(dt_diff, dt_adv)
-end
-"""
-    compute_dt(S::StokesArrays, di, igg)
-
-Compute the time step `dt` for the velocity field `S.V` for a regular gridwith grid spacing `di`.
-The implicit global grid variable `I` implies that the time step is calculated globally and not
-separately on each block.
-"""
-@inline compute_dt(S::StokesArrays, di, I::IGG) = compute_dt(@velocity(S), di, Inf, I::IGG)
-
-"""
-    compute_dt(S::StokesArrays, di, dt_diff)
-
-Compute the time step `dt` for the velocity field `S.V` and the diffusive maximum time step
-`dt_diff` for a regular gridwith grid spacing `di`. The implicit global grid variable `I`
-implies that the time step is calculated globally and not separately on each block.
-"""
-@inline function compute_dt(S::StokesArrays, di, dt_diff, I::IGG)
-    return compute_dt(@velocity(S), di, dt_diff, I::IGG)
+function compute_dt(S::JustRelax.StokesArrays, args...)
+    return compute_dt(backend(S), S, args...)
 end
 
-@inline function compute_dt(V::NTuple, di, dt_diff, I::IGG)
+function compute_dt(::CPUBackendTrait, S::JustRelax.StokesArrays, args...)
+    return _compute_dt(S, args...)
+end
+
+@inline _compute_dt(S::JustRelax.StokesArrays, di) =
+    _compute_dt(@velocity(S), di, Inf, maximum)
+
+@inline _compute_dt(S::JustRelax.StokesArrays, di, dt_diff) =
+    _compute_dt(@velocity(S), di, dt_diff, maximum)
+
+@inline _compute_dt(S::JustRelax.StokesArrays, di, dt_diff, ::IGG) =
+    _compute_dt(@velocity(S), di, dt_diff, maximum_mpi)
+
+@inline _compute_dt(S::JustRelax.StokesArrays, di, ::IGG) =
+    _compute_dt(@velocity(S), di, Inf, maximum_mpi)
+
+@inline function _compute_dt(V::NTuple, di, dt_diff, max_fun::F) where {F<:Function}
     n = inv(length(V) + 0.1)
-    dt_adv = mapreduce(x -> x[1] * inv(maximum_mpi(abs.(x[2]))), max, zip(di, V)) * n
+    dt_adv = mapreduce(x -> x[1] * inv(max_fun(abs.(x[2]))), min, zip(di, V)) * n
     return min(dt_diff, dt_adv)
 end
 
@@ -465,7 +478,7 @@ Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping par
     x_cont = exp((1 - ν) * log(x_old) + ν * log(x_new))
     return isnan(x_cont) ? 0.0 : x_cont
 end
-# @inline continuation_log(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
+@inline continuation_linear(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
 
 # Others
 

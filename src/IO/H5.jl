@@ -4,30 +4,90 @@ macro namevar(x)
     name = split(string(x), ".")[end]
     return quote
         tmp = $(esc(x))
-        $(esc(name)), _tocpu(tmp)
+        if tmp isa Float64
+            $(esc(name)), tmp
+        else
+            $(esc(name)), Array(tmp)
+        end
     end
 end
 
-_tocpu(x) = x
-_tocpu(x::T) where {T<:CuArray} = Array(x)
-_tocpu(x::T) where {T<:ROCArray} = Array(x)
-
 """
-    checkpointing(dst, stokes, T, η, time)
+    checkpointing_hdf5(dst, stokes, T, η, time, timestep)
 
 Save necessary data in `dst` as and HDF5 file to restart the model from the state at `time`
 """
-function checkpointing(dst, stokes, T, η, time)
-    !isdir(dst) && mkpath(dst) # creat folder in case it does not exist
+function checkpointing_hdf5(dst, stokes, T, time, timestep)
+    !isdir(dst) && mkpath(dst) # create folder in case it does not exist
     fname = joinpath(dst, "checkpoint")
-    h5open("$(fname).h5", "w") do file
-        write(file, @namevar(time)...)
-        write(file, @namevar(stokes.V.Vx)...)
-        write(file, @namevar(stokes.V.Vy)...)
-        write(file, @namevar(stokes.P)...)
-        write(file, @namevar(T)...)
-        write(file, "viscosity", _tocpu(η))
+
+    # Create a temporary directory
+    mktempdir() do tmpdir
+        # Save the checkpoint file in the temporary directory
+        tmpfname = joinpath(tmpdir, basename(fname))
+        h5open("$(tmpfname).h5", "w") do file
+            write(file, @namevar(time)...)
+            write(file, @namevar(timestep)...)
+            write(file, @namevar(stokes.V.Vx)...)
+            write(file, @namevar(stokes.V.Vy)...)
+            if !isnothing(stokes.V.Vz)
+                write(file, @namevar(stokes.V.Vz)...)
+            end
+            write(file, @namevar(stokes.P)...)
+            write(file, @namevar(stokes.viscosity.η)...)
+            write(file, @namevar(T)...)
+        end
+        # Move the checkpoint file from the temporary directory to the destination directory
+        mv("$(tmpfname).h5", "$(fname).h5"; force=true)
     end
+
+    return nothing
+end
+
+"""
+    load_checkpoint_hdf5(file_path)
+
+Load the state of the simulation from an .h5 file.
+
+# Arguments
+- `file_path`: The path to the .h5 file.
+
+# Returns
+- `P`: The loaded state of the pressure variable.
+- `T`: The loaded state of the temperature variable.
+- `Vx`: The loaded state of the x-component of the velocity variable.
+- `Vy`: The loaded state of the y-component of the velocity variable.
+- `Vz`: The loaded state of the z-component of the velocity variable.
+- `η`: The loaded state of the viscosity variable.
+- `t`: The loaded simulation time.
+- `dt`: The loaded simulation time.
+
+# Example
+```julia
+# Define the path to the .h5 file
+file_path = "path/to/your/file.h5"
+
+# Use the load_checkpoint function to load the variables from the file
+P, T, Vx, Vy, Vz, η, t, dt = `load_checkpoint(file_path)``
+
+
+"""
+function load_checkpoint_hdf5(file_path)
+    h5file = h5open(file_path, "r")  # Open the file in read mode
+    P = read(h5file["P"])  # Read the stokes variable
+    T = read(h5file["T"])  # Read the thermal.T variable
+    Vx = read(h5file["Vx"])  # Read the stokes.V.Vx variable
+    Vy = read(h5file["Vy"])  # Read the stokes.V.Vy variable
+    if "Vz" in keys(h5file)  # Check if the "Vz" key exists
+        Vz = read(h5file["Vz"])  # Read the stokes.V.Vz variable
+    else
+        Vz = nothing  # Assign a default value to Vz
+    end
+    η = read(h5file["η"])  # Read the stokes.viscosity.η variable
+    t = read(h5file["time"])  # Read the t variable
+    dt = read(h5file["timestep"])  # Read the t variable
+    close(h5file)  # Close the file
+    return P, T, Vx, Vy, Vz, η, t, dt
 end
 
 """

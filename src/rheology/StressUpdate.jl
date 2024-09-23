@@ -30,7 +30,7 @@ function _compute_τ_nonlinear!(
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
 
     # yield stess (GeoParams could be used here...)
-    τy = C * cosϕ + P[idx...] * sinϕ
+    τy = max(C * cosϕ + P[idx...] * sinϕ, 0)
 
     # check if yielding; if so, compute plastic strain rate (λdQdτ),
     # plastic stress increment (dτ_pl), and update the plastic
@@ -107,8 +107,8 @@ end
 
 # update the global arrays τ::NTuple{N, AbstractArray} with the local τij::NTuple{3, Float64} at indices idx::Vararg{Integer, N}
 @generated function correct_stress!(
-    τ, τij::NTuple{N1,T}, idx::Vararg{Integer,N2}
-) where {N1,N2,T}
+    τ, τij::NTuple{N1}, idx::Vararg{Integer,N2}
+) where {N1,N2}
     quote
         Base.@_inline_meta
         Base.@nexprs $N1 i -> τ[i][idx...] = τij[i]
@@ -145,8 +145,21 @@ end
 end
 
 function plastic_params_phase(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio
+    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio, kwargs
 ) where {N}
+    return plastic_params_phase(rheology, EII, ratio; kwargs...)
+end
+
+function plastic_params_phase(
+    rheology::NTuple{N,AbstractMaterialParamsStruct},
+    EII,
+    ratio;
+    perturbation_C=nothing,
+    kwargs...,
+) where {N}
+    @inline perturbation(::Nothing) = 1.0
+    @inline perturbation(x::Real) = x
+
     data = _plastic_params_phase(rheology, EII, ratio)
     # average over phases
     is_pl = false
@@ -154,7 +167,7 @@ function plastic_params_phase(
     for n in 1:N
         ratio_n = ratio[n]
         data[n][1] && (is_pl = true)
-        C += data[n][2] * ratio_n
+        C += data[n][2] * ratio_n * perturbation(perturbation_C)
         sinϕ += data[n][3] * ratio_n
         cosϕ += data[n][4] * ratio_n
         sinψ += data[n][5] * ratio_n

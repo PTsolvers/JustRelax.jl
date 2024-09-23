@@ -1,7 +1,6 @@
 module JustRelax
 
 using Reexport
-@reexport using ParallelStencil
 @reexport using ImplicitGlobalGrid
 using LinearAlgebra
 using Printf
@@ -10,64 +9,47 @@ using GeoParams
 using HDF5
 using CellArrays
 using StaticArrays
+using Statistics
 
 function solve!() end
+
+abstract type AbstractBackend end
+struct CPUBackend <: AbstractBackend end
+struct AMDGPUBackend <: AbstractBackend end
+
+PTArray() = Array
+PTArray(::Type{CPUBackend}) = Array
+PTArray(::T) where {T} = error(ArgumentError("Unknown backend $T"))
+
+export PTArray, CPUBackend, CUDABackend, AMDGPUBackend
+
+include("types/stokes.jl")
+# export StokesArrays, PTStokesCoeffs
+
+include("types/heat_diffusion.jl")
+# export ThermalArrays, PTThermalCoeffs
+
+include("types/phases.jl")
+# export PhaseRatio
+
+include("boundaryconditions/types.jl")
+export TemperatureBoundaryConditions,
+    DisplacementBoundaryConditions, VelocityBoundaryConditions
+
+include("types/traits.jl")
+export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 
 include("topology/Topology.jl")
 export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g
 
-include("MiniKernels.jl")
-export _d_xa,
-    _d_ya,
-    _d_za,
-    _d_za,
-    _d_xi,
-    _d_yi,
-    _d_zi,
-    _d_zi,
-    _av,
-    _av_a,
-    _av_xa,
-    _av_ya,
-    _av_x,
-    _av_y,
-    _av_z,
-    _av_yz,
-    _av_xz,
-    _av_xy,
-    _av_yzi,
-    _av_xzi,
-    _av_xyi,
-    _gather,
-    _gather_yz,
-    _gather_xz,
-    _gather_xy,
-    _harm_x,
-    _harm_y,
-    _harm_z,
-    _harm_yz,
-    _harm_xz,
-    _harm_xy,
-    _harm_xyi,
-    _harm_xzi,
-    _harm_yzi,
-    _current
-
 include("phases/CellArrays.jl")
 export @cell, element, setelement!, cellnum, cellaxes, new_empty_cell, setindex!
 
-include("rheology/StressUpdate.jl")
-export plastic_params, plastic_params_phase, compute_dτ_r, _compute_τ_nonlinear!
-
-include("MetaJustRelax.jl")
-
-include("stokes/MetaStokes.jl")
-export PS_Setup, environment!, ps_reset!
-
-include("thermal_diffusion/MetaDiffusion.jl")
-
-include("thermal_diffusion/Rheology.jl")
+include("JustRelax_CPU.jl")
 
 include("IO/DataIO.jl")
+
+include("types/type_conversions.jl")
+export Array, copy
 
 end # module

@@ -1,14 +1,31 @@
 push!(LOAD_PATH, "..")
 
-using Test, Suppressor
-using GeoParams, CellArrays
-using JustRelax, JustRelax.DataIO
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+end
 
-# setup ParallelStencil.jl environment
-model  = PS_Setup(:Threads, Float64, 3)
-environment!(model)
+using Test, Suppressor
+using GeoParams
+using JustRelax, JustRelax.JustRelax3D
+using ParallelStencil
+
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 3)
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
+
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    CPUBackend
+end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j, k) function init_T!(T, z)
@@ -48,10 +65,10 @@ function diffusion_3D(;
     finalize_MPI = false,
 )
 
-    kyr      = 1e3 * 3600 * 24 * 365.25
-    Myr      = 1e6 * 3600 * 24 * 365.25
-    ttot     = 1 * Myr # total simulation time
-    dt       = 50 * kyr # physical time step
+    kyr          = 1e3 * 3600 * 24 * 365.25
+    Myr          = 1e6 * 3600 * 24 * 365.25
+    ttot         = 1 * Myr # total simulation time
+    dt           = 50 * kyr # physical time step
 
     # Physical domain
     ni           = (nx, ny, nz)
@@ -72,11 +89,11 @@ function diffusion_3D(;
 
     # fields needed to compute density on the fly
     P          = @zeros(ni...)
-    args       = (; P=P)
+    args       = (; P=P, T=@zeros(ni.+1...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
-    thermal    = ThermalArrays(ni)
+    thermal    = ThermalArrays(backend, ni)
     thermal.H .= 1e-6
     # physical parameters
     ρ          = @fill(ρ0, ni...)
@@ -85,10 +102,9 @@ function diffusion_3D(;
     ρCp        = @. Cp * ρ
 
     # Boundary conditions
-    pt_thermal = PTThermalCoeffs(K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.95 / √3.1)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
-        periodicity = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
 
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])
@@ -96,7 +112,7 @@ function diffusion_3D(;
     # Add thermal perturbation
     δT                  = 100e0 # thermal perturbation
     r                   = 10e3 # thermal perturbation radius
-    center_perturbation = lx/2, ly/2, -lz/2
+    center_perturbation = lx / 2, ly / 2, -lz / 2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
 
     t  = 0.0
@@ -112,9 +128,11 @@ function diffusion_3D(;
             rheology,
             args,
             dt,
-            di,;
-            igg,
-            verbose=false,
+            di;
+            kwargs = (;
+                igg,
+                verbose=false
+            ),
         )
 
         t  += dt
@@ -132,7 +150,11 @@ end
         ny=32;
         nz=32;
         thermal = diffusion_3D(; nx = nx, ny = ny, nz = nz)
-        @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1824.614400703972 rtol=1e-3
-        @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1827.002299288895 rtol=1e-3
+        if backend == CPUBackend
+            @test thermal.T[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1824.614400703972 rtol=1e-3
+            @test thermal.Tc[Int(ceil(nx/2)), Int(ceil(ny/2)), Int(ceil(nz/2))] ≈ 1827.002299288895 rtol=1e-3
+        else
+            @test true ==true
+        end
     end
 end

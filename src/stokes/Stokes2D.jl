@@ -510,7 +510,7 @@ function _solve!(
     @copy stokes.P0 stokes.P
     wtime0 = 0.0
     relλ = 0.2
-    θ = copy(stokes.P)
+    θ = deepcopy(stokes.P)
     λ = @zeros(ni...)
     λv = @zeros(ni .+ 1...)
     η0 = deepcopy(η)

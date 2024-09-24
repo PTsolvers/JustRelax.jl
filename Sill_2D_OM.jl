@@ -66,11 +66,26 @@ end
     return nothing
 end
 
+function plot_particles(particles, pPhases)
+    p = particles.coords
+    # pp = [argmax(p) for p in phase_ratios.center] #if you want to plot it in a heatmap rather than scatter
+    ppx, ppy = p
+    # pxv = ustrip.(dimensionalize(ppx.data[:], km, CharDim))
+    # pyv = ustrip.(dimensionalize(ppy.data[:], km, CharDim))
+    pxv = ppx.data[:]
+    pyv = ppy.data[:]
+    clr = pPhases.data[:]
+    # clr = pϕ.data[:]
+    idxv = particles.index.data[:]
+    f,ax,h=scatter(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:roma, markersize=1)
+    Colorbar(f[1,2], h)
+    f
+end
 
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-# function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
+function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     #-----------------------------------------------------
     # USER INPUTS
@@ -114,7 +129,7 @@ end
     # κ            = (4 / (compute_heatcapacity(rheology[1].HeatCapacity[1].Cp) * 2900.0))
     κ            = (4 / (compute_heatcapacity(rheology[1].HeatCapacity[1].Cp) * rheology[1].Density[1].ρ))
     # κ            = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
-    dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01) # diffusive CFL timestep limiter
+    dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01) *100 # diffusive CFL timestep limiter
     # dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 / 100 # diffusive CFL timestep limiter
    # dt = dt_diff/10
     @show dt
@@ -428,7 +443,7 @@ end
                 ax3,
                 ustrip.(dimensionalize(xvi[1],m,CharDim)),
                 ustrip.(dimensionalize(xvi[2],m,CharDim)),
-                Array(ustrip.(dimensionalize(Vy_v, m/s, CharDim))); colormap=:batlow)
+                Array(ustrip.(dimensionalize(stokes.V.Vy, m/s, CharDim))); colormap=:batlow)
 
             # Plot effective viscosity
             #h4  = heatmap!(ax4, xci[1], xci[2], Array(log10.(η_vep)) , colormap=:batlow)

@@ -1,23 +1,40 @@
-using CUDA
-# CUDA.allowscalar(false)
-using JustRelax, JustRelax.DataIO
-import JustRelax.@cell
-using ParallelStencil
-@init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+const isCUDA = false
 
-using JustPIC
-using JustPIC._2D
+@static if isCUDA
+    using CUDA
+    CUDA.allowscalar(true)
+end
+
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+
+
+const backend_JR = @static if isCUDA
+    CUDABackend          # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if isCUDA
+    CUDABackend        # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
-# setup ParallelStencil.jl environment
-model = PS_Setup(:CUDA, Float64, 2) #or (:CUDA, Float64, 2) or (:AMDGPU, Float64, 2)
-environment!(model)
-
-# Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays, WriteVTK
+using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
+import GeoParams.Dislocation
+using StaticArrays, WriteVTK, JLD2, Dates
 
 # Load file with all the rheology configurations
 include("Sill_rheology.jl")
@@ -65,25 +82,10 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_melt_fraction!(ϕ, rheology, args)
-    ϕ[i, j] = compute_meltfraction(rheology, ntuple_idx(args, i, j))
-    return nothing
-end
-
-@parallel_indices (I...) function compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
-args_ijk = ntuple_idx(args, I...)
-ϕ[I...] = compute_melt_frac(rheology, args_ijk, phase_ratios[I...])
-return nothing
-end
-
-@inline function compute_melt_frac(rheology, args, phase_ratios)
-    return GeoParams.compute_meltfraction_ratio(phase_ratios, rheology, args)
-end
-
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
+# function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # Physical domain ------------------------------------
     lx           = 0.5e3             # domain length in x
@@ -98,6 +100,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies(; is_plastic = false)
+    cutoff_visc  = (-Inf,Inf)
     # κ            = (4 / (compute_heatcapacity(rheology[1].HeatCapacity[1].Cp) * 2900.0))
     κ            = (4 / (compute_heatcapacity(rheology[1].HeatCapacity[1].Cp) * rheology[1].Density[1].ρ))
     # κ            = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
@@ -108,10 +111,8 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 1
-    particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
-    )
+    nxcell, max_xcell, min_xcell = 30, 40, 20
+    particles        = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...);
 
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
 
@@ -123,48 +124,43 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
 
     # initialize phases
     init_phases!(pPhases, particles)
-    phase_ratios     = PhaseRatio(ni, length(rheology))
-    @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni);
+    JustPIC._2D.phase_ratios_center!(phase_ratios, particles, xci, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes           = StokesArrays(ni, ViscoElastic)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=5e-5,  CFL = 0.95 / √2.1)
+    stokes          = StokesArrays(backend_JR, ni)
+    pt_stokes       = PTStokesCoeffs(li, di; ϵ=1e-4, CFL=0.9 / √2.1) #ϵ=1e-4,  CFL=1 / √2.1 CFL=0.27 / √2.1
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal          = ThermalArrays(ni)
-    thermal_bc       = TemperatureBoundaryConditions(;
-        no_flux      = (left = true, right = true, top = false, bot = false),
-        periodicity  = (left = false, right = false, top = false, bot = false),
+    thermal         = ThermalArrays(backend_JR, ni)
+    thermal_bc      = TemperatureBoundaryConditions(;
+    no_flux     = (left = true, right = true, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
     @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], xvi[1])
-    thermal_bcs!(thermal.T, thermal_bc)
-
-    @parallel (JustRelax.@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
+    thermal_bcs!(thermal, thermal_bc)
+    temperature2center!(thermal)
     # ----------------------------------------------------
     #melt fraction
-    ϕ                = @zeros(ni...)
-    @parallel (@idx ni) compute_melt_fraction!(
-        ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
-    )
-
+    ϕ  = @zeros(ni...)
+    args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt)#, ΔTc=thermal.ΔTc)
     # Buoyancy forces
     ρg               = @zeros(ni...), @zeros(ni...)
-    for _ in 1:1
-        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P, ϕ= ϕ))
+    for _ in 1:5
+        compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
     # Rheology
-    η                = @ones(ni...)
-    args             = (; T = thermal.Tc, P = stokes.P, dt = dt, ϕ=ϕ)
-    @parallel (@idx ni) compute_viscosity!(
-        η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
+    compute_melt_fraction!(
+        ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
     )
-    η_vep            = copy(η)
-    # ϕ                = similar(η)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
+
+    @copy stokes.P0 stokes.P
+    @copy thermal.Told thermal.T
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -172,16 +168,15 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
     )
 
     # Boundary conditions
-    flow_bcs         = FlowBoundaryConditions(;
+    flow_bcs         = VelocityBoundaryConditions(;
         free_slip    = (left = true, right=true, top=true, bot=true),
-        periodicity  = (left = false, right = false, top = false, bot = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    update_halo!(stokes.V.Vx, stokes.V.Vy)
+    update_halo!(@velocity(stokes)...)
 
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
-    if do_save_vtk
+    if do_vtk
         vtk_dir      = joinpath(figdir,"vtk")
         take(vtk_dir)
     end
@@ -211,9 +206,10 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
         copyinn_x!(dst, src)
     end
     grid2particle!(pT, xvi, T_buffer, particles)
+    pT0.data    .= pT.data
 
     local Vx_v, Vy_v
-    if do_save_vtk
+    if do_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
     end
@@ -324,7 +320,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_save_vtk =false)
         if it == 1 || rem(it, 100) == 0
             checkpointing(figdir, stokes, thermal.T, η, t)
 
-            if do_save_vtk
+            if do_vtk
                 JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
 
                 data_v = (;
@@ -469,18 +465,18 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "240325_OM_Geometry_bas1e5_rhy1e3"
-# figdir   = "test_JP"
-do_save_vtk = true # set to true to generate VTK files for ParaView
-ar       = 2 # aspect ratio
-n        = 512
-nx       = n*ar - 2
-ny       = n - 2
-igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
+figdir   = "$(today())_OM_Geometry_bas1e5_rhy1e3"
+do_vtk = false
+ar = 1 # aspect ratio
+n = 64
+nx = n * ar
+ny = n
+nz = n
+igg = if !(JustRelax.MPI.Initialized())
+    IGG(init_global_grid(nx, ny, 1; init_MPI=true)...)
 else
     igg
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_save_vtk = do_save_vtk);
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);

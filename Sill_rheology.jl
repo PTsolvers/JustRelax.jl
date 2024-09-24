@@ -88,25 +88,69 @@ function init_rheologies(; is_plastic = true)
 end
 
 
-function init_phases!(phases, particles)
+# function init_phases!(phases, particles)
+#     ni = size(phases)
+
+#     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
+#         @inbounds for ip in JustPIC._2D.cellaxes(phases)
+#             # quick escape
+#             @index(index[ip, i, j]) == 0 && continue
+
+#             x = @index px[ip, i, j]
+#             depth = -(@index py[ip, i, j])
+#             @index phases[ip, i, j] = 1.0
+
+#             if 0.1e3 < depth ≤ 0.2e3
+#                 @index phases[ip, i, j] = 2.0
+
+#             end
+#         end
+#         return nothing
+#     end
+
+#     @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index)
+# end
+function init_phases2D!(phases, phase_grid, particles, xvi)
+    ni = size(phases)
+    @parallel (@idx ni) _init_phases2D!(
+        phases, phase_grid, particles.coords, particles.index, xvi
+    )
+end
+
+@parallel_indices (I...) function _init_phases2D!(
+    phases, phase_grid, pcoords::NTuple{N,T}, index, xvi
+) where {N,T}
     ni = size(phases)
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index)
-        @inbounds for ip in JustRelax.cellaxes(phases)
-            # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+    for ip in JustRelax.cellaxes(phases)
+        # quick escape
+        @index(index[ip, I...]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j])
-            @cell phases[ip, i, j] = 1.0
-
-            if 0.1e3 < depth ≤ 0.2e3
-                @cell phases[ip, i, j] = 2.0
-
-            end
+        pᵢ = ntuple(Val(N)) do i
+            @index pcoords[i][ip, I...]
         end
-        return nothing
+
+        d = Inf # distance to the nearest particle
+        particle_phase = -1
+        for offi in 0:1, offj in 0:1
+            ii = I[1] + offi
+            jj = I[2] + offj
+
+            !(ii ≤ ni[1]) && continue
+            !(jj ≤ ni[2]) && continue
+
+            xvᵢ = (xvi[1][ii], xvi[2][jj])
+            d_ijk = √(sum((pᵢ[i] - xvᵢ[i])^2 for i in 1:N))
+            if d_ijk < d
+                d = d_ijk
+                particle_phase = phase_grid[ii, jj]
+            end
+            # if pᵢ[end] > 0.0 && phase_grid[ii, jj] > 1.0
+            #     particle_phase = 4.0
+            # end
+        end
+        @index phases[ip, I...] = Float64(particle_phase)
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index)
+    return nothing
 end

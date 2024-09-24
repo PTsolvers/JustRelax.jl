@@ -41,7 +41,6 @@ function JR3D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number,N}) where {N}
     return ThermalArrays(ni...)
 end
 
-
 function JR3D.PTThermalCoeffs(
     ::Type{CUDABackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
 )

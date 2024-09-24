@@ -172,7 +172,6 @@ end
 
 # Rheology
 
-
 function JR2D.compute_viscosity!(
     ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
 )

@@ -94,11 +94,11 @@ function init_phases!(phases, particles)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, index)
-        @inbounds for ip in cellaxes(phases)
+        @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape if the ip-th element of the [i,j]-th cell is empty
-            @index(index[ip, i, j]) == 0 && continue
+            JustRelax.@cell(index[ip, i, j]) == 0 && continue
             # all particles have phase number = 1.0
-            @index phases[ip, i, j] = 1.0
+            JustRelax.@cell phases[ip, i, j] = 1.0
         end
         return nothing
     end
@@ -120,8 +120,8 @@ map!(x -> isnan(x) ? NaN : 1.0, pPhase.data, particles.index.data)
 
 and finally we need the phase ratios at the cell centers:
 ```julia
-phase_ratios = PhaseRatios(backend, length(rheology), ni)
-phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
+phase_ratios_center(phase_ratios, particles, grid, pPhases)
 ```
 
 ### Stokes and heat diffusion arrays
@@ -312,7 +312,7 @@ move_particles!(particles, xvi, particle_args)
 # check if we need to inject particles
 inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
 # update phase ratios
-phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+phase_ratios_center(phase_ratios, particles, grid, pPhases)
 ```
 5.  Interpolate `T` back to the grid
 ```julia

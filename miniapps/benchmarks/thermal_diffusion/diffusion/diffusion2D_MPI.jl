@@ -5,7 +5,7 @@ const backend_JR = CPUBackend
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-
+import JustRelax.@cell
 using GeoParams
 
 using GLMakie

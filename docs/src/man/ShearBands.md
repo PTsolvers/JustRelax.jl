@@ -92,12 +92,12 @@ function init_phases!(phase_ratios, xci, radius)
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
         x, y = xc[i], yc[j]
         if ((x-o_x)^2 + (y-o_y)^2) > radius^2
-            @index phases[1, i, j] = 1.0
-            @index phases[2, i, j] = 0.0
+            JustRelax.@cell phases[1, i, j] = 1.0
+            JustRelax.@cell phases[2, i, j] = 0.0
 
         else
-            @index phases[1, i, j] = 0.0
-            @index phases[2, i, j] = 1.0
+            JustRelax.@cell phases[1, i, j] = 0.0
+            JustRelax.@cell phases[2, i, j] = 1.0
         end
         return nothing
     end
@@ -109,7 +109,7 @@ end
 
 and finally we need the phase ratios at the cell centers:
 ```julia
-phase_ratios = PhaseRatios(backend, length(rheology), ni)
+phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
 init_phases!(phase_ratios, xci, radius)
 ```
 

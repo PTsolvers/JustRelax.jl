@@ -23,7 +23,7 @@ else
     CPUBackend
 end
 
-
+import JustRelax.@cell
 using GeoParams, SpecialFunctions
 
 # function to compute strain rate (compulsory)

@@ -1,5 +1,5 @@
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-
+import JustRelax.@cell
 
 const backend = CPUBackend
 

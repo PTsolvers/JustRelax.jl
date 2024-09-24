@@ -3,7 +3,7 @@ using ParallelStencil
 
 using Printf, LinearAlgebra, GeoParams, CellArrays
 using JustRelax, JustRelax.JustRelax2D
-
+import JustRelax.@cell
 const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 using JustPIC, JustPIC._2D

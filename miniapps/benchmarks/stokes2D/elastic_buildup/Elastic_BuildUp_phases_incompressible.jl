@@ -14,7 +14,7 @@ function init_phases!(phase_ratios)
     ni = size(phase_ratios.center)
 
     @parallel_indices (i, j) function init_phases!(phases)
-        @index phases[1, i, j] = 1.0
+        JustRelax.@cell phases[1, i, j] = 1.0
 
         return nothing
     end
@@ -56,7 +56,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(phase_ratios)
 
     # STOKES ---------------------------------------------

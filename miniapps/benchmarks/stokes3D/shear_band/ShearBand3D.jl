@@ -1,5 +1,5 @@
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
-
+import JustRelax.@cell
 const backend_JR = CPUBackend
 
 using Printf, GeoParams, GLMakie, CellArrays, CSV, DataFrames
@@ -18,12 +18,12 @@ function init_phases!(phase_ratios, xci, radius)
     @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
         x, y, z = xc[i], yc[j], zc[k]
         if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
-            @index phases[1, i, j, k] = 1.0
-            @index phases[2, i, j, k] = 0.0
+            JustRelax.@cell phases[1, i, j, k] = 1.0
+            JustRelax.@cell phases[2, i, j, k] = 0.0
 
         else
-            @index phases[1, i, j, k] = 0.0
-            @index phases[2, i, j, k] = 1.0
+            JustRelax.@cell phases[1, i, j, k] = 0.0
+            JustRelax.@cell phases[2, i, j, k] = 1.0
 
         end
         return nothing

@@ -27,7 +27,7 @@ for type in (
 end
 
 @inline backend(x::JustRelax.StokesArrays) = backend(x.P)
-# @inline backend(x::JustPIC.PhaseRatios) = backend(x.center.data)
+@inline backend(x::JustRelax.PhaseRatio) = backend(x.center.data)
 
 # Error handling
 @inline backend(::T) where {T} = throw(ArgumentError("$(T) is not a supported backend"))

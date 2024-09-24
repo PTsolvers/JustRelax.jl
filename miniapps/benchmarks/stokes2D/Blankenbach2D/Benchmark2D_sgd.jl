@@ -84,9 +84,9 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
     # temperature
     pT, pT0, pPhases    = init_cell_arrays(particles, Val(3))
     particle_args       = (pT, pT0, pPhases)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios        = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -257,7 +257,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 
         # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----
         Nu_it   =   (ly / (1000.0*lx)) *

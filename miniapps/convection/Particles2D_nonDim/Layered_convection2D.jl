@@ -1,5 +1,5 @@
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-
+import JustRelax.@cell
 
 const backend_JR = CPUBackend
 
@@ -133,9 +133,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     xc_anomaly       = lx/2    # origin of thermal anomaly
     yc_anomaly       = nondimensionalize(-610km, CharDim) # origin of thermal anomaly
     r_anomaly        = nondimensionalize(25km, CharDim) # radius of perturbation
-    phase_ratios     = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios     = PhaseRatio(backend_JR, ni, length(rheology))
     init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly, thick_air, CharDim)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -298,7 +298,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 
         @show it += 1
         t        += dt

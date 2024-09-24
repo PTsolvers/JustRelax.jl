@@ -38,22 +38,22 @@ function init_phases!(phases, particles)
         r=100e3
         f(x, A, λ) = A * sin(π*x/λ)
 
-        @inbounds for ip in cellaxes(phases)
+        @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
-            @index(index[ip, i, j]) == 0 && continue
+            JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
-            x = @index px[ip, i, j]
-            depth = -(@index py[ip, i, j])
-            @index phases[ip, i, j] = 2.0
+            x = JustRelax.@cell px[ip, i, j]
+            depth = -(JustRelax.@cell py[ip, i, j])
+            JustRelax.@cell phases[ip, i, j] = 2.0
 
             if 0e0 ≤ depth ≤ 100e3
-                @index phases[ip, i, j] = 1.0
+                JustRelax.@cell phases[ip, i, j] = 1.0
 
             else
-                @index phases[ip, i, j] = 2.0
+                JustRelax.@cell phases[ip, i, j] = 2.0
 
                 if ((x - 250e3)^2 + (depth - 250e3)^2 ≤ r^2)
-                    @index phases[ip, i, j] = 3.0
+                    JustRelax.@cell phases[ip, i, j] = 3.0
                 end
             end
 
@@ -119,8 +119,8 @@ function main(igg, nx, ny)
 
     # Elliptical temperature anomaly
     init_phases!(pPhases, particles)
-    phase_ratios  = PhaseRatios(backend, length(rheology), ni)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    phase_ratios  = PhaseRatio(backend_JR, ni, length(rheology))
+    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -186,7 +186,7 @@ function main(igg, nx, ny)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
 
         @show it += 1
         t        += dt

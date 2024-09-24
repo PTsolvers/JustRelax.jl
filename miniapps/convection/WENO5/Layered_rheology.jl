@@ -125,32 +125,32 @@ function init_phases!(phases, particles, Lx; d=650e3, r=50e3)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
-        @inbounds for ip in cellaxes(phases)
+        @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
-            @index(index[ip, i, j]) == 0 && continue
+            JustRelax.@cell(index[ip, i, j]) == 0 && continue
 
-            x = @index px[ip, i, j]
-            depth = -(@index py[ip, i, j])
+            x = JustRelax.@cell px[ip, i, j]
+            depth = -(JustRelax.@cell py[ip, i, j])
             if 0e0 ≤ depth ≤ 21e3
-                @index phases[ip, i, j] = 1.0
+                @cell phases[ip, i, j] = 1.0
 
             elseif 35e3 ≥ depth > 21e3
-                @index phases[ip, i, j] = 2.0
+                @cell phases[ip, i, j] = 2.0
 
             elseif 90e3 ≥ depth > 35e3
-                @index phases[ip, i, j] = 3.0
+                @cell phases[ip, i, j] = 3.0
 
             elseif depth > 90e3
-                @index phases[ip, i, j] = 3.0
+                @cell phases[ip, i, j] = 3.0
 
             elseif depth < 0e0
-                @index phases[ip, i, j] = 5.0
+                @cell phases[ip, i, j] = 5.0
 
             end
 
             # plume - rectangular
             if ((x - Lx * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
-                @index phases[ip, i, j] = 4.0
+                JustRelax.@cell phases[ip, i, j] = 4.0
             end
         end
         return nothing

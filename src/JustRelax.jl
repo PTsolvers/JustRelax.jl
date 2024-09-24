@@ -10,7 +10,6 @@ using HDF5
 using CellArrays
 using StaticArrays
 using Statistics
-@reexport using JustPIC
 
 function solve!() end
 
@@ -30,6 +29,9 @@ include("types/stokes.jl")
 include("types/heat_diffusion.jl")
 # export ThermalArrays, PTThermalCoeffs
 
+include("types/phases.jl")
+# export PhaseRatio
+
 include("boundaryconditions/types.jl")
 export TemperatureBoundaryConditions,
     DisplacementBoundaryConditions, VelocityBoundaryConditions
@@ -39,6 +41,9 @@ export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 
 include("topology/Topology.jl")
 export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g
+
+include("phases/CellArrays.jl")
+export @cell, element, setelement!, cellnum, cellaxes, new_empty_cell, setindex!
 
 include("JustRelax_CPU.jl")
 

@@ -13,7 +13,7 @@ function init_rheologies()
             CompositeRheology = CompositeRheology((LinearViscous(; η=1.0e23),)),
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             Gravity           = ConstantGravity(; g=10.0),
-        ),
+        ),        
     )
 end
 
@@ -21,10 +21,10 @@ function init_phases!(phases, particles)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, index)
-        @inbounds for ip in cellaxes(phases)
+        @inbounds for ip in JustRelax.cellaxes(phases)
             # quick escape
-            @index(index[ip, i, j]) == 0 && continue
-            @index phases[ip, i, j] = 1.0
+            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+            JustRelax.@cell phases[ip, i, j] = 1.0
         end
         return nothing
     end

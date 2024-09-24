@@ -1,4 +1,4 @@
-# # Traits
+# # Traits 
 
 # without phase ratios
 @inline function update_viscosity!(
@@ -171,7 +171,7 @@ end
 function _compute_viscosity!(
     stokes::JustRelax.StokesArrays,
     ν,
-    phase_ratios::JustPIC.PhaseRatios,
+    phase_ratios::JustRelax.PhaseRatio,
     args,
     rheology,
     cutoff,

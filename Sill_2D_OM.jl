@@ -87,15 +87,17 @@ end
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 # function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
-    # Physical domain ------------------------------------
-    lx           = 0.5e3             # domain length in x
-    ly           = 0.25e3            # domain length in y
-    ni           = nx, ny            # number of cells
-    li           = lx, ly            # domain length in x- and y-
-    di           = @. li / ni        # grid step in x- and -y
-    origin       = 0,-ly             # origin coordinates (15km f sticky air layer)
-    grid         = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    lx              = nondimensionalize(li_GMG[1]*km, CharDim)              # nondimensionalize domain length in x-direction
+    lz              = nondimensionalize(li_GMG[end]*km, CharDim)            # nondimensionalize domain length in y-direction
+    li              = (lx, lz)                                              # domain length in x- and y-direction
+    ni              = (nx, nz)                                              # number of grid points in x- and y-direction
+    di              = @. li / ni                                            # grid spacing in x- and y-direction
+    origin          = ntuple(Val(2)) do i
+        nondimensionalize(origin_GMG[i] * km,CharDim)                       # origin coordinates of the domain
+    end
+    grid         = Geometry(ni, li; origin=origin)
+    (; xci, xvi) = grid                                                     # nodes at the center and vertices of the cells
+
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------

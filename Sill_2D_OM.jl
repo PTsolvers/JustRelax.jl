@@ -34,10 +34,12 @@ end
 
 using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
 import GeoParams.Dislocation
+using GeophysicalModelGenerator
 using StaticArrays, WriteVTK, JLD2, Dates
 
 # Load file with all the rheology configurations
-include("Sill_rheology.jl")
+include("SillRheology.jl")
+include("SillModelSetup.jl")
 
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -64,36 +66,42 @@ end
     return nothing
 end
 
-# Initial thermal profile
-@parallel_indices (i, j) function init_T!(T, y, x)
-    depth = y[j]
-
-    T[i + 1 , j] = 273e0 + 600e0
-
-    if (-0.2e3 < depth ≤  -0.1e3)
-        T[i + 1, j] = 273e0 + 1200e0
-    end
-
-    if  (-0.15e3 < depth ≤  -0.14e3 ) && (245 < x[i] ≤  255)
-        T[i + 1, j] = 273e0 + 1300e0
-    end
-
-
-    return nothing
-end
 
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 # function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
-    lx              = nondimensionalize(li_GMG[1]*km, CharDim)              # nondimensionalize domain length in x-direction
-    lz              = nondimensionalize(li_GMG[end]*km, CharDim)            # nondimensionalize domain length in y-direction
+    #-----------------------------------------------------
+    # USER INPUTS
+    #-----------------------------------------------------
+    # Characteristic lengths for nondimensionalisation
+    CharDim         = GEO_units(; length=40km, viscosity=1e10Pa * s, temperature=1000C)
+    #-----------------------------------------------------
+
+    # IO --------------------------------------------------
+    # if it does not exist, make folder where figures are stored
+    figdir = "./fig2D/$figname/"
+    checkpoint = joinpath(figdir, "checkpoint")
+    if do_vtk
+        vtk_dir      = joinpath(figdir,"vtk")
+        take(vtk_dir)
+    end
+    take(figdir)
+    # ----------------------------------------------------
+    # Set up the grid
+    # ----------------------------------------------------
+    li_GMG, origin_GMG, phases_GMG, T_GMG, Grid = SillSetup(nx+1,ny+1,nz+1)
+    # -----------------------------------------------------
+    # Set up the JustRelax model
+    # -----------------------------------------------------
+    lx              = nondimensionalize(li_GMG[1]*m, CharDim)              # nondimensionalize domain length in x-direction
+    lz              = nondimensionalize(li_GMG[end]*m, CharDim)            # nondimensionalize domain length in y-direction
     li              = (lx, lz)                                              # domain length in x- and y-direction
     ni              = (nx, nz)                                              # number of grid points in x- and y-direction
     di              = @. li / ni                                            # grid spacing in x- and y-direction
     origin          = ntuple(Val(2)) do i
-        nondimensionalize(origin_GMG[i] * km,CharDim)                       # origin coordinates of the domain
+        nondimensionalize(origin_GMG[i] * m,CharDim)                       # origin coordinates of the domain
     end
     grid         = Geometry(ni, li; origin=origin)
     (; xci, xvi) = grid                                                     # nodes at the center and vertices of the cells
@@ -101,34 +109,44 @@ end
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology     = init_rheologies(; is_plastic = false)
+    rheology     = init_rheologies(CharDim)
     cutoff_visc  = (-Inf,Inf)
     # κ            = (4 / (compute_heatcapacity(rheology[1].HeatCapacity[1].Cp) * 2900.0))
     κ            = (4 / (compute_heatcapacity(rheology[1].HeatCapacity[1].Cp) * rheology[1].Density[1].ρ))
     # κ            = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
-    dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01)/100 # diffusive CFL timestep limiter
+    dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01) # diffusive CFL timestep limiter
     # dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 / 100 # diffusive CFL timestep limiter
    # dt = dt_diff/10
     @show dt
     # ----------------------------------------------------
+    # Weno model -----------------------------------------
+    weno = WENO5(ni=(nx,ny).+1, method=Val{2}()) # ni.+1 for Temp
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 20
     particles        = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...);
 
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    # subgrid_arrays = SubgridDiffusionCellArrays(particles)
 
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases      = init_cell_arrays(particles, Val(3))
+    pT, pPhases      = init_cell_arrays(particles, Val(2))
     particle_args    = (pT, pPhases)
 
-    # initialize phases
-    init_phases!(pPhases, particles)
+    # Assign material phases --------------------------
+    phases_dev   = PTArray(backend_JR)(phases_GMG)
     phase_ratios = PhaseRatios(backend, length(rheology), ni);
-    JustPIC._2D.phase_ratios_center!(phase_ratios, particles, xci, pPhases)
-    # ----------------------------------------------------
+    init_phases!(pPhases, phases_dev, particles, xvi)
+    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+
+    thermal         = ThermalArrays(backend_JR, ni)
+    @views thermal.T[2:end-1, :] .= PTArray(backend_JR)(nondimensionalize(T_GMG.*K, CharDim))
+    thermal_bc      = TemperatureBoundaryConditions(;
+        no_flux     = (left = true, right = true, top = false, bot = false),
+    )
+    thermal_bcs!(thermal, thermal_bc)
+    temperature2center!(thermal)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -136,21 +154,18 @@ end
     pt_stokes       = PTStokesCoeffs(li, di; ϵ=1e-4, CFL=0.9 / √2.1) #ϵ=1e-4,  CFL=1 / √2.1 CFL=0.27 / √2.1
     # ----------------------------------------------------
 
-    # TEMPERATURE PROFILE --------------------------------
-    thermal         = ThermalArrays(backend_JR, ni)
-    thermal_bc      = TemperatureBoundaryConditions(;
-    no_flux     = (left = true, right = true, top = false, bot = false),
+    args = (; T=thermal.Tc, P=stokes.P, dt=dt)
+
+    pt_thermal = PTThermalCoeffs(
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.98 / √2.1
     )
-    # initialize thermal profile - Half space cooling
-    @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], xvi[1])
-    thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
-    # ----------------------------------------------------
-    #melt fraction
-    ϕ  = @zeros(ni...)
-    args = (; ϕ=ϕ, T=thermal.Tc, P=stokes.P, dt=dt)#, ΔTc=thermal.ΔTc)
-    # Buoyancy forces
-    ρg               = @zeros(ni...), @zeros(ni...)
+
+    # Melt Fraction
+    ϕ = @zeros(ni...)
+
+    # Buoyancy force
+    ρg = @zeros(ni...), @zeros(ni...)                      # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
+
     for _ in 1:5
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
         @parallel init_P!(stokes.P, ρg[2], xci[2])
@@ -164,26 +179,12 @@ end
     @copy stokes.P0 stokes.P
     @copy thermal.Told thermal.T
 
-    # PT coefficients for thermal diffusion
-    pt_thermal       = PTThermalCoeffs(
-        rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 5e-2 / √2.1
-    )
-
     # Boundary conditions
     flow_bcs         = VelocityBoundaryConditions(;
         free_slip    = (left = true, right=true, top=true, bot=true),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
-
-    # IO ----- -------------------------------------------
-    # if it does not exist, make folder where figures are stored
-    if do_vtk
-        vtk_dir      = joinpath(figdir,"vtk")
-        take(vtk_dir)
-    end
-    take(figdir)
-    # ----------------------------------------------------
 
     # Plot initial T and η profiles
     let
@@ -192,29 +193,26 @@ end
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:end-1,:][:]), Yv./1e3)
-        scatter!(ax2, Array(log10.(η[:])), Y./1e3)
-        ylims!(ax1, minimum(xvi[2])./1e3, 0)
-        ylims!(ax2, minimum(xvi[2])./1e3, 0)
+        scatter!(
+            ax1,
+            Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :][:], K, CharDim))),
+            ustrip.(dimensionalize(Yv, m, CharDim)),
+        )
+        scatter!(
+            ax2,
+            log10.(Array(ustrip.(dimensionalize(stokes.viscosity.η[:],Pas,CharDim)))),
+            ustrip.(dimensionalize(Y, m, CharDim)),)
         hideydecorations!(ax2)
         save(joinpath(figdir, "initial_profile.png"), fig)
         fig
     end
 
-    T_buffer    = @zeros(ni.+1)
-    Told_buffer = similar(T_buffer)
-    dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, xvi, T_buffer, particles)
-    pT0.data    .= pT.data
+    # WENO arrays
+    T_WENO  = @zeros(ni.+1)
+    Vx_v = @zeros(ni.+1...)
+    Vy_v = @zeros(ni.+1...)
 
     local Vx_v, Vy_v
-    if do_vtk
-        Vx_v = @zeros(ni.+1...)
-        Vy_v = @zeros(ni.+1...)
-    end
     # Time loop
     t, it = 0.0, 0
 
@@ -223,10 +221,10 @@ end
     while it < 100e3
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=dt, ϕ= ϕ)
-        @parallel (@idx ni) compute_viscosity!(
-            η, 1.0, phase_ratios.center, @strain(stokes)..., args, rheology, (-Inf, Inf)
+        compute_melt_fraction!(
+            ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
         )
-        @parallel (JustRelax.@idx ni) compute_ρg!(ρg[2], phase_ratios.center, rheology, args)
+        compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
         # ------------------------------
 
         # Stokes solver ----------------
@@ -236,28 +234,23 @@ end
             di,
             flow_bcs,
             ρg,
-            η,
-            η_vep,
             phase_ratios,
             rheology,
             args,
             dt,
             igg;
-            iterMax = 150e3,
-            nout=1e3,
-            viscosity_cutoff=(-Inf, Inf),
-            verbose = true,
+            kwargs = (;
+                iterMax          = 250e3,#250e3,
+                free_surface     = false,
+                nout             = 2e3,#5e3,
+                viscosity_cutoff = cutoff_visc,
+            )
         )
-        @parallel (JustRelax.@idx ni) JustRelax.Stokes2D.tensor_invariant!(stokes.ε.II, @strain(stokes)...)
-        dt   = compute_dt(stokes, di, dt_diff)
-        # ------------------------------
+        tensor_invariant!(stokes.ε)
+        ## Save the checkpoint file before a possible thermal solver blow up
+        checkpointing_jld2(joinpath(checkpoint, "thermal"), stokes, thermal, t, dt, igg)
 
-    #     # interpolate fields from particle to grid vertices
-    #     particle2grid!(T_buffer, pT, xvi, particles)
-    #    # @views T_buffer[:, end]      .= 273.0
-    #     @views T_buffer[:, end]      .= minimum(T_buffer)
-    #     @views thermal.T[2:end-1, :] .= T_buffer
-    #     temperature2center!(thermal)
+        dt   = compute_dt(stokes, di, dt_diff)
 
         # Thermal solver ---------------
         heatdiffusion_PT!(
@@ -268,79 +261,80 @@ end
             args,
             dt,
             di;
-            igg     = igg,
-            phase   = phase_ratios,
-            iterMax = 100e3,
-            nout    = 1e2,
-            verbose = true,
+            kwargs =(;
+                igg     = igg,
+                phase   = phase_ratios,
+                iterMax = 150e3,
+                nout    = 1e3,
+                verbose = true,
+            )
         )
         # ------------------------------
 
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
-        subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
-        )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
-        subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, particles, xvi,  di, dt
-        )
+        T_WENO .= thermal.T[2:end-1, :]
+        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
+        thermal.T[2:end-1, :] .= T_WENO
 
-        # Advection --------------------
+                # Advection --------------------
         # advect particles in space
-        advection_RK!(particles, @velocity(stokes), grid_vx, grid_vy, dt, 2 / 3)
+        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-        # interpolate fields from grid vertices to particles
-        # grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
         # check if we need to inject particles
-        inject = check_injection(particles)
-        inject && inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
-
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views thermal.T[:, end]     .= 273e0 + 600e0
-        @views thermal.T[:, 1]       .= 273e0 + 600e0
-        @views thermal.T[2:end-1, :] .= T_buffer
-        flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-        thermal_bcs!(thermal.T, thermal_bc)
-        temperature2center!(thermal)
+        inject_particles_phase!(particles, pPhases, (pT, ), (T_WENO,), xvi)
+        # update phase ratios
+        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        @show it += 1
+        t        += dt
         @show extrema(thermal.T)
         any(isnan.(thermal.T)) && break
 
-        # update phase ratios
-        @parallel (@idx ni) phase_ratios_center(phase_ratios.center, pPhases)
-        @parallel (@idx ni) compute_melt_fraction!(
-            ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
-        )
-
-        @show it += 1
-        t        += dt
-
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 100) == 0
-            checkpointing(figdir, stokes, thermal.T, η, t)
+        if it == 1 || rem(it, 10) == 0
+            if igg.me == 0 && it == 1
+                metadata(pwd(), checkpoint, basename(@__FILE__), "SillModelSetup.jl", "SillRheology.jl")
+            end
+            checkpointing_jld2(checkpoint, stokes, thermal, t, dt, igg)
+            ## Somehow fails to open with load("particles.jld2")
+            mktempdir() do tmpdir
+                # Save the checkpoint file in the temporary directory
+                tmpfname = joinpath(tmpdir, basename(joinpath(checkpoint, "particles.jld2")))
+                jldsave(
+                    tmpfname;
+                    particles=Array(particles),
+                    pPhases=Array(pPhases),
+                    time=t,
+                    timestep=dt,
+                )
+                # Move the checkpoint file from the temporary directory to the destination directory
+                mv(tmpfname, joinpath(checkpoint, "particles.jld2"); force=true)
+            end
+
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
 
             if do_vtk
-                JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-
                 data_v = (;
-                    T   = Array(thermal.T[2:end-1, :]),
-                    τxy = Array(stokes.τ.xy),
-                    εxy = Array(stokes.ε.xy),
-                    Vx  = Array(Vx_v),
-                    Vy  = Array(Vy_v),
+                    T   = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
+                    τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
+                    εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
+                    Vx  = Array(ustrip.(dimensionalize(Vx_v,m/s,CharDim))),
+                    Vy  = Array(ustrip.(dimensionalize(Vy_v, m/s, CharDim))),
                 )
                 data_c = (;
-                    P   = Array(stokes.P),
-                    τxx = Array(stokes.τ.xx),
-                    τyy = Array(stokes.τ.yy),
-                    εxx = Array(stokes.ε.xx),
-                    εyy = Array(stokes.ε.yy),
-                    η   = Array(η),
-                    ϕ   = Array(ϕ),
-                    ρ  = Array(ρg[2]./10),
+                    P   = Array(ustrip.(dimensionalize(stokes.P,MPa,CharDim))),
+                    τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa,CharDim))),
+                    τyy = Array(ustrip.(dimensionalize(stokes.τ.yy,MPa,CharDim))),
+                    τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
+                    εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1,CharDim))),
+                    εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1,CharDim))),
+                    εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1,CharDim))),
+                    η   = Array(ustrip.(dimensionalize(stokes.viscosity.η,Pa*s,CharDim))),
+                    ρ   = Array(ustrip.(dimensionalize(ρg[end], kg / m^3 * m / s^2, CharDim))./9.81),
+                )
+                velocity_v = (
+                    Array(ustrip.(dimensionalize(Vx_v,m/s,CharDim))),
+                    Array(ustrip.(dimensionalize(Vy_v, m/s, CharDim))),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -348,6 +342,7 @@ end
                     xci,
                     data_v,
                     data_c,
+                    velocity_v
                 )
             end
 
@@ -361,6 +356,7 @@ end
 
             # Make Makie figure
             fig = Figure(size = (2000, 1000), title = "t = $t", )
+            ar = li[1] / li[2]
             ax0 = Axis(
                 fig[1, 1:2];
                 aspect=ar,
@@ -387,7 +383,7 @@ end
             ax0.xlabelcolor = :white
             ax0.ylabelcolor = :white
 
-            ax1 = Axis( fig[2, 1][1, 1], aspect = DataAspect(), title = L"T \;[\mathrm{C}]",  titlesize=40,
+            ax1 = Axis( fig[2, 1][1, 1], aspect = DataAspect(), title = L"T \;[\mathrm{K}]",  titlesize=40,
             yticklabelsize=25,
             xticklabelsize=25,
             xlabelsize=25,)
@@ -411,24 +407,38 @@ end
                     xlabelsize=25,)
 
             # Plot temperature
-            h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:lipari, colorrange=(700, 1200))
-            # Plot particles phase
-            #h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
-            #h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]))
+            h1  = heatmap!(
+                ax1,
+                ustrip.(dimensionalize(xvi[1],m,CharDim)),
+                ustrip.(dimensionalize(xvi[2],m,CharDim)),
+                ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])),K,CharDim)); colormap=:lipari, colorrange=(600+273, 1000+273))
 
-            h2  = heatmap!(ax2, xci[1], xci[2], Array(ρg[2]./10.0) , colormap=:batlowW, colorrange=(2650, 2820))
+            h2  = heatmap!(
+                ax2,
+                ustrip.(dimensionalize(xci[1],m,CharDim)),
+                ustrip.(dimensionalize(xci[2],m,CharDim)),
+                Array(ustrip.(dimensionalize(ρg[end], kg / m^3 * m / s^2, CharDim))./9.81);
+                colormap=:batlowW)
 
             # Plot 2nd invariant of strain rate
             #h3  = heatmap!(ax3, xci[1], xci[2], Array(log10.(stokes.ε.II)) , colormap=:batlow)
 
             # Plot vy velocity
-            h3  = heatmap!(ax3, xvi[1], xvi[2], Array(stokes.V.Vy) , colormap=:batlow)
+            h3  = heatmap!(
+                ax3,
+                ustrip.(dimensionalize(xvi[1],m,CharDim)),
+                ustrip.(dimensionalize(xvi[2],m,CharDim)),
+                Array(ustrip.(dimensionalize(Vy_v, m/s, CharDim))); colormap=:batlow)
 
             # Plot effective viscosity
             #h4  = heatmap!(ax4, xci[1], xci[2], Array(log10.(η_vep)) , colormap=:batlow)
 
             # Plot melt fraction
-            h4  = heatmap!(ax4, xci[1], xci[2], Array(ϕ) , colormap=:lipari)
+            h4  = heatmap!(ax4,
+                ustrip.(dimensionalize(xci[1],m,CharDim)),
+                ustrip.(dimensionalize(xci[2],m,CharDim)),
+                Array(ϕ);
+                colormap=:lipari)
 
 
             hidexdecorations!(ax1)
@@ -440,17 +450,23 @@ end
             Colorbar(fig[3, 1][1, 2], h3, height = Relative(4/4), ticklabelsize=25, ticksize=15)
             Colorbar(fig[3, 2][1, 2], h4, height = Relative(4/4), ticklabelsize=25, ticksize=15)
             linkaxes!(ax1, ax2, ax3, ax4)
-            save(joinpath(figdir, "$(it).png"), fig)
             fig
+            figsave = joinpath(figdir, @sprintf("%06d.png", it))
+            save(figsave, fig)
 
             let
                 fig = Figure(size = (2000, 1000), title = "t = $t")
-                ax1 = Axis(fig[1,1], aspect = DataAspect(), title = "T [C]  (t=$(round((t/(3600)))) hours)",  titlesize=40,
+                ax1 = Axis(fig[1,1], aspect = DataAspect(), title = "T [K]  (t=$(round((t/(3600)))) hours)",  titlesize=40,
                 yticklabelsize=25,
                 xticklabelsize=25,
                 xlabelsize=25,)
                  # Plot temperature
-                h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:].- 273.15) , colormap=:lipari, colorrange=(700, 1200))
+                h1  = heatmap!(
+                    ax1,
+                    ustrip.(dimensionalize(xvi[1],m,CharDim)),
+                    ustrip.(dimensionalize(xvi[2],m,CharDim)),
+                    ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), :])),K,CharDim));
+                    colormap=:lipari, colorrange=(600+273, 1000+273))
                 Colorbar(fig[1,2], h1, height = Relative(4/4), ticklabelsize=25, ticksize=15)
                 save(joinpath(figdir, "Temperature_$(it).png"), fig)
                 fig
@@ -467,7 +483,7 @@ end
 
 
 # (Path)/folder where output data and figures are stored
-figdir   = "$(today())_OM_Geometry_bas1e5_rhy1e3"
+figname   = "$(today())_Krafla_Sill_Geometry"
 do_vtk = false
 ar = 1 # aspect ratio
 n = 64
@@ -481,4 +497,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+main2D(igg; figname=figname, nx=nx, ny=ny, nz=nz, do_vtk=do_vtk);

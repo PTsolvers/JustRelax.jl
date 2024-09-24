@@ -1,7 +1,7 @@
 
 function init_rheologies()
-    linear_viscosity_rhy      = ViscosityPartialMelt_Costa_etal_2009(LinearMeltViscosity(A = -8.1590, B = 2.4050e+04K, T0 = -430.9606K,η0=1e3Pa*s))
-    linear_viscosity_bas      = ViscosityPartialMelt_Costa_etal_2009(LinearMeltViscosity(A = -9.6012, B = 1.3374e+04K, T0 = 307.8043K, η0=1e5Pa*s))
+    linear_viscosity_rhy            = LinearMeltViscosity(A = -8.1590, B = 2.4050e+04K, T0 = -430.9606K)#,η0=1e0Pa*s)
+    linear_viscosity_bas            = LinearMeltViscosity(A = -9.6012, B = 1.3374e+04K, T0 = 307.8043K)#, η0=1e3Pa*s)
     # Define rheolgy struct
     rheology = (
         # Name              = "Rhyolite",
@@ -49,5 +49,5 @@ function init_phases!(phases, particles)
         return nothing
     end
 
-    @parallel (JustRelax.@idx ni) init_phases!(phases, particles.coords..., particles.index)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index)
 end

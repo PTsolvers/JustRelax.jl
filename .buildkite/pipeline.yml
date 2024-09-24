@@ -4,7 +4,7 @@ steps:
       setup:
         version:
           - "1.10"
-          - 'pre'
+          - "pre"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"

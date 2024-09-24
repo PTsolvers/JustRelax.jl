@@ -503,6 +503,9 @@ function _solve!(
                 phase_ratios.center,
                 phase_ratios.vertex,
             )
+            update_halo!(stokes.τ.yz)
+            update_halo!(stokes.τ.xz)
+            update_halo!(stokes.τ.xy)
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(

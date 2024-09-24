@@ -11,24 +11,27 @@ using ParallelStencil
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, radius)
+function init_phases!(phase_ratios, xci, xvi, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5, 0.5
 
     @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
         x, y, z = xc[i], yc[j], zc[k]
-        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
-            @cell phases[1, i, j, k] = 1.0
-            @cell phases[2, i, j, k] = 0.0
+        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius^2
+            JustRelax.@cell phases[1, i, j, k] = 1.0
+            JustRelax.@cell phases[2, i, j, k] = 0.0
 
         else
-            @cell phases[1, i, j, k] = 0.0
-            @cell phases[2, i, j, k] = 1.0
+            JustRelax.@cell phases[1, i, j, k] = 0.0
+            JustRelax.@cell phases[2, i, j, k] = 1.0
+
         end
         return nothing
     end
 
     @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
+    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin...)
+    return nothing
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -69,6 +72,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
+            # CompositeRheology = CompositeRheology((visc, el_bg, )),
             CompositeRheology = CompositeRheology((visc, el_bg, pl)),
             Elasticity        = el_bg,
 
@@ -77,20 +81,21 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
+            # CompositeRheology = CompositeRheology((visc, el_inc, )),
             CompositeRheology = CompositeRheology((visc, el_inc, pl)),
             Elasticity        = el_inc,
         ),
     )
 
     # Initialize phase ratios -------------------------------
-    radius       = 0.01
+    radius       = 0.1
     phase_ratios = PhaseRatio(ni, length(rheology))
-    init_phases!(phase_ratios, xci, radius)
+    init_phases!(phase_ratios, xci, xvi, radius)
 
      # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes       = StokesArrays(backend_JR, ni)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-4,  CFL = 0.05 / √3.1)
+    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-6,  CFL = 0.5 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
@@ -103,9 +108,17 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         free_slip   = (left = true , right = true , top = true , bot = true , back = true , front = true),
         no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
-    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg/2 for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
-    stokes.V.Vy .= PTArray(backend_JR)([ y*εbg/2 for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
-    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
+    
+    Vx = PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
+    Vz = PTArray(backend_JR)([-z*εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
+    stokes.V.Vx .= Vx
+    stokes.V.Vz .= Vz
+
+    # println("Rank $(igg.me):
+    #     extrema Vx = $(extrema(Vx)) 
+    #     extrema Vz = $(extrema(Vz)) 
+    # ")    
+
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -129,7 +142,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 3
+    tmax  = 4
     τII   = Float64[]
     sol   = Float64[]
     ttot  = Float64[]
@@ -173,12 +186,11 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
 
-        # visualisation
-        th    = 0:pi/50:3*pi;
-        xunit = @. radius * cos(th) + 0.5;
-        yunit = @. radius * sin(th) + 0.5;
-
         if igg.me == 0
+            # visualisation
+            th      = 0:pi/50:3*pi;
+            xunit   = @. radius * cos(th) + 0.5;
+            yunit   = @. radius * sin(th) + 0.5;    
             slice_j = ny_v >>> 1
             fig     = Figure(size = (1600, 1600), title = "t = $t")
             ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
@@ -201,10 +213,10 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 end
 
 n      = 32
-nx     = n
-ny     = n
+nx     = n # ÷ 2
+ny     = n # ÷ 2
 nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
-figdir = "ShearBand3D"
+figdir = "ShearBand3D_MPI"
 igg    = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)
 else

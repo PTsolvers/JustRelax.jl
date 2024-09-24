@@ -3,8 +3,8 @@ steps:
     matrix:
       setup:
         version:
-          - "1.9"
           - "1.10"
+          - 'pre'
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"

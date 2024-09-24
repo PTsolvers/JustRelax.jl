@@ -41,9 +41,6 @@ function JR3D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number,N}) where {N}
     return ThermalArrays(ni...)
 end
 
-# function JR3D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
-#     return PhaseRatio(ni, num_phases)
-# end
 
 function JR3D.PTThermalCoeffs(
     ::Type{CUDABackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3

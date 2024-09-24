@@ -49,10 +49,6 @@ function JR2D.ThermalArrays(::Type{AMDGPUBackend}, ni::Vararg{Number,N}) where {
     return ThermalArrays(ni...)
 end
 
-# function JR2D.PhaseRatio(::Type{AMDGPUBackend}, ni, num_phases)
-#     return PhaseRatio(ni, num_phases)
-# end
-
 function JR2D.PTThermalCoeffs(
     ::Type{AMDGPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
 )
@@ -174,25 +170,8 @@ function thermal_bcs!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays, bc
     return thermal_bcs!(thermal.T, bcs)
 end
 
-# # Phases
-# function JR2D.phase_ratios_center!(
-#     ::AMDGPUBackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
-# )
-#     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-# end
-
-# function JR2D.phase_ratios_vertex!(
-#     ::AMDGPUBackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
-# )
-#     return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-# end
-
 # Rheology
 
-## viscosity
-function JR2D.compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff)
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
-end
 
 function JR2D.compute_viscosity!(
     ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff

@@ -42,10 +42,6 @@ function JR2D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number,N}) where {N}
     return ThermalArrays(ni...)
 end
 
-# function JR2D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
-#     return PhaseRatio(ni, num_phases)
-# end
-
 function JR2D.PTThermalCoeffs(
     ::Type{CUDABackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
 )
@@ -162,19 +158,6 @@ end
 function thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
-
-# # Phases
-# function JR2D.phase_ratios_center!(
-#     ::CUDABackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
-# )
-#     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-# end
-
-# function JR2D.phase_ratios_vertex!(
-#     ::CUDABackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
-# )
-#     return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-# end
 
 # Rheology
 

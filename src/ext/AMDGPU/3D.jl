@@ -49,9 +49,6 @@ function JR3D.ThermalArrays(::Type{AMDGPUBackend}, ni::Vararg{Number,N}) where {
     return ThermalArrays(ni...)
 end
 
-# function JR3D.PhaseRatio(::Type{AMDGPUBackend}, ni, num_phases)
-#     return PhaseRatio(ni, num_phases)
-# end
 
 function JR3D.PTThermalCoeffs(
     ::Type{AMDGPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
@@ -173,31 +170,6 @@ end
 function thermal_bcs!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
-
-# # Phases
-# function JR3D.phase_ratios_center!(
-#     ::AMDGPUBackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
-# )
-#     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-# end
-
-# function JR3D.phase_ratios_vertex!(
-#     ::AMDGPUBackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
-# )
-#     return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-# end
-
-# function JR3D.phase_ratios_center!(
-#     ::AMDGPUBackendTrait, phase_ratios, particles, grid::Geometry, phases
-# )
-#     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-# end
-
-# function JR3D.phase_ratios_vertex!(
-#     ::AMDGPUBackendTrait, phase_ratios, particles, grid::Geometry, phases
-# )
-#     return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-# end
 
 # Rheology
 

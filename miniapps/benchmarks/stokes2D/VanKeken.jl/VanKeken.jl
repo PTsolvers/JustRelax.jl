@@ -3,7 +3,7 @@ using ParallelStencil
 
 using Printf, LinearAlgebra, GeoParams, CellArrays
 using JustRelax, JustRelax.JustRelax2D
-import JustRelax.@cell
+
 const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 using GLMakie
@@ -23,18 +23,18 @@ function init_phases!(phases, particles)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
-        @inbounds for ip in JustRelax.cellaxes(phases)
+        @inbounds for ip in cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+            @index(index[ip, i, j]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, i, j]
-            y = JustRelax.@cell py[ip, i, j]
+            x = @index px[ip, i, j]
+            y = @index py[ip, i, j]
 
             # plume - rectangular
             if y > 0.2 + 0.02 * cos(π * x / λ)
-                JustRelax.@cell phases[ip, i, j] = 2.0
+                @index phases[ip, i, j] = 2.0
             else
-                JustRelax.@cell phases[ip, i, j] = 1.0
+                @index phases[ip, i, j] = 1.0
             end
         end
         return nothing
@@ -86,9 +86,9 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
     # temperature
     pPhases,             = init_cell_arrays(particles, Val(1))
     particle_args        = (pPhases, )
-    phase_ratios         = PhaseRatio(backend_JR, ni, length(rheology))
+    phase_ratios         = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -172,7 +172,7 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
         # inject && break
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
 
         @show it += 1
         t        += dt

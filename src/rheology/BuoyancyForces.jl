@@ -18,10 +18,10 @@ end
 """
     compute_ρg!(ρg, phase_ratios, rheology, args)
 
-Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`. 
+Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object and correspondent arguments `args`.
 The `phase_ratios` are used to compute the density of the composite rheology.
 """
-function compute_ρg!(ρg, phase_ratios::JustRelax.PhaseRatio, rheology, args)
+function compute_ρg!(ρg, phase_ratios::JustPIC.PhaseRatios, rheology, args)
     ni = size(ρg)
     @parallel (@idx ni) compute_ρg_kernel!(ρg, phase_ratios.center, rheology, args)
     return nothing
@@ -97,11 +97,11 @@ end
 @inline update_ρg!(::NonConstantDensityTrait, ρg, rheology, args) =
     compute_ρg!(ρg, rheology, args)
 # with phase ratios
-@inline update_ρg!(ρg::AbstractArray, phase_ratios::JustRelax.PhaseRatio, rheology, args) =
+@inline update_ρg!(ρg::AbstractArray, phase_ratios::JustPIC.PhaseRatios, rheology, args) =
     update_ρg!(isconstant(rheology), ρg, phase_ratios, rheology, args)
 @inline update_ρg!(
-    ::ConstantDensityTrait, ρg, phase_ratios::JustRelax.PhaseRatio, rheology, args
+    ::ConstantDensityTrait, ρg, phase_ratios::JustPIC.PhaseRatios, rheology, args
 ) = nothing
 @inline update_ρg!(
-    ::NonConstantDensityTrait, ρg, phase_ratios::JustRelax.PhaseRatio, rheology, args
+    ::NonConstantDensityTrait, ρg, phase_ratios::JustPIC.PhaseRatios, rheology, args
 ) = compute_ρg!(ρg, phase_ratios, rheology, args)

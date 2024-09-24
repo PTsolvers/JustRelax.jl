@@ -6,7 +6,7 @@ const isCUDA = true
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-import JustRelax.@cell
+
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -94,9 +94,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
-    phase_ratios     = PhaseRatio(backend, ni, length(rheology))
+    phase_ratios     = phase_ratios = PhaseRatios(backend, length(rheology), ni);
     init_phases!(pPhases, phases_device, particles, xvi)
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -264,7 +264,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
 
         @show it += 1
         t        += dt

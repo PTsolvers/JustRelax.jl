@@ -38,7 +38,7 @@ else
     JustPIC.CPUBackend
 end
 
-import JustRelax.@cell
+
 
 @parallel_indices (i, j, k) function init_T!(T, z)
     if z[k] == maximum(z)
@@ -68,20 +68,20 @@ function init_phases!(phases, particles, xc, yc, zc, r)
     center = xc, yc, zc
 
     @parallel_indices (I...) function init_phases!(phases, px, py, pz, index, center, r)
-        @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
+        @inbounds for ip in cellaxes(phases)
             # quick escape
-            @cell(index[ip, I...]) == 0 && continue
+            @index(index[ip, I...]) == 0 && continue
 
-            x = @cell px[ip, I...]
-            y = @cell py[ip, I...]
-            z = @cell pz[ip, I...]
+            x = @index px[ip, I...]
+            y = @index py[ip, I...]
+            z = @index pz[ip, I...]
 
             # plume - rectangular
             if (((x - center[1]))^2 + ((y - center[2]))^2 + ((z - center[3]))^2) ≤ r^2
-                @cell phases[ip, I...] = 2.0
+                @index phases[ip, I...] = 2.0
 
             else
-                @cell phases[ip, I...] = 1.0
+                @index phases[ip, I...] = 1.0
             end
         end
         return nothing
@@ -170,9 +170,9 @@ function diffusion_3D(;
     )
     # temperature
     pPhases,     = init_cell_arrays(particles, Val(1))
-    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion

@@ -15,17 +15,17 @@ end
     cell = i, j
 
     for ip in JustRelax.cellaxes(index)
-        !@cell(index[ip, cell...]) && continue # no particle in this location
+        !@index(index[ip, cell...]) && continue # no particle in this location
 
-        ω_xy = @cell ω[ip, cell...]
-        τ_xx = @cell xx[ip, cell...]
-        τ_yy = @cell yy[ip, cell...]
-        τ_xy = @cell xy[ip, cell...]
+        ω_xy = @index ω[ip, cell...]
+        τ_xx = @index xx[ip, cell...]
+        τ_yy = @index yy[ip, cell...]
+        τ_xy = @index xy[ip, cell...]
 
         tmp = τ_xy * ω_xy * 2.0
-        @cell xx[ip, cell...] = fma(dt, cte, τ_xx)
-        @cell yy[ip, cell...] = fma(dt, cte, τ_yy)
-        @cell xy[ip, cell...] = fma(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
+        @index xx[ip, cell...] = fma(dt, cte, τ_xx)
+        @index yy[ip, cell...] = fma(dt, cte, τ_yy)
+        @index xy[ip, cell...] = fma(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
     end
 
     return nothing
@@ -37,14 +37,14 @@ end
     cell = i, j
 
     for ip in JustRelax.cellaxes(index)
-        !@cell(index[ip, cell...]) && continue # no particle in this location
+        !@index(index[ip, cell...]) && continue # no particle in this location
 
-        θ = dt * @cell ω[ip, cell...]
+        θ = dt * @index ω[ip, cell...]
         sinθ, cosθ = sincos(θ)
 
-        τ_xx = @cell xx[ip, cell...]
-        τ_yy = @cell yy[ip, cell...]
-        τ_xy = @cell xy[ip, cell...]
+        τ_xx = @index xx[ip, cell...]
+        τ_yy = @index yy[ip, cell...]
+        τ_xy = @index xy[ip, cell...]
 
         R = @SMatrix [
             cosθ -sinθ
@@ -59,9 +59,9 @@ end
         # this could be fully unrolled in 2D
         τr = R * τ * R'
 
-        @cell xx[ip, cell...] = τr[1, 1]
-        @cell yy[ip, cell...] = τr[2, 2]
-        @cell xy[ip, cell...] = τr[1, 2]
+        @index xx[ip, cell...] = τr[1, 1]
+        @index yy[ip, cell...] = τr[2, 2]
+        @index xy[ip, cell...] = τr[1, 2]
     end
 
     return nothing

@@ -1,12 +1,12 @@
 ## Phases
 
-@inline get_phase(x::JustRelax.PhaseRatio) = x.center
+@inline get_phase(x::JustPIC.PhaseRatios) = x.center
 @inline get_phase(x) = x
 
 # update_pt_thermal_arrays!(::Vararg{Any,N}) where {N} = nothing
 
 function update_pt_thermal_arrays!(
-    pt_thermal, phase_ratios::JustRelax.PhaseRatio, rheology, args, _dt
+    pt_thermal, phase_ratios::JustPIC.PhaseRatios, rheology, args, _dt
 )
     ni = size(phase_ratios.center)
 
@@ -51,7 +51,7 @@ end
 
 @inline getindex_phase(::Nothing, I::Vararg{Int,N}) where {N} = nothing
 
-# Diffusivity 
+# Diffusivity
 
 @inline function compute_diffusivity(rheology, args)
     return compute_conductivity(rheology, args) *

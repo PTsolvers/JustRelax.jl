@@ -15,12 +15,12 @@ function init_phases!(phase_ratios, xci, xvi, radius)
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
         x, y = xc[i], yc[j]
         if ((x-o_x)^2 + (y-o_y)^2) > radius^2
-            JustRelax.@cell phases[1, i, j] = 1.0
-            JustRelax.@cell phases[2, i, j] = 0.0
+            @index phases[1, i, j] = 1.0
+            @index phases[2, i, j] = 0.0
 
         else
-            JustRelax.@cell phases[1, i, j] = 0.0
-            JustRelax.@cell phases[2, i, j] = 1.0
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
         end
         return nothing
     end

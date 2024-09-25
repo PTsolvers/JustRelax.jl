@@ -57,17 +57,17 @@ function init_phases!(phases, particles, Lx, d, r)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx, d)
-        @inbounds for ip in JustRelax.cellaxes(phases)
+        @inbounds for ip in cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+            @index(index[ip, i, j]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, i, j]
-            depth = -(JustRelax.@cell py[ip, i, j])
-            JustRelax.@cell phases[ip, i, j] = 1.0 # matrix
+            x = @index px[ip, i, j]
+            depth = -(@index py[ip, i, j])
+            @index phases[ip, i, j] = 1.0 # matrix
 
             # thermal anomaly - circular
             if ((x - Lx)^2 + (depth - d)^2 ≤ r^2)
-                JustRelax.@cell phases[ip, i, j] = 2.0
+                @index phases[ip, i, j] = 2.0
             end
         end
         return nothing

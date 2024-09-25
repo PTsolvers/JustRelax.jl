@@ -21,7 +21,7 @@ else
     CPUBackend
 end
 
-import JustRelax.@cell
+
 using GeoParams
 
 # HELPER FUNCTIONS ---------------------------------------------------------------

@@ -2,6 +2,7 @@ module JustRelax2D
 
 using JustRelax: JustRelax
 using CUDA
+using JustPIC, JustPIC._2D
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -12,20 +13,16 @@ using MPI
 import JustRelax.JustRelax2D as JR2D
 
 import JustRelax:
-    IGG,
-    BackendTrait,
-    CPUBackendTrait,
-    CUDABackendTrait,
-    backend,
-    CPUBackend,
-    Geometry,
-    @cell
+    IGG, BackendTrait, CPUBackendTrait, CUDABackendTrait, backend, CPUBackend, Geometry
+
 import JustRelax:
     AbstractBoundaryConditions,
     TemperatureBoundaryConditions,
     AbstractFlowBoundaryConditions,
     DisplacementBoundaryConditions,
     VelocityBoundaryConditions
+
+import JustPIC._2D: numphases, nphases
 
 @init_parallel_stencil(CUDA, Float64, 2)
 
@@ -43,10 +40,6 @@ end
 
 function JR2D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number,N}) where {N}
     return ThermalArrays(ni...)
-end
-
-function JR2D.PhaseRatio(::Type{CUDABackend}, ni, num_phases)
-    return PhaseRatio(ni, num_phases)
 end
 
 function JR2D.PTThermalCoeffs(
@@ -166,27 +159,6 @@ function thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
 
-# Phases
-function JR2D.phase_ratios_center!(
-    ::CUDABackendTrait,
-    phase_ratios::JustRelax.PhaseRatio,
-    particles,
-    grid::Geometry,
-    phases,
-)
-    return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-end
-
-function JR2D.phase_ratios_vertex!(
-    ::CUDABackendTrait,
-    phase_ratios::JustRelax.PhaseRatio,
-    particles,
-    grid::Geometry,
-    phases,
-)
-    return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-end
-
 # Rheology
 
 ## viscosity
@@ -228,7 +200,7 @@ function JR2D.compute_ρg!(ρg::CuArray, rheology, args)
     return compute_ρg!(ρg, rheology, args)
 end
 
-function JR2D.compute_ρg!(ρg::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args)
+function JR2D.compute_ρg!(ρg::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args)
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -238,7 +210,7 @@ function JR2D.compute_melt_fraction!(ϕ::CuArray, rheology, args)
 end
 
 function JR2D.compute_melt_fraction!(
-    ϕ::CuArray, phase_ratios::JustRelax.PhaseRatio, rheology, args
+    ϕ::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
 )
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
@@ -309,7 +281,7 @@ function JR2D.subgrid_characteristic_time!(
     subgrid_arrays,
     particles,
     dt₀::CuArray,
-    phases::JustRelax.PhaseRatio,
+    phases::JustPIC.PhaseRatios,
     rheology,
     thermal::JustRelax.ThermalArrays,
     stokes::JustRelax.StokesArrays,
@@ -357,7 +329,7 @@ function JR2D.compute_shear_heating!(::CUDABackendTrait, thermal, stokes, rheolo
 end
 
 function JR2D.compute_shear_heating!(
-    ::CUDABackendTrait, thermal, stokes, phase_ratios::JustRelax.PhaseRatio, rheology, dt
+    ::CUDABackendTrait, thermal, stokes, phase_ratios::JustPIC.PhaseRatios, rheology, dt
 )
     ni = size(thermal.shear_heating)
     @parallel (@idx ni) compute_shear_heating_kernel!(

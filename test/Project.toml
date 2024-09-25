@@ -1,5 +1,4 @@
 [deps]
-AllocCheck = "9b6a8646-10ed-4001-bbdc-1d2f46dfbb1a"
 CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
 GeoParams = "e018b62d-d9de-4a26-8697-af89c310ae38"
 JustPIC = "10dc771f-8528-4cd9-9d3b-b21b2e693339"
@@ -20,8 +19,7 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 
 [compat]
 AMDGPU = "0.8, 0.9, 1"
-AllocCheck = "0.1"
-CUDA = "~5.3.5"
+CUDA = "5"
 CellArrays = "0.2"
 GeoParams = "0.5, 0.6"
 JustPIC = "0.3.4, 0.3.5, 0.3.6, 0.4"

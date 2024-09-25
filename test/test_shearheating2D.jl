@@ -99,9 +99,9 @@ function Shearheating2D(igg; nx=32, ny=32)
     xc_anomaly       = lx / 2 # origin of thermal anomaly
     yc_anomaly       = 40e3   # origin of thermal anomaly
     r_anomaly        = 3e3    # radius of perturbation
-    phase_ratios     = PhaseRatio(backend_JR, ni, length(rheology))
+    phase_ratios     = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -227,14 +227,14 @@ function Shearheating2D(igg; nx=32, ny=32)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
 
         @show it += 1
         t        += dt
 
     end
 
-    finalize_global_grid(; finalize_MPI=true)
+    # finalize_global_grid(; finalize_MPI=true)
 
     return iters, thermal
 end
@@ -267,5 +267,6 @@ end
 
         # Ensure iters is defined before running the test
         @test iters != nothing && iters.err_evo1[end] < 1e-4
+        @test any(x -> x < 0, thermal.shear_heating) == false
     end
 end

@@ -101,7 +101,7 @@ function Shearheating2D(igg; nx=32, ny=32)
     r_anomaly        = 3e3    # radius of perturbation
     phase_ratios     = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -227,7 +227,7 @@ function Shearheating2D(igg; nx=32, ny=32)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         @show it += 1
         t        += dt

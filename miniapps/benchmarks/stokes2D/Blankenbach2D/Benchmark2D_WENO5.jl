@@ -85,7 +85,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
     pPhases,            = init_cell_arrays(particles, Val(1))
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------

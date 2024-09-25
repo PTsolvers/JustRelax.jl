@@ -145,7 +145,7 @@ function diffusion_3D(;
     pPhases,     = init_cell_arrays(particles, Val(1))
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion

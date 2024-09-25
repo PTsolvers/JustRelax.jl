@@ -88,7 +88,7 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
     particle_args        = (pPhases, )
     phase_ratios         = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -172,7 +172,7 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
         # inject && break
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         @show it += 1
         t        += dt

@@ -265,7 +265,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         @show it += 1
         t        += dt

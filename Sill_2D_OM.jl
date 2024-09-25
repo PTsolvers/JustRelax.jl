@@ -153,7 +153,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     phases_dev   = PTArray(backend_JR)(phases_GMG)
     phase_ratios = PhaseRatios(backend, length(rheology), ni);
     init_phases!(pPhases, phases_dev, particles, xvi)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     thermal         = ThermalArrays(backend_JR, ni)
     @views thermal.T[2:end-1, :] .= PTArray(backend_JR)(nondimensionalize(T_GMG.*K, CharDim))
@@ -299,7 +299,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_WENO,), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
         @show it += 1
         t        += dt
         @show extrema(thermal.T)

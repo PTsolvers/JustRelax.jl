@@ -408,9 +408,9 @@ function _solve!(
     @copy stokes.P0 stokes.P
     θ = deepcopy(stokes.P)
     λ = @zeros(ni...)
-    λv_yz = zeros(size(stokes.τ.yz)...)
-    λv_xz = zeros(size(stokes.τ.xz)...)
-    λv_xy = zeros(size(stokes.τ.xy)...)
+    λv_yz = @zeros(size(stokes.τ.yz)...)
+    λv_xz = @zeros(size(stokes.τ.xz)...)
+    λv_xy = @zeros(size(stokes.τ.xy)...)
 
     # solver loop
     wtime0 = 0.0
@@ -461,25 +461,6 @@ function _solve!(
                 relaxation=viscosity_relaxation,
             )
             # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
-
-            # @parallel (@idx ni) compute_τ_nonlinear!(
-            #     @tensor_center(stokes.τ),
-            #     stokes.τ.II,
-            #     @tensor_center(stokes.τ_o),
-            #     @strain(stokes),
-            #     @tensor_center(stokes.ε_pl),
-            #     stokes.EII_pl,
-            #     stokes.P,
-            #     θ,
-            #     η,
-            #     η_vep,
-            #     λ,
-            #     phase_ratios.center,
-            #     tupleize(rheology), # needs to be a tuple
-            #     dt,
-            #     pt_stokes.θ_dτ,
-            #     args,
-            # )
 
             @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
                 @strain(stokes),

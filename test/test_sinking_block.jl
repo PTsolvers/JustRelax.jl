@@ -148,6 +148,7 @@ function Sinking_Block2D()
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
     phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    phase_ratios_vertex!(phase_ratios, particles, xvi, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem

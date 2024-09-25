@@ -98,6 +98,7 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
     phase_ratios     = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
     phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    phase_ratios_vertex!(phase_ratios, particles, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -219,6 +220,7 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
         inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,), xvi)
         # update phase ratios
         phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        phase_ratios_vertex!(phase_ratios, particles, xvi, pPhases)
 
         @show it += 1
         t += dt

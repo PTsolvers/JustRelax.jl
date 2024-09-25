@@ -102,6 +102,7 @@ function Shearheating2D(igg; nx=32, ny=32)
     phase_ratios     = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
     phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    phase_ratios_vertex!(phase_ratios, particles, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------

@@ -36,8 +36,6 @@ else
     JustPIC.CPUBackend
 end
 
-
-
 # Load script dependencies
 using Printf, LinearAlgebra, CellArrays
 
@@ -114,6 +112,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 10)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
     phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    phase_ratios_vertex!(phase_ratios, particles, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -256,6 +255,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 10)
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
         # update phase ratios
         phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        phase_ratios_vertex!(phase_ratios, particles, xvi, pPhases)
 
         # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----
         Nu_it   =   (ly / (1000.0*lx)) *

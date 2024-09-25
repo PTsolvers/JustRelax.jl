@@ -115,60 +115,70 @@ function _phase_ratios_vertex!(
 end
 
 @parallel_indices (I...) function phase_ratios_vertex_kernel!(
-    ratio_vertices, pxi::NTuple{3,T1}, xvi::NTuple{3,T2}, di::NTuple{3,T3}, phases
-) where {T1,T2,T3}
+    ratio_vertices, pxi::NTuple{3}, xvi::NTuple{3}, di::NTuple{3,T}, phases
+) where {T}
 
-    # # index corresponding to the cell center
+    # index corresponding to the cell center
     cell_vertex = ntuple(i -> xvi[i][I[i]], Val(3))
     ni = size(phases)
+    NC = nphases(ratio_vertices)
+    w = ntuple(_ -> zero(T), NC)
 
     for offsetᵢ in -1:0, offsetⱼ in -1:0, offsetₖ in -1:0
         offsets = offsetᵢ, offsetⱼ, offsetₖ
         cell_index = ntuple(Val(3)) do i
             clamp(I[i] + offsets[i], 1, ni[i])
         end
-        # phase ratios weights (∑w = 1.0)
-        w = phase_ratio_weights(
-            getindex.(pxi, cell_index...),
-            phases[cell_index...],
-            cell_vertex,
-            di,
-            nphases(ratio_vertices),
-        )
-        # update phase ratios array
-        for k in 1:numphases(ratio_vertices)
-            @cell ratio_vertices[k, I...] = w[k]
+
+        for ip in cellaxes(phases)
+            p = @cell(pxi[1][ip, cell_index...]),
+            @cell(pxi[2][ip, cell_index...]),
+            @cell(pxi[3][ip, cell_index...])
+            any(isnan, p) && continue
+            x = @inline bilinear_weight(cell_vertex, p, di)
+            ph_local = @cell phases[ip, cell_index...]
+            # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
+            w = w .+ x .* ntuple(j -> (ph_local == j), NC)
         end
+    end
+
+    w = w .* inv(sum(w))
+    for ip in cellaxes(ratio_vertices)
+        @cell ratio_vertices[ip, I...] = w[ip]
     end
 
     return nothing
 end
 
 @parallel_indices (I...) function phase_ratios_vertex_kernel!(
-    ratio_vertices, pxi::NTuple{2,T1}, xvi::NTuple{2,T2}, di::NTuple{2,T3}, phases
-) where {T1,T2,T3}
+    ratio_vertices, pxi::NTuple{2}, xvi::NTuple{2}, di::NTuple{2,T}, phases
+) where {T}
 
     # index corresponding to the cell center
     cell_vertex = ntuple(i -> xvi[i][I[i]], Val(2))
     ni = size(phases)
+    NC = nphases(ratio_vertices)
+    w = ntuple(_ -> zero(T), NC)
 
     for offsetᵢ in -1:0, offsetⱼ in -1:0
         offsets = offsetᵢ, offsetⱼ
         cell_index = ntuple(Val(2)) do i
             clamp(I[i] + offsets[i], 1, ni[i])
         end
-        # phase ratios weights (∑w = 1.0)
-        w = phase_ratio_weights(
-            getindex.(pxi, cell_index...),
-            phases[cell_index...],
-            cell_vertex,
-            di,
-            nphases(ratio_vertices),
-        )
-        # update phase ratios array
-        for k in 1:numphases(ratio_vertices)
-            @cell ratio_vertices[k, I...] = w[k]
+
+        for ip in cellaxes(phases)
+            p = @cell(pxi[1][ip, cell_index...]), @cell(pxi[2][ip, cell_index...])
+            any(isnan, p) && continue
+            x = @inline bilinear_weight(cell_vertex, p, di)
+            ph_local = @cell phases[ip, cell_index...]
+            # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
+            w = w .+ x .* ntuple(j -> (ph_local == j), NC)
         end
+    end
+
+    w = w .* inv(sum(w))
+    for ip in cellaxes(ratio_vertices)
+        @cell ratio_vertices[ip, I...] = w[ip]
     end
 
     return nothing
@@ -182,20 +192,16 @@ function phase_ratio_weights(
 
     # Initiaze phase ratio weights (note: can't use ntuple() here because of the @generated function)
     w = ntuple(_ -> zero(T), Val(NC))
-    sumw = zero(T)
 
     for i in eachindex(ph)
         # bilinear weight (1-(xᵢ-xc)/dx)*(1-(yᵢ-yc)/dy)
         p = getindex.(pxi, i)
         isnan(first(p)) && continue
         x = @inline bilinear_weight(cell_center, p, di)
-        sumw += x # reduce
-        ph_local = ph[i]
         # this is doing sum(w * δij(i, phase)), where δij is the Kronecker delta
-        # w = w .+ x .* ntuple(j -> δ(Int(ph_local), j), Val(NC))
-        w = w .+ x .* ntuple(j -> (ph_local == j), Val(NC))
+        w = w .+ x .* ntuple(j -> (ph[i] == j), Val(NC))
     end
-    w = w .* inv(sumw)
+    w = w .* inv(sum(w))
     return w
 end
 

@@ -1,5 +1,5 @@
 using GeoParams
-using JustRelax, JustRelax.JustRelax2D
+using JustRelax, JustRelax.JustRelax2D, GLMakie
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
@@ -153,7 +153,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             kwargs = (
                 verbose          = false,
                 iterMax          = 50e3,
-                nout             = 1e2,
+                nout             = 1e3,
                 viscosity_cutoff = (-Inf, Inf)
             )
         )
@@ -204,11 +204,11 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
 end
 
-N      = 32
+N      = 30 
 n      = N
-nx     = n  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-ny     = n
-figdir = "ShearBands2D"
+nx     = n*2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+ny     = n*2
+figdir = "ShearBands2D_MPI"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device=false)...)
 else

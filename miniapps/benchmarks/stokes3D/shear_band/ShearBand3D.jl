@@ -2,7 +2,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 import JustRelax.@cell
 const backend_JR = CPUBackend
 
-using Printf, GeoParams, GLMakie, CellArrays, CSV, DataFrames
+using Printf, GeoParams, GLMakie, CellArrays
 
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
@@ -11,13 +11,13 @@ using ParallelStencil
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, radius)
+function init_phases!(phase_ratios, xci, xvi, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5, 0.5
 
     @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
         x, y, z = xc[i], yc[j], zc[k]
-        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
+        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius^2
             JustRelax.@cell phases[1, i, j, k] = 1.0
             JustRelax.@cell phases[2, i, j, k] = 0.0
 
@@ -30,6 +30,8 @@ function init_phases!(phase_ratios, xci, radius)
     end
 
     @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
+    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin...)
+    return nothing
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -51,12 +53,14 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     η0          = 1.0           # viscosity
     G0          = 1.0           # elastic shear modulus
     Gi          = G0/(6.0-4.0)  # elastic shear modulus perturbation
+    # Gi          = G0            # elastic shear modulus perturbation
     εbg         = 1.0           # background strain-rate
     η_reg       = 1.25e-2       # regularisation "viscosity"
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
     el_inc      = ConstantElasticity(; G=Gi, ν=0.5)
     visc        = LinearViscous(; η=η0)
+    visc_inc    = LinearViscous(; η=η0/10)
     pl          = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ,
@@ -69,6 +73,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
+            # CompositeRheology = CompositeRheology((visc, el_bg, )),
             CompositeRheology = CompositeRheology((visc, el_bg, pl)),
             Elasticity        = el_bg,
 
@@ -77,24 +82,26 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
+            # CompositeRheology = CompositeRheology((visc_inc, el_inc, )),
             CompositeRheology = CompositeRheology((visc, el_inc, pl)),
             Elasticity        = el_inc,
         ),
     )
 
     # Initialize phase ratios -------------------------------
-    radius       = 0.01
+    radius       = 0.1
     phase_ratios = PhaseRatio(ni, length(rheology))
-    init_phases!(phase_ratios, xci, radius)
+    init_phases!(phase_ratios, xci, xvi, radius)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes       = StokesArrays(backend_JR, ni)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-4,  CFL = 0.05 / √3.1)
+    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-5,  CFL = 0.1 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
     # Rheology
+    cutoff_visc = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # Boundary conditions
@@ -102,9 +109,9 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         free_slip   = (left = true , right = true , top = true , bot = true , back = true , front = true),
         no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
-    stokes.V.Vx .= PTArray([ x*εbg/2 for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
-    stokes.V.Vy .= PTArray([ y*εbg/2 for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
-    stokes.V.Vz .= PTArray([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
+
+    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
+    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -113,9 +120,13 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     !isdir(figdir) && mkpath(figdir)
     # ----------------------------------------------------
 
+    Vx_v = @zeros(ni .+ 1...)
+    Vy_v = @zeros(ni .+ 1...)
+    Vz_v = @zeros(ni .+ 1...)
+
     # Time loop
     t, it = 0.0, 0
-    tmax  = 3
+    tmax  = 4
     τII   = Float64[]
     sol   = Float64[]
     ttot  = Float64[]
@@ -134,13 +145,14 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             dt,
             igg;
             kwargs = (;
-                iterMax          = 150e3,
+                iterMax          = 75e3,
                 nout             = 1e3,
                 viscosity_cutoff = (-Inf, Inf)
             )
         )
 
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -151,42 +163,42 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
         println("it = $it; t = $t \n")
 
-        velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-        data_v = (;
-            T   = Array(T_buffer),
-            τII = Array(stokes.τ.II),
-            εII = Array(stokes.ε.II),
-            Vx  = Array(Vx_v),
-            Vy  = Array(Vy_v),
-            Vz  = Array(Vz_v),
-        )
-        data_c = (;
-            P   = Array(stokes.P),
-            η   = Array(stokes.viscosity.η_vep),
-        )
-        velocity_v = (
-            Array(Vx_v),
-            Array(Vy_v),
-            Array(Vz_v),
-        )
-        save_vtk(
-            joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-            xvi,
-            xci,
-            data_v,
-            data_c,
-            velocity_v
-        )
+        # velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+        # data_v = (;
+        #     τII = Array(stokes.τ.II),
+        #     εII = Array(stokes.ε.II),
+        #     Vx  = Array(Vx_v),
+        #     Vy  = Array(Vy_v),
+        #     Vz  = Array(Vz_v),
+        # )
+        # data_c = (;
+        #     P   = Array(stokes.P),
+        #     η   = Array(stokes.viscosity.η_vep),
+        # )
+        # velocity_v = (
+        #     Array(Vx_v),
+        #     Array(Vy_v),
+        #     Array(Vz_v),
+        # )
+        # save_vtk(
+        #     joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
+        #     xvi,
+        #     xci,
+        #     data_v,
+        #     data_c,
+        #     velocity_v
+        # )
 
         # visualisation
+        jslice  = ni[2] >>> 1 
         fig     = Figure(size = (1600, 1600), title = "t = $t")
-        ax1     = Axis3(fig[1,1], aspect =  (1, 1, 1), title = "τII")
-        ax2     = Axis3(fig[2,1], aspect =  (1, 1, 1), title = "η_vep")
-        ax3     = Axis3(fig[1,2], aspect =  (1, 1, 1), title = "log10(εxy)")
+        ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
+        ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
+        ax3     = Axis(fig[1,2], aspect = 1, title = "log10(εxy)")
         ax4     = Axis(fig[2,2], aspect = 1)
-        volume!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
-        volume!(ax2, xci..., Array(η_vep) , colormap=:batlow)
-        volume!(ax3, xci..., Array(log10.(stokes.ε.xy)) , colormap=:batlow)
+        heatmap!(ax1, xci[1], xci[3], Array(stokes.τ.II[:, jslice, :]) , colormap=:batlow)
+        heatmap!(ax2, xci[1], xci[3], Array(stokes.viscosity.η_vep[:, jslice, :]) , colormap=:batlow)
+        heatmap!(ax3, xci[1], xci[3], Array(stokes.ε_pl.II[:, jslice, :]) , colormap=:batlow)
         lines!(ax4, ttot, τII, color = :black)
         lines!(ax4, ttot, sol, color = :red)
         hidexdecorations!(ax1)
@@ -194,25 +206,16 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         for ax in (ax1, ax2, ax3)
             xlims!(ax, (0, 1))
             ylims!(ax, (0, 1))
-            zlims!(ax, (0, 1))
         end
         save(joinpath(figdir, "$(it).png"), fig)
 
     end
 
-    df = DataFrame(
-        t = ttot,
-        τII = τII,
-        sol = sol,
-    )
-
-    CSV.write(joinpath(figdir, "data_$(nx).csv"), df)
-
     return nothing
 end
 
-n            = 64 + 2
-nx = ny = nz = n - 2
+n            = 32
+nx = ny = nz = n
 figdir       = "ShearBand3D"
 igg          = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)

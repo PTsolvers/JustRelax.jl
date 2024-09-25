@@ -504,7 +504,7 @@ end
 function clamped_indices(ni::NTuple{3,Integer}, i, j, k)
     nx, ny, nz = ni
     i0 = clamp(i - 1, 1, nx)
-    ic = clamp(i    , 1, nx)
+    ic = clamp(i, 1, nx)
     i1 = clamp(i + 1, 1, nx)
     j0 = clamp(j - 1, 1, ny)
     jc = clamp(j, 1, ny)

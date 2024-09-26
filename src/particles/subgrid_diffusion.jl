@@ -41,7 +41,7 @@ end
 )
     Pᵢ, Tᵢ = P[I...], T[I...]
     argsᵢ = (; P=Pᵢ, T=Tᵢ)
-    phaseᵢ = phase_ratios[I...]
+    phaseᵢ = @cell phase_ratios[I...]
 
     # Compute the characteristic timescale `dt₀` of the local cell
     ρCp = compute_ρCp(rheology, phaseᵢ, argsᵢ)

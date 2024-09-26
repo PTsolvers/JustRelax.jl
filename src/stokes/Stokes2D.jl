@@ -555,10 +555,10 @@ function _solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            if rem(iter, nout) == 0
-                @copy η0 η
-            end
-            if do_visc
+            # if rem(iter, nout) == 0
+            #     @copy η0 η
+            # end
+            # if do_visc
                 update_viscosity!(
                     stokes,
                     phase_ratios,
@@ -567,7 +567,7 @@ function _solve!(
                     viscosity_cutoff;
                     relaxation=viscosity_relaxation,
                 )
-            end
+            # end
 
             @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
                 @strain(stokes),
@@ -620,8 +620,8 @@ function _solve!(
         iter += 1
 
         if iter % nout == 0 && iter > 1
-            er_η = norm_mpi(@.(log10(η) - log10(η0)))
-            er_η < 1e-3 && (do_visc = false)
+            # er_η = norm_mpi(@.(log10(η) - log10(η0)))
+            # er_η < 1e-3 && (do_visc = false)
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,

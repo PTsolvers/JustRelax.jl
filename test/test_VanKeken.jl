@@ -114,7 +114,7 @@ function VanKeken2D(ny=32, nx=32)
     particle_args        = (pPhases, )
     phase_ratios         = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -191,7 +191,7 @@ function VanKeken2D(ny=32, nx=32)
         # inject && break
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         @show it += 1
         t        += dt

@@ -118,7 +118,7 @@ function RT_2D(igg, nx, ny)
     A             = 5e3    # Amplitude of the anomaly
     phase_ratios  = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, A)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -197,7 +197,7 @@ function RT_2D(igg, nx, ny)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         @show it += 1
         t        += dt

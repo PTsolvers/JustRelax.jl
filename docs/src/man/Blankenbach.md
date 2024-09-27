@@ -121,7 +121,7 @@ map!(x -> isnan(x) ? NaN : 1.0, pPhase.data, particles.index.data)
 and finally we need the phase ratios at the cell centers:
 ```julia
 phase_ratios = PhaseRatios(backend, length(rheology), ni)
-phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 ```
 
 ### Stokes and heat diffusion arrays
@@ -312,7 +312,7 @@ move_particles!(particles, xvi, particle_args)
 # check if we need to inject particles
 inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
 # update phase ratios
-phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 ```
 5.  Interpolate `T` back to the grid
 ```julia

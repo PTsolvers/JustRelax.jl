@@ -49,6 +49,10 @@ function JR2D.ThermalArrays(::Type{AMDGPUBackend}, ni::Vararg{Number,N}) where {
     return ThermalArrays(ni...)
 end
 
+function JR2D.WENO5(::Type{AMDGPUBackend}, ni::Vararg{Integer,N}, method::Val{T}) where {N,T}
+    return WENO5(ni..., method)
+end
+
 function JR2D.PTThermalCoeffs(
     ::Type{AMDGPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
 )

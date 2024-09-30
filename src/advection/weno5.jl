@@ -3,7 +3,7 @@ using MuladdMacro, Adapt
 ## Weno5 advection scheme. Implementation based on the repository from
 # https://gmd.copernicus.org/preprints/gmd-2023-189/
 
-abstract type AbstractWENO end
+# abstract type AbstractWENO end
 
 """
     WENO5{T, N, A, M} <: AbstractWENO
@@ -24,36 +24,37 @@ The `WENO5` is a structure representing the Weighted Essentially Non-Oscillatory
 # Description
 The `WENO5` structure contains the parameters and temporary variables used in the WENO scheme. These include the upwind and downwind constants, the constants for betas, the stencil candidate weights, the tolerance, the grid size, the fluxes, and the method.
 """
-@kwdef struct WENO5{T,N,A,M} <: AbstractWENO
+@kwdef struct WENO5{T,N,A,M} #<: AbstractWENO
     # upwind constants
-    d0L::T = 1 / 10
-    d1L::T = 3 / 5
-    d2L::T = 3 / 10
+    d0L::T
+    d1L::T
+    d2L::T
     # downwind constants
-    d0R::T = 3 / 10
-    d1R::T = 3 / 5
-    d2R::T = 1 / 10
+    d0R::T
+    d1R::T
+    d2R::T
     # for betas
-    c1::T = 13 / 12
-    c2::T = 1 / 4
+    c1::T
+    c2::T
     # stencil weights
-    sc1::T = 1 / 3
-    sc2::T = 7 / 6
-    sc3::T = 11 / 6
-    sc4::T = 1 / 6
-    sc5::T = 5 / 6
+    sc1::T
+    sc2::T
+    sc3::T
+    sc4::T
+    sc5::T
     # tolerance
-    ϵ::T = 1e-6
+    ϵ::T
     # grid size
     ni::NTuple{N,Int64}
     # fluxes
-    ut::A = zeros(ni...)
-    fL::A = zeros(ni...)
-    fR::A = zeros(ni...)
-    fB::A = zeros(ni...)
-    fT::A = zeros(ni...)
+    ut::A
+    fL::A
+    fR::A
+    fB::A
+    fT::A
     # method
-    method::M = Val{1} # 1:JS, 2:Z
+    # method::M # 1:JS, 2:Z
+
 end
 
 Adapt.@adapt_structure WENO5

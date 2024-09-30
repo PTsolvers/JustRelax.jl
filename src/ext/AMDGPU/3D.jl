@@ -49,8 +49,8 @@ function JR3D.ThermalArrays(::Type{AMDGPUBackend}, ni::Vararg{Number,N}) where {
     return ThermalArrays(ni...)
 end
 
-function JR3D.WENO5(::Type{AMDGPUBackend}, ni::Vararg{Integer,N}, method::Val{T}) where {N,T}
-    return WENO5(ni..., method)
+function JR3D.WENO5(::Type{AMDGPUBackend}, method::Val{T}, ni::Vararg{Integer,N}) where {N,T}
+    return WENO5(method, ni)
 end
 
 function JR3D.PTThermalCoeffs(

@@ -4,9 +4,6 @@ export StokesArrays, PTStokesCoeffs
 include("types/constructors/heat_diffusion.jl")
 export ThermalArrays, PTThermalCoeffs
 
-include("types/constructors/weno.jl")
-export WENO5
-
 include("Utils.jl")
 export @allocate,
     @add,
@@ -67,8 +64,7 @@ include("Interpolations.jl")
 export vertex2center!, center2vertex!, temperature2center!, velocity2vertex!
 
 include("advection/weno5.jl")
-export WENO_advection!
-# export WENO5, WENO_advection!
+export WENO5, WENO_advection!
 
 # Stokes
 

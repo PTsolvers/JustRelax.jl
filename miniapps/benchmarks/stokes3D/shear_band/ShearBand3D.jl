@@ -57,6 +57,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     εbg         = 1.0           # background strain-rate
     η_reg       = 1.25e-2       # regularisation "viscosity"
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
+    dt         /= 2     
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
     el_inc      = ConstantElasticity(; G=Gi, ν=0.5)
     visc        = LinearViscous(; η=η0)
@@ -73,7 +74,6 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            # CompositeRheology = CompositeRheology((visc, el_bg, )),
             CompositeRheology = CompositeRheology((visc, el_bg, pl)),
             Elasticity        = el_bg,
 
@@ -82,7 +82,6 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            # CompositeRheology = CompositeRheology((visc_inc, el_inc, )),
             CompositeRheology = CompositeRheology((visc, el_inc, pl)),
             Elasticity        = el_inc,
         ),
@@ -96,7 +95,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes       = StokesArrays(backend_JR, ni)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-5,  CFL = 0.1 / √3.1)
+    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-5,  CFL = 0.5 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
@@ -111,7 +110,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     )
 
     stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
-    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg   for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
+    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -212,7 +211,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n            = 32
+n            = 128
 nx = ny = nz = n
 figdir       = "ShearBand3D"
 igg          = if !(JustRelax.MPI.Initialized())

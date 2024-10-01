@@ -111,7 +111,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     )
 
     stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
-    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg   for _ in 1:nx+2, _ in 1:nx+2, z in xvi[3]])
+    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg   for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -163,31 +163,29 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
         println("it = $it; t = $t \n")
 
-        # velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-        # data_v = (;
-        #     τII = Array(stokes.τ.II),
-        #     εII = Array(stokes.ε.II),
-        #     Vx  = Array(Vx_v),
-        #     Vy  = Array(Vy_v),
-        #     Vz  = Array(Vz_v),
-        # )
-        # data_c = (;
-        #     P   = Array(stokes.P),
-        #     η   = Array(stokes.viscosity.η_vep),
-        # )
-        # velocity_v = (
-        #     Array(Vx_v),
-        #     Array(Vy_v),
-        #     Array(Vz_v),
-        # )
-        # save_vtk(
-        #     joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
-        #     xvi,
-        #     xci,
-        #     data_v,
-        #     data_c,
-        #     velocity_v
-        # )
+        velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+        data_v = (;
+            τII = Array(stokes.τ.II),
+            εII = Array(stokes.ε.II),
+            εII = Array(stokes.ε_pl.II),
+        )
+        data_c = (;
+            P   = Array(stokes.P),
+            η   = Array(stokes.viscosity.η_vep),
+        )
+        velocity_v = (
+            Array(Vx_v),
+            Array(Vy_v),
+            Array(Vz_v),
+        )
+        save_vtk(
+            joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
+            xvi,
+            xci,
+            data_v,
+            data_c,
+            velocity_v
+        )
 
         # visualisation
         jslice  = ni[2] >>> 1 

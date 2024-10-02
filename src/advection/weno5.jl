@@ -3,7 +3,7 @@ using MuladdMacro, Adapt
 ## Weno5 advection scheme. Implementation based on the repository from
 # https://gmd.copernicus.org/preprints/gmd-2023-189/
 
-# abstract type AbstractWENO end
+abstract type AbstractWENO end
 
 """
     WENO5{T, N, A, M} <: AbstractWENO
@@ -25,7 +25,7 @@ The `WENO5` is a structure representing the Weighted Essentially Non-Oscillatory
 The `WENO5` structure contains the parameters and temporary variables used in the WENO scheme. These include the upwind and downwind constants, the constants for betas, the stencil candidate weights, the tolerance, the grid size, the fluxes, and the method.
 """
 # Define the WENO5 struct
-struct WENO5{T,N,A,M}
+struct WENO5{T,N,A,M} <: AbstractWENO
     # upwind constants
     d0L::T
     d1L::T
@@ -59,7 +59,7 @@ end
 
 # Define the WENO5 constructor
 function WENO5(::Type{CPUBackend}, method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
-    return WENO5(method, ni)
+    return WENO5(method, tuple(ni...))
 end
 
 function WENO5(method::Val{T}, ni::NTuple{N,Integer}) where {N,T}

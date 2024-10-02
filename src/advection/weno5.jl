@@ -16,18 +16,18 @@ end
 end
 
 ## Upwind alphas
-@inline function weno_alphas_upwind(::WENO5, ::Type{Any}, β0, β1, β2)
+@inline function weno_alphas_upwind(::JustRelax.WENO5, ::Type{Any}, β0, β1, β2)
     return error("Unknown method for the WENO Scheme")
 end
 
-@inline function weno_alphas_upwind(weno::WENO5, ::Val{1}, β0, β1, β2)
+@inline function weno_alphas_upwind(weno::JustRelax.WENO5, ::Val{1}, β0, β1, β2)
     α0L = weno.d0L * inv(β0 + weno.ϵ)^2
     α1L = weno.d1L * inv(β1 + weno.ϵ)^2
     α2L = weno.d2L * inv(β2 + weno.ϵ)^2
     return α0L, α1L, α2L
 end
 
-@inline function weno_alphas_upwind(weno::WENO5, ::Val{2}, β0, β1, β2)
+@inline function weno_alphas_upwind(weno::JustRelax.WENO5, ::Val{2}, β0, β1, β2)
     τ = abs(β0 - β2)
     α0L = weno.d0L * (1 + (τ * inv(β0 + weno.ϵ))^2)
     α1L = weno.d1L * (1 + (τ * inv(β1 + weno.ϵ))^2)
@@ -36,18 +36,18 @@ end
 end
 
 ## Downwind alphas
-@inline function weno_alphas_downwind(::WENO5, ::Any, β0, β1, β2)
+@inline function weno_alphas_downwind(::JustRelax.WENO5, ::Any, β0, β1, β2)
     return error("Unknown method for the WENO Scheme")
 end
 
-@inline function weno_alphas_downwind(weno::WENO5, ::Val{1}, β0, β1, β2)
+@inline function weno_alphas_downwind(weno::JustRelax.WENO5, ::Val{1}, β0, β1, β2)
     α0R = weno.d0R * inv(β0 + weno.ϵ)^2
     α1R = weno.d1R * inv(β1 + weno.ϵ)^2
     α2R = weno.d2R * inv(β2 + weno.ϵ)^2
     return α0R, α1R, α2R
 end
 
-@inline function weno_alphas_downwind(weno::WENO5, ::Val{2}, β0, β1, β2)
+@inline function weno_alphas_downwind(weno::JustRelax.WENO5, ::Val{2}, β0, β1, β2)
     τ = abs(β0 - β2)
     α0R = weno.d0R * (1 + (τ * inv(β0 + weno.ϵ))^2)
     α1R = weno.d1R * (1 + (τ * inv(β1 + weno.ϵ))^2)

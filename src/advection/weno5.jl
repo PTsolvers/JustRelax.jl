@@ -59,10 +59,10 @@ end
 
 # Define the WENO5 constructor
 function WENO5(::Type{CPUBackend}, method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
-    return WENO5(method, ni::NTuple{N,Integer})
+    return WENO5(method, ni)
 end
 
-function WENO5(ni::NTuple{N,Integer}, method::Val{T}) where {N,T}
+function WENO5(method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
     d0L = 1 / 10
     d1L = 3 / 5
     d2L = 3 / 10

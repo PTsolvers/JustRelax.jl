@@ -41,7 +41,7 @@ function JR3D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number,N}) where {N}
     return ThermalArrays(ni...)
 end
 
-function JR3D.WENO5(::Type{CUDABackend}, method::Val{T}, ni::Vararg{Integer,N}) where {N,T}
+function JR3D.WENO5(::Type{CUDABackend}, method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
     return WENO5(method, ni)
 end
 

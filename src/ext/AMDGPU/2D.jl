@@ -49,7 +49,7 @@ function JR2D.ThermalArrays(::Type{AMDGPUBackend}, ni::Vararg{Number,N}) where {
     return ThermalArrays(ni...)
 end
 
-function JR2D.WENO5(::Type{AMDGPUBackend}, method::Val{T}, ni::Vararg{Integer,N}) where {N,T}
+function JR2D.WENO5(::Type{AMDGPUBackend}, method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
     return WENO5(method, ni)
 end
 

@@ -42,8 +42,8 @@ function JR2D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number,N}) where {N}
     return ThermalArrays(ni...)
 end
 
-function JR2D.WENO5(::Type{CUDABackend}, method::Val{T}, ni::Vararg{Integer,N}, ) where {N,T}
-    return WENO5(method, ni)
+function JR2D.WENO5(::Type{CUDABackend}, method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
+    return WENO5(method, ni...)
 end
 
 function JR2D.PTThermalCoeffs(

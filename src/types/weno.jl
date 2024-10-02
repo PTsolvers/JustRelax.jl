@@ -19,6 +19,11 @@ The `WENO5` is a structure representing the Weighted Essentially Non-Oscillatory
 - `fL`, `fR`, `fB`, `fT`: Fluxes.
 - `method`: Method (1:JS, 2:Z).
 
+# Examples
+```julia
+weno = WENO5(Val(2), (nx, ny))
+```
+
 # Description
 The `WENO5` structure contains the parameters and temporary variables used in the WENO scheme. These include the upwind and downwind constants, the constants for betas, the stencil candidate weights, the tolerance, the grid size, the fluxes, and the method.
 """
@@ -54,13 +59,3 @@ struct WENO5{T,N,A,M} <: AbstractWENO
     # method
     method::M # 1:JS, 2:Z
 end
-
-# function WENO5(::Type{CPUBackend}, method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
-#     return WENO5(d0L, d1L, d2L, d0R, d1R, d2R, c1, c2, sc1, sc2, sc3, sc4, sc5, ϵ, ni, ut, fL, fR, fB, fT, method)
-# end
-
-# function WENO5{T,N,A,M}(ni::NTuple{N,Int64}, method::Val{T}) where {T,N,A,M}
-#     WENO5(
-#         d0L, d1L, d2L, d0R, d1R, d2R, c1, c2, sc1, sc2, sc3, sc4, sc5, ϵ, ni, ut, fL, fR, fB, fT, method
-#     )
-# end

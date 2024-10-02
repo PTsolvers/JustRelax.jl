@@ -100,7 +100,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # ----------------------------------------------------
 
     # Weno model -----------------------------------------
-    weno = WENO5(ni=(nx,ny).+1, method=Val{2}()) # ni.+1 for Temp
+    weno = WENO5(Val(2), (nx,ny).+1) # ni.+1 for Temp
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------

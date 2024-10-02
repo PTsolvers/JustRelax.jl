@@ -29,5 +29,27 @@ function WENO5(method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
     fB = @zeros(ni...)
     fT = @zeros(ni...)
     # method = Val{1} # 1:JS, 2:Z
-    return JustRelax.WENO5(d0L, d1L, d2L, d0R, d1R, d2R, c1, c2, sc1, sc2, sc3, sc4, sc5, ϵ, ni, ut, fL, fR, fB, fT, method)
+    return JustRelax.WENO5(
+        d0L,
+        d1L,
+        d2L,
+        d0R,
+        d1R,
+        d2R,
+        c1,
+        c2,
+        sc1,
+        sc2,
+        sc3,
+        sc4,
+        sc5,
+        ϵ,
+        ni,
+        ut,
+        fL,
+        fR,
+        fB,
+        fT,
+        method,
+    )
 end

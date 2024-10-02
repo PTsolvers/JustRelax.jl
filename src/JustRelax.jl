@@ -31,7 +31,6 @@ include("types/heat_diffusion.jl")
 # export ThermalArrays, PTThermalCoeffs
 
 include("types/weno.jl")
-export AbstractWENO
 
 include("boundaryconditions/types.jl")
 export TemperatureBoundaryConditions,

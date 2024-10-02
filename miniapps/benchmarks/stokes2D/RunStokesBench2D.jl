@@ -5,6 +5,8 @@ using GLMakie
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
+const backend = CPUBackend
+
 # choose benchmark
 benchmark = :solcx
 

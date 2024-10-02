@@ -1,3 +1,4 @@
+using ParallelStencil.FiniteDifferences2D
 # include benchmark related functions
 include("vizSolVi.jl")
 
@@ -35,9 +36,9 @@ function solVi(;
     Δη=1e-3,
     nx=256 - 1,
     ny=256 - 1,
-    lx=1e1,
-    ly=1e1,
-    rc=1e0,
+    lx=2e0,
+    ly=2e0,
+    rc=0.2,
     εbg=1e0,
     init_MPI=true,
     finalize_MPI=false,
@@ -46,10 +47,11 @@ function solVi(;
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni           = (nx, ny) # number of nodes in x- and y-
-    li           = (lx, ly)  # domain length in x- and y-
-    origin       = zero(nx), zero(ny)
-    igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
+    ni           = nx, ny # number of nodes in x- and y-
+    li           = lx, ly  # domain length in x- and y-
+    origin       = 0, 0
+    igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=true)...) #init MPI
+    # igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...) #init MPI
     di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -60,25 +62,27 @@ function solVi(;
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes    = StokesArrays(ni, ViscoElastic)
+    stokes    = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-5, CFL=0.27 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-9,  CFL = 0.95 / √2.1)
 
     ## Setup-specific parameters and fields
     η0        = 1.0  # matrix viscosity
     ηi        = Δη # inclusion viscosity
-    η         = solvi_viscosity(ni, di, li, rc, η0, ηi) # viscosity field
+    stokes.viscosity.η .= solvi_viscosity(ni, di, li, rc, η0, ηi) # viscosity field
     ρg        = @zeros(ni...), @zeros(ni...)
-    dt        = 0.1
+    dt        = Inf
     G         = @fill(Inf, ni...)
     Kb        = @fill(Inf, ni...)
 
     ## Boundary conditions
-    pureshear_bc!(stokes, xci, xvi, εbg)
-    flow_bcs  = VelocityBoundaryConditions(;
-        free_slip=(left=true, right=true, top=true, bot=true)
+    flow_bcs     = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true),
+        no_slip   = (left = false, right = false, top = false, bot=false),
     )
-    flow_bcs!(stokes,flow_bcs) # apply boundary conditions
+    stokes.V.Vx .= PTArray(backend)([-x*εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray(backend)([ y*εbg for _ in 1:nx+2, y in xvi[2]])
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
     # Physical time loop
@@ -91,15 +95,15 @@ function solVi(;
             di,
             flow_bcs,
             ρg,
-            η,
             G,
             Kb,
             dt,
             igg;
-            iterMax = 150e3,
-            nout    = 1e3,
-            b_width = (4, 4, 1),
-            verbose = false,
+            kwargs = (
+                iterMax = 50e3,
+                nout    = 1e3,
+                verbose = true,
+            )
         )
         t += Δt
     end
@@ -151,3 +155,37 @@ function multiple_solVi(; Δη=1e-3, lx=1e1, ly=1e1, rc=1e0, εbg=1e0, nrange::U
 
     return f
 end
+
+# ητ = deepcopy(η)
+# # @hide_communication b_width begin # communication/computation overlap
+# JustRelax2D.compute_maxloc!(ητ, η; window=(1, 1))
+
+# ## Compressible
+# @parallel_indices (I...) function compute_P!(P, P0, RP, ∇V, η, K, dt, r, θ_dτ)
+#     RP[I...], P[I...] = JustRelax2D._compute_P!(
+#         P[I...], P0[I...], ∇V[I...], η[I...], K[I...], dt, r, θ_dτ
+#     )
+#     return nothing
+# end
+
+# stokes.P .= 0
+# @parallel compute_P!(
+#     stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, ητ, Kb, dt, r, θ_dτ
+# )
+
+# stokes.P .= 0
+# JustRelax2D.compute_P!(
+#     stokes.P,
+#     stokes.P0,
+#     stokes.R.RP,
+#     stokes.∇V,
+#     stokes.viscosity.
+#     η,
+#     rheology,
+#     phase_ratios.center,
+#     dt,
+#     r,
+#     θ_dτ,
+#     args,
+# )
+# heatmap(stokes.P)

@@ -36,8 +36,8 @@ end
 using GeoParams, GLMakie, CellArrays
 
 # Load file with all the rheology configurations
-include("Subd2D_setup.jl")
-include("Subd2D_rheology.jl")
+include("Subduction2D_setup.jl")
+include("Subduction2D_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -74,9 +74,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology            = init_rheology_linear()
-    rheology            = init_rheology_nonNewtonian()
-    # rheology            = init_rheology_nonNewtonian_plastic()
+    # rheology            = init_rheology_linear()
+    # rheology            = init_rheology_nonNewtonian()
+    rheology            = init_rheology_nonNewtonian_plastic()
     dt                  = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -124,11 +124,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(2))
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-    # stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
+    stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
 
     # Rheology
     args0            = (T=thermal.Tc, P=stokes.P, dt = Inf)
-    viscosity_cutoff = (1e17, 1e24)
+    viscosity_cutoff = (1e18, 1e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
@@ -159,25 +159,25 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         Vy_v = @zeros(ni.+1...)
     end
 
-    # Smooth out thermal field ---------------------------
-    for _ in 1:10
-        heatdiffusion_PT!(
-            thermal,
-            pt_thermal,
-            thermal_bc,
-            rheology,
-            args0,
-            1e6 * 3600 * 24 * 365.25,
-            di;
-            kwargs = (
-                igg     = igg,
-                phase   = phase_ratios,
-                iterMax = 150e3,
-                nout    = 1e2,
-                verbose = true,
-            )
-        )
-    end
+    # # Smooth out thermal field ---------------------------
+    # for _ in 1:10
+    #     heatdiffusion_PT!(
+    #         thermal,
+    #         pt_thermal,
+    #         thermal_bc,
+    #         rheology,
+    #         args0,
+    #         1e6 * 3600 * 24 * 365.25,
+    #         di;
+    #         kwargs = (
+    #             igg     = igg,
+    #             phase   = phase_ratios,
+    #             iterMax = 150e3,
+    #             nout    = 1e2,
+    #             verbose = true,
+    #         )
+    #     )
+    # end
 
     T_buffer    = @zeros(ni.+1)
     Told_buffer = similar(T_buffer)
@@ -217,7 +217,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 igg;
                 kwargs = (
                     iterMax          = 50e3,
-                    nout             = 1e3,
+                    nout             = 2e3,
                     viscosity_cutoff = viscosity_cutoff,
                     free_surface     = false,
                     viscosity_relaxation = 1e-2
@@ -325,7 +325,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             # Plot 2nd invariant of strain rate
             h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
             # Plot effective viscosity
-            h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:batlow)
+            h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)

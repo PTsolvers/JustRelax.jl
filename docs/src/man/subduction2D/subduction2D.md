@@ -56,22 +56,19 @@ For the rheology we will use the `rheology` object we created in the previous se
 
 ## Initialize particles
 ```julia
-nxcell              = 40 # initial number of particles per cell
-max_xcell           = 60 # maximum number of particles per cell
-min_xcell           = 20 # minimum number of particles per cell
-    particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
-    )
-)
-subgrid_arrays      = SubgridDiffusionCellArrays(particles)
+nxcell          = 40 # initial number of particles per cell
+max_xcell       = 60 # maximum number of particles per cell
+min_xcell       = 20 # minimum number of particles per cell
+particles       = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
+subgrid_arrays  = SubgridDiffusionCellArrays(particles)
 # velocity staggered grids
-grid_vxi            = velocity_grids(xci, xvi, di)
+grid_vxi        = velocity_grids(xci, xvi, di)
 ```
 
 We will like to advect two fields, the temperature `pT` and the material phases of each particle `pPhases`. We will initialize these fields as `CellArray` objects:
 ```julia
-pPhases, pT         = init_cell_arrays(particles, Val(2))
-particle_args       = (pT, pPhases)
+pPhases, pT      = init_cell_arrays(particles, Val(2))
+particle_args    = (pT, pPhases)
 ```
 
 # Assign particles phases anomaly

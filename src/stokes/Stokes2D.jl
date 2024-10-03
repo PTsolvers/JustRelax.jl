@@ -559,14 +559,14 @@ function _solve!(
             #     @copy η0 η
             # end
             # if do_visc
-                update_viscosity!(
-                    stokes,
-                    phase_ratios,
-                    args,
-                    rheology,
-                    viscosity_cutoff;
-                    relaxation=viscosity_relaxation,
-                )
+            update_viscosity!(
+                stokes,
+                phase_ratios,
+                args,
+                rheology,
+                viscosity_cutoff;
+                relaxation=viscosity_relaxation,
+            )
             # end
 
             @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(

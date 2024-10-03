@@ -36,8 +36,6 @@ else
     JustPIC.CPUBackend
 end
 
-
-
 # Load script dependencies
 using Printf, LinearAlgebra, CellArrays
 

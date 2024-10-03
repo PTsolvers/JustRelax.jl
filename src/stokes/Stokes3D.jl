@@ -406,8 +406,11 @@ function _solve!(
     norm_∇V = Float64[]
 
     @copy stokes.P0 stokes.P
+    θ = deepcopy(stokes.P)
     λ = @zeros(ni...)
-    θ = @zeros(ni...)
+    λv_yz = @zeros(size(stokes.τ.yz)...)
+    λv_xz = @zeros(size(stokes.τ.xz)...)
+    λv_xy = @zeros(size(stokes.τ.xy)...)
 
     # solver loop
     wtime0 = 0.0
@@ -428,7 +431,7 @@ function _solve!(
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             compute_P!(
-                stokes.P,
+                θ,
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
@@ -459,44 +462,37 @@ function _solve!(
             )
             # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
-            @parallel (@idx ni) compute_τ_nonlinear!(
-                @tensor_center(stokes.τ),
-                stokes.τ.II,
-                @tensor_center(stokes.τ_o),
+            @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
                 stokes.EII_pl,
-                stokes.P,
+                @tensor_center(stokes.τ),
+                (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy),
+                @tensor_center(stokes.τ_o),
+                (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
                 θ,
-                η,
-                η_vep,
+                stokes.P,
+                stokes.viscosity.η,
                 λ,
-                phase_ratios.center,
-                tupleize(rheology), # needs to be a tuple
+                (λv_yz, λv_xz, λv_xy),
+                stokes.τ.II,
+                stokes.viscosity.η_vep,
+                0.2,
                 dt,
                 pt_stokes.θ_dτ,
-                args,
+                rheology,
+                phase_ratios.center,
+                phase_ratios.vertex,
             )
-
-            center2vertex!(
-                stokes.τ.yz,
-                stokes.τ.xz,
-                stokes.τ.xy,
-                stokes.τ.yz_c,
-                stokes.τ.xz_c,
-                stokes.τ.xy_c,
-            )
-            update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
-
-            # @parallel (@idx ni .+ 1) compute_τ_vertex!(
-            #     @shear(stokes.τ)..., @shear(stokes.ε)..., η_vep, pt_stokes.θ_dτ
-            # )
+            update_halo!(stokes.τ.yz)
+            update_halo!(stokes.τ.xz)
+            update_halo!(stokes.τ.xy)
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     @residuals(stokes.R)...,
-                    θ,
+                    stokes.P,
                     ρg...,
                     @stress(stokes)...,
                     ητ,
@@ -510,8 +506,6 @@ function _solve!(
                 update_halo!(@velocity(stokes)...)
             end
         end
-
-        stokes.P .= θ
 
         iter += 1
         if iter % nout == 0 && iter > 1
@@ -546,8 +540,6 @@ function _solve!(
     end
 
     av_time = wtime0 / (iter - 1) # average time per iteration
-
-    stokes.P .= θ
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))

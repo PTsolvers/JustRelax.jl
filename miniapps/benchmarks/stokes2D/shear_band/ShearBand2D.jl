@@ -1,15 +1,18 @@
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
 const backend = CPUBackend
 
+using JustPIC, JustPIC._2D
+const backend_JP = JustPIC.CPUBackend
+
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, radius)
+function init_phases!(phase_ratios, xci, xvi, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5
 
@@ -27,6 +30,8 @@ function init_phases!(phase_ratios, xci, radius)
     end
 
     @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+    @parallel (@idx ni.+1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    return nothing
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -69,7 +74,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc, el_bg, pl)),
+            # CompositeRheology = CompositeRheology((visc, el_bg, )),
+                        CompositeRheology = CompositeRheology((visc, el_bg, pl)),
             Elasticity        = el_bg,
 
         ),
@@ -78,7 +84,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc, el_inc, pl)),
+            # CompositeRheology = CompositeRheology((visc, el_inc, )),
+                        CompositeRheology = CompositeRheology((visc, el_inc, pl)),
             Elasticity        = el_inc,
         ),
     )
@@ -88,13 +95,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    init_phases!(phase_ratios, xci, radius)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    init_phases!(phase_ratios, xci, xvi, radius)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
@@ -119,12 +126,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Time loop
     t, it      = 0.0, 0
-    tmax       = 3.5
+    tmax       = 5
     τII        = Float64[]
     sol        = Float64[]
     ttot       = Float64[]
 
-    while t < tmax
+    # while t < tmax
+    for _ in 1:15
 
         # Stokes solver ----------------
         iters = solve!(
@@ -141,7 +149,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             kwargs = (
                 verbose          = false,
                 iterMax          = 50e3,
-                nout             = 1e2,
+                nout             = 1e3,
                 viscosity_cutoff = (-Inf, Inf)
             )
         )
@@ -183,7 +191,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     return nothing
 end
 
-n      = 128
+n      = 32
 nx     = n
 ny     = n
 figdir = "ShearBands2D"
@@ -192,4 +200,4 @@ igg  = if !(JustRelax.MPI.Initialized())
 else
     igg
 end
-main(igg; figdir = figdir, nx = nx, ny = ny);
+# main(igg; figdir = figdir, nx = nx, ny = ny);

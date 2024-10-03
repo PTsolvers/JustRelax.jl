@@ -1,6 +1,5 @@
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
-
 const backend_JR = CPUBackend
 
 using ParallelStencil
@@ -116,7 +115,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     r_anomaly        = 50e3   # radius of perturbation
     init_phases!(pPhases, particles, lx, ly; d=abs(zc_anomaly), r=r_anomaly)
     phase_ratios     = PhaseRatios(backend, length(rheology), ni)
-    @parallel (@idx ni) phase_ratios_center!(phase_ratios.center, particles.coords, xci, di, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------

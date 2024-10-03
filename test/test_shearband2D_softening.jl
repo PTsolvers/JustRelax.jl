@@ -1,5 +1,4 @@
 push!(LOAD_PATH, "..")
-
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 
@@ -33,12 +32,11 @@ else
     JustPIC.CPUBackend
 end
 
-
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, radius)
+function init_phases!(phase_ratios, xci, xvi, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5
 
@@ -56,6 +54,8 @@ function init_phases!(phase_ratios, xci, radius)
     end
 
     @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+    @parallel (@idx ni.+1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    return nothing
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -122,7 +122,7 @@ function ShearBand2D()
     # Initialize phase ratios -------------------------------
     radius       = 0.1
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    init_phases!(phase_ratios, xci, radius)
+    init_phases!(phase_ratios, xci, xvi, radius)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -200,7 +200,7 @@ end
     @suppress begin
         iters, τII, sol = ShearBand2D()
         @test passed = iters.err_evo1[end] < 1e-6
-        @test τII[end] ≈ 1.48348 atol = 1e-4
+        @test τII[end] ≈ 1.59639 atol = 1e-4
         @test sol[end] ≈ 1.94255 atol = 1e-4
     end
 end

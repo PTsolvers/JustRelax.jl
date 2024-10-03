@@ -115,7 +115,7 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
     r_anomaly    =  50e3   # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem

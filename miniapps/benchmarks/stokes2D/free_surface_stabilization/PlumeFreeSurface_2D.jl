@@ -120,7 +120,7 @@ function main(igg, nx, ny)
     # Elliptical temperature anomaly
     init_phases!(pPhases, particles)
     phase_ratios  = PhaseRatios(backend, length(rheology), ni)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -186,7 +186,7 @@ function main(igg, nx, ny)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         @show it += 1
         t        += dt

@@ -1,63 +1,4 @@
 using MuladdMacro, Adapt
-
-## Weno5 advection scheme. Implementation based on the repository from
-# https://gmd.copernicus.org/preprints/gmd-2023-189/
-
-abstract type AbstractWENO end
-
-"""
-    WENO5{T, N, A, M} <: AbstractWENO
-
-The `WENO5` is a structure representing the Weighted Essentially Non-Oscillatory (WENO) scheme of order 5 for the solution of hyperbolic partial differential equations.
-
-# Fields
-- `d0L`, `d1L`, `d2L`: Upwind constants.
-- `d0R`, `d1R`, `d2R`: Downwind constants.
-- `c1`, `c2`: Constants for betas.
-- `sc1`, `sc2`, `sc3`, `sc4`, `sc5`: Stencil weights.
-- `ϵ`: Tolerance.
-- `ni`: Grid size.
-- `ut`: Intermediate buffer array.
-- `fL`, `fR`, `fB`, `fT`: Fluxes.
-- `method`: Method (1:JS, 2:Z).
-
-# Description
-The `WENO5` structure contains the parameters and temporary variables used in the WENO scheme. These include the upwind and downwind constants, the constants for betas, the stencil candidate weights, the tolerance, the grid size, the fluxes, and the method.
-"""
-@kwdef struct WENO5{T,N,A,M} <: AbstractWENO
-    # upwind constants
-    d0L::T = 1 / 10
-    d1L::T = 3 / 5
-    d2L::T = 3 / 10
-    # downwind constants
-    d0R::T = 3 / 10
-    d1R::T = 3 / 5
-    d2R::T = 1 / 10
-    # for betas
-    c1::T = 13 / 12
-    c2::T = 1 / 4
-    # stencil weights
-    sc1::T = 1 / 3
-    sc2::T = 7 / 6
-    sc3::T = 11 / 6
-    sc4::T = 1 / 6
-    sc5::T = 5 / 6
-    # tolerance
-    ϵ::T = 1e-6
-    # grid size
-    ni::NTuple{N,Int64}
-    # fluxes
-    ut::A = @zeros(ni...)
-    fL::A = @zeros(ni...)
-    fR::A = @zeros(ni...)
-    fB::A = @zeros(ni...)
-    fT::A = @zeros(ni...)
-    # method
-    method::M = Val{1} # 1:JS, 2:Z
-end
-
-Adapt.@adapt_structure WENO5
-
 # check if index is on the boundary, if yes take value on the opposite for periodic, if not, don't change the value
 # @inline limit_periodic(a, n) = a > n ? n : (a < 1 ? 1 : a)
 @inline function limit_periodic(a, n)
@@ -75,18 +16,18 @@ end
 end
 
 ## Upwind alphas
-@inline function weno_alphas_upwind(::WENO5, ::Type{Any}, β0, β1, β2)
+@inline function weno_alphas_upwind(::JustRelax.WENO5, ::Type{Any}, β0, β1, β2)
     return error("Unknown method for the WENO Scheme")
 end
 
-@inline function weno_alphas_upwind(weno::WENO5, ::Val{1}, β0, β1, β2)
+@inline function weno_alphas_upwind(weno::JustRelax.WENO5, ::Val{1}, β0, β1, β2)
     α0L = weno.d0L * inv(β0 + weno.ϵ)^2
     α1L = weno.d1L * inv(β1 + weno.ϵ)^2
     α2L = weno.d2L * inv(β2 + weno.ϵ)^2
     return α0L, α1L, α2L
 end
 
-@inline function weno_alphas_upwind(weno::WENO5, ::Val{2}, β0, β1, β2)
+@inline function weno_alphas_upwind(weno::JustRelax.WENO5, ::Val{2}, β0, β1, β2)
     τ = abs(β0 - β2)
     α0L = weno.d0L * (1 + (τ * inv(β0 + weno.ϵ))^2)
     α1L = weno.d1L * (1 + (τ * inv(β1 + weno.ϵ))^2)
@@ -95,18 +36,18 @@ end
 end
 
 ## Downwind alphas
-@inline function weno_alphas_downwind(::WENO5, ::Any, β0, β1, β2)
+@inline function weno_alphas_downwind(::JustRelax.WENO5, ::Any, β0, β1, β2)
     return error("Unknown method for the WENO Scheme")
 end
 
-@inline function weno_alphas_downwind(weno::WENO5, ::Val{1}, β0, β1, β2)
+@inline function weno_alphas_downwind(weno::JustRelax.WENO5, ::Val{1}, β0, β1, β2)
     α0R = weno.d0R * inv(β0 + weno.ϵ)^2
     α1R = weno.d1R * inv(β1 + weno.ϵ)^2
     α2R = weno.d2R * inv(β2 + weno.ϵ)^2
     return α0R, α1R, α2R
 end
 
-@inline function weno_alphas_downwind(weno::WENO5, ::Val{2}, β0, β1, β2)
+@inline function weno_alphas_downwind(weno::JustRelax.WENO5, ::Val{2}, β0, β1, β2)
     τ = abs(β0 - β2)
     α0R = weno.d0R * (1 + (τ * inv(β0 + weno.ϵ))^2)
     α1R = weno.d1R * (1 + (τ * inv(β1 + weno.ϵ))^2)

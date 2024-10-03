@@ -267,8 +267,7 @@ function main2D(; nx=32, ny=32)
     anomaly      = nondimensionalize((750 + 273)K, CharDim) # thermal perturbation (in K)
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, r_anomaly, sticky_air, nondimensionalize(0.0km,CharDim), nondimensionalize(20km,CharDim))
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
-    phase_ratios_vertex!(phase_ratios, particles, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # Initialisation of thermal profile
     thermal     = ThermalArrays(backend_JR, ni) # initialise thermal arrays and boundary conditions
@@ -427,8 +426,7 @@ function main2D(; nx=32, ny=32)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, xci, pPhases)
-        phase_ratios_vertex!(phase_ratios, particles, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end]        .= Tsurf

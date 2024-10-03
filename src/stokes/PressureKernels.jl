@@ -83,7 +83,7 @@ end
     ::Nothing,
     ::Nothing,
 ) where {N,C<:JustRelax.CellArray}
-    K = fn_ratio(get_bulk_modulus, rheology, phase_ratio[I...])
+    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
@@ -102,7 +102,7 @@ end
     ::Nothing,
     ϕ,
 ) where {N,C<:JustRelax.CellArray}
-    K = fn_ratio(get_bulk_modulus, rheology, phase_ratio[I...])
+    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
@@ -121,8 +121,9 @@ end
     ΔTc,
     ::Nothing,
 ) where {N,C<:JustRelax.CellArray}
-    K = fn_ratio(get_bulk_modulus, rheology, phase_ratio[I...])
-    α = fn_ratio(get_thermal_expansion, rheology, phase_ratio[I...])
+    phase_ratio_I = phase_ratio[I...]
+    K = fn_ratio(get_bulk_modulus, rheology, phase_ratio_I)
+    α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
     RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
     )
@@ -143,8 +144,8 @@ end
     ΔTc,
     ϕ,
 ) where {N,C<:JustRelax.CellArray}
-    K = fn_ratio(get_bulk_modulus, rheology, phase_ratio[I...])
-    α = fn_ratio(get_thermal_expansion, rheology, phase_ratio[I...], (; ϕ=ϕ[I...]))
+    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
+    α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ=ϕ[I...]))
     RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
     )

@@ -29,7 +29,7 @@ end
 
 @parallel_indices (I...) function compute_ρg_kernel!(ρg, phase_ratios, rheology, args)
     args_ijk = ntuple_idx(args, I...)
-    ρg[I...] = compute_buoyancy(rheology, args_ijk, phase_ratios[I...])
+    ρg[I...] = compute_buoyancy(rheology, args_ijk, @cell(phase_ratios[I...]))
     return nothing
 end
 

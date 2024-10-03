@@ -75,7 +75,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     r_anomaly        = 3e3    # radius of perturbation
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
     phase_ratios     = PhaseRatio(backend, length(rheology), ni)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -227,7 +227,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
             # check if we need to inject particles
             inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
             # update phase ratios
-            phase_ratios_center!(phase_ratios, particles, xci, pPhases)
+            update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
             @show it += 1
             t        += dt

@@ -6,6 +6,8 @@ using ParallelStencil
 
 
 using GeoParams
+using JustPIC, JustPIC._2D
+const backend =  JustPIC.CPUBackend
 
 distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
 
@@ -61,7 +63,7 @@ end
 @parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
 
     args_ij = ntuple_idx(args, I...)
-    H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij)
+    H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios.center[I...], args_ij)
 
     return nothing
 end
@@ -73,7 +75,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     dt       = 50 * kyr # physical time step
 
     init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg    = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+    # igg    = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
     # Physical domain
     ni           = (nx, ny)
@@ -129,7 +131,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
-    @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
+    @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios, args)
 
     # PT coefficients for thermal diffusion
     args       = (; P=P, T=thermal.Tc)

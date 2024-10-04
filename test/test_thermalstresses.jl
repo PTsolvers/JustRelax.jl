@@ -2,10 +2,8 @@ push!(LOAD_PATH, "..")
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
-    AMDGPU.allowscalar(true)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
-    CUDA.allowscalar(true)
 end
 
 using Test, Suppressor
@@ -317,7 +315,7 @@ function main2D(; nx=32, ny=32)
 
     ϕ = @zeros(ni...)
     compute_melt_fraction!(
-        ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
+        ϕ, phase_ratios, rheology, (T=thermal.Tc, P=stokes.P)
     )
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
@@ -416,7 +414,7 @@ function main2D(; nx=32, ny=32)
         )
         # ------------------------------
         compute_melt_fraction!(
-            ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
+            ϕ, phase_ratios, rheology, (T=thermal.Tc, P=stokes.P)
         )
         # Advection --------------------
         # advect particles in space

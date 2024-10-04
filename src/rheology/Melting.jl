@@ -22,7 +22,7 @@ end
     ϕ, phase_ratios, rheology, args
 )
     args_ijk = ntuple_idx(args, I...)
-    ϕ[I...] = compute_melt_frac(rheology, args_ijk, phase_ratios[I...])
+    ϕ[I...] = compute_melt_frac(rheology, args_ijk, @cell(phase_ratios[I...]))
     return nothing
 end
 

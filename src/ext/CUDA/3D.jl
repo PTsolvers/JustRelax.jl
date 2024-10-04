@@ -180,20 +180,6 @@ end
 function thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
-
-# # Phases
-# function JR3D.phase_ratios_center!(
-#     ::CUDABackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
-# )
-#     return _phase_ratios_center!(phase_ratios, particles, grid, phases)
-# end
-
-# function JR3D.phase_ratios_vertex!(
-#     ::CUDABackendTrait, phase_ratios::JustPIC.PhaseRatios, particles, grid::Geometry, phases
-# )
-#     return _phase_ratios_vertex!(phase_ratios, particles, grid, phases)
-# end
-
 # Rheology
 
 ## viscosity
@@ -252,7 +238,13 @@ function JR3D.compute_melt_fraction!(
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
-function JR3D.compute_melt_fraction!(ϕ::CuArray, phase_ratios, rheology, args)
+function compute_melt_fraction!(ϕ::CuArray, rheology, args)
+    return compute_melt_fraction!(ϕ, rheology, args)
+end
+
+function compute_melt_fraction!(
+    ϕ::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
+)
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 

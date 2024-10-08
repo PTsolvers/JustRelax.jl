@@ -220,10 +220,7 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
 end
 
 
-function main2D(; nx=32, ny=32)
-
-    init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg      = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+function main2D(igg; nx=32, ny=32)
 
     # Characteristic lengths
     CharDim      = GEO_units(;length=12.5km, viscosity=1e21, temperature = 1e3C)
@@ -446,7 +443,14 @@ end
 
 @testset "thermal stresses" begin
     @suppress begin
-        ϕ, stokes, thermal = main2D(; nx=32, ny=32)
+        nx, ny   = 32, 32           # number of cells
+        igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+            IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
+        else
+            igg
+        end
+
+        ϕ, stokes, thermal = main2D(igg; nx=32, ny=32)
 
         nx_T, ny_T = size(thermal.T)
         @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.5369 rtol = 1e-2

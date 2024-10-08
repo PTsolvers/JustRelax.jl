@@ -209,14 +209,24 @@ function JR2D.compute_ρg!(ρg::CuArray, phase_ratios::JustPIC.PhaseRatios, rheo
 end
 
 ## Melt fraction
+# function JR2D.compute_melt_fraction!(ϕ::CuArray, rheology, args)
+#     return compute_melt_fraction!(ϕ, rheology, args)
+# end
+
+# function JR2D.compute_melt_fraction!(
+#     ϕ::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
+# )
+#     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
+# end
+
 function JR2D.compute_melt_fraction!(ϕ::CuArray, rheology, args)
-    return compute_melt_fraction!(ϕ, rheology, args)
+    ni = size(ϕ)
+    @parallel (@idx ni) compute_melt_fraction_kernel!(ϕ, rheology, args)
 end
 
-function JR2D.compute_melt_fraction!(
-    ϕ::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
-)
-    return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
+function JR2D.compute_melt_fraction!(ϕ::CuArray, phase_ratios, rheology, args)
+    ni = size(ϕ)
+    @parallel (@idx ni) compute_melt_fraction_kernel!(ϕ, phase_ratios, rheology, args)
 end
 
 # Interpolations

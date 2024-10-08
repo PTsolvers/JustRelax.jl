@@ -166,12 +166,10 @@ end
 end
 
 @parallel_indices (i, j) function weno_f!(u, weno, nx, ny)
-    @inbounds begin
-        weno.fL[i, j] = WENO_flux_upwind_x(u, nx, weno, i, j)
-        weno.fR[i, j] = WENO_flux_downwind_x(u, nx, weno, i, j)
-        weno.fB[i, j] = WENO_flux_upwind_y(u, ny, weno, i, j)
-        weno.fT[i, j] = WENO_flux_downwind_y(u, ny, weno, i, j)
-    end
+    weno.fL[i, j] = WENO_flux_upwind_x(u, nx, weno, i, j)
+    weno.fR[i, j] = WENO_flux_downwind_x(u, nx, weno, i, j)
+    weno.fB[i, j] = WENO_flux_upwind_y(u, ny, weno, i, j)
+    weno.fT[i, j] = WENO_flux_downwind_y(u, ny, weno, i, j)
     return nothing
 end
 

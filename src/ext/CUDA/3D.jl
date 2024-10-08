@@ -381,4 +381,8 @@ function JR3D.compute_shear_heating!(
     return nothing
 end
 
+function JR3D.WENO_advection!(u::CuArray, Vxi::NTuple, weno, di, dt)
+    return WENO_advection!(u, Vxi, weno, di, dt)
+end
+
 end

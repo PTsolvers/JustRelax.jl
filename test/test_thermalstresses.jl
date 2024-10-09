@@ -338,8 +338,8 @@ function main2D(igg; nx=32, ny=32)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init        = deepcopy(stokes.P)
-    Tsurf         = thermal.T[1, end]
-    Tbot          = thermal.T[1, 1]
+    Tsurf         = nondimensionalize(273K,CharDim)
+    Tbot          = nondimensionalize(648K,CharDim)
     local ϕ, stokes, thermal
 
     while it < 1

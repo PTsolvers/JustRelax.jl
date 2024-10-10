@@ -5,6 +5,7 @@ using ParallelStencil
 
 const backend = CPUBackend
 
+# HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j, k) function init_T!(T, z)
     if z[k] == maximum(z)
         T[i, j, k] = 300.0
@@ -66,7 +67,7 @@ function diffusion_3D(;
 
     # fields needed to compute density on the fly
     P          = @zeros(ni...)
-    args       = (; P=P)
+    args       = (; P=P, T=@zeros(ni.+1...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
@@ -79,7 +80,7 @@ function diffusion_3D(;
     ρCp        = @. Cp * ρ
 
     # Boundary conditions
-    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.95 / √3.1)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
     )
@@ -95,7 +96,6 @@ function diffusion_3D(;
     t  = 0.0
     it = 0
     nt = Int(ceil(ttot / dt))
-
     # Physical time loop
     while it < nt
         heatdiffusion_PT!(
@@ -106,8 +106,8 @@ function diffusion_3D(;
             args,
             dt,
             di;
-            kwargs = (; 
-                igg, 
+            kwargs = (;
+                igg,
                 verbose=false
             ),
         )
@@ -120,3 +120,5 @@ function diffusion_3D(;
 
     return (ni=ni, xci=xci, li=li, di=di), thermal
 end
+
+diffusion_3D()

@@ -61,7 +61,7 @@ function solvi_solution(geometry, η0, ηi, εbg, rc)
     return (p=ps, vx=-vxs, vy=-vys)
 end
 
-function Li_error(geometry, stokes::StokesArrays, Δη, εbg, rc, ; order=2)
+function Li_error(geometry, stokes::JustRelax.StokesArrays, Δη, εbg, rc, ; order=2)
 
     # analytical solution
     sol = solvi_solution(geometry, 1, Δη, εbg, rc)
@@ -76,7 +76,7 @@ function Li_error(geometry, stokes::StokesArrays, Δη, εbg, rc, ; order=2)
     return L2_vx, L2_vy, L2_p
 end
 
-function plot_solVi_error(geometry, stokes::StokesArrays, Δη, εbg, rc)
+function plot_solVi_error(geometry, stokes::JustRelax.StokesArrays, Δη, εbg, rc)
 
     # analytical solution
     sol = solvi_solution(geometry, 1, Δη, εbg, rc)

@@ -52,7 +52,7 @@ function analytical_solution(xci, xvi)
     return Vx, Vy, Vz, P
 end
 
-function plot(stokes::StokesArrays, geometry; cmap=:vik)
+function plot(stokes::JustRelax.StokesArrays, geometry; cmap=:vik)
     xci, xvi = geometry.xci, geometry.xvi
     vx, vy, vz, p = analytical_solution(xci, xvi)
 
@@ -92,7 +92,7 @@ function plot(stokes::StokesArrays, geometry; cmap=:vik)
     return f
 end
 
-function error(stokes::StokesArrays, geometry)
+function error(stokes::JustRelax.StokesArrays, geometry)
     gridsize = foldl(*, geometry.di)
     vx, vy, vz, p = analytical_solution(geometry.xci, geometry.xvi)
 

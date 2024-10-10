@@ -10,9 +10,9 @@ using JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using Printf, Statistics, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
 using StaticArrays
 using ImplicitGlobalGrid
 using MPI: MPI
@@ -690,7 +690,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 end
 
 figdir = "Thermal_stresses_around_cooling_magma"
-do_vtk = true # set to true to generate VTK files for ParaView
+do_vtk = false # set to true to generate VTK files for ParaView
 n      = 64
 ar     = 2
 nx     = n * ar - 2

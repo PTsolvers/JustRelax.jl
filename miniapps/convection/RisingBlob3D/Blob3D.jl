@@ -7,7 +7,6 @@ end
 
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
-
 const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
@@ -168,7 +167,6 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
             LatentHeat        = ConstantLatentHeat(; Q_L=350e3J / kg),
             ShearHeat         = ConstantShearheating(1.0NoUnits),
             CompositeRheology = CompositeRheology((creep_rock, el, pl)),
-            # Melting           = MeltingParam_Caricchi(),
             Gravity           = ConstantGravity(; g=g),
             Elasticity        = el,
             CharDim           = CharDim,
@@ -183,7 +181,6 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
             LatentHeat        = ConstantLatentHeat(; Q_L=350e3J / kg),
             ShearHeat         = ConstantShearheating(0.0NoUnits),
             CompositeRheology = CompositeRheology((creep_magma, el_magma)),
-            # Melting           = MeltingParam_Caricchi(),
             Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_magma,
             CharDim           = CharDim,
@@ -229,7 +226,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     rheology     = init_rheology(CharDim; is_compressible=true, steady_state=true)
     cutoff_visc  = nondimensionalize((1e16Pa*s, 1e24Pa*s),CharDim)
     κ            = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
-    dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01)         # diffusive CFL timestep limiter
+    dt = dt_diff = (0.5 * min(di...)^2 / κ / 3.01)         # diffusive CFL timestep limiter
 
     # Initialize particles -------------------------------
     nxcell           = 20
@@ -245,8 +242,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     particle_args    = (pT, pPhases)
 
     # Circular temperature anomaly--------------------------
-    x_anomaly    = lx * 0.5
-    y_anomaly    = ly * 0.5
+    x_anomaly    =  lx * 0.5
+    y_anomaly    =  ly * 0.5
     z_anomaly    = -lz * 0.5
     # z_anomaly    = nondimensionalize(-5km,CharDim)  # origin of the small thermal anomaly
     r_anomaly    = nondimensionalize(1.5km, CharDim)             # radius of perturbation
@@ -283,7 +280,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     args = (; T=thermal.Tc, P=stokes.P, dt=dt, ΔTc=thermal.ΔTc)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.8 / √3.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.95 / √3.1
     )
 
     flow_bcs = VelocityBoundaryConditions(;

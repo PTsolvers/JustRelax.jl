@@ -6,11 +6,11 @@ using JustRelax, JustRelax.JustRelax2D
 
 const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using JustPIC, JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# using JustPIC, JustPIC._2D
+# # Threads is the default backend,
+# # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+# const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 @parallel_indices (i, j) function init_T!(T, z)
     if z[j] == maximum(z)
@@ -60,7 +60,7 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
     )
     # fields needed to compute density on the fly
     P          = @zeros(ni...)
-    args       = (; P=P)
+    args       = (; P=P, T=@zeros(ni.+1...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal    = ThermalArrays(backend_JR, ni)
@@ -98,12 +98,16 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, ρ0=3.3e3, Cp0=1.2e3, 
             args,
             dt,
             di;
-            kwargs = (; verbose=false),
+            kwargs = (;
+                verbose = false
+            ),
         )
 
         t  += dt
         it += 1
     end
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), thermal
+    return thermal
 end
+
+diffusion_2D()

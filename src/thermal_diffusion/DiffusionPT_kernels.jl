@@ -176,7 +176,7 @@ end
                 Told[I...] * ρCp * _dt +
                 av(H) +
                 av(shear_heating) +
-                adiabatic[i, j] * T_ijk
+                adiabatic[i, j, k] * T_ijk
             ) + T_ijk
         ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
     return nothing

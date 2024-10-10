@@ -2,17 +2,17 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
 const backend_JR = CPUBackend
 
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(Threads, Float64, 3)
 
 using JustPIC, JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using Printf, GeoParams, GLMakie, GeoParams
+using Printf, GeoParams, CairoMakie, GeoParams
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
@@ -142,6 +142,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     @parallel init_P!(stokes.P, ρg[end], xci[end])
 
     # Rheology
+    args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
     viscosity_cutoff = (1e18, 1e24)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
@@ -175,7 +176,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         ax1 = Axis(fig[1,1], aspect = 2/3, title = "T")
         ax2 = Axis(fig[1,2], aspect = 2/3, title = "log10(η)")
         lines!(ax1, Array(thermal.T[:]), Zv./1e3)
-        lines!(ax2, Array(log10.(η[:])), Z./1e3)
+        lines!(ax2, Array(log10.(stokes.viscosity.η[:])), Z./1e3)
         ylims!(ax1, minimum(xvi[3])./1e3, 0)
         ylims!(ax2, minimum(xvi[3])./1e3, 0)
         hideydecorations!(ax2)
@@ -239,7 +240,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             args,
             dt,
             di;
-            kawargs = (;
+            kwargs = (;
                 igg     = igg,
                 phase   = phase_ratios,
                 iterMax = 10e3,
@@ -262,7 +263,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,), xvi)
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
@@ -321,7 +322,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
             # Plot 2nd invariant of strain rate
             h3  = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
             # Plot effective viscosity
-            h4  = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(η_vep[:, slice_j, :])) , colormap=:batlow)
+            h4  = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.viscosity.η_vep[:, slice_j, :])) , colormap=:batlow)
             hideydecorations!(ax3)
             hideydecorations!(ax4)
             Colorbar(fig[1,2], h1)
@@ -354,4 +355,4 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir   = "Plume3D_$n"
-# main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

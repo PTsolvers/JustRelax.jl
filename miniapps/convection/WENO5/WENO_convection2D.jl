@@ -1,6 +1,5 @@
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
-
 const backend_JR = CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -10,7 +9,7 @@ using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
@@ -100,9 +99,9 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # ----------------------------------------------------
 
     # Weno model -----------------------------------------
-    weno = WENO5(Val(2), (nx,ny).+1) # ni.+1 for Temp
+    weno = WENO5(backend_JR, Val(2), ni.+1)
     # ----------------------------------------------------
-
+    
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
     particles        = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...);
@@ -124,7 +123,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.1 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -155,7 +154,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √2.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1 / √2.1
     )
 
     # Boundary conditions
@@ -257,7 +256,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT, ), (T_WENO,), xvi)
+        inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
         @show it += 1
@@ -285,9 +284,9 @@ end
 # (Path)/folder where output data and figures are stored
 figdir   = "Weno2D"
 ar       = 1 # aspect ratio
-n        = 256
-nx       = n*ar - 2
-ny       = n - 2
+n        = 64
+nx       = n*ar 
+ny       = n 
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else

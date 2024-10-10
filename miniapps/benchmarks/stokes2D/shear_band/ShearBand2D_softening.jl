@@ -3,7 +3,12 @@ using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
-const backend = CPUBackend
+const backend_JR = CPUBackend
+
+using JustPIC, JustPIC._2D
+
+const backend = JustPIC.CPUBackend
+
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
@@ -87,12 +92,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatio(backend, ni, length(rheology))
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(phase_ratios, xci, xvi, radius)
 
      # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes    = StokesArrays(backend, ni)
+    stokes    = StokesArrays(backend_JR, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.9 / √2.1)
 
     # Buoyancy forces
@@ -108,8 +113,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
-    stokes.V.Vx .= PTArray(backend)([ x*εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray(backend)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray(backend_JR)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
@@ -192,4 +197,3 @@ else
     igg
 end
 main(igg; figdir = figdir, nx = nx, ny = ny);
-

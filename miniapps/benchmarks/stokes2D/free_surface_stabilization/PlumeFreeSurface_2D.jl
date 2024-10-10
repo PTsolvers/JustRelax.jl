@@ -2,7 +2,7 @@ using JustRelax, JustRelax.JustRelax2D
 const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
-const backend = CPUBackend
+const backend = JustPIC.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
@@ -109,7 +109,7 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 15
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi[1], xvi[2], di[1], di[2], nx, ny
+        backend, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -195,7 +195,7 @@ function main(igg, nx, ny)
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 5
             fig = Figure(size = (900, 900), title = "t = $t")
-            ax  = Axis(fig[1,1], aspect = 1, title = " t=$(t/(1e3 * 3600 * 24 *365.25)) Kyrs")
+            ax  = Axis(fig[1,1], aspect = 1, title = " t=$(round.(t/(1e3 * 3600 * 24 *365.25); digits=3)) Kyrs")
             heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η)), colormap = :grayC)
             arrows!(
                 ax,

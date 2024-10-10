@@ -1,18 +1,19 @@
+using GeoParams
 using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
+using CairoMakie
 const backend = CPUBackend
 
-using GLMakie, GeoParams
-
-@parallel_indices (i, j, k) function init_T!(T, z, lz)
-    if z[k] ≥ 0.0
+# HELPER FUNCTIONS ---------------------------------------------------------------
+@parallel_indices (i, j, k) function init_T!(T, z)
+    if z[k] == maximum(z)
         T[i, j, k] = 300.0
-    elseif z[k] == -lz
+    elseif z[k] == minimum(z)
         T[i, j, k] = 3500.0
     else
-        T[i, j, k] = z[k] * (1900.0 - 1600.0) / (-lz) + 1600.0
+        T[i, j, k] = z[k] * (1900.0 - 1600.0) / minimum(z) + 1600.0
     end
     return nothing
 end
@@ -43,32 +44,31 @@ function diffusion_3D(;
     finalize_MPI = false,
 )
 
-    kyr      = 1e3 * 3600 * 24 * 365.25
-    Myr      = 1e6 * 3600 * 24 * 365.25
-    ttot     = 10 * Myr # total simulation time
-    dt       = 50 * kyr # physical time step
+    kyr          = 1e3 * 3600 * 24 * 365.25
+    Myr          = 1e6 * 3600 * 24 * 365.25
+    ttot         = 1 * Myr # total simulation time
+    dt           = 50 * kyr # physical time step
 
     # Physical domain
     ni           = (nx, ny, nz)
     li           = (lx, ly, lz)  # domain length in x- and y-
     di           = @. li / ni # grid step in x- and -y
     origin       = 0, 0, -lz # nodes at the center and vertices of the cells
-    igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI, select_device=false)...) # init MPI
-    di           = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
+    igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Define the thermal parameters with GeoParams
     rheology = SetMaterialParams(;
-    Phase        = 1,
-    Density      = PT_Density(; ρ0=3.1e3, β=0.0, T0=0.0, α = 1.5e-5),
-    HeatCapacity = ConstantHeatCapacity(; Cp=Cp0),
-    Conductivity = ConstantConductivity(; k=K0),
+        Phase        = 1,
+        Density      = PT_Density(; ρ0=3.1e3, β=0.0, T0=0.0, α = 1.5e-5),
+        HeatCapacity = ConstantHeatCapacity(; Cp=Cp0),
+        Conductivity = ConstantConductivity(; k=K0),
     )
 
     # fields needed to compute density on the fly
     P          = @zeros(ni...)
-    args       = (; P=P)
+    args       = (; P=P, T=@zeros(ni.+1...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
@@ -81,9 +81,9 @@ function diffusion_3D(;
     ρCp        = @. Cp * ρ
 
     # Boundary conditions
-    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.95 / √3.1)
     thermal_bc = TemperatureBoundaryConditions(;
-    no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
+        no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
     )
 
     @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])
@@ -114,9 +114,10 @@ function diffusion_3D(;
             args,
             dt,
             di;
-            kwargs = (; 
-                igg, 
-            )
+            kwargs = (;
+                igg,
+                verbose=false
+            ),
         )
 
         @views T_nohalo .= Array(thermal.T[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
@@ -135,7 +136,7 @@ function diffusion_3D(;
 
     finalize_global_grid(; finalize_MPI=finalize_MPI)
 
-    return nothing
+    return thermal
 end
 
 n  = 32

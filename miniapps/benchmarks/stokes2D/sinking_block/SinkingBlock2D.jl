@@ -5,9 +5,9 @@ using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
 
 using JustPIC, JustPIC._2D
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using GeoParams
+using GeoParams, GLMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -171,7 +171,7 @@ function sinking_block2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_per
     # Plotting ---------------------
     f, _, h = heatmap(velocity, colormap=:vikO)
     Colorbar(f[1,2], h)
-    f
+    display(f)
     # ------------------------------
 
     return nothing

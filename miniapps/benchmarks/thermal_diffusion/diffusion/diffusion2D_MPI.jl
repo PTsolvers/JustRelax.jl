@@ -8,7 +8,7 @@ using ParallelStencil
 
 using GeoParams
 
-using GLMakie
+using CairoMakie
 
 @parallel_indices (i, j) function init_T!(T, z, lz)
     if z[j] ≥ 0.0
@@ -33,7 +33,7 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
     @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
-function diffusion_2D(;
+function diffusion_2D(figdir;
     nx  = 32,
     ny  = 32,
     lx  = 100e3,
@@ -66,7 +66,7 @@ function diffusion_2D(;
     )
     # fields needed to compute density on the fly
     P          = @zeros(ni...)
-    args       = (; P=P)
+    args       = (; P=P, T=@zeros(ni.+1...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal    = ThermalArrays(backend_JR, ni)
@@ -99,6 +99,10 @@ function diffusion_2D(;
     # Time loop
     t  = 0.0
     it = 0
+    ## IO -----------------------------------------------
+    take(figdir)
+    # ---------------------------------------------------
+
     while it < 10
         heatdiffusion_PT!(
             thermal,
@@ -119,7 +123,7 @@ function diffusion_2D(;
 
         if igg.me == 0
             fig, = heatmap(T_v, colorrange=(1500,2000))
-            save("mpi_figs\\temperature_it_$it.png", fig)
+            save(joinpath(figdir,"temperature_it_$it.png"), fig)
         end
 
         t  += dt
@@ -129,5 +133,6 @@ function diffusion_2D(;
     return nothing
 end
 
+figdir="MPI_Diffusion2D"
 n   = 32
-diffusion_2D(; nx=n, ny=n)
+diffusion_2D(figdir; nx=n, ny=n)

@@ -200,4 +200,4 @@ igg  = if !(JustRelax.MPI.Initialized())
 else
     igg
 end
-# main(igg; figdir = figdir, nx = nx, ny = ny);
+main(igg; figdir = figdir, nx = nx, ny = ny);

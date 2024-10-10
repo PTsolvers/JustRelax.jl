@@ -10,7 +10,7 @@ using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
 using GeoParams, GLMakie
@@ -326,7 +326,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
   end
 
 figdir   = "Benchmark_Duretz_etal_2014"
-do_vtk = false # set to true to generate VTK files for ParaView
+do_vtk   = false # set to true to generate VTK files for ParaView
 ar       = 1 # aspect ratio
 n        = 64
 nx       = n*ar - 2

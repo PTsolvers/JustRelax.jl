@@ -2,10 +2,8 @@ push!(LOAD_PATH, "..")
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
-    AMDGPU.allowscalar(true) #used because of velocity2vertex!
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
-    CUDA.allowscalar(true) #used because of velocity2vertex!
 end
 
 

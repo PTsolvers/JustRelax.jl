@@ -2,10 +2,8 @@ push!(LOAD_PATH, "..")
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
-    AMDGPU.allowscalar(true)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
-    CUDA.allowscalar(true)
 end
 
 using Test, Suppressor
@@ -112,7 +110,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, thermal_perturbation = 
     # ----------------------------------------------------
 
     # Weno model -----------------------------------------
-    weno = WENO5(Val(2), ni.+1) # ni.+1 for Temp
+    weno = WENO5(backend_JR, Val(2), ni.+1) # ni.+1 for Temp
     # ----------------------------------------------------
 
     # create rheology struct

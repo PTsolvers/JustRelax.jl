@@ -236,10 +236,6 @@ function JR3D.compute_melt_fraction!(
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
-function JR3D.compute_melt_fraction!(ϕ::ROCArray, phase_ratios, rheology, args)
-    return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
-end
-
 # Interpolations
 function JR3D.temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)
@@ -385,4 +381,9 @@ function JR3D.compute_shear_heating!(
     )
     return nothing
 end
+
+function JR3D.WENO_advection!(u::ROCArray, Vxi::NTuple, weno, di, dt)
+    return WENO_advection!(u, Vxi, weno, di, dt)
+end
+
 end

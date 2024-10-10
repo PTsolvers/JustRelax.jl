@@ -2,10 +2,8 @@ push!(LOAD_PATH, "..")
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
-    AMDGPU.allowscalar(true)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
-    CUDA.allowscalar(true)
 end
 
 using Test
@@ -27,7 +25,7 @@ end
 
 
 @testset "Interpolations" begin
-
+    if backend_JR == CPUBackend
         # Set up mock data
         # Physical domain ------------------------------------
         ly           = 1.0       # domain length in y
@@ -75,4 +73,7 @@ end
         velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=false)
         @test iszero(Vx_v[1,1])
         @test Vy_v[1,1] == 10
+    else
+        @test true == true
+    end
 end

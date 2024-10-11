@@ -3,7 +3,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
 const backend_JR = CPUBackend
 
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(Threads, Float64, 3) #or (CUDA, Float64, 3) or (AMDGPU, Float64, 3)
 
 using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
@@ -139,7 +139,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal    = ThermalArrays(backend, ni)
+    thermal    = ThermalArrays(backend_JR, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false, front=true, back=true),
     )
@@ -171,7 +171,7 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes          = StokesArrays(backend, ni)
+    stokes          = StokesArrays(backend_JR, ni)
     pt_stokes       = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1.0 / √3.1)
     # Buoyancy forces
     ρg              = @zeros(ni...), @zeros(ni...), @zeros(ni...)
@@ -246,14 +246,19 @@ function thermal_convection3D(; ar=8, nz=16, nx=ny*8, ny=nx, figdir="figs3D", th
         # ------------------------------
 
         # Thermal solver ---------------
-        solve!(
+        heatdiffusion_PT!(
             thermal,
+            pt_thermal,
             thermal_bc,
-            stokes,
             rheology,
-            args,
-            di,
-            dt
+            args_T,
+            dt,
+            di;
+            kwargs = (
+                iterMax = 10e3,
+                nout    = 1e2,
+                verbose = true
+            ),
         )
         # ------------------------------
 

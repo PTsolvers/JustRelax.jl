@@ -1,5 +1,5 @@
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-import JustRelax.@cell
+
 
 const backend = CPUBackend
 
@@ -94,7 +94,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", therma
     # ----------------------------------------------------
 
     # Weno model -----------------------------------------
-    weno = WENO5(ni = ni .+ 1, method = Val(2)) # ni.+1 for Temp
+    weno = WENO5(Val(2), ni.+1) # ni.+1 for Temp
     # ----------------------------------------------------
 
     # create rheology struct

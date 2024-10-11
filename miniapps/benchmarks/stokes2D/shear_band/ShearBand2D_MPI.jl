@@ -1,5 +1,5 @@
 using GeoParams
-using JustRelax, JustRelax.JustRelax2D
+using JustRelax, JustRelax.JustRelax2D, GLMakie
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
@@ -9,24 +9,26 @@ const backend = CPUBackend
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, radius)
+function init_phases!(phase_ratios, xci, xvi, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5
 
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
         x, y = xc[i], yc[j]
         if ((x-o_x)^2 + (y-o_y)^2) > radius^2
-            JustRelax.@cell phases[1, i, j] = 1.0
-            JustRelax.@cell phases[2, i, j] = 0.0
+            @index phases[1, i, j] = 1.0
+            @index phases[2, i, j] = 0.0
 
         else
-            JustRelax.@cell phases[1, i, j] = 0.0
-            JustRelax.@cell phases[2, i, j] = 1.0
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
         end
         return nothing
     end
 
     @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+    @parallel (@idx ni.+1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    return nothing
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -84,7 +86,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # Initialize phase ratios -------------------------------
     radius       = 0.1
     phase_ratios = PhaseRatio(backend, ni, length(rheology))
-    init_phases!(phase_ratios, xci, radius)
+    init_phases!(phase_ratios, xci, xvi, radius)
 
    # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -151,7 +153,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             kwargs = (
                 verbose          = false,
                 iterMax          = 50e3,
-                nout             = 1e2,
+                nout             = 1e3,
                 viscosity_cutoff = (-Inf, Inf)
             )
         )
@@ -202,11 +204,11 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
 end
 
-N      = 32
+N      = 30 
 n      = N
-nx     = n  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-ny     = n
-figdir = "ShearBands2D"
+nx     = n*2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+ny     = n*2
+figdir = "ShearBands2D_MPI"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device=false)...)
 else

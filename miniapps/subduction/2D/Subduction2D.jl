@@ -1,12 +1,12 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-import JustRelax.@cell
+
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -75,7 +75,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Physical properties using GeoParams ----------------
     rheology            = init_rheology_linear()
-    dt                  = 50e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    rheology            = init_rheology_nonNewtonian()
+    # rheology            = init_rheology_nonNewtonian_plastic()
+    dt                  = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -94,15 +96,15 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
-    phase_ratios     = PhaseRatio(backend, ni, length(rheology))
+    phase_ratios     = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni);
     init_phases!(pPhases, phases_device, particles, xvi)
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -121,8 +123,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg[2], phase_ratios, rheology_augmented, (T=thermal.Tc, P=stokes.P))
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+    # stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
 
     # Rheology
     args0            = (T=thermal.Tc, P=stokes.P, dt = Inf)
@@ -131,7 +133,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        backend, rheology_augmented, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √3
+        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=0.95 / √3
     )
 
     # Boundary conditions
@@ -163,7 +165,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             thermal,
             pt_thermal,
             thermal_bc,
-            rheology_augmented,
+            rheology,
             args0,
             1e6 * 3600 * 24 * 365.25,
             di;
@@ -209,12 +211,12 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 flow_bcs,
                 ρg,
                 phase_ratios,
-                rheology_augmented,
+                rheology,
                 args,
                 dt,
                 igg;
                 kwargs = (
-                    iterMax          = 150e3,
+                    iterMax          = 50e3,
                     nout             = 1e3,
                     viscosity_cutoff = viscosity_cutoff,
                     free_surface     = false,
@@ -234,7 +236,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             thermal,
             pt_thermal,
             thermal_bc,
-            rheology_augmented,
+            rheology,
             args,
             dt,
             di;
@@ -247,7 +249,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             )
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology_augmented, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
         )
         centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
         subgrid_diffusion!(
@@ -264,7 +266,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         @show it += 1
         t        += dt
@@ -346,7 +348,7 @@ end
 do_vtk   = true # set to true to generate VTK files for ParaView
 figdir   = "Subduction2D"
 n        = 128
-nx, ny   = 512, 256
+nx, ny   = 128, 64
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)

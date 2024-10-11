@@ -462,7 +462,7 @@ function _solve!(
     di::NTuple{2,T},
     flow_bcs::AbstractFlowBoundaryConditions,
     ρg,
-    phase_ratios::JustRelax.PhaseRatio,
+    phase_ratios::JustPIC.PhaseRatios,
     rheology,
     args,
     dt,
@@ -509,8 +509,10 @@ function _solve!(
     # solver loop
     @copy stokes.P0 stokes.P
     wtime0 = 0.0
-    θ = @zeros(ni...)
+    relλ = 0.2
+    θ = deepcopy(stokes.P)
     λ = @zeros(ni...)
+    λv = @zeros(ni .+ 1...)
     η0 = deepcopy(η)
     do_visc = true
 
@@ -534,7 +536,7 @@ function _solve!(
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
 
             compute_P!(
-                stokes.P,
+                θ,
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
@@ -547,56 +549,49 @@ function _solve!(
                 args,
             )
 
-            # stokes.P[1, 1] = stokes.P[2, 1]
-            # stokes.P[end, 1] = stokes.P[end - 1, 1]
-            # stokes.P[1, end] = stokes.P[2, end]
-            # stokes.P[end, end] = stokes.P[end - 1, end]
-
             update_ρg!(ρg[2], phase_ratios, rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            if rem(iter, nout) == 0
-                @copy η0 η
-            end
-            if do_visc
-                update_viscosity!(
-                    stokes,
-                    phase_ratios,
-                    args,
-                    rheology,
-                    viscosity_cutoff;
-                    relaxation=viscosity_relaxation,
-                )
-            end
+            # if rem(iter, nout) == 0
+            #     @copy η0 η
+            # end
+            # if do_visc
+            update_viscosity!(
+                stokes,
+                phase_ratios,
+                args,
+                rheology,
+                viscosity_cutoff;
+                relaxation=viscosity_relaxation,
+            )
+            # end
 
-            @parallel (@idx ni) compute_τ_nonlinear!(
-                @tensor_center(stokes.τ),
-                stokes.τ.II,
-                @tensor_center(stokes.τ_o),
+            @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
                 stokes.EII_pl,
-                stokes.P,
+                @tensor_center(stokes.τ),
+                (stokes.τ.xy,),
+                @tensor_center(stokes.τ_o),
+                (stokes.τ_o.xy,),
                 θ,
-                η,
-                η_vep,
+                stokes.P,
+                stokes.viscosity.η,
                 λ,
-                phase_ratios.center,
-                tupleize(rheology), # needs to be a tuple
+                λv,
+                stokes.τ.II,
+                stokes.viscosity.η_vep,
+                relλ,
                 dt,
                 θ_dτ,
-                args,
+                rheology,
+                phase_ratios.center,
+                phase_ratios.vertex,
             )
-
-            center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
-
-            # @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
-            #     Vx_on_Vy, stokes.V.Vx
-            # )
 
             @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
                 Vx_on_Vy, stokes.V.Vx, ρg[2], _di[1]
@@ -606,7 +601,7 @@ function _solve!(
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     Vx_on_Vy,
-                    θ,
+                    stokes.P,
                     @stress(stokes)...,
                     ηdτ,
                     ρg...,
@@ -625,8 +620,8 @@ function _solve!(
         iter += 1
 
         if iter % nout == 0 && iter > 1
-            er_η = norm_mpi(@.(log10(η) - log10(η0)))
-            er_η < 1e-3 && (do_visc = false)
+            # er_η = norm_mpi(@.(log10(η) - log10(η0)))
+            # er_η < 1e-3 && (do_visc = false)
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,
@@ -670,8 +665,6 @@ function _solve!(
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
-
-    stokes.P .= θ # θ = P + plastic_overpressure
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))

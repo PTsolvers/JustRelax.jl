@@ -10,7 +10,7 @@ using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
     AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -21,28 +21,40 @@ else
     CPUBackend
 end
 
+using JustPIC, JustPIC._2D
+
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustPIC.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    JustPIC.CPUBackend
+end
+
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, radius)
+function init_phases!(phase_ratios, xci, xvi, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5
 
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
         x, y = xc[i], yc[j]
         if ((x-o_x)^2 + (y-o_y)^2) > radius^2
-            JustRelax.@cell phases[1, i, j] = 1.0
-            JustRelax.@cell phases[2, i, j] = 0.0
+            @index phases[1, i, j] = 1.0
+            @index phases[2, i, j] = 0.0
 
         else
-            JustRelax.@cell phases[1, i, j] = 0.0
-            JustRelax.@cell phases[2, i, j] = 1.0
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
         end
         return nothing
     end
 
     @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+    @parallel (@idx ni.+1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    return nothing
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -104,12 +116,12 @@ function ShearBand2D()
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatio(backend, ni, length(rheology))
-    init_phases!(phase_ratios, xci, radius)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    init_phases!(phase_ratios, xci, xvi, radius)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes    = StokesArrays(backend, ni)
+    stokes    = StokesArrays(backend_JR, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1)
 
     # Buoyancy forces
@@ -125,8 +137,8 @@ function ShearBand2D()
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
-    stokes.V.Vx .= PTArray(backend)([ x*εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray(backend)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray(backend_JR)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -181,7 +193,7 @@ end
     @suppress begin
         iters, τII, sol = ShearBand2D()
         @test passed = iters.err_evo1[end] < 1e-6
-        @test τII[end] ≈ 1.4360739032832368 atol = 1e-4
+        @test τII[end] ≈ 1.68593 atol = 1e-4
         @test sol[end] ≈ 1.93960 atol = 1e-4
     end
 end

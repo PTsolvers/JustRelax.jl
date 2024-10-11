@@ -78,9 +78,9 @@ particle_args       = (pT, pPhases)
 Now we assign the material phases from the arrays we computed with help of [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl)
 ```julia
 phases_device    = PTArray(backend)(phases_GMG)
-phase_ratios     = PhaseRatio(backend, ni, length(rheology))
+phase_ratios     = PhaseRatios(backend, length(rheology), ni);
 init_phases!(pPhases, phases_device, particles, xvi)
-phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 ```
 
 ## Temperature profile
@@ -227,7 +227,7 @@ move_particles!(particles, xvi, particle_args)
 # check if we need to inject particles
 inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
 # update phase ratios
-phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 ```
 
 6. **Optional:** Save data as VTK to visualize it later with [ParaView](https://www.paraview.org/)

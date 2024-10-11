@@ -1,4 +1,4 @@
-# # Traits 
+# # Traits
 
 # without phase ratios
 @inline function update_viscosity!(
@@ -171,7 +171,7 @@ end
 function _compute_viscosity!(
     stokes::JustRelax.StokesArrays,
     ν,
-    phase_ratios::JustRelax.PhaseRatio,
+    phase_ratios::JustPIC.PhaseRatios,
     args,
     rheology,
     cutoff,
@@ -207,7 +207,7 @@ end
         args_ij = local_viscosity_args(args, I...)
 
         # local phase ratio
-        ratio_ij = ratios_center[I...]
+        ratio_ij = @cell(ratios_center[I...])
 
         # compute second invariant of strain rate tensor
         εij = εII_0 + ε[1], -εII_0 + ε[1], gather(εxyv)
@@ -276,7 +276,7 @@ end
         args_ijk = local_viscosity_args(args, I...)
 
         # local phase ratio
-        ratio_ijk = ratios_center[I...]
+        ratio_ijk = @cell(ratios_center[I...])
 
         # compute second invariant of strain rate tensor
         εij_normal = εij_normal .+ (εII_0, -εII_0 * 0.5, -εII_0 * 0.5)

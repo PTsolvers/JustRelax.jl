@@ -1,35 +1,59 @@
+using CUDA
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
-const backend_JR = CPUBackend
+const backend_JR = CUDABackend
+# const backend_JR = CPUBackend
 
-using GeoParams, GLMakie
+using Printf, GeoParams, GLMakie, CellArrays
+
+using JustPIC, JustPIC._3D
+const backend_JP = CUDABackend
+# const backend_JP = JustPIC.CPUBackend
 
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+@init_parallel_stencil(CUDA, Float64, 3)
+# @init_parallel_stencil(Threads, Float64, 3)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, xvi, radius)
+function init_phases!(phase_ratios, xci, xvi)
     ni      = size(phase_ratios.center)
-    origin  = 0.5, 0.5, 0.5
-
-    @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
+ 
+    @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, radii::NTuple{N}, centers) where N
         x, y, z = xc[i], yc[j], zc[k]
-        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
-            @index phases[1, i, j, k] = 1.0
-            @index phases[2, i, j, k] = 0.0
 
-        else
+        inside = false
+        for I in 1:N
+            if ((x-centers[I][1])^2 + (y-centers[I][2])^2 + (z-centers[I][3])^2) < radii[I]^2
+                inside = true
+                break
+            end
+        end
+
+        if inside
             @index phases[1, i, j, k] = 0.0
             @index phases[2, i, j, k] = 1.0
+        else
+            @index phases[1, i, j, k] = 1.0
+            @index phases[2, i, j, k] = 0.0
         end
+
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
-    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin...)
+    radii   = (0.075, 0.075, 0.075, 0.075, 0.1)
+    c1      = (0.4, 0.25, 0.25)
+    c2      = (0.25, 0.6, 0.25)
+    c3      = (0.25, 0.85, 0.75)
+    c4      = (0.75, 0.35, 0.75)
+    c5      = (0.5, 0.5, 0.5)
+    centers = (c1, c2, c3, c4, c5)
+
+    @parallel (@idx ni)      init_phases!(phase_ratios.center, xci..., radii, centers)
+    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., radii, centers)
+
     return nothing
 end
 
@@ -40,7 +64,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     lx = ly = lz = 1e0             # domain length in y
     ni           = nx, ny, nz      # number of cells
     li           = lx, ly, lz      # domain length in x- and y-
-    di           = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y and z-
+    di           = @. li / ni      # grid step in x- and -y
     origin       = 0.0, 0.0, 0.0   # origin coordinates
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells    dt          = Inf
@@ -52,13 +76,15 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     η0          = 1.0           # viscosity
     G0          = 1.0           # elastic shear modulus
     Gi          = G0/(6.0-4.0)  # elastic shear modulus perturbation
+    # Gi          = G0            # elastic shear modulus perturbation
     εbg         = 1.0           # background strain-rate
-    # η_reg       = 8e-3          # regularisation "viscosity"
     η_reg       = 1.25e-2       # regularisation "viscosity"
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
+    dt         /= 2     
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
     el_inc      = ConstantElasticity(; G=Gi, ν=0.5)
     visc        = LinearViscous(; η=η0)
+    visc_inc    = LinearViscous(; η=η0/10)
     pl          = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ,
@@ -71,7 +97,6 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            # CompositeRheology = CompositeRheology((visc, el_bg, )),
             CompositeRheology = CompositeRheology((visc, el_bg, pl)),
             Elasticity        = el_bg,
 
@@ -80,21 +105,19 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            # CompositeRheology = CompositeRheology((visc, el_inc, )),
             CompositeRheology = CompositeRheology((visc, el_inc, pl)),
             Elasticity        = el_inc,
         ),
     )
 
     # Initialize phase ratios -------------------------------
-    radius       = 0.1
-    phase_ratios = PhaseRatio(ni, length(rheology))
-    init_phases!(phase_ratios, xci, xvi, radius)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    init_phases!(phase_ratios, xci, xvi)
 
-     # STOKES ---------------------------------------------
+    # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes       = StokesArrays(backend_JR, ni)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-6,  CFL = 0.5 / √3.1)
+    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-5,  CFL = 0.75 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
@@ -107,17 +130,9 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         free_slip   = (left = true , right = true , top = true , bot = true , back = true , front = true),
         no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
-    
-    Vx = PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
-    Vz = PTArray(backend_JR)([-z*εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
-    stokes.V.Vx .= Vx
-    stokes.V.Vz .= Vz
 
-    # println("Rank $(igg.me):
-    #     extrema Vx = $(extrema(Vx)) 
-    #     extrema Vz = $(extrema(Vz)) 
-    # ")    
-
+    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
+    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -126,29 +141,21 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     !isdir(figdir) && mkpath(figdir)
     # ----------------------------------------------------
 
-    # global array
-    nx_v         = (nx - 2) * igg.dims[1]
-    ny_v         = (ny - 2) * igg.dims[2]
-    nz_v         = (nz - 2) * igg.dims[3]
-    τII_v        = zeros(nx_v, ny_v, nz_v)
-    η_vep_v      = zeros(nx_v, ny_v, nz_v)
-    εII_v        = zeros(nx_v, ny_v, nz_v)
-    τII_nohalo   = zeros(nx-2, ny-2, nz-2)
-    η_vep_nohalo = zeros(nx-2, ny-2, nz-2)
-    εII_nohalo   = zeros(nx-2, ny-2, nz-2)
-    xci_v        = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
-    xvi_v        = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1), LinRange(0, 1, nz_v+1)
+    Vx_v = @zeros(ni .+ 1...)
+    Vy_v = @zeros(ni .+ 1...)
+    Vz_v = @zeros(ni .+ 1...)
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 4
+    tmax  = 5
     τII   = Float64[]
     sol   = Float64[]
     ttot  = Float64[]
 
+    pc = [argmax(p) for p in Array(phase_ratios.center)]
     while t < tmax
-       # Stokes solver ----------------
-       solve!(
+        # Stokes solver ----------------
+        solve!(
             stokes,
             pt_stokes,
             di,
@@ -160,13 +167,14 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             dt,
             igg;
             kwargs = (;
-                iterMax          = 150e3,
+                iterMax          = 75e3,
                 nout             = 1e3,
                 viscosity_cutoff = (-Inf, Inf)
             )
         )
 
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -175,49 +183,64 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
 
-        igg.me == 0 && println("it = $it; t = $t \n")
+        println("it = $it; t = $t \n")
 
-        # MPI
-        @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
-        @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        gather!(τII_nohalo, τII_v)
-        gather!(η_vep_nohalo, η_vep_v)
-        gather!(εII_nohalo, εII_v)
+        velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+        data_v = (;
+            τII    = Array(stokes.τ.II),
+            εII    = Array(stokes.ε.II),
+            εII_pl = Array(stokes.ε_pl.II),
+            phase  = pc, 
+        )
+        data_c = (;
+            P   = Array(stokes.P),
+            η   = Array(stokes.viscosity.η_vep),
+        )
+        velocity_v = (
+            Array(Vx_v),
+            Array(Vy_v),
+            Array(Vz_v),
+        )
+        save_vtk(
+            joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
+            xvi,
+            xci,
+            data_v,
+            data_c,
+            velocity_v
+        )
 
-        if igg.me == 0
-            # visualisation
-            th      = 0:pi/50:3*pi;
-            xunit   = @. radius * cos(th) + 0.5;
-            yunit   = @. radius * sin(th) + 0.5;    
-            slice_j = ny_v >>> 1
-            fig     = Figure(size = (1600, 1600), title = "t = $t")
-            ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
-            ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
-            ax3     = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
-            ax4     = Axis(fig[2,2], aspect = 1)
-            heatmap!(ax1, xci_v[1], xci_v[3], Array(τII_v[:, slice_j, :]) , colormap=:batlow)
-            heatmap!(ax2, xci_v[1], xci_v[3], Array(log10.(η_vep_v)[:, slice_j, :]) , colormap=:batlow)
-            heatmap!(ax3, xci_v[1], xci_v[3], Array(log10.(εII_v)[:, slice_j, :]) , colormap=:batlow)
-            lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-            lines!(ax4, ttot, τII, color = :black)
-            lines!(ax4, ttot, sol, color = :red)
-            hidexdecorations!(ax1)
-            hidexdecorations!(ax3)
-            save(joinpath(figdir, "MPI_3D_$(it).png"), fig)
+        # visualisation
+        jslice  = ni[2] >>> 1 
+        fig     = Figure(size = (1600, 1600), title = "t = $t")
+        ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
+        ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
+        ax3     = Axis(fig[1,2], aspect = 1, title = "log10(εxy)")
+        ax4     = Axis(fig[2,2], aspect = 1)
+        heatmap!(ax1, xci[1], xci[3], Array(stokes.τ.II[:, jslice, :]) , colormap=:batlow)
+        heatmap!(ax2, xci[1], xci[3], Array(stokes.viscosity.η_vep[:, jslice, :]) , colormap=:batlow)
+        heatmap!(ax3, xci[1], xci[3], Array(stokes.ε_pl.II[:, jslice, :]) , colormap=:batlow)
+        lines!(ax4, ttot, τII, color = :black)
+        lines!(ax4, ttot, sol, color = :red)
+        hidexdecorations!(ax1)
+        hidexdecorations!(ax3)
+        for ax in (ax1, ax2, ax3)
+            xlims!(ax, (0, 1))
+            ylims!(ax, (0, 1))
         end
+        fig
+        save(joinpath(figdir, "$(it).png"), fig)
+
     end
 
     return nothing
 end
 
-n      = 32
-nx     = n # ÷ 2
-ny     = n # ÷ 2
-nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
-figdir = "ShearBand3D_MPI"
-igg    = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)
+n            = 100
+nx = ny = nz = n
+figdir       = "MultiInclusions_$n"
+igg          = if !(JustRelax.MPI.Initialized())
+    IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
 else
     igg
 end

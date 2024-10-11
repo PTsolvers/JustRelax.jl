@@ -73,7 +73,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
     # ----------------------------------------------------
 
     # Weno model -----------------------------------------
-    weno = WENO5(ni=(nx,ny).+1, method=Val{2}()) # ni.+1 for Temp
+    weno = WENO5(Val(2), (nx,ny).+1) # ni.+1 for Temp
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -83,9 +83,9 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
     )
     # temperature
     pPhases,            = init_cell_arrays(particles, Val(1))
-    phase_ratios        = PhaseRatio(backend_JR, ni, length(rheology))
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------

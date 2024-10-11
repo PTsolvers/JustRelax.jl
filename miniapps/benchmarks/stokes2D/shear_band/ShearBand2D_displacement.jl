@@ -9,24 +9,26 @@ const backend = CPUBackend
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, radius)
+function init_phases!(phase_ratios, xci, xvi, radius)
     ni      = size(phase_ratios.center)
     origin  = 0.5, 0.5
 
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
         x, y = xc[i], yc[j]
         if ((x-o_x)^2 + (y-o_y)^2) > radius^2
-            JustRelax.@cell phases[1, i, j] = 1.0
-            JustRelax.@cell phases[2, i, j] = 0.0
+            @index phases[1, i, j] = 1.0
+            @index phases[2, i, j] = 0.0
 
         else
-            JustRelax.@cell phases[1, i, j] = 0.0
-            JustRelax.@cell phases[2, i, j] = 1.0
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
         end
         return nothing
     end
 
     @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+    @parallel (@idx ni.+1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    return nothing
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -89,7 +91,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # Initialize phase ratios -------------------------------
     radius       = 0.1
     phase_ratios = PhaseRatio(backend, ni, length(rheology))
-    init_phases!(phase_ratios, xci, radius)
+    init_phases!(phase_ratios, xci, xvi, radius)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem

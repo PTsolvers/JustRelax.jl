@@ -58,7 +58,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     εbg     = 1.0           # background strain-rate
     η_reg   = 8e-3          # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
-    dt /= 5
+    dt     /= 5
     el_bg   = ConstantElasticity(; G=G0, Kb=4)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4)
     visc    = LinearViscous(; η=η0)
@@ -145,7 +145,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             dt,
             igg;
             kwargs = (
-                verbose          = false,
+                verbose          = true,
                 iterMax          = 50e3,
                 nout             = 1e3,
                 viscosity_cutoff = (-Inf, Inf)

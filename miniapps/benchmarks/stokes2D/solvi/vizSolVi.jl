@@ -1,70 +1,64 @@
+using ExactFieldSolutions
+
 # Analytical solution found in:
 #     D. W. Schmid and Y. Y. Podladchikov. Analytical solutions for deformable elliptical inclusions in
 #     general shear. Geophysical Journal International, 155(1):269–288, 2003.
 
-function _solvi_solution(X, Y; ε=1, ηm=1, ηc=1e-3, rc=1)
+function solvi_solution(geometry, Δη, rc, εbg)
+    # Pressure
+    x = geometry.xci[1]
+    x = x.-(x[end] - x[1]) / 2
+    y = geometry.xci[2]
+    y = y.-(y[end] - y[1]) / 2
+    X = [x for x in x, y in y]
+    Y = [y for x in x, y in y]
 
-    # geometry
-    Z = @. X + im * Y
-    A = ηm * (ηc - ηm) / (ηc + ηm)
+    P = zeros(size(X))
 
-    # pressure
-    P = @. -2 * A * real((rc^2) / (Z^2)) * (2 * ε)
-    idx = @.(sqrt(X^2 + Y^2)) .< rc # nodes within circular inclusion
-    P[idx] .= 0
+    for i in eachindex(P)
+        sol = Stokes2D_Schmid2003([X[i], Y[i]];
+            params = (mm = 1.0, mc = 1e-3, rc =0.2, gr = 0.0, er =1) )
+        P[i] = sol.p
+    end
 
-    # velocity function
-    vel(ϕ, dϕ, ψ, Z, η) = (ϕ - Z * conj(dϕ) - conj(ψ)) / 2 / η
+    # Vx
+    x = geometry.xvi[1]
+    x = x.-(x[end] - x[1]) / 2
+    y = geometry.xci[2]
+    y = y.-(y[end] - y[1]) / 2
+    X = [x for x in x, y in y]
+    Y = [y for x in x, y in y]
 
-    # velocity in matrix
-    ϕm = @. -(0 + 2 * ε) * A * rc * rc / Z
-    dϕm = @. (0 + 2 * ε) * A * rc * rc / (Z^2)
-    ψm = @. (0 - 2 * ε) * ηm * Z -
-        (0 + 2 * ε) * ηm * ηc / (ηm + ηc) * A * (rc^4) / Z / Z / Z
-    vm = vel.(ϕm, dϕm, ψm, Z, ηm)
+    Vx = zeros(size(X))
 
-    # velocity in clast
-    ϕc = 0.0
-    dϕc = 0.0
-    ψc = @. Z * 2 * (0 - 2 * ε) * ηm * ηc / (ηm + ηc)
-    vc = vel.(ϕc, dϕc, ψc, Z, ηc)
+    for i in eachindex(Vx)
+        sol = Stokes2D_Schmid2003([X[i], Y[i]];
+            params = (mm = 1.0, mc = 1e-3, rc = 0.2, gr = 0.0, er =-1) )
+        Vx[i] = sol.V[1]
+    end
 
-    # domain velocity
-    v = vm
-    v[idx] .= vc[idx]
+    # Vy
+    x = geometry.xci[1]
+    x = x.-(x[end] - x[1]) / 2
+    y = geometry.xvi[2]
+    y = y.-(y[end] - y[1]) / 2
+    X = [x for x in x, y in y]
+    Y = [y for x in x, y in y]
 
-    return P, v
+    Vy = zeros(size(X))
+
+    for i in eachindex(Vy)
+        sol = Stokes2D_Schmid2003([X[i], Y[i]];
+            params = (mm = 1.0, mc = 1e-3, rc =0.2, gr = 0.0, er =-1) )
+        Vy[i] = sol.V[2]
+    end
+    return (p=P, vx=Vx, vy=Vy)
 end
 
-function solvi_solution(geometry, η0, ηi, εbg, rc)
-    # element center
-    xci, yci = geometry.xci
-    xc = [xc for xc in xci, _ in yci] .- (xci[end] - xci[1]) / 2
-    yc = [yc for _ in xci, yc in yci] .- (yci[end] - yci[1]) / 2
-    # element vertices
-    xvi, yvi = geometry.xvi
-    xv_x = [xc for xc in xvi, _ in yci] .- (xvi[end] - xvi[1]) / 2 # for vx
-    yv_x = [yc for _ in xvi, yc in yci] .- (yci[end] - yci[1]) / 2 # for vx
-
-    xv_y = [xc for xc in xci, _ in yvi] .- (xci[end] - xci[1]) / 2 # for vy
-    yv_y = [yc for _ in xci, yc in yvi] .- (yvi[end] - yvi[1]) / 2 # for vy
-
-    # pressure analytical solution
-    ps, = _solvi_solution(xc, yc; ηm=η0, ηc=ηi, ε=εbg, rc=rc)
-    # x-velocity analytical solution
-    _, va = _solvi_solution(xv_x, yv_x; ηm=η0, ηc=ηi, ε=εbg, rc=rc)
-    vxs = real.(va)
-    # y-velocity analytical solution
-    _, va = _solvi_solution(xv_y, yv_y; ηm=η0, ηc=ηi, ε=εbg, rc=rc)
-    vys = imag.(va)
-
-    return (p=ps, vx=-vxs, vy=-vys)
-end
-
-function Li_error(geometry, stokes::JustRelax.StokesArrays, Δη, εbg, rc, ; order=2)
+function Li_error(geometry, stokes, Δη, εbg, rc, ; order=2)
 
     # analytical solution
-    sol = solvi_solution(geometry, 1, Δη, εbg, rc)
+    sol = solvi_solution(geometry, Δη, rc)
     gridsize = reduce(*, geometry.di)
 
     Li(A, B; order=2) = norm(A .- B, order)
@@ -76,10 +70,10 @@ function Li_error(geometry, stokes::JustRelax.StokesArrays, Δη, εbg, rc, ; or
     return L2_vx, L2_vy, L2_p
 end
 
-function plot_solVi_error(geometry, stokes::JustRelax.StokesArrays, Δη, εbg, rc)
+function plot_solVi_error(geometry, stokes, Δη, εbg, rc)
 
     # analytical solution
-    sol = solvi_solution(geometry, 1, Δη, εbg, rc)
+    sol = solvi_solution(geometry, Δη, εbg, rc)
 
     cx, cy = (geometry.xvi[1][end] - geometry.xvi[1][1]) / 2,
     (geometry.xvi[2][end] - geometry.xvi[2][1]) / 2
@@ -139,7 +133,7 @@ function plot_solVi_error(geometry, stokes::JustRelax.StokesArrays, Δη, εbg, 
         geometry.xvi[1],
         geometry.xci[2],
         stokes.V.Vx;
-        colorrange=extrema(stokes.V.Vx),
+        # colorrange=(-1, 1),
         colormap=:romaO,
     )
     lines!(ax1, ix, iy; linewidth=3, color=:black)
@@ -152,7 +146,7 @@ function plot_solVi_error(geometry, stokes::JustRelax.StokesArrays, Δη, εbg, 
         geometry.xvi[1],
         geometry.xci[2],
         sol.vx;
-        colorrange=extrema(stokes.V.Vx),
+        # colorrange=(-1, 1),
         colormap=:romaO,
     )
     lines!(ax1, ix, iy; linewidth=3, color=:black)
@@ -182,13 +176,19 @@ function plot_solVi_error(geometry, stokes::JustRelax.StokesArrays, Δη, εbg, 
         geometry.xvi[1],
         geometry.xci[2],
         stokes.V.Vy;
-        colorrange=extrema(stokes.V.Vy),
+        # colorrange=(-1, 1),
         colormap=:romaO,
     )
     lines!(ax1, ix, iy; linewidth=3, color=:black)
 
     ax1 = Axis(f[3, 2]; title="Vy analytical", aspect=1)
-    h = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], sol.vy; colormap=:romaO)
+    h = heatmap!(
+        ax1, 
+        geometry.xvi[1], 
+        geometry.xci[2], 
+        sol.vy; 
+        colormap=:romaO
+    )
     lines!(ax1, ix, iy; linewidth=3, color=:black)
     Colorbar(f[3, 3], h; height=300)
 

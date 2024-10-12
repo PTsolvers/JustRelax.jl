@@ -12,7 +12,9 @@ end
 
 function compute_melt_fraction!(ϕ, phase_ratios::JustPIC.PhaseRatios, rheology, args)
     ni = size(ϕ)
-    @parallel (@idx ni) compute_melt_fraction_kernel!(ϕ, phase_ratios.center, rheology, args)
+    @parallel (@idx ni) compute_melt_fraction_kernel!(
+        ϕ, phase_ratios.center, rheology, args
+    )
 end
 
 @parallel_indices (I...) function compute_melt_fraction_kernel!(

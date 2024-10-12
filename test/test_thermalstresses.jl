@@ -36,7 +36,6 @@ else
     JustPIC.CPUBackend
 end
 
-import JustRelax.@cell
 
 # Load script dependencies
 using Printf, Statistics, LinearAlgebra, CellArrays, StaticArrays
@@ -70,23 +69,23 @@ function init_phases!(phases, particles, xc_anomaly, yc_anomaly, r_anomaly, stic
     @parallel_indices (i, j) function init_phases!(
         phases, px, py, index, xc_anomaly, yc_anomaly, r_anomaly, sticky_air, top, bottom
     )
-        @inbounds for ip in JustRelax.JustRelax.cellaxes(phases)
+        @inbounds for ip in cellaxes(phases)
             # quick escape
-            JustRelax.@cell(index[ip, i, j]) == 0 && continue
+            @index(index[ip, i, j]) == 0 && continue
 
-            x = JustRelax.@cell px[ip, i, j]
-            y = -(JustRelax.@cell py[ip, i, j]) - sticky_air
+            x = @index px[ip, i, j]
+            y = -(@index py[ip, i, j]) - sticky_air
             if top ≤ y ≤ bottom
-                @cell phases[ip, i, j] = 1.0 # crust
+                @index phases[ip, i, j] = 1.0 # crust
             end
 
             # thermal anomaly - circular
             if ((x - xc_anomaly)^2 + (y + yc_anomaly)^2 ≤ r_anomaly^2)
-                JustRelax.@cell phases[ip, i, j] = 2.0
+                @index phases[ip, i, j] = 2.0
             end
 
             if y < top
-                @cell phases[ip, i, j] = 3.0
+                @index phases[ip, i, j] = 3.0
             end
         end
         return nothing
@@ -267,8 +266,8 @@ function main2D(; nx=32, ny=32)
     r_anomaly    = nondimensionalize(1.5km, CharDim)        # radius of perturbation
     anomaly      = nondimensionalize((750 + 273)K, CharDim) # thermal perturbation (in K)
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, r_anomaly, sticky_air, nondimensionalize(0.0km,CharDim), nondimensionalize(20km,CharDim))
-    phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
-    phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # Initialisation of thermal profile
     thermal     = ThermalArrays(backend_JR, ni) # initialise thermal arrays and boundary conditions
@@ -297,7 +296,7 @@ function main2D(; nx=32, ny=32)
 
     args = (; T=thermal.Tc, P=stokes.P, dt=dt)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.9 / √2.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL=0.8 / √2.1
     )
 
     # Pure shear far-field boundary conditions
@@ -427,7 +426,7 @@ function main2D(; nx=32, ny=32)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer,), xvi)
         # update phase ratios
-        phase_ratios_center!(phase_ratios, particles, grid, pPhases)
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end]        .= Tsurf
@@ -453,7 +452,7 @@ end
 
         nx_T, ny_T = size(thermal.T)
         @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.5369 rtol = 1e-2
-        @test  Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] == 0
+        @test  Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] == 0 
 
     end
 end

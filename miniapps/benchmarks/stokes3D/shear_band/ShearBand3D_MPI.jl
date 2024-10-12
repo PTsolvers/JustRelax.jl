@@ -7,6 +7,10 @@ using GeoParams, GLMakie
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
+using JustPIC, JustPIC._3D
+
+const backend = JustPIC.CPUBackend
+
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
@@ -17,7 +21,7 @@ function init_phases!(phase_ratios, xci, xvi, radius)
 
     @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
         x, y, z = xc[i], yc[j], zc[k]
-        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
+        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius^2
             @index phases[1, i, j, k] = 1.0
             @index phases[2, i, j, k] = 0.0
 
@@ -88,7 +92,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatio(ni, length(rheology))
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(phase_ratios, xci, xvi, radius)
 
      # STOKES ---------------------------------------------
@@ -107,16 +111,16 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         free_slip   = (left = true , right = true , top = true , bot = true , back = true , front = true),
         no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
-    
+
     Vx = PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
     Vz = PTArray(backend_JR)([-z*εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
     stokes.V.Vx .= Vx
     stokes.V.Vz .= Vz
 
     # println("Rank $(igg.me):
-    #     extrema Vx = $(extrema(Vx)) 
-    #     extrema Vz = $(extrema(Vz)) 
-    # ")    
+    #     extrema Vx = $(extrema(Vx))
+    #     extrema Vz = $(extrema(Vz))
+    # ")
 
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
@@ -189,7 +193,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             # visualisation
             th      = 0:pi/50:3*pi;
             xunit   = @. radius * cos(th) + 0.5;
-            yunit   = @. radius * sin(th) + 0.5;    
+            yunit   = @. radius * sin(th) + 0.5;
             slice_j = ny_v >>> 1
             fig     = Figure(size = (1600, 1600), title = "t = $t")
             ax1     = Axis(fig[1,1], aspect = 1, title = "τII")

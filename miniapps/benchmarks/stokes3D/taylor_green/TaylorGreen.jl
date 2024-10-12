@@ -100,7 +100,7 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni, ViscoElastic)
+    stokes = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √3)
 

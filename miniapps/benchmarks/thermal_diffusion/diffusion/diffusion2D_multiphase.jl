@@ -6,6 +6,8 @@ using ParallelStencil
 
 
 using GeoParams
+using JustPIC, JustPIC._2D
+const backend = JustPIC.CPUBackend
 
 distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
 

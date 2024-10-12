@@ -12,7 +12,7 @@ using JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CellArrays
@@ -74,7 +74,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     zc_anomaly       = 40e3  # origin of thermal anomaly
     r_anomaly        = 3e3    # radius of perturbation
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
-    phase_ratios     = PhaseRatio(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 

@@ -2,10 +2,8 @@ push!(LOAD_PATH, "..")
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
-    AMDGPU.allowscalar(true)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
-    CUDA.allowscalar(true)
 end
 
 using Test, Suppressor
@@ -137,12 +135,6 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 10)
     temperature2center!(thermal)
     # ----------------------------------------------------
 
-    # Rayleigh number
-    ΔT = thermal.T[1,1] - thermal.T[1,end]
-    Ra = (rheology[1].Density[1].ρ0 * rheology[1].Gravity[1].g * rheology[1].Density[1].α * ΔT * ly^3.0 ) /
-       (κ * rheology[1].CompositeRheology[1].elements[1].η )
-    @show Ra
-
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
     # Buoyancy forces  & viscosity ----------------------
@@ -264,7 +256,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 10)
         # Compute U rms -----------------------------
         # U₍ᵣₘₛ₎ = H*ρ₀*c₍ₚ₎/k * √ 1/H/L * ∫∫ (vx²+vz²) dx dz
         Urms_it = let
-            JustRelax.JustRelax2D.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
+            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
             sqrt( sum( Vx_v.^2 .* prod(di)) / lx /ly ) *
                 ((ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )

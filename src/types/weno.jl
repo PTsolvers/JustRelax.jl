@@ -1,3 +1,4 @@
+using Adapt
 ## Weno5 advection scheme. Implementation based on the repository from
 # https://gmd.copernicus.org/preprints/gmd-2023-189/
 
@@ -59,3 +60,5 @@ struct WENO5{T,N,A,M} <: AbstractWENO
     # method
     method::M # 1:JS, 2:Z
 end
+
+Adapt.@adapt_structure WENO5

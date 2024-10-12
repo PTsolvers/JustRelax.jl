@@ -2,10 +2,8 @@ push!(LOAD_PATH, "..")
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
-    AMDGPU.allowscalar(true)
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
-    CUDA.allowscalar(true)
 end
 
 using Test, Suppressor
@@ -222,10 +220,7 @@ function init_rheology(CharDim; is_compressible = false, steady_state=true)
 end
 
 
-function main2D(; nx=32, ny=32)
-
-    init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg      = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+function main2D(igg; nx=32, ny=32)
 
     # Characteristic lengths
     CharDim      = GEO_units(;length=12.5km, viscosity=1e21, temperature = 1e3C)
@@ -317,7 +312,7 @@ function main2D(; nx=32, ny=32)
 
     ϕ = @zeros(ni...)
     compute_melt_fraction!(
-        ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
+        ϕ, phase_ratios, rheology, (T=thermal.Tc, P=stokes.P)
     )
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
@@ -343,8 +338,8 @@ function main2D(; nx=32, ny=32)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init        = deepcopy(stokes.P)
-    Tsurf         = thermal.T[1, end]
-    Tbot          = thermal.T[1, 1]
+    Tsurf         = nondimensionalize(273K,CharDim)
+    Tbot          = nondimensionalize(648K,CharDim)
     local ϕ, stokes, thermal
 
     while it < 1
@@ -416,7 +411,7 @@ function main2D(; nx=32, ny=32)
         )
         # ------------------------------
         compute_melt_fraction!(
-            ϕ, phase_ratios.center, rheology, (T=thermal.Tc, P=stokes.P)
+            ϕ, phase_ratios, rheology, (T=thermal.Tc, P=stokes.P)
         )
         # Advection --------------------
         # advect particles in space
@@ -448,9 +443,17 @@ end
 
 @testset "thermal stresses" begin
     @suppress begin
-        ϕ, stokes, thermal = main2D(; nx=32, ny=32)
-        nx_T, ny_T = size(thermal.T) .>>> 1
-        @test Array(thermal.T)[nx_T  + 1, ny_T + 1] ≈ 0.5369 rtol = 1e-2
-        @test Array(ϕ)[nx_T + 1, ny_T + 1] ≤ 1e-8 
+        nx, ny   = 32, 32           # number of cells
+        igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+            IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
+        else
+            igg
+        end
+
+        ϕ, stokes, thermal = main2D(igg; nx=32, ny=32)
+
+        nx_T, ny_T = size(thermal.T)
+        @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.5369 rtol = 1e-2
+        @test  Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 9.351e-9 rtol = 1e-1
     end
 end

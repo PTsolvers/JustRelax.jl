@@ -101,7 +101,7 @@ function main2D(igg; ar=8, ny=16, nx=ny*8, figdir="figs2D", do_vtk =false)
     # Weno model -----------------------------------------
     weno = WENO5(backend_JR, Val(2), ni.+1)
     # ----------------------------------------------------
-    
+
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
     particles        = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...);
@@ -285,8 +285,8 @@ end
 figdir   = "Weno2D"
 ar       = 1 # aspect ratio
 n        = 64
-nx       = n*ar 
-ny       = n 
+nx       = n*ar
+ny       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else

@@ -451,6 +451,6 @@ end
         ϕ, stokes, thermal = main2D(; nx=32, ny=32)
         nx_T, ny_T = size(thermal.T) .>>> 1
         @test Array(thermal.T)[nx_T  + 1, ny_T + 1] ≈ 0.5369 rtol = 1e-2
-        @test Array(ϕ)[nx_T + 1, ny_T + 1] ≤ 1-8 
+        @test Array(ϕ)[nx_T + 1, ny_T + 1] ≤ 1e-8 
     end
 end

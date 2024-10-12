@@ -449,10 +449,10 @@ end
 # @testset "thermal stresses" begin
 #     @suppress begin
         ϕ, stokes, thermal = main2D(; nx=32, ny=32)
+        nx_T, ny_T = size(thermal.T)
         @show Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] 
         @show Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] 
 
-        nx_T, ny_T = size(thermal.T)
         @test Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.5369 rtol = 1e-2
         @test Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] == 0 
 

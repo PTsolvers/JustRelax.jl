@@ -33,15 +33,14 @@ function _solve!(
 ) where {T}
 
     # unpack
-    _dx, _dy = inv.(di)
+    _di = _dx, _dy = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
-    (; η) = stokes.viscosity
     ni = size(stokes.P)
 
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η; window=(1, 1))
+    compute_maxloc!(ητ, stokes.viscosity.η; window=(1, 1))
     update_halo!(ητ)
     # end
 
@@ -69,16 +68,13 @@ function _solve!(
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.RP, stokes.∇V, η, K, dt, r, θ_dτ
             )
-            @parallel (@idx ni .+ 1) compute_τ!(
-                @stress(stokes)..., @strain(stokes)..., η, θ_dτ
-            )
-
+            @parallel (@idx ni) compute_τ!(@stress(stokes)..., @strain(stokes)..., η, θ_dτ)
             @hide_communication b_width begin
                 @parallel compute_V!(
                     @velocity(stokes)...,
                     stokes.P,
                     @stress(stokes)...,
-                    pt_stokes.ηdτ,
+                    ηdτ,
                     ρg...,
                     ητ,
                     _di...,
@@ -198,12 +194,15 @@ function _solve!(
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+
+            @parallel compute_P!(
+                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, ητ, K, dt, r, θ_dτ
+            )
+
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-            @parallel compute_P!(
-                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, K, dt, r, θ_dτ
-            )
+
             @parallel (@idx ni) compute_τ!(
                 @stress(stokes)...,
                 @tensor(stokes.τ_o)...,
@@ -213,6 +212,7 @@ function _solve!(
                 θ_dτ,
                 dt,
             )
+
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
@@ -603,7 +603,7 @@ function _solve!(
                     Vx_on_Vy,
                     stokes.P,
                     @stress(stokes)...,
-                    pt_stokes.ηdτ,
+                    ηdτ,
                     ρg...,
                     ητ,
                     _di...,

@@ -7,6 +7,9 @@ using Printf, GeoParams, GLMakie, CellArrays
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
+using JustPIC, JustPIC._3D
+const backend = JustPIC.CPUBackend
+
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
@@ -57,7 +60,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     εbg         = 1.0           # background strain-rate
     η_reg       = 1.25e-2       # regularisation "viscosity"
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
-    dt         /= 2     
+    dt         /= 2
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
     el_inc      = ConstantElasticity(; G=Gi, ν=0.5)
     visc        = LinearViscous(; η=η0)
@@ -89,7 +92,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatio(ni, length(rheology))
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(phase_ratios, xci, xvi, radius)
 
     # STOKES ---------------------------------------------
@@ -187,7 +190,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         )
 
         # visualisation
-        jslice  = ni[2] >>> 1 
+        jslice  = ni[2] >>> 1
         fig     = Figure(size = (1600, 1600), title = "t = $t")
         ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
         ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")

@@ -6,7 +6,7 @@ function GMG_subduction_2D(nx, ny)
     nx, nz = nx, ny
     Tbot   = 1474.0 
     x      = range(0, 3000, nx);
-    air_thickness = 10.0
+    air_thickness = 15.0
     z      = range(-model_depth, air_thickness, nz);
     Grid2D = CartData(xyz_grid(x,0,z))
     Phases = zeros(Int64, nx, 1, nz);

@@ -1,15 +1,14 @@
 using LinearAlgebra, CairoMakie
-using JustRelax
+using JustRelax, JustRelax.JustRelax3D
 using MPI: MPI
+
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
-# setup ParallelStencil.jl environment
-model = PS_Setup(:cpu, Float64, 3)
-environment!(model)
+const backend_JR = CPUBackend
 
 # choose benchmark
-benchmark = :solvi
+benchmark = :Burstedde
 
 # model resolution (number of gridpoints)
 nx, ny, nz = 16, 16, 16

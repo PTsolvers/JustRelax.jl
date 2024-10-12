@@ -3,13 +3,13 @@ using JustRelax, JustRelax.JustRelax2D
 const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
-const backend = CPUBackend
+const backend = JustPIC.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
 
 # Load script dependencies
-using LinearAlgebra, GeoParams, GLMakie
+using LinearAlgebra, GeoParams, CairoMakie#GLMakie
 
 ## START OF HELPER FUNCTION ----------------------------------------------------------
 function copyinn_x!(A, B)
@@ -213,7 +213,7 @@ function RT_2D(igg, nx, ny)
             clr      = pPhases.data[:]
 
             fig = Figure(size = (900, 900), title = "t = $t")
-            ax  = Axis(fig[1,1], aspect = 1, title = " t=$(t/(1e3 * 3600 * 24 *365.25)) Kyrs")
+            ax  = Axis(fig[1,1], aspect = 1, title = " t=$(round.(t/(1e3 * 3600 * 24 *365.25); digits=3)) Kyrs")
             scatter!(
                 ax,
                 pxv, pyv,
@@ -237,7 +237,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n        = 50
+n        = 100
 nx       = n
 ny       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

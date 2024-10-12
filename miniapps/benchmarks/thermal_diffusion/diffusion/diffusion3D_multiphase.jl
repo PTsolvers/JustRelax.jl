@@ -10,7 +10,7 @@ using JustPIC, JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 using GeoParams
 
@@ -140,7 +140,7 @@ function diffusion_3D(;
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 20, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     pPhases,     = init_cell_arrays(particles, Val(1))
     phase_ratios = PhaseRatios(backend, length(rheology), ni)

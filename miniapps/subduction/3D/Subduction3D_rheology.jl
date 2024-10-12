@@ -1,5 +1,3 @@
-# from "Fingerprinting secondary mantle plumes", Cloetingh et al. 2022
-
 function init_rheologies()
     # Define rheolgy struct
     rheology = (

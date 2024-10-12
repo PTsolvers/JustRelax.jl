@@ -82,7 +82,8 @@ end
 function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_perturbation = :circular)
 
     # initialize MPI
-
+    !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
     # Physical domain ------------------------------------
     ly           = 2890e3
     lx           = ly * ar
@@ -239,7 +240,6 @@ function thermal_convection2D(; ar=8, ny=16, nx=ny*8, figdir="figs2D", thermal_p
         solve!(
             thermal,
             thermal_bc,
-            stokes,
             rheology,
             args_T,
             di,

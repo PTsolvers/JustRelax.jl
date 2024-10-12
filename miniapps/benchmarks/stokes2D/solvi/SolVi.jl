@@ -155,37 +155,3 @@ function multiple_solVi(; Δη=1e-3, lx=1e1, ly=1e1, rc=1e0, εbg=1e0, nrange::U
 
     return f
 end
-
-# ητ = deepcopy(η)
-# # @hide_communication b_width begin # communication/computation overlap
-# JustRelax2D.compute_maxloc!(ητ, η; window=(1, 1))
-
-# ## Compressible
-# @parallel_indices (I...) function compute_P!(P, P0, RP, ∇V, η, K, dt, r, θ_dτ)
-#     RP[I...], P[I...] = JustRelax2D._compute_P!(
-#         P[I...], P0[I...], ∇V[I...], η[I...], K[I...], dt, r, θ_dτ
-#     )
-#     return nothing
-# end
-
-# stokes.P .= 0
-# @parallel compute_P!(
-#     stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, ητ, Kb, dt, r, θ_dτ
-# )
-
-# stokes.P .= 0
-# JustRelax2D.compute_P!(
-#     stokes.P,
-#     stokes.P0,
-#     stokes.R.RP,
-#     stokes.∇V,
-#     stokes.viscosity.
-#     η,
-#     rheology,
-#     phase_ratios.center,
-#     dt,
-#     r,
-#     θ_dτ,
-#     args,
-# )
-# heatmap(stokes.P)

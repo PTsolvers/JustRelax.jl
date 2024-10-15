@@ -50,7 +50,7 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 100, 150, 50
+    nxcell, max_xcell, min_xcell = 50, 75, 25
     particles                    = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni)
     subgrid_arrays               = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -187,13 +187,15 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
-                    T   = Array(thermal.T),
+                    T   = zeros(ni.+1...),
+                    phase_vertex = [argmax(p) for p in Array(phase_ratios.center)]
                 )
                 data_c = (;
-                    P   = Array(stokes.P),
-                    τII = Array(stokes.τ.II),
-                    εII = Array(stokes.ε.II),
+                    # P   = Array(stokes.P),
+                    # τII = Array(stokes.τ.II),
+                    # εII = Array(stokes.ε.II),
                     η   = Array(stokes.viscosity.η),
+                    phase_center = [argmax(p) for p in Array(phase_ratios.center)]
                 )
                 velocity_v = (
                     Array(Vx_v),
@@ -220,8 +222,8 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
 # nx,ny,nz = 50, 50, 50
-# nx,ny,nz = 150, 40, 150
-nx,ny,nz = 128, 32, 128
+nx,ny,nz = 150, 40, 150
+# nx,ny,nz = 128, 32, 64
 li, origin, phases_GMG, = GMG_only(nx+1, ny+1, nz+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI= true)...)

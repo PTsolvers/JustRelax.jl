@@ -74,9 +74,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    # rheology            = init_rheology_linear()
+    rheology            = init_rheology_linear()
     # rheology            = init_rheology_nonNewtonian()
-    rheology            = init_rheology_nonNewtonian_plastic()
+    # rheology            = init_rheology_nonNewtonian_plastic()
     dt                  = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -95,7 +95,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # particle fields for the stress rotation
     pτ  = pτxx, pτyy, pτxy        = init_cell_arrays(particles, Val(3)) # stress
-    pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
+    # pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
     pω   = pωxy,                  = init_cell_arrays(particles, Val(1)) # vorticity
     particle_args                 = (pT, pPhases, pτ..., pω...)
     particle_args_reduced         = (pT, pτ..., pω...)
@@ -110,7 +110,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-3, Re=3π, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -175,6 +175,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Time loop
     t, it = 0.0, 0
+    τxx_v = @zeros(ni.+1...)
+    τyy_v = @zeros(ni.+1...)
 
     while it < 1000 # run only for 5 Myrs
 
@@ -188,20 +190,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
 
-        # Stokes solver ----------------
         particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
         particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
         particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
 
-
-        a = copy(stokes.τ.xx)
-        b = copy(stokes.τ.yy)
-        c = copy(stokes.τ.xy)
-
-        particle2centroid!(a, pτxx, xci, particles)
-        particle2centroid!(b, pτyy, xci, particles)
-        particle2grid!(c, pτxy, xvi, particles)
-
+        # Stokes solver ----------------
         t_stokes = @elapsed begin
             out = solve!(
                 stokes,
@@ -224,6 +217,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             );
         end
 
+        center2vertex!(τxx_v, stokes.τ.xx)
+        center2vertex!(τyy_v, stokes.τ.yy)
         centroid2particle!(pτxx , xci, stokes.τ.xx, particles)
         centroid2particle!(pτyy , xci, stokes.τ.yy, particles)
         grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
@@ -267,9 +262,17 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        
+        inject_particles_phase!(
+            particles, 
+            pPhases, 
+            particle_args_reduced, 
+            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
+            xvi
+        )
+
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
@@ -328,7 +331,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             # Plot particles phase
             h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
             # Plot 2nd invariant of strain rate
-            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array((stokes.τ.II)) , colormap=:batlow)
             # Plot effective viscosity
             h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
             hidexdecorations!(ax1)
@@ -361,64 +365,4 @@ else
     igg
 end
 
-# main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
-
-# @parallel_indices (I...) function rotate_stress_particles_rotation_matrix!(
-#     xx, yy, xy, ω, index, dt
-# )
-
-#     for ip in cellaxes(index)
-#         @index(index[ip, I...]) || continue # no particle in this location
-
-#         θ = dt * @index ω[ip, I...]
-#         sinθ, cosθ = sincos(θ)
-
-#         τ_xx = @index xx[ip, I...]
-#         τ_yy = @index yy[ip, I...]
-#         τ_xy = @index xy[ip, I...]
-
-#         R = @SMatrix [
-#             cosθ -sinθ
-#             sinθ cosθ
-#         ]
-
-#         τ = @SMatrix [
-#             τ_xx τ_xy
-#             τ_xy τ_yy
-#         ]
-
-#         # this could be fully unrolled in 2D
-#         τr = R * τ * R'
-
-#         @index xx[ip, I...] = τr[1, 1]
-#         @index yy[ip, I...] = τr[2, 2]
-#         @index xy[ip, I...] = τr[1, 2]
-#     end
-
-#     return nothing
-# end
-
-# @parallel (@idx ni) rotate_stress_particles_rotation_matrix!(
-#     pτxx, pτyy, pτxy, pωxy, particles.index, dt
-# )
-
-
-# function rotate_stress_particles!(τ::NTuple, ω::NTuple, particles, dt; method::Symbol = :matrix)
-#     fn = if method === :matrix
-#         rotate_stress_particles_rotation_matrix!
-
-#     elseif method === :jaumann
-#         rotate_stress_particles_jaumann!
-
-#     else
-#         error("Unknown method: $method. Valid methods are :matrix and :jaumann")
-#     end
-#     @parallel (@idx ni) fn(τ..., ω..., particles.index, dt)
-    
-#     return nothing 
-# end
-
-# rotate_stress_particles!(
-#     (pτxx, pτyy, pτxy), (pωxy,), particles, dt
-# )
-
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

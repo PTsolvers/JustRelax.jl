@@ -21,7 +21,7 @@ function rotate_stress_particles!(τ::NTuple, ω::NTuple, particles, dt; method:
     else
         error("Unknown method: $method. Valid methods are :matrix and :jaumann")
     end
-    @parallel (@idx ni) fn(τ..., ω..., particles.index, dt)
+    @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
     
     return nothing 
 end
@@ -29,7 +29,7 @@ end
 @parallel_indices (i, j) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
     cell = i, j
 
-    for ip in JustRelax.cellaxes(index)
+    for ip in cellaxes(index)
         !@index(index[ip, cell...]) && continue # no particle in this location
 
         ω_xy = @index ω[ip, cell...]

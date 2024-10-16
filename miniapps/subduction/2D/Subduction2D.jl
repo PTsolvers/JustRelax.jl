@@ -92,7 +92,13 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     grid_vxi            = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT         = init_cell_arrays(particles, Val(2))
-    particle_args       = (pT, pPhases)
+
+    # particle fields for the stress rotation
+    pτ  = pτxx, pτyy, pτxy        = init_cell_arrays(particles, Val(3)) # stress
+    pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
+    pω   = pωxy,                  = init_cell_arrays(particles, Val(1)) # vorticity
+    particle_args                 = (pT, pPhases, pτ..., pω...)
+    particle_args_reduced         = (pT, pτ..., pω...)
 
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
@@ -159,26 +165,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         Vy_v = @zeros(ni.+1...)
     end
 
-    # # Smooth out thermal field ---------------------------
-    # for _ in 1:10
-    #     heatdiffusion_PT!(
-    #         thermal,
-    #         pt_thermal,
-    #         thermal_bc,
-    #         rheology,
-    #         args0,
-    #         1e6 * 3600 * 24 * 365.25,
-    #         di;
-    #         kwargs = (
-    #             igg     = igg,
-    #             phase   = phase_ratios,
-    #             iterMax = 150e3,
-    #             nout    = 1e2,
-    #             verbose = true,
-    #         )
-    #     )
-    # end
-
     T_buffer    = @zeros(ni.+1)
     Told_buffer = similar(T_buffer)
     dt₀         = similar(stokes.P)
@@ -203,6 +189,19 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
 
         # Stokes solver ----------------
+        particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
+        particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
+        particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
+
+
+        a = copy(stokes.τ.xx)
+        b = copy(stokes.τ.yy)
+        c = copy(stokes.τ.xy)
+
+        particle2centroid!(a, pτxx, xci, particles)
+        particle2centroid!(b, pτyy, xci, particles)
+        particle2grid!(c, pτxy, xvi, particles)
+
         t_stokes = @elapsed begin
             out = solve!(
                 stokes,
@@ -224,6 +223,12 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 )
             );
         end
+
+        centroid2particle!(pτxx , xci, stokes.τ.xx, particles)
+        centroid2particle!(pτyy , xci, stokes.τ.yy, particles)
+        grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
+        rotate_stress_particles!(pτ, pω, particles, dt)
+
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
@@ -356,4 +361,64 @@ else
     igg
 end
 
-main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+# main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+
+# @parallel_indices (I...) function rotate_stress_particles_rotation_matrix!(
+#     xx, yy, xy, ω, index, dt
+# )
+
+#     for ip in cellaxes(index)
+#         @index(index[ip, I...]) || continue # no particle in this location
+
+#         θ = dt * @index ω[ip, I...]
+#         sinθ, cosθ = sincos(θ)
+
+#         τ_xx = @index xx[ip, I...]
+#         τ_yy = @index yy[ip, I...]
+#         τ_xy = @index xy[ip, I...]
+
+#         R = @SMatrix [
+#             cosθ -sinθ
+#             sinθ cosθ
+#         ]
+
+#         τ = @SMatrix [
+#             τ_xx τ_xy
+#             τ_xy τ_yy
+#         ]
+
+#         # this could be fully unrolled in 2D
+#         τr = R * τ * R'
+
+#         @index xx[ip, I...] = τr[1, 1]
+#         @index yy[ip, I...] = τr[2, 2]
+#         @index xy[ip, I...] = τr[1, 2]
+#     end
+
+#     return nothing
+# end
+
+# @parallel (@idx ni) rotate_stress_particles_rotation_matrix!(
+#     pτxx, pτyy, pτxy, pωxy, particles.index, dt
+# )
+
+
+# function rotate_stress_particles!(τ::NTuple, ω::NTuple, particles, dt; method::Symbol = :matrix)
+#     fn = if method === :matrix
+#         rotate_stress_particles_rotation_matrix!
+
+#     elseif method === :jaumann
+#         rotate_stress_particles_jaumann!
+
+#     else
+#         error("Unknown method: $method. Valid methods are :matrix and :jaumann")
+#     end
+#     @parallel (@idx ni) fn(τ..., ω..., particles.index, dt)
+    
+#     return nothing 
+# end
+
+# rotate_stress_particles!(
+#     (pτxx, pτyy, pτxy), (pωxy,), particles, dt
+# )
+

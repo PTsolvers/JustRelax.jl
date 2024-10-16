@@ -2,13 +2,28 @@ using StaticArrays
 
 ## Stress Rotation on the particles
 
-@parallel_indices (i, j) function compute_vorticity!(vorticity, Vx, Vy, _dx, _dy)
-    dx(A) = _d_xa(A, i, j, _dx)
-    dy(A) = _d_ya(A, i, j, _dy)
+@parallel_indices (I...) function compute_vorticity!(vorticity, Vx, Vy, _dx, _dy)
+    dx(A) = _d_xa(A, I..., _dx)
+    dy(A) = _d_ya(A, I..., _dy)
 
-    vorticity[i, j] = 0.5 * (dx(Vy) - dy(Vx))
+    vorticity[I...] = 0.5 * (dx(Vy) - dy(Vx))
 
     return nothing
+end
+
+function rotate_stress_particles!(τ::NTuple, ω::NTuple, particles, dt; method::Symbol = :matrix)
+    fn = if method === :matrix
+        rotate_stress_particles_rotation_matrix!
+
+    elseif method === :jaumann
+        rotate_stress_particles_jaumann!
+
+    else
+        error("Unknown method: $method. Valid methods are :matrix and :jaumann")
+    end
+    @parallel (@idx ni) fn(τ..., ω..., particles.index, dt)
+    
+    return nothing 
 end
 
 @parallel_indices (i, j) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
@@ -36,7 +51,7 @@ end
 )
     cell = i, j
 
-    for ip in JustRelax.cellaxes(index)
+    for ip in cellaxes(index)
         !@index(index[ip, cell...]) && continue # no particle in this location
 
         θ = dt * @index ω[ip, cell...]

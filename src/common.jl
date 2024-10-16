@@ -57,9 +57,6 @@ export compute_viscosity!
 include("rheology/Melting.jl")
 export compute_melt_fraction!
 
-# include("thermal_diffusion/DiffusionExplicit.jl")
-# export ThermalParameters
-
 include("particles/subgrid_diffusion.jl")
 export subgrid_characteristic_time!
 
@@ -72,12 +69,17 @@ export WENO_advection!
 # Stokes
 
 include("rheology/GeoParams.jl")
+
 include("rheology/StressUpdate.jl")
+
 include("stokes/StressRotation.jl")
+
 include("stokes/StressKernels.jl")
 export tensor_invariant!
 
 include("stokes/PressureKernels.jl")
+export rotate_stress_particles!
+
 include("stokes/VelocityKernels.jl")
 
 # thermal diffusion

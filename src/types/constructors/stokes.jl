@@ -39,15 +39,15 @@ end
 ## Vorticity type
 
 function Vorticity(nx::Integer, ny::Integer)
-    xy = @zeros(nx, ny)
+    xy = @zeros(nx + 1, ny + 1)
 
     return JustRelax.Vorticity(nothing, nothing, xy)
 end
 
 function Vorticity(nx::Integer, ny::Integer, nz::Integer)
-    yz = @zeros(nx, ny, nz)
-    xz = @zeros(nx, ny, nz)
-    xy = @zeros(nx, ny, nz)
+    yz = @zeros(nx, ny + 1, nz + 1)
+    xz = @zeros(nx + 1, ny, nz + 1)
+    xy = @zeros(nx + 1, ny + 1, nz)
 
     return JustRelax.Vorticity(yz, xz, xy)
 end

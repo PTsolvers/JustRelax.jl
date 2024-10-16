@@ -1,20 +1,20 @@
 function init_rheologies()
     # Define rheolgy struct
     rheology = (
-        # Name              = "crust",
+
+        # Name              = "slab",
         SetMaterialParams(;
             Phase             = 1,
             Density           = ConstantDensity(; ρ=3.28e3),
-            CompositeRheology = CompositeRheology( (LinearViscous(η = 1e23), ) ),
+            CompositeRheology = CompositeRheology( (LinearViscous(η = 2e23), ) ),
             # Elasticity        = el_upper_crust,
             Gravity           = ConstantGravity(; g=9.81),
         ),
-        # Name              = "slab",
+        # Name              = "crust",
         SetMaterialParams(;
             Phase             = 2,
             Density           = ConstantDensity(; ρ=3.28e3),
-            # CompositeRheology = CompositeRheology( (LinearViscous(η = 2e23), ) ),
-            CompositeRheology = CompositeRheology( (LinearViscous(η = 2e23), ) ),
+            CompositeRheology = CompositeRheology( (LinearViscous(η = 1e21), ) ),
             # Elasticity        = el_upper_crust,
             Gravity           = ConstantGravity(; g=9.81),
         ),
@@ -25,6 +25,14 @@ function init_rheologies()
             CompositeRheology = CompositeRheology( (LinearViscous(η = 1e21), ) ),
             # Elasticity        = el_upper_crust,
             Gravity           = ConstantGravity(; g=9.81),
+        ),
+        # Name              = "StickyAir",
+        SetMaterialParams(;
+            Phase             = 4,
+            Density           = ConstantDensity(; ρ=100), # water density
+            HeatCapacity      = ConstantHeatCapacity(; Cp=3e3),
+            Conductivity      = ConstantConductivity(; k=1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e19),)),
         ),
     )
 end

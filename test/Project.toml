@@ -20,7 +20,7 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 [compat]
 AMDGPU = "0.8, 0.9, 1"
 CUDA = "5"
-CellArrays = "0.2"
+CellArrays = "0.2, 0.3"
 GeoParams = "0.5, 0.6"
 JustPIC = "0.5"
 MPI = "0.20"

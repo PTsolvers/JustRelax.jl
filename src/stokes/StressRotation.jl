@@ -2,28 +2,77 @@ using StaticArrays
 
 ## Stress Rotation on the particles
 
-@parallel_indices (I...) function compute_vorticity!(vorticity, Vx, Vy, _dx, _dy)
+@parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _dx, _dy)
     dx(A) = _d_xa(A, I..., _dx)
     dy(A) = _d_ya(A, I..., _dy)
 
-    vorticity[I...] = 0.5 * (dx(Vy) - dy(Vx))
+    ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
 
     return nothing
 end
 
-function rotate_stress_particles!(τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol = :matrix)
-    fn = if method === :matrix
-        rotate_stress_particles_rotation_matrix!
+@parallel_indices (I...) function compute_vorticity!( ωyz, ωxz, ωxy, Vx, Vy, Vz, _dx, _dy, _dz)
+    dx(A) = _d_xa(A, I..., _dx)
+    dy(A) = _d_ya(A, I..., _dy)
+    dz(A) = _d_za(A, I..., _dz)
 
-    elseif method === :jaumann
-        rotate_stress_particles_jaumann!
+    ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
+    ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
+    ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
 
-    else
-        error("Unknown method: $method. Valid methods are :matrix and :jaumann")
-    end
-    @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
-    
+    return nothing
+end
+
+function rotate_stress_particles!(τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol = :matrix)    
+    @parallel (@idx size(particles.index)) rotate_stress_particles_GeoParams!(τ..., ω..., particles.index, dt)
     return nothing 
+end
+
+@parallel_indices (I...) function rotate_stress_particles_GeoParams!(xx, yy, xy, ω, index, dt)
+
+    for ip in cellaxes(index)
+        @index(index[ip, I...]) || continue # no particle in this location
+
+        ω_xy = @index ω[ip, I...]
+        τ_xx = @index xx[ip, I...]
+        τ_yy = @index yy[ip, I...]
+        τ_xy = @index xy[ip, I...]
+
+        τ_rotated = GeoParams.rotate_elastic_stress2D(ω_xy, (τ_xx, τ_yy, τ_xy), dt)
+
+        @index xx[ip, I...] = τ_rotated[1]
+        @index yy[ip, I...] = τ_rotated[2]
+        @index xy[ip, I...] = τ_rotated[3]
+    end
+
+    return nothing
+end
+
+@parallel_indices (I...) function rotate_stress_particles_GeoParams!(xx, yy, zz, yz, xz, xy, ωyz, ωxz, ωxy, index, dt)
+
+    for ip in cellaxes(index)
+        @index(index[ip, I...]) || continue # no particle in this location
+
+        ω_yz = @index ωyz[ip, I...]
+        ω_xz = @index ωxz[ip, I...]
+        ω_xy = @index ωxy[ip, I...]
+        τ_xx = @index xx[ip, I...]
+        τ_yy = @index yy[ip, I...]
+        τ_yz = @index yz[ip, I...]
+        τ_xz = @index xz[ip, I...]
+        τ_xy = @index xy[ip, I...]
+
+        τ_rotated = GeoParams.rotate_elastic_stress3D((ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_xy, τ_yz, τ_xz, τ_xy), dt)
+
+        @index xx[ip, I...] = τ_rotated[1]
+        @index yy[ip, I...] = τ_rotated[2]
+        @index zz[ip, I...] = τ_rotated[3]
+        @index yz[ip, I...] = τ_rotated[4]
+        @index xz[ip, I...] = τ_rotated[5]
+        @index xy[ip, I...] = τ_rotated[6]
+    end
+
+    return nothing
 end
 
 @parallel_indices (I) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)

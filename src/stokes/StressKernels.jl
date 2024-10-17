@@ -9,7 +9,8 @@ function compute_stress_increment(
 ) where {N}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-        dτ_r * fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
+        return dτ_r *
+               fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
     end
     return dτij
 end

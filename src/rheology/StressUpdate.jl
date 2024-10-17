@@ -24,7 +24,7 @@ function _compute_τ_nonlinear!(
     # visco-elastic strain rates
     εij_ve = ntuple(Val(N1)) do i
         Base.@_inline_meta
-        fma(0.5 * τij_o[i], _Gdt, εij[i])
+        return fma(0.5 * τij_o[i], _Gdt, εij[i])
     end
     # get plastic parameters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
@@ -60,7 +60,7 @@ end
 
 # fill plastic strain rate tensor
 @generated function update_plastic_strain_rate!(ε_pl::NTuple{N,T}, λdQdτ, idx) where {N,T}
-    quote
+    return quote
         Base.@_inline_meta
         Base.@nexprs $N i -> ε_pl[i][idx...] = !isinf(λdQdτ[i]) * λdQdτ[i]
     end
@@ -76,7 +76,8 @@ function compute_stress_increment_and_trial(
 ) where {N,T}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-        dτ_r * fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
+        return dτ_r *
+               fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
     end
     return dτij, second_invariant((τij .+ dτij)...)
 end
@@ -94,13 +95,13 @@ function compute_dτ_pl(
     λdQdτ = ntuple(Val(N)) do i
         Base.@_inline_meta
         # derivatives of the plastic potential
-        (τij[i] + dτij[i]) * λ_τII
+        return (τij[i] + dτij[i]) * λ_τII
     end
 
     dτ_pl = ntuple(Val(N)) do i
         Base.@_inline_meta
         # corrected stress
-        fma(-dτ_r * 2.0, ηij * λdQdτ[i], dτij[i])
+        return fma(-dτ_r * 2.0, ηij * λdQdτ[i], dτij[i])
     end
     return dτ_pl, λ, λdQdτ
 end
@@ -109,7 +110,7 @@ end
 @generated function correct_stress!(
     τ, τij::NTuple{N1}, idx::Vararg{Integer,N2}
 ) where {N1,N2}
-    quote
+    return quote
         Base.@_inline_meta
         Base.@nexprs $N1 i -> τ[i][idx...] = τij[i]
     end
@@ -179,7 +180,7 @@ end
 @generated function _plastic_params_phase(
     rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio
 ) where {N}
-    quote
+    return quote
         Base.@_inline_meta
         empty_args = false, 0.0, 0.0, 0.0, 0.0, 0.0
         Base.@nexprs $N i ->

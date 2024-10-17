@@ -70,7 +70,7 @@ function save_vtk(
             for (name_i, array_i) in zip(data_names_v, data_arrays_v)
                 vtk[name_i] = Array(array_i)
             end
-            vtk["Velocity"] = velocity_field
+            return vtk["Velocity"] = velocity_field
         end
     end
 

@@ -26,11 +26,19 @@ jobs:
           # - 'nightly'
         os:
           - ubuntu-latest
-          - macOS-latest # M-Series Chip
           - macOS-13 # Intel Chip
           - windows-latest
         arch:
           - x64
+        include:
+          - os: macos-latest
+            arch: aarch64
+            version:
+              - '1.10'
+              - '1.11'
+              - 'pre'
+              # - 'nightly'
+
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2

@@ -11,7 +11,7 @@ using StaticArrays
     return nothing
 end
 
-function rotate_stress_particles!(τ::NTuple, ω::NTuple, particles, dt; method::Symbol = :matrix)
+function rotate_stress_particles!(τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol = :matrix)
     fn = if method === :matrix
         rotate_stress_particles_rotation_matrix!
 
@@ -26,40 +26,38 @@ function rotate_stress_particles!(τ::NTuple, ω::NTuple, particles, dt; method:
     return nothing 
 end
 
-@parallel_indices (i, j) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
-    cell = i, j
+@parallel_indices (I) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
 
     for ip in cellaxes(index)
-        !@index(index[ip, cell...]) && continue # no particle in this location
+        !@index(index[ip, I...]) && continue # no particle in this location
 
-        ω_xy = @index ω[ip, cell...]
-        τ_xx = @index xx[ip, cell...]
-        τ_yy = @index yy[ip, cell...]
-        τ_xy = @index xy[ip, cell...]
+        ω_xy = @index ω[ip, I...]
+        τ_xx = @index xx[ip, I...]
+        τ_yy = @index yy[ip, I...]
+        τ_xy = @index xy[ip, I...]
 
         tmp = τ_xy * ω_xy * 2.0
-        @index xx[ip, cell...] = fma(dt, cte, τ_xx)
-        @index yy[ip, cell...] = fma(dt, cte, τ_yy)
-        @index xy[ip, cell...] = fma(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
+        @index xx[ip, I...] = fma(dt, cte, τ_xx)
+        @index yy[ip, I...] = fma(dt, cte, τ_yy)
+        @index xy[ip, I...] = fma(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
     end
 
     return nothing
 end
 
-@parallel_indices (i, j) function rotate_stress_particles_rotation_matrix!(
+@parallel_indices (I...) function rotate_stress_particles_rotation_matrix!(
     xx, yy, xy, ω, index, dt
 )
-    cell = i, j
 
     for ip in cellaxes(index)
-        !@index(index[ip, cell...]) && continue # no particle in this location
+        !@index(index[ip, I...]) && continue # no particle in this location
 
-        θ = dt * @index ω[ip, cell...]
+        θ = dt * @index ω[ip, I...]
         sinθ, cosθ = sincos(θ)
 
-        τ_xx = @index xx[ip, cell...]
-        τ_yy = @index yy[ip, cell...]
-        τ_xy = @index xy[ip, cell...]
+        τ_xx = @index xx[ip, I...]
+        τ_yy = @index yy[ip, I...]
+        τ_xy = @index xy[ip, I...]
 
         R = @SMatrix [
             cosθ -sinθ
@@ -74,9 +72,9 @@ end
         # this could be fully unrolled in 2D
         τr = R * τ * R'
 
-        @index xx[ip, cell...] = τr[1, 1]
-        @index yy[ip, cell...] = τr[2, 2]
-        @index xy[ip, cell...] = τr[1, 2]
+        @index xx[ip, I...] = τr[1, 1]
+        @index yy[ip, I...] = τr[2, 2]
+        @index xy[ip, I...] = τr[1, 2]
     end
 
     return nothing

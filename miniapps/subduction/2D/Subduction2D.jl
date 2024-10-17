@@ -1,12 +1,11 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -74,9 +73,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology            = init_rheology_linear()
+    # rheology            = init_rheology_linear()
     # rheology            = init_rheology_nonNewtonian()
-    # rheology            = init_rheology_nonNewtonian_plastic()
+    rheology            = init_rheology_nonNewtonian_plastic()
     dt                  = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -110,7 +109,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-3, Re=3π, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    # pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-5, Re = 2π√2, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -139,7 +139,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=0.95 / √3
+        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-8, CFL=0.95 / √2
     )
 
     # Boundary conditions
@@ -173,10 +173,15 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     end
     grid2particle!(pT, xvi, T_buffer, particles)
 
-    # Time loop
-    t, it = 0.0, 0
     τxx_v = @zeros(ni.+1...)
     τyy_v = @zeros(ni.+1...)
+
+    # Time loop
+    t, it = 0.0, 0
+
+    fig_iters = Figure(size=(1200, 800))
+    ax_iters1 = Axis(fig_iters[1,1], aspect = 1, title = "error")
+    ax_iters2 = Axis(fig_iters[1,2], aspect = 1, title = "num iters / ny")
 
     while it < 1000 # run only for 5 Myrs
 
@@ -208,13 +213,21 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 dt,
                 igg;
                 kwargs = (
-                    iterMax          = 50e3,
+                    iterMax          = 100e3,
                     nout             = 2e3,
                     viscosity_cutoff = viscosity_cutoff,
                     free_surface     = false,
                     viscosity_relaxation = 1e-2
                 )
             );
+
+            scatter!(ax_iters1, [it], [log10(out.err_evo1[end])], markersize = 10, color=:blue)
+            scatter!(ax_iters2, [it], [out.iter/ny], markersize = 10, color=:blue)
+            fig_iters
+
+            if it == 1 || rem(it, 10) == 0
+                save(joinpath(figdir, "errors.png"), fig_iters)
+            end
         end
 
         center2vertex!(τxx_v, stokes.τ.xx)
@@ -264,7 +277,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
-        
         inject_particles_phase!(
             particles, 
             pPhases, 
@@ -357,7 +369,7 @@ end
 do_vtk   = true # set to true to generate VTK files for ParaView
 figdir   = "Subduction2D"
 n        = 128
-nx, ny   = 128, 64
+nx, ny   = 256, 128
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)

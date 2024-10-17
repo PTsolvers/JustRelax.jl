@@ -21,8 +21,8 @@ function init_rheology_nonNewtonian_plastic()
     # plasticity
     ϕ_wet_olivine   = asind(0.1)
     C_wet_olivine   = 1e6
-    η_reg           = 1e19
-    el              = ConstantElasticity(; G = 40e9)
+    η_reg           = 1e16
+    el              = ConstantElasticity(; G = 40e9, ν = 0.45)
     lithosphere_rheology = CompositeRheology(
                 (
                     el,
@@ -35,8 +35,9 @@ function init_rheology_nonNewtonian_plastic()
 end
 
 function init_rheology_linear()
-    el    = ConstantElasticity(; G = 40e9)
-    lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e22), el))
+    el    = ConstantElasticity(; G = 40e9, ν = 0.45)
+    # lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), ))
+    lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), el))
     init_rheologies(lithosphere_rheology)
 end
 

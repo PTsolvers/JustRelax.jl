@@ -145,7 +145,7 @@ Base.@propagate_inbounds function advect_stress(τxx, τyy, τxy, Vx, Vy, i, j, 
     τ_adv = ntuple(Val(3)) do k
         Base.@_inline_meta
         dx_right, dx_left, dy_up, dy_down = upwind_derivatives(τ[k], i, j)
-        advection_term(Vx, Vy, dx_right, dx_left, dy_up, dy_down, _dx, _dy)
+        return advection_term(Vx, Vy, dx_right, dx_left, dy_up, dy_down, _dx, _dy)
     end
     return τ_adv
 end
@@ -160,7 +160,7 @@ Base.@propagate_inbounds function advect_stress(
         dx_right, dx_left, dy_back, dy_front, dz_up, dz_down = upwind_derivatives(
             τ[l], i, j, k
         )
-        advection_term(
+        return advection_term(
             Vx,
             Vy,
             Vz,

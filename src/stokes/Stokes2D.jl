@@ -374,7 +374,7 @@ function _solve!(
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
-            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
+            @parallel (1:(size(stokes.V.Vy, 1)-2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
                 Vx_on_Vy, stokes.V.Vx
             )
 
@@ -593,7 +593,7 @@ function _solve!(
             )
             update_halo!(stokes.τ.xy)
 
-            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
+            @parallel (1:(size(stokes.V.Vy, 1)-2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
                 Vx_on_Vy, stokes.V.Vx, ρg[2], _di[1]
             )
 

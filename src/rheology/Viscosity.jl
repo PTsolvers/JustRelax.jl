@@ -310,7 +310,7 @@ end
 @generated function compute_phase_viscosity_εII(
     rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio, εII, args
 ) where {N}
-    quote
+    return quote
         Base.@_inline_meta
         η = 0.0
         Base.@nexprs $N i -> (

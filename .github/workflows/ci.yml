@@ -33,11 +33,13 @@ jobs:
         include:
           - os: macOS-latest
             arch: aarch64
-            version:
-              - '1.10'
-              - '1.11'
-              - 'pre'
-              # - 'nightly'
+            version: '1.10'
+          - os: macOS-latest
+            arch: aarch64
+            version: '1.11'
+          - os: macOS-latest
+            arch: aarch64
+            version: 'pre'
 
     steps:
       - uses: actions/checkout@v4

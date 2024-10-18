@@ -11,7 +11,9 @@ using StaticArrays
     return nothing
 end
 
-@parallel_indices (I...) function compute_vorticity!( ωyz, ωxz, ωxy, Vx, Vy, Vz, _dx, _dy, _dz)
+@parallel_indices (I...) function compute_vorticity!(
+    ωyz, ωxz, ωxy, Vx, Vy, Vz, _dx, _dy, _dz
+)
     dx(A) = _d_xa(A, I..., _dx)
     dy(A) = _d_ya(A, I..., _dy)
     dz(A) = _d_za(A, I..., _dz)
@@ -23,13 +25,18 @@ end
     return nothing
 end
 
-function rotate_stress_particles!(τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol = :matrix)    
-    @parallel (@idx size(particles.index)) rotate_stress_particles_GeoParams!(τ..., ω..., particles.index, dt)
-    return nothing 
+function rotate_stress_particles!(
+    τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol=:matrix
+)
+    @parallel (@idx size(particles.index)) rotate_stress_particles_GeoParams!(
+        τ..., ω..., particles.index, dt
+    )
+    return nothing
 end
 
-@parallel_indices (I...) function rotate_stress_particles_GeoParams!(xx, yy, xy, ω, index, dt)
-
+@parallel_indices (I...) function rotate_stress_particles_GeoParams!(
+    xx, yy, xy, ω, index, dt
+)
     for ip in cellaxes(index)
         @index(index[ip, I...]) || continue # no particle in this location
 
@@ -48,8 +55,9 @@ end
     return nothing
 end
 
-@parallel_indices (I...) function rotate_stress_particles_GeoParams!(xx, yy, zz, yz, xz, xy, ωyz, ωxz, ωxy, index, dt)
-
+@parallel_indices (I...) function rotate_stress_particles_GeoParams!(
+    xx, yy, zz, yz, xz, xy, ωyz, ωxz, ωxy, index, dt
+)
     for ip in cellaxes(index)
         @index(index[ip, I...]) || continue # no particle in this location
 
@@ -62,7 +70,9 @@ end
         τ_xz = @index xz[ip, I...]
         τ_xy = @index xy[ip, I...]
 
-        τ_rotated = GeoParams.rotate_elastic_stress3D((ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_xy, τ_yz, τ_xz, τ_xy), dt)
+        τ_rotated = GeoParams.rotate_elastic_stress3D(
+            (ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_xy, τ_yz, τ_xz, τ_xy), dt
+        )
 
         @index xx[ip, I...] = τ_rotated[1]
         @index yy[ip, I...] = τ_rotated[2]
@@ -76,7 +86,6 @@ end
 end
 
 @parallel_indices (I) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
-
     for ip in cellaxes(index)
         !@index(index[ip, I...]) && continue # no particle in this location
 
@@ -97,7 +106,6 @@ end
 @parallel_indices (I...) function rotate_stress_particles_rotation_matrix!(
     xx, yy, xy, ω, index, dt
 )
-
     for ip in cellaxes(index)
         !@index(index[ip, I...]) && continue # no particle in this location
 

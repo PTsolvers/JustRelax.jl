@@ -442,7 +442,9 @@ function _solve!(
     stokes.P .= θ # θ = P + plastic_overpressure
 
     # compute vorticity
-    @parallel (@idx ni.+1) compute_vorticity!(stokes.ω.xy, @velocity(stokes)..., inv.(di)...)
+    @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+    )
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
@@ -673,7 +675,9 @@ function _solve!(
     end
 
     # compute vorticity
-    @parallel (@idx ni.+1) compute_vorticity!(stokes.ω.xy, @velocity(stokes)..., inv.(di)...)
+    @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+    )
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)

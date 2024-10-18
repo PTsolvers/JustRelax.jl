@@ -387,7 +387,9 @@ end
 
 # stress rotation on particles
 
-function JR3D.rotate_stress_particles!(τ::NTuple, ω::NTuple, particles::Particles{CUDABackend}, dt; method::Symbol = :matrix)
+function JR3D.rotate_stress_particles!(
+    τ::NTuple, ω::NTuple, particles::Particles{CUDABackend}, dt; method::Symbol=:matrix
+)
     fn = if method === :matrix
         rotate_stress_particles_rotation_matrix!
 
@@ -398,8 +400,8 @@ function JR3D.rotate_stress_particles!(τ::NTuple, ω::NTuple, particles::Partic
         error("Unknown method: $method. Valid methods are :matrix and :jaumann")
     end
     @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
-    
-    return nothing 
+
+    return nothing
 end
 
 end

@@ -349,7 +349,9 @@ function _solve!(
     av_time = wtime0 / (iter - 1) # average time per iteration
 
     # compute vorticity
-    @parallel (@idx ni.+1) compute_vorticity!(stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., inv.(di)...)
+    @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+    )
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
@@ -548,7 +550,9 @@ function _solve!(
     av_time = wtime0 / (iter - 1) # average time per iteration
 
     # compute vorticity
-    @parallel (@idx ni.+1) compute_vorticity!(stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., inv.(di)...)
+    @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+    )
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)

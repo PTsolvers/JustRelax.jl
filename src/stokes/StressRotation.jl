@@ -1,6 +1,6 @@
 using StaticArrays
 
-## Stress Rotation on the particles
+# Vorticity tensor
 
 @parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _dx, _dy)
     dx(A) = _d_xa(A, I..., _dx)
@@ -24,6 +24,8 @@ end
 
     return nothing
 end
+
+## Stress Rotation on the particles
 
 function rotate_stress_particles!(
     τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol=:matrix

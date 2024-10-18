@@ -1,12 +1,11 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -92,7 +91,13 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     grid_vxi            = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT         = init_cell_arrays(particles, Val(2))
-    particle_args       = (pT, pPhases)
+
+    # particle fields for the stress rotation
+    pτ  = pτxx, pτyy, pτxy        = init_cell_arrays(particles, Val(3)) # stress
+    # pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
+    pω   = pωxy,                  = init_cell_arrays(particles, Val(1)) # vorticity
+    particle_args                 = (pT, pPhases, pτ..., pω...)
+    particle_args_reduced         = (pT, pτ..., pω...)
 
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
@@ -104,7 +109,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    # pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-5, Re = 2π√2, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -133,7 +139,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=0.95 / √3
+        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-8, CFL=0.95 / √2
     )
 
     # Boundary conditions
@@ -159,26 +165,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         Vy_v = @zeros(ni.+1...)
     end
 
-    # # Smooth out thermal field ---------------------------
-    # for _ in 1:10
-    #     heatdiffusion_PT!(
-    #         thermal,
-    #         pt_thermal,
-    #         thermal_bc,
-    #         rheology,
-    #         args0,
-    #         1e6 * 3600 * 24 * 365.25,
-    #         di;
-    #         kwargs = (
-    #             igg     = igg,
-    #             phase   = phase_ratios,
-    #             iterMax = 150e3,
-    #             nout    = 1e2,
-    #             verbose = true,
-    #         )
-    #     )
-    # end
-
     T_buffer    = @zeros(ni.+1)
     Told_buffer = similar(T_buffer)
     dt₀         = similar(stokes.P)
@@ -187,8 +173,15 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     end
     grid2particle!(pT, xvi, T_buffer, particles)
 
+    τxx_v = @zeros(ni.+1...)
+    τyy_v = @zeros(ni.+1...)
+
     # Time loop
     t, it = 0.0, 0
+
+    fig_iters = Figure(size=(1200, 800))
+    ax_iters1 = Axis(fig_iters[1,1], aspect = 1, title = "error")
+    ax_iters2 = Axis(fig_iters[1,2], aspect = 1, title = "num iters / ny")
 
     while it < 1000 # run only for 5 Myrs
 
@@ -201,6 +194,10 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         temperature2center!(thermal)
 
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+
+        particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
+        particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
+        particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
 
         # Stokes solver ----------------
         t_stokes = @elapsed begin
@@ -216,14 +213,30 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 dt,
                 igg;
                 kwargs = (
-                    iterMax          = 50e3,
+                    iterMax          = 100e3,
                     nout             = 2e3,
                     viscosity_cutoff = viscosity_cutoff,
                     free_surface     = false,
                     viscosity_relaxation = 1e-2
                 )
             );
+
+            scatter!(ax_iters1, [it], [log10(out.err_evo1[end])], markersize = 10, color=:blue)
+            scatter!(ax_iters2, [it], [out.iter/ny], markersize = 10, color=:blue)
+            fig_iters
+
+            if it == 1 || rem(it, 10) == 0
+                save(joinpath(figdir, "errors.png"), fig_iters)
+            end
         end
+
+        center2vertex!(τxx_v, stokes.τ.xx)
+        center2vertex!(τyy_v, stokes.τ.yy)
+        centroid2particle!(pτxx , xci, stokes.τ.xx, particles)
+        centroid2particle!(pτyy , xci, stokes.τ.yy, particles)
+        grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
+        rotate_stress_particles!(pτ, pω, particles, dt)
+
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
@@ -262,9 +275,16 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        inject_particles_phase!(
+            particles, 
+            pPhases, 
+            particle_args_reduced, 
+            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
+            xvi
+        )
+
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
@@ -323,7 +343,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             # Plot particles phase
             h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
             # Plot 2nd invariant of strain rate
-            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array((stokes.τ.II)) , colormap=:batlow)
             # Plot effective viscosity
             h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
             hidexdecorations!(ax1)
@@ -348,7 +369,7 @@ end
 do_vtk   = true # set to true to generate VTK files for ParaView
 figdir   = "Subduction2D"
 n        = 128
-nx, ny   = 128, 64
+nx, ny   = 256, 128
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)

@@ -381,7 +381,7 @@ function JustRelax.solve!(
 
     # solve heat diffusion
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel (1:(nx-1), 1:(ny-1)) compute_flux!(
+    @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
         thermal.qTx, thermal.qTy, thermal.T, rheology, args, _dx, _dy
     )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _dx, _dy)
@@ -413,7 +413,7 @@ function JustRelax.solve!(
 
     # solve heat diffusion
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel (1:(nx-1), 1:(ny-1)) compute_flux!(
+    @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
         thermal.qTx, thermal.qTy, thermal.T, rheology, phase_ratios.center, args, _di...
     )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _di...)
@@ -442,7 +442,7 @@ function JustRelax.solve!(
     nx, ny = size(thermal.T)
     # solve heat diffusion
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel (1:(nx-1), 1:(ny-1)) compute_flux!(
+    @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
         thermal.qTx, thermal.qTy, thermal.T, rheology, args, _dx, _dy
     )
     @parallel advect_T!(
@@ -481,7 +481,7 @@ function JustRelax.solve!(
     nx, ny = size(thermal.T)
     # solve heat diffusion
     @parallel assign!(thermal.Told, thermal.T)
-    @parallel (1:(nx-1), 1:(ny-1)) compute_flux!(
+    @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
         thermal.qTx, thermal.qTy, thermal.T, phases, rheology, args, _dx, _dy
     )
     @parallel advect_T!(

@@ -11,16 +11,37 @@
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_∇V!(
-    ∇V::AbstractArray{T,3}, Vx, Vy, Vz, _dx, _dy, _dz
-) where {T}
-    d_xi(A) = _d_xi(A, i, j, k, _dx)
-    d_yi(A) = _d_yi(A, i, j, k, _dy)
-    d_zi(A) = _d_zi(A, i, j, k, _dz)
+# @parallel_indices (I...) function compute_∇V!(
+#     ∇V::AbstractArray{T,3}, Vx, Vy, Vz, ϕ::RockRatio, _dx, _dy, _dz
+# ) where {T}
+#     d_xi(A) = _d_xi(A, I..., _dx)
+#     d_yi(A) = _d_yi(A, I..., _dy)
+#     d_zi(A) = _d_zi(A, I..., _dz)
 
-    @inbounds ∇V[i, j, k] = d_xi(Vx) + d_yi(Vy) + d_zi(Vz)
-    return nothing
-end
+#     if isvalid(ϕ, I...)
+#         @inbounds ∇V[I...] = d_xi(Vx) + d_yi(Vy) + d_zi(Vz)
+#     else 
+#         @inbounds ∇V[I...] = zero(T)
+#     end
+#     return nothing
+# end
+
+# @parallel_indices (I...) function compute_∇V!(
+#     ∇V::AbstractArray{T, N}, V::NTuple{N}, ϕ::RockRatio, _di::NTuple{N}
+# ) where {T, N}
+#     @inline d_xi(A) = _d_xi(A, I..., _di[1])
+#     @inline d_yi(A) = _d_yi(A, I..., _di[2])
+#     @inline d_zi(A) = _d_zi(A, I..., _di[3])
+
+#     f = d_xi, d_yi, d_zi
+
+#     if isvalid(ϕ, I...)
+#         @inbounds ∇V[I...] = sum(f[i](V[i]) for i in 1:N)
+#     else 
+#         @inbounds ∇V[I...] = zero(T)
+#     end
+#     return nothing
+# end
 
 ## DEVIATORIC STRAIN RATE TENSOR
 
@@ -289,34 +310,8 @@ end
         if all((i, j) .≤ size(Rx))
             Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
         end
+        
         if all((i, j) .≤ size(Ry))
-            # θ = 1.0
-            # Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
-            # # Vertical velocity
-            # Vyᵢⱼ = Vy[i + 1, j + 1]
-            # # Get necessary buoyancy forces
-            # i_W, i_E = max(i - 1, 1), min(i + 1, nx)
-            # j_N = min(j + 1, ny)
-            # ρg_stencil = (
-            #     ρgy[i_W, j],
-            #     ρgy[i, j],
-            #     ρgy[i_E, j],
-            #     ρgy[i_W, j_N],
-            #     ρgy[i, j_N],
-            #     ρgy[i_E, j_N],
-            # )
-            # ρg_W = (ρg_stencil[1] + ρg_stencil[2] + ρg_stencil[4] + ρg_stencil[5]) * 0.25
-            # ρg_E = (ρg_stencil[2] + ρg_stencil[3] + ρg_stencil[5] + ρg_stencil[6]) * 0.25
-            # ρg_S = ρg_stencil[2]
-            # ρg_N = ρg_stencil[5]
-            # # Spatial derivatives
-            # ∂ρg∂x = (ρg_E - ρg_W) * _dx
-            # ∂ρg∂y = (ρg_N - ρg_S) * _dy
-            # # correction term
-            # ρg_correction = (Vxᵢⱼ * ∂ρg∂x + Vyᵢⱼ * ∂ρg∂y) * θ * dt
-            # Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + ρg_correction
-            # # Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
-
             θ = 1.0
             # Interpolated Vx into Vy node (includes density gradient)
             Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]

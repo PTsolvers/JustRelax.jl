@@ -36,11 +36,12 @@ end
     return nothing
 end
 
-function init_phases!(phases, particles)
+function init_phases!(phases, particles, A)
     ni = size(phases)
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index)
-        r=100e3
+    @parallel_indices (i, j) function init_phases!(phases, px, py, index, A)
+
+        f(x, A, λ) = A * sin(π * x / λ)
 
         @inbounds for ip in cellaxes(phases)
             # quick escape
@@ -53,19 +54,16 @@ function init_phases!(phases, particles)
             if 0e0 ≤ depth ≤ 100e3
                 @index phases[ip, i, j] = 1.0
 
-            else
-                @index phases[ip, i, j] = 2.0
+            elseif depth > (-f(x, A, 500e3) + (200e3 - A))
+                @index phases[ip, i, j] = 3.0
 
-                if ((x - 250e3)^2 + (depth - 250e3)^2 ≤ r^2)
-                    @index phases[ip, i, j] = 3.0
-                end
             end
 
         end
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, A)
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
@@ -83,8 +81,8 @@ end
 function main(igg, nx, ny)
 
     # Physical domain ------------------------------------
-    thick_air    = 15e3             # thickness of sticky air layer
-    ly           = 400e3 + thick_air # domain length in y
+    thick_air    = 100e3             # thickness of sticky air layer
+    ly           = 500e3 + thick_air # domain length in y
     lx           = 500e3             # domain length in x
     ni           = nx, ny            # number of cells
     li           = lx, ly            # domain length in x- and y-
@@ -97,26 +95,20 @@ function main(igg, nx, ny)
     # Physical properties using GeoParams ----------------
     rheology     = rheology = (
         # Name              = "Air",
-        # SetMaterialParams(;
-        #     Phase             = 1,
-        #     Density           = ConstantDensity(; ρ=1e1),
-        #     CompositeRheology = CompositeRheology((LinearViscous(; η=1e17),)),
-        #     Gravity           = ConstantGravity(; g=9.81),
-        # ),
         SetMaterialParams(;
             Phase             = 1,
-            Density           = ConstantDensity(; ρ=3.3e3),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
+            Density           = ConstantDensity(; ρ=1e0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e16),)),
             Gravity           = ConstantGravity(; g=9.81),
         ),
-        # Name              = "Mantle",
+        # Name              = "Crust",
         SetMaterialParams(;
             Phase             = 2,
             Density           = ConstantDensity(; ρ=3.3e3),
             CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
             Gravity           = ConstantGravity(; g=9.81),
         ),
-        # Name              = "Plume",
+        # Name              = "Mantle",
         SetMaterialParams(;
             Phase             = 3,
             Density           = ConstantDensity(; ρ=3.2e3),
@@ -138,8 +130,9 @@ function main(igg, nx, ny)
     particle_args    = (pT, pPhases)
 
     # Elliptical temperature anomaly
-    init_phases!(pPhases, particles)
+    A             = 5e3    # Amplitude of the anomaly
     phase_ratios  = PhaseRatios(backend, length(rheology), ni)
+    init_phases!(pPhases, particles, A)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
@@ -151,7 +144,7 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3e0, r=0.7, CFL = 0.7 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -161,25 +154,27 @@ function main(igg, nx, ny)
     # Buoyancy forces & rheology
     ρg               = @zeros(ni...), @zeros(ni...)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-    # @parallel init_P!(stokes.P, ρg[2], xci[2])
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
+    @parallel init_P!(stokes.P, ρg[2], xci[2])
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
     flow_bcs         = VelocityBoundaryConditions(;
-        free_slip    = (left = true, right = true, top = true, bot = true),
-        free_surface = true
+        free_slip    = (left =  true, right =  true, top =  true, bot = false),
+        no_slip      = (left = false, right = false, top = false, bot =  true),
+        free_surface = true,
     )
 
     Vx_v = @zeros(ni.+1...)
     Vy_v = @zeros(ni.+1...)
 
-    figdir = "FreeSurfacePlume"
+    figdir = "RayleighTaylor2D"
     take(figdir)
 
     # Time loop
-    t, it = 0.0, 0
-    dt = 1e3 * (3600 * 24 * 365.25)
+    t, it   = 0.0, 0
+    dt      = 10e3 * (3600 * 24 * 365.25)
+    dt_max  = 50e3 * (3600 * 24 * 365.25)
     
     _di = inv.(di)
     (; ϵ, r, θ_dτ, ηdτ) = pt_stokes

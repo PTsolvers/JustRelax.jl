@@ -36,30 +36,28 @@ end
     return nothing
 end
 
+topo_fun(x, r) =  -√(r^2 - x^2)
+
 function init_phases!(phases, particles)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
-        r=100e3
+        r=0.5
 
         @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
 
-            x = @index px[ip, i, j]
-            depth = -(@index py[ip, i, j])
-            @index phases[ip, i, j] = 2.0
+            x     = @index px[ip, i, j]
+            depth = (@index py[ip, i, j])
 
-            if 0e0 ≤ depth ≤ 100e3
-                @index phases[ip, i, j] = 1.0
-
-            else
+            h =  -√(r^2 - x^2)
+            if depth ≤ h
                 @index phases[ip, i, j] = 2.0
-
-                if ((x - 250e3)^2 + (depth - 250e3)^2 ≤ r^2)
-                    @index phases[ip, i, j] = 3.0
-                end
+            else 
+                @index phases[ip, i, j] = 1.0
             end
+
 
         end
         return nothing
@@ -80,54 +78,44 @@ else
 end
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(igg, nx, ny)
+# function main(igg, nx, ny)
 
     # Physical domain ------------------------------------
-    thick_air    = 15e3             # thickness of sticky air layer
-    ly           = 400e3 + thick_air # domain length in y
-    lx           = 500e3             # domain length in x
-    ni           = nx, ny            # number of cells
-    li           = lx, ly            # domain length in x- and y-
-    di           = @. li / ni        # grid step in x- and -y
-    origin       = 0.0, -ly          # origin coordinates (15km f sticky air layer)
+    thick_air    = 0             # thickness of sticky air layer
+    ly           = 0.5           # domain length in y
+    lx           = 0.5           # domain length in x
+    ni           = nx, ny        # number of cells
+    li           = lx, ly        # domain length in x- and y-
+    di           = @. li / ni    # grid step in x- and -y
+    origin       = -0.25, -0.75  # origin coordinates (15km f sticky air layer)
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
+    L = 0.5
+    H = 0.5
+    r = 0.5
+    
     # Physical properties using GeoParams ----------------
     rheology     = rheology = (
-        # Name              = "Air",
-        # SetMaterialParams(;
-        #     Phase             = 1,
-        #     Density           = ConstantDensity(; ρ=1e1),
-        #     CompositeRheology = CompositeRheology((LinearViscous(; η=1e17),)),
-        #     Gravity           = ConstantGravity(; g=9.81),
-        # ),
         SetMaterialParams(;
             Phase             = 1,
-            Density           = ConstantDensity(; ρ=3.3e3),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
-            Gravity           = ConstantGravity(; g=9.81),
+            Density           = ConstantDensity(; ρ=1),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1),)),
+            Gravity           = ConstantGravity(; g=1),
         ),
         # Name              = "Mantle",
         SetMaterialParams(;
             Phase             = 2,
-            Density           = ConstantDensity(; ρ=3.3e3),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
-            Gravity           = ConstantGravity(; g=9.81),
+            Density           = ConstantDensity(; ρ=1),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1),)),
+            Gravity           = ConstantGravity(; g=1),
         ),
-        # Name              = "Plume",
-        SetMaterialParams(;
-            Phase             = 3,
-            Density           = ConstantDensity(; ρ=3.2e3),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e20),)),
-            Gravity           = ConstantGravity(; g=9.81),
-        )
     )
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 60, 80, 40
+    nxcell, max_xcell, min_xcell = 30, 40, 15
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
@@ -151,7 +139,7 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.95 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -174,7 +162,7 @@ function main(igg, nx, ny)
     Vx_v = @zeros(ni.+1...)
     Vy_v = @zeros(ni.+1...)
 
-    figdir = "FreeSurfacePlume"
+    figdir = "Duretz2016"
     take(figdir)
 
     # Time loop
@@ -190,7 +178,7 @@ function main(igg, nx, ny)
     viscosity_cutoff = (-Inf, Inf)
     free_surface     =       false
     ητ = @zeros(ni...)
-    while it < 20
+    # while it < 1
 
         ## variational solver
        
@@ -380,19 +368,19 @@ function main(igg, nx, ny)
             fig = Figure(size = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(round.(t/(1e3 * 3600 * 24 *365.25); digits=3)) Kyrs")
             heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
-            arrows!(
-                ax,
-                xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
-                lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
-                color = :red,
-            )
+            # arrows!(
+            #     ax,
+            #     xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
+            #     lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
+            #     color = :red,
+            # )
             fig
             save(joinpath(figdir, "$(it).png"), fig)
 
         end
-    end
+    # end
     return nothing
-end
+# end
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 main(igg, nx, ny)
 

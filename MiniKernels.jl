@@ -13,18 +13,17 @@ Base.@propagate_inbounds @inline   bot(A::AbstractArray, i::I, j::I, k::I) where
 Base.@propagate_inbounds @inline   top(A::AbstractArray, i::I, j::I, k::I) where I<:Integer = A[i, j, k+1]
 
 # masked versions
-Base.@propagate_inbounds @inline center(A::T,ϕ::T, inds::Vararg{Integer, N}) where {T<:AbstractArray, N}   = A[inds...]   * ϕ[inds...]
-Base.@propagate_inbounds @inline  next(A::T, ϕ::T, inds::Vararg{Integer, N}) where {T<:AbstractArray, N}   = A[inds.+1...]* ϕ[inds.+1...]
-Base.@propagate_inbounds @inline  left(A::T, ϕ::T, i::I, j::I)       where {T<:AbstractArray, I<:Integer} = A[i-1, j]    * ϕ[i-1, j]
-Base.@propagate_inbounds @inline right(A::T, ϕ::T, i::I, j::I)       where {T<:AbstractArray, I<:Integer} = A[i+1, j]    * ϕ[i+1, j]
-Base.@propagate_inbounds @inline  back(A::T, ϕ::T, i::I, j::I)       where {T<:AbstractArray, I<:Integer} = A[i, j-1]    * ϕ[i, j-1]
-Base.@propagate_inbounds @inline front(A::T, ϕ::T, i::I, j::I)       where {T<:AbstractArray, I<:Integer} = A[i, j+1]    * ϕ[i, j+1]
-Base.@propagate_inbounds @inline  left(A::T, ϕ::T, i::I, j::I, k::I) where {T<:AbstractArray, I<:Integer} = A[i-1, j, k] * ϕ[i-1, j, k]
-Base.@propagate_inbounds @inline right(A::T, ϕ::T, i::I, j::I, k::I) where {T<:AbstractArray, I<:Integer} = A[i+1, j, k] * ϕ[i+1, j, k]
-Base.@propagate_inbounds @inline  back(A::T, ϕ::T, i::I, j::I, k::I) where {T<:AbstractArray, I<:Integer} = A[i, j-1, k] * ϕ[i, j-1, k]
-Base.@propagate_inbounds @inline front(A::T, ϕ::T, i::I, j::I, k::I) where {T<:AbstractArray, I<:Integer} = A[i, j+1, k] * ϕ[i, j+1, k]
-Base.@propagate_inbounds @inline   bot(A::T, ϕ::T, i::I, j::I, k::I) where {T<:AbstractArray, I<:Integer} = A[i, j, k-1] * ϕ[i, j, k-1]
-Base.@propagate_inbounds @inline   top(A::T, ϕ::T, i::I, j::I, k::I) where {T<:AbstractArray, I<:Integer} = A[i, j, k+1] * ϕ[i, j, k+1]
+for fn in (:center, :next, :left, :right, :back, :front)
+    @eval begin
+        Base.@propagate_inbounds @inline ($fn)(A::T, ϕ::T, inds::Vararg{Integer, N}) where {T<:AbstractArray, N} = ($fn)(A, inds...) * ($fn)(ϕ, inds...)        
+    end
+end
+# Base.@propagate_inbounds @inline center(A::T,ϕ::T, inds::Vararg{Integer, N}) where {T<:AbstractArray, N} = center(A, inds...) * center(ϕ, inds...)
+# Base.@propagate_inbounds @inline  next(A::T, ϕ::T, inds::Vararg{Integer, N}) where {T<:AbstractArray, N} = next(A, inds...)   * next(ϕ, inds...)
+# Base.@propagate_inbounds @inline  left(A::T, ϕ::T, inds::Vararg{Integer, N}) where {T<:AbstractArray, N} = left(A, inds...)   * left(ϕ, inds...)
+# Base.@propagate_inbounds @inline right(A::T, ϕ::T, inds::Vararg{Integer, N}) where {T<:AbstractArray, N} = right(A, inds...)  * right(ϕ, inds...)
+# Base.@propagate_inbounds @inline  back(A::T, ϕ::T, inds::Vararg{Integer, N}) where {T<:AbstractArray, N} = back(A, inds...)   * back(ϕ, inds...)
+# Base.@propagate_inbounds @inline front(A::T, ϕ::T, inds::Vararg{Integer, N}) where {T<:AbstractArray, N} = front(A, inds...)  * front(ϕ, inds...)
 
 ## 2D mini kernels
 const T2 = AbstractArray{T,2} where {T}

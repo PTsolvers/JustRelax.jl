@@ -60,9 +60,9 @@ end
 
 @parallel_indices (I...) function update_rock_ratio_cv!(ϕ, ratio_center, ratio_vertex, air_phase)
     if all(I .≤ size(ratio_center))
-        ϕ.center[I...] = compute_rock_ratio(ratio_center, air_phase, I...)
+        ϕ.center[I...] = Float64(Float16(compute_rock_ratio(ratio_center, air_phase, I...)))
     end
-    ϕ.vertex[I...] = compute_rock_ratio(ratio_vertex, air_phase, I...)
+    ϕ.vertex[I...] = Float64(Float16(compute_rock_ratio(ratio_vertex, air_phase, I...)))
     return nothing
 end
 
@@ -119,6 +119,81 @@ function isvalid(A::T, I::Vararg{Integer, N}) where {N, T<:AbstractArray}
     return v * (A[I...] > 0)
 end
 
+function isvalid_c(ϕ::RockRatio, i, j)
+    vx  = (ϕ.Vx[i, j] > 0) * (ϕ.Vx[i + 1, j] > 0)
+    vy  = (ϕ.Vy[i, j] > 0) * (ϕ.Vy[i, j + 1] > 0)
+    div = vx * vy
+    return div * (ϕ.center[i, j] > 0)
+end
+
+function isvalid_v(ϕ::RockRatio, i, j)
+    nx, ny = size(ϕ.Vx)
+    il  = clamp(i - 1, 1, nx)
+    i0  = clamp(i, 1, nx)
+    j0  = clamp(j, 1, ny)
+    vx  = (ϕ.Vx[i0, j0] > 0) * (ϕ.Vx[il, j0] > 0)
+    
+    nx, ny = size(ϕ.Vy)
+    jl  = max(j - 1, 1)
+    i0  = clamp(i, 1, nx)
+    j0  = clamp(j, 1, ny)
+    vy  = (ϕ.Vy[i0, j0] > 0) * (ϕ.Vy[i0, jl] > 0)
+    div = vx * vy
+    return div * (ϕ.vertex[i, j] > 0)
+end
+
+function isvalid_vx(ϕ::RockRatio, i, j)
+    nx, ny = size(ϕ.center)
+    il  = clamp(i - 1, 1, nx)
+    i0  = clamp(i, 1, nx)
+    j0  = clamp(j, 1, ny)
+    c  = (ϕ.center[i0, j0] > 0) * (ϕ.center[il, j0] > 0)
+    
+    _, ny = size(ϕ.vertex)
+    jt  = clamp(j - 1, 1, ny)
+    v   = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i, jt] > 0)
+    div = c * v
+    return div * (ϕ.Vx[i, j] > 0)
+end
+
+function isvalid_vy(ϕ::RockRatio, i, j)
+    nx, ny = size(ϕ.center)
+    jb  = clamp(j - 1, 1, ny)
+    i0  = clamp(i, 1, nx)
+    j0  = clamp(j, 1, ny)
+    c  = (ϕ.center[i0, j0] > 0) * (ϕ.center[i0, jb] > 0)
+    
+    nx, ny = size(ϕ.vertex)
+    ir  = clamp(i - 1, 1, ny)
+    v   = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[ir, j] > 0)
+    div = c * v
+    return div * (ϕ.Vy[i, j] > 0)
+end
+
+
+# function isvalid(A::T, I::Vararg{Integer, N}) where {N, T<:AbstractArray}
+#     v = true
+#     Base.@nexprs 2 j -> begin
+#         Base.@nexprs 2 i -> begin
+#             @inline
+#             ii = clamp(I[1] + 2 * i - 3, 1, size(A, 1))
+#             jj = clamp(I[2] + 2 * j - 3, 1, size(A, 2))
+#             v *= if N == 3
+#                 A[ii, jj, I[3]] > 0
+#             else
+#                 A[ii, jj] > 0
+#             end
+#         end
+#     end
+#     if N === 3
+#         Base.@nexprs 2 k -> begin    
+#             kk = clamp(I[3] + 2 * k - 3, 1, size(A, 3))
+#             v *= A[ii, jj, kk] > 0
+#         end
+#     end
+#     return v * (A[I...] > 0)
+# end
+
 @parallel_indices (I...) function compute_∇V!(
     ∇V::AbstractArray{T, N}, V::NTuple{N}, ϕ::RockRatio, _di::NTuple{N}
 ) where {T, N}
@@ -128,7 +203,7 @@ end
 
     f = d_xi, d_yi, d_zi
 
-    if isvalid(ϕ.center, I...)
+    if isvalid_c(ϕ, I...)
         @inbounds ∇V[I...] = sum(f[i](V[i]) for i in 1:N)
     else 
         @inbounds ∇V[I...] = zero(T)
@@ -136,12 +211,10 @@ end
     return nothing
 end
 
-@parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
-
 @parallel_indices (I...) function compute_P!(
     P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio, ϕ::RockRatio, dt, r, θ_dτ
 ) where {N}
-    if isvalid(ϕ.center, I...)
+    if isvalid_c(ϕ, I...)
         K = JustRelax2D.fn_ratio(JustRelax2D.get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
         RP[I...], P[I...] = JustRelax2D._compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
     else
@@ -149,20 +222,6 @@ end
     end
     return nothing
 end
-
-@parallel (@idx ni) compute_P!(
-    stokes.P,
-    stokes.P0,
-    stokes.R.RP,
-    stokes.∇V,
-    stokes.viscosity.η,
-    rheology,
-    phase_ratios.center,
-    ϕ,
-    dt,
-    pt_stokes.r,
-    pt_stokes.θ_dτ,
-)
             
 # 2D kernel
 @parallel_indices (I...) function update_stresses_center_vertex_ps!(
@@ -193,7 +252,7 @@ end
     ni = size(Pr)
     Ic = JustRelax2D.clamped_indices(ni, I...)
 
-    if isvalid(ϕ.vertex, I...)
+    if isvalid_v(ϕ, I...)
         # interpolate to ith vertex
         Pv_ij       = JustRelax2D.av_clamped(Pr, Ic...)
         εxxv_ij     = JustRelax2D.av_clamped(ε[1], Ic...)
@@ -244,7 +303,7 @@ end
 
     ## center
     if all(I .≤ ni)
-        if isvalid(ϕ.center, I...)
+        if isvalid_c(ϕ, I...)
             # Material properties
             phase = @inbounds phase_center[I...]
             _Gdt = inv(JustRelax2D.fn_ratio(JustRelax2D.get_shear_modulus, rheology, phase) * dt)
@@ -290,9 +349,10 @@ end
             Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
         else
             Pr_c[I...] = zero(eltype(T))
-            τij, = JustRelax2D.cache_tensors(τ, τ_o, ε, I...)
+            # τij, = JustRelax2D.cache_tensors(τ, τ_o, ε, I...)
             dτij = zero(eltype(T)), zero(eltype(T)), zero(eltype(T))
-            setindex!.(τ, dτij .+ τij, I...)
+            # setindex!.(τ, dτij .+ τij, I...)
+            setindex!.(τ, dτij, I...)
         end
     end
 
@@ -300,38 +360,154 @@ end
 end
 
 
-# with free surface stabilization
+# # with free surface stabilization
 @parallel_indices (i, j) function compute_V!(
-    Vx::AbstractArray{T,2}, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, ϕ_Vx, ϕ_Vy, _dx, _dy, dt
+    Vx::AbstractArray{T,2}, Vy, Rx, Ry, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, ϕ::RockRatio, _dx, _dy
 ) where {T}
     d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
     d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
     d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
     av_xa(A) = _av_xa(A, i, j)
     av_ya(A) = _av_ya(A, i, j)
     harm_xa(A) = _av_xa(A, i, j)
     harm_ya(A) = _av_ya(A, i, j)
 
-    nx, ny = size(ρgy)
-
     if all((i, j) .< size(Vx) .- 1)
-        dVx = if iszero(ϕ_Vx[i + 1, j])
-            zero(T)
+        if isvalid_vx(ϕ, i, j)
+            Rx[i, j]= R_Vx    = (-d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - av_xa(ρgx)) 
+            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
         else
-            (-d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - av_xa(ρgx)) * ηdτ / av_xa(ητ)
+            Rx[i, j]         = zero(T)
+            Vx[i + 1, j + 1] = zero(T)
         end
-        Vx[i + 1, j + 1] += dVx
     end
 
-    if all((i, j) .< size(Vy) .- 1)
-        dVy = if iszero(ϕ_Vy[i, j + 1])
-            zero(T)
+    if all((i, j) .< size(Vy) .- 1)        
+        if isvalid_vy(ϕ, i, j)
+            Ry[i, j] = R_Vy   = -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - av_ya(ρgy)
+            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
         else
-            ρg_correction = if iszero(dt)
-                zero(dt)
+            Ry[i, j]         = zero(T)
+            Vy[i + 1, j + 1] = zero(T)
+        end
+    end
+
+    return nothing
+end
+
+# @parallel_indices (i, j) function compute_V!(
+#     Vx::AbstractArray{T,2}, Vy, Rx, Ry, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, ϕ_Vx, ϕ_Vy, _dx, _dy
+# ) where {T}
+#     d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+#     d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+#     d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+#     d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+#     av_xa(A) = _av_xa(A, i, j)
+#     av_ya(A) = _av_ya(A, i, j)
+#     harm_xa(A) = _av_xa(A, i, j)
+#     harm_ya(A) = _av_ya(A, i, j)
+
+#     if all((i, j) .< size(Vx) .- 1)
+#         if iszero(ϕ_Vx[i + 1, j])
+#             Rx[i, j]         = zero(T)
+#             Vx[i + 1, j + 1] = zero(T)
+#         else
+#             Rx[i, j]= R_Vx    = (-d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - av_xa(ρgx)) 
+#             Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
+#         end
+#     end
+
+#     if all((i, j) .< size(Vy) .- 1)        
+#         if iszero(ϕ_Vy[i, j + 1])
+#             Ry[i, j]         = zero(T)
+#             Vy[i + 1, j + 1] = zero(T)
+#         else
+#             Ry[i, j] = R_Vy   = -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - av_ya(ρgy)
+#             Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+#         end
+#     end
+
+#     return nothing
+# end
+
+# @parallel_indices (i, j) function compute_V!(
+#     Vx::AbstractArray{T,2}, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, ϕ_Vx, ϕ_Vy, _dx, _dy, dt
+# ) where {T}
+#     d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+#     d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+#     d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+#     d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+#     av_xa(A) = _av_xa(A, i, j)
+#     av_ya(A) = _av_ya(A, i, j)
+#     harm_xa(A) = _av_xa(A, i, j)
+#     harm_ya(A) = _av_ya(A, i, j)
+
+#     nx, ny = size(ρgy)
+
+#     if all((i, j) .< size(Vx) .- 1)
+#         dVx = if iszero(ϕ_Vx[i + 1, j])
+#             zero(T)
+#         else
+#             (-d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - av_xa(ρgx)) * ηdτ / av_xa(ητ)
+#         end
+#         Vx[i + 1, j + 1] += dVx
+#     end
+
+#     if all((i, j) .< size(Vy) .- 1)
+#         dVy = if iszero(ϕ_Vy[i, j + 1])
+#             zero(T)
+#         else
+#             ρg_correction = if iszero(dt)
+#                 zero(dt)
+#             else
+#                 θ = 1
+#                 # Interpolated Vx into Vy node (includes density gradient)
+#                 Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
+#                 # Vertical velocity
+#                 Vyᵢⱼ = Vy[i + 1, j + 1]
+#                 # Get necessary buoyancy forces
+#                 j_N = min(j + 1, ny)
+#                 ρg_S = ρgy[i, j]
+#                 ρg_N = ρgy[i, j_N]
+#                 # Spatial derivatives
+#                 ∂ρg∂y = (ρg_N - ρg_S) * _dy            
+#                 # correction term
+#                 (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+#             end
+#             (-d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - av_ya(ρgy) + ρg_correction) * ηdτ / av_ya(ητ)
+#         end
+#         Vy[i + 1, j + 1] += dVy
+#     end
+
+#     return nothing
+# end
+
+@parallel_indices (i, j) function compute_Res!(
+    Rx::AbstractArray{T,2}, Ry, Vx, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ρgx, ρgy, ϕ_Vx, ϕ_Vy, _dx, _dy, dt
+) where {T}
+    d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+    d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+    d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    @inline av_xa(A) = _av_xa(A, i, j)
+    @inline av_ya(A) = _av_ya(A, i, j)
+
+    nx, ny = size(ρgy)
+    @inbounds begin
+        if all((i, j) .≤ size(Rx))
+            Rx[i, j] = if iszero(ϕ_Vx[i + 1, j])
+                zero(T)
             else
-                θ = 1
+                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - av_xa(ρgx)
+            end
+        end
+        
+        if all((i, j) .≤ size(Ry))
+            Ry[i, j] = if iszero(ϕ_Vy[i, j + 1])
+                zero(T)
+            else
+                θ = 1.0
                 # Interpolated Vx into Vy node (includes density gradient)
                 Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
                 # Vertical velocity
@@ -341,19 +517,16 @@ end
                 ρg_S = ρgy[i, j]
                 ρg_N = ρgy[i, j_N]
                 # Spatial derivatives
-                ∂ρg∂y = (ρg_N - ρg_S) * _dy            
+                ∂ρg∂y = (ρg_N - ρg_S) * _dy
                 # correction term
-                (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+                ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+                -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - av_ya(ρgy) + ρg_correction
             end
-            (-d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - av_ya(ρgy) + ρg_correction) * ηdτ / av_ya(ητ)
         end
-        Vy[i + 1, j + 1] += dVy
     end
 
     return nothing
 end
-
-
 
 # #### TESTING GROUNDS
 # N = 4

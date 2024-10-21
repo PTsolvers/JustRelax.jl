@@ -36,39 +36,23 @@ end
     return nothing
 end
 
-topo_fun(x, r) =  -√(r^2 - x^2)
-
 function init_phases!(phases, particles)
     ni = size(phases)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
-        r=0.5
-        rinc=0.1
+        r = 5
 
         @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
 
-            x     = @index px[ip, i, j]
-            depth = (@index py[ip, i, j])
+            x = @index px[ip, i, j]
+            depth = abs(@index py[ip, i, j])
+            @index phases[ip, i, j] = 2.0
 
-            # h =  √(r^2 - x^2) - 0.4330127018922193*2
-            h =  -√(r^2 - x^2)
-            if depth ≤ h
-                @index phases[ip, i, j] = 2.0
-            else 
+            if 0e0 ≤ depth ≤ 10e0 || ((x - 25)^2 + (depth - 55)^2 ≤ r^2)
                 @index phases[ip, i, j] = 1.0
             end
-
-            # h =  √(r^2 - x^2) - 0.55*2
-            # h =  -√(r^2 - x^2) - 0.2
-            # if depth ≤ h
-            #     @index phases[ip, i, j] = 1.0
-            # end
-
-            # if (x^2 + (depth + 0.75)^2 ≤ rinc^2)
-            #     @index phases[ip, i, j] = 1.0
-            # end
 
         end
         return nothing
@@ -76,14 +60,6 @@ function init_phases!(phases, particles)
 
     @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index)
 end
-
-# init_phases!(pPhases, particles)
-# phase_ratios  = PhaseRatios(backend, length(rheology), ni)
-# update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-# p=[argmax(p) for p in phase_ratios.center]
-# heatmap(p)
-
-
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
@@ -100,41 +76,38 @@ end
 function main(igg, nx, ny)
 
     # Physical domain ------------------------------------
-    thick_air    = 0             # thickness of sticky air layer
-    ly           = 0.5           # domain length in y
-    lx           = 0.5           # domain length in x
-    ni           = nx, ny        # number of cells
-    li           = lx, ly        # domain length in x- and y-
-    di           = @. li / ni    # grid step in x- and -y
-    origin       = -0.25, -0.75  # origin coordinates (15km f sticky air layer)
+    thick_air    = 5e0             # thickness of sticky air layer
+    ly           = 50e0 + thick_air # domain length in y
+    lx           = 50e0             # domain length in x
+    ni           = nx, ny            # number of cells
+    li           = lx, ly            # domain length in x- and y-
+    di           = @. li / ni        # grid step in x- and -y
+    origin       = 0.0, -ly          # origin coordinates (15km f sticky air layer)
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
-    L = 0.5
-    H = 0.5
-    r = 0.5
-    
     # Physical properties using GeoParams ----------------
     rheology     = rheology = (
+        # Name              = "Air",
         SetMaterialParams(;
             Phase             = 1,
-            Density           = ConstantDensity(; ρ=1),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1),)),
-            Gravity           = ConstantGravity(; g=1),
+            Density           = ConstantDensity(; ρ=2.7e3),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
+            Gravity           = ConstantGravity(; g=9.81),
         ),
-        # Name              = "Mantle",
+        # Name              = "Rock",
         SetMaterialParams(;
             Phase             = 2,
-            Density           = ConstantDensity(; ρ=1),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1),)),
-            Gravity           = ConstantGravity(; g=1),
+            Density           = ConstantDensity(; ρ=2.7e3),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=1e21),)),
+            Gravity           = ConstantGravity(; g=9.81),
         ),
     )
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 40, 70, 15
+    nxcell, max_xcell, min_xcell = 120, 120, 100
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
@@ -158,7 +131,7 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3e0*π, r=0.7, CFL = 0.95 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -174,14 +147,14 @@ function main(igg, nx, ny)
 
     # Boundary conditions
     flow_bcs         = VelocityBoundaryConditions(;
-        free_slip    = (left = true, right = true, top = true, bot = true),
-        free_surface = true
+        free_slip    = (left = true, right = true, top = true, bot = false),
+        no_slip      = (left = false, right = false, top = false, bot = true),
     )
 
     Vx_v = @zeros(ni.+1...)
     Vy_v = @zeros(ni.+1...)
 
-    figdir = "Duretz2016"
+    figdir = "FreeSurfacePlume"
     take(figdir)
 
     # Time loop
@@ -193,11 +166,11 @@ function main(igg, nx, ny)
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
     iterMax          =        5e3
-    nout             =         1e3
+    nout             =        1e3
     viscosity_cutoff = (-Inf, Inf)
     free_surface     =       false
     ητ = @zeros(ni...)
-    # while it < 1
+    while it < 1
 
         ## variational solver
        
@@ -234,6 +207,7 @@ function main(igg, nx, ny)
         compute_ρg!(ρg[end], phase_ratios, rheology, args)
         compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
+        # for a in 1:100
         while iter ≤ iterMax
             err < ϵ && break
                 # for _ in 1:100
@@ -363,76 +337,60 @@ function main(igg, nx, ny)
                 isinf(err) && error("Inf(s)")
             end
         end
-        
+        heatmap(stokes.V.Vy)
+
         dt = compute_dt(stokes, di) / 2
         # ------------------------------
-        heatmap(stokes.τ.xy)
 
-        # # Advection --------------------
-        # # advect particles in space
-        # advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
-        # # advect particles in memory
-        # move_particles!(particles, xvi, particle_args)
-        # # check if we need to inject particles
-        # inject_particles_phase!(particles, pPhases, (), (), xvi)
-        # # update phase ratios
-        # update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        # update_rock_ratio!(ϕ, phase_ratios, air_phase)
+        # Advection --------------------
+        # advect particles in space
+        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        # advect particles in memory
+        move_particles!(particles, xvi, particle_args)
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
-        # @show it += 1
-        # t        += dt
+        @show it += 1
+        t        += dt
 
-    #     if it == 1 || rem(it, 1) == 0
-    #         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-    #         nt = 5
-    #         fig = Figure(size = (900, 900), title = "t = $t")
-    #         ax  = Axis(fig[1,1], aspect = 1, title = " t=$(round.(t/(1e3 * 3600 * 24 *365.25); digits=3)) Kyrs")
-    #         heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
-    #         # arrows!(
-    #         #     ax,
-    #         #     xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
-    #         #     lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
-    #         #     color = :red,
-    #         # )
-    #         fig
-    #         save(joinpath(figdir, "$(it).png"), fig)
+        if it == 1 || rem(it, 1) == 0
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            nt = 5
+            fig = Figure(size = (900, 900), title = "t = $t")
+            ax  = Axis(fig[1,1], aspect = 1, title = " t=$(round.(t/(1e3 * 3600 * 24 *365.25); digits=3)) Kyrs")
+            # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
+            # arrows!(
+            #     ax,
+            #     xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
+            #     lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
+            #     color = :red,
+            # )
+            # heatmap!(ax, stokes.V.Vy)
+            # heatmap!(ax, stokes.τ.xx)
 
-    #     end
-    # # end
-    # return nothing
-    # heatmap(stokes.τ.xy)
-    ind = iszero.(stokes.P)
-    stokes.P[ind] .= NaN
-    f,ax,=heatmap(xci...,stokes.P)
-    ind = iszero.(stokes.V.Vy)
-    stokes.V.Vy[ind] .= NaN
-    f,ax,=heatmap(xci[1],xvi[2], stokes.V.Vy[2:end-1,:])
-    
-    px, py = particles.coords
-    scatter!(
-        px.data[:], py.data[:],color=pPhases.data[:], 
-        markersize=3)
-    h = @. -√(0.5^2 - xci[1]^2)
-    lines!(ax,xci[1], h, color=:red)
-    xlims!(ax, -0.25, -0.15)
-    ylims!(ax, -0.5, -0.4)
-    f
-    # ind = iszero.(stokes.V.Vx)
-    # stokes.V.Vx[ind] .= NaN
-    # heatmap(stokes.V.Vx)
-    # stokes
+            # ind = iszero.(stokes.V.Vy)
+            # stokes.V.Vy[ind] .= NaN
+            heatmap!(ax, stokes.V.Vy)
+            display(fig)
+            # save(joinpath(figdir, "$(it).png"), fig)
+
+        end
+    end
+    return stokes, ϕ
 end
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
-main(igg, nx, ny)
+stoke, ϕ = main(igg, nx, ny);
 
+# # # (Path)/folder where output data and figures are stored
+# # n        = 100
+# # nx       = n
+# # ny       = n
+# # igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+# #     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
+# # else
+# #     igg
+# # end
 
-# heatmap(stokes.τ.xy)
-# # ind = iszero.(stokes.P)
-# # stokes.P[ind] .= NaN
-# heatmap(stokes.P)
-# ind = iszero.(stokes.V.Vy)
-# stokes.V.Vy[ind] .= NaN
-# heatmap(stokes.V.Vy)
-# # ind = iszero.(stokes.V.Vx)
-# # stokes.V.Vx[ind] .= NaN
-# # heatmap(stokes.V.Vx) 

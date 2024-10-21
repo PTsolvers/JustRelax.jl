@@ -270,17 +270,29 @@ Colorbar(f[1,2], h, label="Vy")
 lines(stokes.P[1,:])
 lines(stokes.V.Vy[1,:])
 
+xc = [x for x in xci[1], y in xci[2]]
+yc = [y for x in xci[1], y in xci[2]]
+
 v = [isvalid_c(ϕ, i, j) for i in 1:nx, j in 1:ny]
 heatmap(xci..., v)
+
+heatmap(xci..., ϕ.center)
+h = @. -√(0.5^2 - xci[1]^2)
+lines!(xci[1], h, color=:red)
 
 v = [isvalid_v(ϕ, i, j) for i in 1:nx, j in 1:ny]
 heatmap(xvi..., v)
 
+heatmap(xvi..., ϕ.vertex)
+h = @. -√(0.5^2 - xvi[1]^2)
+lines!(xvi[1], h, color=:red)
 
-vx = [isvalid_vx(ϕ, i, j) for i in 1:nx+1, j in 1:ny]
-heatmap(vx)
+vx = [isvalid_vx(ϕ, i+1, j) for i in 1:nx-1, j in 1:ny]
+heatmap(xvi[1], xci[2], vx)
+h = @. -√(0.5^2 - xci[1]^2)
+lines!(xci[1], h, color=:red)
 
-vy = [isvalid_vy(ϕ, i, j) for i in 1:nx, j in 1:ny+1]
+vy = [isvalid_vy(ϕ, i, j+1) for i in 1:nx, j in 1:ny-1]
 heatmap(vy)
 
 heatmap(

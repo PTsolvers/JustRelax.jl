@@ -122,54 +122,47 @@ end
 function isvalid_c(ϕ::RockRatio, i, j)
     vx  = (ϕ.Vx[i, j] > 0) * (ϕ.Vx[i + 1, j] > 0)
     vy  = (ϕ.Vy[i, j] > 0) * (ϕ.Vy[i, j + 1] > 0)
-    div = vx * vy
-    return div * (ϕ.center[i, j] > 0)
+    v = vx * vy
+    # return v * (ϕ.center[i, j] > 0)
+    return true
 end
 
 function isvalid_v(ϕ::RockRatio, i, j)
     nx, ny = size(ϕ.Vx)
-    il  = clamp(i - 1, 1, nx)
-    i0  = clamp(i, 1, nx)
-    j0  = clamp(j, 1, ny)
-    vx  = (ϕ.Vx[i0, j0] > 0) * (ϕ.Vx[il, j0] > 0)
+    j_bot  = max(j - 1, 1)
+    j0     = min(j, ny)
+    vx     = (ϕ.Vx[i, j0] > 0) * (ϕ.Vx[i, j_bot] > 0)
     
-    nx, ny = size(ϕ.Vy)
-    jl  = max(j - 1, 1)
-    i0  = clamp(i, 1, nx)
-    j0  = clamp(j, 1, ny)
-    vy  = (ϕ.Vy[i0, j0] > 0) * (ϕ.Vy[i0, jl] > 0)
-    div = vx * vy
-    return div * (ϕ.vertex[i, j] > 0)
+    nx, ny  = size(ϕ.Vy)
+    i_left  = max(i - 1, 1)
+    i0      = min(i, nx)
+    vy      = (ϕ.Vy[i0, j] > 0) * (ϕ.Vy[i_left, j] > 0)
+    v       = vx * vy
+    # return v * (ϕ.vertex[i, j] > 0)
+    return true
 end
 
 function isvalid_vx(ϕ::RockRatio, i, j)
-    nx, ny = size(ϕ.center)
-    il  = clamp(i - 1, 1, nx)
-    i0  = clamp(i, 1, nx)
-    j0  = clamp(j, 1, ny)
-    c  = (ϕ.center[i0, j0] > 0) * (ϕ.center[il, j0] > 0)
-    
-    _, ny = size(ϕ.vertex)
-    jt  = clamp(j - 1, 1, ny)
-    v   = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i, jt] > 0)
-    div = c * v
-    return div * (ϕ.Vx[i, j] > 0)
+    c  = (ϕ.center[i, j] > 0) * (ϕ.center[i-1, j] > 0)
+    v  = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i, j+1] > 0)
+    cv = c * v
+    return cv * (ϕ.Vx[i, j] > 0)
+    # c  = (ϕ.center[i, j] > 0) || (ϕ.center[i-1, j] > 0)
+    # v  = (ϕ.vertex[i, j] > 0) || (ϕ.vertex[i, j+1] > 0)
+    # cv = c || v
+    # return cv || (ϕ.Vx[i, j] > 0)
 end
 
 function isvalid_vy(ϕ::RockRatio, i, j)
-    nx, ny = size(ϕ.center)
-    jb  = clamp(j - 1, 1, ny)
-    i0  = clamp(i, 1, nx)
-    j0  = clamp(j, 1, ny)
-    c  = (ϕ.center[i0, j0] > 0) * (ϕ.center[i0, jb] > 0)
-    
-    nx, ny = size(ϕ.vertex)
-    ir  = clamp(i - 1, 1, ny)
-    v   = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[ir, j] > 0)
-    div = c * v
-    return div * (ϕ.Vy[i, j] > 0)
+    c  = (ϕ.center[i, j] > 0) * (ϕ.center[i, j - 1] > 0)
+    v  = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i + 1, j] > 0)
+    cv = c * v
+    return cv * (ϕ.Vy[i, j] > 0)
+    # c  = (ϕ.center[i, j] > 0) || (ϕ.center[i, j - 1] > 0)
+    # v  = (ϕ.vertex[i, j] > 0) || (ϕ.vertex[i + 1, j] > 0)
+    # cv = c || v
+    # return cv || (ϕ.Vy[i, j] > 0)
 end
-
 
 # function isvalid(A::T, I::Vararg{Integer, N}) where {N, T<:AbstractArray}
 #     v = true
@@ -374,7 +367,7 @@ end
     harm_ya(A) = _av_ya(A, i, j)
 
     if all((i, j) .< size(Vx) .- 1)
-        if isvalid_vx(ϕ, i, j)
+        if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j]= R_Vx    = (-d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - av_xa(ρgx)) 
             Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
         else
@@ -384,7 +377,7 @@ end
     end
 
     if all((i, j) .< size(Vy) .- 1)        
-        if isvalid_vy(ϕ, i, j)
+        if isvalid_vy(ϕ, i, j + 1)
             Ry[i, j] = R_Vy   = -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - av_ya(ρgy)
             Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
         else
@@ -396,40 +389,40 @@ end
     return nothing
 end
 
-# @parallel_indices (i, j) function compute_V!(
-#     Vx::AbstractArray{T,2}, Vy, Rx, Ry, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, ϕ_Vx, ϕ_Vy, _dx, _dy
-# ) where {T}
-#     d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-#     d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-#     d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
-#     d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
-#     av_xa(A) = _av_xa(A, i, j)
-#     av_ya(A) = _av_ya(A, i, j)
-#     harm_xa(A) = _av_xa(A, i, j)
-#     harm_ya(A) = _av_ya(A, i, j)
+@parallel_indices (i, j) function compute_V!(
+    Vx::AbstractArray{T,2}, Vy, Rx, Ry, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, ϕ_Vx, ϕ_Vy, _dx, _dy
+) where {T}
+    d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+    d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+    d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    av_xa(A) = _av_xa(A, i, j)
+    av_ya(A) = _av_ya(A, i, j)
+    harm_xa(A) = _av_xa(A, i, j)
+    harm_ya(A) = _av_ya(A, i, j)
 
-#     if all((i, j) .< size(Vx) .- 1)
-#         if iszero(ϕ_Vx[i + 1, j])
-#             Rx[i, j]         = zero(T)
-#             Vx[i + 1, j + 1] = zero(T)
-#         else
-#             Rx[i, j]= R_Vx    = (-d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - av_xa(ρgx)) 
-#             Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
-#         end
-#     end
+    if all((i, j) .< size(Vx) .- 1)
+        if iszero(ϕ_Vx[i + 1, j])
+            Rx[i, j]         = zero(T)
+            Vx[i + 1, j + 1] = zero(T)
+        else
+            Rx[i, j]= R_Vx    = (-d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - av_xa(ρgx)) 
+            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
+        end
+    end
 
-#     if all((i, j) .< size(Vy) .- 1)        
-#         if iszero(ϕ_Vy[i, j + 1])
-#             Ry[i, j]         = zero(T)
-#             Vy[i + 1, j + 1] = zero(T)
-#         else
-#             Ry[i, j] = R_Vy   = -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - av_ya(ρgy)
-#             Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
-#         end
-#     end
+    if all((i, j) .< size(Vy) .- 1)        
+        if iszero(ϕ_Vy[i, j + 1])
+            Ry[i, j]         = zero(T)
+            Vy[i + 1, j + 1] = zero(T)
+        else
+            Ry[i, j] = R_Vy   = -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - av_ya(ρgy)
+            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+        end
+    end
 
-#     return nothing
-# end
+    return nothing
+end
 
 # @parallel_indices (i, j) function compute_V!(
 #     Vx::AbstractArray{T,2}, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, ϕ_Vx, ϕ_Vy, _dx, _dy, dt

@@ -1,11 +1,14 @@
+using CUDA
 using JustRelax,  JustRelax.JustRelax2D
-const backend_JR = CPUBackend
+const backend_JR = CUDABackend
+# const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend
+const backend = CUDABackend
+# const backend = JustPIC.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2)
+@init_parallel_stencil(CUDA, Float64, 2)
 
 # Load script dependencies
 using LinearAlgebra, GeoParams, GLMakie
@@ -133,7 +136,7 @@ function main(igg, nx, ny)
 
     # RockRatios
     air_phase = 1
-    ϕ         = RockRatio(ni...)
+    ϕ         = RockRatio(backend, ni)
     update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
     # STOKES ---------------------------------------------
@@ -180,7 +183,7 @@ function main(igg, nx, ny)
     viscosity_cutoff = (-Inf, Inf)
     free_surface     =       false
     ητ = @zeros(ni...)
-    while it < 1
+    while it < 1000
 
         ## variational solver
         # Stokes solver ----------------
@@ -229,7 +232,7 @@ function main(igg, nx, ny)
             fig = Figure(size = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(round.(t/(1e3 * 3600 * 24 *365.25); digits=3)) Kyrs")
             # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
-            scatter!(ax, px.data[:].*1e-3, py.data[:].*1e-3, color = pPhases.data[:], colormap = :grayC)
+            scatter!(ax, Array(px.data[:]).*1e-3, Array(py.data[:]).*1e-3, color =Array(pPhases.data[:]), colormap = :grayC)
             arrows!(
                 ax,
                 xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
@@ -243,6 +246,6 @@ function main(igg, nx, ny)
     end
     return nothing
 end
-# ## END OF MAIN SCRIPT ----------------------------------------------------------------
-main(igg, nx, ny)
 
+## END OF MAIN SCRIPT ----------------------------------------------------------------
+main(igg, nx, ny)

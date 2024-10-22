@@ -1,6 +1,6 @@
 # 2D kernel
 @parallel_indices (I...) function update_stresses_center_vertex!(
-    ε::NTuple{3, T},      # normal components @ centers; shear components @ vertices
+    ε::NTuple{3,T},      # normal components @ centers; shear components @ vertices
     ε_pl::NTuple{3},      # whole Voigt tensor @ centers
     EII,                  # accumulated plastic strain rate @ centers
     τ::NTuple{3},         # whole Voigt tensor @ centers
@@ -20,8 +20,8 @@
     rheology,
     phase_center,
     phase_vertex,
-    ϕ::JustRelax.RockRatio
-) where T
+    ϕ::JustRelax.RockRatio,
+) where {T}
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
     ni = size(Pr)
@@ -29,18 +29,20 @@
 
     if isvalid_v(ϕ, I...)
         # interpolate to ith vertex
-        Pv_ij       = av_clamped(Pr, Ic...)
-        εxxv_ij     = av_clamped(ε[1], Ic...)
-        εyyv_ij     = av_clamped(ε[2], Ic...)
-        τxxv_ij     = av_clamped(τ[1], Ic...)
-        τyyv_ij     = av_clamped(τ[2], Ic...)
+        Pv_ij = av_clamped(Pr, Ic...)
+        εxxv_ij = av_clamped(ε[1], Ic...)
+        εyyv_ij = av_clamped(ε[2], Ic...)
+        τxxv_ij = av_clamped(τ[1], Ic...)
+        τyyv_ij = av_clamped(τ[2], Ic...)
         τxxv_old_ij = av_clamped(τ_o[1], Ic...)
         τyyv_old_ij = av_clamped(τ_o[2], Ic...)
-        EIIv_ij     = av_clamped(EII, Ic...)
+        EIIv_ij = av_clamped(EII, Ic...)
 
         ## vertex
         phase = @inbounds phase_vertex[I...]
-        is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
+        is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
+            rheology, EIIv_ij, phase
+        )
         _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
         Kv = fn_ratio(get_bulk_modulus, rheology, phase)
         volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
@@ -49,15 +51,18 @@
 
         # stress increments @ vertex
         dτxxv =
-            (-(τxxv_ij - τxxv_old_ij) * ηv_ij * _Gvdt - τxxv_ij + 2.0 * ηv_ij * εxxv_ij) * dτ_rv
+            (-(τxxv_ij - τxxv_old_ij) * ηv_ij * _Gvdt - τxxv_ij + 2.0 * ηv_ij * εxxv_ij) *
+            dτ_rv
         dτyyv =
-            (-(τyyv_ij - τyyv_old_ij) * ηv_ij * _Gvdt - τyyv_ij + 2.0 * ηv_ij * εyyv_ij) * dτ_rv
+            (-(τyyv_ij - τyyv_old_ij) * ηv_ij * _Gvdt - τyyv_ij + 2.0 * ηv_ij * εyyv_ij) *
+            dτ_rv
         dτxyv =
             (
                 -(τxyv[I...] - τxyv_old[I...]) * ηv_ij * _Gvdt - τxyv[I...] +
                 2.0 * ηv_ij * ε[3][I...]
             ) * dτ_rv
-        τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+        τIIv_ij =
+            √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
 
         # yield function @ center
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
@@ -82,7 +87,9 @@
             # Material properties
             phase = @inbounds phase_center[I...]
             _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
-            is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
+            is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(
+                rheology, EII[I...], phase
+            )
             K = fn_ratio(get_bulk_modulus, rheology, phase)
             volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
             ηij = η[I...]

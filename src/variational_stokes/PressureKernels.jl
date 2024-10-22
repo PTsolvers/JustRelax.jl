@@ -21,11 +21,24 @@ function compute_P!(
 end
 
 @parallel_indices (I...) function compute_P!(
-    P, P0, RP, ∇V, η, rheology::NTuple{N,MaterialParams}, phase_ratio, ϕ::JustRelax.RockRatio, dt, r, θ_dτ, ::Nothing
+    P,
+    P0,
+    RP,
+    ∇V,
+    η,
+    rheology::NTuple{N,MaterialParams},
+    phase_ratio,
+    ϕ::JustRelax.RockRatio,
+    dt,
+    r,
+    θ_dτ,
+    ::Nothing,
 ) where {N}
     if isvalid_c(ϕ, I...)
         K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
-        RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
+        RP[I...], P[I...] = _compute_P!(
+            P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ
+        )
     else
         RP[I...] = P[I...] = zero(eltype(P))
     end

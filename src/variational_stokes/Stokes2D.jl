@@ -7,7 +7,9 @@ function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwarg
 end
 
 # entry point for extensions
-solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs) = _solve_VS!(stokes, args...; kwargs...)
+function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
+    return _solve_VS!(stokes, args...; kwargs...)
+end
 
 function _solve_VS!(
     stokes::JustRelax.StokesArrays,
@@ -109,7 +111,7 @@ function _solve_VS!(
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-           
+
             update_viscosity!(
                 stokes,
                 phase_ratios,
@@ -144,25 +146,24 @@ function _solve_VS!(
             )
             update_halo!(stokes.τ.xy)
 
-
             # @hide_communication b_width begin # communication/computation overlap
-                @parallel (@idx ni.+1) compute_V!(
-                        @velocity(stokes)...,
-                        stokes.R.Rx,
-                        stokes.R.Ry,
-                        stokes.P,
-                        @stress(stokes)...,
-                        ηdτ,
-                        ρg...,
-                        ητ,
-                        ϕ,
-                        _di...,
-                    )
-                # apply boundary conditions
-                velocity2displacement!(stokes, dt)
-                free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
-                flow_bcs!(stokes, flow_bcs)
-                update_halo!(@velocity(stokes)...)
+            @parallel (@idx ni .+ 1) compute_V!(
+                @velocity(stokes)...,
+                stokes.R.Rx,
+                stokes.R.Ry,
+                stokes.P,
+                @stress(stokes)...,
+                ηdτ,
+                ρg...,
+                ητ,
+                ϕ,
+                _di...,
+            )
+            # apply boundary conditions
+            velocity2displacement!(stokes, dt)
+            free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
+            flow_bcs!(stokes, flow_bcs)
+            update_halo!(@velocity(stokes)...)
             # end
         end
 

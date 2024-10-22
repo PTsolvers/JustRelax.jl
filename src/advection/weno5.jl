@@ -1,4 +1,4 @@
-using MuladdMacro, Adapt
+using MuladdMacro
 # check if index is on the boundary, if yes take value on the opposite for periodic, if not, don't change the value
 # @inline limit_periodic(a, n) = a > n ? n : (a < 1 ? 1 : a)
 @inline function limit_periodic(a, n)

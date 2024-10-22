@@ -3,10 +3,10 @@ using StaticArrays
 # Vorticity tensor
 
 @parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _dx, _dy)
-    dx(A) = _d_xa(A, I..., _dx)
-    dy(A) = _d_ya(A, I..., _dy)
+    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
+    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
 
-    ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+    @inbounds ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
 
     return nothing
 end
@@ -14,13 +14,13 @@ end
 @parallel_indices (I...) function compute_vorticity!(
     ωyz, ωxz, ωxy, Vx, Vy, Vz, _dx, _dy, _dz
 )
-    dx(A) = _d_xa(A, I..., _dx)
-    dy(A) = _d_ya(A, I..., _dy)
-    dz(A) = _d_za(A, I..., _dz)
+    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
+    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
+    Base.@propagate_inbounds @inline dz(A) = _d_za(A, _dz, I...)
 
-    ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
-    ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
-    ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+    @inbounds ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
+    @inbounds ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
+    @inbounds ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
 
     return nothing
 end

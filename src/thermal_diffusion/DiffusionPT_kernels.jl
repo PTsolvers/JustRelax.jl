@@ -1,17 +1,15 @@
 
 ## 3D KERNELS
 
-@parallel_indices (i, j, k) function compute_flux!(
+@parallel_indices (I...) function compute_flux!(
     qTx::AbstractArray{_T,3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
 ) where {_T}
-    d_xi(A) = _d_xi(A, i, j, k, _dx)
-    d_yi(A) = _d_yi(A, i, j, k, _dy)
-    d_zi(A) = _d_zi(A, i, j, k, _dz)
-    av_xy(A) = _av_xy(A, i, j, k)
-    av_xz(A) = _av_xz(A, i, j, k)
-    av_yz(A) = _av_yz(A, i, j, k)
-
-    I = i, j, k
+    d_xi(A) = _d_xi(A, _dx, I...)
+    d_yi(A) = _d_yi(A, _dy, I...)
+    d_zi(A) = _d_zi(A, _dz, I...)
+    av_xy(A) = _av_xy(A, I...)
+    av_xz(A) = _av_xz(A, I...)
+    av_yz(A) = _av_yz(A, I...)
 
     if all(I .≤ size(qTx))
         qx = qTx2[I...] = -av_yz(K) * d_xi(T)
@@ -47,16 +45,17 @@ end
     _dz,
     args,
 ) where {_T}
-    d_xi(A) = _d_xi(A, i, j, k, _dx)
-    d_yi(A) = _d_yi(A, i, j, k, _dy)
-    d_zi(A) = _d_zi(A, i, j, k, _dz)
-    av_xy(A) = _av_xy(A, i, j, k)
-    av_xz(A) = _av_xz(A, i, j, k)
-    av_yz(A) = _av_yz(A, i, j, k)
+    I = i, j, k
+
+    @inline d_xi(A) = _d_xi(A, _dx, I...)
+    @inline d_yi(A) = _d_yi(A, _dy, I...)
+    @inline d_zi(A) = _d_zi(A, _dz, I...)
+    @inline av_xy(A) = _av_xy(A, I...)
+    @inline av_xz(A) = _av_xz(A, I...)
+    @inline av_yz(A) = _av_yz(A, I...)
 
     get_K(idx, args) = compute_phase(compute_conductivity, rheology, idx, args)
 
-    I = i, j, k
 
     @inbounds if all(I .≤ size(qTx))
         T_ijk = (T[(I .+ 1)...] + T[i, j + 1, k + 1]) * 0.5
@@ -122,9 +121,9 @@ end
     _dz,
 ) where {_T}
     av(A) = _av(A, I...)
-    d_xa(A) = _d_xa(A, I..., _dx)
-    d_ya(A) = _d_ya(A, I..., _dy)
-    d_za(A) = _d_za(A, I..., _dz)
+    d_xa(A) = _d_xa(A, _dx, I...)
+    d_ya(A) = _d_ya(A, _dy, I...)
+    d_za(A) = _d_za(A, _dz, I...)
 
     I1 = I .+ 1
     T[I1...] =
@@ -158,9 +157,9 @@ end
     args,
 ) where {_T}
     av(A) = _av(A, i, j, k)
-    d_xa(A) = _d_xa(A, i, j, k, _dx)
-    d_ya(A) = _d_ya(A, i, j, k, _dy)
-    d_za(A) = _d_za(A, i, j, k, _dz)
+    d_xa(A) = _d_xa(A, _dx, i, j, k)
+    d_ya(A) = _d_ya(A, _dy, i, j, k)
+    d_za(A) = _d_za(A, _dz, i, j, k)
 
     I = i + 1, j + 1, k + 1
 
@@ -197,9 +196,9 @@ end
     _dy,
     _dz,
 ) where {_T}
-    d_xa(A) = _d_xa(A, i, j, k, _dx)
-    d_ya(A) = _d_ya(A, i, j, k, _dy)
-    d_za(A) = _d_za(A, i, j, k, _dz)
+    d_xa(A) = _d_xa(A, _dx, i, j, k)
+    d_ya(A) = _d_ya(A, _dy, i, j, k)
+    d_za(A) = _d_za(A, _dz, i, j, k)
     av(A) = _av(A, i, j, k)
 
     I = i + 1, j + 1, k + 1
@@ -230,9 +229,9 @@ end
     _dz,
     args,
 ) where {_T}
-    d_xa(A) = _d_xa(A, i, j, k, _dx)
-    d_ya(A) = _d_ya(A, i, j, k, _dy)
-    d_za(A) = _d_za(A, i, j, k, _dz)
+    d_xa(A) = _d_xa(A, _dx, i, j, k)
+    d_ya(A) = _d_ya(A, _dy, i, j, k)
+    d_za(A) = _d_za(A, _dz, i, j, k)
     av(A) = _av(A, i, j, k)
 
     I = i + 1, j + 1, k + 1
@@ -257,8 +256,8 @@ end
 ) where {_T}
     nx = size(θr_dτ, 1)
 
-    d_xi(A) = _d_xi(A, i, j, _dx)
-    d_yi(A) = _d_yi(A, i, j, _dy)
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
     av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
     av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
 
@@ -279,8 +278,8 @@ end
 ) where {_T}
     nx = size(θr_dτ, 1)
 
-    d_xi(A) = _d_xi(A, i, j, _dx)
-    d_yi(A) = _d_yi(A, i, j, _dy)
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
     av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
     av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
 
@@ -334,8 +333,8 @@ end
 ) where {_T,N,C1,C2,C3,C4}
     nx = size(θr_dτ, 1)
 
-    d_xi(A) = _d_xi(A, i, j, _dx)
-    d_yi(A) = _d_yi(A, i, j, _dy)
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
     av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
     av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
     compute_K(phase, args) = fn_ratio(compute_conductivity, rheology, phase, args)
@@ -379,8 +378,8 @@ end
 ) where {_T}
     nx, ny = size(ρCp)
 
-    d_xa(A) = _d_xa(A, i, j, _dx)
-    d_ya(A) = _d_ya(A, i, j, _dy)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
     #! format: off
     function av(A)
         (
@@ -428,8 +427,8 @@ end
     j0 = clamp(j - 1, 1, ny)
     j1 = clamp(j, 1, ny)
 
-    d_xa(A) = _d_xa(A, i, j, _dx)
-    d_ya(A) = _d_ya(A, i, j, _dy)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
     av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
 
     T_ij = T[i + 1, j + 1]
@@ -462,8 +461,8 @@ end
 ) where {_T}
     nx, ny = size(ρCp)
 
-    d_xa(A) = _d_xa(A, i, j, _dx)
-    d_ya(A) = _d_ya(A, i, j, _dy)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
     #! format: off
     function av(A)
         (
@@ -506,8 +505,8 @@ end
     j0 = clamp(j - 1, 1, ny)
     j1 = clamp(j, 1, ny)
 
-    d_xa(A) = _d_xa(A, i, j, _dx)
-    d_ya(A) = _d_ya(A, i, j, _dy)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
     av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
 
     T_ij = T[i + 1, j + 1]

@@ -3,24 +3,23 @@
 @parallel_indices (i, j) function compute_∇V!(
     ∇V::AbstractArray{T,2}, Vx, Vy, _dx, _dy
 ) where {T}
-    d_xi(A) = _d_xi(A,_dx,  i, j)
-    d_yi(A) = _d_yi(A,_dy,  i, j)
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
 
     ∇V[i, j] = d_xi(Vx) + d_yi(Vy)
 
     return nothing
 end
 
-
 ## DEVIATORIC STRAIN RATE TENSOR
 
 @parallel_indices (i, j) function compute_strain_rate!(
     εxx::AbstractArray{T,2}, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
 ) where {T}
-    d_xi(A) = _d_xi(A,_dx,  i, j)
-    d_yi(A) = _d_yi(A,_dy,  i, j)
-    d_xa(A) = _d_xa(A,_dx,  i, j)
-    d_ya(A) = _d_ya(A,_dy,  i, j)
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
 
     if all((i, j) .≤ size(εxx))
         ∇V_ij = ∇V[i, j] / 3.0
@@ -83,10 +82,10 @@ end
 @parallel_indices (i, j) function compute_V!(
     Vx::AbstractArray{T,2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy
 ) where {T}
-    d_xi(A) = _d_xi(A,_dx,  i, j)
-    d_yi(A) = _d_yi(A,_dy,  i, j)
-    d_xa(A) = _d_xa(A,_dx,  i, j)
-    d_ya(A) = _d_ya(A,_dy,  i, j)
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
     av_xa(A) = _av_xa(A, i, j)
     av_ya(A) = _av_ya(A, i, j)
     harm_xa(A) = _av_xa(A, i, j)
@@ -107,10 +106,10 @@ end
 @parallel_indices (i, j) function compute_V!(
     Vx::AbstractArray{T,2}, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy, dt
 ) where {T}
-    d_xi(A) = _d_xi(A,_dx,  i, j)
-    d_yi(A) = _d_yi(A,_dy,  i, j)
-    d_xa(A) = _d_xa(A,_dx,  i, j)
-    d_ya(A) = _d_ya(A,_dy,  i, j)
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
     av_xa(A) = _av_xa(A, i, j)
     av_ya(A) = _av_ya(A, i, j)
     harm_xa(A) = _av_xa(A, i, j)
@@ -246,10 +245,10 @@ end
 @parallel_indices (i, j) function compute_Res!(
     Rx::AbstractArray{T,2}, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
 ) where {T}
-    @inline d_xa(A) = _d_xa(A,_dx,  i, j)
-    @inline d_ya(A) = _d_ya(A,_dy,  i, j)
-    @inline d_xi(A) = _d_xi(A,_dx,  i, j)
-    @inline d_yi(A) = _d_yi(A,_dy,  i, j)
+    @inline d_xa(A) = _d_xa(A, _dx, i, j)
+    @inline d_ya(A) = _d_ya(A, _dy, i, j)
+    @inline d_xi(A) = _d_xi(A, _dx, i, j)
+    @inline d_yi(A) = _d_yi(A, _dy, i, j)
     @inline av_xa(A) = _av_xa(A, i, j)
     @inline av_ya(A) = _av_ya(A, i, j)
 
@@ -267,10 +266,10 @@ end
 @parallel_indices (i, j) function compute_Res!(
     Rx::AbstractArray{T,2}, Ry, Vx, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
 ) where {T}
-    @inline d_xa(A) = _d_xa(A,_dx,  i, j)
-    @inline d_ya(A) = _d_ya(A,_dy,  i, j)
-    @inline d_xi(A) = _d_xi(A,_dx,  i, j)
-    @inline d_yi(A) = _d_yi(A,_dy,  i, j)
+    @inline d_xa(A) = _d_xa(A, _dx, i, j)
+    @inline d_ya(A) = _d_ya(A, _dy, i, j)
+    @inline d_xi(A) = _d_xi(A, _dx, i, j)
+    @inline d_yi(A) = _d_yi(A, _dy, i, j)
     @inline av_xa(A) = _av_xa(A, i, j)
     @inline av_ya(A) = _av_ya(A, i, j)
 
@@ -279,7 +278,7 @@ end
         if all((i, j) .≤ size(Rx))
             Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
         end
-        
+
         if all((i, j) .≤ size(Ry))
             θ = 1.0
             # Interpolated Vx into Vy node (includes density gradient)

@@ -56,7 +56,6 @@ end
 
     get_K(idx, args) = compute_phase(compute_conductivity, rheology, idx, args)
 
-
     @inbounds if all(I .≤ size(qTx))
         T_ijk = (T[(I .+ 1)...] + T[i, j + 1, k + 1]) * 0.5
         args_ijk = (; T=T_ijk, P=av_yz(args.P))

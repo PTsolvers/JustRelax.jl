@@ -1,3 +1,6 @@
+function RockRatio(::Type{CPUBackend}, ni::NTuple{N,Integer}) where {N}
+    return RockRatio(ni...)
+end
 
 function RockRatio(nx, ny)
     ni = nx, ny
@@ -5,8 +8,8 @@ function RockRatio(nx, ny)
     vertex = @zeros(ni .+ 1...)
     Vx = @zeros(nx+1, ny) # no ghost nodes!
     Vy = @zeros(nx, ny+1) # no ghost nodes!
-
-    return JustRelax.RockRatio(center, vertex, Vx, Vy, nothing, nothing, nothing, nothing)
+    dummy = @zeros(1, 1) # because it cant be a Union{T, Nothing} type on the GPU....
+    return JustRelax.RockRatio(center, vertex, Vx, Vy, dummy, dummy, dummy, dummy)
 end
 
 function RockRatio(nx, ny, nz)
@@ -54,6 +57,7 @@ end
 @inline compute_rock_ratio(
     phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
 ) where {N} = 1 - @index phase_ratio[air_phase, I...]
+
 @inline compute_air_ratio(phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}) where {N} = @index phase_ratio[
     air_phase, I...
 ]

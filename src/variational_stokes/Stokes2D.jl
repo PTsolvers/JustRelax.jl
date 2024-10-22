@@ -90,7 +90,7 @@ function _solve_VS!(
             compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., ϕ, _di...)
 
             compute_P!(
                 θ,

@@ -30,6 +30,7 @@ include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 
 # Types
+
 function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
     return StokesArrays(ni)
 end
@@ -44,6 +45,14 @@ end
 
 function JR2D.WENO5(::Type{CUDABackend}, method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
     return WENO5(method, tuple(ni...))
+end
+
+function JR2D.RockRatio(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
+    return RockRatio(ni...)
+end
+
+function JR2D.RockRatio(::Type{CUDABackend}, ni::Vararg{Integer,N}) where {N}
+    return RockRatio(ni...)
 end
 
 function JR2D.PTThermalCoeffs(
@@ -270,6 +279,10 @@ function JR2D.solve!(::CUDABackendTrait, stokes, args...; kwargs)
     return _solve!(stokes, args...; kwargs...)
 end
 
+function JR2D.solve_VariationalStokes!(::CUDABackendTrait, stokes, args...; kwargs)
+    return _solve_VS!(stokes, args...; kwargs...)
+end
+
 function JR2D.heatdiffusion_PT!(::CUDABackendTrait, thermal, args...; kwargs)
     return _heatdiffusion_PT!(thermal, args...; kwargs...)
 end
@@ -369,6 +382,15 @@ function JR2D.rotate_stress_particles!(
     end
     @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
 
+    return nothing
+end
+
+# rock ratios
+
+function JR2D.update_rock_ratio!(
+    ϕ::JustRelax.RockRatio{CuArray{T,nD,D},N}, phase_ratios, air_phase
+) where {T,nD,N,D}
+    update_rock_ratio!(ϕ, phase_ratios, air_phase)
     return nothing
 end
 

@@ -82,6 +82,21 @@ export rotate_stress_particles!
 
 include("stokes/VelocityKernels.jl")
 
+# variational Stokes
+include("variational_stokes/mask.jl")
+export RockRatio, update_rock_ratio!
+
+include("variational_stokes/PressureKernels.jl")
+
+include("variational_stokes/MiniKernels.jl")
+
+include("variational_stokes/StressKernels.jl")
+
+include("variational_stokes/VelocityKernels.jl")
+
+include("variational_stokes/Stokes2D.jl")
+export solve_VariationalStokes!
+
 # thermal diffusion
 
 include("thermal_diffusion/DiffusionPT.jl")

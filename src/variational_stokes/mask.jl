@@ -143,7 +143,8 @@ function isvalid_vx(ϕ::JustRelax.RockRatio, i, j)
     c = (ϕ.center[i, j] > 0) * (ϕ.center[i - 1, j] > 0)
     v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i, j + 1] > 0)
     cv = c * v
-    return cv * (ϕ.Vx[i, j] > 0)
+    # return cv * (ϕ.Vx[i, j] > 0)
+    return ϕ.Vx[i, j] > 0
 end
 
 """
@@ -159,5 +160,66 @@ function isvalid_vy(ϕ::JustRelax.RockRatio, i, j)
     c = (ϕ.center[i, j] > 0) * (ϕ.center[i, j - 1] > 0)
     v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i + 1, j] > 0)
     cv = c * v
-    return cv * (ϕ.Vy[i, j] > 0)
+    # return cv * (ϕ.Vy[i, j] > 0)
+    return ϕ.Vy[i, j] > 0
 end
+
+
+
+# """
+#     isvalid_c(ϕ::JustRelax.RockRatio, inds...)
+
+# Check if  `ϕ.center[inds...]` is a not a nullspace.
+
+# # Arguments
+# - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
+# - `inds`: Cartesian indices to check.
+# """
+# function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
+#     return (ϕ.center[i, j] > 0)
+# end
+
+# """
+#     isvalid_v(ϕ::JustRelax.RockRatio, inds...)
+
+# Check if  `ϕ.vertex[inds...]` is a not a nullspace.
+
+# # Arguments
+# - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
+# - `inds`: Cartesian indices to check.
+# """
+# function isvalid_v(ϕ::JustRelax.RockRatio, i, j)
+#     return (ϕ.vertex[i, j] > 0)
+# end
+
+# """
+#     isvalid_vx(ϕ::JustRelax.RockRatio, inds...)
+
+# Check if  `ϕ.Vx[inds...]` is a not a nullspace.
+
+# # Arguments
+# - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
+# - `inds`: Cartesian indices to check.
+# """
+# function isvalid_vx(ϕ::JustRelax.RockRatio, i, j)
+#     c = (ϕ.center[i, j] > 0) || (ϕ.center[i - 1, j] > 0)
+#     v = (ϕ.vertex[i, j] > 0) || (ϕ.vertex[i, j + 1] > 0)
+#     cv = c || v
+#     return cv || (ϕ.Vx[i, j] > 0)
+# end
+
+# """
+#     isvalid_vy(ϕ::JustRelax.RockRatio, inds...)
+
+# Check if  `ϕ.Vy[inds...]` is a not a nullspace.
+
+# # Arguments
+# - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
+# - `inds`: Cartesian indices to check.
+# """
+# function isvalid_vy(ϕ::JustRelax.RockRatio, i, j)
+#     c = (ϕ.center[i, j] > 0) || (ϕ.center[i, j - 1] > 0)
+#     v = (ϕ.vertex[i, j] > 0) || (ϕ.vertex[i + 1, j] > 0)
+#     cv = c || v
+#     return cv || (ϕ.Vy[i, j] > 0)
+# end

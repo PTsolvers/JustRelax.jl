@@ -31,7 +31,7 @@ import JustRelax:
 
 import JustPIC._2D: nphases, numphases
 
-@init_parallel_stencil(AMDGPU, Float64, 2)
+__init__() = @init_parallel_stencil(AMDGPU, Float64, 2)
 
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")

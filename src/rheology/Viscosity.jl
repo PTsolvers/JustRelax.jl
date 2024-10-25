@@ -35,7 +35,7 @@ end
 
 # with phase ratios
 @inline function update_viscosity!(
-    stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation=1e0
+    stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; air_phase = 0, relaxation=1e0
 )
     update_viscosity!(
         islinear(rheology),
@@ -43,6 +43,7 @@ end
         phase_ratios,
         args,
         rheology,
+        air_phase,
         cutoff;
         relaxation=relaxation,
     )
@@ -55,6 +56,7 @@ end
     phase_ratios,
     args,
     rheology,
+    air_phase,
     cutoff;
     relaxation=1e0,
 )
@@ -67,10 +69,12 @@ end
     phase_ratios,
     args,
     rheology,
+    air_phase,
     cutoff;
     relaxation=1e0,
 )
-    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff; relaxation=relaxation)
+        air_phase,
+        compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff; relaxation=relaxation)
     return nothing
 end
 
@@ -149,10 +153,10 @@ end
 end
 
 function compute_viscosity!(
-    stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation=1e0
+    stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, air_phase, cutoff; relaxation=1e0
 )
     return compute_viscosity!(
-        backend(stokes), stokes, relaxation, phase_ratios, args, rheology, cutoff
+        backend(stokes), stokes, relaxation, phase_ratios, args, rheology, air_phase, cutoff
     )
 end
 
@@ -163,9 +167,10 @@ function compute_viscosity!(
     phase_ratios,
     args,
     rheology,
+    air_phase,
     cutoff,
 )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
 end
 
 function _compute_viscosity!(
@@ -174,8 +179,10 @@ function _compute_viscosity!(
     phase_ratios::JustPIC.PhaseRatios,
     args,
     rheology,
-    cutoff,
+    air_phase,
+    cutoff;
 )
+    air_phase
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(
         stokes.viscosity.η,
@@ -190,8 +197,8 @@ function _compute_viscosity!(
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-    η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
-)
+    η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, air_phase::Integer, cutoff
+) where N
 
     # convenience closure
     @inline gather(A) = _gather(A, I...)
@@ -207,7 +214,9 @@ end
         args_ij = local_viscosity_args(args, I...)
 
         # local phase ratio
-        ratio_ij = @cell(ratios_center[I...])
+        ratio_ij = @cell ratios_center[I...]
+        # remove phase ratio of the air if necessary & normalize ratios
+        ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
 
         # compute second invariant of strain rate tensor
         εij = εII_0 + ε[1], -εII_0 + ε[1], gather(εxyv)
@@ -258,7 +267,7 @@ end
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-    η, ν, ratios_center, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
+    η, ν, ratios_center, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, air_phase, cutoff
 )
 
     # convenience closures
@@ -276,7 +285,9 @@ end
         args_ijk = local_viscosity_args(args, I...)
 
         # local phase ratio
-        ratio_ijk = @cell(ratios_center[I...])
+        ratio_ijk = @cell ratios_center[I...]
+        # remove phase ratio of the air if necessary & normalize ratios
+        ratio_ijk = correct_phase_ratio(air_phase, ratio_ijk)
 
         # compute second invariant of strain rate tensor
         εij_normal = εij_normal .+ (εII_0, -εII_0 * 0.5, -εII_0 * 0.5)
@@ -340,3 +351,16 @@ end
 #         η
 #     end
 # end
+
+
+function correct_phase_ratio(air_phase, ratio::SVector{N}) where N
+    corrected_ratio = if iszero(air_phase)
+        ratio
+    else
+        mask = ntuple(i-> (i !== air_phase), Val(N))
+        # set air phase ratio to zero
+        corrected_ratio = ratio .* mask
+        # normalize phase ratios without air
+        corrected_ratio  ./ sum(corrected_ratio)
+    end
+end

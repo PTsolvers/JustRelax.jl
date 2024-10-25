@@ -155,7 +155,7 @@ end
 ## Because mysum(::generator) does not work inside CUDA kernels...
 @inline mysum(A, ranges::Vararg{T,N}) where {T,N} = mysum(identity, A, ranges...)
 
-@inline function mysum(f::F, A, ranges_i) where {F<:Function}
+@inline function mysum(f::F, A::AbstractArray, ranges_i) where {F<:Function}
     s = 0.0
     for i in ranges_i
         s += f(A[i])
@@ -163,7 +163,7 @@ end
     return s
 end
 
-@inline function mysum(f::F, A, ranges_i, ranges_j) where {F<:Function}
+@inline function mysum(f::F, A::AbstractArray, ranges_i, ranges_j) where {F<:Function}
     s = 0.0
     for i in ranges_i, j in ranges_j
         s += f(A[i, j])
@@ -171,7 +171,7 @@ end
     return s
 end
 
-@inline function mysum(f::F, A, ranges_i, ranges_j, ranges_k) where {F<:Function}
+@inline function mysum(f::F, A::AbstractArray, ranges_i, ranges_j, ranges_k) where {F<:Function}
     s = 0.0
     for i in ranges_i, j in ranges_j, k in ranges_k
         s += f(A[i, j, k])

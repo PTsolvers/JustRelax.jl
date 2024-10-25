@@ -70,6 +70,8 @@ end
     d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
     d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
+    av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
     av_xa(A) = _av_xa(A, i, j)
     av_ya(A) = _av_ya(A, i, j)
     harm_xa(A) = _av_xa(A, i, j)
@@ -80,7 +82,7 @@ end
             Rx[i, j] =
                 R_Vx = (
                     -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
-                    av_xa(ρgx)
+                    av_xa(ρgx, ϕ.center)
                 )
             Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
         else
@@ -94,7 +96,7 @@ end
             Ry[i, j] =
                 R_Vy =
                     -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
-                    av_ya(ρgy)
+                    av_ya(ρgy, ϕ.center)
             Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
         else
             Ry[i, j] = zero(T)

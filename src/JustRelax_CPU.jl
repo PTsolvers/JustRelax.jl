@@ -21,7 +21,7 @@ import JustRelax:
 
 import JustPIC._2D: numphases, nphases
 
- __init__() = @init_parallel_stencil(Threads, Float64, 2)
+__init__() = @init_parallel_stencil(Threads, Float64, 2)
 
 include("common.jl")
 include("stokes/Stokes2D.jl")

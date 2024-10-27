@@ -21,9 +21,9 @@ Base.@propagate_inbounds @inline _d_yi(A::T, ϕ::T, _dy, I::Vararg{Integer,N}) w
 
 # averages
 Base.@propagate_inbounds @inline _av(A::T, ϕ::T, i, j) where {T<:T2} =
-    0.25 * mysum(A, ϕ, (i+1):(i+2), (j+1):(j+2))
+    0.25 * mysum(A, ϕ, (i + 1):(i + 2), (j + 1):(j + 2))
 Base.@propagate_inbounds @inline _av_a(A::T, ϕ::T, i, j) where {T<:T2} =
-    0.25 * mysum(A, ϕ, (i):(i+1), (j):(j+1))
+    0.25 * mysum(A, ϕ, (i):(i + 1), (j):(j + 1))
 Base.@propagate_inbounds @inline _av_xa(A::T, ϕ::T, I::Vararg{Integer,2}) where {T<:T2} =
     (center(A, ϕ, I...) + right(A, ϕ, I...)) * 0.5
 Base.@propagate_inbounds @inline _av_ya(A::T, ϕ::T, I::Vararg{Integer,2}) where {T<:T2} =
@@ -36,7 +36,9 @@ Base.@propagate_inbounds @inline _av_yi(A::T, ϕ::T, I::Vararg{Integer,2}) where
 ## Because mysum(::generator) does not work inside CUDA kernels...
 @inline mysum(A, ϕ, ranges::Vararg{T,N}) where {T,N} = mysum(identity, A, ϕ, ranges...)
 
-@inline function mysum(f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i) where {F<:Function}
+@inline function mysum(
+    f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i
+) where {F<:Function}
     s = 0.0
     for i in ranges_i
         s += f(A[i]) * ϕ[i]
@@ -44,7 +46,9 @@ Base.@propagate_inbounds @inline _av_yi(A::T, ϕ::T, I::Vararg{Integer,2}) where
     return s
 end
 
-@inline function mysum(f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i, ranges_j) where {F<:Function}
+@inline function mysum(
+    f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i, ranges_j
+) where {F<:Function}
     s = 0.0
     for i in ranges_i, j in ranges_j
         s += f(A[i, j]) * ϕ[i, j]
@@ -52,7 +56,9 @@ end
     return s
 end
 
-@inline function mysum(f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i, ranges_j, ranges_k) where {F<:Function}
+@inline function mysum(
+    f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i, ranges_j, ranges_k
+) where {F<:Function}
     s = 0.0
     for i in ranges_i, j in ranges_j, k in ranges_k
         s += f(A[i, j, k]) * ϕ[i, j, k]

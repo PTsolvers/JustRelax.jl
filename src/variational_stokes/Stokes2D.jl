@@ -23,6 +23,7 @@ function _solve_VS!(
     args,
     dt,
     igg::IGG;
+    air_phase::Integer=0,
     viscosity_cutoff=(-Inf, Inf),
     viscosity_relaxation=1e-2,
     iterMax=50e3,
@@ -77,7 +78,7 @@ function _solve_VS!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, air_phase, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -90,7 +91,7 @@ function _solve_VS!(
             compute_maxloc!(ητ, η; window=(1, 1))
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., ϕ, _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
 
             compute_P!(
                 θ,
@@ -118,6 +119,7 @@ function _solve_VS!(
                 args,
                 rheology,
                 viscosity_cutoff;
+                air_phase=air_phase,
                 relaxation=viscosity_relaxation,
             )
 
@@ -175,7 +177,7 @@ function _solve_VS!(
                 length(stokes.R.Rx),
                 norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
                 length(stokes.R.Ry),
-                norm_mpi(stokes.R.RP) / length(stokes.R.RP),
+                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) / length(@views stokes.R.RP[ϕ.center .> 0]),
             )
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])

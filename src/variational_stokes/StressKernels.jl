@@ -61,12 +61,13 @@
                 -(τxyv[I...] - τxyv_old[I...]) * ηv_ij * _Gvdt - τxyv[I...] +
                 2.0 * ηv_ij * ε[3][I...]
             ) * dτ_rv
-        τIIv_ij =
-            √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+        τIIv_ij = √(
+            0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2
+        )
 
         # yield function @ center
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij)
+        if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[I...] =
                 (1.0 - relλ) * λv[I...] +
@@ -107,7 +108,7 @@
             # yield function @ center
             F = τII_ij - C - Pr[I...] * sinϕ
 
-            if is_pl && !iszero(τII_ij)
+            if is_pl && !iszero(τII_ij) && F > 0
                 # stress correction @ center
                 λ[I...] =
                     (1.0 - relλ) * λ[I...] +

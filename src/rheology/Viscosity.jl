@@ -35,7 +35,13 @@ end
 
 # with phase ratios
 @inline function update_viscosity!(
-    stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; air_phase = 0, relaxation=1e0
+    stokes::JustRelax.StokesArrays,
+    phase_ratios,
+    args,
+    rheology,
+    cutoff;
+    air_phase::Integer=0,
+    relaxation=1e0,
 )
     update_viscosity!(
         islinear(rheology),
@@ -73,8 +79,9 @@ end
     cutoff;
     relaxation=1e0,
 )
-        air_phase,
-        compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff; relaxation=relaxation)
+    compute_viscosity!(
+        stokes, phase_ratios, args, rheology, air_phase, cutoff; relaxation=relaxation
+    )
     return nothing
 end
 
@@ -153,7 +160,13 @@ end
 end
 
 function compute_viscosity!(
-    stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, air_phase, cutoff; relaxation=1e0
+    stokes::JustRelax.StokesArrays,
+    phase_ratios,
+    args,
+    rheology,
+    air_phase::Integer,
+    cutoff;
+    relaxation=1e0,
 )
     return compute_viscosity!(
         backend(stokes), stokes, relaxation, phase_ratios, args, rheology, air_phase, cutoff
@@ -182,7 +195,6 @@ function _compute_viscosity!(
     air_phase,
     cutoff;
 )
-    air_phase
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(
         stokes.viscosity.η,
@@ -191,6 +203,7 @@ function _compute_viscosity!(
         @strain(stokes)...,
         args,
         rheology,
+        air_phase,
         cutoff,
     )
     return nothing
@@ -198,7 +211,7 @@ end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
     η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, air_phase::Integer, cutoff
-) where N
+)
 
     # convenience closure
     @inline gather(A) = _gather(A, I...)
@@ -267,7 +280,19 @@ end
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-    η, ν, ratios_center, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, air_phase, cutoff
+    η,
+    ν,
+    ratios_center,
+    εxx,
+    εyy,
+    εzz,
+    εyzv,
+    εxzv,
+    εxyv,
+    args,
+    rheology,
+    air_phase::Integer,
+    cutoff,
 )
 
     # convenience closures
@@ -352,15 +377,16 @@ end
 #     end
 # end
 
-
-function correct_phase_ratio(air_phase, ratio::SVector{N}) where N
-    corrected_ratio = if iszero(air_phase)
-        ratio
+function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
+    if iszero(air_phase)
+        return ratio
+    elseif ratio[air_phase] ≈ 1
+        return SVector{N,T}(zero(T) for _ in 1:N)
     else
-        mask = ntuple(i-> (i !== air_phase), Val(N))
+        mask = ntuple(i -> (i !== air_phase), Val(N))
         # set air phase ratio to zero
         corrected_ratio = ratio .* mask
         # normalize phase ratios without air
-        corrected_ratio  ./ sum(corrected_ratio)
+        return corrected_ratio ./ sum(corrected_ratio)
     end
 end

@@ -1,53 +1,42 @@
-@parallel_indices (I...) function compute_∇V!(
-    ∇V::AbstractArray{T,2}, Vx, Vy, ϕ::JustRelax.RockRatio, _dx, _dy
-) where {T}
-    @inline d_xi(A) = _d_xi(A, _dx, I...)
-    @inline d_yi(A) = _d_yi(A, _dy, I...)
-
-    if isvalid_c(ϕ, I...)
-        @inbounds ∇V[I...] = d_xi(Vx) + d_yi(Vy)
-    else
-        @inbounds ∇V[I...] = zero(T)
-    end
-    return nothing
-end
-
-@parallel_indices (I...) function compute_∇V!(
-    ∇V::AbstractArray{T,2}, Vx, Vy, Vz, ϕ::JustRelax.RockRatio, _dx, _dy, _dz
-) where {T}
-    @inline d_xi(A) = _d_xi(A, _dx, I...)
-    @inline d_yi(A) = _d_yi(A, _dy, I...)
-    @inline d_zi(A) = _d_zi(A, _dz, I...)
-
-    if isvalid_c(ϕ, I...)
-        @inbounds ∇V[I...] = d_xi(Vx) + d_yi(Vy) + d_zi(Vz)
-    else
-        @inbounds ∇V[I...] = zero(T)
-    end
-    return nothing
-end
-
 # @parallel_indices (I...) function compute_∇V!(
-#     ∇V::AbstractArray{T,N}, V::NTuple{N}, ϕ::JustRelax.RockRatio, _di::NTuple{N}
-# ) where {T,N}
-#     # @inline d_xi(A) = _d_xi(A, _di, I...)
-#     # @inline d_yi(A) = _d_yi(A, _di, I...)
-#     # @inline d_zi(A) = _d_zi(A, _di, I...)
-
-#     # f = d_xi, d_yi, d_zi
-#     f = _d_xi, _d_yi, _d_zi
+#     ∇V::AbstractArray{T,2}, Vx, Vy, ϕ::JustRelax.RockRatio, _dx, _dy
+# ) where {T}
+#     @inline d_xi(A) = _d_xi(A, _dx, I...)
+#     @inline d_yi(A) = _d_yi(A, _dy, I...)
 
 #     if isvalid_c(ϕ, I...)
-#         v = zero(T)
-#         for i in 1:N
-#             v += f[i](V[i], _di[I], I...)
-#         end
-#         @inbounds ∇V[I...] = v
+#         @inbounds ∇V[I...] = d_xi(Vx) + d_yi(Vy)
 #     else
 #         @inbounds ∇V[I...] = zero(T)
 #     end
 #     return nothing
 # end
+
+# @parallel_indices (I...) function compute_∇V!(
+#     ∇V::AbstractArray{T,2}, Vx, Vy, Vz, ϕ::JustRelax.RockRatio, _dx, _dy, _dz
+# ) where {T}
+#     @inline d_xi(A) = _d_xi(A, _dx, I...)
+#     @inline d_yi(A) = _d_yi(A, _dy, I...)
+#     @inline d_zi(A) = _d_zi(A, _dz, I...)
+
+#     if isvalid_c(ϕ, I...)
+#         @inbounds ∇V[I...] = d_xi(Vx) + d_yi(Vy) + d_zi(Vz)
+#     else
+#         @inbounds ∇V[I...] = zero(T)
+#     end
+#     return nothing
+# end
+
+@parallel_indices (I...) function compute_∇V!(
+    ∇V::AbstractArray{T,N}, V::NTuple{N}, ϕ::JustRelax.RockRatio, _di::NTuple{N}
+) where {T,N}
+    if isvalid_c(ϕ, I...)
+        @inbounds ∇V[I...] = div(V..., _di..., I...)
+    else
+        @inbounds ∇V[I...] = zero(T)
+    end
+    return nothing
+end
 
 @parallel_indices (i, j) function compute_V!(
     Vx::AbstractArray{T,2},
@@ -84,7 +73,7 @@ end
                     -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
                 )
-            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
+            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ, ϕ.center)
         else
             Rx[i, j] = zero(T)
             Vx[i + 1, j + 1] = zero(T)
@@ -97,7 +86,7 @@ end
                 R_Vy =
                     -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                     av_ya(ρgy, ϕ.center)
-            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ, ϕ.center)
         else
             Ry[i, j] = zero(T)
             Vy[i + 1, j + 1] = zero(T)

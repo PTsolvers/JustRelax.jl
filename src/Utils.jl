@@ -83,9 +83,8 @@ end
 
 @inline _tuple(V::JustRelax.Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
 @inline _tuple(V::JustRelax.Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
-@inline _tuple(A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}) where {T} = A.xx,
-A.yy,
-A.xy_c
+@inline _tuple(A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}) where {T} =
+    A.xx, A.yy, A.xy_c
 @inline function _tuple(A::JustRelax.SymmetricTensor{<:AbstractArray{T,3}}) where {T}
     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
 end
@@ -102,9 +101,8 @@ macro velocity(A)
 end
 
 @inline unpack_velocity(V::JustRelax.Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
-@inline unpack_velocity(V::JustRelax.Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx,
-V.Vy,
-V.Vz
+@inline unpack_velocity(V::JustRelax.Velocity{<:AbstractArray{T,3}}) where {T} =
+    V.Vx, V.Vy, V.Vz
 
 """
     @displacement(U)
@@ -117,11 +115,10 @@ macro displacement(A)
     end
 end
 
-@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,2}}) where {T} = U.Ux,
-U.Uy
-@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,3}}) where {T} = U.Ux,
-U.Uy,
-U.Uz
+@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,2}}) where {T} =
+    U.Ux, U.Uy
+@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,3}}) where {T} =
+    U.Ux, U.Uy, U.Uz
 
 """
     @qT(V)
@@ -135,9 +132,8 @@ macro qT(A)
 end
 
 @inline unpack_qT(A::JustRelax.ThermalArrays{<:AbstractArray{T,2}}) where {T} = A.qTx, A.qTy
-@inline unpack_qT(A::JustRelax.ThermalArrays{<:AbstractArray{T,3}}) where {T} = A.qTx,
-A.qTy,
-A.qTz
+@inline unpack_qT(A::JustRelax.ThermalArrays{<:AbstractArray{T,3}}) where {T} =
+    A.qTx, A.qTy, A.qTz
 
 """
     @qT2(V)
@@ -150,8 +146,8 @@ macro qT2(A)
     end
 end
 
-@inline unpack_qT2(A::JustRelax.ThermalArrays{<:AbstractArray{T,2}}) where {T} = A.qTx2,
-A.qTy2
+@inline unpack_qT2(A::JustRelax.ThermalArrays{<:AbstractArray{T,2}}) where {T} =
+    A.qTx2, A.qTy2
 @inline function unpack_qT2(A::JustRelax.ThermalArrays{<:AbstractArray{T,3}}) where {T}
     return A.qTx2, A.qTy2, A.qTz2
 end
@@ -364,8 +360,8 @@ end
 
 @inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
     nx, ny = size(A)
-    I_range = (I-width_x):(I+width_x)
-    J_range = (J-width_y):(J+width_y)
+    I_range = (I - width_x):(I + width_x)
+    J_range = (J - width_y):(J + width_y)
     x = -Inf
 
     for j in J_range
@@ -383,9 +379,9 @@ end
 
 @inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
     nx, ny, nz = size(A)
-    I_range = (I-width_x):(I+width_x)
-    J_range = (J-width_y):(J+width_y)
-    K_range = (K-width_z):(K+width_z)
+    I_range = (I - width_x):(I + width_x)
+    J_range = (J - width_y):(J + width_y)
+    K_range = (K - width_z):(K + width_z)
     x = -Inf
 
     for k in K_range
@@ -432,21 +428,17 @@ function compute_dt(::CPUBackendTrait, S::JustRelax.StokesArrays, args...)
     return _compute_dt(S, args...)
 end
 
-@inline _compute_dt(S::JustRelax.StokesArrays, di) = _compute_dt(
-    @velocity(S), di, Inf, maximum
-)
+@inline _compute_dt(S::JustRelax.StokesArrays, di) =
+    _compute_dt(@velocity(S), di, Inf, maximum)
 
-@inline _compute_dt(S::JustRelax.StokesArrays, di, dt_diff) = _compute_dt(
-    @velocity(S), di, dt_diff, maximum
-)
+@inline _compute_dt(S::JustRelax.StokesArrays, di, dt_diff) =
+    _compute_dt(@velocity(S), di, dt_diff, maximum)
 
-@inline _compute_dt(S::JustRelax.StokesArrays, di, dt_diff, ::IGG) = _compute_dt(
-    @velocity(S), di, dt_diff, maximum_mpi
-)
+@inline _compute_dt(S::JustRelax.StokesArrays, di, dt_diff, ::IGG) =
+    _compute_dt(@velocity(S), di, dt_diff, maximum_mpi)
 
-@inline _compute_dt(S::JustRelax.StokesArrays, di, ::IGG) = _compute_dt(
-    @velocity(S), di, Inf, maximum_mpi
-)
+@inline _compute_dt(S::JustRelax.StokesArrays, di, ::IGG) =
+    _compute_dt(@velocity(S), di, Inf, maximum_mpi)
 
 @inline function _compute_dt(V::NTuple, di, dt_diff, max_fun::F) where {F<:Function}
     n = inv(length(V) + 0.1)

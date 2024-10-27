@@ -653,7 +653,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij)
+        if is_pl && !iszero(τIIv_ij) && Fv >0
             # stress correction @ vertex
             λv[1][I...] =
                 (1.0 - relλ) * λv[1][I...] +
@@ -728,7 +728,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij)
+        if is_pl && !iszero(τIIv_ij) && Fv >0
             # stress correction @ vertex
             λv[2][I...] =
                 (1.0 - relλ) * λv[2][I...] +
@@ -805,7 +805,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij)
+        if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
                 (1.0 - relλ) * λv[3][I...] +
@@ -842,7 +842,7 @@ end
         # yield function @ center
         F = τII_ij - C - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij)
+        if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
@@ -930,7 +930,7 @@ end
 
     # yield function @ center
     Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-    if is_pl && !iszero(τIIv_ij)
+    if is_pl && !iszero(τIIv_ij) && Fv > 0
         # stress correction @ vertex
         λv[I...] =
             (1.0 - relλ) * λv[I...] +
@@ -965,7 +965,7 @@ end
         # yield function @ center
         F = τII_ij - C - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij)
+        if is_pl && !iszero(τII_ij) && F >0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +

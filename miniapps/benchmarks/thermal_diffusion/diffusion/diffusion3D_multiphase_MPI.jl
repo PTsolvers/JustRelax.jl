@@ -12,7 +12,7 @@ using JustPIC, JustPIC._3D
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
 @parallel_indices (i, j, k) function init_T!(T, z)
     if z[k] == maximum(z)
@@ -136,16 +136,19 @@ function diffusion_3D(;
     r                   = 10e3 # thermal perturbation radius
     center_perturbation = lx/2, ly/2, -lz/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
-
+    update_halo!(thermal.T)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 20, 1
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi...
     )
     pPhases,     = init_cell_arrays(particles, Val(1))
+    particle_args = (pPhases);
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_cell_halo!(particles.coords..., particle_args);
+    update_cell_halo!(particles.index)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion

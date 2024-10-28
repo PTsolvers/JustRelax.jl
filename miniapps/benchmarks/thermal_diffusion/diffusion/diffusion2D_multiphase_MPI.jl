@@ -11,13 +11,13 @@ const backend = JustPIC.CPUBackend
 
 distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
 
-@parallel_indices (i, j) function init_T!(T, z)
-    if z[j] == maximum(z)
+@parallel_indices (i, j) function init_T!(T, z, lz)
+    if z[j] ≥ 0.0
         T[i, j] = 300.0
-    elseif z[j] == minimum(z)
+    elseif z[j] == -lz
         T[i, j] = 3500.0
     else
-        T[i, j] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
+        T[i, j] = z[j] * (1900.0 - 1600.0) /( -lz) + 1600.0
     end
     return nothing
 end
@@ -49,7 +49,6 @@ function init_phases!(phases, particles, xc, yc, r)
             # plume - rectangular
             if (((x - center[1] ))^2 + ((y - center[2]))^2) ≤ r^2
                 @index phases[ip, i, j] = 2.0
-
             else
                 @index phases[ip, i, j] = 1.0
             end
@@ -74,14 +73,24 @@ function diffusion_2D(figdir; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.
     ttot     = 1 * Myr # total simulation time
     dt       = 50 * kyr # physical time step
 
-    init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg    = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+    # init_mpi = JustRelax.MPI.Initialized() ? false : true
+    # igg    = IGG(init_global_grid(nx, ny, 1; select_device=false, init_MPI = init_mpi)...)
+
+    # # Physical domain
+    # ni           = (nx, ny)
+    # li           = (lx, ly)  # domain length in x- and y-
+    # di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    # grid         = Geometry(ni, li; origin = (0, -ly))
+    # (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Physical domain
-    ni           = (nx, ny)
-    li           = (lx, ly)  # domain length in x- and y-
+    ni           = nx, ny
+    li           = lx, ly  # domain length in x- and y-
     di           = @. li / ni # grid step in x- and -y
-    grid         = Geometry(ni, li; origin = (0, -ly))
+    origin       = 0.0, -ly
+    igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=true, select_device=false)...) #init MPI
+    di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Define the thermal parameters with GeoParams
@@ -111,7 +120,7 @@ function diffusion_2D(figdir; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
+    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2], ly)
 
     # Add thermal perturbation
     δT                  = 100e0 # thermal perturbation
@@ -119,6 +128,7 @@ function diffusion_2D(figdir; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.
     center_perturbation = lx/2, -ly/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
     temperature2center!(thermal)
+   
     update_halo!(thermal.T)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1

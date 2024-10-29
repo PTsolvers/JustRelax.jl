@@ -214,7 +214,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
 end
 
-@supress begin
+@suppress begin
     if backend_JR == CPUBackend
         N      = 30
         n      = N

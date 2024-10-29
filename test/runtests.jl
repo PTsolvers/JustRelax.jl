@@ -1,6 +1,8 @@
 using JustRelax
 
 using Pkg
+using MPI
+using Test
 
 push!(LOAD_PATH, "..")
 
@@ -49,10 +51,22 @@ function runtests()
 
         println("")
         println("Running tests from $f")
-        try
-            run(`$(Base.julia_cmd()) -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
-        catch ex
-            nfail += 1
+        if occursin("MPI", f)
+            try
+                @testset "$(basename(f))" begin
+                    n = 2
+                    p= run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
+                    @test success(p)
+                end
+            catch ex
+                nfail += 1
+            end
+        else
+            try
+                run(`$(Base.julia_cmd()) -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
+            catch ex
+                nfail += 1
+            end
         end
     end
 

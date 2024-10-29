@@ -14,13 +14,13 @@ const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBac
 
 using GeoParams, CairoMakie
 
-@parallel_indices (i, j, k) function init_T!(T, z)
-    if z[k] == maximum(z)
+@parallel_indices (i, j, k) function init_T!(T, z, lz)
+    if z[k] ≥ 0.0
         T[i, j, k] = 300.0
-    elseif z[k] == minimum(z)
+    elseif z[k] == -lz
         T[i, j, k] = 3500.0
     else
-        T[i, j, k] = z[k] * (1900.0 - 1600.0) / minimum(z) + 1600.0
+        T[i, j, k] = z[k] * (1900.0 - 1600.0) / (-lz) + 1600.0
     end
     return nothing
 end
@@ -84,11 +84,11 @@ function diffusion_3D(;
     dt       = 50 * kyr # physical time step
 
     # Physical domain
-    ni           = (nx, ny, nz)
-    li           = (lx, ly, lz)  # domain length in x- and y-
-    di           = @. li / ni # grid step in x- and -y
-    origin       = 0, 0, -lz # nodes at the center and vertices of the cells
+    ni           = nx, ny, nz
+    li           = lx, ly, lz  # domain length in x- and y-
     igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    di           = @. li / (nx_g(), ny_g(),nz_g()) # grid step in x- and -y
+    origin       = 0, 0, -lz # nodes at the center and vertices of the cells
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
@@ -129,7 +129,7 @@ function diffusion_3D(;
         no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
     )
 
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])
+    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3], lz)
 
     # Add thermal perturbation
     δT                  = 100e0 # thermal perturbation
@@ -199,7 +199,7 @@ function diffusion_3D(;
         it += 1
     end
 
-    finalize_global_grid(; finalize_MPI=finalize_MPI)
+    finalize_global_grid(; finalize_MPI=true)
 
     return thermal
 end

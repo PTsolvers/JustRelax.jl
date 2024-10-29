@@ -88,7 +88,7 @@ function diffusion_2D(figdir; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.
     li           = lx, ly  # domain length in x- and y-
     di           = @. li / ni # grid step in x- and -y
     origin       = 0.0, -ly
-    igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=true, select_device=false)...) #init MPI
+    igg          = IGG(init_global_grid(nx, ny, 1; init_MPI=true)...) #init MPI
     di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -128,7 +128,7 @@ function diffusion_2D(figdir; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.
     center_perturbation = lx/2, -ly/2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
     temperature2center!(thermal)
-   
+
     update_halo!(thermal.T)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1

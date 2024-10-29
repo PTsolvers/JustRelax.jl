@@ -54,7 +54,7 @@ function runtests()
         if occursin("MPI", f)
             try
                 @testset "$(basename(f))" begin
-                    n = 2
+                    n = 4
                     p= run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
                     @test success(p)
                 end

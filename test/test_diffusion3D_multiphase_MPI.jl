@@ -229,5 +229,9 @@ function diffusion_3D(;
 end
 
 @suppress begin
-    diffusion_3D()
+    if backend_JR == CPUBackend
+        diffusion_3D()
+    else
+        println("This test is only for CPU CI yet")
+    end
 end

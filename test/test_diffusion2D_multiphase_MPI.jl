@@ -226,7 +226,11 @@ function diffusion_2D(figdir; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.
 end
 
 @suppress begin
-    figdir="MPI_Diffusion2D"
-    n   = 32
-    diffusion_2D(figdir; nx=n, ny=n)
+    if backend_JR == CPUBackend
+        figdir="MPI_Diffusion2D"
+        n   = 32
+        diffusion_2D(figdir; nx=n, ny=n)
+    else
+        println("This test is only for CPU CI yet")
+    end
 end

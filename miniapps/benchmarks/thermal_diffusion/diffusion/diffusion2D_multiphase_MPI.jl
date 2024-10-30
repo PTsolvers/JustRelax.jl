@@ -73,16 +73,6 @@ function diffusion_2D(figdir; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.
     ttot     = 1 * Myr # total simulation time
     dt       = 50 * kyr # physical time step
 
-    # init_mpi = JustRelax.MPI.Initialized() ? false : true
-    # igg    = IGG(init_global_grid(nx, ny, 1; select_device=false, init_MPI = init_mpi)...)
-
-    # # Physical domain
-    # ni           = (nx, ny)
-    # li           = (lx, ly)  # domain length in x- and y-
-    # di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    # grid         = Geometry(ni, li; origin = (0, -ly))
-    # (; xci, xvi) = grid # nodes at the center and vertices of the cells
-
     # Physical domain
     ni           = nx, ny
     li           = lx, ly  # domain length in x- and y-

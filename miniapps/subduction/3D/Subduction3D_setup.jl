@@ -1,17 +1,17 @@
 using GeophysicalModelGenerator
 
-function GMG_only(nx, ny, nz)
+function GMG_only(xvi, nx, ny, nz)
     # nx,ny,nz = 99, 33, 66
 #     nx, ny, nz = (nx,ny,nz) .+ 1
-    x = range(-3960, 500, nx);
-    y = range(0, 2640, ny);
-    air_thickness = 0.0
-    z = range(-660, air_thickness,    nz);
+    x = range(minimum(xvi[1]), maximum(xvi[1]), nx);
+    y = range(minimum(xvi[2]), maximum(xvi[2]), ny);
+    z = range(minimum(xvi[3]), maximum(xvi[3]),    nz);
     Grid = CartData(xyz_grid(x,y,z));
 
+    println("Grid_$(igg.me) created with $(nx) x $(ny) x $(nz) cells, $Grid")
     # Now we create an integer array that will hold the `Phases` information (which usually refers to the material or rock type in the simulation)
     Phases = fill(3, nx, ny, nz);
-        
+
     # In many (geodynamic) models, one also has to define the temperature, so lets define it as well
     Temp = fill(1350.0, nx, ny, nz);
 
@@ -28,7 +28,7 @@ function GMG_only(nx, ny, nz)
 
     # # And an an inclined part:
     # lith = LithosphericPhases(Layers=[200], Phases=[1 2], Tlab=1250)
-    # add_box!(Phases, Temp, Grid; xlim=(0,300).-1000, ylim=(0, 1000.0), zlim=(-80.0, 10.0), phase = lith, 
+    # add_box!(Phases, Temp, Grid; xlim=(0,300).-1000, ylim=(0, 1000.0), zlim=(-80.0, 10.0), phase = lith,
     #         # Origin=(-1000,0,0),
     #         T=SpreadingRateTemp(SpreadingVel=0, MORside="left"), DipAngle=20, StrikeAngle=0);
 
@@ -39,9 +39,9 @@ function GMG_only(nx, ny, nz)
     Grid = addfield(Grid,(;Phases, Temp))
 
     # Which looks like
-    write_paraview(Grid,"Initial_Setup_Subduction");
+    write_paraview(Grid,"Initial_Setup_Subduction_$(igg.me)");
 
-    surf = Grid.z.val .> 0.0 
+    surf = Grid.z.val .> 0.0
     Phases[surf] .= 4
 
     li = (abs(last(x)-first(x)), abs(last(y)-first(y)), abs(last(z)-first(z))) .* 1e3

@@ -1,11 +1,10 @@
 using GeophysicalModelGenerator
 
-function GMG_only(nx, ny, nz)
+function GMG_only(xvi, nx, ny, nz)
 
-    x = range(-3960, 500, nx);
-    y = range(0, 2640, ny);
-    air_thickness = 0.0
-    z = range(-660, air_thickness,    nz);
+    x = range(minimum(xvi[1]), maximum(xvi[1]), nx);
+    y = range(minimum(xvi[2]), maximum(xvi[2]), ny);
+    z = range(minimum(xvi[3]), maximum(xvi[3]), nz);
     Grid = CartData(xyz_grid(x,y,z));
 
     # Now we create an integer array that will hold the `Phases` information (which usually refers to the material or rock type in the simulation)
@@ -38,7 +37,7 @@ function GMG_only(nx, ny, nz)
     Grid = addfield(Grid,(;Phases, Temp))
 
     # Which looks like
-    write_paraview(Grid,"Initial_Setup_Subduction");
+    write_paraview(Grid,"Initial_Setup_Subduction_$(igg.me)");
 
     surf = Grid.z.val .> 0.0
     Phases[surf] .= 4

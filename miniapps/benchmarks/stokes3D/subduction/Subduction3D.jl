@@ -1,16 +1,31 @@
-using CUDA
+const isGPU = false
+@static if isGPU 
+    using CUDA
+end
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
-# const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-const backend_JR = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
+const backend_JR = @static if isGPU 
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
-@init_parallel_stencil(CUDA, Float64, 3)
-# @init_parallel_stencil(Threads, Float64, 3)
+@static if isGPU 
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+     @init_parallel_stencil(Threads, Float64, 3)
+end
 
 using JustPIC, JustPIC._3D
-const backend_JP = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# const backend_JP = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 # const backend_JP = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+
+const backend_JP = @static if isGPU 
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend
+end
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, GLMakie
@@ -50,7 +65,7 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 50, 75, 25
+    nxcell, max_xcell, min_xcell = 125, 150, 75
     particles                    = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni)
     subgrid_arrays               = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -68,7 +83,7 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=5e-3, CFL = 0.99 / √3.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, CFL = 0.95 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -78,8 +93,8 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-    # @parallel (@idx ni) init_P!(stokes.P, ρg[3], xci[3])
-    stokes.P        .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
+    @parallel (@idx ni) init_P!(stokes.P, ρg[3], xci[3])
+    # stokes.P        .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
     # Rheology
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1e18, 1e24)
@@ -87,8 +102,8 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
 
     # Boundary conditions
     flow_bcs         = VelocityBoundaryConditions(;
-        free_slip    = (left = true , right = true , top = true , bot = false, front = true , back = true ),
-        no_slip      = (left = false, right = false, top = false, bot = true,  front = false, back = false),
+        free_slip    = (left = true , right = true , top = true , bot = true, front = true , back = true ),
+        no_slip      = (left = false, right = false, top = false, bot = false,  front = false, back = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 
@@ -107,12 +122,15 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
         Vy_v = @zeros(ni.+1...)
         Vz_v = @zeros(ni.+1...)
     end
+    
     # Time loop
     t, it = 0.0, 0
     # while it < 10000 # run only for 5 Myrs
-    while (t/(1e6 * 3600 * 24 *365.25)) < 10 # run only for 5 Myrs
+    # while (t/(1e6 * 3600 * 24 *365.25)) < 10 # run only for 5 Myrs
+    while it < 150 # run only for 5 Myrs
         
         # Stokes solver ----------------
+        compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
         t_stokes = @elapsed begin
             out = solve!(
                 stokes,
@@ -134,9 +152,9 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
         end
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
-        println("   Time/iteration:  $(t_stokes / out.iter) s")
+        # println("   Time/iteration:  $(t_stokes / out.iter) s")
         tensor_invariant!(stokes.ε)
-        dt   = compute_dt(stokes, di)
+        dt   = compute_dt(stokes, di) * 0.8
         # ------------------------------
 
         # Advection --------------------
@@ -157,16 +175,25 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
             # checkpointing(figdir, stokes, thermal.T, η, t)
 
             if do_vtk
-                velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+                # velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
                     T   = zeros(ni.+1...),
                     phase_vertex = [argmax(p) for p in Array(phase_ratios.center)]
                 )
                 data_c = (;
-                    # P   = Array(stokes.P),
-                    # τII = Array(stokes.τ.II),
-                    # εII = Array(stokes.ε.II),
+                    P   = Array(stokes.P),
+                    τII = Array(stokes.τ.II),
+                    εII = Array(stokes.ε.II),
+                    εxx = Array(stokes.ε.xx),
+                    εyy = Array(stokes.ε.yy),
+                    εzz = Array(stokes.ε.zz),
+                    τxx = Array(stokes.τ.xx),
+                    τyy = Array(stokes.τ.yy),
+                    τzz = Array(stokes.τ.zz),
                     η   = Array(stokes.viscosity.η),
+                    Vx_c = diff(stokes.V.Vx[:, 2:end-1, 2:end-1], dims=1),
+                    Vy_c = diff(stokes.V.Vy[2:end-1, :, 2:end-1], dims=2),
+                    Vz_c = diff(stokes.V.Vz[2:end-1, 2:end-1, :], dims=3),
                     phase_center = [argmax(p) for p in Array(phase_ratios.center)]
                 )
                 velocity_v = (
@@ -194,8 +221,9 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
 # nx,ny,nz = 50, 50, 50
+# nx,ny,nz = 125, 32, 50
+# nx,ny,nz = 250, 3, 100
 nx,ny,nz = 125, 3, 50
-# nx,ny,nz = 128, 32, 64
 li, origin, phases_GMG, = GMG_only(nx+1, ny+1, nz+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI= true)...)
@@ -205,5 +233,4 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir   = "Subduction3D"
-# main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
-
+main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

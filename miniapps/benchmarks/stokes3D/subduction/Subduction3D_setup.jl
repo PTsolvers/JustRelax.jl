@@ -6,7 +6,7 @@ function GMG_only(nx, ny, nz)
     Tbot   = 1474.0 
     x      = range(0, 3000, nx);
     y      = range(0, 100, ny);
-    air_thickness = 50.0
+    air_thickness = 50.0 * 0
     z      = range(-model_depth, air_thickness, nz);
     Grid2D = CartData(xyz_grid(x, y, z))
     Phases = zeros(Int64, nx, ny, nz);
@@ -22,6 +22,7 @@ function GMG_only(nx, ny, nz)
         Temp, 
         Grid2D; 
         xlim    = (0, 3000),
+        ylim    = (0, 100),
         zlim    = (-model_depth, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
         phase   = LithosphericPhases(Layers=[], Phases=[0], Tlab=Tlab), 
@@ -34,6 +35,7 @@ function GMG_only(nx, ny, nz)
         Temp, 
         Grid2D; 
         xlim    = (1000, 3000),
+        ylim    = (0, 100),
         zlim    = (-100, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
         phase   = LithosphericPhases(Layers=[100], Phases=[1 0], Tlab=Tlab), 
@@ -46,6 +48,7 @@ function GMG_only(nx, ny, nz)
         Temp, 
         Grid2D; 
         xlim    = (1000, 1200),
+        ylim    = (0, 100),
         zlim    = (-100, 0.0), 
         Origin  = nothing, StrikeAngle=0, DipAngle=90,
         phase   = LithosphericPhases(Layers=[200], Phases=[1 0], Tlab=Tlab), 

@@ -6,7 +6,7 @@ function GMG_only(nx, ny, nz)
     Tbot   = 1474.0 
     x      = range(0, 3000, nx);
     y      = range(0, 100, ny);
-    air_thickness = 50.0 * 0
+    air_thickness = 50.0 * 1
     z      = range(-model_depth, air_thickness, nz);
     Grid2D = CartData(xyz_grid(x, y, z))
     Phases = zeros(Int64, nx, ny, nz);

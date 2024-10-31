@@ -84,19 +84,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     particles           = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
-    subgrid_arrays      = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vxi            = velocity_grids(xci, xvi, di)
     # material phase & temperature
-    pPhases, pT         = init_cell_arrays(particles, Val(2))
-
-    # particle fields for the stress rotation
-    pτ  = pτxx, pτyy, pτxy        = init_cell_arrays(particles, Val(3)) # stress
-    # pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
-    pω   = pωxy,                  = init_cell_arrays(particles, Val(1)) # vorticity
-    particle_args                 = (pT, pPhases, pτ..., pω...)
-    particle_args_reduced         = (pT, pτ..., pω...)
-
+    pPhases,         = init_cell_arrays(particles, Val(1))
+    particle_args    = (pPhases,)
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
     phase_ratios     = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni);
@@ -108,22 +100,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
     pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
-    # pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-5, Re = 2π√2, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
-    # # TEMPERATURE PROFILE --------------------------------
-    # Ttop             = 20 + 273
-    # Tbot             = maximum(T_GMG)
+    # TEMPERATURE PROFILE --------------------------------
     thermal          = ThermalArrays(backend, ni)
-    # @views thermal.T[2:end-1, :] .= PTArray(backend)(T_GMG)
-    # thermal_bc       = TemperatureBoundaryConditions(;
-    #     no_flux      = (left = true, right = true, top = false, bot = false),
-    # )
-    # thermal_bcs!(thermal, thermal_bc)
-    # @views thermal.T[:, end] .= Ttop
-    # @views thermal.T[:, 1]   .= Tbot
-    # temperature2center!(thermal)
-    # # ----------------------------------------------------
+    # ----------------------------------------------------
 
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(2))
@@ -134,11 +115,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     args0            = (T=thermal.Tc, P=stokes.P, dt = Inf)
     viscosity_cutoff = (1e18, 1e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
-
-    # # PT coefficients for thermal diffusion
-    # pt_thermal       = PTThermalCoeffs(
-    #     backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-8, CFL=0.95 / √2
-    # )
 
     # Boundary conditions
     flow_bcs         = VelocityBoundaryConditions(;
@@ -163,23 +139,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         Vy_v = @zeros(ni.+1...)
     end
 
-    # T_buffer    = @zeros(ni.+1)
-    # Told_buffer = similar(T_buffer)
-    # dt₀         = similar(stokes.P)
-    # for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-    #     copyinn_x!(dst, src)
-    # end
-    # grid2particle!(pT, xvi, T_buffer, particles)
-
     τxx_v = @zeros(ni.+1...)
     τyy_v = @zeros(ni.+1...)
 
     # Time loop
     t, it = 0.0, 0
-
-    # fig_iters = Figure(size=(1200, 800))
-    # ax_iters1 = Axis(fig_iters[1,1], aspect = 1, title = "error")
-    # ax_iters2 = Axis(fig_iters[1,2], aspect = 1, title = "num iters / ny")
 
     while it < 1000 # run only for 5 Myrs
 
@@ -232,7 +196,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 10) == 0
-            # checkpointing(figdir, stokes, thermal.T, η, t)
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -275,12 +238,10 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             ax3 = Axis(fig[1,3], aspect = ar, title = "τII")
             ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            # h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
             h1  = heatmap!(ax1, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
             # Plot particles phase
             h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
             # Plot 2nd invariant of strain rate
-            # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
             h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array((stokes.τ.II)) , colormap=:batlow)
             # Plot effective viscosity
             h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)

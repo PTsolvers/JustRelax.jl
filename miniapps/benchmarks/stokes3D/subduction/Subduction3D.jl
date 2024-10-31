@@ -1,4 +1,4 @@
-const isGPU = false
+const isGPU = true
 @static if isGPU 
     using CUDA
 end
@@ -67,7 +67,6 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
     particles                    = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni)
-    subgrid_arrays               = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vx, grid_vy, grid_vz    = velocity_grids(xci, xvi, di)
     # temperature
@@ -83,7 +82,7 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, CFL = 0.95 / √3.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-3, CFL = 0.95 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -125,9 +124,7 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
     
     # Time loop
     t, it = 0.0, 0
-    # while it < 10000 # run only for 5 Myrs
-    # while (t/(1e6 * 3600 * 24 *365.25)) < 10 # run only for 5 Myrs
-    while it < 150 # run only for 5 Myrs
+    while it < 500 # run only for 5 Myrs
         
         # Stokes solver ----------------
         compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
@@ -171,7 +168,7 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
         t        += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 20) == 0
+        if it == 1 || rem(it, 10) == 0
             # checkpointing(figdir, stokes, thermal.T, η, t)
 
             if do_vtk
@@ -220,10 +217,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-# nx,ny,nz = 50, 50, 50
-# nx,ny,nz = 125, 32, 50
-# nx,ny,nz = 250, 3, 100
-nx,ny,nz = 125, 3, 50
+nx,ny,nz = 250, 8, 100
 li, origin, phases_GMG, = GMG_only(nx+1, ny+1, nz+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI= true)...)

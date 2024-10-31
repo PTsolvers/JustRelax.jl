@@ -160,6 +160,10 @@ end
     av_xz(A) = _av_xzi(A, i, j, k)
     av_yz(A) = _av_yzi(A, i, j, k)
     get(x) = x[i, j, k]
+    av_xy(::Nothing) = Inf
+    av_xz(::Nothing) = Inf
+    av_yz(::Nothing) = Inf
+      get(::Nothing) = Inf
 
     @inbounds begin
         if all((i, j, k) .≤ size(τxx))
@@ -591,7 +595,7 @@ end
     Ic = clamped_indices(ni, I...)
 
     ## yz 
-    if all(I .< size(ε[4]))
+    if all(I .≤ size(ε[4]))
         # interpolate to ith vertex
         ηv_ij = av_clamped_yz(η, Ic...)
         Pv_ij = av_clamped_yz(Pr, Ic...)
@@ -653,7 +657,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij)
+        if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
                 (1.0 - relλ) * λv[1][I...] +
@@ -668,7 +672,7 @@ end
     end
 
     ## xz
-    if all(I .< size(ε[5]))
+    if all(I .≤ size(ε[5]))
         # interpolate to ith vertex
         ηv_ij = av_clamped_xz(η, Ic...)
         EIIv_ij = av_clamped_xz(EII, Ic...)
@@ -728,7 +732,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij)
+        if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
                 (1.0 - relλ) * λv[2][I...] +
@@ -743,7 +747,7 @@ end
     end
 
     ## xy
-    if all(I .< size(ε[6]))
+    if all(I .≤ size(ε[6]))
         # interpolate to ith vertex
         ηv_ij = av_clamped_xy(η, Ic...)
         EIIv_ij = av_clamped_xy(EII, Ic...)
@@ -805,7 +809,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij)
+        if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
                 (1.0 - relλ) * λv[3][I...] +
@@ -842,7 +846,7 @@ end
         # yield function @ center
         F = τII_ij - C - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij)
+        if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
@@ -930,7 +934,7 @@ end
 
     # yield function @ center
     Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-    if is_pl && !iszero(τIIv_ij)
+    if is_pl && !iszero(τIIv_ij) && Fv > 0
         # stress correction @ vertex
         λv[I...] =
             (1.0 - relλ) * λv[I...] +
@@ -965,7 +969,7 @@ end
         # yield function @ center
         F = τII_ij - C - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij)
+        if is_pl && !iszero(τII_ij) F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +

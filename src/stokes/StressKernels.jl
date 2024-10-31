@@ -163,7 +163,7 @@ end
     av_xy(::Nothing) = Inf
     av_xz(::Nothing) = Inf
     av_yz(::Nothing) = Inf
-      get(::Nothing) = Inf
+    get(::Nothing) = Inf
 
     @inbounds begin
         if all((i, j, k) .≤ size(τxx))
@@ -969,7 +969,8 @@ end
         # yield function @ center
         F = τII_ij - C - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij) F > 0
+        if is_pl && !iszero(τII_ij)
+            F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +

@@ -18,9 +18,15 @@ end
     dy(A) = _d_ya(A, I..., _dy)
     dz(A) = _d_za(A, I..., _dz)
 
-    ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
-    ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
-    ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+    if all(I .≤ size(ωyz))
+        ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
+    end
+    if all(I .≤ size(ωxz))
+        ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
+    end
+    if all(I .≤ size(ωxy))
+        ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+    end
 
     return nothing
 end

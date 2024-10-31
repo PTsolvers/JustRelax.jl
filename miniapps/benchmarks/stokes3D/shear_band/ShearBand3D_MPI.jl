@@ -2,7 +2,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
 const backend_JR = CPUBackend
 
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
@@ -38,7 +38,7 @@ function init_phases!(phase_ratios, xci, xvi, radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
+function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
 
     # Physical domain ------------------------------------
     lx = ly = lz = 1e0             # domain length in y
@@ -127,6 +127,10 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
+    if do_vtk
+        vtk_dir      = joinpath(figdir, "vtk")
+        take(vtk_dir)
+    end
     !isdir(figdir) && mkpath(figdir)
     # ----------------------------------------------------
 
@@ -137,11 +141,30 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     τII_v        = zeros(nx_v, ny_v, nz_v)
     η_vep_v      = zeros(nx_v, ny_v, nz_v)
     εII_v        = zeros(nx_v, ny_v, nz_v)
+    phases_c_v   = zeros(nx_v, ny_v, nz_v)
     τII_nohalo   = zeros(nx-2, ny-2, nz-2)
     η_vep_nohalo = zeros(nx-2, ny-2, nz-2)
     εII_nohalo   = zeros(nx-2, ny-2, nz-2)
+    phases_c_nohalo = zeros(nx-2, ny-2, nz-2)
+    #vertex
+    Vxv_v         = zeros(nx_v+1, ny_v+1, nz_v+1)
+    Vyv_v         = zeros(nx_v+1, ny_v+1, nz_v+1)
+    Vzv_v         = zeros(nx_v+1, ny_v+1, nz_v+1)
+    phases_v_v    = zeros(nx_v+1, ny_v+1, nz_v+1)
+    Vx_nohalo    = zeros(nx-1, ny-1, nz-1)
+    Vy_nohalo    = zeros(nx-1, ny-1, nz-1)
+    Vz_nohalo    = zeros(nx-1, ny-1, nz-1)
+    phases_v_nohalo = zeros(nx-1, ny-1, nz-1)
+
     xci_v        = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
     xvi_v        = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1), LinRange(0, 1, nz_v+1)
+
+    local Vx_v, Vy_v, Vz_v
+    if do_vtk
+        Vx_v = @zeros(ni.+1...)
+        Vy_v = @zeros(ni.+1...)
+        Vz_v = @zeros(ni.+1...)
+    end
 
     # Time loop
     t, it = 0.0, 0
@@ -171,6 +194,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         )
 
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -181,7 +205,20 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
         igg.me == 0 && println("it = $it; t = $t \n")
 
+        if do_vtk
+            velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+            @views Vx_nohalo .= Array(Vx_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            @views Vy_nohalo .= Array(Vy_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            @views Vz_nohalo .= Array(Vz_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            # gather!(Vx_nohalo, Vxv_v)
+            # gather!(Vy_nohalo, Vyv_v)
+            # gather!(Vz_nohalo, Vzv_v)
+        end
+
         # MPI
+        phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)]
+        phase_center = [argmax(p) for p in Array(phase_ratios.center)]
+
         @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
         @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
@@ -189,7 +226,42 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
 
+        @views phases_c_nohalo .= Array(phase_center[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        gather!(phases_c_nohalo, phases_c_v)
+        # @views phases_v_nohalo .= Array(phase_vertex[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        # gather!(phases_v_nohalo, phases_v_v)
+
         if igg.me == 0
+
+            if do_vtk == true
+
+                data_v = (;
+                    # T = T_v,
+                    # phases_v = phases_v_v,
+                )
+                data_c = (;
+                    τII = τII_v,
+                    εII = εII_v,
+                    η   = η_vep_v,
+                    phases = phases_c_v
+
+
+                )
+                velocity_v = (
+                    Array(Vxv_v),
+                    Array(Vyv_v),
+                    Array(Vzv_v),
+                )
+                save_vtk(
+                    joinpath(vtk_dir, "vtk_" * lpad("$(it)_$(igg.me)", 6, "0")),
+                    xvi_v,
+                    xci_v,
+                    data_v,
+                    data_c,
+                    velocity_v
+                )
+            end
+
             # visualisation
             th      = 0:pi/50:3*pi;
             xunit   = @. radius * cos(th) + 0.5;
@@ -215,6 +287,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
+do_vtk = true
 n      = 32
 nx     = n # ÷ 2
 ny     = n # ÷ 2
@@ -225,4 +298,4 @@ igg    = if !(JustRelax.MPI.Initialized())
 else
     igg
 end
-main(igg; figdir = figdir, nx = nx, ny = ny, nz = nz);
+main(igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

@@ -17,7 +17,7 @@ using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Subduction3D_rheology.jl")
-include("Subduction3D_setup.jl")
+include("Subduction3D_setup_MPI.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -35,9 +35,8 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
-
-    # Physical domain ------------------------------------
+function main3D(air_thickness, li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
+    # LOCAL Physical domain ------------------------------------
     ni           = nx, ny, nz           # number of cells
     di           = @. li / (nx_g(), ny_g(), nz_g())           # grid steps
     grid         = Geometry(ni, li; origin = origin)
@@ -141,15 +140,15 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
     T_nohalo     = zeros(nx-1, ny-1, nz-1)
     phase_v_nohalo = zeros(nx-1, ny-1, nz-1)
 
-    xci_v        = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
-    xvi_v        = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1), LinRange(0, 1, nz_v+1)
-
+    xci_v        = LinRange(-3960e3, 500e3, nx_v), LinRange(0e3, 2640e3, ny_v), LinRange(-660e3, air_thickness.*1e3, nz_v)
+    xvi_v        = LinRange(-3960e3, 500e3, nx_v+1), LinRange(0e3, 2640e3, ny_v+1), LinRange(-660e3, air_thickness.*1e3, nz_v+1)
 
     # Time loop
     t, it = 0.0, 0
     # while it < 10000 # run only for 5 Myrs
 
-    while (t/(1e6 * 3600 * 24 *365.25)) < 10 # run only for 5 Myrs
+    # while (t/(1e6 * 3600 * 24 *365.25)) < 10 # run only for 5 Myrs
+    while it < 10
 
         # # interpolate fields from particle to grid vertices
         # particle2grid!(thermal.T, pT, xvi, particles)
@@ -169,7 +168,7 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
                 Inf,
                 igg;
                 kwargs =(;
-                    iterMax          = 100e3,
+                    iterMax          = 10e3,
                     nout             = 1e3,
                     viscosity_cutoff = viscosity_cutoff
                 )
@@ -225,101 +224,73 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
             @show it += 1
             t        += dt
         end
-        if do_vtk
 
+        #MPI gathering
+        phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)]
+        phase_center = [argmax(p) for p in Array(phase_ratios.center)]
+        #centers
+        @views P_nohalo     .= Array(stokes.P[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
+        @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views phases_c_nohalo   .= Array(phase_center[2:end-1, 2:end-1, 2:end-1])
+        @async gather!(P_nohalo, P_v)
+        gather!(τII_nohalo, τII_v)
+        gather!(η_vep_nohalo, η_vep_v)
+        gather!(εII_nohalo, εII_v)
+        gather!(phases_c_nohalo, phases_c_v)
+        #vertices
+        if do_vtk
             velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+            @views Vxv_nohalo   .= Array(Vx_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            @views Vyv_nohalo   .= Array(Vy_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            @views Vzv_nohalo   .= Array(Vz_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            # gather!(Vxv_nohalo, Vxv_v)
+            # gather!(Vyv_nohalo, Vyv_v)
+            # gather!(Vzv_nohalo, Vzv_v)
+        end
+        # @views T_nohalo     .= Array(thermal.T[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        # @views phase_v_nohalo .= Array(phase_vertex[2:end-1, 2:end-1, 2:end-1])
+        # gather!(T_nohalo, T_v)
+        # gather!(phase_v_nohalo, phases_v_v)
+
+        # Data I/O and plotting ---------------------
+        if igg.me == 0 && (it == 1 || rem(it, 1) == 0)
+            # checkpointing(figdir, stokes, thermal.T, η, t)
+            if do_vtk
+
                 data_v = (;
-                    T   = zeros(ni.+1...),
-                    phase_vertex = [argmax(p) for p in Array(phase_ratios.center)]
+                    # T = T_v,
+                    # phases_v = phases_v_v,
                 )
                 data_c = (;
-                    # P   = Array(stokes.P),
-                    # τII = Array(stokes.τ.II),
-                    # εII = Array(stokes.ε.II),
-                    η   = Array(stokes.viscosity.η),
-                    phase_center = [argmax(p) for p in Array(phase_ratios.center)]
+                    P = P_v,
+                    τII = τII_v,
+                    εII = εII_v,
+                    η   = η_vep_v,
+                    phases = phases_c_v
+
+
                 )
                 velocity_v = (
-                    Array(Vx_v),
-                    Array(Vy_v),
-                    Array(Vz_v),
+                    Array(Vxv_v),
+                    Array(Vyv_v),
+                    Array(Vzv_v),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$(it)_$(igg.me)", 6, "0")),
-                    xvi,
-                    xci,
+                    xvi_v./1e3,
+                    xci_v./1e3,
                     data_v,
                     data_c,
                     velocity_v
                 )
+            end
         end
-        # Data I/O and plotting ---------------------
-        # if igg.me == 0 && (it == 1 || rem(it, 20) == 0)
-        #     # checkpointing(figdir, stokes, thermal.T, η, t)
-
-        #     if do_vtk
-        #         velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-        #         phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)]
-        #         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
-        #         println("pv= $(size(phase_vertex)), pc= $(size(phase_center))")
-        #         println("stokes P = $(size(stokes.P)), T = $(size(thermal.T))")
-        #         # MPI
-        #         #centers
-        #         @views P_nohalo     .= Array(stokes.P[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        #         @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        #         @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
-        #         @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        #         # @views phases_c_v   .= Array(phase_center[2:end-1, 2:end-1, 2:end-1])
-        #         gather!(P_nohalo, P_v)
-        #         gather!(τII_nohalo, τII_v)
-        #         gather!(η_vep_nohalo, η_vep_v)
-        #         gather!(εII_nohalo, εII_v)
-        #         # gather!(phases_c_nohalo, phases_c_v)
-        #         #vertices
-        #         @views Vxv_nohalo   .= Array(Vx_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        #         @views Vyv_nohalo   .= Array(Vy_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        #         @views Vzv_nohalo   .= Array(Vz_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        #         @views T_nohalo     .= Array(thermal.T[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        #         # @views phase_v_nohalo .= Array(phase_vertex[2:end-1, 2:end-1, 2:end-1])
-        #         gather!(Vxv_nohalo, Vxv_v)
-        #         gather!(Vyv_nohalo, Vyv_v)
-        #         gather!(Vzv_nohalo, Vzv_v)
-        #         gather!(T_nohalo, T_v)
-        #         # gather!(phase_v_nohalo, phases_v_v)
-
-
-        #         # data_v = (;
-        #         #     T = T_v,
-        #         #     # phases_v = phases_v_v,
-        #         # )
-        #         # data_c = (;
-        #         #     P = P_v,
-        #         #     τII = τII_v,
-        #         #     εII = εII_v,
-        #         #     η   = η_vep_v,
-        #         #     # phases = phases_c_v
-
-
-        #         # )
-        #         # velocity_v = (
-        #         #     Array(Vxv_v),
-        #         #     Array(Vyv_v),
-        #         #     Array(Vzv_v),
-        #         # )
-        #         # save_vtk(
-        #         #     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-        #         #     xvi_v,
-        #         #     xci_v,
-        #         #     data_v,
-        #         #     data_c,
-        #         #     velocity_v
-        #         # )
-        #     end
-        # end
         # ------------------------------
 
     end
-
+    finalize_global_grid()
     return nothing
 end
 
@@ -334,22 +305,22 @@ else
     igg
 end
 
-# Physical domain ------------------------------------
+# Dont forget to change the extents of the global grid also in the main script
+# it's located on line 143 and 144
+# GLOBAL Physical domain ------------------------------------
 x = range(-3960, 500, nx_g());
 y = range(0, 2640, ny_g());
 air_thickness = 0.0
-z = range(-660, air_thickness,    nz_g());
+z = range(-660, air_thickness,nz_g());
 origin = (x[1], y[1], z[1])
 li = (abs(last(x)-first(x)), abs(last(y)-first(y)), abs(last(z)-first(z)))
 
 ni           = nx, ny, nz           # number of cells
 di           = @. li / (nx_g(), ny_g(), nz_g())           # grid steps
-grid         = Geometry(ni, li; origin = origin)
-(; xci, xvi) = grid # nodes at the center and vertices of the cells
-li, origin, phases_GMG, = GMG_only(xvi,nx, ny, nz)
-# li, origin, phases_GMG, = GMG_only(nx_g()+1, ny_g()+1, nz_g()+1)
-# li, origin, phases_GMG, = GMG_only(Grid, nx+1, ny+1, nz+1)
-
+grid_global  = Geometry(ni, li; origin = origin)
+li_GMG, origin_GMG, phases_GMG, = GMG_only(grid_global.xvi,nx+1, ny+1, nz+1)
+# ----------------------------------------------------
 # (Path)/folder where output data and figures are stored
-# figdir   = "Subduction3D_$(nx_g())x$(ny_g())x$(nz_g())"
-# main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+figdir   = "Subduction3D_$(nx_g())x$(ny_g())x$(nz_g())"
+
+main3D(air_thickness, li_GMG, origin_GMG, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

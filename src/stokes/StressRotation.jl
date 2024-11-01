@@ -18,9 +18,15 @@ end
     Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
     Base.@propagate_inbounds @inline dz(A) = _d_za(A, _dz, I...)
 
-    @inbounds ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
-    @inbounds ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
-    @inbounds ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+    if all(I .≤ size(ωyz))
+        ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
+    end
+    if all(I .≤ size(ωxz))
+        ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
+    end
+    if all(I .≤ size(ωxy))
+        ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+    end
 
     return nothing
 end

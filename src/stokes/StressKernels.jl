@@ -622,7 +622,8 @@ end
         τxyv_old_ij = av_clamped_yz_z(τxyv_old, Ic...)
 
         # vertex parameters
-        phase = @inbounds phase_vertex[I...]
+        phase = @inbounds (phase_vertex[I...] + phase_vertex[I[1] + 1, I[2], I[3]]) * 0.5
+        # phase = @inbounds phase_vertex[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -697,7 +698,8 @@ end
         τxyv_old_ij = av_clamped_xz_z(τxyv_old, Ic...)
 
         # vertex parameters
-        phase = @inbounds phase_vertex[I...]
+        phase = @inbounds (phase_vertex[I...] + phase_vertex[I[1], I[2] + 1, I[3]]) * 0.5
+        # phase = @inbounds phase_vertex[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -774,7 +776,8 @@ end
         τxyv_old_ij = τxyv_old[I...]
 
         # vertex parameters
-        phase = @inbounds phase_vertex[I...]
+        phase = @inbounds (phase_vertex[I...] + phase_vertex[I[1], I[2], I[3] + 1]) * 0.5
+        # phase = @inbounds phase_vertex[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -969,7 +972,7 @@ end
         # yield function @ center
         F = τII_ij - C - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij) && F >0
+        if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +

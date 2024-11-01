@@ -421,4 +421,11 @@ function JR3D.update_rock_ratio!(
     return nothing
 end
 
+function JR3D.update_rock_ratio!(
+    ϕ::JustRelax.RockRatio{CuArray{T,nD,D},N}, phase_ratios, ratio_vel::NTuple{N}, air_phase
+) where {T,nD,N,D}
+    update_rock_ratio!(ϕ, phase_ratios, ratio_vel, air_phase)
+    return nothing
+end
+
 end

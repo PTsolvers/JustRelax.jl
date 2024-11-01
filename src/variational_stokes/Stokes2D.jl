@@ -177,7 +177,8 @@ function _solve_VS!(
                 length(stokes.R.Rx),
                 norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
                 length(stokes.R.Ry),
-                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) / length(@views stokes.R.RP[ϕ.center .> 0]),
+                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) /
+                length(@views stokes.R.RP[ϕ.center .> 0]),
             )
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])

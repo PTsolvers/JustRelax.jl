@@ -185,6 +185,12 @@ function JR2D.compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
+function JR2D.compute_viscosity!(
+    ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
+)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
+end
+
 function JR2D.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
@@ -194,9 +200,9 @@ function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cuto
 end
 
 function compute_viscosity!(
-    ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
+    ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
 )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
 end
 
 function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
@@ -391,6 +397,13 @@ function JR2D.update_rock_ratio!(
     ϕ::JustRelax.RockRatio{CuArray{T,nD,D},N}, phase_ratios, air_phase
 ) where {T,nD,N,D}
     update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    return nothing
+end
+
+function JR2D.update_rock_ratio!(
+    ϕ::JustRelax.RockRatio{CuArray{T,nD,D},N}, phase_ratios, ratio_vel::NTuple{N}, air_phase
+) where {T,nD,N,D}
+    update_rock_ratio!(ϕ, phase_ratios, ratio_vel, air_phase)
     return nothing
 end
 

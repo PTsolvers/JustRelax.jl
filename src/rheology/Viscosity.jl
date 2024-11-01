@@ -377,7 +377,7 @@ end
 #     end
 # end
 
-function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
+function correct_phase_ratio(air_phase, ratio::SVector{N,T}) where {N,T}
     if iszero(air_phase)
         return ratio
     elseif ratio[air_phase] ≈ 1

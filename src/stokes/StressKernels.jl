@@ -587,6 +587,9 @@ end
     rheology,
     phase_center,
     phase_vertex,
+    phase_xy,
+    phase_yz,
+    phase_xz,
 )
     τyzv, τxzv, τxyv = τshear_v
     τyzv_old, τxzv_old, τxyv_old = τshear_ov
@@ -622,7 +625,7 @@ end
         τxyv_old_ij = av_clamped_yz_z(τxyv_old, Ic...)
 
         # vertex parameters
-        phase = @inbounds phase_vertex[I...]
+        phase = @inbounds phase_yz[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -697,7 +700,7 @@ end
         τxyv_old_ij = av_clamped_xz_z(τxyv_old, Ic...)
 
         # vertex parameters
-        phase = @inbounds phase_vertex[I...]
+        phase = @inbounds phase_xz[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -774,7 +777,7 @@ end
         τxyv_old_ij = τxyv_old[I...]
 
         # vertex parameters
-        phase = @inbounds phase_vertex[I...]
+        phase = @inbounds phase_xy[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -895,6 +898,9 @@ end
     rheology,
     phase_center,
     phase_vertex,
+    phase_xy,
+    phase_yz,
+    phase_xz,
 )
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]

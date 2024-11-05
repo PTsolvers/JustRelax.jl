@@ -35,7 +35,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main3D(air_thickness, li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
+function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
     # LOCAL Physical domain ------------------------------------
     ni           = nx, ny, nz           # number of cells
     di           = @. li / (nx_g(), ny_g(), nz_g())           # grid steps
@@ -140,15 +140,13 @@ function main3D(air_thickness, li, origin, phases_GMG, igg; nx=16, ny=16, nz=16,
     T_nohalo     = zeros(nx-1, ny-1, nz-1)
     phase_v_nohalo = zeros(nx-1, ny-1, nz-1)
 
-    xci_v        = LinRange(-3960e3, 500e3, nx_v), LinRange(0e3, 2640e3, ny_v), LinRange(-660e3, air_thickness.*1e3, nz_v)
-    xvi_v        = LinRange(-3960e3, 500e3, nx_v+1), LinRange(0e3, 2640e3, ny_v+1), LinRange(-660e3, air_thickness.*1e3, nz_v+1)
+    xci_v        = LinRange(minimum(x_global).*1e3, maximum(x_global).*1e3, nx_v), LinRange(minimum(y_global).*1e3, maximum(y_global).*1e3, ny_v), LinRange(minimum(z_global).*1e3, maximum(z_global).*1e3, nz_v)
+    xvi_v        = LinRange(minimum(x_global).*1e3, maximum(x_global).*1e3, nx_v+1), LinRange(minimum(y_global).*1e3, maximum(y_global).*1e3, ny_v+1), LinRange(minimum(z_global).*1e3, maximum(z_global).*1e3, nz_v+1)
 
     # Time loop
     t, it = 0.0, 0
-    # while it < 10000 # run only for 5 Myrs
 
-    # while (t/(1e6 * 3600 * 24 *365.25)) < 10 # run only for 5 Myrs
-    while it < 10
+    while (t/(1e6 * 3600 * 24 *365.25)) < 10 # run only for 5 Myrs
 
         # # interpolate fields from particle to grid vertices
         # particle2grid!(thermal.T, pT, xvi, particles)
@@ -305,15 +303,13 @@ else
     igg
 end
 
-# Dont forget to change the extents of the global grid also in the main script
-# it's located on line 143 and 144
 # GLOBAL Physical domain ------------------------------------
-x = range(-3960, 500, nx_g());
-y = range(0, 2640, ny_g());
+x_global = range(-3960, 500, nx_g());
+y_global = range(0, 2640, ny_g());
 air_thickness = 0.0
-z = range(-660, air_thickness,nz_g());
-origin = (x[1], y[1], z[1])
-li = (abs(last(x)-first(x)), abs(last(y)-first(y)), abs(last(z)-first(z)))
+z_global = range(-660, air_thickness,nz_g());
+origin = (x_global[1], y_global[1], z_global[1])
+li = (abs(last(x_global)-first(x_global)), abs(last(y_global)-first(y_global)), abs(last(z_global)-first(z_global)))
 
 ni           = nx, ny, nz           # number of cells
 di           = @. li / (nx_g(), ny_g(), nz_g())           # grid steps
@@ -323,4 +319,4 @@ li_GMG, origin_GMG, phases_GMG, = GMG_only(grid_global.xvi,nx+1, ny+1, nz+1)
 # (Path)/folder where output data and figures are stored
 figdir   = "Subduction3D_$(nx_g())x$(ny_g())x$(nz_g())"
 
-main3D(air_thickness, li_GMG, origin_GMG, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+main3D(x_global, y_global, z_global, li_GMG, origin_GMG, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

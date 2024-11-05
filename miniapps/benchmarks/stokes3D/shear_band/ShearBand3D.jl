@@ -1,41 +1,19 @@
+using CUDA
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
-const backend_JR = CPUBackend
+const backend_JR = CUDABackend
 using Printf, GeoParams, GLMakie, CellArrays
 
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+@init_parallel_stencil(CUDA, Float64, 3)
 
 using JustPIC, JustPIC._3D
-const backend = JustPIC.CPUBackend
+const backend = CUDABackend
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-# function init_phases!(phase_ratios, xci, xvi, radius)
-#     ni      = size(phase_ratios.center)
-#     origin  = 0.5, 0.5, 0.5
-
-#     @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
-#         x, y, z = xc[i], yc[j], zc[k]
-#         if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
-#             @index phases[1, i, j, k] = 1.0
-#             @index phases[2, i, j, k] = 0.0
-
-#         else
-#             @index phases[1, i, j, k] = 0.0
-#             @index phases[2, i, j, k] = 1.0
-
-#         end
-#         return nothing
-#     end
-
-#     @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
-#     @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin...)
-#     return nothing
-# end
-
 function init_phases!(phases, particles, radius)
     ni      = size(phases)
     origin  = 0.5, 0.5, 0.5
@@ -49,7 +27,7 @@ function init_phases!(phases, particles, radius)
             y = @index yc[ip, I...]
             z = @index zc[ip, I...]
 
-            if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
+            if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius^2
                 @index phases[ip, I...] = 1.0
             else
                 @index phases[ip, I...] = 2.0
@@ -245,7 +223,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n            = 128
+n            = 64
 nx = ny = nz = n
 figdir       = "ShearBand3D"
 igg          = if !(JustRelax.MPI.Initialized())

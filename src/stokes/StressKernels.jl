@@ -637,7 +637,7 @@ end
         # stress increments @ vertex
         dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
         dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
-        dτyyv = compute_stress_increment(τzzv_ij, τzzv_old_ij, ηv_ij, εzzv_ij, _Gvdt, dτ_rv)
+        dτzzv = compute_stress_increment(τzzv_ij, τzzv_old_ij, ηv_ij, εzzv_ij, _Gvdt, dτ_rv)
         dτyzv = compute_stress_increment(τyzv_ij, τyzv_old_ij, ηv_ij, εyzv_ij, _Gvdt, dτ_rv)
         dτxzv = compute_stress_increment(τxzv_ij, τxzv_old_ij, ηv_ij, εxzv_ij, _Gvdt, dτ_rv)
         dτxyv = compute_stress_increment(τxyv_ij, τxyv_old_ij, ηv_ij, εxyv_ij, _Gvdt, dτ_rv)
@@ -700,7 +700,7 @@ end
         # stress increments @ vertex
         dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
         dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
-        dτyyv = compute_stress_increment(τzzv_ij, τzzv_old_ij, ηv_ij, εzzv_ij, _Gvdt, dτ_rv)
+        dτzzv = compute_stress_increment(τzzv_ij, τzzv_old_ij, ηv_ij, εzzv_ij, _Gvdt, dτ_rv)
         dτyzv = compute_stress_increment(τyzv_ij, τyzv_old_ij, ηv_ij, εyzv_ij, _Gvdt, dτ_rv)
         dτxzv = compute_stress_increment(τxzv_ij, τxzv_old_ij, ηv_ij, εxzv_ij, _Gvdt, dτ_rv)
         dτxyv = compute_stress_increment(τxyv_ij, τxyv_old_ij, ηv_ij, εxyv_ij, _Gvdt, dτ_rv)
@@ -765,7 +765,7 @@ end
         # stress increments @ vertex
         dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
         dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
-        dτyyv = compute_stress_increment(τzzv_ij, τzzv_old_ij, ηv_ij, εzzv_ij, _Gvdt, dτ_rv)
+        dτzzv = compute_stress_increment(τzzv_ij, τzzv_old_ij, ηv_ij, εzzv_ij, _Gvdt, dτ_rv)
         dτyzv = compute_stress_increment(τyzv_ij, τyzv_old_ij, ηv_ij, εyzv_ij, _Gvdt, dτ_rv)
         dτxzv = compute_stress_increment(τxzv_ij, τxzv_old_ij, ηv_ij, εxzv_ij, _Gvdt, dτ_rv)
         dτxyv = compute_stress_increment(τxyv_ij, τxyv_old_ij, ηv_ij, εxyv_ij, _Gvdt, dτ_rv)

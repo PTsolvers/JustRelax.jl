@@ -63,11 +63,11 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
+function main(x_global, z_global,li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
 
     # Physical domain ------------------------------------
     ni                  = nx, ny           # number of cells
-    di                  = @. li / ni       # grid steps
+    di                  = @. li / (nx_g(), ny_g())       # grid steps
     grid                = Geometry(ni, li; origin = origin)
     (; xci, xvi)        = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
@@ -166,9 +166,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     if do_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
+        Vx = @zeros(ni...)
+        Vy = @zeros(ni...)
     end
 
-        #MPI
+    #MPI
     # global array
     nx_v         = (nx - 2) * igg.dims[1]
     ny_v         = (ny - 2) * igg.dims[2]
@@ -185,20 +187,16 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     εII_nohalo   = zeros(nx-2, ny-2)
     phases_c_nohalo = zeros(nx-2, ny-2)
     #vertex
-    Vxv_v        = zeros(nx_v+1, ny_v+1)
-    Vyv_v        = zeros(nx_v+1, ny_v+1)
-    Vzv_v        = zeros(nx_v+1, ny_v+1)
-    T_v          = zeros(nx_v+1, ny_v+1)
-    phases_v_v    = zeros(nx_v+1, ny_v+1)
+    Vxv_v        = zeros(nx_v, ny_v)
+    Vyv_v        = zeros(nx_v, ny_v)
+    T_v          = zeros(nx_v, ny_v)
     #vertex nohalo
-    Vxv_nohalo   = zeros(nx-1, ny-1)
-    Vyv_nohalo   = zeros(nx-1, ny-1)
-    Vzv_nohalo   = zeros(nx-1, ny-1)
-    T_nohalo     = zeros(nx-1, ny-1)
-    phase_v_nohalo = zeros(nx-1, ny-1)
+    Vxv_nohalo   = zeros(nx-2, ny-2)
+    Vyv_nohalo   = zeros(nx-2, ny-2)
+    Vzv_nohalo   = zeros(nx-2, ny-2)
+    T_nohalo     = zeros(nx-2, ny-2)
 
-    xci_v        = LinRange(minimum(x_global).*1e3, maximum(x_global).*1e3, nx_v), LinRange(minimum(y_global).*1e3, maximum(y_global).*1e3, ny_v)
-    xvi_v        = LinRange(minimum(x_global).*1e3, maximum(x_global).*1e3, nx_v+1), LinRange(minimum(y_global).*1e3, maximum(y_global).*1e3, ny_v+1)
+    xci_v        = LinRange(minimum(x_global).*1e3, maximum(x_global).*1e3, nx_v), LinRange(minimum(z_global).*1e3, maximum(z_global).*1e3, ny_v)
 
 
     T_buffer    = @zeros(ni.+1)
@@ -351,16 +349,16 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         gather!(phases_c_nohalo, phases_c_v)
         #vertices
         if do_vtk
-            velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-            @views Vxv_nohalo   .= Array(Vx_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-            @views Vyv_nohalo   .= Array(Vy_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-            # gather!(Vxv_nohalo, Vxv_v)
-            # gather!(Vyv_nohalo, Vyv_v)
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            vertex2center!(Vx, Vx_v)
+            vertex2center!(Vy, Vy_v)
+            @views Vxv_nohalo   .= Array(Vx[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            @views Vyv_nohalo   .= Array(Vy[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            gather!(Vxv_nohalo, Vxv_v)
+            gather!(Vyv_nohalo, Vyv_v)
         end
-        # @views T_nohalo     .= Array(thermal.T[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        # @views phase_v_nohalo .= Array(phase_vertex[2:end-1, 2:end-1, 2:end-1])
-        # gather!(T_nohalo, T_v)
-        # gather!(phase_v_nohalo, phases_v_v)
+        @views T_nohalo     .= Array(thermal.Tc[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        gather!(T_nohalo, T_v)
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 10) == 0
@@ -372,6 +370,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                     # phases_v = phases_v_v,
                 )
                 data_c = (;
+                    T = T_v,
                     P = P_v,
                     τII = τII_v,
                     εII = εII_v,
@@ -385,10 +384,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                     Array(Vyv_v),
                 )
                 save_vtk(
-                    joinpath(vtk_dir, "vtk_" * lpad("$(it)_$(igg.me)", 6, "0")),
-                    xvi_v./1e3,
+                    joinpath(vtk_dir, "vtk_" * lpad("$(it)", 6, "0")),
                     xci_v./1e3,
-                    data_v,
                     data_c,
                     velocity_v
                 )
@@ -411,9 +408,10 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1  = heatmap!(ax1, xvi_v[1].*1e-3, xvi_v[2].*1e-3, Array(T_v) , colormap=:batlow)
+            h1  = heatmap!(ax1, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(T_v) , colormap=:batlow)
             # Plot particles phase
-            h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+            # h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+            h2  = heatmap!(ax2, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(phases_c_v) , colormap=:batlow)
             # Plot 2nd invariant of strain rate
             # h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(log10.(εII)) , colormap=:batlow)
             h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(τII_v) , colormap=:batlow)
@@ -463,4 +461,4 @@ figdir   = "Subduction3D_$(nx_g())x$(ny_g())"
 
 li_GMG, origin_GMG, phases_GMG, T_GMG = GMG_subduction_2D(model_depth, grid_global.xvi,nx+1, ny+1)
 
-# main(x_global, z_global,li_GMG, origin_GMG, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+ main(x_global, z_global,li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

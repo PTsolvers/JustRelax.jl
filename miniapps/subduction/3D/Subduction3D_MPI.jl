@@ -108,6 +108,9 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
         Vz_v = @zeros(ni.+1...)
+        Vx = @zeros(ni...)
+        Vy = @zeros(ni...)
+        Vz = @zeros(ni...)
     end
 
 
@@ -128,20 +131,17 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
     εII_nohalo   = zeros(nx-2, ny-2, nz-2)
     phases_c_nohalo = zeros(nx-2, ny-2, nz-2)
     #vertex
-    Vxv_v        = zeros(nx_v+1, ny_v+1, nz_v+1)
-    Vyv_v        = zeros(nx_v+1, ny_v+1, nz_v+1)
-    Vzv_v        = zeros(nx_v+1, ny_v+1, nz_v+1)
-    T_v          = zeros(nx_v+1, ny_v+1, nz_v+1)
-    phases_v_v    = zeros(nx_v+1, ny_v+1, nz_v+1)
+    Vxv_v        = zeros(nx_v, ny_v, nz_v)
+    Vyv_v        = zeros(nx_v, ny_v, nz_v)
+    Vzv_v        = zeros(nx_v, ny_v, nz_v)
+    T_v          = zeros(nx_v, ny_v, nz_v)
     #vertex nohalo
-    Vxv_nohalo   = zeros(nx-1, ny-1, nz-1)
-    Vyv_nohalo   = zeros(nx-1, ny-1, nz-1)
-    Vzv_nohalo   = zeros(nx-1, ny-1, nz-1)
-    T_nohalo     = zeros(nx-1, ny-1, nz-1)
-    phase_v_nohalo = zeros(nx-1, ny-1, nz-1)
+    Vxv_nohalo   = zeros(nx-2, ny-2, nz-2)
+    Vyv_nohalo   = zeros(nx-2, ny-2, nz-2)
+    Vzv_nohalo   = zeros(nx-2, ny-2, nz-2)
+    T_nohalo     = zeros(nx-2, ny-2, nz-2)
 
     xci_v        = LinRange(minimum(x_global).*1e3, maximum(x_global).*1e3, nx_v), LinRange(minimum(y_global).*1e3, maximum(y_global).*1e3, ny_v), LinRange(minimum(z_global).*1e3, maximum(z_global).*1e3, nz_v)
-    xvi_v        = LinRange(minimum(x_global).*1e3, maximum(x_global).*1e3, nx_v+1), LinRange(minimum(y_global).*1e3, maximum(y_global).*1e3, ny_v+1), LinRange(minimum(z_global).*1e3, maximum(z_global).*1e3, nz_v+1)
 
     # Time loop
     t, it = 0.0, 0
@@ -224,7 +224,6 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
         end
 
         #MPI gathering
-        phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)]
         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
         #centers
         @views P_nohalo     .= Array(stokes.P[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
@@ -240,28 +239,26 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
         #vertices
         if do_vtk
             velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-            @views Vxv_nohalo   .= Array(Vx_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-            @views Vyv_nohalo   .= Array(Vy_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-            @views Vzv_nohalo   .= Array(Vz_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-            # gather!(Vxv_nohalo, Vxv_v)
-            # gather!(Vyv_nohalo, Vyv_v)
-            # gather!(Vzv_nohalo, Vzv_v)
+            vertex2center!(Vx, Vx_v)
+            vertex2center!(Vy, Vy_v)
+            vertex2center!(Vz, Vz_v)
+            @views Vxv_nohalo   .= Array(Vx[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            @views Vyv_nohalo   .= Array(Vy[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            @views Vzv_nohalo   .= Array(Vz[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            gather!(Vxv_nohalo, Vxv_v)
+            gather!(Vyv_nohalo, Vyv_v)
+            gather!(Vzv_nohalo, Vzv_v)
         end
-        # @views T_nohalo     .= Array(thermal.T[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        # @views phase_v_nohalo .= Array(phase_vertex[2:end-1, 2:end-1, 2:end-1])
-        # gather!(T_nohalo, T_v)
-        # gather!(phase_v_nohalo, phases_v_v)
+        @views T_nohalo     .= Array(thermal.Tc[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        gather!(T_nohalo, T_v)
 
         # Data I/O and plotting ---------------------
         if igg.me == 0 && (it == 1 || rem(it, 1) == 0)
             # checkpointing(figdir, stokes, thermal.T, η, t)
             if do_vtk
 
-                data_v = (;
-                    # T = T_v,
-                    # phases_v = phases_v_v,
-                )
                 data_c = (;
+                    T = T_v,
                     P = P_v,
                     τII = τII_v,
                     εII = εII_v,
@@ -277,9 +274,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$(it)_$(igg.me)", 6, "0")),
-                    xvi_v./1e3,
                     xci_v./1e3,
-                    data_v,
                     data_c,
                     velocity_v
                 )

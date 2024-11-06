@@ -77,9 +77,7 @@ function save_vtk(
     return nothing
 end
 
-function save_vtk(
-    fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T}
-) where {N,T}
+function save_vtk(fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T}) where {N,T}
 
     # unpack data names and arrays
     data_names_c = string.(keys(data_c))

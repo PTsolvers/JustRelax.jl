@@ -4,8 +4,9 @@ include("free_surface.jl")
 include("no_slip.jl")
 include("pure_shear.jl")
 
-@inline bc_index(x::T) where {T<:AbstractArray{_T, 2} where _T} = max(size(x)...)
-@inline bc_index(x::T) where {T<:AbstractArray{_T, 3} where _T} = max(size(x)...), max(size(x)...)
+@inline bc_index(x::T) where {T<:AbstractArray{_T,2} where {_T}} = max(size(x)...)
+@inline bc_index(x::T) where {T<:AbstractArray{_T,3} where {_T}} =
+    max(size(x)...), max(size(x)...)
 
 @inline bc_index(x::NTuple{2,T}) where {T} = mapreduce(xi -> max(size(xi)...), max, x)
 @inline function bc_index(x::NTuple{3,T}) where {T}

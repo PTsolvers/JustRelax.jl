@@ -430,7 +430,7 @@ function main2D(igg; nx=32, ny=32)
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
         thermal.ΔT .= thermal.T .- thermal.Told
-        vertex2center!(thermal.ΔTc, thermal.ΔT)
+        vertex2center!(thermal.ΔTc, thermal.ΔT[2:end-1, ;])
 
         @show it += 1
         t += dt

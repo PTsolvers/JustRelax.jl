@@ -1,39 +1,42 @@
+using CUDA
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
-const backend_JR = CPUBackend
-
+const backend_JR = CUDABackend
 using Printf, GeoParams, GLMakie, CellArrays
 
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+@init_parallel_stencil(CUDA, Float64, 3)
 
 using JustPIC, JustPIC._3D
-const backend = JustPIC.CPUBackend
+const backend = CUDABackend
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, xvi, radius)
-    ni      = size(phase_ratios.center)
+function init_phases!(phases, particles, radius)
+    ni      = size(phases)
     origin  = 0.5, 0.5, 0.5
 
-    @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
-        x, y, z = xc[i], yc[j], zc[k]
-        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius
-            @index phases[1, i, j, k] = 1.0
-            @index phases[2, i, j, k] = 0.0
+    @parallel_indices (I...) function init_phases!(phases, index, xc, yc, zc, o_x, o_y, o_z)
+        
+        for ip in cellaxes(xc)
+            (@index index[ip, I...]) || continue
 
-        else
-            @index phases[1, i, j, k] = 0.0
-            @index phases[2, i, j, k] = 1.0
+            x = @index xc[ip, I...]
+            y = @index yc[ip, I...]
+            z = @index zc[ip, I...]
 
+            if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius^2
+                @index phases[ip, I...] = 1.0
+            else
+                @index phases[ip, I...] = 2.0
+            end
         end
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
-    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin...)
+    @parallel (@idx ni) init_phases!(phases,  particles.index, particles.coords...,origin...)
     return nothing
 end
 
@@ -91,9 +94,15 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     )
 
     # Initialize phase ratios -------------------------------
-    radius       = 0.1
+    nxcell, max_xcell, min_xcell = 125, 150, 75
+    particles                    = init_particles(backend, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    radius                       = 0.1
+    phase_ratios                 = PhaseRatios(backend, length(rheology), ni)
+    pPhases,                     = init_cell_arrays(particles, Val(1))
+    # Assign particles phases anomaly
+    init_phases!(pPhases, particles, radius)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    init_phases!(phase_ratios, xci, xvi, radius)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -167,9 +176,9 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
         velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
         data_v = (;
-            τII = Array(stokes.τ.II),
-            εII = Array(stokes.ε.II),
-            εII = Array(stokes.ε_pl.II),
+            τII    = Array(stokes.τ.II),
+            εII    = Array(stokes.ε.II),
+            εII_pl = Array(stokes.ε_pl.II),
         )
         data_c = (;
             P   = Array(stokes.P),
@@ -214,7 +223,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n            = 128
+n            = 64
 nx = ny = nz = n
 figdir       = "ShearBand3D"
 igg          = if !(JustRelax.MPI.Initialized())

@@ -98,7 +98,7 @@ function save_vtk(
     end
 
     # Variables stores in cell centers
-    vtk_grid(vtm, xci...) do vtk
+    vtk_grid(fname, xci...) do vtk
         for (name_i, array_i) in zip(data_names_c, data_arrays_c)
             vtk[name_i] = Array(array_i)
         end

@@ -42,7 +42,7 @@ function append!(data_series, data::NamedTuple, time_step, seconds)
 end
 
 function save_vtk(
-    fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTuple, velocity::NTuple{N,T}
+    fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTuple, velocity::NTuple{N,T}, t::Number
 ) where {N,T}
 
     # unpack data names and arrays
@@ -71,13 +71,14 @@ function save_vtk(
                 vtk[name_i] = Array(array_i)
             end
             return vtk["Velocity"] = velocity_field
+            return vtk["TimeValue"] = t
         end
     end
 
     return nothing
 end
 
-function save_vtk(fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T}) where {N,T}
+function save_vtk(fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T}, t::Number) where {N,T}
 
     # unpack data names and arrays
     data_names_c = string.(keys(data_c))
@@ -96,6 +97,7 @@ function save_vtk(fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T})
                 vtk[name_i] = Array(array_i)
             end
             return vtk["Velocity"] = velocity_field
+            return vtk["TimeValue"] = t
         end
     end
 

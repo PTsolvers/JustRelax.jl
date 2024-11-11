@@ -364,7 +364,7 @@ function JR2D.compute_shear_heating!(
     return nothing
 end
 
-function JR2D.WENO_advection!(u::ROCArrayArray, Vxi::NTuple, weno, di, dt)
+function JR2D.WENO_advection!(u::ROCArray, Vxi::NTuple, weno, di, dt)
     return WENO_advection!(u, Vxi, weno, di, dt)
 end
 

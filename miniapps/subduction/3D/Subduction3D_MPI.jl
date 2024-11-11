@@ -49,7 +49,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 50, 75, 25
+    nxcell, max_xcell, min_xcell = 150, 175, 125
     particles                    = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni)
     subgrid_arrays               = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -231,7 +231,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
         @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
         @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         @views phases_c_nohalo   .= Array(phase_center[2:end-1, 2:end-1, 2:end-1])
-        @async gather!(P_nohalo, P_v)
+        gather!(P_nohalo, P_v)
         gather!(τII_nohalo, τII_v)
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)

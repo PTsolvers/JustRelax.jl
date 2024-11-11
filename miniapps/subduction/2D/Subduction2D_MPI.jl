@@ -193,10 +193,10 @@ function main(x_global, z_global,li, origin, phases_GMG, T_GMG, igg; nx=16, ny=1
     #vertex nohalo
     Vxv_nohalo   = zeros(nx-2, ny-2)
     Vyv_nohalo   = zeros(nx-2, ny-2)
-    Vzv_nohalo   = zeros(nx-2, ny-2)
     T_nohalo     = zeros(nx-2, ny-2)
 
-    xci_v        = LinRange(minimum(x_global).*1e3, maximum(x_global).*1e3, nx_v), LinRange(minimum(z_global).*1e3, maximum(z_global).*1e3, ny_v)
+    xci_v        = LinRange(minimum(x_global).*1e3, maximum(x_global).*1e3, nx_v),
+                   LinRange(minimum(z_global).*1e3, maximum(z_global).*1e3, ny_v)
 
 
     T_buffer    = @zeros(ni.+1)
@@ -334,7 +334,6 @@ function main(x_global, z_global,li, origin, phases_GMG, T_GMG, igg; nx=16, ny=1
         end
 
         #MPI gathering
-        phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)]
         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
         #centers
         @views P_nohalo     .= Array(stokes.P[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
@@ -365,10 +364,6 @@ function main(x_global, z_global,li, origin, phases_GMG, T_GMG, igg; nx=16, ny=1
             # checkpointing(figdir, stokes, thermal.T, η, t)
             if do_vtk
 
-                data_v = (;
-                    # T = T_v,
-                    # phases_v = phases_v_v,
-                )
                 data_c = (;
                     T = T_v,
                     P = P_v,
@@ -391,15 +386,6 @@ function main(x_global, z_global,li, origin, phases_GMG, T_GMG, igg; nx=16, ny=1
                 )
             end
 
-            # Make particles plottable
-            p        = particles.coords
-            ppx, ppy = p
-            pxv      = ppx.data[:]./1e3
-            pyv      = ppy.data[:]./1e3
-            clr      = pPhases.data[:]
-            # clr      = pT.data[:]
-            idxv     = particles.index.data[:];
-
             # Make Makie figure
             ar  = 3
             fig = Figure(size = (1200, 900), title = "t = $t")
@@ -413,7 +399,7 @@ function main(x_global, z_global,li, origin, phases_GMG, T_GMG, igg; nx=16, ny=1
             # h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
             h2  = heatmap!(ax2, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(phases_c_v) , colormap=:batlow)
             # Plot 2nd invariant of strain rate
-            # h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(log10.(εII)) , colormap=:batlow)
+            # h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(log10.(εII_v)) , colormap=:batlow)
             h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(τII_v) , colormap=:batlow)
             # Plot effective viscosity
             h4  = heatmap!(ax4, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(log10.(η_vep_v)) , colormap=:batlow)
@@ -437,7 +423,6 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-n        = 128
 nx, ny   = 256, 128
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
@@ -457,8 +442,8 @@ ni           = nx, ny           # number of cells
 di           = @. li / (nx_g(), ny_g())           # grid steps
 grid_global  = Geometry(ni, li; origin = origin)
 
-figdir   = "Subduction3D_$(nx_g())x$(ny_g())"
+figdir   = "Subduction2D_$(nx_g())x$(ny_g())"
 
 li_GMG, origin_GMG, phases_GMG, T_GMG = GMG_subduction_2D(model_depth, grid_global.xvi,nx+1, ny+1)
 
- main(x_global, z_global,li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+#  main(x_global, z_global,li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

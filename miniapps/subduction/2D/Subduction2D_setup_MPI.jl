@@ -33,7 +33,6 @@ function GMG_subduction_2D(model_depth, xvi, nx, ny)
         Phases,
         Temp,
         Grid2D;
-        # xlim    =(100, 3000-100),
         xlim    =(100, 2900),
         zlim    =(-model_depth, 0.0),
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
@@ -46,7 +45,6 @@ function GMG_subduction_2D(model_depth, xvi, nx, ny)
         Phases,
         Temp,
         Grid2D;
-        # xlim    =(3000-1430, 3000-200),
         xlim    =(1570, 2800),
         zlim    =(-model_depth, 0.0),
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
@@ -59,7 +57,6 @@ function GMG_subduction_2D(model_depth, xvi, nx, ny)
         Phases,
         Temp,
         Grid2D;
-        # xlim    = (3000-1430, 3000-1430-250),
         xlim    = (1570, 1320),
         zlim    =(-80, 0.0),
         Origin  = nothing, StrikeAngle=0, DipAngle=-30,

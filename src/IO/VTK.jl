@@ -42,7 +42,13 @@ function append!(data_series, data::NamedTuple, time_step, seconds)
 end
 
 function save_vtk(
-    fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTuple, velocity::NTuple{N,T}, t::Number
+    fname::String,
+    xvi,
+    xci,
+    data_v::NamedTuple,
+    data_c::NamedTuple,
+    velocity::NTuple{N,T},
+    t::Number,
 ) where {N,T}
 
     # unpack data names and arrays
@@ -70,15 +76,17 @@ function save_vtk(
             for (name_i, array_i) in zip(data_names_v, data_arrays_v)
                 vtk[name_i] = Array(array_i)
             end
-            return vtk["Velocity"] = velocity_field
-            return vtk["TimeValue"] = t
+            vtk["Velocity"] = velocity_field
+            vtk["TimeValue"] = t
         end
     end
 
     return nothing
 end
 
-function save_vtk(fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T}, t::Number) where {N,T}
+function save_vtk(
+    fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T}, t::Number
+) where {N,T}
 
     # unpack data names and arrays
     data_names_c = string.(keys(data_c))
@@ -89,16 +97,13 @@ function save_vtk(fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T},
         velocity_field[i, :, :, :] = v
     end
 
-    vtk_multiblock(fname) do vtm
-        # First block.
-        # Variables stores in cell centers
-        vtk_grid(vtm, xci...) do vtk
-            for (name_i, array_i) in zip(data_names_c, data_arrays_c)
-                vtk[name_i] = Array(array_i)
-            end
-            return vtk["Velocity"] = velocity_field
-            return vtk["TimeValue"] = t
+    # Variables stores in cell centers
+    vtk_grid(vtm, xci...) do vtk
+        for (name_i, array_i) in zip(data_names_c, data_arrays_c)
+            vtk[name_i] = Array(array_i)
         end
+        vtk["Velocity"] = velocity_field
+        vtk["TimeValue"] = t
     end
 
     return nothing

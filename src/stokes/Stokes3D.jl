@@ -491,6 +491,9 @@ function _solve!(
                 rheology,
                 phase_ratios.center,
                 phase_ratios.vertex,
+                phase_ratios.xy,
+                phase_ratios.yz,
+                phase_ratios.xz,
             )
             update_halo!(stokes.τ.yz)
             update_halo!(stokes.τ.xz)

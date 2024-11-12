@@ -82,6 +82,7 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 10
     particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
+    subgrid_arrays   = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
@@ -107,7 +108,8 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
     # TEMPERATURE PROFILE --------------------------------
     thermal         = ThermalArrays(backend_JR, ni)
     thermal_bc      = TemperatureBoundaryConditions(;
-        no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
+        no_flux     = (left = true , right = true , top = true, bot = true, front = true , back = true),
+        # no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
     )
 
     # Initialize constant temperature
@@ -136,7 +138,7 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
     ## Compression and not extension - fix this
-    εbg              = 5e-14
+    εbg          = 5e-14
     stokes.V.Vx .= PTArray(backend_JR)([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
     stokes.V.Vy .= PTArray(backend_JR)([ -(y - ly/2) * εbg for _ in 1:nx+2, y in xvi[2], _ in 1:nz+2])
     stokes.V.Vz .= PTArray(backend_JR)([  (lz - abs(z)) * εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
@@ -144,11 +146,16 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
     update_halo!(@velocity(stokes)...)
 
     grid2particle!(pT, xvi, thermal.T, particles)
+    dt₀         = similar(stokes.P)
 
     # Time loop
     t, it = 0.0, 0
     local iters
     while it < 5
+
+        # interpolate fields from particle to grid vertices
+        particle2grid!(thermal.T, pT, xvi, particles)
+        temperature2center!(thermal)
 
         # Stokes solver ----------------
         iters = solve!(
@@ -165,17 +172,13 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
             kwargs = (
                 iterMax = 100e3,
                 nout=1e3,
-                viscosity_cutoff=(-Inf, Inf),
+                viscosity_cutoff=(1e18, 1e22),
                 verbose=false,
             )
         )
         tensor_invariant!(stokes.ε)
-        dt   = compute_dt(stokes, di, dt_diff)
+        dt   = compute_dt(stokes, di, dt_diff) * 0.1
         # ------------------------------
-
-        # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, xvi, particles)
-        temperature2center!(thermal)
 
         compute_shear_heating!(
             thermal,
@@ -202,6 +205,13 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
                 verbose = false,
             )
         )
+        subgrid_characteristic_time!(
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+        )
+        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+        subgrid_diffusion!(
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi,  di, dt
+        )
         # ------------------------------
 
         # Advection --------------------
@@ -211,8 +221,6 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
         )
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-        # interpolate fields from grid vertices to particles
-        grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,), xvi)
         # update phase ratios
@@ -222,8 +230,6 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
         t += dt
         # ------------------------------
     end
-
-    finalize_global_grid(; finalize_MPI=true)
 
     return iters, thermal
 end

@@ -131,7 +131,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     η_vep_nohalo = zeros(nx-2, ny-2)
     εII_nohalo   = zeros(nx-2, ny-2)
     xci_v        = LinRange(0, 1, nx_v)  , LinRange(0, 1, ny_v)
-    xvi_v        = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1)
 
     # Time loop
     t, it      = 0.0, 0
@@ -162,6 +161,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             )
         )
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1

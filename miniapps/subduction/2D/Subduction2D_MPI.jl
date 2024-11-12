@@ -382,7 +382,8 @@ function main(x_global, z_global,li, origin, phases_GMG, T_GMG, igg; nx=16, ny=1
                     joinpath(vtk_dir, "vtk_" * lpad("$(it)", 6, "0")),
                     xci_v./1e3,
                     data_c,
-                    velocity_v
+                    velocity_v,
+                    t
                 )
             end
 

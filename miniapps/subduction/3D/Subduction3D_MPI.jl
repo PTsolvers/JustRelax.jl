@@ -267,7 +267,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
 
 
                 )
-                velocity_v = (
+                velocity = (
                     Array(Vxv_v),
                     Array(Vyv_v),
                     Array(Vzv_v),
@@ -276,7 +276,8 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
                     joinpath(vtk_dir, "vtk_" * lpad("$(it)_$(igg.me)", 6, "0")),
                     xci_v./1e3,
                     data_c,
-                    velocity_v
+                    velocity,
+                    t/(1e6 * 3600 * 24 *365.25)
                 )
             end
         end

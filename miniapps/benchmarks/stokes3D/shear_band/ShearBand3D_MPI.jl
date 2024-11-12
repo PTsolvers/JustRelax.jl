@@ -147,23 +147,24 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
     εII_nohalo   = zeros(nx-2, ny-2, nz-2)
     phases_c_nohalo = zeros(nx-2, ny-2, nz-2)
     #vertex
-    Vxv_v         = zeros(nx_v+1, ny_v+1, nz_v+1)
-    Vyv_v         = zeros(nx_v+1, ny_v+1, nz_v+1)
-    Vzv_v         = zeros(nx_v+1, ny_v+1, nz_v+1)
-    phases_v_v    = zeros(nx_v+1, ny_v+1, nz_v+1)
-    Vx_nohalo    = zeros(nx-1, ny-1, nz-1)
-    Vy_nohalo    = zeros(nx-1, ny-1, nz-1)
-    Vz_nohalo    = zeros(nx-1, ny-1, nz-1)
-    phases_v_nohalo = zeros(nx-1, ny-1, nz-1)
+    Vxv_v         = zeros(nx_v, ny_v, nz_v)
+    Vyv_v         = zeros(nx_v, ny_v, nz_v)
+    Vzv_v         = zeros(nx_v, ny_v, nz_v)
+    phases_v_v    = zeros(nx_v, ny_v, nz_v)
+    Vx_nohalo    = zeros(nx-2, ny-2, nz-2)
+    Vy_nohalo    = zeros(nx-2, ny-2, nz-2)
+    Vz_nohalo    = zeros(nx-2, ny-2, nz-2)
 
     xci_v        = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
-    xvi_v        = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1), LinRange(0, 1, nz_v+1)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
         Vz_v = @zeros(ni.+1...)
+        Vx = @zeros(ni...)
+        Vy = @zeros(ni...)
+        Vz = @zeros(ni...)
     end
 
     # Time loop
@@ -207,16 +208,18 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
 
         if do_vtk
             velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-            @views Vx_nohalo .= Array(Vx_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-            @views Vy_nohalo .= Array(Vy_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-            @views Vz_nohalo .= Array(Vz_v[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-            # gather!(Vx_nohalo, Vxv_v)
-            # gather!(Vy_nohalo, Vyv_v)
-            # gather!(Vz_nohalo, Vzv_v)
+            vertex2center!(Vx, Vx_v)
+            vertex2center!(Vy, Vy_v)
+            vertex2center!(Vz, Vz_v)
+            @views Vx_nohalo .= Array(Vx[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            @views Vy_nohalo .= Array(Vy[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            @views Vz_nohalo .= Array(Vz[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            gather!(Vx_nohalo, Vxv_v)
+            gather!(Vy_nohalo, Vyv_v)
+            gather!(Vz_nohalo, Vzv_v)
         end
 
         # MPI
-        phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)]
         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
 
         @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
@@ -228,37 +231,28 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
 
         @views phases_c_nohalo .= Array(phase_center[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         gather!(phases_c_nohalo, phases_c_v)
-        # @views phases_v_nohalo .= Array(phase_vertex[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
-        # gather!(phases_v_nohalo, phases_v_v)
 
         if igg.me == 0
 
             if do_vtk == true
 
-                data_v = (;
-                    # T = T_v,
-                    # phases_v = phases_v_v,
-                )
                 data_c = (;
                     τII = τII_v,
                     εII = εII_v,
                     η   = η_vep_v,
                     phases = phases_c_v
-
-
                 )
-                velocity_v = (
+                velocity = (
                     Array(Vxv_v),
                     Array(Vyv_v),
                     Array(Vzv_v),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$(it)_$(igg.me)", 6, "0")),
-                    xvi_v,
                     xci_v,
-                    data_v,
                     data_c,
-                    velocity_v
+                    velocity,
+                    t
                 )
             end
 

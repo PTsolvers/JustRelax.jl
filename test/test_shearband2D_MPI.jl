@@ -59,7 +59,7 @@ function init_phases!(phase_ratios, xci, xvi, radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, figdir="model_figs")
+function main(igg; nx=64, ny=64)
 
     # Physical domain ------------------------------------
     ly           = 1e0          # domain length in y
@@ -139,10 +139,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    # IO ------------------------------------------------
-    # if it does not exist, make folder where figures are stored
-    take(figdir)
-    # ----------------------------------------------------
 
     # global array
     nx_v         = (nx - 2) * igg.dims[1]
@@ -220,13 +216,12 @@ end
         n      = N
         nx     = n*2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
         ny     = n*2
-        figdir = "ShearBands2D_MPI"
         igg  = if !(JustRelax.MPI.Initialized())
             IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
         else
             igg
         end
-        main(igg; figdir = figdir, nx = nx, ny = ny);
+        main(igg; nx = nx, ny = ny);
     else
         println("This test is only for CPU CI yet")
     end

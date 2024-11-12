@@ -58,7 +58,7 @@ function init_phases!(phase_ratios, xci, xvi, radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
+function main(igg; nx=64, ny=64, nz=64)
 
     # Physical domain ------------------------------------
     lx = ly = lz = 1e0             # domain length in y
@@ -137,18 +137,8 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     stokes.V.Vx .= Vx
     stokes.V.Vz .= Vz
 
-    # println("Rank $(igg.me):
-    #     extrema Vx = $(extrema(Vx))
-    #     extrema Vz = $(extrema(Vz))
-    # ")
-
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
-
-    # IO ------------------------------------------------
-    # if it does not exist, make folder where figures are stored
-    !isdir(figdir) && mkpath(figdir)
-    # ----------------------------------------------------
 
     # global array
     nx_v         = (nx - 2) * igg.dims[1]
@@ -161,7 +151,6 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     η_vep_nohalo = zeros(nx-2, ny-2, nz-2)
     εII_nohalo   = zeros(nx-2, ny-2, nz-2)
     xci_v        = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
-    xvi_v        = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1), LinRange(0, 1, nz_v+1)
 
     # Time loop
     t, it = 0.0, 0
@@ -216,17 +205,16 @@ end
 
 @suppress begin
     if backend_JR == CPUBackend
-        n      = 32
+        n      = 16
         nx     = n # ÷ 2
         ny     = n # ÷ 2
         nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
-        figdir = "ShearBand3D_MPI"
         igg    = if !(JustRelax.MPI.Initialized())
             IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)
         else
             igg
         end
-        main(igg; figdir = figdir, nx = nx, ny = ny, nz = nz);
+        main(igg; nx = nx, ny = ny, nz = nz);
     else
         println("This test is only for CPU CI yet")
     end

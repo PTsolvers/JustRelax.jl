@@ -1,5 +1,5 @@
 # const isCUDA = false
-const isCUDA = true
+const isCUDA = false
 
 @static if isCUDA
     using CUDA
@@ -32,7 +32,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -278,9 +278,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
         inject_particles_phase!(
-            particles, 
-            pPhases, 
-            particle_args_reduced, 
+            particles,
+            pPhases,
+            particle_args_reduced,
             (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
             xvi
         )
@@ -318,7 +318,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                     xci,
                     data_v,
                     data_c,
-                    velocity_v
+                    velocity_v,
+                    t
                 )
             end
 

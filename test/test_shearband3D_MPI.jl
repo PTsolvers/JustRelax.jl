@@ -35,25 +35,29 @@ end
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, xvi, radius)
-    ni      = size(phase_ratios.center)
+function init_phases!(phases, particles, radius)
+    ni      = size(phases)
     origin  = 0.5, 0.5, 0.5
 
-    @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, o_x, o_y, o_z)
-        x, y, z = xc[i], yc[j], zc[k]
-        if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius^2
-            @index phases[1, i, j, k] = 1.0
-            @index phases[2, i, j, k] = 0.0
+    @parallel_indices (I...) function init_phases!(phases, index, xc, yc, zc, o_x, o_y, o_z)
 
-        else
-            @index phases[1, i, j, k] = 0.0
-            @index phases[2, i, j, k] = 1.0
+        for ip in cellaxes(xc)
+            (@index index[ip, I...]) || continue
+
+            x = @index xc[ip, I...]
+            y = @index yc[ip, I...]
+            z = @index zc[ip, I...]
+
+            if ((x-o_x)^2 + (y-o_y)^2 + (z-o_z)^2) > radius^2
+                @index phases[ip, I...] = 1.0
+            else
+                @index phases[ip, I...] = 2.0
+            end
         end
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin...)
-    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin...)
+    @parallel (@idx ni) init_phases!(phases,  particles.index, particles.coords...,origin...)
     return nothing
 end
 
@@ -76,13 +80,15 @@ function main(igg; nx=64, ny=64, nz=64)
     η0          = 1.0           # viscosity
     G0          = 1.0           # elastic shear modulus
     Gi          = G0/(6.0-4.0)  # elastic shear modulus perturbation
+    # Gi          = G0            # elastic shear modulus perturbation
     εbg         = 1.0           # background strain-rate
-    # η_reg       = 8e-3          # regularisation "viscosity"
     η_reg       = 1.25e-2       # regularisation "viscosity"
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
+    dt         /= 2
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
     el_inc      = ConstantElasticity(; G=Gi, ν=0.5)
     visc        = LinearViscous(; η=η0)
+    visc_inc    = LinearViscous(; η=η0/10)
     pl          = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ,
@@ -95,7 +101,6 @@ function main(igg; nx=64, ny=64, nz=64)
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            # CompositeRheology = CompositeRheology((visc, el_bg, )),
             CompositeRheology = CompositeRheology((visc, el_bg, pl)),
             Elasticity        = el_bg,
 
@@ -104,21 +109,26 @@ function main(igg; nx=64, ny=64, nz=64)
         SetMaterialParams(;
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            # CompositeRheology = CompositeRheology((visc, el_inc, )),
             CompositeRheology = CompositeRheology((visc, el_inc, pl)),
             Elasticity        = el_inc,
         ),
     )
 
     # Initialize phase ratios -------------------------------
-    radius       = 0.1
+    nxcell, max_xcell, min_xcell = 125, 150, 75
+    particles                    = init_particles(backend, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    radius                       = 0.1
+    phase_ratios                 = PhaseRatios(backend, length(rheology), ni)
+    pPhases,                     = init_cell_arrays(particles, Val(1))
+    # Assign particles phases anomaly
+    init_phases!(pPhases, particles, radius)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    init_phases!(phase_ratios, xci, xvi, radius)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
-     # STOKES ---------------------------------------------
+    # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes       = StokesArrays(backend_JR, ni)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-6,  CFL = 0.5 / √3.1)
+    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-5,  CFL = 0.5 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
@@ -132,11 +142,8 @@ function main(igg; nx=64, ny=64, nz=64)
         no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
 
-    Vx = PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
-    Vz = PTArray(backend_JR)([-z*εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
-    stokes.V.Vx .= Vx
-    stokes.V.Vz .= Vz
-
+    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
+    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -154,7 +161,7 @@ function main(igg; nx=64, ny=64, nz=64)
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 4
+    tmax  = 3.5
     τII   = Float64[]
     sol   = Float64[]
     ttot  = Float64[]
@@ -180,6 +187,7 @@ function main(igg; nx=64, ny=64, nz=64)
         )
 
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1

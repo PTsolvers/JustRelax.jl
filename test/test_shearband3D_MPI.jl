@@ -86,7 +86,6 @@ function main(igg; nx=64, ny=64, nz=64)
     εbg         = 1.0           # background strain-rate
     η_reg       = 1.25e-2       # regularisation "viscosity"
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
-    dt         /= 2
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
     el_inc      = ConstantElasticity(; G=Gi, ν=0.5)
     visc        = LinearViscous(; η=η0)
@@ -179,7 +178,7 @@ function main(igg; nx=64, ny=64, nz=64)
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 4
+    tmax  = 3.0
     τII   = Float64[]
     sol   = Float64[]
     ttot  = Float64[]

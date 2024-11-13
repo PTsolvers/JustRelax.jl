@@ -70,10 +70,10 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
     visc        = LinearViscous(; η=η0)
     visc_inc    = LinearViscous(; η=η0/10)
     pl          = DruckerPrager_regularised(;  # non-regularized plasticity
-        C    = C,
-        ϕ    = ϕ,
-        η_vp = η_reg,
-        Ψ    = 0.0,
+        C       = C,
+        ϕ       = ϕ,
+        η_vp    = η_reg,
+        Ψ       = 0.0,
     )
     rheology    = (
         # Low density phase
@@ -108,7 +108,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
   # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes       = StokesArrays(backend_JR, ni)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-5,  CFL = 0.5 / √3.1)
+    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-5,  Re = 3e0, r = 0.7, CFL = 0.9 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
@@ -137,36 +137,36 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
     # ----------------------------------------------------
 
     # global array
-    nx_v         = (nx - 2) * igg.dims[1]
-    ny_v         = (ny - 2) * igg.dims[2]
-    nz_v         = (nz - 2) * igg.dims[3]
-    τII_v        = zeros(nx_v, ny_v, nz_v)
-    η_vep_v      = zeros(nx_v, ny_v, nz_v)
-    εII_v        = zeros(nx_v, ny_v, nz_v)
-    phases_c_v   = zeros(nx_v, ny_v, nz_v)
-    τII_nohalo   = zeros(nx-2, ny-2, nz-2)
-    η_vep_nohalo = zeros(nx-2, ny-2, nz-2)
-    εII_nohalo   = zeros(nx-2, ny-2, nz-2)
+    nx_v            = (nx - 2) * igg.dims[1]
+    ny_v            = (ny - 2) * igg.dims[2]
+    nz_v            = (nz - 2) * igg.dims[3]
+    τII_v           = zeros(nx_v, ny_v, nz_v)
+    η_vep_v         = zeros(nx_v, ny_v, nz_v)
+    εII_v           = zeros(nx_v, ny_v, nz_v)
+    phases_c_v      = zeros(nx_v, ny_v, nz_v)
+    τII_nohalo      = zeros(nx-2, ny-2, nz-2)
+    η_vep_nohalo    = zeros(nx-2, ny-2, nz-2)
+    εII_nohalo      = zeros(nx-2, ny-2, nz-2)
     phases_c_nohalo = zeros(nx-2, ny-2, nz-2)
     #vertex
-    Vxv_v         = zeros(nx_v, ny_v, nz_v)
-    Vyv_v         = zeros(nx_v, ny_v, nz_v)
-    Vzv_v         = zeros(nx_v, ny_v, nz_v)
-    phases_v_v    = zeros(nx_v, ny_v, nz_v)
-    Vx_nohalo    = zeros(nx-2, ny-2, nz-2)
-    Vy_nohalo    = zeros(nx-2, ny-2, nz-2)
-    Vz_nohalo    = zeros(nx-2, ny-2, nz-2)
+    Vxv_v           = zeros(nx_v, ny_v, nz_v)
+    Vyv_v           = zeros(nx_v, ny_v, nz_v)
+    Vzv_v           = zeros(nx_v, ny_v, nz_v)
+    phases_v_v      = zeros(nx_v, ny_v, nz_v)
+    Vx_nohalo       = zeros(nx-2, ny-2, nz-2)
+    Vy_nohalo       = zeros(nx-2, ny-2, nz-2)
+    Vz_nohalo       = zeros(nx-2, ny-2, nz-2)
+    # grid
+    xci_v           = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
 
-    xci_v        = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
-
-    local Vx_v, Vy_v, Vz_v
+    local Vx_v, Vy_v, Vz_v, Vx, Vy, Vz
     if do_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
         Vz_v = @zeros(ni.+1...)
-        Vx = @zeros(ni...)
-        Vy = @zeros(ni...)
-        Vz = @zeros(ni...)
+        Vx   = @zeros(ni...)
+        Vy   = @zeros(ni...)
+        Vz   = @zeros(ni...)
     end
 
     # Time loop
@@ -208,10 +208,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
 
         igg.me == 0 && println("it = $it; t = $t \n")
 
-        velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-        vertex2center!(Vx, Vx_v)
-        vertex2center!(Vy, Vy_v)
-        vertex2center!(Vz, Vz_v)
+        velocity2center!(Vx, Vy, Vz, @velocity(stokes)...)
         @views Vx_nohalo .= Array(Vx[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         @views Vy_nohalo .= Array(Vy[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         @views Vz_nohalo .= Array(Vz[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo

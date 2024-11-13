@@ -266,8 +266,10 @@ function JR3D.velocity2vertex!(
     return nothing
 end
 
-function JR3D.velocity2center!(Vx_c::T, Vy_c::T, Vz_c::T, Vx::T, Vy::T, Vz::T) where {T<:ROCArray}
-    velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
+function JR3D.velocity2center!(
+    Vx_c::T, Vy_c::T, Vz_c::T, Vx::T, Vy::T, Vz::T
+) where {T<:ROCArray}
+    return velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
 end
 
 function JR3D.velocity2displacement!(

@@ -253,8 +253,8 @@ save_vtk(
     xci,
     data_v,
     data_c,
-    velocity_v,
-    t
+    velocity_v;
+    t=t
 )
 ```
 

@@ -70,9 +70,17 @@ end
 
         Vx_v = @ones(ni.+1...)
         Vy_v = @ones(ni.+1...)
-        velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=false)
+        # velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=false)
+        velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
         @test iszero(Vx_v[1,1])
         @test Vy_v[1,1] == 10
+
+        Vx = @ones(ni...)
+        Vy = @ones(ni...)
+        # velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=false)
+        velocity2center!(Vx, Vy, stokes.V.Vx, stokes.V.Vy)
+        @test iszero(Vx[1,1])
+        @test Vy[1,1] == 10
     else
         @test true == true
     end

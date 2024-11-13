@@ -32,6 +32,8 @@ else
 end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
+
+# HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
@@ -84,16 +86,15 @@ function main(igg; nx=64, ny=64, nz=64)
     εbg         = 1.0           # background strain-rate
     η_reg       = 1.25e-2       # regularisation "viscosity"
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
-    dt         /= 2
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
     el_inc      = ConstantElasticity(; G=Gi, ν=0.5)
     visc        = LinearViscous(; η=η0)
     visc_inc    = LinearViscous(; η=η0/10)
     pl          = DruckerPrager_regularised(;  # non-regularized plasticity
-        C    = C,
-        ϕ    = ϕ,
-        η_vp = η_reg,
-        Ψ    = 0.0,
+        C       = C,
+        ϕ       = ϕ,
+        η_vp    = η_reg,
+        Ψ       = 0.0,
     )
     rheology    = (
         # Low density phase
@@ -125,10 +126,10 @@ function main(igg; nx=64, ny=64, nz=64)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
-    # STOKES ---------------------------------------------
+  # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes       = StokesArrays(backend_JR, ni)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-5,  CFL = 0.5 / √3.1)
+    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-5,  Re = 3e0, r = 0.7, CFL = 0.9 / √3.1)
     # Buoyancy forces
     ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
@@ -148,20 +149,36 @@ function main(igg; nx=64, ny=64, nz=64)
     update_halo!(@velocity(stokes)...)
 
     # global array
-    nx_v         = (nx - 2) * igg.dims[1]
-    ny_v         = (ny - 2) * igg.dims[2]
-    nz_v         = (nz - 2) * igg.dims[3]
-    τII_v        = zeros(nx_v, ny_v, nz_v)
-    η_vep_v      = zeros(nx_v, ny_v, nz_v)
-    εII_v        = zeros(nx_v, ny_v, nz_v)
-    τII_nohalo   = zeros(nx-2, ny-2, nz-2)
-    η_vep_nohalo = zeros(nx-2, ny-2, nz-2)
-    εII_nohalo   = zeros(nx-2, ny-2, nz-2)
-    xci_v        = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
+    nx_v            = (nx - 2) * igg.dims[1]
+    ny_v            = (ny - 2) * igg.dims[2]
+    nz_v            = (nz - 2) * igg.dims[3]
+    τII_v           = zeros(nx_v, ny_v, nz_v)
+    η_vep_v         = zeros(nx_v, ny_v, nz_v)
+    εII_v           = zeros(nx_v, ny_v, nz_v)
+    phases_c_v      = zeros(nx_v, ny_v, nz_v)
+    τII_nohalo      = zeros(nx-2, ny-2, nz-2)
+    η_vep_nohalo    = zeros(nx-2, ny-2, nz-2)
+    εII_nohalo      = zeros(nx-2, ny-2, nz-2)
+    phases_c_nohalo = zeros(nx-2, ny-2, nz-2)
+    #vertex
+    Vxv_v           = zeros(nx_v, ny_v, nz_v)
+    Vyv_v           = zeros(nx_v, ny_v, nz_v)
+    Vzv_v           = zeros(nx_v, ny_v, nz_v)
+    phases_v_v      = zeros(nx_v, ny_v, nz_v)
+    Vx_nohalo       = zeros(nx-2, ny-2, nz-2)
+    Vy_nohalo       = zeros(nx-2, ny-2, nz-2)
+    Vz_nohalo       = zeros(nx-2, ny-2, nz-2)
+    # grid
+    xci_v           = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
+
+    local Vx, Vy, Vz
+    Vx   = @zeros(ni...)
+    Vy   = @zeros(ni...)
+    Vz   = @zeros(ni...)
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 3.5
+    tmax  = 3.0
     τII   = Float64[]
     sol   = Float64[]
     ttot  = Float64[]
@@ -198,7 +215,17 @@ function main(igg; nx=64, ny=64, nz=64)
 
         igg.me == 0 && println("it = $it; t = $t \n")
 
+        velocity2center!(Vx, Vy, Vz, @velocity(stokes)...)
+        @views Vx_nohalo .= Array(Vx[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views Vy_nohalo .= Array(Vy[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views Vz_nohalo .= Array(Vz[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        gather!(Vx_nohalo, Vxv_v)
+        gather!(Vy_nohalo, Vyv_v)
+        gather!(Vz_nohalo, Vzv_v)
+
         # MPI
+        phase_center = [argmax(p) for p in Array(phase_ratios.center)]
+
         @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
         @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
@@ -206,6 +233,8 @@ function main(igg; nx=64, ny=64, nz=64)
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
 
+        @views phases_c_nohalo .= Array(phase_center[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        gather!(phases_c_nohalo, phases_c_v)
     end
 
     return nothing
@@ -215,7 +244,7 @@ end
     if backend_JR == CPUBackend
         n      = 32 + 2
         nx     = n ÷ 2
-        ny     = n - 2 
+        ny     = n - 2
         nz     = n - 2 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
         igg    = if !(JustRelax.MPI.Initialized())
             IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)

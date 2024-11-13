@@ -315,9 +315,8 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
                     xci,
                     data_v,
                     data_c,
-                    velocity_v,
-                    t,
-                    t
+                    velocity_v;
+                    t=t
                 )
             end
 

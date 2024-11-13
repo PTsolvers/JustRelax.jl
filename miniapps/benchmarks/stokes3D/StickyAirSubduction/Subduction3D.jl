@@ -204,8 +204,8 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
                     xci,
                     data_v,
                     data_c,
-                    velocity_v,
-                    t
+                    velocity_v;
+                    t=t
                 )
             end
         end

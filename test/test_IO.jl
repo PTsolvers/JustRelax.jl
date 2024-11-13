@@ -122,8 +122,8 @@ using WriteVTK
             xci,
             data_v,
             data_c,
-            velocity_v,
-            time,
+            velocity_v;
+            t=time,
         )
         @test isfile(joinpath(dst, "vtk_000001_1.vti"))
         @test isfile(joinpath(dst, "vtk_000001_2.vti"))
@@ -134,8 +134,8 @@ using WriteVTK
             joinpath(dst, "vtk_" * lpad("1", 6, "0")),
             xci,
             data_c,
-            velocity_v,
-            time,
+            velocity_v;
+            t=time,
         )
 
         @test isfile(joinpath(dst, "vtk_000001.vti"))

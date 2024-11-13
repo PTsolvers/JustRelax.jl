@@ -47,8 +47,8 @@ function save_vtk(
     xci,
     data_v::NamedTuple,
     data_c::NamedTuple,
-    velocity::NTuple{N,T},
-    t::Number,
+    velocity::NTuple{N,T};
+    t::Number=nothing,
 ) where {N,T}
 
     # unpack data names and arrays
@@ -77,7 +77,7 @@ function save_vtk(
                 vtk[name_i] = Array(array_i)
             end
             vtk["Velocity"] = velocity_field
-            vtk["TimeValue"] = t
+            isnothing(t) || (vtk["TimeValue"] = t)
         end
     end
 
@@ -85,7 +85,7 @@ function save_vtk(
 end
 
 function save_vtk(
-    fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T}, t::Number
+    fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T}; t::Number=nothing
 ) where {N,T}
 
     # unpack data names and arrays
@@ -103,7 +103,7 @@ function save_vtk(
             vtk[name_i] = Array(array_i)
         end
         vtk["Velocity"] = velocity_field
-        vtk["TimeValue"] = t
+        isnothing(t) || (vtk["TimeValue"] = t)
     end
 
     return nothing

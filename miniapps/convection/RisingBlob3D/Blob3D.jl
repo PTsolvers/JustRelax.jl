@@ -463,8 +463,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                         xci,
                         data_v,
                         data_c,
-                        velocity_v,
-                        t
+                        velocity_v;
+                        t=t
                     )
                 end
 

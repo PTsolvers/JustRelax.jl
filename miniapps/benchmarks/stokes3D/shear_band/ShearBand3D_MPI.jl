@@ -159,11 +159,8 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
     # grid
     xci_v           = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
 
-    local Vx_v, Vy_v, Vz_v, Vx, Vy, Vz
+    local Vx, Vy, Vz
     if do_vtk
-        Vx_v = @zeros(ni.+1...)
-        Vy_v = @zeros(ni.+1...)
-        Vz_v = @zeros(ni.+1...)
         Vx   = @zeros(ni...)
         Vy   = @zeros(ni...)
         Vz   = @zeros(ni...)
@@ -246,8 +243,8 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
                 joinpath(vtk_dir, "vtk_" * lpad("$(it)_$(igg.me)", 6, "0")),
                 xci_v,
                 data_c,
-                velocity,
-                t
+                velocity;
+                t=t
             )
 
             # visualisation

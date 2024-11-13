@@ -213,10 +213,10 @@ end
 
 @suppress begin
     if backend_JR == CPUBackend
-        n      = 16
-        nx     = n # ÷ 2
-        ny     = n # ÷ 2
-        nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
+        n      = 32 + 2
+        nx     = n ÷ 2
+        ny     = n - 2 
+        nz     = n - 2 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
         igg    = if !(JustRelax.MPI.Initialized())
             IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)
         else

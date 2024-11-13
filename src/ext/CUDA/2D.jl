@@ -248,10 +248,8 @@ function JR2D.velocity2center!(Vx_c::T, Vy_c::T, Vx::T, Vy::T) where {T<:CuArray
     return nothing
 end
 
-function JR2D.velocity2vertex!(
-    Vx_v::CuArray, Vy_v::CuArray, Vx::CuArray, Vy::CuArray; ghost_nodes=true
-)
-    velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=ghost_nodes)
+function JR2D.velocity2vertex!(Vx_v::CuArray, Vy_v::CuArray, Vx::CuArray, Vy::CuArray)
+    velocity2vertex!(Vx_v, Vy_v, Vx, Vy)
     return nothing
 end
 

@@ -176,8 +176,8 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
     trms    =   Float64[]
 
     # Buffer arrays to compute velocity rms
-    Vx_v    =   @zeros(ni.+1...)
-    Vy_v    =   @zeros(ni.+1...)
+    Vx_v    =   @zeros(ni .+ 1...)
+    Vy_v    =   @zeros(ni .+ 1...)
 
     # WENO arrays
     T_WENO  = @zeros(ni.+1)
@@ -231,7 +231,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
             )
         )
         @views T_WENO .= thermal.T[2:end-1, :]
-        JustRelax.JustRelax2D.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
         WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
         @views thermal.T[2:end-1, :]  .= T_WENO
         @views thermal.T[2:end-1,end] .= 273.0

@@ -5,7 +5,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-using Test#, Suppressor
+using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
@@ -241,7 +241,7 @@ function main(igg; nx=64, ny=64, nz=64)
     return nothing
 end
 
-# @suppress begin
+@suppress begin
     if backend_JR == CPUBackend
         n      = 32 + 2
         nx     = n ÷ 2
@@ -256,4 +256,4 @@ end
     else
         println("This test is only for CPU CI yet")
     end
-# end
+end

@@ -261,6 +261,11 @@ function JR2D.velocity2vertex!(
     return nothing
 end
 
+function JR2D.velocity2center!(Vx_c::T, Vy_c::T, Vx::T, Vy::T) where {T<:ROCArray}
+    velocity2center!(Vx_c, Vy_c, Vx, Vy)
+    nothing
+end
+
 function JR2D.velocity2displacement!(
     ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt
 )

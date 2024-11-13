@@ -239,7 +239,13 @@ end
 function JR2D.center2vertex!(
     vertex_yz::T, vertex_xz::T, vertex_xy::T, center_yz::T, center_xz::T, center_xy::T
 ) where {T<:CuArray}
-    return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
+    center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
+    return nothing
+end
+
+function JR2D.velocity2center!(Vx_c::T, Vy_c::T, Vx::T, Vy::T) where {T<:CuArray}
+    velocity2center!(Vx_c, Vy_c, Vx, Vy)
+    nothing
 end
 
 function JR2D.velocity2vertex!(

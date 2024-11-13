@@ -274,33 +274,48 @@ In-place interpolation of the velocity field `Vx`, `Vy`, `Vz` from a staggered g
 onto the pre-allocated `Vx_d`, `Vy_d`, `Vz_d` 3D arrays located at the grid vertices.
 """
 function velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
-    # infer size of grid
-    nx, ny, nz = size(Vx)
-    n = max(nx, ny, nz)
-    nv_x, nv_y, nv_z = nx - 1, ny - 2, nz - 2
+    @assert size(Vx_v) == size(Vy_v) == size(Vz_v)
     # interpolate to cell vertices
-    @parallel (@idx n, n, n) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
-
+    @parallel (@idx size(Vx_v)) _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
     return nothing
 end
 
 @parallel_indices (i, j, k) function _velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
-    @inbounds begin
-        if all((i, j, k) .≤ size(Vx))
-            Vx_v[i, j, k] =
-                0.25 *
-                (Vx[i, j, k] + Vx[i, j + 1, k] + Vx[i, j, k + 1] + Vx[i, j + 1, k + 1])
-        end
-        if all((i, j, k) .≤ size(Vy))
-            Vy_v[i, j, k] =
-                0.25 *
-                (Vy[i, j, k] + Vy[i + 1, j, k] + Vy[i, j, k + 1] + Vy[i + 1, j, k + 1])
-        end
-        if all((i, j, k) .≤ size(Vz))
-            Vz_v[i, j, k] =
-                0.25 *
-                (Vz[i, j, k] + Vz[i, j + 1, k] + Vz[i + 1, j, k] + Vz[i + 1, j + 1, k])
-        end
-    end
+    Vx_v[i, j, k] =
+        0.25 *
+        (Vx[i, j, k] + Vx[i, j + 1, k] + Vx[i, j, k + 1] + Vx[i, j + 1, k + 1])
+    Vy_v[i, j, k] =
+        0.25 *
+        (Vy[i, j, k] + Vy[i + 1, j, k] + Vy[i, j, k + 1] + Vy[i + 1, j, k + 1])
+    Vz_v[i, j, k] =
+        0.25 *
+        (Vz[i, j, k] + Vz[i, j + 1, k] + Vz[i + 1, j, k] + Vz[i + 1, j + 1, k])
+    return nothing
+end
+
+function velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
+    @assert size(Vx_c) == size(Vy_c) == size(Vz_c)
+    # interpolate to cell vertices
+    @parallel (@idx size(Vx_c)) _velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
+    return nothing
+end
+
+@parallel_indices (i, j, k) function _velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
+    Vx_c[i, j, k] = (Vx[i, j + 1, k + 1] + Vx[i + 1, j + 1, k + 1]) / 2
+    Vy_c[i, j, k] = (Vy[i + 1, j, k + 1] + Vy[i + 1, j + 1, k + 1]) / 2
+    Vz_c[i, j, k] = (Vz[i + 1, j + 1, k] + Vz[i + 1, j + 1, k + 1]) / 2
+    return nothing
+end
+
+function velocity2center!(Vx_c, Vy_c, Vx, Vy)
+    @assert size(Vx_c) == size(Vy_c)
+    # interpolate to cell vertices
+    @parallel (@idx size(Vx_c)) _velocity2center!(Vx_c, Vy_c, Vx, Vy)
+    return nothing
+end
+
+@parallel_indices (i, j, k) function _velocity2center!(Vx_c, Vy_c, Vx, Vy)
+    Vx_c[i, j, k] = (Vx[i, j + 1] + Vx[i + 1, j + 1]) / 2
+    Vy_c[i, j, k] = (Vy[i + 1, j] + Vy[i + 1, j + 1]) / 2
     return nothing
 end

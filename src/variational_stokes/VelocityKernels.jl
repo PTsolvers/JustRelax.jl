@@ -73,7 +73,7 @@ end
                     -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
                 )
-            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ, ϕ.center)
+            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
         else
             Rx[i, j] = zero(T)
             Vx[i + 1, j + 1] = zero(T)
@@ -86,7 +86,7 @@ end
                 R_Vy =
                     -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                     av_ya(ρgy, ϕ.center)
-            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ, ϕ.center)
+            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
         else
             Ry[i, j] = zero(T)
             Vy[i + 1, j + 1] = zero(T)

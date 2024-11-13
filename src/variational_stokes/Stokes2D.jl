@@ -163,7 +163,7 @@ function _solve_VS!(
             )
             # apply boundary conditions
             velocity2displacement!(stokes, dt)
-            free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
+            # free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)
             # end

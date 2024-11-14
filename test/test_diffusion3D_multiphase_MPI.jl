@@ -212,13 +212,6 @@ function diffusion_3D(;
         @views T_nohalo .= Array(thermal.T[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
-        # if igg.me == 0
-        #     slice_j = ny_v >>> 1
-        #     fig, = heatmap(T_v[:, slice_j, :])
-        #     save("temperature_3D_it_$(it)_MPI.png", fig)
-        #     println("\n SAVED TEMPERATURE \n")
-        # end
-
         t  += dt
         it += 1
     end

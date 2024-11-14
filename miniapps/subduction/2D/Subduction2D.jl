@@ -1,4 +1,3 @@
-# const isCUDA = false
 const isCUDA = false
 
 @static if isCUDA
@@ -318,7 +317,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                     xci,
                     data_v,
                     data_c,
-                    velocity_v;
+                    velocity_v,
                     t=t
                 )
             end

@@ -20,15 +20,6 @@ function GMG_only(xvi, nx, ny, nz)
 
     # We use a lithospheric structure. Note that if the lowermost layer has the same phase as the mantle, you can define `Tlab` as the lithosphere-asthenosphere boundary which will automatically adjust the phase depending on temperature
     lith = LithosphericPhases(Layers=[80], Phases=[1 2], Tlab=1250)
-    # add_box!(Phases, Temp, Grid; xlim=(-3000,-1000), ylim=(0, 1000.0), zlim=(-80.0, 0.0), phase = lith,
-    #         Origin=(-0,0,0),
-    #         T=SpreadingRateTemp(SpreadingVel=3, MORside="left"), StrikeAngle=0);
-
-    # # And an an inclined part:
-    # lith = LithosphericPhases(Layers=[200], Phases=[1 2], Tlab=1250)
-    # add_box!(Phases, Temp, Grid; xlim=(0,300).-1000, ylim=(0, 1000.0), zlim=(-80.0, 10.0), phase = lith,
-    #         # Origin=(-1000,0,0),
-    #         T=SpreadingRateTemp(SpreadingVel=0, MORside="left"), DipAngle=20, StrikeAngle=0);
 
     add_box!(Phases, Temp, Grid; xlim=(-3000,-1000), ylim=(0,1000), zlim=(-80,0), phase=LithosphericPhases(Layers=[20,60], Phases=[1,2]))
     add_box!(Phases, Temp, Grid, xlim=(-1000, -810), ylim=(0,1000), zlim=(-80,0), phase=LithosphericPhases(Layers=[20,60], Phases=[1,2]), DipAngle=20)

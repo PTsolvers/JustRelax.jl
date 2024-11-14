@@ -304,7 +304,7 @@ function main3D(igg; ar=1, nx=16, ny=16, nz=16, figdir="figs3D", do_vtk =false)
                     xci,
                     data_v,
                     data_c,
-                    velocity_v;
+                    velocity_v,
                     t=t
                 )
             end

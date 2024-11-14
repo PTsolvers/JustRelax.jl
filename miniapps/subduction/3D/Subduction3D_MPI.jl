@@ -148,10 +148,6 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
 
     while (t/(1e6 * 3600 * 24 *365.25)) < 10 # run only for 5 Myrs
 
-        # # interpolate fields from particle to grid vertices
-        # particle2grid!(thermal.T, pT, xvi, particles)
-        # temperature2center!(thermal)
-
         # Stokes solver ----------------
         t_stokes = @elapsed begin
             out = solve!(
@@ -179,30 +175,6 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx=16
         end
         tensor_invariant!(stokes.ε)
         dt   = compute_dt(stokes, di)
-        # ------------------------------
-
-        # # Thermal solver ---------------
-        # heatdiffusion_PT!(
-        #     thermal,
-        #     pt_thermal,
-        #     thermal_bc,
-        #     rheology,
-        #     args,
-        #     dt,
-        #     di;
-        #     igg     = igg,
-        #     phase   = phase_ratios,
-        #     iterMax = 10e3,
-        #     nout    = 1e2,
-        #     verbose = true,
-        # )
-        # subgrid_characteristic_time!(
-        #     subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
-        # )
-        # centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
-        # subgrid_diffusion!(
-        #     pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi,  di, dt
-        # )
         # ------------------------------
 
         # Advection --------------------
@@ -290,9 +262,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-# nx,ny,nz = 50, 50, 50
 nx,ny,nz = 32,32,32
-# nx,ny,nz = 128, 32, 64
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI= true)...)
 else

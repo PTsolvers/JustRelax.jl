@@ -178,7 +178,7 @@ function main(igg; nx=64, ny=64, nz=64)
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 3.0
+    tmax  = 2.25
     τII   = Float64[]
     sol   = Float64[]
     ttot  = Float64[]

@@ -1,13 +1,36 @@
-using GeoParams
-using JustRelax, JustRelax.JustRelax2D, GLMakie
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+push!(LOAD_PATH, "..")
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
 
-const backend_JR = CPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+end
+
+using Test, Suppressor
+using GeoParams, CellArrays
+using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil
+
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 2)
+    CUDABackend
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+    CPUBackend
+end
 
 using JustPIC, JustPIC._2D
 
-const backend = JustPIC.CPUBackend
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustPIC.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    JustPIC.CPUBackend
+end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -36,7 +59,7 @@ function init_phases!(phase_ratios, xci, xvi, radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, figdir="model_figs")
+function main(igg; nx=64, ny=64)
 
     # Physical domain ------------------------------------
     ly           = 1e0          # domain length in y
@@ -116,10 +139,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    # IO ------------------------------------------------
-    # if it does not exist, make folder where figures are stored
-    take(figdir)
-    # ----------------------------------------------------
 
     # global array
     nx_v         = (nx - 2) * igg.dims[1]
@@ -139,6 +158,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     local Vx, Vy
     Vx   = @zeros(ni...)
     Vy   = @zeros(ni...)
+
 
     # Time loop
     t, it      = 0.0, 0
@@ -169,7 +189,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             )
         )
         tensor_invariant!(stokes.ε)
-        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -199,37 +218,25 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
 
-        if igg.me == 0
-            fig = Figure(size = (1600, 1600), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = 1, title = "τII")
-            ax2 = Axis(fig[2,1], aspect = 1, title = "η_vep")
-            ax3 = Axis(fig[1,3], aspect = 1, title = "log10(εII)")
-            ax4 = Axis(fig[2,3], aspect = 1)
-            heatmap!(ax1, xci_v..., Array(τII_v)          , colormap=:batlow)
-            heatmap!(ax2, xci_v..., Array(log10.(η_vep_v)), colormap=:batlow)
-            heatmap!(ax3, xci_v..., Array(log10.(εII_v))  , colormap=:batlow)
-            lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-            lines!(ax4, ttot, τII, color = :black)
-            lines!(ax4, ttot, sol, color = :red)
-            hidexdecorations!(ax1)
-            hidexdecorations!(ax3)
-            save(joinpath(figdir, "MPI_$(it).png"), fig)
-
-        end
     end
 
     return nothing
 
 end
 
-N      = 30
-n      = N
-nx     = n*2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-ny     = n*2
-figdir = "ShearBands2D_MPI"
-igg  = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device=false)...)
-else
-    igg
+@suppress begin
+    if backend_JR == CPUBackend
+        N      = 30
+        n      = N
+        nx     = n*2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+        ny     = n*2
+        igg  = if !(JustRelax.MPI.Initialized())
+            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+        else
+            igg
+        end
+        main(igg; nx = nx, ny = ny);
+    else
+        println("This test is only for CPU CI yet")
+    end
 end
-main(igg; figdir = figdir, nx = nx, ny = ny);

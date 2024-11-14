@@ -91,10 +91,10 @@ function diffusion_2D(figdir;
     temperature2center!(thermal)
 
     # global array
-    nx_v = ((nx + 2) - 2) * igg.dims[1]
-    ny_v = ((ny + 1) - 2) * igg.dims[2]
+    nx_v = (nx - 2) * igg.dims[1]
+    ny_v = (ny - 2) * igg.dims[2]
     T_v  = zeros(nx_v, ny_v)
-    T_nohalo = zeros((nx + 2)-2, (ny + 1)-2)
+    T_nohalo = zeros(nx -2, ny -2)
 
     # Time loop
     t  = 0.0
@@ -118,7 +118,9 @@ function diffusion_2D(figdir;
             )
         )
 
-        @views T_nohalo .= Array(thermal.T[2:end-2, 2:end-1]) # Copy data to CPU removing the halo
+        temperature2center!(thermal)
+
+        @views T_nohalo .= Array(thermal.Tc[2:end-2, 2:end-1]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         if igg.me == 0

@@ -12,7 +12,7 @@ using JustPIC._2D
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie
+using Printf, LinearAlgebra, GeoParams, GLMakie
 
 # Load file with all the rheology configurations
 include("Blankenbach_Rheology_scaled.jl")
@@ -257,7 +257,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
         # Compute U rms -----------------------------
         # U₍ᵣₘₛ₎ = √ ∫∫ (vx²+vz²) dx dz
         Urms_it = let
-            JustRelax.JustRelax2D.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
+            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
             sqrt(sum( Vx_v.^2 .* prod(di)) )
         end
@@ -307,7 +307,8 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
                     xci,
                     data_v,
                     data_c,
-                    velocity_v
+                    velocity_v,
+                    t=t
                 )
             end
 

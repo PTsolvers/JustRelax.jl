@@ -1,17 +1,17 @@
 const isGPU = true
-@static if isGPU 
+@static if isGPU
     using CUDA
 end
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
-const backend_JR = @static if isGPU 
+const backend_JR = @static if isGPU
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
-@static if isGPU 
+@static if isGPU
     @init_parallel_stencil(CUDA, Float64, 3)
 else
      @init_parallel_stencil(Threads, Float64, 3)
@@ -21,7 +21,7 @@ using JustPIC, JustPIC._3D
 # const backend_JP = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 # const backend_JP = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-const backend_JP = @static if isGPU 
+const backend_JP = @static if isGPU
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustPIC.CPUBackend
@@ -121,11 +121,11 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
         Vy_v = @zeros(ni.+1...)
         Vz_v = @zeros(ni.+1...)
     end
-    
+
     # Time loop
     t, it = 0.0, 0
     while it < 500 # run only for 5 Myrs
-        
+
         # Stokes solver ----------------
         compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
         t_stokes = @elapsed begin
@@ -204,7 +204,8 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
                     xci,
                     data_v,
                     data_c,
-                    velocity_v
+                    velocity_v,
+                    t=t
                 )
             end
         end

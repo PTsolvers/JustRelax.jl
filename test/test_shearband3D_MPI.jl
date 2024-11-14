@@ -1,15 +1,37 @@
-using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+push!(LOAD_PATH, "..")
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+end
 
-const backend_JR = CPUBackend
-
-using GeoParams, CairoMakie
-
+using Test, Suppressor
+using GeoParams
+using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 3)
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 3)
+    CUDABackend
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+    CPUBackend
+end
 
 using JustPIC, JustPIC._3D
 
-const backend = JustPIC.CPUBackend
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustPIC.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    JustPIC.CPUBackend
+end
+
+# HELPER FUNCTIONS ---------------------------------------------------------------
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -42,7 +64,7 @@ function init_phases!(phases, particles, radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
+function main(igg; nx=64, ny=64, nz=64)
 
     # Physical domain ------------------------------------
     lx = ly = lz = 1e0             # domain length in y
@@ -64,7 +86,6 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
     εbg         = 1.0           # background strain-rate
     η_reg       = 1.25e-2       # regularisation "viscosity"
     dt          = η0/G0/4.0     # assumes Maxwell time of 4
-    # dt         /= 2
     el_bg       = ConstantElasticity(; G=G0, ν=0.5)
     el_inc      = ConstantElasticity(; G=Gi, ν=0.5)
     visc        = LinearViscous(; η=η0)
@@ -127,15 +148,6 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    # IO ------------------------------------------------
-    # if it does not exist, make folder where figures are stored
-    if do_vtk
-        vtk_dir      = joinpath(figdir, "vtk")
-        take(vtk_dir)
-    end
-    !isdir(figdir) && mkpath(figdir)
-    # ----------------------------------------------------
-
     # global array
     nx_v            = (nx - 2) * igg.dims[1]
     ny_v            = (ny - 2) * igg.dims[2]
@@ -160,15 +172,13 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
     xci_v           = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v), LinRange(0, 1, nz_v)
 
     local Vx, Vy, Vz
-    if do_vtk
-        Vx   = @zeros(ni...)
-        Vy   = @zeros(ni...)
-        Vz   = @zeros(ni...)
-    end
+    Vx   = @zeros(ni...)
+    Vy   = @zeros(ni...)
+    Vz   = @zeros(ni...)
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 4
+    tmax  = 2.25
     τII   = Float64[]
     sol   = Float64[]
     ttot  = Float64[]
@@ -225,62 +235,24 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs", do_vtk=false)
 
         @views phases_c_nohalo .= Array(phase_center[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         gather!(phases_c_nohalo, phases_c_v)
-
-        if igg.me == 0
-
-            data_c = (;
-                τII = τII_v,
-                εII = εII_v,
-                η   = η_vep_v,
-                phases = phases_c_v
-            )
-            velocity = (
-                Array(Vxv_v),
-                Array(Vyv_v),
-                Array(Vzv_v),
-            )
-            save_vtk(
-                joinpath(vtk_dir, "vtk_" * lpad("$(it)_$(igg.me)", 6, "0")),
-                xci_v,
-                data_c,
-                velocity;
-                t=t
-            )
-
-            # visualisation
-            th      = 0:pi/50:3*pi;
-            xunit   = @. radius * cos(th) + 0.5;
-            yunit   = @. radius * sin(th) + 0.5;
-            slice_j = ny_v >>> 1
-            fig     = Figure(size = (1600, 1600), title = "t = $t")
-            ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
-            ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
-            ax3     = Axis(fig[1,2], aspect = 1, title = "log10(εII)")
-            ax4     = Axis(fig[2,2], aspect = 1)
-            heatmap!(ax1, xci_v[1], xci_v[3], Array(τII_v[:, slice_j, :]) , colormap=:batlow)
-            heatmap!(ax2, xci_v[1], xci_v[3], Array(log10.(η_vep_v)[:, slice_j, :]) , colormap=:batlow)
-            heatmap!(ax3, xci_v[1], xci_v[3], Array(log10.(εII_v)[:, slice_j, :]) , colormap=:batlow)
-            lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-            lines!(ax4, ttot, τII, color = :black)
-            lines!(ax4, ttot, sol, color = :red)
-            hidexdecorations!(ax1)
-            hidexdecorations!(ax3)
-            save(joinpath(figdir, "MPI_3D_$(it).png"), fig)
-        end
     end
 
     return nothing
 end
 
-do_vtk = true
-n      = 32
-nx     = n # ÷ 2
-ny     = n # ÷ 2
-nz     = n # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
-figdir = "ShearBand3D_MPI"
-igg    = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)
-else
-    igg
+@suppress begin
+    if backend_JR == CPUBackend
+        n      = 32 + 2
+        nx     = n ÷ 2
+        ny     = n - 2
+        nz     = n - 2 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
+        igg    = if !(JustRelax.MPI.Initialized())
+            IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device=false)...)
+        else
+            igg
+        end
+        main(igg; nx = nx, ny = ny, nz = nz);
+    else
+        println("This test is only for CPU CI yet")
+    end
 end
-main(igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

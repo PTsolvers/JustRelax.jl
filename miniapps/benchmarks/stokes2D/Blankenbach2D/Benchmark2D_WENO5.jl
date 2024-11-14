@@ -176,8 +176,8 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
     trms    =   Float64[]
 
     # Buffer arrays to compute velocity rms
-    Vx_v    =   @zeros(ni.+1...)
-    Vy_v    =   @zeros(ni.+1...)
+    Vx_v    =   @zeros(ni .+ 1...)
+    Vy_v    =   @zeros(ni .+ 1...)
 
     # WENO arrays
     T_WENO  = @zeros(ni.+1)
@@ -231,7 +231,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
             )
         )
         @views T_WENO .= thermal.T[2:end-1, :]
-        JustRelax.JustRelax2D.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
         WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
         @views thermal.T[2:end-1, :]  .= T_WENO
         @views thermal.T[2:end-1,end] .= 273.0
@@ -249,6 +249,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
         # U₍ᵣₘₛ₎ = H*ρ₀*c₍ₚ₎/k * √ 1/H/L * ∫∫ (vx²+vz²) dx dz
         Urms_it = let
             # JustRelax.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
+            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
             sqrt( sum( Vx_v.^2 .* prod(di)) / lx /ly ) *
                 ((ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k )
@@ -287,7 +288,8 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
                     xci,
                     data_v,
                     data_c,
-                    velocity_v
+                    velocity_v,
+                    t=t
                 )
             end
 

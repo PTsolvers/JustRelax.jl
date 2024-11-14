@@ -1,13 +1,10 @@
 using GeophysicalModelGenerator
 
-function GMG_subduction_2D(nx, ny)
-    model_depth = 660
-    # Our starting basis is the example above with ridge and overriding slab
+function GMG_subduction_2D(model_depth, xvi, nx, ny)
     nx, nz = nx, ny
     Tbot   = 1474.0
-    x      = range(0, 3000, nx);
-    air_thickness = 15.0
-    z      = range(-model_depth, air_thickness, nz);
+    x = range(minimum(xvi[1]), maximum(xvi[1]), nx);
+    z = range(minimum(xvi[2]), maximum(xvi[2]), nz);
     Grid2D = CartData(xyz_grid(x,0,z))
     Phases = zeros(Int64, nx, 1, nz);
     Temp   = fill(Tbot, nx, 1, nz);
@@ -36,7 +33,7 @@ function GMG_subduction_2D(nx, ny)
         Phases,
         Temp,
         Grid2D;
-        xlim    =(100, 3000-100),
+        xlim    =(100, 2900),
         zlim    =(-model_depth, 0.0),
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
         phase   = LithosphericPhases(Layers=[80], Phases=[1 0], Tlab=Tlab),
@@ -48,7 +45,7 @@ function GMG_subduction_2D(nx, ny)
         Phases,
         Temp,
         Grid2D;
-        xlim    =(3000-1430, 3000-200),
+        xlim    =(1570, 2800),
         zlim    =(-model_depth, 0.0),
         Origin  = nothing, StrikeAngle=0, DipAngle=0,
         phase   = LithosphericPhases(Layers=[8 72], Phases=[2 1 0], Tlab=Tlab),
@@ -60,7 +57,7 @@ function GMG_subduction_2D(nx, ny)
         Phases,
         Temp,
         Grid2D;
-        xlim    = (3000-1430, 3000-1430-250),
+        xlim    = (1570, 1320),
         zlim    =(-80, 0.0),
         Origin  = nothing, StrikeAngle=0, DipAngle=-30,
         phase   = LithosphericPhases(Layers=[8 80], Phases=[2 1 0], Tlab=Tlab),
@@ -71,8 +68,11 @@ function GMG_subduction_2D(nx, ny)
     Temp[surf] .= 20.0
     Phases[surf] .= 3
 
+
     Grid2D = addfield(Grid2D,(;Phases, Temp))
-    write_paraview(Grid2D,"Initial_Setup_Subduction_rank");
+    # Which looks like
+    write_paraview(Grid2D,"Initial_Setup_Subduction_$(igg.me)");
+
     li = (abs(last(x)-first(x)), abs(last(z)-first(z))).* 1e3
     origin = (x[1], z[1]) .* 1e3
 

@@ -262,10 +262,16 @@ function JR3D.center2vertex!(
 end
 
 function JR3D.velocity2vertex!(
-    Vx_v::CuArray, Vy_v::CuArray, Vz_v::CuArray, Vx::CuArray, Vy::CuArray, Vz::CuArray
-)
+    Vx_v::T, Vy_v::T, Vz_v::T, Vx::T, Vy::T, Vz::T
+) where {T<:CuArray}
     velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
     return nothing
+end
+
+function JR3D.velocity2center!(
+    Vx_c::T, Vy_c::T, Vz_c::T, Vx::T, Vy::T, Vz::T
+) where {T<:CuArray}
+    return velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
 end
 
 function JR3D.velocity2displacement!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, dt)

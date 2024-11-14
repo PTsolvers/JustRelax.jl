@@ -61,7 +61,8 @@ include("particles/subgrid_diffusion.jl")
 export subgrid_characteristic_time!
 
 include("Interpolations.jl")
-export vertex2center!, center2vertex!, temperature2center!, velocity2vertex!
+export vertex2center!,
+    center2vertex!, temperature2center!, velocity2vertex!, velocity2center!
 
 include("advection/weno5.jl")
 export WENO_advection!

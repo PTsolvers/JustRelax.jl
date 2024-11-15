@@ -1,13 +1,15 @@
 abstract type AbstractBoundaryConditions end
 abstract type AbstractFlowBoundaryConditions <: AbstractBoundaryConditions end
-struct TemperatureBoundaryConditions{T,nD} <: AbstractBoundaryConditions
+struct TemperatureBoundaryConditions{T,D,nD} <: AbstractBoundaryConditions
     no_flux::T
-
+    dirichlet::D
     function TemperatureBoundaryConditions(;
-        no_flux::T=(left=true, right=false, top=false, bot=false)
+        no_flux::T=(left=true, right=false, top=false, bot=false),
+        dirichlet=(; values=nothing, mask=nothing),
     ) where {T}
+        D = Dirichlet(dirichlet)
         nD = length(no_flux) == 4 ? 2 : 3
-        return new{T,nD}(no_flux)
+        return new{T,typeof(D),nD}(no_flux, D)
     end
 end
 

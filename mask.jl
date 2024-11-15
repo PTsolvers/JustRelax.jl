@@ -1,3 +1,4 @@
+using MuladdMacro
 abstract type AbstractMask end
 
 struct Mask{T} <: AbstractMask
@@ -43,7 +44,50 @@ Base.all(m::Mask) = all(isone, m.mask)
 Base.similar(m::Mask) = Mask(size(m)...)
 
 apply_mask!(A::AbstractArray, B::AbstractArray, m::Mask) = (A .= inv(m) .* A .+ m.mask .* B)
+apply_mask!(::AbstractArray, ::AbstractArray, ::Nothing) = nothing
 apply_mask!(A::AbstractArray, B::AbstractArray, m::Mask, inds::Vararg{Int,N}) where {N} = (A[inds...] = inv(m, inds...) * A[inds...] + m[inds...]  * B[inds...])
+apply_mask!(::AbstractArray, ::AbstractArray, ::Nothing, inds::Vararg{Int,N}) where {N} = nothing
 
 apply_mask(A::AbstractArray, B::AbstractArray, m::Mask) = inv(m) .* A .+ m.mask .* B
-apply_mask(A::AbstractArray, B::AbstractArray, m::Mask, inds::Vararg{Int,N}) where {N} = inv(m, inds...) * A[inds...] + m[inds...]  * B[inds...]
+apply_mask(::AbstractArray, ::AbstractArray, ::Nothing) = A
+apply_mask(A::AbstractArray, B::AbstractArray, m::Mask, inds::Vararg{Int,N}) where {N} = @muladd inv(m, inds...) * A[inds...] + m[inds...] * B[inds...]
+apply_mask(::AbstractArray, ::AbstractArray, ::Nothing, inds::Vararg{Int,N}) where {N} = A[inds...]
+
+## 
+struct InnerDirichletBoundaryConditions{N, A, M}
+    values::NTuple{N, A}
+    masks::NTuple{N, M}
+
+    function InnerDirichletBoundaryConditions(values::NTuple{N, A}, masks::NTuple{N, M}) where {N, A, M}
+        return new{N, A, M}(values, masks)
+    end
+
+    function InnerDirichletBoundaryConditions(values::Tuple{}, masks::Tuple{N})
+        return new{0, Nothing, Nothing}(values, masks)
+    end
+end
+
+InnerDirichletBoundaryConditions() = InnerDirichletBoundaryConditions((), ())
+
+
+struct InnerDirichletBoundaryCondition{A, M}
+    values::A
+    masks::M
+
+    function InnerDirichletBoundaryCondition(value::A, mask::M) where {A, M}
+        return new{A, M}(value, mask)
+    end
+
+    function InnerDirichletBoundaryCondition()
+        return new{Nothing, Nothing}(nothing, nothing)
+    end
+end
+
+
+value  = zeros(ni...)
+value[4:7, 4:7] .= 5
+mask  = Mask(ni..., 4:7, 4:7)
+
+InnerDirichletBoundaryCondition(value, mask) 
+
+@test InnerDirichletBoundaryCondition() isa InnerDirichletBoundaryCondition{Nothing, Nothing}

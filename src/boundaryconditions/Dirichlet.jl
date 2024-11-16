@@ -71,49 +71,49 @@ function Base.getindex(
 end
 
 @inline function apply_dirichlet!(A::AbstractArray, bc::AbstractDirichletBoundaryCondition)
-    apply_mask!(A, bc.value, bc.mask)
+    return apply_mask!(A, bc.value, bc.mask)
 end
 
 @inline function apply_dirichlet!(
     ::AbstractArray, ::AbstractDirichletBoundaryCondition{Nothing,Nothing}
-) 
-    nothing
+)
+    return nothing
 end
 
 @inline function apply_dirichlet!(
     A::AbstractArray, bc::AbstractDirichletBoundaryCondition, inds::Vararg{Int,N}
-) where {N} 
-    apply_mask!(A, bc.value, bc.mask, inds...)
+) where {N}
+    return apply_mask!(A, bc.value, bc.mask, inds...)
 end
 
 @inline function apply_dirichlet!(
     ::AbstractArray, ::AbstractDirichletBoundaryCondition{Nothing,Nothing}, ::Vararg{Int,N}
-) where {N} 
-    nothing
+) where {N}
+    return nothing
 end
 
 @inline function apply_dirichlet(A::AbstractArray, bc::AbstractDirichletBoundaryCondition)
-    apply_mask(A, bc.value, bc.mask)
+    return apply_mask(A, bc.value, bc.mask)
 end
 
 @inline function apply_dirichlet(
     A::AbstractArray, ::AbstractDirichletBoundaryCondition{Nothing,Nothing}
-) 
- A
+)
+    return A
 end
 
 @inline function apply_dirichlet(
     A::AbstractArray, bc::AbstractDirichletBoundaryCondition, inds::Vararg{Int,N}
-) where {N} 
-    apply_mask(A, bc.value, bc.mask, inds...)
+) where {N}
+    return apply_mask(A, bc.value, bc.mask, inds...)
 end
 
 @inline function apply_dirichlet(
     A::AbstractArray,
     ::AbstractDirichletBoundaryCondition{Nothing,Nothing},
     inds::Vararg{Int,N},
-) where {N} 
-    A[inds...]
+) where {N}
+    return A[inds...]
 end
 
 @inline Dirichlet(x::NamedTuple) = Dirichlet(; x...)

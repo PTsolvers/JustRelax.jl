@@ -137,8 +137,8 @@ end
                 av(shear_heating)
             ) + T[I1...]
         ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
-    apply_dirichlet!(T , dirichlet, I1...)
-    
+    apply_dirichlet!(T, dirichlet, I1...)
+
     return nothing
 end
 
@@ -183,7 +183,7 @@ end
                 adiabatic[i, j, k] * T_ijk
             ) + T_ijk
         ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
-    apply_dirichlet!(T , dirichlet, I1...)
+    apply_dirichlet!(T, dirichlet, I1...)
 
     return nothing
 end
@@ -388,7 +388,18 @@ end
 end
 
 @parallel_indices (i, j) function update_T!(
-    T::AbstractArray{_T,2}, Told, qTx, qTy, H, shear_heating, ρCp, dτ_ρ, dirichlet, _dt, _dx, _dy
+    T::AbstractArray{_T,2},
+    Told,
+    qTx,
+    qTy,
+    H,
+    shear_heating,
+    ρCp,
+    dτ_ρ,
+    dirichlet,
+    _dt,
+    _dx,
+    _dy,
 ) where {_T}
     nx, ny = size(ρCp)
 
@@ -405,7 +416,7 @@ end
     end
     #! format: on
 
-    I1  = i + 1, j + 1
+    I1 = i + 1, j + 1
     T[I1...] =
         (
             av(dτ_ρ) * (
@@ -416,8 +427,8 @@ end
             ) + T[I1...]
         ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
 
-    apply_dirichlet!(T , dirichlet, I1...)
-    
+    apply_dirichlet!(T, dirichlet, I1...)
+
     return nothing
 end
 
@@ -460,7 +471,7 @@ end
             compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
         ) * 0.25
 
-    I1  = i + 1, j + 1
+    I1 = i + 1, j + 1
     T[I1...] =
         (
             av(dτ_ρ) * (
@@ -471,14 +482,25 @@ end
                 adiabatic[i, j] * T[I1...]
             ) + T[I1...]
         ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
-    
-    apply_dirichlet!(T , dirichlet, I1...)
+
+    apply_dirichlet!(T, dirichlet, I1...)
 
     return nothing
 end
 
 @parallel_indices (i, j) function check_res!(
-    ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, H, shear_heating, ρCp, dirichlet, _dt, _dx, _dy
+    ResT::AbstractArray{_T,2},
+    T,
+    Told,
+    qTx2,
+    qTy2,
+    H,
+    shear_heating,
+    ρCp,
+    dirichlet,
+    _dt,
+    _dx,
+    _dy,
 ) where {_T}
     nx, ny = size(ρCp)
 
@@ -497,14 +519,13 @@ end
 
     I1 = i + 1, j + 1
     ResT[i, j] = if iszero(dirichlet.mask[I1...])
-        -av(ρCp) * (T[I1...] - Told[I1...]) * _dt -
-        (d_xa(qTx2) + d_ya(qTy2)) +
+        -av(ρCp) * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
         av(H) +
         av(shear_heating)
     else
         zero(_T)
     end
-    
+
     return nothing
 end
 
@@ -553,7 +574,7 @@ end
         av(H) +
         av(shear_heating) +
         adiabatic[i, j] * T[I1...]
-    else 
+    else
         zero(_T)
     end
 

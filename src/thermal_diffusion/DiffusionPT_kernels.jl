@@ -1,3 +1,5 @@
+isNotDirichlet(m, inds::Vararg{Int, N}) where N = iszero(m[inds...])
+isNotDirichlet(::Nothing, ::Vararg{Int, N}) where N = false 
 
 ## 3D KERNELS
 
@@ -211,7 +213,7 @@ end
 
     I = i + 1, j + 1, k + 1
 
-    ResT[i, j, k] = if iszero(dirichlet.mask[i, j, k])
+    ResT[i, j, k] = if isNotDirichlet(dirichlet.mask, I...)
         -av(ρCp) * (T[I...] - Told[I...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
         av(H) +
         av(shear_heating)
@@ -251,7 +253,7 @@ end
     args_ijk = (; T=T_ijk, P=av(args.P))
     phase_ijk = getindex_phase(phase, i, j, k)
 
-    ResT[i, j, k] = if iszero(dirichlet.mask[i, j, k])
+    ResT[i, j, k] = if isNotDirichlet(dirichlet.mask, I...)
         -compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt -
         (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
         av(H) +
@@ -518,7 +520,7 @@ end
     #! format: on
 
     I1 = i + 1, j + 1
-    ResT[i, j] = if iszero(dirichlet.mask[I1...])
+    ResT[i, j] = if isNotDirichlet(dirichlet.mask, I1...)
         -av(ρCp) * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
         av(H) +
         av(shear_heating)
@@ -569,7 +571,7 @@ end
         ) * 0.25
 
     I1 = i + 1, j + 1
-    ResT[i, j] = if iszero(dirichlet.mask[I1...])
+    ResT[i, j] = if isNotDirichlet(dirichlet.mask, I1...)
         -ρCp * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
         av(H) +
         av(shear_heating) +

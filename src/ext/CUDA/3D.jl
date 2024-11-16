@@ -19,7 +19,9 @@ import JustRelax:
     TemperatureBoundaryConditions,
     AbstractFlowBoundaryConditions,
     DisplacementBoundaryConditions,
-    VelocityBoundaryConditions
+    VelocityBoundaryConditions,
+    apply_dirichlet,
+    apply_dirichlet!
 
 import JustPIC._3D: numphases, nphases
 

@@ -5,7 +5,7 @@ struct TemperatureBoundaryConditions{T,D,nD} <: AbstractBoundaryConditions
     dirichlet::D
     function TemperatureBoundaryConditions(;
         no_flux::T=(left=true, right=false, top=false, bot=false),
-        dirichlet=(; values=nothing, mask=nothing),
+        dirichlet=(; constant=nothing, mask=nothing),
     ) where {T}
         D = Dirichlet(dirichlet)
         nD = length(no_flux) == 4 ? 2 : 3

@@ -53,7 +53,7 @@ function _heatdiffusion_PT!(
             @parallel flux_range(ni...) compute_flux!(
                 @qT(thermal)..., @qT2(thermal)..., thermal.T, K, pt_thermal.θr_dτ, _di...
             )
-            update_T(nothing, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
+            update_T(nothing, b_width, thermal, ρCp, pt_thermal, thermal_bc.dirichlet, _dt, _di, ni)
             thermal_bcs!(thermal, thermal_bc)
             update_halo!(thermal.T)
         end
@@ -70,6 +70,7 @@ function _heatdiffusion_PT!(
                     thermal.H,
                     thermal.shear_heating,
                     ρCp,
+                    thermal_bc.dirichlet,
                     _dt,
                     _di...,
                 )
@@ -159,7 +160,7 @@ function _heatdiffusion_PT!(
                 args,
             )
             update_T(
-                nothing, b_width, thermal, rheology, phases, pt_thermal, _dt, _di, ni, args
+                nothing, b_width, thermal, rheology, phases, pt_thermal, thermal_bc.dirichlet, _dt, _di, ni, args
             )
             thermal_bcs!(thermal, thermal_bc)
             update_halo!(thermal.T)
@@ -182,6 +183,7 @@ function _heatdiffusion_PT!(
                     thermal.adiabatic,
                     rheology,
                     phases,
+                    thermal_bc.dirichlet,
                     _dt,
                     _di...,
                     args,

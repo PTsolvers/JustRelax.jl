@@ -32,6 +32,10 @@ include("types/heat_diffusion.jl")
 
 include("types/weno.jl")
 
+include("mask/mask.jl")
+
+include("boundaryconditions/Dirichlet.jl")
+
 include("boundaryconditions/types.jl")
 export TemperatureBoundaryConditions,
     DisplacementBoundaryConditions, VelocityBoundaryConditions

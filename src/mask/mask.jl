@@ -9,19 +9,7 @@ end
 
 Mask(ni::Vararg{Int,N}) where {N} = Mask(zeros(ni...))
 
-function Mask(nx, ny, inds::Vararg{UnitRange,N}) where {N}
-    mask = zeros(nx, ny)
-    @views mask[inds...] .= 1
-    return Mask(mask)
-end
-
-function Mask(nx, ny, nz, inds::Vararg{UnitRange,N}) where {N}
-    mask = zeros(nx, ny, nz)
-    @views mask[inds...] .= 1
-    return Mask(mask)
-end
-
-Adapt.@adapt_struct Mask
+Adapt.@adapt_structure Mask
 
 Base.@propagate_inbounds Base.getindex(m::Mask{T}, inds::Vararg{Int,N}) where {T,N} =
     m.mask[inds...]

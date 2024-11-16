@@ -17,8 +17,9 @@ import JustRelax:
     TemperatureBoundaryConditions,
     AbstractFlowBoundaryConditions,
     DisplacementBoundaryConditions,
-    VelocityBoundaryConditions
-
+    VelocityBoundaryConditions,
+    apply_dirichlet, apply_dirichlet!
+    
 import JustPIC._2D: numphases, nphases
 
 __init__() = @init_parallel_stencil(Threads, Float64, 2)
@@ -48,7 +49,8 @@ import JustRelax:
     TemperatureBoundaryConditions,
     AbstractFlowBoundaryConditions,
     DisplacementBoundaryConditions,
-    VelocityBoundaryConditions
+    VelocityBoundaryConditions, 
+    apply_dirichlet, apply_dirichlet!
 
 import JustPIC._3D: numphases, nphases
 

@@ -168,9 +168,9 @@ end
     d_ya(A) = _d_ya(A, i, j, k, _dy)
     d_za(A) = _d_za(A, i, j, k, _dz)
 
-    I = i + 1, j + 1, k + 1
+    I1 = i + 1, j + 1, k + 1
 
-    T_ijk = T[I...]
+    T_ijk = T[I1...]
     args_ijk = (; T=T_ijk, P=av(args.P))
     phase_ijk = getindex_phase(phase, i, j, k)
     ρCp = compute_ρCp(rheology, phase_ijk, args_ijk)

@@ -180,11 +180,11 @@ end
             A      = rand(ni...)
             value  = zeros(ni...)
             value[4:7, 4:7] .= 5
-            mask  = Mask(ni..., 4:7, 4:7)
+            mask  = Float64.(value .== 5)
 
-            bc = DirichletBoundaryCondition(value, mask) 
+            bc = JustRelax.DirichletBoundaryCondition(value, mask) 
 
-            @test all(apply_dirichlet(A, bc)[4:7,4:7] .== 5)
+            @test all(JustRelax.apply_dirichlet(A, bc)[4:7,4:7] .== 5)
 
             apply_mask!(A, bc)
             @test all(A[4:7,4:7] .== 5)

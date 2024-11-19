@@ -27,7 +27,9 @@ import JustRelax:
     TemperatureBoundaryConditions,
     AbstractFlowBoundaryConditions,
     DisplacementBoundaryConditions,
-    VelocityBoundaryConditions
+    VelocityBoundaryConditions,
+    apply_dirichlet,
+    apply_dirichlet!
 
 import JustPIC._3D: numphases, nphases
 
@@ -268,6 +270,12 @@ function JR3D.velocity2vertex!(
 )
     velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
     return nothing
+end
+
+function JR3D.velocity2center!(
+    Vx_c::T, Vy_c::T, Vz_c::T, Vx::T, Vy::T, Vz::T
+) where {T<:ROCArray}
+    return velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
 end
 
 function JR3D.velocity2displacement!(

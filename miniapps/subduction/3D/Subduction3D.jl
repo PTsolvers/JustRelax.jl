@@ -111,11 +111,11 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
     t, it = 0.0, 0
     # while it < 10000 # run only for 5 Myrs
     while (t/(1e6 * 3600 * 24 *365.25)) < 10 # run only for 5 Myrs
-        
+
         # # interpolate fields from particle to grid vertices
         # particle2grid!(thermal.T, pT, xvi, particles)
         # temperature2center!(thermal)
-    
+
         # Stokes solver ----------------
         t_stokes = @elapsed begin
             out = solve!(
@@ -208,7 +208,8 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
                     xci,
                     data_v,
                     data_c,
-                    velocity_v
+                    velocity_v,
+                    t=t
                 )
             end
         end
@@ -234,4 +235,3 @@ end
 # (Path)/folder where output data and figures are stored
 figdir   = "Subduction3D"
 main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
-

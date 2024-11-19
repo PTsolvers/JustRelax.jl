@@ -480,7 +480,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                         xci,
                         data_v,
                         data_c,
-                        velocity_v
+                        velocity_v,
+                        t=t
                     )
                 end
 

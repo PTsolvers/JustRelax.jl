@@ -1,3 +1,4 @@
+# const isCUDA = false
 const isCUDA = false
 
 @static if isCUDA
@@ -34,7 +35,7 @@ end
 using GeoParams, CairoMakie, CellArrays
 
 # Load file with all the rheology configurations
-include("Subduction2D_setup.jl")
+include("Subduction2D_setup_MPI.jl")
 include("Subduction2D_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -62,11 +63,11 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
+function main(x_global, z_global,li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
 
     # Physical domain ------------------------------------
     ni                  = nx, ny           # number of cells
-    di                  = @. li / ni       # grid steps
+    di                  = @. li / (nx_g(), ny_g())       # grid steps
     grid                = Geometry(ni, li; origin = origin)
     (; xci, xvi)        = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
@@ -103,6 +104,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     phase_ratios     = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni);
     init_phases!(pPhases, phases_device, particles, xvi)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+
+    update_cell_halo!(particles.coords..., particle_args...);
+    update_cell_halo!(particles.index)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -162,7 +166,38 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     if do_vtk
         Vx_v = @zeros(ni.+1...)
         Vy_v = @zeros(ni.+1...)
+        Vx = @zeros(ni...)
+        Vy = @zeros(ni...)
     end
+
+    #MPI
+    # global array
+    nx_v         = (nx - 2) * igg.dims[1]
+    ny_v         = (ny - 2) * igg.dims[2]
+    # center
+    P_v          = zeros(nx_v, ny_v)
+    τII_v        = zeros(nx_v, ny_v)
+    η_vep_v      = zeros(nx_v, ny_v)
+    εII_v        = zeros(nx_v, ny_v)
+    phases_c_v    = zeros(nx_v, ny_v)
+    #center nohalo
+    P_nohalo     = zeros(nx-2, ny-2)
+    τII_nohalo   = zeros(nx-2, ny-2)
+    η_vep_nohalo = zeros(nx-2, ny-2)
+    εII_nohalo   = zeros(nx-2, ny-2)
+    phases_c_nohalo = zeros(nx-2, ny-2)
+    #vertex
+    Vxv_v        = zeros(nx_v, ny_v)
+    Vyv_v        = zeros(nx_v, ny_v)
+    T_v          = zeros(nx_v, ny_v)
+    #vertex nohalo
+    Vxv_nohalo   = zeros(nx-2, ny-2)
+    Vyv_nohalo   = zeros(nx-2, ny-2)
+    T_nohalo     = zeros(nx-2, ny-2)
+
+    xci_v        = LinRange(minimum(x_global).*1e3, maximum(x_global).*1e3, nx_v),
+                   LinRange(minimum(z_global).*1e3, maximum(z_global).*1e3, ny_v)
+
 
     T_buffer    = @zeros(ni.+1)
     Told_buffer = similar(T_buffer)
@@ -236,10 +271,13 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
         rotate_stress_particles!(pτ, pω, particles, dt)
 
-        println("Stokes solver time             ")
-        println("   Total time:      $t_stokes s")
-        println("   Time/iteration:  $(t_stokes / out.iter) s")
+        if igg.me == 0
+            println("Stokes solver time             ")
+            println("   Total time:      $t_stokes s")
+            println("   Time/iteration:  $(t_stokes / out.iter) s")
+        end
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         dt   = compute_dt(stokes, di) * 0.8
         # ------------------------------
 
@@ -272,6 +310,10 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         # Advection --------------------
         # advect particles in space
         advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+
+        update_cell_halo!(particles.coords..., particle_args...);
+        update_cell_halo!(particles.index)
+
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
@@ -286,50 +328,64 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        if igg.me == 0
+            @show it += 1
+            t        += dt
+        end
 
-        @show it += 1
-        t        += dt
+        #MPI gathering
+        phase_center = [argmax(p) for p in Array(phase_ratios.center)]
+        #centers
+        @views P_nohalo     .= Array(stokes.P[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views τII_nohalo   .= Array(stokes.τ.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:end-1, 2:end-1, 2:end-1])       # Copy data to CPU removing the halo
+        @views εII_nohalo   .= Array(stokes.ε.II[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views phases_c_nohalo   .= Array(phase_center[2:end-1, 2:end-1, 2:end-1])
+        @async gather!(P_nohalo, P_v)
+        gather!(τII_nohalo, τII_v)
+        gather!(η_vep_nohalo, η_vep_v)
+        gather!(εII_nohalo, εII_v)
+        gather!(phases_c_nohalo, phases_c_v)
+        #vertices
+        if do_vtk
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            vertex2center!(Vx, Vx_v)
+            vertex2center!(Vy, Vy_v)
+            @views Vxv_nohalo   .= Array(Vx[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            @views Vyv_nohalo   .= Array(Vy[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+            gather!(Vxv_nohalo, Vxv_v)
+            gather!(Vyv_nohalo, Vyv_v)
+        end
+        @views T_nohalo     .= Array(thermal.Tc[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        gather!(T_nohalo, T_v)
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 10) == 0
             # checkpointing(figdir, stokes, thermal.T, η, t)
-            (; η_vep, η) = stokes.viscosity
             if do_vtk
-                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-                data_v = (;
-                    T   = Array(T_buffer),
-                    τII = Array(stokes.τ.II),
-                    εII = Array(stokes.ε.II),
-                    Vx  = Array(Vx_v),
-                    Vy  = Array(Vy_v),
-                )
+
                 data_c = (;
-                    P   = Array(stokes.P),
-                    η   = Array(η_vep),
+                    T = T_v,
+                    P = P_v,
+                    τII = τII_v,
+                    εII = εII_v,
+                    η   = η_vep_v,
+                    phases = phases_c_v
+
+
                 )
                 velocity_v = (
-                    Array(Vx_v),
-                    Array(Vy_v),
+                    Array(Vxv_v),
+                    Array(Vyv_v),
                 )
                 save_vtk(
-                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                    xvi,
-                    xci,
-                    data_v,
+                    joinpath(vtk_dir, "vtk_" * lpad("$(it)", 6, "0")),
+                    xci_v./1e3,
                     data_c,
                     velocity_v,
                     t=t
                 )
             end
-
-            # Make particles plottable
-            p        = particles.coords
-            ppx, ppy = p
-            pxv      = ppx.data[:]./1e3
-            pyv      = ppy.data[:]./1e3
-            clr      = pPhases.data[:]
-            # clr      = pT.data[:]
-            idxv     = particles.index.data[:];
 
             # Make Makie figure
             ar  = 3
@@ -339,14 +395,15 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
+            h1  = heatmap!(ax1, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(T_v) , colormap=:batlow)
             # Plot particles phase
-            h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+            # h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+            h2  = heatmap!(ax2, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(phases_c_v) , colormap=:batlow)
             # Plot 2nd invariant of strain rate
-            # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
-            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array((stokes.τ.II)) , colormap=:batlow)
+            # h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(log10.(εII_v)) , colormap=:batlow)
+            h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(τII_v) , colormap=:batlow)
             # Plot effective viscosity
-            h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
+            h4  = heatmap!(ax4, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(log10.(η_vep_v)) , colormap=:batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -367,14 +424,27 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-figdir   = "Subduction2D"
-n        = 128
 nx, ny   = 256, 128
-li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else
     igg
 end
 
-main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+# GLOBAL Physical domain ------------------------------------
+model_depth = 660
+x_global      = range(0, 3000, nx_g());
+air_thickness = 15.0
+z_global      = range(-model_depth, air_thickness, ny_g());
+origin = (x_global[1], z_global[1])
+li = (abs(last(x_global)-first(x_global)), abs(last(z_global)-first(z_global)))
+
+ni           = nx, ny           # number of cells
+di           = @. li / (nx_g(), ny_g())           # grid steps
+grid_global  = Geometry(ni, li; origin = origin)
+
+figdir   = "Subduction2D_$(nx_g())x$(ny_g())"
+
+li_GMG, origin_GMG, phases_GMG, T_GMG = GMG_subduction_2D(model_depth, grid_global.xvi,nx+1, ny+1)
+
+#  main(x_global, z_global,li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

@@ -176,7 +176,8 @@ function VanKeken2D(ny=32, nx=32)
 
         # Compute U rms ---------------
         Urms_it = let
-            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
+            # velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
+            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
             sum(Vx_v.^2) * prod(di) |> sqrt
         end

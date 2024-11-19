@@ -1,3 +1,5 @@
+using Adapt, MuladdMacro
+
 include("types/constructors/stokes.jl")
 export StokesArrays, PTStokesCoeffs
 
@@ -33,6 +35,8 @@ export @allocate,
 include("types/displacement.jl")
 export velocity2displacement!, displacement2velocity!
 
+include("mask/constructors.jl")
+
 include("boundaryconditions/BoundaryConditions.jl")
 export AbstractBoundaryConditions,
     TemperatureBoundaryConditions,
@@ -61,7 +65,8 @@ include("particles/subgrid_diffusion.jl")
 export subgrid_characteristic_time!
 
 include("Interpolations.jl")
-export vertex2center!, center2vertex!, temperature2center!, velocity2vertex!
+export vertex2center!,
+    center2vertex!, temperature2center!, velocity2vertex!, velocity2center!
 
 include("advection/weno5.jl")
 export WENO_advection!

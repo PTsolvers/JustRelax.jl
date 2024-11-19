@@ -20,7 +20,9 @@ import JustRelax:
     TemperatureBoundaryConditions,
     AbstractFlowBoundaryConditions,
     DisplacementBoundaryConditions,
-    VelocityBoundaryConditions
+    VelocityBoundaryConditions,
+    apply_dirichlet,
+    apply_dirichlet!
 
 import JustPIC._2D: numphases, nphases
 
@@ -254,13 +256,17 @@ end
 function JR2D.center2vertex!(
     vertex_yz::T, vertex_xz::T, vertex_xy::T, center_yz::T, center_xz::T, center_xy::T
 ) where {T<:CuArray}
-    return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
+    center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
+    return nothing
 end
 
-function JR2D.velocity2vertex!(
-    Vx_v::CuArray, Vy_v::CuArray, Vx::CuArray, Vy::CuArray; ghost_nodes=true
-)
-    velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=ghost_nodes)
+function JR2D.velocity2center!(Vx_c::T, Vy_c::T, Vx::T, Vy::T) where {T<:CuArray}
+    velocity2center!(Vx_c, Vy_c, Vx, Vy)
+    return nothing
+end
+
+function JR2D.velocity2vertex!(Vx_v::CuArray, Vy_v::CuArray, Vx::CuArray, Vy::CuArray)
+    velocity2vertex!(Vx_v, Vy_v, Vx, Vy)
     return nothing
 end
 

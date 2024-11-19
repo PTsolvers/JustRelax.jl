@@ -1,3 +1,5 @@
+using Adapt, MuladdMacro
+
 include("types/constructors/stokes.jl")
 export StokesArrays, PTStokesCoeffs
 
@@ -32,6 +34,8 @@ export @allocate,
 
 include("types/displacement.jl")
 export velocity2displacement!, displacement2velocity!
+
+include("mask/constructors.jl")
 
 include("boundaryconditions/BoundaryConditions.jl")
 export AbstractBoundaryConditions,

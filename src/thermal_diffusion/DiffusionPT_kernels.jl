@@ -179,7 +179,7 @@ end
         (
             av(dτ_ρ) * (
                 -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
-                Told[I...] * ρCp * _dt +
+                Told[I1...] * ρCp * _dt +
                 av(H) +
                 av(shear_heating) +
                 adiabatic[i, j, k] * T_ijk
@@ -211,10 +211,10 @@ end
     d_za(A) = _d_za(A, i, j, k, _dz)
     av(A) = _av(A, i, j, k)
 
-    I = i + 1, j + 1, k + 1
+    I1 = i + 1, j + 1, k + 1
 
-    ResT[i, j, k] = if isNotDirichlet(dirichlet.mask, I...)
-        -av(ρCp) * (T[I...] - Told[I...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
+    ResT[i, j, k] = if isNotDirichlet(dirichlet.mask, I1...)
+        -av(ρCp) * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
         av(H) +
         av(shear_heating)
     else

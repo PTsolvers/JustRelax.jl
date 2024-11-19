@@ -260,7 +260,7 @@ end
         av(shear_heating) +
         adiabatic[i, j, k] * T_ijk
     else
-        zero_(T)
+        zero(_T)
     end
     return nothing
 end

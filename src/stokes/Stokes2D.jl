@@ -527,7 +527,7 @@ function _solve!(
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
 
@@ -557,7 +557,7 @@ function _solve!(
                 args,
             )
 
-            update_ρg!(ρg[2], phase_ratios, rheology, args)
+            update_ρg!(ρg, phase_ratios, rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...

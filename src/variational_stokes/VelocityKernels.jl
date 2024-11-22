@@ -1,32 +1,3 @@
-# @parallel_indices (I...) function compute_∇V!(
-#     ∇V::AbstractArray{T,2}, Vx, Vy, ϕ::JustRelax.RockRatio, _dx, _dy
-# ) where {T}
-#     @inline d_xi(A) = _d_xi(A, _dx, I...)
-#     @inline d_yi(A) = _d_yi(A, _dy, I...)
-
-#     if isvalid_c(ϕ, I...)
-#         @inbounds ∇V[I...] = d_xi(Vx) + d_yi(Vy)
-#     else
-#         @inbounds ∇V[I...] = zero(T)
-#     end
-#     return nothing
-# end
-
-# @parallel_indices (I...) function compute_∇V!(
-#     ∇V::AbstractArray{T,2}, Vx, Vy, Vz, ϕ::JustRelax.RockRatio, _dx, _dy, _dz
-# ) where {T}
-#     @inline d_xi(A) = _d_xi(A, _dx, I...)
-#     @inline d_yi(A) = _d_yi(A, _dy, I...)
-#     @inline d_zi(A) = _d_zi(A, _dz, I...)
-
-#     if isvalid_c(ϕ, I...)
-#         @inbounds ∇V[I...] = d_xi(Vx) + d_yi(Vy) + d_zi(Vz)
-#     else
-#         @inbounds ∇V[I...] = zero(T)
-#     end
-#     return nothing
-# end
-
 @parallel_indices (I...) function compute_∇V!(
     ∇V::AbstractArray{T,N}, V::NTuple{N}, ϕ::JustRelax.RockRatio, _di::NTuple{N}
 ) where {T,N}
@@ -35,6 +6,58 @@
     else
         @inbounds ∇V[I...] = zero(T)
     end
+    return nothing
+end
+
+@parallel_indices (i, j) function compute_strain_rate!(
+    εxx::AbstractArray{T,2}, εyy, εxy, ∇V, Vx, Vy, ϕ::JustRelax.RockRatio, _dx, _dy
+) where {T}
+    @inline d_xi(A) = _d_xi(A, _dx, i, j)
+    @inline d_yi(A) = _d_yi(A, _dy, i, j)
+    @inline d_xa(A) = _d_xa(A, _dx, i, j)
+    @inline d_ya(A) = _d_ya(A, _dy, i, j)
+    @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+    @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+    @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+
+    if all((i, j) .≤ size(εxx))
+        if isvalid_c(ϕ, i, j)
+            ∇V_ij = ∇V[i, j] / 3
+            εxx[i, j] = d_xi(Vx) - ∇V_ij
+            εyy[i, j] = d_yi(Vy) - ∇V_ij
+        else
+            εxx[i, j] = zero(T)
+            εyy[i, j] = zero(T)
+        end
+        # εxx[i, j] = (Vx[i + 1, j + 1] * ϕ.Vx[i + 1, j] - Vx[i, j + 1] * ϕ.Vx[i, j]) * _dx - ∇V_ij
+        # εyy[i, j] = (Vy[i + 1, j + 1] * ϕ.Vy[i, j + 1] - Vy[i + 1, j] * ϕ.Vy[i, j]) * _dy - ∇V_ij
+    end
+
+    εxy[i, j] = if isvalid_v(ϕ, i, j)
+        0.5 * (
+            d_ya(Vx) + 
+            d_xa(Vy)
+        )
+    else
+        zero(T)
+    end
+
+    # εxy[i, j] =  0.5 * (
+    #         d_ya(Vx) + 
+    #         d_xa(Vy)
+    #     )
+    # vy_mask_left  = ϕ.Vy[max(i - 1, 1), j]
+    # vy_mask_right = ϕ.Vy[min(i + 1, size(ϕ.Vy, 1)), j]
+    
+    # vx_mask_bot = ϕ.Vx[i, max(j - 1, 1)]
+    # vx_mask_top = ϕ.Vx[i, min(j + 1, size(ϕ.Vx, 2))]
+    
+    # εxy[i, j] = 0.5 * (
+    #     (Vx[i, j+1] * vx_mask_top - Vx[i, j] * vx_mask_bot) * _dy + 
+    #     (Vy[i+1, j] * vy_mask_right - Vy[i, j] * vy_mask_left) * _dx
+    # )
+
     return nothing
 end
 

@@ -1,5 +1,5 @@
 isNotDirichlet(m, inds::Vararg{Int,N}) where {N} = iszero(m[inds...])
-isNotDirichlet(::Nothing, ::Vararg{Int,N}) where {N} = false
+isNotDirichlet(::Nothing, ::Vararg{Int,N}) where {N} = true
 
 ## 3D KERNELS
 

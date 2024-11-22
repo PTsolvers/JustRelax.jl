@@ -110,7 +110,7 @@ function _solve_VS!(
             update_ρg!(ρg[2], phase_ratios, rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., ϕ, _di...
             )
 
             update_viscosity!(

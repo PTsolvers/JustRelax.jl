@@ -276,6 +276,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         centroid2particle!(pτxx , xci, stokes.τ.xx, particles)
         centroid2particle!(pτyy , xci, stokes.τ.yy, particles)
         grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
+        grid2particle!(pωxy, xvi, stokes.ω.xy, particles)
         rotate_stress_particles!(pτ, pω, particles, dt)
 
         println("Stokes solver time             ")

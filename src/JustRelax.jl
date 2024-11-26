@@ -24,6 +24,8 @@ PTArray(::T) where {T} = error(ArgumentError("Unknown backend $T"))
 
 export PTArray, CPUBackend, CUDABackend, AMDGPUBackend
 
+include("stress_rotation/types.jl")
+
 include("types/stokes.jl")
 # export StokesArrays, PTStokesCoeffs
 
@@ -52,5 +54,6 @@ include("IO/DataIO.jl")
 
 include("types/type_conversions.jl")
 export Array, copy
+
 
 end # module

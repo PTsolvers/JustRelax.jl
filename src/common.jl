@@ -87,6 +87,12 @@ export rotate_stress_particles!
 
 include("stokes/VelocityKernels.jl")
 
+include("stress_rotation/constructors.jl")
+export StressParticles
+
+include("stress_rotation/stress_rotation_particles.jl")
+export rotate_stress!, stress2grid!
+
 # thermal diffusion
 
 include("thermal_diffusion/DiffusionPT.jl")

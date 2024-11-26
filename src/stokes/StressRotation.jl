@@ -151,23 +151,23 @@ stress2grid!(stokes, pτ::NTuple, xvi, xci, particles) = @inline stress2grid!(st
 
 function stress2grid!(stokes, pτxx, pτyy, pτxy, xvi, xci, particles)
     # normal components
-    particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
-    particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
+    particle2centroid!(stokes.τ_o.xx, pτxx, xci, particles)
+    particle2centroid!(stokes.τ_o.yy, pτyy, xci, particles)
     # shear components
-    particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
+    particle2grid!(stokes.τ_o.xy, pτxy, xvi, particles)
     
     return nothing
 end
 
 function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, xvi, xci, particles)
     # normal components
-    particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
-    particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
-    particle2centroid!(stokes.τ.zz, pτzz, xci, particles)
+    particle2centroid!(stokes.τ_o.xx, pτxx, xci, particles)
+    particle2centroid!(stokes.τ_o.yy, pτyy, xci, particles)
+    particle2centroid!(stokes.τ_o.zz, pτzz, xci, particles)
     # shear components
-    particle2grid!(stokes.τ.yz, pτyz, xvi, particles)
-    particle2grid!(stokes.τ.xz, pτxz, xvi, particles)
-    particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
+    particle2grid!(stokes.τ_o.yz, pτyz, xvi, particles)
+    particle2grid!(stokes.τ_o.xz, pτxz, xvi, particles)
+    particle2grid!(stokes.τ_o.xy, pτxy, xvi, particles)
     
     return nothing
 end

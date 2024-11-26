@@ -133,9 +133,6 @@ function _solve!(
         end
     end
 
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
-
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -259,9 +256,6 @@ function _solve!(
         end
     end
 
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
-
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -334,9 +328,6 @@ function _solve!(
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
-
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
@@ -530,9 +521,6 @@ function _solve!(
     compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
-
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break

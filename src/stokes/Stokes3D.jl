@@ -214,9 +214,6 @@ function _solve!(
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
 
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
-
     # solver loop
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
@@ -427,9 +424,6 @@ function _solve!(
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
-
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin

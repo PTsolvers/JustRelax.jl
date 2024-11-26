@@ -219,13 +219,17 @@ function JR3D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor
 end
 
 ## Buoyancy forces
-function JR3D.compute_ρg!(ρg::CuArray, rheology, args)
+function JR3D.compute_ρg!(ρg::Union{CuArray,NTuple{N,CuArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
 end
-function JR3D.compute_ρg!(ρg::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args)
+function JR3D.compute_ρg!(
+    ρg::Union{CuArray,NTuple{N,CuArray}}, phase_ratios::JustPIC.PhaseRatios, rheology, args
+) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
-function JR3D.compute_ρg!(ρg::CuArray, phase_ratios, rheology, args)
+function JR3D.compute_ρg!(
+    ρg::Union{CuArray,NTuple{N,CuArray}}, phase_ratios, rheology, args
+) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 

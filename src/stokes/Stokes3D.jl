@@ -208,7 +208,7 @@ function _solve!(
     θ = @zeros(ni...)
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
@@ -241,7 +241,7 @@ function _solve!(
             )
 
             # Update buoyancy
-            update_ρg!(ρg[3], rheology, args)
+            update_ρg!(ρg, rheology, args)
 
             update_viscosity!(
                 stokes,
@@ -422,7 +422,7 @@ function _solve!(
     ητ = deepcopy(η)
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
@@ -457,7 +457,7 @@ function _solve!(
             )
 
             # Update buoyancy
-            update_ρg!(ρg[end], phase_ratios, rheology, args)
+            update_ρg!(ρg, phase_ratios, rheology, args)
 
             # Update viscosity
             update_viscosity!(

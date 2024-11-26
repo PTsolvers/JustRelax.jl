@@ -62,9 +62,9 @@ function setup2D(
     if chimney
         add_cylinder!(Phases, Temp, Grid;
             base = (mean(Grid.x.val), 0, -chamber_depth),
-            cap  = (mean(Grid.x.val), 0, 0e0),
+            cap  = (mean(Grid.x.val), 0, 3e0),
             radius = 0.05,
-            phase  = ConstantPhase(2),
+            phase  = ConstantPhase(3),
             # T      = LinearTemp(Ttop=20, Tbot=1000),
             # T      = ConstantTemp(T=800),
             T      = ConstantTemp(T=chamber_T),

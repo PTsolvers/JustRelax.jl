@@ -52,6 +52,11 @@ function init_rheologies(; linear=false)
     el      = ConstantElasticity(; G = 25e9, ν = 0.45)
     β       = 1 / el.Kb.val
     Cp      = 1200.0
+
+    #dislocation laws
+    disl_top  = SetDislocationCreep(Dislocation.dry_olivine_Karato_2003)
+    # diffusion laws
+    disl_bot  = SetDislocationCreep(Dislocation.wet_quartzite_Hirth_2001)
     
     # Define rheolgy struct
     rheology = (
@@ -61,7 +66,8 @@ function init_rheologies(; linear=false)
             Density           = PT_Density(; ρ0=2.7e3, T0=273.15, β=β),
             HeatCapacity      = ConstantHeatCapacity(; Cp = Cp),
             Conductivity      = ConstantConductivity(; k  = 2.5),
-            CompositeRheology = CompositeRheology( (LinearViscous(; η=1e23), el, pl)),
+            CompositeRheology = CompositeRheology( (disl_top, el, pl)),
+            # CompositeRheology = CompositeRheology( (LinearViscous(; η=1e23), el, pl)),
             Gravity           = ConstantGravity(; g=9.81),
         ),
         # Name = "Lower crust",
@@ -70,7 +76,8 @@ function init_rheologies(; linear=false)
             Density           = PT_Density(; ρ0=2.7e3, T0=273.15, β=β),
             HeatCapacity      = ConstantHeatCapacity(; Cp = Cp),
             Conductivity      = ConstantConductivity(; k  = 2.5),
-            CompositeRheology = CompositeRheology( (LinearViscous(; η=1e22), el, pl)),
+            CompositeRheology = CompositeRheology( (disl_bot, el,  pl)),
+            # CompositeRheology = CompositeRheology( (LinearViscous(; η=1e22), el, pl)),
             Gravity           = ConstantGravity(; g=9.81),
         ),
 
@@ -82,7 +89,7 @@ function init_rheologies(; linear=false)
             # HeatCapacity      = Latent_HeatCapacity(Cp=ConstantHeatCapacity()),
             HeatCapacity      = Latent_HeatCapacity(Cp=ConstantHeatCapacity(), Q_L=350e3J/kg),
             LatentHeat        = ConstantLatentHeat(Q_L=350e3J/kg),
-            CompositeRheology = CompositeRheology( (LinearViscous(; η=1e18), )),
+            CompositeRheology = CompositeRheology( (LinearViscous(; η=1e18), el)),
         ),
         # Name              = "magma chamber - hot anomaly",
         SetMaterialParams(;
@@ -92,12 +99,12 @@ function init_rheologies(; linear=false)
             # HeatCapacity      = Latent_HeatCapacity(Cp=ConstantHeatCapacity()),
             HeatCapacity      = Latent_HeatCapacity(Cp=ConstantHeatCapacity(), Q_L=350e3J/kg),
             LatentHeat        = ConstantLatentHeat(Q_L=350e3J/kg),
-            CompositeRheology = CompositeRheology( (LinearViscous(; η=1e18), )),
+            CompositeRheology = CompositeRheology( (LinearViscous(; η=1e18), el, )),
         ),
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase             = 5,
-            Density           = ConstantDensity(; ρ=0e0),
+            Density           = ConstantDensity(; ρ=1e0),
             HeatCapacity      = ConstantHeatCapacity(; Cp = Cp),
             Conductivity      = ConstantConductivity(; k  = 2.5),
             CompositeRheology = CompositeRheology( (LinearViscous(; η=1e22), el, pl)),

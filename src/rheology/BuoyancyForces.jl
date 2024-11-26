@@ -6,7 +6,7 @@ Calculate the buoyance forces `ρg` for the given GeoParams.jl `rheology` object
 function compute_ρg!(ρg, rheology, args)
     _size(x::AbstractArray) = size(x)
     _size(x::NTuple) = size(x[1])
-    
+
     ni = _size(ρg)
     @parallel (@idx ni) compute_ρg_kernel!(ρg, rheology, args)
     return nothing
@@ -18,10 +18,12 @@ end
     return nothing
 end
 
-@parallel_indices (I...) function compute_ρg_kernel!(ρg::NTuple{N, AbstractArray}, rheology, args) where N
+@parallel_indices (I...) function compute_ρg_kernel!(
+    ρg::NTuple{N,AbstractArray}, rheology, args
+) where {N}
     args_ijk = ntuple_idx(args, I...)
-    gᵢ       = compute_gravity(first(rheology))
-    ρgᵢ      = compute_buoyancies(rheology, args_ijk, gᵢ, Val(N))
+    gᵢ = compute_gravity(first(rheology))
+    ρgᵢ = compute_buoyancies(rheology, args_ijk, gᵢ, Val(N))
     fill_density!(ρg, ρgᵢ, I...)
     return nothing
 end
@@ -35,7 +37,7 @@ The `phase_ratios` are used to compute the density of the composite rheology.
 function compute_ρg!(ρg, phase_ratios::JustPIC.PhaseRatios, rheology, args)
     _size(x::AbstractArray) = size(x)
     _size(x::NTuple) = size(x[1])
-    
+
     ni = _size(ρg)
     @parallel (@idx ni) compute_ρg_kernel!(ρg, phase_ratios.center, rheology, args)
     return nothing
@@ -47,36 +49,50 @@ end
     return nothing
 end
 
-@parallel_indices (I...) function compute_ρg_kernel!(ρg::NTuple{N, AbstractArray}, phase_ratios, rheology, args) where N
+@parallel_indices (I...) function compute_ρg_kernel!(
+    ρg::NTuple{N,AbstractArray}, phase_ratios, rheology, args
+) where {N}
     args_ijk = ntuple_idx(args, I...)
-    gᵢ       = compute_gravity(first(rheology))
-    ρgᵢ      = compute_buoyancies(rheology, @cell(phase_ratios[I...]), args_ijk, gᵢ, Val(N))
+    gᵢ = compute_gravity(first(rheology))
+    ρgᵢ = compute_buoyancies(rheology, @cell(phase_ratios[I...]), args_ijk, gᵢ, Val(N))
     fill_density!(ρg, ρgᵢ, I...)
     return nothing
 end
 
 ## Inner buoyancy force kernels
-@generated function fill_density!(ρg::NTuple{N}, ρgᵢ::NTuple{N}, I::Vararg{Int, N}) where N
+@generated function fill_density!(ρg::NTuple{N}, ρgᵢ::NTuple{N}, I::Vararg{Int,N}) where {N}
     quote
-        Base.@nexprs $N i-> ρg[i][I...] = ρgᵢ[i]
+        Base.@nexprs $N i -> ρg[i][I...] = ρgᵢ[i]
         return nothing
     end
 end
 
-@inline fill_density!(ρg::NTuple{N}, ρgᵢ::Number, I::Vararg{Int, N}) where N = setindex!(last(ρg), ρgᵢ, I...)
+@inline fill_density!(ρg::NTuple{N}, ρgᵢ::Number, I::Vararg{Int,N}) where {N} =
+    setindex!(last(ρg), ρgᵢ, I...)
 
-@inline compute_buoyancies(rheology::MaterialParams, args, gᵢ::NTuple{3}, ::Val{2}) = compute_density(rheology, args) .* (gᵢ[1], gᵢ[3])
-@inline compute_buoyancies(rheology::MaterialParams, args, gᵢ::NTuple{3}, ::Val{3}) = compute_density(rheology, args) .* gᵢ
-@inline compute_buoyancies(rheology::MaterialParams, args, gᵢ::Number, ::Any) = compute_density(rheology, args) * gᵢ
+@inline compute_buoyancies(rheology::MaterialParams, args, gᵢ::NTuple{3}, ::Val{2}) =
+    compute_density(rheology, args) .* (gᵢ[1], gᵢ[3])
+@inline compute_buoyancies(rheology::MaterialParams, args, gᵢ::NTuple{3}, ::Val{3}) =
+    compute_density(rheology, args) .* gᵢ
+@inline compute_buoyancies(rheology::MaterialParams, args, gᵢ::Number, ::Any) =
+    compute_density(rheology, args) * gᵢ
 
-@inline compute_buoyancies(rheology::MaterialParams, phase_ratios, args, gᵢ::NTuple{3}, ::Val{2}) = compute_density_ratio(phase_ratios, rheology, args) .* (gᵢ[1], gᵢ[3])
-@inline compute_buoyancies(rheology::MaterialParams, phase_ratios, args, gᵢ::NTuple{3}, ::Val{3}) = compute_density_ratio(phase_ratios, rheology, args) .* gᵢ
-@inline compute_buoyancies(rheology::MaterialParams, phase_ratios, args, gᵢ::Number, ::Any) = compute_density_ratio(phase_ratios, rheology, args) * gᵢ
+@inline compute_buoyancies(
+    rheology::MaterialParams, phase_ratios, args, gᵢ::NTuple{3}, ::Val{2}
+) = compute_density_ratio(phase_ratios, rheology, args) .* (gᵢ[1], gᵢ[3])
+@inline compute_buoyancies(
+    rheology::MaterialParams, phase_ratios, args, gᵢ::NTuple{3}, ::Val{3}
+) = compute_density_ratio(phase_ratios, rheology, args) .* gᵢ
+@inline compute_buoyancies(
+    rheology::MaterialParams, phase_ratios, args, gᵢ::Number, ::Any
+) = compute_density_ratio(phase_ratios, rheology, args) * gᵢ
 
-@inline compute_buoyancies(rheology, phase_ratios, args, gᵢ::NTuple{3}, ::Val{2}) = fn_ratio(compute_density, rheology, phase_ratios, args) .* (gᵢ[1], gᵢ[3])
-@inline compute_buoyancies(rheology, phase_ratios, args, gᵢ::NTuple{3}, ::Val{3}) = fn_ratio(compute_density, rheology, phase_ratios, args) .* gᵢ
-@inline compute_buoyancies(rheology, phase_ratios, args, gᵢ::Number, ::Any) = fn_ratio(compute_density, rheology, phase_ratios, args) * gᵢ
-
+@inline compute_buoyancies(rheology, phase_ratios, args, gᵢ::NTuple{3}, ::Val{2}) =
+    fn_ratio(compute_density, rheology, phase_ratios, args) .* (gᵢ[1], gᵢ[3])
+@inline compute_buoyancies(rheology, phase_ratios, args, gᵢ::NTuple{3}, ::Val{3}) =
+    fn_ratio(compute_density, rheology, phase_ratios, args) .* gᵢ
+@inline compute_buoyancies(rheology, phase_ratios, args, gᵢ::Number, ::Any) =
+    fn_ratio(compute_density, rheology, phase_ratios, args) * gᵢ
 
 """
     compute_buoyancy(rheology::MaterialParams, args)
@@ -134,14 +150,15 @@ Compute the buoyancy forces based on the given rheology, arguments, and phase ra
 end
 
 # without phase ratios
-@inline update_ρg!(ρg::Union{NTuple, AbstractArray}, rheology, args) =
+@inline update_ρg!(ρg::Union{NTuple,AbstractArray}, rheology, args) =
     update_ρg!(isconstant(rheology), ρg, rheology, args)
 @inline update_ρg!(::ConstantDensityTrait, ρg, rheology, args) = nothing
 @inline update_ρg!(::NonConstantDensityTrait, ρg, rheology, args) =
     compute_ρg!(ρg, rheology, args)
 # with phase ratios
-@inline update_ρg!(ρg::Union{NTuple, AbstractArray}, phase_ratios::JustPIC.PhaseRatios, rheology, args) =
-    update_ρg!(isconstant(rheology), ρg, phase_ratios, rheology, args)
+@inline update_ρg!(
+    ρg::Union{NTuple,AbstractArray}, phase_ratios::JustPIC.PhaseRatios, rheology, args
+) = update_ρg!(isconstant(rheology), ρg, phase_ratios, rheology, args)
 @inline update_ρg!(
     ::ConstantDensityTrait, ρg, phase_ratios::JustPIC.PhaseRatios, rheology, args
 ) = nothing

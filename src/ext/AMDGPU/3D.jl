@@ -215,15 +215,22 @@ function JR3D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTens
 end
 
 ## Buoyancy forces
-function JR3D.compute_ρg!(ρg::Union{ROCArray, NTuple{N, ROCArray}}, rheology, args) where N
+function JR3D.compute_ρg!(ρg::Union{ROCArray,NTuple{N,ROCArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
 end
 
-function JR3D.compute_ρg!(ρg::Union{ROCArray, NTuple{N, ROCArray}}, phase_ratios::JustPIC.PhaseRatios, rheology, args) where N
+function JR3D.compute_ρg!(
+    ρg::Union{ROCArray,NTuple{N,ROCArray}},
+    phase_ratios::JustPIC.PhaseRatios,
+    rheology,
+    args,
+) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
-function JR3D.compute_ρg!(ρg::Union{ROCArray, NTuple{N, ROCArray}}, phase_ratios, rheology, args) where N
+function JR3D.compute_ρg!(
+    ρg::Union{ROCArray,NTuple{N,ROCArray}}, phase_ratios, rheology, args
+) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 

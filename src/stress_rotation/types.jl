@@ -1,10 +1,12 @@
-struct StressParticles{backend, nNormal, nShear, T}
-    τ_normal::NTuple{nNormal, T}
-    τ_shear::NTuple{nShear, T}
-    ω::NTuple{nShear, T}
+struct StressParticles{backend,nNormal,nShear,T}
+    τ_normal::NTuple{nNormal,T}
+    τ_shear::NTuple{nShear,T}
+    ω::NTuple{nShear,T}
 
-    function StressParticles(backend, τ_normal::NTuple{nNormal, T}, τ_shear::NTuple{nShear, T}, ω::NTuple{nShear, T}) where {nNormal, nShear, T}
-        new{backend,nNormal, nShear, T}(τ_normal, τ_shear, ω)
+    function StressParticles(
+        backend, τ_normal::NTuple{nNormal,T}, τ_shear::NTuple{nShear,T}, ω::NTuple{nShear,T}
+    ) where {nNormal,nShear,T}
+        return new{backend,nNormal,nShear,T}(τ_normal, τ_shear, ω)
     end
 end
 

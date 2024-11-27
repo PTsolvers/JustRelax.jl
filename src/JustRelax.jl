@@ -56,5 +56,4 @@ include("IO/DataIO.jl")
 include("types/type_conversions.jl")
 export Array, copy
 
-
 end # module

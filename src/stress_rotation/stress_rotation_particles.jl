@@ -147,8 +147,17 @@ end
 
 # Interpolations between stress on the particles and the grid
 
-function stress2grid!(stokes, τ_particles::JustRelax.StressParticles{backend}, xvi, xci, particles) where {backend}
-    stress2grid!(stokes, normal_stress(τ_particles)..., shear_stress(τ_particles)..., xvi, xci, particles)
+function stress2grid!(
+    stokes, τ_particles::JustRelax.StressParticles{backend}, xvi, xci, particles
+) where {backend}
+    return stress2grid!(
+        stokes,
+        normal_stress(τ_particles)...,
+        shear_stress(τ_particles)...,
+        xvi,
+        xci,
+        particles,
+    )
 end
 
 function stress2grid!(stokes, pτxx, pτyy, pτxy, xvi, xci, particles)
@@ -157,7 +166,7 @@ function stress2grid!(stokes, pτxx, pτyy, pτxy, xvi, xci, particles)
     particle2centroid!(stokes.τ_o.yy, pτyy, xci, particles)
     # shear components
     particle2grid!(stokes.τ_o.xy, pτxy, xvi, particles)
-    
+
     return nothing
 end
 
@@ -170,12 +179,14 @@ function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, xvi, xci
     particle2grid!(stokes.τ_o.yz, pτyz, xvi, particles)
     particle2grid!(stokes.τ_o.xz, pτxz, xvi, particles)
     particle2grid!(stokes.τ_o.xy, pτxy, xvi, particles)
-    
+
     return nothing
 end
 
-function rotate_stress!(τ_particles::JustRelax.StressParticles{backend}, stokes, particles, xci, xvi, dt) where {backend}
-    rotate_stress!(unwrap(τ_particles)..., stokes, particles, xci, xvi, dt)
+function rotate_stress!(
+    τ_particles::JustRelax.StressParticles{backend}, stokes, particles, xci, xvi, dt
+) where {backend}
+    return rotate_stress!(unwrap(τ_particles)..., stokes, particles, xci, xvi, dt)
 end
 
 function rotate_stress!(pτxx, pτyy, pτxy, pω, stokes, particles, xci, xvi, dt)
@@ -192,11 +203,13 @@ function rotate_stress!(pτxx, pτyy, pτxy, pω, stokes, particles, xci, xvi, d
     return nothing
 end
 
-function rotate_stress!(pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, pωxy, stokes, particles, xci, xvi, dt)
+function rotate_stress!(
+    pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, pωxy, stokes, particles, xci, xvi, dt
+)
     # normal components
-    centroid2particle!(pτxx , xci, stokes.τ.xx, particles)
-    centroid2particle!(pτyy , xci, stokes.τ.yy, particles)
-    centroid2particle!(pτzz , xci, stokes.τ.zz, particles)
+    centroid2particle!(pτxx, xci, stokes.τ.xx, particles)
+    centroid2particle!(pτyy, xci, stokes.τ.yy, particles)
+    centroid2particle!(pτzz, xci, stokes.τ.zz, particles)
     # shear components
     grid2particle!(pτyz, xvi, stokes.τ.yz, particles)
     grid2particle!(pτxz, xvi, stokes.τ.xz, particles)
@@ -206,7 +219,9 @@ function rotate_stress!(pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, 
     grid2particle!(pωxz, xvi, stokes.ω.xz, particles)
     grid2particle!(pωxy, xvi, stokes.ω.xy, particles)
     # rotate stress
-    rotate_stress_particles!((pτxx, pτyy, pτzz, pτyz, pτxz, pτxy), (pωyz, pωxz, pωxy), particles, dt)
-    
+    rotate_stress_particles!(
+        (pτxx, pτyy, pτzz, pτyz, pτxz, pτxy), (pωyz, pωxz, pωxy), particles, dt
+    )
+
     return nothing
 end

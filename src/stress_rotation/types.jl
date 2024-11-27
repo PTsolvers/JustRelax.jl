@@ -8,6 +8,7 @@ struct StressParticles{backend, nNormal, nShear, T}
     end
 end
 
+@inline unwrap(x::StressParticles) = tuple(x.τ_normal..., x.τ_shear..., x.ω...)
 @inline normal_stress(x::StressParticles) = x.τ_normal
 @inline shear_stress(x::StressParticles) = x.τ_shear
 @inline shear_vorticity(x::StressParticles) = x.ω

@@ -3,8 +3,8 @@ using StaticArrays
 # Vorticity tensor
 
 @parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _dx, _dy)
-    @inline dx(A) = _d_xi(A, I..., _dx)
-    @inline dy(A) = _d_yi(A, I..., _dy)
+    @inline dx(A) = _d_xa(A, I..., _dx)
+    @inline dy(A) = _d_ya(A, I..., _dy)
 
     ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
 
@@ -175,7 +175,7 @@ function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, xvi, xci
 end
 
 function rotate_stress!(τ_particles::JustRelax.StressParticles{backend}, stokes, particles, xci, xvi, dt) where {backend}
-    rotate_stress!(normal_stress(τ_particles)..., shear_stress(τ_particles)..., shear_vorticity(τ_particles)..., stokes, particles, xci, xvi, dt)
+    rotate_stress!(unwrap(τ_particles)..., stokes, particles, xci, xvi, dt)
 end
 
 function rotate_stress!(pτxx, pτyy, pτxy, pω, stokes, particles, xci, xvi, dt)

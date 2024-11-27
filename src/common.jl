@@ -77,8 +77,6 @@ include("rheology/GeoParams.jl")
 
 include("rheology/StressUpdate.jl")
 
-include("stokes/StressRotation.jl")
-
 include("stokes/StressKernels.jl")
 export tensor_invariant!
 

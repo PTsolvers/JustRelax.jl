@@ -31,7 +31,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays
+using GeoParams,  CellArrays, GLMakie
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -72,31 +72,27 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    # rheology            = init_rheology_linear()
-    # rheology            = init_rheology_nonNewtonian()
     rheology            = init_rheology_nonNewtonian_plastic()
     dt                  = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell              = 40
-    max_xcell           = 60
-    min_xcell           = 20
-    particles           = init_particles(
+    nxcell                = 40
+    max_xcell             = 60
+    min_xcell             = 20
+    particles             = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
-    subgrid_arrays      = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays        = SubgridDiffusionCellArrays(particles)
     # velocity grids
-    grid_vxi            = velocity_grids(xci, xvi, di)
+    grid_vxi              = velocity_grids(xci, xvi, di)
     # material phase & temperature
-    pPhases, pT         = init_cell_arrays(particles, Val(2))
+    pPhases, pT           = init_cell_arrays(particles, Val(2))
 
     # particle fields for the stress rotation
-    pτ  = pτxx, pτyy, pτxy        = init_cell_arrays(particles, Val(3)) # stress
-    # pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
-    pω   = pωxy,                  = init_cell_arrays(particles, Val(1)) # vorticity
-    particle_args                 = (pT, pPhases, pτ..., pω...)
-    particle_args_reduced         = (pT, pτ..., pω...)
+    pτ                    = StressParticles(particles)
+    particle_args         = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT,  unwrap(pτ)...)
 
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
@@ -109,7 +105,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
     pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
-    # pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-5, Re = 2π√2, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -178,10 +173,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Time loop
     t, it = 0.0, 0
 
-    fig_iters = Figure(size=(1200, 800))
-    ax_iters1 = Axis(fig_iters[1,1], aspect = 1, title = "error")
-    ax_iters2 = Axis(fig_iters[1,2], aspect = 1, title = "num iters / ny")
-
     while it < 1000 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
@@ -192,13 +183,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
 
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-
-        particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
-        particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
-        particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, xvi, xci, particles)
 
         # Stokes solver ----------------
+        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         t_stokes = @elapsed begin
             out = solve!(
                 stokes,
@@ -219,28 +208,19 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                     viscosity_relaxation = 1e-2
                 )
             );
-
-            scatter!(ax_iters1, [it], [log10(out.err_evo1[end])], markersize = 10, color=:blue)
-            scatter!(ax_iters2, [it], [out.iter/ny], markersize = 10, color=:blue)
-            fig_iters
-
-            if it == 1 || rem(it, 10) == 0
-                save(joinpath(figdir, "errors.png"), fig_iters)
-            end
         end
 
-        center2vertex!(τxx_v, stokes.τ.xx)
-        center2vertex!(τyy_v, stokes.τ.yy)
-        centroid2particle!(pτxx , xci, stokes.τ.xx, particles)
-        centroid2particle!(pτyy , xci, stokes.τ.yy, particles)
-        grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
-        rotate_stress_particles!(pτ, pω, particles, dt)
-
+        # print some stuff
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
-        tensor_invariant!(stokes.ε)
+
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
+        # compute time step
         dt   = compute_dt(stokes, di) * 0.8
+        # compute strain rate 2nd invartian - for plotting
+        tensor_invariant!(stokes.ε)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -275,7 +255,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
-        # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        # need stresses on the vertices for injection purposes
+        center2vertex!(τxx_v, stokes.τ.xx)
+        center2vertex!(τyy_v, stokes.τ.yy)
         inject_particles_phase!(
             particles,
             pPhases,
@@ -368,8 +350,8 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
 figdir   = "Subduction2D"
-n        = 128
-nx, ny   = 256, 128
+n        = 64
+nx, ny   = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)

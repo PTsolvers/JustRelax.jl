@@ -31,6 +31,8 @@ import JustRelax:
     apply_dirichlet,
     apply_dirichlet!
 
+import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
+
 import JustPIC._2D: nphases, numphases
 
 __init__() = @init_parallel_stencil(AMDGPU, Float64, 2)
@@ -398,6 +400,29 @@ function JR2D.rotate_stress_particles!(
     end
     @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
 
+    return nothing
+end
+
+function JR2D.stress2grid!(
+    stokes,
+    τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+    xvi,
+    xci,
+    particles,
+)
+    stress2grid!(stokes, τ_particles, xvi, xci, particles)
+    return nothing
+end
+
+function JR2D.rotate_stress!(
+    τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+    stokes,
+    particles,
+    xci,
+    xvi,
+    dt,
+)
+    rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
     return nothing
 end
 

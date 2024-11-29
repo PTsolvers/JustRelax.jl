@@ -144,7 +144,9 @@ function _solve!(
     end
 
     av_time = wtime0 / (iter - 1) # average time per iteration
-    update_τ_o!(stokes) # copy τ into τ_o
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter=iter,
@@ -208,14 +210,11 @@ function _solve!(
     θ = @zeros(ni...)
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
-
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     # solver loop
     wtime0 = 0.0
@@ -241,7 +240,7 @@ function _solve!(
             )
 
             # Update buoyancy
-            update_ρg!(ρg[3], rheology, args)
+            update_ρg!(ρg, rheology, args)
 
             update_viscosity!(
                 stokes,
@@ -356,6 +355,9 @@ function _solve!(
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
 
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+
     return (
         iter=iter,
         err_evo1=err_evo1,
@@ -422,14 +424,11 @@ function _solve!(
     ητ = deepcopy(η)
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
-
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
@@ -457,7 +456,7 @@ function _solve!(
             )
 
             # Update buoyancy
-            update_ρg!(ρg[end], phase_ratios, rheology, args)
+            update_ρg!(ρg, phase_ratios, rheology, args)
 
             # Update viscosity
             update_viscosity!(
@@ -559,6 +558,9 @@ function _solve!(
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter=iter,

@@ -21,6 +21,8 @@ import JustRelax:
     apply_dirichlet,
     apply_dirichlet!
 
+import JustRelax: normal_stress, shear_stress, shear_vorticity
+
 import JustPIC._2D: numphases, nphases
 
 __init__() = @init_parallel_stencil(Threads, Float64, 2)
@@ -53,6 +55,7 @@ import JustRelax:
     VelocityBoundaryConditions,
     apply_dirichlet,
     apply_dirichlet!
+import JustRelax: normal_stress, shear_stress, shear_vorticity
 
 import JustPIC._3D: numphases, nphases
 

@@ -23,6 +23,8 @@ import JustRelax:
     apply_dirichlet,
     apply_dirichlet!
 
+import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
+
 import JustPIC._3D: numphases, nphases
 
 __init__() = @init_parallel_stencil(CUDA, Float64, 3)
@@ -223,13 +225,17 @@ function JR3D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor
 end
 
 ## Buoyancy forces
-function JR3D.compute_ρg!(ρg::CuArray, rheology, args)
+function JR3D.compute_ρg!(ρg::Union{CuArray,NTuple{N,CuArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
 end
-function JR3D.compute_ρg!(ρg::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args)
+function JR3D.compute_ρg!(
+    ρg::Union{CuArray,NTuple{N,CuArray}}, phase_ratios::JustPIC.PhaseRatios, rheology, args
+) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
-function JR3D.compute_ρg!(ρg::CuArray, phase_ratios, rheology, args)
+function JR3D.compute_ρg!(
+    ρg::Union{CuArray,NTuple{N,CuArray}}, phase_ratios, rheology, args
+) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -433,6 +439,20 @@ function JR3D.update_rock_ratio!(
     ϕ::JustRelax.RockRatio{CuArray{T,nD,D},N}, phase_ratios, ratio_vel::NTuple{N}, air_phase
 ) where {T,nD,N,D}
     update_rock_ratio!(ϕ, phase_ratios, ratio_vel, air_phase)
+    return nothing
+end
+
+function JR3D.stress2grid!(
+    stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, xvi, xci, particles
+)
+    stress2grid!(stokes, τ_particles, xvi, xci, particles)
+    return nothing
+end
+
+function JR3D.rotate_stress!(
+    τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, xci, xvi, dt
+)
+    rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
     return nothing
 end
 

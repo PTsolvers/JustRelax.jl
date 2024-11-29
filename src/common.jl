@@ -77,8 +77,6 @@ include("rheology/GeoParams.jl")
 
 include("rheology/StressUpdate.jl")
 
-include("stokes/StressRotation.jl")
-
 include("stokes/StressKernels.jl")
 export tensor_invariant!
 
@@ -101,6 +99,12 @@ include("variational_stokes/VelocityKernels.jl")
 
 include("variational_stokes/Stokes2D.jl")
 export solve_VariationalStokes!
+
+include("stress_rotation/constructors.jl")
+export StressParticles
+
+include("stress_rotation/stress_rotation_particles.jl")
+export rotate_stress!, stress2grid!
 
 # thermal diffusion
 

@@ -96,10 +96,18 @@ Check if  `ϕ.center[inds...]` is a not a nullspace.
 - `inds`: Cartesian indices to check.
 """
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
-    vx = (ϕ.Vx[i, j] > 0) * (ϕ.Vx[i + 1, j] > 0)
-    vy = (ϕ.Vy[i, j] > 0) * (ϕ.Vy[i, j + 1] > 0)
+    vx = isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vx[i + 1, j])
+    vy = isvalid(ϕ.Vy, i, j) * isvalid(ϕ.Vy[i, j + 1])
     v = vx * vy
-    return v * (ϕ.center[i, j] > 0)
+    return v * isvalid(ϕ.center, i, j)
+end
+
+Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j, k)
+    vx = isvalid(ϕ.Vx, i, j, k) * isvalid(ϕ.Vx, i + 1, j, k)
+    vy = isvalid(ϕ.Vy, i, j, k) * isvalid(ϕ.Vy, i, j + 1, k)
+    vz = isvalid(ϕ.Vz, i, j, k) * isvalid(ϕ.Vz, i, j, k + 1)
+    v = vx * vy * vz
+    return v * isvalid(ϕ.center, i, j, k)
 end
 
 """
@@ -115,15 +123,16 @@ Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, 
     nx, ny = size(ϕ.Vx)
     j_bot = max(j - 1, 1)
     j0 = min(j, ny)
-    vx = (ϕ.Vx[i, j0] > 0) * (ϕ.Vx[i, j_bot] > 0)
+    vx = isvalid(ϕ.Vx, i, j0) * isvalid(ϕ.Vx, i, j_bot)
 
     nx, ny = size(ϕ.Vy)
     i_left = max(i - 1, 1)
     i0 = min(i, nx)
-    vy = (ϕ.Vy[i0, j] > 0) * (ϕ.Vy[i_left, j] > 0)
+    vy = isvalid(ϕ.Vy, i0, j) * isvalid(ϕ.Vy, i_left, j)
     v = vx * vy
-    return v * (ϕ.vertex[i, j] > 0)
+    return v * isvalid(ϕ.vertex, i, j)
 end
+
 
 """
     isvalid_vx(ϕ::JustRelax.RockRatio, inds...)
@@ -134,13 +143,19 @@ Check if  `ϕ.Vx[inds...]` is a not a nullspace.
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
 - `inds`: Cartesian indices to check.
 """
-Base.@propagate_inbounds @inline function isvalid_vx(ϕ::JustRelax.RockRatio, i, j)
-    # c = (ϕ.center[i, j] > 0) * (ϕ.center[i - 1, j] > 0)
-    # v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i, j + 1] > 0)
-    # cv = c * v
-    # return cv * (ϕ.Vx[i, j] > 0)
-    return (ϕ.Vx[i, j] > 0)
+Base.@propagate_inbounds @inline function isvalid_vx(
+    ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}
+) where {N}
+    return isvalid(ϕ.Vx, I...)
 end
+
+# Base.@propagate_inbounds @inline function isvalid_vx(ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}) where {N}
+#     # c = (ϕ.center[i, j] > 0) * (ϕ.center[i - 1, j] > 0)
+#     # v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i, j + 1] > 0)
+#     # cv = c * v
+#     # return cv * (ϕ.Vx[i, j] > 0)
+#     return (ϕ.Vx[I...] > 0)
+# end
 
 """
     isvalid_vy(ϕ::JustRelax.RockRatio, inds...)
@@ -151,13 +166,128 @@ Check if  `ϕ.Vy[inds...]` is a not a nullspace.
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
 - `inds`: Cartesian indices to check.
 """
-Base.@propagate_inbounds @inline function isvalid_vy(ϕ::JustRelax.RockRatio, i, j)
-    # c = (ϕ.center[i, j] > 0) * (ϕ.center[i, j - 1] > 0)
-    # v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i + 1, j] > 0)
-    # cv = c * v
-    # return cv * (ϕ.Vy[i, j] > 0)
-    return (ϕ.Vy[i, j] > 0)
+# Base.@propagate_inbounds @inline function isvalid_vy(ϕ::JustRelax.RockRatio, i, j)
+#     # c = (ϕ.center[i, j] > 0) * (ϕ.center[i, j - 1] > 0)
+#     # v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i + 1, j] > 0)
+#     # cv = c * v
+#     # return cv * (ϕ.Vy[i, j] > 0)
+#     return (ϕ.Vy[i, j] > 0)
+# end
+Base.@propagate_inbounds @inline function isvalid_vy(
+    ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}
+) where {N}
+    return isvalid(ϕ.Vy, I...)
 end
+
+"""
+    isvalid_vz(ϕ::JustRelax.RockRatio, inds...)
+
+Check if  `ϕ.Vz[inds...]` is a not a nullspace.
+
+# Arguments
+- `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
+- `inds`: Cartesian indices to check.
+"""
+Base.@propagate_inbounds @inline function isvalid_vz(
+    ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}
+) where {N}
+    return isvalid(ϕ.Vz, I...)
+end
+
+Base.@propagate_inbounds @inline function isvalid_velocity(ϕ::JustRelax.RockRatio, i, j)
+    return isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vy, i, j)
+end
+
+Base.@propagate_inbounds @inline function isvalid_velocity(ϕ::JustRelax.RockRatio, i, j, k)
+    return isvalid(ϕ.Vx, i, j, k) * isvalid(ϕ.Vy, i, j, k) * isvalid(ϕ.Vz, i, j, k)
+end
+
+Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, j, k)
+    # yz
+    nx, ny, nz = size(ϕ.yz)
+    i_left = max(i - 1, 1)
+    i_right = min(i, nx)
+    yz = isvalid(ϕ.yz, i_left, j, k) * isvalid(ϕ.yz, i_right, j, k)
+
+    # xz
+    nx, ny, nz = size(ϕ.xz)
+    j_front = max(j - 1, 1)
+    j_back = min(j, ny)
+    xz = isvalid(ϕ.xz, i, j_front, k) * isvalid(ϕ.xz, i, j_back, k)
+
+    # xy
+    nx, ny, nz = size(ϕ.xy)
+    k_top = max(k - 1, 1)
+    k_bot = min(k, nz)
+    xy = isvalid(ϕ.xy, i, j, k_top) * isvalid(ϕ.xy, i, j, k_back)
+
+    # V
+    v = yz * xz * xy
+
+    return v * isvalid(ϕ.vertex, i, j, k)
+end
+
+Base.@propagate_inbounds @inline function isvalid_xz(ϕ::JustRelax.RockRatio, i, j, k)
+
+    # check vertices
+    v = isvalid(ϕ.vertex, i, j, k) * isvalid(ϕ.vertex, i, j + 1, k)
+
+    # check vz
+    nx, ny, nz = size(ϕ.vz)
+    i_left = max(i - 1, 1)
+    i_right = min(i, nx)
+    vz = isvalid(ϕ.vz, i_left, j, k) * isvalid(ϕ.vz, i_right, j, k)
+
+    # check vx
+    nx, ny, nz = size(ϕ.vx)
+    k_top = max(k - 1, 1)
+    k_bot = min(k, nz)
+    vx = isvalid(ϕ.vx, i, j, k_top) * isvalid(ϕ.vx, i, j, k_back)
+
+    return v * vx * vz * isvalid(ϕ.vertex, i, j, k)
+end
+
+Base.@propagate_inbounds @inline function isvalid_xy(ϕ::JustRelax.RockRatio, i, j, k)
+
+    # check vertices
+    v = isvalid(ϕ.vertex, i, j, k) * isvalid(ϕ.vertex, i, j, k + 1)
+
+    # check vx
+    nx, ny, nz = size(ϕ.vx)
+    j_front = max(j - 1, 1)
+    j_back = min(j, ny)
+    vx = isvalid(ϕ.vx, i, j_front, k) * isvalid(ϕ.vx, i, j_back, k)
+
+    # check vy
+    nx, ny, nz = size(ϕ.vy)
+    i_left = max(i - 1, 1)
+    i_right = min(i, nx)
+    vy = isvalid(ϕ.vy, i_left, j, k) * isvalid(ϕ.vy, i_right, j, k)
+
+    return v * vy * vz * isvalid(ϕ.vertex, i, j, k)
+end
+
+Base.@propagate_inbounds @inline function isvalid_yz(ϕ::JustRelax.RockRatio, i, j, k)
+
+    # check vertices
+    v = isvalid(ϕ.vertex, i, j, k) * isvalid(ϕ.vertex, i + 1, j, k)
+
+    # check vz
+    nx, ny, nz = size(ϕ.vz)
+    j_front = max(j - 1, 1)
+    j_back = min(j, ny)
+    vz = isvalid(ϕ.vz, i, j_front, k) * isvalid(ϕ.vz, i, j_back, k)
+
+    # check vy
+    nx, ny, nz = size(ϕ.vy)
+    k_top = max(k - 1, 1)
+    k_bot = min(k, nz)
+    vy = isvalid(ϕ.vy, i, j, k_top) * isvalid(ϕ.vy, i, j, k_back)
+
+    return v * vy * vz * isvalid(ϕ.vertex, i, j, k)
+end
+
+Base.@propagate_inbounds @inline isvalid(ϕ, I::Vararg{Integer,N}) where {N} = ϕ[I...] > 0
 
 ######
 
@@ -218,5 +348,3 @@ end
 #     cv = c || v
 #     return cv || isvalid(ϕ.Vy, i, j)
 # end
-
-Base.@propagate_inbounds @inline isvalid(ϕ, I::Vararg{Integer,N}) where {N} = ϕ[I...] > 0

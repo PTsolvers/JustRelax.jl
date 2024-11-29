@@ -81,9 +81,6 @@ function _solve_VS!(
     compute_viscosity!(stokes, phase_ratios, args, rheology, air_phase, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
 
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
-
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
 
@@ -100,7 +97,7 @@ function _solve_VS!(
                 stokes.∇V,
                 ητ,
                 rheology,
-                phase_ratios.center,
+                phase_ratios,
                 dt,
                 r,
                 θ_dτ,
@@ -212,6 +209,9 @@ function _solve_VS!(
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter=iter,

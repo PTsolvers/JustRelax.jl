@@ -97,9 +97,6 @@ include("variational_stokes/StressKernels.jl")
 
 include("variational_stokes/VelocityKernels.jl")
 
-include("variational_stokes/Stokes2D.jl")
-export solve_VariationalStokes!
-
 include("stress_rotation/constructors.jl")
 export StressParticles
 

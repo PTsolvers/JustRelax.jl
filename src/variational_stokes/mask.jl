@@ -46,22 +46,58 @@ Update the rock ratio `ϕ` based on the provided `phase_ratios` and `air_phase`.
 - `air_phase`: The phase representing air.
 """
 function update_rock_ratio!(
-    ϕ::JustRelax.RockRatio, phase_ratios, ratio_vel::NTuple{N}, air_phase
-) where {N}
+    ϕ::JustRelax.RockRatio{T, 2}, phase_ratios, air_phase
+) where {T}
     nvi = size_v(ϕ)
     @parallel (@idx nvi) update_rock_ratio_cv!(
         ϕ, phase_ratios.center, phase_ratios.vertex, air_phase
     )
-    # @parallel (@idx nvi) update_rock_ratio_vel!(ϕ)
 
-    @parallel (@idx size(ϕ.Vx)) update_rock_ratio_vel!(ϕ.Vx, ratio_vel[1], air_phase)
-    @parallel (@idx size(ϕ.Vy)) update_rock_ratio_vel!(ϕ.Vy, ratio_vel[2], air_phase)
-    if N === 3
-        @parallel (@idx size(ϕ.Vz)) update_rock_ratio_vel!(ϕ.Vz, ratio_vel[3], air_phase)
+    dst = ϕ.Vx, ϕ.Vy
+    src = phase_ratios.Vx, phase_ratios.Vy
+
+    for (dstᵢ, srcᵢ) in zip(dst, src)
+        @parallel (@idx size(dstᵢ)) _update_rock_ratio!(dstᵢ, srcᵢ, air_phase)
     end
 
     return nothing
 end
+
+function update_rock_ratio!(
+    ϕ::JustRelax.RockRatio{T, 3}, phase_ratios, air_phase
+) where {T}
+    nvi = size_v(ϕ)
+    @parallel (@idx nvi) update_rock_ratio_cv!(
+        ϕ, phase_ratios.center, phase_ratios.vertex, air_phase
+    )
+
+    dst = ϕ.Vx, ϕ.Vy, ϕ.Vz, ϕ.xy, ϕ.yz, ϕ.xz
+    src = phase_ratios.Vx, phase_ratios.Vy, phase_ratios.Vz, phase_ratios.xy, phase_ratios.yz, phase_ratios.xz
+    
+    for (dstᵢ, srcᵢ) in zip(dst, src)
+        @parallel (@idx size(dstᵢ)) _update_rock_ratio!(dstᵢ, srcᵢ, air_phase)
+    end
+
+    return nothing
+end
+
+# function update_rock_ratio!(
+#     ϕ::JustRelax.RockRatio, phase_ratios, ratio_vel::NTuple{N}, air_phase
+# ) where {N}
+#     nvi = size_v(ϕ)
+#     @parallel (@idx nvi) update_rock_ratio_cv!(
+#         ϕ, phase_ratios.center, phase_ratios.vertex, air_phase
+#     )
+#     # @parallel (@idx nvi) _update_rock_ratio!(ϕ)
+
+#     @parallel (@idx size(ϕ.Vx)) _update_rock_ratio!(ϕ.Vx, ratio_vel[1], air_phase)
+#     @parallel (@idx size(ϕ.Vy)) _update_rock_ratio!(ϕ.Vy, ratio_vel[2], air_phase)
+#     if N === 3
+#         @parallel (@idx size(ϕ.Vz)) _update_rock_ratio!(ϕ.Vz, ratio_vel[3], air_phase)
+#     end
+
+#     return nothing
+# end
 
 @inline compute_rock_ratio(
     phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
@@ -81,7 +117,7 @@ end
     return nothing
 end
 
-@parallel_indices (I...) function update_rock_ratio_vel!(ϕ, ratio, air_phase)
+@parallel_indices (I...) function _update_rock_ratio!(ϕ, ratio, air_phase)
     ϕ[I...] = Float64(Float16(compute_rock_ratio(ratio, air_phase, I...)))
     return nothing
 end

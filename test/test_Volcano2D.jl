@@ -130,7 +130,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     # RockRatios
     air_phase   = 5
     ϕ           = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, (phase_ratios.Vx, phase_ratios.Vy), air_phase)
+    update_rock_ratio!(ϕ, phase_ratios,  air_phase)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -299,7 +299,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, (phase_ratios.Vx, phase_ratios.Vy), air_phase)
+        update_rock_ratio!(ϕ, phase_ratios,  air_phase)
 
         particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
         particle2centroid!(stokes.τ.yy, pτyy, xci, particles)

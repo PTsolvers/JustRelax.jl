@@ -12,7 +12,7 @@ function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
 end
 
 # GeoParams and multiple phases
-function _solve!(
+function _solve_VS!(
     stokes::JustRelax.StokesArrays,
     pt_stokes,
     di::NTuple{3,T},
@@ -24,6 +24,7 @@ function _solve!(
     args,
     dt,
     igg::IGG;
+    air_phase::Integer=0,
     iterMax=10e3,
     nout=500,
     b_width=(4, 4, 4),
@@ -66,7 +67,7 @@ function _solve!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, air_phase, viscosity_cutoff)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
@@ -77,7 +78,7 @@ function _solve!(
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di...)
             compute_P!(
                 θ,
                 stokes.P0,

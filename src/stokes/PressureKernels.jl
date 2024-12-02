@@ -64,7 +64,7 @@ function compute_P!(
 ) where {N}
     ni = size(P)
     @parallel (@idx ni) compute_P_kernel!(
-        P, P0, RP, ∇V, η, rheology, phase_ratio, dt, r, θ_dτ, ΔTc, melt_fraction
+        P, P0, RP, ∇V, η, rheology, phase_ratio.center, dt, r, θ_dτ, ΔTc, melt_fraction
     )
     return nothing
 end

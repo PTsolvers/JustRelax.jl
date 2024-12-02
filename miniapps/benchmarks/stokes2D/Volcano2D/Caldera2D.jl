@@ -195,7 +195,6 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
             take(vtk_dir)
         end
         take(figdir)
-        cp(@__FILE__, joinpath(figdir, "script.jl"); force = true)
     end
     # ----------------------------------------------------
 
@@ -352,7 +351,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
             # Data I/O and plotting ---------------------
             if it == 1 || rem(it, 1) == 0
                 if igg.me == 0 && it == 1
-                    metadata(pwd(), checkpoint, basename(@__FILE__), "CalderaModelSetup.jl", "CalderaRheology.jl")
+                    metadata(pwd(), checkpoint, basename(@__FILE__), "Caldera_setup.jl", "Caldera_rheology.jl")
                 end
                 checkpointing_jld2(checkpoint, stokes, thermal, t, dt, igg)
 
@@ -457,7 +456,7 @@ const plotting = true
 do_vtk   = true # set to true to generate VTK files for ParaView
 # figdir   = "Caldera2D_noPguess"
 figdir   = "Caldera2D"
-n        = 128 * 2
+n        = 128
 nx, ny   = n, n >>> 1
 li, origin, phases_GMG, T_GMG = setup2D(
     nx+1, ny+1;

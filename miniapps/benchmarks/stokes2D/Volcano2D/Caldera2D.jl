@@ -32,7 +32,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays, Statistics
 
 # Load file with all the rheology configurations
 include("Caldera_setup.jl")
@@ -72,7 +72,7 @@ function apply_pure_shear(Vx,Vy, εbg, xvi, lx, ly)
 
     @parallel_indices (i, j) function pure_shear_y!(Vy, εbg, ly)
         yi = yv[j]
-        Vy[i + 1, j] = abs(yi) * εbg 
+        Vy[i + 1, j] = abs(yi) * εbg
         return nothing
     end
 
@@ -86,7 +86,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
+function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
 
     # Physical domain ------------------------------------
     ni                  = nx, ny           # number of cells
@@ -148,8 +148,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     )
     thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
-    Ttop             = thermal.T[2:end-1, end] 
-    Tbot             = thermal.T[2:end-1, 1]   
+    Ttop             = thermal.T[2:end-1, end]
+    Tbot             = thermal.T[2:end-1, 1]
     # ----------------------------------------------------
 
     # Buoyancy forces
@@ -180,7 +180,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     # displacement2velocity!(stokes, dt)
 
-    εbg          = 1e-15 * 1 
+    εbg          = 1e-15 * 1
     apply_pure_shear(@velocity(stokes)..., εbg, xvi, li...)
 
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -188,12 +188,15 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
-    if do_vtk
-        vtk_dir      = joinpath(figdir, "vtk")
-        take(vtk_dir)
+    if plotting
+        checkpoint = joinpath(figdir, "checkpoint")
+        if do_vtk
+            vtk_dir      = joinpath(figdir, "vtk")
+            take(vtk_dir)
+        end
+        take(figdir)
+        cp(@__FILE__, joinpath(figdir, "script.jl"); force = true)
     end
-    take(figdir)
-    cp(@__FILE__, joinpath(figdir, "script.jl"); force = true)
     # ----------------------------------------------------
 
     local Vx_v, Vy_v
@@ -248,7 +251,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         @views thermal.T[2:end-1, :] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
-       
+
         # args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf)
 
@@ -266,7 +269,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             igg;
             kwargs = (;
                 iterMax          = 100e3,
-                nout             = 2e3, 
+                nout             = 2e3,
                 viscosity_cutoff = viscosity_cutoff,
             )
         )
@@ -285,7 +288,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         tensor_invariant!(stokes.ε_pl)
         dtmax = 2e3 * 3600 * 24 * 365.25
         dt    = compute_dt(stokes, di, dtmax)
-        
+
         println("dt = $(dt/(3600 * 24 *365.25)) years")
         # ------------------------------
 
@@ -327,9 +330,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
         inject_particles_phase!(
-            particles, 
-            pPhases, 
-            particle_args_reduced, 
+            particles,
+            pPhases,
+            particle_args_reduced,
             (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
             xvi
         )
@@ -338,122 +341,128 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
         update_rock_ratio!(ϕ, phase_ratios, (phase_ratios.Vx, phase_ratios.Vy), air_phase)
 
-        particle2centroid!(stokes.τ_o.xx, pτxx, xci, particles)
-        particle2centroid!(stokes.τ_o.yy, pτyy, xci, particles)
-        particle2grid!(stokes.τ_o.xy, pτxy, xvi, particles)
+        particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
+        particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
+        particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
+        tensor_invariant!(stokes.τ)
 
         @show it += 1
         t        += dt
-        
-        # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
-            # checkpointing(figdir, stokes, thermal.T, η, t)
-            (; η_vep, η) = stokes.viscosity
-            if do_vtk
-                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-                data_v = (;
-                    T   = Array(T_buffer),
-                    τII = Array(stokes.τ.II),
-                    εII = Array(stokes.ε.II),
-                    εII_pl = Array(stokes.ε_pl.II),
-                )
-                data_c = (;
-                    P   = Array(stokes.P),
-                    η   = Array(η_vep),
-                )
-                velocity_v = (
-                    Array(Vx_v),
-                    Array(Vy_v),
-                )
-                save_vtk(
-                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                    xvi,
-                    xci,
-                    data_v,
-                    data_c,
-                    velocity_v;
-                    t = 0
-                )
+        if plotting
+            # Data I/O and plotting ---------------------
+            if it == 1 || rem(it, 1) == 0
+                if igg.me == 0 && it == 1
+                    metadata(pwd(), checkpoint, basename(@__FILE__), "CalderaModelSetup.jl", "CalderaRheology.jl")
+                end
+                checkpointing_jld2(checkpoint, stokes, thermal, t, dt, igg)
+
+                (; η_vep, η) = stokes.viscosity
+                if do_vtk
+                    velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                    data_v = (;
+                        T   = Array(T_buffer),
+                        τII = Array(stokes.τ.II),
+                        εII = Array(stokes.ε.II),
+                        εII_pl = Array(stokes.ε_pl.II),
+                    )
+                    data_c = (;
+                        P   = Array(stokes.P),
+                        η   = Array(η_vep),
+                    )
+                    velocity_v = (
+                        Array(Vx_v),
+                        Array(Vy_v),
+                    )
+                    save_vtk(
+                        joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                        xvi,
+                        xci,
+                        data_v,
+                        data_c,
+                        velocity_v;
+                        t = 0
+                    )
+                end
+
+                # Make particles plottable
+                p        = particles.coords
+                ppx, ppy = p
+                pxv      = ppx.data[:]./1e3
+                pyv      = ppy.data[:]./1e3
+                clr      = pPhases.data[:]
+                # clr      = pT.data[:]
+                idxv     = particles.index.data[:];
+                # Make Makie figure
+                ar  = 2
+                fig = Figure(size = (1200, 900), title = "t = $t")
+                ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+                ax2 = Axis(fig[2,1], aspect = ar, title = "Vy")
+                # ax2 = Axis(fig[2,1], aspect = ar, title = "Phase")
+                ax3 = Axis(fig[1,3], aspect = ar, title = "τII [MPa]")
+                # ax4 = Axis(fig[2,3], aspect = ar, title = "log10(εII)")
+                ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+                # Plot temperature
+                h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
+                # Plot particles phase
+                h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+                # h2  = heatmap!(ax2, xvi[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy) , colormap=:batlow)
+                # Plot 2nd invariant of strain rate
+                # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε_pl.II)) , colormap=:batlow)
+                h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II)./1e6 , colormap=:batlow)
+                # Plot effective viscosity
+                # h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:lipari)
+                h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)), colorrange=log10.(viscosity_cutoff), colormap=:batlow)
+                hidexdecorations!(ax1)
+                hidexdecorations!(ax2)
+                hidexdecorations!(ax3)
+                Colorbar(fig[1,2], h1)
+                Colorbar(fig[2,2], h2)
+                Colorbar(fig[1,4], h3)
+                Colorbar(fig[2,4], h4)
+                linkaxes!(ax1, ax2, ax3, ax4)
+                fig
+                save(joinpath(figdir, "$(it).png"), fig)
+
+                # ## Plot initial T and P profile
+                # fig = let
+                #     Yv = [y for x in xvi[1], y in xvi[2]][:]
+                #     Y = [y for x in xci[1], y in xci[2]][:]
+                #     fig = Figure(; size=(1200, 900))
+                #     ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
+                #     ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
+                #     scatter!(
+                #         ax1,
+                #         Array(thermal.T[2:(end - 1), :][:]),
+                #         Yv,
+                #     )
+                #     lines!(
+                #         ax2,
+                #         Array(stokes.P[:]),
+                #         Y,
+                #     )
+                #     hideydecorations!(ax2)
+                #     save(joinpath(figdir, "thermal_profile_$it.png"), fig)
+                #     fig
+                # end
             end
-
-            # Make particles plottable
-            p        = particles.coords
-            ppx, ppy = p
-            pxv      = ppx.data[:]./1e3
-            pyv      = ppy.data[:]./1e3
-            clr      = pPhases.data[:]
-            # clr      = pT.data[:]
-            idxv     = particles.index.data[:];
-            # Make Makie figure
-            ar  = 2
-            fig = Figure(size = (1200, 900), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-            ax2 = Axis(fig[2,1], aspect = ar, title = "Vy")
-            # ax2 = Axis(fig[2,1], aspect = ar, title = "Phase")
-            ax3 = Axis(fig[1,3], aspect = ar, title = "τII [MPa]")
-            # ax4 = Axis(fig[2,3], aspect = ar, title = "log10(εII)")
-            ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
-            # Plot temperature
-            h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
-            # Plot particles phase
-            h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
-            # h2  = heatmap!(ax2, xvi[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy) , colormap=:batlow)
-            # Plot 2nd invariant of strain rate
-            # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε_pl.II)) , colormap=:batlow)
-            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II)./1e6 , colormap=:batlow)
-            # Plot effective viscosity
-            # h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:lipari)
-            h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)), colorrange=log10.(viscosity_cutoff), colormap=:batlow)
-            hidexdecorations!(ax1)
-            hidexdecorations!(ax2)
-            hidexdecorations!(ax3)
-            Colorbar(fig[1,2], h1)
-            Colorbar(fig[2,2], h2)
-            Colorbar(fig[1,4], h3)
-            Colorbar(fig[2,4], h4)
-            linkaxes!(ax1, ax2, ax3, ax4)
-            fig
-            save(joinpath(figdir, "$(it).png"), fig)
-
-            # ## Plot initial T and P profile
-            # fig = let
-            #     Yv = [y for x in xvi[1], y in xvi[2]][:]
-            #     Y = [y for x in xci[1], y in xci[2]][:]
-            #     fig = Figure(; size=(1200, 900))
-            #     ax1 = Axis(fig[1, 1]; aspect=2 / 3, title="T")
-            #     ax2 = Axis(fig[1, 2]; aspect=2 / 3, title="Pressure")
-            #     scatter!(
-            #         ax1,
-            #         Array(thermal.T[2:(end - 1), :][:]),
-            #         Yv,
-            #     )
-            #     lines!(
-            #         ax2,
-            #         Array(stokes.P[:]),
-            #         Y,
-            #     )
-            #     hideydecorations!(ax2)
-            #     save(joinpath(figdir, "thermal_profile_$it.png"), fig)
-            #     fig
-            # end
+            # ------------------------------
         end
-        # ------------------------------
-
     end
 
     return nothing
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
+const plotting = true
 do_vtk   = true # set to true to generate VTK files for ParaView
 # figdir   = "Caldera2D_noPguess"
 figdir   = "Caldera2D"
 n        = 128 * 2
 nx, ny   = n, n >>> 1
 li, origin, phases_GMG, T_GMG = setup2D(
-    nx+1, ny+1; 
-    sticky_air     = 4, 
-    flat           = false, 
+    nx+1, ny+1;
+    sticky_air     = 4,
+    flat           = false,
     chimney        = false,
     chamber_T      = 1e3,
     chamber_depth  = 7e0,
@@ -470,4 +479,4 @@ else
     igg
 end
 
-main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(li, origin, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

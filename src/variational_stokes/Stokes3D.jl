@@ -11,7 +11,6 @@ function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
     return _solve_VS!(stokes, args...; kwargs...)
 end
 
-
 # GeoParams and multiple phases
 function _solve!(
     stokes::JustRelax.StokesArrays,

@@ -304,7 +304,7 @@ end
     end
 
     ## xy
-    if all(I .≤ size(ε[6]))  && isvalid_xy(ϕ, I...)
+    if all(I .≤ size(ε[6])) && isvalid_xy(ϕ, I...)
         # interpolate to ith vertex
         ηv_ij = av_clamped_xy(η, Ic...)
         EIIv_ij = av_clamped_xy(EII, Ic...)

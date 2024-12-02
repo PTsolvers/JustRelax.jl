@@ -133,7 +133,6 @@ Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, 
     return v * isvalid(ϕ.vertex, i, j)
 end
 
-
 """
     isvalid_vx(ϕ::JustRelax.RockRatio, inds...)
 

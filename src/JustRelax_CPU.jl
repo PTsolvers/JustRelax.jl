@@ -34,6 +34,9 @@ export solve!
 include("variational_stokes/Stokes2D.jl")
 export solve_VariationalStokes!
 
+include("phases/topography_correction.jl")
+export update_phases_given_markerchain!
+
 end
 
 module JustRelax3D

@@ -1,5 +1,5 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -123,14 +123,14 @@ function main(igg, nx, ny)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 15
-    particles = init_particles(
+    particles     = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
     # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+    grid_vxi      = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases      = init_cell_arrays(particles, Val(2))
-    particle_args    = (pT, pPhases)
+    pT, pPhases   = init_cell_arrays(particles, Val(2))
+    particle_args = (pT, pPhases)
 
     # Elliptical temperature anomaly
     init_phases!(pPhases, particles)
@@ -141,7 +141,15 @@ function main(igg, nx, ny)
     # RockRatios
     air_phase   = 1
     ϕ           = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, (phase_ratios.Vx, phase_ratios.Vy), air_phase)
+    update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    # ----------------------------------------------------
+    
+    # Initialize marker chain-------------------------------
+    nxcell, max_xcell, min_xcell = 24, 40, 12
+    nxcell, min_xcell, max_xcell = 12, 6, 24
+
+    initial_elevation = -100e3
+    chain             = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation);
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -220,32 +228,27 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, (phase_ratios.Vx, phase_ratios.Vy), air_phase)
+        update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
+        # advect marker chain
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        # ------------------------------
         @show it += 1
         t        += dt
 
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 5) == 0
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 5
             fig = Figure(size = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(round.(t/(1e3 * 3600 * 24 *365.25); digits=3)) Kyrs")
-            
-            # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η)), colormap = :grayC)
-            # arrows!(
-            #     ax,
-            #     xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
-            #     lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
-            #     color = :red,
-            # )
-
 
             # Make particles plottable
             p        = particles.coords
@@ -254,13 +257,18 @@ function main(igg, nx, ny)
             pyv      = ppy.data[:]./1e3
             clr      = pPhases.data[:]
             idxv     = particles.index.data[:];
-            scatter!(ax, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 2)
+
+            chain_x = chain.coords[1].data[:]./1e3
+            chain_y = chain.coords[2].data[:]./1e3
+
+            scatter!(ax, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 5)
             arrows!(
                 ax,
                 xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
                 lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
-                color = :red,
+                color = :gray,
             )
+            scatter!(ax, Array(chain_x), Array(chain_y), color=:red, markersize = 5)
 
             fig
             save(joinpath(figdir, "$(it).png"), fig)
@@ -272,7 +280,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n        = 256
+n        = 128
 nx       = n
 ny       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

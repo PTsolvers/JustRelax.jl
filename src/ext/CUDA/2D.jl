@@ -32,6 +32,7 @@ __init__() = @init_parallel_stencil(CUDA, Float64, 2)
 
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
+include("../../variational_stokes/Stokes2D.jl")
 
 # Types
 

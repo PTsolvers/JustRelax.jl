@@ -404,8 +404,8 @@ end
 # rock ratios
 
 function JR2D.update_rock_ratio!(
-    ϕ::JustRelax.RockRatio{CuArray{T,nD,D},N}, phase_ratios, air_phase
-) where {T,nD,N,D}
+    ϕ::JustRelax.RockRatio{CuArray{T,nD,D},2}, phase_ratios, air_phase
+) where {T,nD,D}
     update_rock_ratio!(ϕ, phase_ratios, air_phase)
     return nothing
 end

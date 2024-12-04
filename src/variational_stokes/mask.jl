@@ -205,15 +205,6 @@ Base.@propagate_inbounds @inline function isvalid_vx(
     return isvalid(ϕ.Vx, I...)
 end
 
-
-Base.@propagate_inbounds @inline function isvalid_vx(ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}) where {N}
-    # c = (ϕ.center[i, j] > 0) * (ϕ.center[i - 1, j] > 0)
-    # v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i, j + 1] > 0)
-    # cv = c * v
-    # return cv * (ϕ.Vx[i, j] > 0)
-    return (ϕ.Vx[I...] > 0)
-end
-
 # Base.@propagate_inbounds @inline function isvalid_vx(ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}) where {N}
 #     # c = (ϕ.center[i, j] > 0) * (ϕ.center[i - 1, j] > 0)
 #     # v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i, j + 1] > 0)

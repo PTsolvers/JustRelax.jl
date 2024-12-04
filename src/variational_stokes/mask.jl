@@ -131,10 +131,17 @@ Check if  `ϕ.center[inds...]` is a not a nullspace.
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
 - `inds`: Cartesian indices to check.
 """
+# Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
+#     vx = isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vx[i + 1, j])
+#     vy = isvalid(ϕ.Vy, i, j) * isvalid(ϕ.Vy[i, j + 1])
+#     v = vx * vy
+#     return v * isvalid(ϕ.center, i, j)
+# end
+
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
     vx = isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vx[i + 1, j])
     vy = isvalid(ϕ.Vy, i, j) * isvalid(ϕ.Vy[i, j + 1])
-    v = vx * vy
+    v = vx || vy
     return v * isvalid(ϕ.center, i, j)
 end
 
@@ -165,9 +172,23 @@ Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, 
     i_left = max(i - 1, 1)
     i0 = min(i, nx)
     vy = isvalid(ϕ.Vy, i0, j) * isvalid(ϕ.Vy, i_left, j)
-    v = vx * vy
+    v = vx || vy
     return v * isvalid(ϕ.vertex, i, j)
 end
+
+# Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, j)
+#     nx, ny = size(ϕ.Vx)
+#     j_bot = max(j - 1, 1)
+#     j0 = min(j, ny)
+#     vx = isvalid(ϕ.Vx, i, j0) * isvalid(ϕ.Vx, i, j_bot)
+
+#     nx, ny = size(ϕ.Vy)
+#     i_left = max(i - 1, 1)
+#     i0 = min(i, nx)
+#     vy = isvalid(ϕ.Vy, i0, j) * isvalid(ϕ.Vy, i_left, j)
+#     v = vx * vy
+#     return v * isvalid(ϕ.vertex, i, j)
+# end
 
 """
     isvalid_vx(ϕ::JustRelax.RockRatio, inds...)
@@ -182,6 +203,15 @@ Base.@propagate_inbounds @inline function isvalid_vx(
     ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}
 ) where {N}
     return isvalid(ϕ.Vx, I...)
+end
+
+
+Base.@propagate_inbounds @inline function isvalid_vx(ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}) where {N}
+    # c = (ϕ.center[i, j] > 0) * (ϕ.center[i - 1, j] > 0)
+    # v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i, j + 1] > 0)
+    # cv = c * v
+    # return cv * (ϕ.Vx[i, j] > 0)
+    return (ϕ.Vx[I...] > 0)
 end
 
 # Base.@propagate_inbounds @inline function isvalid_vx(ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}) where {N}

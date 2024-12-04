@@ -145,9 +145,7 @@ function main(igg, nx, ny)
     # ----------------------------------------------------
     
     # Initialize marker chain-------------------------------
-    nxcell, max_xcell, min_xcell = 24, 40, 12
-    nxcell, min_xcell, max_xcell = 12, 6, 24
-
+    nxcell, max_xcell, min_xcell = 100, 150, 75
     initial_elevation = -100e3
     chain             = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation);
     # ----------------------------------------------------
@@ -184,7 +182,7 @@ function main(igg, nx, ny)
     # Time loop
     t, it = 0.0, 0
     dt = 1e3 * (3600 * 24 * 365.25)
-    while it < 150
+    while it < 40
 
         # solve!(
         #     stokes,
@@ -233,14 +231,16 @@ function main(igg, nx, ny)
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
-        # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, air_phase)
-
+        
         # advect marker chain
         advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_rock_ratio!(ϕ, phase_ratios, air_phase)        
         # ------------------------------
+
         @show it += 1
         t        += dt
 
@@ -275,6 +275,7 @@ function main(igg, nx, ny)
 
         end
     end
+
     return nothing
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------

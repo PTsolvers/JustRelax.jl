@@ -444,4 +444,10 @@ function JR2D.rotate_stress!(
     return nothing
 end
 
+# marker chain
+
+function JR2D.update_phases_given_markerchain!(phase, chain::MarkerChain{JustPIC.AMDGPUBackend}, particles::Particles{JustPIC.AMDGPUBackend}, origin, di, air_phase)
+    update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
+end
+
 end

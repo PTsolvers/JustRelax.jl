@@ -71,6 +71,9 @@ export vertex2center!,
 include("advection/weno5.jl")
 export WENO_advection!
 
+include("phases/topography_correction.jl")
+export update_phases_given_markerchain!
+
 # Stokes
 
 include("rheology/GeoParams.jl")

@@ -1,7 +1,7 @@
-import JustPIC._2D: is_above_surface, cell_index, interp1D_inner, interp1D_extremas, distance
+import JustPIC._2D: cell_index, interp1D_inner, interp1D_extremas, distance
 using StaticArrays
 
-function update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
+function update_phases_given_markerchain!(phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase) where {backend}
     (; coords, index) = particles;
     dy = di[2]
     @parallel (1:size(index,1)) _update_phases_given_markerchain!(phase, coords, index, chain.coords, chain.cell_vertices, origin, dy, air_phase)
@@ -13,10 +13,13 @@ end
 end
 
 function _update_phases_given_markerchain_kernel!(phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell)
-    chain_yi     = @cell chain_coords[2][icell]
-    cell_range   = find_minmax_cell_indices(chain_yi, origin[2], dy)
-    T            = eltype(eltype(phase))
-
+    T                       = eltype(eltype(phase))
+    chain_yi                = @cell chain_coords[2][icell]
+    min_cell_j, max_cell_j  = find_minmax_cell_indices(chain_yi, origin[2], dy)
+    min_cell_j              = max(1, min_cell_j - 10)
+    max_cell_j              = max(1, max_cell_j + 10)
+    cell_range              = min_cell_j:max_cell_j
+    
     # iterate over cells with marker chain on them
     for j in cell_range
         # iterate over particles j-th cell
@@ -27,7 +30,7 @@ function _update_phases_given_markerchain_kernel!(phase, coords, index, chain_co
             phaseq = @index phase[ip, icell, j]
 
             # check if particle is above the marker chain
-            above = is_above_surface2(xq, yq, chain_coords, cell_vertices)
+            above = is_above_chain(xq, yq, chain_coords, cell_vertices)
             # if the particle is above the surface and the phase is not air, set the phase to air
             if above && phaseq != air_phase
                 @index phase[ip, icell, j] = T(air_phase)
@@ -64,10 +67,10 @@ function find_minmax_cell_indices(chain_yi, origin_y, dy)
     ymin, ymax = extrema_CA(chain_yi)
     min_cell_j = Int((ymin - origin_y) ÷ dy) + 1
     max_cell_j = Int((ymax - origin_y) ÷ dy) + 1
-    return min_cell_j:max_cell_j
+    return min_cell_j, max_cell_j
 end
 
-@inline function is_above_surface2(xq, yq, coords, cell_vertices)
+@inline function is_above_chain(xq, yq, coords, cell_vertices)
     I = cell_index(xq, cell_vertices)
     x_cell, y_cell = coords[1][I], coords[2][I]
     ychain = if 1 < I[1] < length(cell_vertices) - 1

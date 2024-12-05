@@ -1,6 +1,7 @@
 import JustPIC._2D: cell_index, interp1D_inner, interp1D_extremas, distance
 using StaticArrays
 
+
 function update_phases_given_markerchain!(phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase) where {backend}
     (; coords, index) = particles;
     dy = di[2]
@@ -17,9 +18,9 @@ function _update_phases_given_markerchain_kernel!(phase, coords, index, chain_co
     chain_yi                = @cell chain_coords[2][icell]
     min_cell_j, max_cell_j  = find_minmax_cell_indices(chain_yi, origin[2], dy)
     min_cell_j              = max(1, min_cell_j - 10)
-    max_cell_j              = max(1, max_cell_j + 10)
+    max_cell_j              = min(size(index, 2), max_cell_j + 10)
     cell_range              = min_cell_j:max_cell_j
-    
+
     # iterate over cells with marker chain on them
     for j in cell_range
         # iterate over particles j-th cell

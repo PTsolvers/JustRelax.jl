@@ -101,7 +101,7 @@ end
 
 @inline compute_rock_ratio(
     phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
-) where {N} = 1 - @index phase_ratio[air_phase, I...]
+) where {N} = (x = 1 - @index phase_ratio[air_phase, I...]; x *= x > 1e-5)
 
 @inline compute_air_ratio(
     phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
@@ -118,7 +118,8 @@ end
 end
 
 @parallel_indices (I...) function _update_rock_ratio!(ϕ, ratio, air_phase)
-    ϕ[I...] = Float64(Float16(compute_rock_ratio(ratio, air_phase, I...)))
+    # ϕ[I...] = Float64(Float16(compute_rock_ratio(ratio, air_phase, I...)))
+    ϕ[I...] = clamp(compute_rock_ratio(ratio, air_phase, I...), 0, 1)
     return nothing
 end
 
@@ -131,17 +132,10 @@ Check if  `ϕ.center[inds...]` is a not a nullspace.
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
 - `inds`: Cartesian indices to check.
 """
-# Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
-#     vx = isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vx[i + 1, j])
-#     vy = isvalid(ϕ.Vy, i, j) * isvalid(ϕ.Vy[i, j + 1])
-#     v = vx * vy
-#     return v * isvalid(ϕ.center, i, j)
-# end
-
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
     vx = isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vx[i + 1, j])
     vy = isvalid(ϕ.Vy, i, j) * isvalid(ϕ.Vy[i, j + 1])
-    v = vx || vy
+    v = vx * vy
     return v * isvalid(ϕ.center, i, j)
 end
 
@@ -172,23 +166,9 @@ Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, 
     i_left = max(i - 1, 1)
     i0 = min(i, nx)
     vy = isvalid(ϕ.Vy, i0, j) * isvalid(ϕ.Vy, i_left, j)
-    v = vx || vy
+    v = vx * vy
     return v * isvalid(ϕ.vertex, i, j)
 end
-
-# Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, j)
-#     nx, ny = size(ϕ.Vx)
-#     j_bot = max(j - 1, 1)
-#     j0 = min(j, ny)
-#     vx = isvalid(ϕ.Vx, i, j0) * isvalid(ϕ.Vx, i, j_bot)
-
-#     nx, ny = size(ϕ.Vy)
-#     i_left = max(i - 1, 1)
-#     i0 = min(i, nx)
-#     vy = isvalid(ϕ.Vy, i0, j) * isvalid(ϕ.Vy, i_left, j)
-#     v = vx * vy
-#     return v * isvalid(ϕ.vertex, i, j)
-# end
 
 """
     isvalid_vx(ϕ::JustRelax.RockRatio, inds...)

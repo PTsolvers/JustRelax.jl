@@ -13,7 +13,7 @@ else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
+using ParallelStencil
 
 @static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
@@ -32,19 +32,13 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays, Statistics
+using GeoParams, GLMakie, Statistics
 
 # Load file with all the rheology configurations
 include("Caldera_setup.jl")
 include("Caldera_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-import ParallelStencil.INDICES
-const idx_k = INDICES[2]
-macro all_k(A)
-    esc(:($A[$idx_k]))
-end
 
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
@@ -53,12 +47,6 @@ function copyinn_x!(A, B)
     end
 
     @parallel f_x(A, B)
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
 end
 
 function apply_pure_shear(Vx,Vy, εbg, xvi, lx, ly)
@@ -85,6 +73,13 @@ function apply_pure_shear(Vx,Vy, εbg, xvi, lx, ly)
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
+function extract_topo_from_GMG_phases(phases_GMG, xvi, air_phase)
+    topo_idx = [findfirst(x->x==air_phase, row) - 1 for row in eachrow(phases_GMG)]
+    yv = xvi[2]
+    topo_y = yv[topo_idx]
+    return topo_y
+end
+
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
 
@@ -92,19 +87,19 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     ni                  = nx, ny           # number of cells
     di                  = @. li / ni       # grid steps
     grid                = Geometry(ni, li; origin = origin)
-    (; xci, xvi)        = grid # nodes at the center and vertices of the cells
+    (; xci, xvi)        = grid             # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology            = init_rheologies()
-    dt                  = 5e2 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt                  = 5e2 * 3600 * 24 * 365
     # dt                  = Inf # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell              = 40
-    max_xcell           = 60
-    min_xcell           = 20
+    nxcell              = 100
+    max_xcell           = 150
+    min_xcell           = 75
     particles           = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
@@ -114,24 +109,39 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     # material phase & temperature
     pPhases, pT         = init_cell_arrays(particles, Val(2))
 
-    # particle fields for the stress rotation
-    pτ  = pτxx, pτyy, pτxy        = init_cell_arrays(particles, Val(3)) # stress
-    # pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
-    pω   = pωxy,                  = init_cell_arrays(particles, Val(1)) # vorticity
-    particle_args                 = (pT, pPhases, pτ..., pω...)
-    particle_args_reduced         = (pT, pτ..., pω...)
-
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
     phase_ratios     = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni);
     init_phases!(pPhases, phases_device, particles, xvi)
+    
+    # Initialize marker chain
+    nxcell, max_xcell, min_xcell = 100, 150, 75
+    initial_elevation            = 0e0
+    chain                        = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation);
+    air_phase                    = 5
+    topo_y                       = extract_topo_from_GMG_phases(phases_GMG, xvi, air_phase)
+    for _ in 1:3
+        @views hn               = 0.5 .* (topo_y[1:end-1] .+ topo_y[2:end])
+        @views topo_y[2:end-1] .= 0.5 .* (hn[1:end-1] .+ hn[2:end])
+        fill_chain_from_vertices!(chain, PTArray(backend)(topo_y))
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+    end
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+
+    # particle fields for the stress rotation
+    # pτ  = pτxx, pτyy, pτxy        = init_cell_arrays(particles, Val(3)) # stress
+    # # pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
+    # pω   = pωxy,                  = init_cell_arrays(particles, Val(1)) # vorticity
+    # particle_args                 = (pT, pPhases, pτ..., pω...)
+    # particle_args_reduced         = (pT, pτ..., pω...)
+    pτ                    = StressParticles(particles)
+    particle_args         = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT,  unwrap(pτ)...)
 
     # rock ratios for variational stokes
     # RockRatios
-    air_phase   = 5
     ϕ           = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, (phase_ratios.Vx, phase_ratios.Vy), air_phase)
+    update_rock_ratio!(ϕ, phase_ratios, air_phase)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -241,7 +251,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     t, it = 0.0, 0
     thermal.Told .= thermal.T
 
-    while it < 500 #000 # run only for 5 Myrs
+    while it < 1000 #000 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -253,6 +263,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
 
         # args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf)
+
+        stress2grid!(stokes, pτ, xvi, xci, particles)
 
         t_stokes = @elapsed solve_VariationalStokes!(
             stokes,
@@ -273,20 +285,15 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
             )
         )
 
-        center2vertex!(τxx_v, stokes.τ.xx)
-        center2vertex!(τyy_v, stokes.τ.yy)
-        centroid2particle!(pτxx , xci, stokes.τ.xx, particles)
-        centroid2particle!(pτyy , xci, stokes.τ.yy, particles)
-        grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
-        grid2particle!(pωxy, xvi, stokes.ω.xy, particles)
-        rotate_stress_particles!(pτ, pω, particles, dt)
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
 
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
         dtmax = 2e3 * 3600 * 24 * 365.25
-        dt    = compute_dt(stokes, di, dtmax)
+        dt    = compute_dt(stokes, di, dtmax) * 0.5
 
         println("dt = $(dt/(3600 * 24 *365.25)) years")
         # ------------------------------
@@ -303,7 +310,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
             kwargs = (
                 igg     = igg,
                 phase   = phase_ratios,
-                iterMax = 50e3,
+                iterMax = 100e3,
                 nout    = 1e2,
                 verbose = true,
             )
@@ -328,6 +335,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        center2vertex!(τxx_v, stokes.τ.xx)
+        center2vertex!(τyy_v, stokes.τ.yy)
         inject_particles_phase!(
             particles,
             pPhases,
@@ -336,20 +345,21 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
             xvi
         )
 
+        # advect marker chain
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, (phase_ratios.Vx, phase_ratios.Vy), air_phase)
+        update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
-        particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
-        particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
-        particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
         tensor_invariant!(stokes.τ)
 
         @show it += 1
         t        += dt
         if plotting
             # Data I/O and plotting ---------------------
-            if it == 1 || rem(it, 1) == 0
+            if it == 1 || rem(it, 5) == 0
                 if igg.me == 0 && it == 1
                     metadata(pwd(), checkpoint, basename(@__FILE__), "Caldera_setup.jl", "Caldera_rheology.jl")
                 end
@@ -391,6 +401,10 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
                 clr      = pPhases.data[:]
                 # clr      = pT.data[:]
                 idxv     = particles.index.data[:];
+
+                chain_x = chain.coords[1].data[:]./1e3
+                chain_y = chain.coords[2].data[:]./1e3
+
                 # Make Makie figure
                 ar  = 2
                 fig = Figure(size = (1200, 900), title = "t = $t")
@@ -403,7 +417,9 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
                 # Plot temperature
                 h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
                 # Plot particles phase
-                h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+                h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 3)
+                scatter!(ax2, Array(chain_x), Array(chain_y), color=:red, markersize = 3)
+
                 # h2  = heatmap!(ax2, xvi[1].*1e-3, xvi[2].*1e-3, Array(stokes.V.Vy) , colormap=:batlow)
                 # Plot 2nd invariant of strain rate
                 # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε_pl.II)) , colormap=:batlow)
@@ -453,16 +469,17 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 const plotting = true
+
 do_vtk   = true # set to true to generate VTK files for ParaView
 # figdir   = "Caldera2D_noPguess"
 figdir   = "Caldera2D"
-n        = 128
+n        = 256
 nx, ny   = n, n >>> 1
 li, origin, phases_GMG, T_GMG = setup2D(
     nx+1, ny+1;
     sticky_air     = 4,
     flat           = false,
-    chimney        = false,
+    chimney        = true,
     chamber_T      = 1e3,
     chamber_depth  = 7e0,
     chamber_radius = 0.5,

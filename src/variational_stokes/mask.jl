@@ -81,24 +81,6 @@ function update_rock_ratio!(
     return nothing
 end
 
-# function update_rock_ratio!(
-#     ϕ::JustRelax.RockRatio, phase_ratios, ratio_vel::NTuple{N}, air_phase
-# ) where {N}
-#     nvi = size_v(ϕ)
-#     @parallel (@idx nvi) update_rock_ratio_cv!(
-#         ϕ, phase_ratios.center, phase_ratios.vertex, air_phase
-#     )
-#     # @parallel (@idx nvi) _update_rock_ratio!(ϕ)
-
-#     @parallel (@idx size(ϕ.Vx)) _update_rock_ratio!(ϕ.Vx, ratio_vel[1], air_phase)
-#     @parallel (@idx size(ϕ.Vy)) _update_rock_ratio!(ϕ.Vy, ratio_vel[2], air_phase)
-#     if N === 3
-#         @parallel (@idx size(ϕ.Vz)) _update_rock_ratio!(ϕ.Vz, ratio_vel[3], air_phase)
-#     end
-
-#     return nothing
-# end
-
 @inline compute_rock_ratio(
     phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
 ) where {N} = (x = 1 - @index phase_ratio[air_phase, I...]; x *= x > 1e-5)

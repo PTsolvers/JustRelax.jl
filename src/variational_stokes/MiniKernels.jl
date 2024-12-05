@@ -47,10 +47,10 @@ Base.@propagate_inbounds @inline _av_yi(A::T, ϕ::T, I::Vararg{Integer,2}) where
 
 # averages 3D
 Base.@propagate_inbounds @inline _av(A::T, ϕ::T, i, j, k) where {T<:T3} =
-    0.125 * mysum(A, ϕ, (i + 1):(i + 2), (j + 1):(j + 2), (k + 1):(k + 2))
+    0.125 * mymaskedsum(A, ϕ, (i + 1):(i + 2), (j + 1):(j + 2), (k + 1):(k + 2))
 
 Base.@propagate_inbounds @inline _av_a(A::T, ϕ::T, i, j, k) where {T<:T3} =
-    0.125 * mysum(A, ϕ, (i):(i + 1), (j):(j + 1), (k):(k + 1))
+    0.125 * mymaskedsum(A, ϕ, (i):(i + 1), (j):(j + 1), (k):(k + 1))
 
 Base.@propagate_inbounds @inline _av_xa(A::T, ϕ::T, I::Vararg{Integer,3}) where {T<:T3} =
     (center(A, ϕ, I...) + right(A, ϕ, I...)) * 0.5
@@ -70,10 +70,10 @@ Base.@propagate_inbounds @inline _av_yi(A::T, ϕ::T, I::Vararg{Integer,3}) where
 Base.@propagate_inbounds @inline _av_zi(A::T, ϕ::T, I::Vararg{Integer,3}) where {T<:T3} =
     (top(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
 
-## Because mysum(::generator) does not work inside CUDA kernels...
-@inline mysum(A, ϕ, ranges::Vararg{T,N}) where {T,N} = mysum(identity, A, ϕ, ranges...)
+## Because mymaskedsum(::generator) does not work inside CUDA kernels...
+@inline mymaskedsum(A::AbstractArray, ϕ::AbstractArray, ranges::Vararg{T,N}) where {T,N} = mymaskedsum(identity, A, ϕ, ranges...)
 
-@inline function mysum(
+@inline function mymaskedsum(
     f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i
 ) where {F<:Function}
     s = 0.0
@@ -83,7 +83,7 @@ Base.@propagate_inbounds @inline _av_zi(A::T, ϕ::T, I::Vararg{Integer,3}) where
     return s
 end
 
-@inline function mysum(
+@inline function mymaskedsum(
     f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i, ranges_j
 ) where {F<:Function}
     s = 0.0
@@ -93,7 +93,7 @@ end
     return s
 end
 
-@inline function mysum(
+@inline function mymaskedsum(
     f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i, ranges_j, ranges_k
 ) where {F<:Function}
     s = 0.0

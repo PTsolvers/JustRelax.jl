@@ -1,5 +1,5 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -13,7 +13,7 @@ else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 @static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
@@ -32,13 +32,19 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, Statistics
+using GeoParams, GLMakie, CellArrays, Statistics
 
 # Load file with all the rheology configurations
 include("Caldera_setup.jl")
 include("Caldera_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
+
+import ParallelStencil.INDICES
+const idx_k = INDICES[2]
+macro all_k(A)
+    esc(:($A[$idx_k]))
+end
 
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
@@ -47,6 +53,12 @@ function copyinn_x!(A, B)
     end
 
     @parallel f_x(A, B)
+end
+
+# Initial pressure profile - not accurate
+@parallel function init_P!(P, ρg, z)
+    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
+    return nothing
 end
 
 function apply_pure_shear(Vx,Vy, εbg, xvi, lx, ly)
@@ -473,7 +485,7 @@ const plotting = true
 do_vtk   = true # set to true to generate VTK files for ParaView
 # figdir   = "Caldera2D_noPguess"
 figdir   = "Caldera2D"
-n        = 256
+n        = 128
 nx, ny   = n, n >>> 1
 li, origin, phases_GMG, T_GMG = setup2D(
     nx+1, ny+1;
@@ -485,9 +497,6 @@ li, origin, phases_GMG, T_GMG = setup2D(
     chamber_radius = 0.5,
     aspect_x       = 6,
 )
-
-# heatmap(phases_GMG)
-# heatmap(T_GMG)
 
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)

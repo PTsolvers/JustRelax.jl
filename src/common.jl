@@ -71,6 +71,9 @@ export vertex2center!,
 include("advection/weno5.jl")
 export WENO_advection!
 
+include("phases/topography_correction.jl")
+export update_phases_given_markerchain!
+
 # Stokes
 
 include("rheology/GeoParams.jl")
@@ -84,6 +87,18 @@ include("stokes/PressureKernels.jl")
 export rotate_stress_particles!
 
 include("stokes/VelocityKernels.jl")
+
+# variational Stokes
+include("variational_stokes/mask.jl")
+export RockRatio, update_rock_ratio!
+
+include("variational_stokes/PressureKernels.jl")
+
+include("variational_stokes/MiniKernels.jl")
+
+include("variational_stokes/StressKernels.jl")
+
+include("variational_stokes/VelocityKernels.jl")
 
 include("stress_rotation/constructors.jl")
 export StressParticles

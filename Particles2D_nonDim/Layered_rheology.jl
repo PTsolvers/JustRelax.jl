@@ -2,95 +2,95 @@ using GeoParams.Dislocation
 using GeoParams.Diffusion
 
 function init_rheologies(CharDim; is_plastic = true)
-    # from https://agupubs.onlinelibrary.wiley.com/doi/pdf/10.1029/2022JB025877
-    diff_ol = DiffusionCreep(
-        n = 1NoUnits,
-        r = 0NoUnits,
-        A = 1.25e-15Pa^(-1) / s,
-        E = 370.0e3J / mol,
-        V = 6e-6m^3 / mol,
-        R = 8.3145J / mol / K,
-    )
-    disl_ol = DislocationCreep(
-        n = 3.5NoUnits,
-        r = 0NoUnits,
-        A = 8.33e-15Pa^(-35//10) / s,
-        E = 530.0e3J / mol,
-        V = 1.4e-5m^3 / mol,
-        R = 8.3145J / mol / K,
-    )
+    # # from https://agupubs.onlinelibrary.wiley.com/doi/pdf/10.1029/2022JB025877
+    # diff_ol = DiffusionCreep(
+    #     n = 1NoUnits,
+    #     r = 0NoUnits,
+    #     A = 1.25e-15Pa^(-1) / s,
+    #     E = 370.0e3J / mol,
+    #     V = 6e-6m^3 / mol,
+    #     R = 8.3145J / mol / K,
+    # )
+    # disl_ol = DislocationCreep(
+    #     n = 3.5NoUnits,
+    #     r = 0NoUnits,
+    #     A = 8.33e-15Pa^(-35//10) / s,
+    #     E = 530.0e3J / mol,
+    #     V = 1.4e-5m^3 / mol,
+    #     R = 8.3145J / mol / K,
+    # )
 
-    diff_wad = DiffusionCreep(
-        n = 1NoUnits,
-        r = 0NoUnits,
-        A = 6.12e-19Pa^(-1) / s,
-        E = 231.0e3J / mol,
-        V = 6e-6m^3 / mol,
-        R = 8.3145J / mol / K,
-    )
-    disl_wad = DislocationCreep(
-        n = 3.5NoUnits,
-        r = 0NoUnits,
-        A = 2.05e-12Pa^(-35//10) / s,
-        E = 530.0e3J / mol,
-        V = 1.7e-5m^3 / mol,
-        R = 8.3145J / mol / K,
-    )
+    # diff_wad = DiffusionCreep(
+    #     n = 1NoUnits,
+    #     r = 0NoUnits,
+    #     A = 6.12e-19Pa^(-1) / s,
+    #     E = 231.0e3J / mol,
+    #     V = 6e-6m^3 / mol,
+    #     R = 8.3145J / mol / K,
+    # )
+    # disl_wad = DislocationCreep(
+    #     n = 3.5NoUnits,
+    #     r = 0NoUnits,
+    #     A = 2.05e-12Pa^(-35//10) / s,
+    #     E = 530.0e3J / mol,
+    #     V = 1.7e-5m^3 / mol,
+    #     R = 8.3145J / mol / K,
+    # )
 
-    diff_ring = DiffusionCreep(
-        n = 1NoUnits,
-        r = 0NoUnits,
-        A = 2.94e-17Pa^(-1) / s,
-        E = 270.0e3J / mol,
-        V = 6e-6m^3 / mol,
-        R = 8.3145J / mol / K,
-    )
-    disl_ring = DislocationCreep(
-        n = 3.5NoUnits,
-        r = 0NoUnits,
-        A = 2.05e-12Pa^(-35//10) / s,
-        E = 530.0e3J / mol,
-        V = 1.7e-5m^3 / mol,
-        R = 8.3145J / mol / K,
-    )
+    # diff_ring = DiffusionCreep(
+    #     n = 1NoUnits,
+    #     r = 0NoUnits,
+    #     A = 2.94e-17Pa^(-1) / s,
+    #     E = 270.0e3J / mol,
+    #     V = 6e-6m^3 / mol,
+    #     R = 8.3145J / mol / K,
+    # )
+    # disl_ring = DislocationCreep(
+    #     n = 3.5NoUnits,
+    #     r = 0NoUnits,
+    #     A = 2.05e-12Pa^(-35//10) / s,
+    #     E = 530.0e3J / mol,
+    #     V = 1.7e-5m^3 / mol,
+    #     R = 8.3145J / mol / K,
+    # )
 
-    diff_lower_mantle = DiffusionCreep(
-        n = 1NoUnits,
-        r = 0NoUnits,
-        A = 5.4e-22Pa^(-1) / s,
-        E = 270.0e3J / mol,
-        V = 6e-6m^3 / mol,
-        R = 8.3145J / mol / K,
-    )
-    disl_lower_mantle = DislocationCreep(
-        n = 3.5NoUnits,
-        r = 0NoUnits,
-        A = 1e-40Pa^(-35//10) / s,
-        E = 530.0e3J / mol,
-        V = 0m^3 / mol,
-        R = 8.3145J / mol / K,
-    )
+    # diff_lower_mantle = DiffusionCreep(
+    #     n = 1NoUnits,
+    #     r = 0NoUnits,
+    #     A = 5.4e-22Pa^(-1) / s,
+    #     E = 270.0e3J / mol,
+    #     V = 6e-6m^3 / mol,
+    #     R = 8.3145J / mol / K,
+    # )
+    # disl_lower_mantle = DislocationCreep(
+    #     n = 3.5NoUnits,
+    #     r = 0NoUnits,
+    #     A = 1e-40Pa^(-35//10) / s,
+    #     E = 530.0e3J / mol,
+    #     V = 0m^3 / mol,
+    #     R = 8.3145J / mol / K,
+    # )
 
     # Dislocation and Diffusion creep
-    disl_upper_crust            = SetDislocationCreep(Dislocation.dry_anorthite_Rybacki_2006)
-    disl_lower_crust            = SetDislocationCreep(Dislocation.dry_anorthite_Rybacki_2006)
+    disl_upper_crust            = SetDislocationCreep(Dislocation.mafic_granulite_Wilks_1990)
+    disl_lower_crust            = SetDislocationCreep(Dislocation.mafic_granulite_Wilks_1990)
     disl_lithospheric_mantle    = SetDislocationCreep(Dislocation.wet_olivine_Hirth_2003)
     disl_sublithospheric_mantle = SetDislocationCreep(Dislocation.dry_olivine_Hirth_2003)
     disl_bridgemanite           = SetDislocationCreep(Dislocation.wet_olivine_Hirth_2003)
     disl_ppv                    = SetDislocationCreep(Dislocation.wet_olivine_Hirth_2003)
 
-    diff_upper_crust            = SetDiffusionCreep(Diffusion.dry_anorthite_Rybacki_2006)
-    diff_lower_crust            = SetDiffusionCreep(Diffusion.dry_anorthite_Rybacki_2006)
+    # diff_upper_crust            = SetDiffusionCreep(Diffusion.mafic_granulite_Wilks_1990)
+    # diff_lower_crust            = SetDiffusionCreep(Diffusion.mafic_granulite_Wilks_1990)
     diff_lithospheric_mantle    = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
     diff_sublithospheric_mantle = SetDiffusionCreep(Diffusion.dry_olivine_Hirth_2003)
     diff_bridgemanite           = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
     diff_ppv                    = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
 
     # Elasticity
-    el_upper_crust              = SetConstantElasticity(; G=25e9Pa, ν=0.5)
-    el_lower_crust              = SetConstantElasticity(; G=25e9Pa, ν=0.5)
-    el_lithospheric_mantle      = SetConstantElasticity(; G=67e9Pa, ν=0.5)
-    el_sublithospheric_mantle   = SetConstantElasticity(; G=67e9Pa, ν=0.5)
+    el_upper_crust              = SetConstantElasticity(; G=25e9Pa, ν=0.45)
+    el_lower_crust              = SetConstantElasticity(; G=25e9Pa, ν=0.45)
+    el_lithospheric_mantle      = SetConstantElasticity(; G=67e9Pa, ν=0.45)
+    el_sublithospheric_mantle   = SetConstantElasticity(; G=67e9Pa, ν=0.45)
     β_upper_crust               = inv(get_Kb(el_upper_crust))
     β_lower_crust               = inv(get_Kb(el_lower_crust))
     β_lithospheric_mantle       = inv(get_Kb(el_lithospheric_mantle))
@@ -135,7 +135,8 @@ function init_rheologies(CharDim; is_plastic = true)
             Density           = PT_Density(; ρ0=2.75e3kg / m^3, β=β_upper_crust, T0=0e0C, α = 3.5e-5/ K),
             HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2J / kg / K),
             Conductivity      = K_crust,
-            CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
+            CompositeRheology = CompositeRheology((disl_upper_crust, pl_crust)),
+            # CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
             Elasticity        = el_upper_crust,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
             Gravity           = ConstantGravity(; g=g),
@@ -148,7 +149,8 @@ function init_rheologies(CharDim; is_plastic = true)
             HeatCapacity      = ConstantHeatCapacity(; Cp=7.5e2J / kg / K),
             Conductivity      = K_crust,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
+            # CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
+            CompositeRheology = CompositeRheology((disl_lower_crust,  pl_crust)),
             Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_lower_crust,
             CharDim           = CharDim,
@@ -160,7 +162,8 @@ function init_rheologies(CharDim; is_plastic = true)
             HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3J / kg / K),
             Conductivity      = K_mantle,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, el_lithospheric_mantle, pl)),
+            CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle,  pl)),
+            # CompositeRheology = CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, el_lithospheric_mantle, pl)),
             Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_lithospheric_mantle,
             CharDim           = CharDim,
@@ -172,7 +175,8 @@ function init_rheologies(CharDim; is_plastic = true)
             HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3J / kg / K),
             Conductivity      = K_mantle,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle, pl)),
+            CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle,  pl)),
+            # CompositeRheology = CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle, pl)),
             Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_lithospheric_mantle,
             CharDim           = CharDim,
@@ -184,7 +188,8 @@ function init_rheologies(CharDim; is_plastic = true)
             HeatCapacity      = ConstantHeatCapacity(; Cp=1.25e3J / kg / K),
             Conductivity      = K_mantle,
             RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            CompositeRheology = CompositeRheology((disl_bridgemanite, diff_bridgemanite, el_sublithospheric_mantle)),
+            CompositeRheology = CompositeRheology((disl_bridgemanite, diff_bridgemanite)),
+            # CompositeRheology = CompositeRheology((disl_bridgemanite, diff_bridgemanite, el_sublithospheric_mantle)),
             Gravity           = ConstantGravity(; g=g),
             Elasticity        = el_sublithospheric_mantle,
             CharDim           = CharDim,

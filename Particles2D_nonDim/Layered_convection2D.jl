@@ -107,7 +107,7 @@ function main(li_dim, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_
     min_xcell        = 20
     particles        = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
-    )
+    );
     subgrid_arrays   = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -154,7 +154,7 @@ function main(li_dim, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_
     stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
 
     # Rheology
-    viscosity_cutoff = nondimensionalize((1e17Pa*s, 1e23Pa*s), CharDim)
+    viscosity_cutoff = nondimensionalize((1e18Pa*s, 1e23Pa*s), CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
@@ -241,7 +241,7 @@ function main(li_dim, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_
             phase_ratios,
             rheology,
             args,
-            dt,
+            Inf,
             igg;
             kwargs = (;
                 iterMax          = 150e3,
@@ -392,4 +392,4 @@ else
 end
 
 # run main script
-main(li_dim, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+# main(li_dim, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

@@ -28,7 +28,7 @@ function setup(nx, ny)
         zlim    = (-model_depth, 0.0),
         # Origin  = nothing, StrikeAngle=0, DipAngle=0,
         phase   = LithosphericPhases(Layers=[20, 40, 120, 660, 2600], Phases=[1, 2, 3, 4, 5, 6]),
-        T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=2000, Age=1000, Adiabat=0.4)
+        T       = HalfspaceCoolingTemp(Tsurface=20, Tmantle=1000, Age=10, Adiabat=0.4)
     )
 
     ## add a sphere

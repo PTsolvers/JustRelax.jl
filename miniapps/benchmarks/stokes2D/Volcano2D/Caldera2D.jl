@@ -32,7 +32,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays, Statistics, Dates
+using GeoParams, GLMakie, CellArrays, Statistics, Dates
 
 # Load file with all the rheology configurations
 include("Caldera_setup.jl")
@@ -92,24 +92,29 @@ function extract_topo_from_GMG_phases(phases_GMG, xvi, air_phase)
     return topo_y
 end
 
-function thermal_anomaly!(Temp, mask, Ω_T, phases, particles, conduit_phase, magma_phase)
+function thermal_anomaly!(Temp, mask, Ω_T, phase_ratios, conduit_phase, magma_phase)
 
-    @parallel_indices (i, j) function _thermal_anomaly!(Temp, mask, Ω_T, phases, index, conduit_phase, magma_phase)
-        @inbounds for ip in cellaxes(phases)
-            #quick escape
-            @index(index[ip, i, j]) == 0 && continue
-            phase_ij = @index phases[ip, i, j]
+    @parallel_indices (i, j) function _thermal_anomaly!(Temp, mask, Ω_T, vertex_ratio, conduit_phase, magma_phase)
+        # quick escape
+        conduit_ratio_ij = @index vertex_ratio[conduit_phase, i, j]
+        magma_ratio_ij   = @index vertex_ratio[magma_phase, i, j]
 
-            if phase_ij == conduit_phase || phase_ij == magma_phase
-                Temp[i+1, j+1] = Ω_T
-                mask[i+1,j+1] = 1
-            end
+        if conduit_ratio_ij > 0.5 || magma_ratio_ij > 0.5
+        # if isone(conduit_ratio_ij) || isone(magma_ratio_ij)
+            Temp[i+1, j] = Ω_T
+            mask[i+1, j] = 1
         end
+
         return nothing
     end
+ 
+    ni = size(phase_ratios.vertex)
 
-    @parallel _thermal_anomaly!(Temp, mask, Ω_T, phases, particles.index, conduit_phase, magma_phase)
+    @parallel (@idx ni) _thermal_anomaly!(Temp, mask, Ω_T, phase_ratios.vertex, conduit_phase, magma_phase)
+    
+    return nothing
 end
+
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
@@ -188,7 +193,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     # Add thermal anomaly BC's
     Ω_T                 = 1223e0 # inner BCs temperature
     mask                = @zeros(size(thermal.T)...)
-    thermal_anomaly!(thermal.T, mask, Ω_T, pPhases, particles, 5, 3)
+    thermal_anomaly!(thermal.T, mask, Ω_T, phase_ratios, 5, 3)
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux      = (left = true, right = true, top = false, bot = false),
         dirichlet    = (constant = Ω_T, mask=mask)
@@ -549,7 +554,7 @@ do_vtk   = true # set to true to generate VTK files for ParaView
 # figdir   = "Caldera2D_noPguess"
 figdir   = "$(today())_Conduit"
 n        = 128
-nx, ny   = n, n #>>> 1
+nx, ny   = n, n >>> 1
 li, origin, phases_GMG, T_GMG = setup2D(
     nx+1, ny+1;
     sticky_air     = 4e0,
@@ -570,21 +575,21 @@ else
     igg
 end
 
-main(li, origin, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+# main(li, origin, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
 
-function plot_particles(particles, pPhases, chain)
-    p = particles.coords
-    # pp = [argmax(p) for p in phase_ratios.center] #if you want to plot it in a heatmap rather than scatter
-    ppx, ppy = p
-    # pxv = ustrip.(dimensionalize(ppx.data[:], km, CharDim))
-    # pyv = ustrip.(dimensionalize(ppy.data[:], km, CharDim))
-    pxv = ppx.data[:]
-    pyv = ppy.data[:]
-    clr = pPhases.data[:]
-    # clr = pϕ.data[:]
-    idxv = particles.index.data[:]
-    f,ax,h=scatter(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:roma, markersize=1)
+# function plot_particles(particles, pPhases, chain)
+#     p = particles.coords
+#     # pp = [argmax(p) for p in phase_ratios.center] #if you want to plot it in a heatmap rather than scatter
+#     ppx, ppy = p
+#     # pxv = ustrip.(dimensionalize(ppx.data[:], km, CharDim))
+#     # pyv = ustrip.(dimensionalize(ppy.data[:], km, CharDim))
+#     pxv = ppx.data[:]
+#     pyv = ppy.data[:]
+#     clr = pPhases.data[:]
+#     # clr = pϕ.data[:]
+#     idxv = particles.index.data[:]
+#     f,ax,h=scatter(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:roma, markersize=1)
 
-    Colorbar(f[1,2], h)
-    f
-end
+#     Colorbar(f[1,2], h)
+#     f
+# end

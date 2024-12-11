@@ -13,6 +13,7 @@ using Statistics
 @reexport using JustPIC
 
 function solve!() end
+#! format: off
 function __init__()
     println("""
          _           _   ____      _               _ _
@@ -23,7 +24,7 @@ function __init__()
                                                 |__/
     """)
 end
-
+#! format: on
 abstract type AbstractBackend end
 struct CPUBackend <: AbstractBackend end
 struct AMDGPUBackend <: AbstractBackend end

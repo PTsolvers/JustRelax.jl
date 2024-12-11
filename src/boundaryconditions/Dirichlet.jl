@@ -25,22 +25,29 @@ function Base.getindex(x::DirichletBoundaryCondition, inds::Vararg{Int,N}) where
     return x.value[inds...] * x.mask[inds...]
 end
 
-struct ConstantArray{T,N} <: AbstractArray{T,N}
-    val::T
+# struct ConstantArray{T,N} <: AbstractArray{T,N}
+#     val::T
+    
+#     ConstantArray(val::T, ::Val{N}) where {T<:Number,N} = new{T,N}(val)
+# end
+# Adapt.@adapt_structure ConstantArray
 
-    ConstantArray(val::T, ::Val{N}) where {T<:Number,N} = new{T,N}(val)
+struct ConstantArray{T}
+    val::T
+    
+    ConstantArray(val::T) where {T<:Number} = new{T}(val)
 end
 Adapt.@adapt_structure ConstantArray
 
 Base.getindex(A::ConstantArray, ::Vararg{Int,N}) where {N} = A.val
 Base.setindex!(::ConstantArray, ::Any, ::Vararg{Int,N}) where {N} = nothing
-function Base.show(io::IO, ::MIME"text/plain", A::ConstantArray{T,N}) where {T,N}
-    println(io, "ConstantArray{$T,$N}:")
+function Base.show(io::IO, ::MIME"text/plain", A::ConstantArray{T}) where {T}
+    println(io, "ConstantArray{$T}:")
     return println(io, "  ", A.val)
 end
 
-function Base.show(io::IO, A::ConstantArray{T,N}) where {T,N}
-    println(io, "ConstantArray{$T,$N}:")
+function Base.show(io::IO, A::ConstantArray{T}) where {T}
+    println(io, "ConstantArray{$T}:")
     return println(io, "  ", A.val)
 end
 
@@ -49,7 +56,7 @@ struct ConstantDirichletBoundaryCondition{T,M} <: AbstractDirichletBoundaryCondi
     mask::M
 
     function ConstantDirichletBoundaryCondition(value::N, mask::M) where {N<:Number,M}
-        v = ConstantArray(value, Val(dims(mask)))
+        v = ConstantArray(value)
         T = typeof(v)
         return new{T,M}(v, mask)
     end

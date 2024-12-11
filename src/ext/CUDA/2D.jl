@@ -20,11 +20,15 @@ import JustRelax:
     TemperatureBoundaryConditions,
     AbstractFlowBoundaryConditions,
     DisplacementBoundaryConditions,
-    VelocityBoundaryConditions
+    VelocityBoundaryConditions,
+    apply_dirichlet,
+    apply_dirichlet!
+
+import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
 import JustPIC._2D: numphases, nphases
 
-@init_parallel_stencil(CUDA, Float64, 2)
+__init__() = @init_parallel_stencil(CUDA, Float64, 2)
 
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
@@ -200,11 +204,13 @@ function JR2D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor
 end
 
 ## Buoyancy forces
-function JR2D.compute_ρg!(ρg::CuArray, rheology, args)
+function JR2D.compute_ρg!(ρg::Union{CuArray,NTuple{N,CuArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
 end
 
-function JR2D.compute_ρg!(ρg::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args)
+function JR2D.compute_ρg!(
+    ρg::Union{CuArray,NTuple{N,CuArray}}, phase_ratios::JustPIC.PhaseRatios, rheology, args
+) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -239,13 +245,17 @@ end
 function JR2D.center2vertex!(
     vertex_yz::T, vertex_xz::T, vertex_xy::T, center_yz::T, center_xz::T, center_xy::T
 ) where {T<:CuArray}
-    return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
+    center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
+    return nothing
 end
 
-function JR2D.velocity2vertex!(
-    Vx_v::CuArray, Vy_v::CuArray, Vx::CuArray, Vy::CuArray; ghost_nodes=true
-)
-    velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=ghost_nodes)
+function JR2D.velocity2center!(Vx_c::T, Vy_c::T, Vx::T, Vy::T) where {T<:CuArray}
+    velocity2center!(Vx_c, Vy_c, Vx, Vy)
+    return nothing
+end
+
+function JR2D.velocity2vertex!(Vx_v::CuArray, Vy_v::CuArray, Vx::CuArray, Vy::CuArray)
+    velocity2vertex!(Vx_v, Vy_v, Vx, Vy)
     return nothing
 end
 
@@ -351,6 +361,39 @@ end
 # WENO-5 advection
 function JR2D.WENO_advection!(u::CuArray, Vxi::NTuple, weno, di, dt)
     return WENO_advection!(u, Vxi, weno, di, dt)
+end
+
+# stress rotation on particles
+
+function JR2D.rotate_stress_particles!(
+    τ::NTuple, ω::NTuple, particles::Particles{CUDABackend}, dt; method::Symbol=:matrix
+)
+    fn = if method === :matrix
+        rotate_stress_particles_rotation_matrix!
+
+    elseif method === :jaumann
+        rotate_stress_particles_jaumann!
+
+    else
+        error("Unknown method: $method. Valid methods are :matrix and :jaumann")
+    end
+    @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
+
+    return nothing
+end
+
+function JR2D.stress2grid!(
+    stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, xvi, xci, particles
+)
+    stress2grid!(stokes, τ_particles, xvi, xci, particles)
+    return nothing
+end
+
+function JR2D.rotate_stress!(
+    τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, xci, xvi, dt
+)
+    rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
+    return nothing
 end
 
 end

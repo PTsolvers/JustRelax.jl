@@ -9,7 +9,8 @@ function compute_stress_increment(
 ) where {N}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-        dτ_r * fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
+        return dτ_r *
+               fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
     end
     return dτij
 end
@@ -159,6 +160,10 @@ end
     av_xz(A) = _av_xzi(A, i, j, k)
     av_yz(A) = _av_yzi(A, i, j, k)
     get(x) = x[i, j, k]
+    av_xy(::Nothing) = Inf
+    av_xz(::Nothing) = Inf
+    av_yz(::Nothing) = Inf
+    get(::Nothing) = Inf
 
     @inbounds begin
         if all((i, j, k) .≤ size(τxx))
@@ -582,6 +587,9 @@ end
     rheology,
     phase_center,
     phase_vertex,
+    phase_xy,
+    phase_yz,
+    phase_xz,
 )
     τyzv, τxzv, τxyv = τshear_v
     τyzv_old, τxzv_old, τxyv_old = τshear_ov
@@ -590,7 +598,7 @@ end
     Ic = clamped_indices(ni, I...)
 
     ## yz 
-    if all(I .< size(ε[4]))
+    if all(I .≤ size(ε[4]))
         # interpolate to ith vertex
         ηv_ij = av_clamped_yz(η, Ic...)
         Pv_ij = av_clamped_yz(Pr, Ic...)
@@ -617,7 +625,7 @@ end
         τxyv_old_ij = av_clamped_yz_z(τxyv_old, Ic...)
 
         # vertex parameters
-        phase = @inbounds phase_vertex[I...]
+        phase = @inbounds phase_yz[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -627,24 +635,12 @@ end
         dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
         # stress increments @ vertex
-        dτxxv =
-            (-(τxxv_ij - τxxv_old_ij) * ηv_ij * _Gvdt - τxxv_ij + 2.0 * ηv_ij * εxxv_ij) *
-            dτ_rv
-        dτyyv =
-            (-(τyyv_ij - τyyv_old_ij) * ηv_ij * _Gvdt - τyyv_ij + 2.0 * ηv_ij * εyyv_ij) *
-            dτ_rv
-        dτzzv =
-            (-(τzzv_ij - τzzv_old_ij) * ηv_ij * _Gvdt - τzzv_ij + 2.0 * ηv_ij * εzzv_ij) *
-            dτ_rv
-        dτyzv =
-            (-(τyzv_ij - τyzv_old_ij) * ηv_ij * _Gvdt - τyzv_ij + 2.0 * ηv_ij * εyzv_ij) *
-            dτ_rv
-        dτxzv =
-            (-(τxzv_ij - τxzv_old_ij) * ηv_ij * _Gvdt - τxzv_ij + 2.0 * ηv_ij * εxzv_ij) *
-            dτ_rv
-        dτxyv =
-            (-(τxyv_ij - τxyv_old_ij) * ηv_ij * _Gvdt - τxyv_ij + 2.0 * ηv_ij * εxyv_ij) *
-            dτ_rv
+        dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
+        dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
+        dτzzv = compute_stress_increment(τzzv_ij, τzzv_old_ij, ηv_ij, εzzv_ij, _Gvdt, dτ_rv)
+        dτyzv = compute_stress_increment(τyzv_ij, τyzv_old_ij, ηv_ij, εyzv_ij, _Gvdt, dτ_rv)
+        dτxzv = compute_stress_increment(τxzv_ij, τxzv_old_ij, ηv_ij, εxzv_ij, _Gvdt, dτ_rv)
+        dτxyv = compute_stress_increment(τxyv_ij, τxyv_old_ij, ηv_ij, εxyv_ij, _Gvdt, dτ_rv)
 
         dτijv = dτxxv, dτyyv, dτzzv, dτyzv, dτxzv, dτxyv
         τijv = τxxv_ij, τyyv_ij, τzzv_ij, τyzv_ij, τxzv_ij, τxyv_ij
@@ -652,7 +648,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij)
+        if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
                 (1.0 - relλ) * λv[1][I...] +
@@ -667,7 +663,7 @@ end
     end
 
     ## xz
-    if all(I .< size(ε[5]))
+    if all(I .≤ size(ε[5]))
         # interpolate to ith vertex
         ηv_ij = av_clamped_xz(η, Ic...)
         EIIv_ij = av_clamped_xz(EII, Ic...)
@@ -692,7 +688,7 @@ end
         τxyv_old_ij = av_clamped_xz_z(τxyv_old, Ic...)
 
         # vertex parameters
-        phase = @inbounds phase_vertex[I...]
+        phase = @inbounds phase_xz[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -702,24 +698,12 @@ end
         dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
         # stress increments @ vertex
-        dτxxv =
-            (-(τxxv_ij - τxxv_old_ij) * ηv_ij * _Gvdt - τxxv_ij + 2.0 * ηv_ij * εxxv_ij) *
-            dτ_rv
-        dτyyv =
-            (-(τyyv_ij - τyyv_old_ij) * ηv_ij * _Gvdt - τyyv_ij + 2.0 * ηv_ij * εyyv_ij) *
-            dτ_rv
-        dτzzv =
-            (-(τzzv_ij - τzzv_old_ij) * ηv_ij * _Gvdt - τzzv_ij + 2.0 * ηv_ij * εzzv_ij) *
-            dτ_rv
-        dτyzv =
-            (-(τyzv_ij - τyzv_old_ij) * ηv_ij * _Gvdt - τyzv_ij + 2.0 * ηv_ij * εyzv_ij) *
-            dτ_rv
-        dτxzv =
-            (-(τxzv_ij - τxzv_old_ij) * ηv_ij * _Gvdt - τxzv_ij + 2.0 * ηv_ij * εxzv_ij) *
-            dτ_rv
-        dτxyv =
-            (-(τxyv_ij - τxyv_old_ij) * ηv_ij * _Gvdt - τxyv_ij + 2.0 * ηv_ij * εxyv_ij) *
-            dτ_rv
+        dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
+        dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
+        dτzzv = compute_stress_increment(τzzv_ij, τzzv_old_ij, ηv_ij, εzzv_ij, _Gvdt, dτ_rv)
+        dτyzv = compute_stress_increment(τyzv_ij, τyzv_old_ij, ηv_ij, εyzv_ij, _Gvdt, dτ_rv)
+        dτxzv = compute_stress_increment(τxzv_ij, τxzv_old_ij, ηv_ij, εxzv_ij, _Gvdt, dτ_rv)
+        dτxyv = compute_stress_increment(τxyv_ij, τxyv_old_ij, ηv_ij, εxyv_ij, _Gvdt, dτ_rv)
 
         dτijv = dτxxv, dτyyv, dτzzv, dτyzv, dτxzv, dτxyv
         τijv = τxxv_ij, τyyv_ij, τzzv_ij, τyzv_ij, τxzv_ij, τxyv_ij
@@ -727,7 +711,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij)
+        if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
                 (1.0 - relλ) * λv[2][I...] +
@@ -742,7 +726,7 @@ end
     end
 
     ## xy
-    if all(I .< size(ε[6]))
+    if all(I .≤ size(ε[6]))
         # interpolate to ith vertex
         ηv_ij = av_clamped_xy(η, Ic...)
         EIIv_ij = av_clamped_xy(EII, Ic...)
@@ -769,7 +753,7 @@ end
         τxyv_old_ij = τxyv_old[I...]
 
         # vertex parameters
-        phase = @inbounds phase_vertex[I...]
+        phase = @inbounds phase_xy[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -779,32 +763,19 @@ end
         dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
         # stress increments @ vertex
-        dτxxv =
-            (-(τxxv_ij - τxxv_old_ij) * ηv_ij * _Gvdt - τxxv_ij + 2.0 * ηv_ij * εxxv_ij) *
-            dτ_rv
-        dτyyv =
-            (-(τyyv_ij - τyyv_old_ij) * ηv_ij * _Gvdt - τyyv_ij + 2.0 * ηv_ij * εyyv_ij) *
-            dτ_rv
-        dτzzv =
-            (-(τzzv_ij - τzzv_old_ij) * ηv_ij * _Gvdt - τzzv_ij + 2.0 * ηv_ij * εzzv_ij) *
-            dτ_rv
-        dτyzv =
-            (-(τyzv_ij - τyzv_old_ij) * ηv_ij * _Gvdt - τyzv_ij + 2.0 * ηv_ij * εyzv_ij) *
-            dτ_rv
-        dτxzv =
-            (-(τxzv_ij - τxzv_old_ij) * ηv_ij * _Gvdt - τxzv_ij + 2.0 * ηv_ij * εxzv_ij) *
-            dτ_rv
-        dτxyv =
-            (-(τxyv_ij - τxyv_old_ij) * ηv_ij * _Gvdt - τxyv_ij + 2.0 * ηv_ij * εxyv_ij) *
-            dτ_rv
-
+        dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
+        dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
+        dτzzv = compute_stress_increment(τzzv_ij, τzzv_old_ij, ηv_ij, εzzv_ij, _Gvdt, dτ_rv)
+        dτyzv = compute_stress_increment(τyzv_ij, τyzv_old_ij, ηv_ij, εyzv_ij, _Gvdt, dτ_rv)
+        dτxzv = compute_stress_increment(τxzv_ij, τxzv_old_ij, ηv_ij, εxzv_ij, _Gvdt, dτ_rv)
+        dτxyv = compute_stress_increment(τxyv_ij, τxyv_old_ij, ηv_ij, εxyv_ij, _Gvdt, dτ_rv)
         dτijv = dτxxv, dτyyv, dτzzv, dτyzv, dτxzv, dτxyv
         τijv = τxxv_ij, τyyv_ij, τzzv_ij, τyzv_ij, τxzv_ij, τxyv_ij
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij)
+        if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
                 (1.0 - relλ) * λv[3][I...] +
@@ -841,7 +812,7 @@ end
         # yield function @ center
         F = τII_ij - C - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij)
+        if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
@@ -890,6 +861,9 @@ end
     rheology,
     phase_center,
     phase_vertex,
+    phase_xy,
+    phase_yz,
+    phase_xz,
 )
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
@@ -916,20 +890,16 @@ end
     dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
     # stress increments @ vertex
-    dτxxv =
-        (-(τxxv_ij - τxxv_old_ij) * ηv_ij * _Gvdt - τxxv_ij + 2.0 * ηv_ij * εxxv_ij) * dτ_rv
-    dτyyv =
-        (-(τyyv_ij - τyyv_old_ij) * ηv_ij * _Gvdt - τyyv_ij + 2.0 * ηv_ij * εyyv_ij) * dτ_rv
-    dτxyv =
-        (
-            -(τxyv[I...] - τxyv_old[I...]) * ηv_ij * _Gvdt - τxyv[I...] +
-            2.0 * ηv_ij * ε[3][I...]
-        ) * dτ_rv
+    dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
+    dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
+    dτxyv = compute_stress_increment(
+        τxyv[I...], τxyv_old[I...], ηv_ij, ε[3][I...], _Gvdt, dτ_rv
+    )
     τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
 
     # yield function @ center
     Fv = τIIv_ij - Cv - Pv_ij * sinϕv
-    if is_pl && !iszero(τIIv_ij)
+    if is_pl && !iszero(τIIv_ij) && Fv > 0
         # stress correction @ vertex
         λv[I...] =
             (1.0 - relλ) * λv[I...] +
@@ -959,12 +929,14 @@ end
         εij_ve = @. εij + 0.5 * τij_o * _Gdt
         εII_ve = GeoParams.second_invariant(εij_ve)
         # stress increments @ center
-        dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
+        # dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
+        dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = GeoParams.second_invariant(dτij .+ τij)
         # yield function @ center
         F = τII_ij - C - Pr[I...] * sinϕ
 
         if is_pl && !iszero(τII_ij)
+            F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +

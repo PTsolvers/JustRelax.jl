@@ -262,7 +262,8 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                         xci,
                         data_v,
                         data_c,
-                        velocity_v
+                        velocity_v,
+                        t=t
                     )
                 end
 

@@ -95,11 +95,11 @@ function diffusion_3D(;
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
 
     # Visualization global arrays
-    nx_v     = ((nx + 1)-2) * igg.dims[1]
-    ny_v     = ((ny + 1)-2) * igg.dims[2]
-    nz_v     = ((nz + 1)-2) * igg.dims[3]
+    nx_v     = (nx - 2) * igg.dims[1]
+    ny_v     = (ny - 2) * igg.dims[2]
+    nz_v     = (nz - 2) * igg.dims[3]
     T_v      = zeros(nx_v, ny_v, nz_v)             # plotting is done on the CPU
-    T_nohalo = zeros((nx+1)-2, (ny+1)-2, (nz+1)-2) # plotting is done on the CPU
+    T_nohalo = zeros(nx-2, ny-2, nz-2) # plotting is done on the CPU
 
     t  = 0.0
     it = 0
@@ -119,8 +119,8 @@ function diffusion_3D(;
                 verbose=false
             ),
         )
-
-        @views T_nohalo .= Array(thermal.T[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        temperature2center!(thermal)
+        @views T_nohalo .= Array(thermal.Tc[2:end-1, 2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         if igg.me == 0

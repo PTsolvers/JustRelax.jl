@@ -26,11 +26,21 @@ jobs:
           # - 'nightly'
         os:
           - ubuntu-latest
-          - macOS-latest # M-Series Chip
           - macOS-13 # Intel Chip
           - windows-latest
         arch:
           - x64
+        include:
+          - os: macOS-latest
+            arch: aarch64
+            version: '1.10'
+          - os: macOS-latest
+            arch: aarch64
+            version: '1.11'
+          - os: macOS-latest
+            arch: aarch64
+            version: 'pre'
+
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -50,7 +60,7 @@ jobs:
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v4.6.0
+      - uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false  # or true if you want CI to fail when Codecov fails

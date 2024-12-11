@@ -438,11 +438,16 @@ function _solve!(
 
     stokes.P .= θ # θ = P + plastic_overpressure
 
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+    # compute vorticity
+    @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+    )
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter=iter,
@@ -522,7 +527,7 @@ function _solve!(
     Vx_on_Vy = @zeros(size(stokes.V.Vy))
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
 
@@ -549,7 +554,7 @@ function _solve!(
                 args,
             )
 
-            update_ρg!(ρg[2], phase_ratios, rheology, args)
+            update_ρg!(ρg, phase_ratios, rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -590,6 +595,9 @@ function _solve!(
                 rheology,
                 phase_ratios.center,
                 phase_ratios.vertex,
+                phase_ratios.xy,
+                phase_ratios.yz,
+                phase_ratios.xz,
             )
             update_halo!(stokes.τ.xy)
 
@@ -661,16 +669,21 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && err ≤ ϵ && iter ≥ 20000
+        if igg.me == 0 && err ≤ ϵ
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
 
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+    # compute vorticity
+    @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+    )
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter=iter,

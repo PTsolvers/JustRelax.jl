@@ -130,8 +130,15 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     τII_nohalo   = zeros(nx-2, ny-2)
     η_vep_nohalo = zeros(nx-2, ny-2)
     εII_nohalo   = zeros(nx-2, ny-2)
+    Vxv_v        = zeros(nx_v, ny_v)
+    Vyv_v        = zeros(nx_v, ny_v)
+    Vx_nohalo    = zeros(nx-2, ny-2)
+    Vy_nohalo    = zeros(nx-2, ny-2)
     xci_v        = LinRange(0, 1, nx_v)  , LinRange(0, 1, ny_v)
-    xvi_v        = LinRange(0, 1, nx_v+1), LinRange(0, 1, ny_v+1)
+
+    local Vx, Vy
+    Vx   = @zeros(ni...)
+    Vy   = @zeros(ni...)
 
     # Time loop
     t, it      = 0.0, 0
@@ -162,6 +169,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
             )
         )
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -178,6 +186,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         yunit = @. radius * sin(th) + 0.5;
 
         # Gather MPI arrays
+        velocity2center!(Vx, Vy, @velocity(stokes)...)
+        @views Vx_nohalo .= Array(Vx[2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        @views Vy_nohalo .= Array(Vy[2:end-1, 2:end-1]) # Copy data to CPU removing the halo
+        gather!(Vx_nohalo, Vxv_v)
+        gather!(Vy_nohalo, Vyv_v)
+
         @views τII_nohalo .= Array(stokes.τ.II[2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:end-1, 2:end-1]) # Copy data to CPU removing the halo
         @views εII_nohalo .= Array(stokes.ε.II[2:end-1, 2:end-1]) # Copy data to CPU removing the halo

@@ -174,5 +174,83 @@ end
                 @test true === true
             end
         end
+
+        # @testset "DirichletBoundaryCondition" begin
+        #     ni     = 10, 10
+        #     A      = rand(ni...)
+        #     value  = zeros(ni...)
+        #     value[4:7, 4:7] .= 5
+        #     mask  = Float64.(value .== 5)
+
+        #     bc = JustRelax.DirichletBoundaryCondition(value, mask) 
+
+        #     @test all(JustRelax.apply_dirichlet(A, bc)[4:7,4:7] .== 5)
+
+        #     apply_mask!(A, bc)
+        #     @test all(A[4:7,4:7] .== 5)
+
+        #     A      = rand(ni...)
+        #     @test apply_dirichlet(A, bc, 1, 1) == A[1,1]
+        #     @test apply_dirichlet(A, bc, 5, 5) == 5
+
+        #     apply_mask!(A, bc, 1, 1)
+        #     apply_mask!(A, bc, 5, 5)
+
+        #     @test A[1, 1] !== 5
+        #     @test A[5, 5]  == 5
+
+        #     bc = DirichletBoundaryCondition() 
+
+        #     @test all(apply_dirichlet(A, bc) == A)
+
+        #     apply_mask!(A, bc)
+        #     @test all(A[4:7,4:7] .!== 5)
+
+        #     @test apply_dirichlet(A, bc, 1, 1) == A[1, 1]
+        #     @test apply_dirichlet(A, bc, 5, 5) == A[5, 5]
+
+        #     apply_mask!(A, bc, 1, 1)
+        #     apply_mask!(A, bc, 5, 5)
+
+        #     @test A[1, 1] !== 5
+        #     @test A[5, 5] !== 5
+        # end
+
+        # @testset "ConstantDirichletBoundaryCondition" begin
+
+        #     ni    = 10, 10
+        #     A     = rand(ni...)
+        #     value = 5e0
+        #     mask  = Mask(ni..., 4:7, 4:7)
+
+        #     bc = ConstantDirichletBoundaryCondition(value, mask) 
+
+        #     @test apply_dirichlet(A, bc, 1, 1) == A[1,1]
+        #     @test apply_dirichlet(A, bc, 5, 5) == 5
+
+        #     A      .= rand(ni...)
+        #     apply_mask!(A, bc, 1, 1)
+        #     apply_mask!(A, bc, 5, 5)
+
+        #     @test A[1, 1] !== 5
+        #     @test A[5, 5]  == 5
+
+        #     bc = ConstantDirichletBoundaryCondition() 
+
+        #     @test all(apply_dirichlet(A, bc) == A)
+
+        #     apply_mask!(A, bc)
+        #     @test any(A .== 5)
+
+        #     @test apply_dirichlet(A, bc, 1, 1) == A[1, 1]
+        #     @test apply_dirichlet(A, bc, 5, 5) == A[5, 5]
+
+        #     A      .= rand(ni...)
+        #     apply_mask!(A, bc, 1, 1)
+        #     apply_mask!(A, bc, 5, 5)
+
+        #     @test A[1, 1] !== 5
+        #     @test A[5, 5] !== 5
+        # end
     end
 end

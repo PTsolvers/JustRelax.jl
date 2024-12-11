@@ -31,9 +31,9 @@ function detect_args_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
         Base.@_inline_meta
         s = ntuple(Val(N)) do j
             Base.@_inline_meta
-            size(A[j], i)
+            return size(A[j], i)
         end
-        maximum(s)
+        return maximum(s)
     end
 end
 
@@ -52,7 +52,7 @@ end
 Base.@propagate_inbounds @generated function unrolled_copy!(
     dst::NTuple{N,T}, src::NTuple{N,T}, I::Vararg{Int,NI}
 ) where {N,NI,T}
-    quote
+    return quote
         Base.@_inline_meta
         Base.@nexprs $N n -> begin
             if all(tuple(I...) .≤ size(dst[n]))
@@ -68,7 +68,7 @@ end
 Add `I` to the scalars in `args`
 """
 macro add(I, args...)
-    quote
+    return quote
         Base.@_inline_meta
         v = (; $(esc.(args)...))
         values(v) .+ $(esc(I))
@@ -250,7 +250,7 @@ end
     A::JustRelax.SymmetricTensor{<:AbstractArray{T,N}}
 ) where {T,N}
     syms = (:xx, :yy, :zz)
-    quote
+    return quote
         Base.@_inline_meta
         Base.@nexprs $N i -> f_i = getfield(A, $syms[i])
         Base.@ncall $N tuple f

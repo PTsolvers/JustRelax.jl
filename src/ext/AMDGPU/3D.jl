@@ -27,11 +27,15 @@ import JustRelax:
     TemperatureBoundaryConditions,
     AbstractFlowBoundaryConditions,
     DisplacementBoundaryConditions,
-    VelocityBoundaryConditions
+    VelocityBoundaryConditions,
+    apply_dirichlet,
+    apply_dirichlet!
+
+import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
 import JustPIC._3D: numphases, nphases
 
-@init_parallel_stencil(AMDGPU, Float64, 3)
+__init__() = @init_parallel_stencil(AMDGPU, Float64, 3)
 
 include("../../common.jl")
 include("../../stokes/Stokes3D.jl")
@@ -213,15 +217,22 @@ function JR3D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTens
 end
 
 ## Buoyancy forces
-function JR3D.compute_ρg!(ρg::ROCArray, rheology, args)
+function JR3D.compute_ρg!(ρg::Union{ROCArray,NTuple{N,ROCArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
 end
 
-function JR3D.compute_ρg!(ρg::ROCArray, phase_ratios::JustPIC.PhaseRatios, rheology, args)
+function JR3D.compute_ρg!(
+    ρg::Union{ROCArray,NTuple{N,ROCArray}},
+    phase_ratios::JustPIC.PhaseRatios,
+    rheology,
+    args,
+) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
-function JR3D.compute_ρg!(ρg::ROCArray, phase_ratios, rheology, args)
+function JR3D.compute_ρg!(
+    ρg::Union{ROCArray,NTuple{N,ROCArray}}, phase_ratios, rheology, args
+) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -264,6 +275,12 @@ function JR3D.velocity2vertex!(
 )
     velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
     return nothing
+end
+
+function JR3D.velocity2center!(
+    Vx_c::T, Vy_c::T, Vz_c::T, Vx::T, Vy::T, Vz::T
+) where {T<:ROCArray}
+    return velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
 end
 
 function JR3D.velocity2displacement!(
@@ -384,6 +401,50 @@ end
 
 function JR3D.WENO_advection!(u::ROCArray, Vxi::NTuple, weno, di, dt)
     return WENO_advection!(u, Vxi, weno, di, dt)
+end
+
+function JR3D.rotate_stress_particles!(
+    τ::NTuple,
+    ω::NTuple,
+    particles::Particles{JustPIC.AMDGPUBackend},
+    dt;
+    method::Symbol=:matrix,
+)
+    fn = if method === :matrix
+        rotate_stress_particles_rotation_matrix!
+
+    elseif method === :jaumann
+        rotate_stress_particles_jaumann!
+
+    else
+        error("Unknown method: $method. Valid methods are :matrix and :jaumann")
+    end
+    @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
+
+    return nothing
+end
+
+function JR3D.stress2grid!(
+    stokes,
+    τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+    xvi,
+    xci,
+    particles,
+)
+    stress2grid!(stokes, τ_particles, xvi, xci, particles)
+    return nothing
+end
+
+function JR3D.rotate_stress!(
+    τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+    stokes,
+    particles,
+    xci,
+    xvi,
+    dt,
+)
+    rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
+    return nothing
 end
 
 end

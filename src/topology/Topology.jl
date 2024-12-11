@@ -143,7 +143,7 @@ end
 
 function velocity_grids(xci, xvi, di::NTuple{3,T}) where {T}
     xghost = ntuple(Val(3)) do i
-        LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i]) + 2)
+        return LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i]) + 2)
     end
     grid_vx = xvi[1], xghost[2], xghost[3]
     grid_vy = xghost[1], xvi[2], xghost[3]

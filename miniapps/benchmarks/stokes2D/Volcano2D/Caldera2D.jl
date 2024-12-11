@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -107,11 +107,11 @@ function thermal_anomaly!(Temp, mask, Ω_T, phase_ratios, conduit_phase, magma_p
 
         return nothing
     end
- 
+
     ni = size(phase_ratios.vertex)
 
     @parallel (@idx ni) _thermal_anomaly!(Temp, mask, Ω_T, phase_ratios.vertex, conduit_phase, magma_phase)
-    
+
     return nothing
 end
 
@@ -307,8 +307,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
         @views T_buffer[:, end]      .= Ttop
         @views T_buffer[:, 1]        .= Tbot
         @views thermal.T[2:end-1, :] .= T_buffer
-        if mod(round(t/(1e3 * 3600 * 24 *365.25); digits=3), 1.5e3)
-            thermal_anomaly!(thermal.T, mask, Ω_T, pPhases, particles, 5, 3)
+        if mod(round(t/(1e3 * 3600 * 24 *365.25); digits=3), 1.5e3) == 0.0
+            thermal_anomaly!(thermal.T, mask, Ω_T, phase_ratios, 5, 3)
         end
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
@@ -544,7 +544,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
         end
     end
 
-    return nothing
+     return nothing
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------

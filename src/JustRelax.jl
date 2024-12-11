@@ -13,6 +13,16 @@ using Statistics
 @reexport using JustPIC
 
 function solve!() end
+function __init__()
+    println("""
+         _           _   ____      _               _ _
+        | |_   _ ___| |_|  _ \\ ___| | __ ___  __  (_) |
+     _  | | | | / __| __| |_) / _ \\ |/ _` \\ \\/ /  | | |
+    | |_| | |_| \\__ \\ |_|  _ <  __/ | (_| |>  < _ | | |
+     \\___/ \\__,_|___/\\__|_| \\_\\___|_|\\__,_/_/\\_(_)/ |_|
+                                                |__/
+    """)
+end
 
 abstract type AbstractBackend end
 struct CPUBackend <: AbstractBackend end

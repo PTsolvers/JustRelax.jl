@@ -27,11 +27,15 @@ import JustRelax:
     TemperatureBoundaryConditions,
     AbstractFlowBoundaryConditions,
     DisplacementBoundaryConditions,
-    VelocityBoundaryConditions
+    VelocityBoundaryConditions,
+    apply_dirichlet,
+    apply_dirichlet!
+
+import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
 import JustPIC._2D: nphases, numphases
 
-@init_parallel_stencil(AMDGPU, Float64, 2)
+__init__() = @init_parallel_stencil(AMDGPU, Float64, 2)
 
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
@@ -213,10 +217,15 @@ function JR2D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTens
 end
 
 ## Buoyancy forces
-function JR2D.compute_ρg!(ρg::ROCArray, rheology, args)
+function JR2D.compute_ρg!(ρg::Union{ROCArray,NTuple{N,ROCArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
 end
-function JR2D.compute_ρg!(ρg::ROCArray, phase_ratios::JustPIC.PhaseRatios, rheology, args)
+function JR2D.compute_ρg!(
+    ρg::Union{ROCArray,NTuple{N,ROCArray}},
+    phase_ratios::JustPIC.PhaseRatios,
+    rheology,
+    args,
+) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -254,10 +263,13 @@ function JR2D.center2vertex!(
     return center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
 end
 
-function JR2D.velocity2vertex!(
-    Vx_v::ROCArray, Vy_v::ROCArray, Vx::ROCArray, Vy::ROCArray; ghost_nodes=true
-)
-    velocity2vertex!(Vx_v, Vy_v, Vx, Vy; ghost_nodes=ghost_nodes)
+function JR2D.velocity2vertex!(Vx_v::ROCArray, Vy_v::ROCArray, Vx::ROCArray, Vy::ROCArray)
+    velocity2vertex!(Vx_v, Vy_v, Vx, Vy)
+    return nothing
+end
+
+function JR2D.velocity2center!(Vx_c::T, Vy_c::T, Vx::T, Vy::T) where {T<:ROCArray}
+    velocity2center!(Vx_c, Vy_c, Vx, Vy)
     return nothing
 end
 
@@ -364,8 +376,54 @@ function JR2D.compute_shear_heating!(
     return nothing
 end
 
-function JR2D.WENO_advection!(u::ROCArrayArray, Vxi::NTuple, weno, di, dt)
+function JR2D.WENO_advection!(u::ROCArray, Vxi::NTuple, weno, di, dt)
     return WENO_advection!(u, Vxi, weno, di, dt)
+end
+
+# stress rotation on particles
+
+function JR2D.rotate_stress_particles!(
+    τ::NTuple,
+    ω::NTuple,
+    particles::Particles{JustPIC.AMDGPUBackend},
+    dt;
+    method::Symbol=:matrix,
+)
+    fn = if method === :matrix
+        rotate_stress_particles_rotation_matrix!
+
+    elseif method === :jaumann
+        rotate_stress_particles_jaumann!
+
+    else
+        error("Unknown method: $method. Valid methods are :matrix and :jaumann")
+    end
+    @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
+
+    return nothing
+end
+
+function JR2D.stress2grid!(
+    stokes,
+    τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+    xvi,
+    xci,
+    particles,
+)
+    stress2grid!(stokes, τ_particles, xvi, xci, particles)
+    return nothing
+end
+
+function JR2D.rotate_stress!(
+    τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+    stokes,
+    particles,
+    xci,
+    xvi,
+    dt,
+)
+    rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
+    return nothing
 end
 
 end

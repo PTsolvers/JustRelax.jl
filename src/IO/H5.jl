@@ -35,10 +35,10 @@ function checkpointing_hdf5(dst, stokes, T, time, timestep)
             end
             write(file, @namevar(stokes.P)...)
             write(file, @namevar(stokes.viscosity.η)...)
-            write(file, @namevar(T)...)
+            return write(file, @namevar(T)...)
         end
         # Move the checkpoint file from the temporary directory to the destination directory
-        mv("$(tmpfname).h5", "$(fname).h5"; force=true)
+        return mv("$(tmpfname).h5", "$(fname).h5"; force=true)
     end
 
     return nothing

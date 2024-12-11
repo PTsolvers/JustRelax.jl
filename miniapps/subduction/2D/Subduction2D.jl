@@ -1,12 +1,10 @@
 const isCUDA = false
-# const isCUDA = true
 
 @static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -33,7 +31,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, CellArrays
+using GeoParams,  CellArrays, GLMakie
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -74,25 +72,27 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    # rheology            = init_rheology_linear()
-    # rheology            = init_rheology_nonNewtonian()
     rheology            = init_rheology_nonNewtonian_plastic()
     dt                  = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell              = 40
-    max_xcell           = 60
-    min_xcell           = 20
-    particles           = init_particles(
+    nxcell                = 40
+    max_xcell             = 60
+    min_xcell             = 20
+    particles             = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
-    subgrid_arrays      = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays        = SubgridDiffusionCellArrays(particles)
     # velocity grids
-    grid_vxi            = velocity_grids(xci, xvi, di)
+    grid_vxi              = velocity_grids(xci, xvi, di)
     # material phase & temperature
-    pPhases, pT         = init_cell_arrays(particles, Val(2))
-    particle_args       = (pT, pPhases)
+    pPhases, pT           = init_cell_arrays(particles, Val(2))
+
+    # particle fields for the stress rotation
+    pτ                    = StressParticles(particles)
+    particle_args         = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT,  unwrap(pτ)...)
 
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
@@ -104,7 +104,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -133,7 +133,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=0.95 / √3
+        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-8, CFL=0.95 / √2
     )
 
     # Boundary conditions
@@ -159,26 +159,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         Vy_v = @zeros(ni.+1...)
     end
 
-    # # Smooth out thermal field ---------------------------
-    # for _ in 1:10
-    #     heatdiffusion_PT!(
-    #         thermal,
-    #         pt_thermal,
-    #         thermal_bc,
-    #         rheology,
-    #         args0,
-    #         1e6 * 3600 * 24 * 365.25,
-    #         di;
-    #         kwargs = (
-    #             igg     = igg,
-    #             phase   = phase_ratios,
-    #             iterMax = 150e3,
-    #             nout    = 1e2,
-    #             verbose = true,
-    #         )
-    #     )
-    # end
-
     T_buffer    = @zeros(ni.+1)
     Told_buffer = similar(T_buffer)
     dt₀         = similar(stokes.P)
@@ -186,6 +166,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         copyinn_x!(dst, src)
     end
     grid2particle!(pT, xvi, T_buffer, particles)
+
+    τxx_v = @zeros(ni.+1...)
+    τyy_v = @zeros(ni.+1...)
 
     # Time loop
     t, it = 0.0, 0
@@ -200,9 +183,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
 
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, xvi, xci, particles)
 
         # Stokes solver ----------------
+        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         t_stokes = @elapsed begin
             out = solve!(
                 stokes,
@@ -216,7 +201,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 dt,
                 igg;
                 kwargs = (
-                    iterMax          = 50e3,
+                    iterMax          = 100e3,
                     nout             = 2e3,
                     viscosity_cutoff = viscosity_cutoff,
                     free_surface     = false,
@@ -224,11 +209,18 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 )
             );
         end
+
+        # print some stuff
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
-        tensor_invariant!(stokes.ε)
+
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
+        # compute time step
         dt   = compute_dt(stokes, di) * 0.8
+        # compute strain rate 2nd invartian - for plotting
+        tensor_invariant!(stokes.ε)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -262,9 +254,18 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
-
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        # need stresses on the vertices for injection purposes
+        center2vertex!(τxx_v, stokes.τ.xx)
+        center2vertex!(τyy_v, stokes.τ.yy)
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
+            xvi
+        )
+
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
@@ -298,7 +299,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                     xci,
                     data_v,
                     data_c,
-                    velocity_v
+                    velocity_v,
+                    t=t
                 )
             end
 
@@ -323,7 +325,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             # Plot particles phase
             h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
             # Plot 2nd invariant of strain rate
-            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array((stokes.τ.II)) , colormap=:batlow)
             # Plot effective viscosity
             h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
             hidexdecorations!(ax1)
@@ -347,8 +350,8 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
 figdir   = "Subduction2D"
-n        = 128
-nx, ny   = 128, 64
+n        = 64
+nx, ny   = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx+1, ny+1)
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)

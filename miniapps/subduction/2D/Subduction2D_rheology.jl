@@ -7,7 +7,9 @@ function init_rheology_nonNewtonian()
     # diffusion laws
     diff_wet_olivine  = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
 
-    lithosphere_rheology = CompositeRheology( (disl_wet_olivine, diff_wet_olivine))
+    el              = ConstantElasticity(; G = 40e9)
+
+    lithosphere_rheology = CompositeRheology( (el, disl_wet_olivine, diff_wet_olivine))
     init_rheologies(lithosphere_rheology)
 end
 
@@ -19,10 +21,11 @@ function init_rheology_nonNewtonian_plastic()
     # plasticity
     ϕ_wet_olivine   = asind(0.1)
     C_wet_olivine   = 1e6
-    η_reg           = 1e19
-
+    η_reg           = 1e16
+    el              = ConstantElasticity(; G = 40e9, ν = 0.45)
     lithosphere_rheology = CompositeRheology(
                 (
+                    el,
                     disl_wet_olivine,
                     diff_wet_olivine,
                     DruckerPrager_regularised(; C = C_wet_olivine, ϕ = ϕ_wet_olivine, η_vp=η_reg, Ψ=0.0) # non-regularized plasticity
@@ -32,15 +35,16 @@ function init_rheology_nonNewtonian_plastic()
 end
 
 function init_rheology_linear()
-    lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e22),))
+    el    = ConstantElasticity(; G = 40e9, ν = 0.45)
+    # lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), ))
+    lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), el))
     init_rheologies(lithosphere_rheology)
 end
 
 function init_rheologies(lithosphere_rheology)
     # common physical properties
     α     = 2.4e-5 # 1 / K
-    Cp    = 750  # J / kg K
-
+    Cp    = 750    # J / kg K
     # Define rheolgy struct
     rheology = (
         # Name = "Asthenoshpere",

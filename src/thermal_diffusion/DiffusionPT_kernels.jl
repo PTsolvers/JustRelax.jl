@@ -1,3 +1,5 @@
+isNotDirichlet(m, inds::Vararg{Int,N}) where {N} = iszero(m[inds...])
+isNotDirichlet(::Nothing, ::Vararg{Int,N}) where {N} = true
 
 ## 3D KERNELS
 
@@ -116,6 +118,7 @@ end
     shear_heating,
     ρCp,
     dτ_ρ,
+    dirichlet,
     _dt,
     _dx,
     _dy,
@@ -136,6 +139,8 @@ end
                 av(shear_heating)
             ) + T[I1...]
         ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
+    apply_dirichlet!(T, dirichlet, I1...)
+
     return nothing
 end
 
@@ -151,6 +156,7 @@ end
     rheology,
     phase,
     dτ_ρ,
+    dirichlet,
     _dt,
     _dx,
     _dy,
@@ -162,23 +168,25 @@ end
     d_ya(A) = _d_ya(A, i, j, k, _dy)
     d_za(A) = _d_za(A, i, j, k, _dz)
 
-    I = i + 1, j + 1, k + 1
+    I1 = i + 1, j + 1, k + 1
 
-    T_ijk = T[I...]
+    T_ijk = T[I1...]
     args_ijk = (; T=T_ijk, P=av(args.P))
     phase_ijk = getindex_phase(phase, i, j, k)
     ρCp = compute_ρCp(rheology, phase_ijk, args_ijk)
 
-    T[I...] =
+    T[I1...] =
         (
             av(dτ_ρ) * (
                 -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
-                Told[I...] * ρCp * _dt +
+                Told[I1...] * ρCp * _dt +
                 av(H) +
                 av(shear_heating) +
                 adiabatic[i, j, k] * T_ijk
             ) + T_ijk
         ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
+    apply_dirichlet!(T, dirichlet, I1...)
+
     return nothing
 end
 
@@ -192,6 +200,7 @@ end
     H,
     shear_heating,
     ρCp,
+    dirichlet,
     _dt,
     _dx,
     _dy,
@@ -202,12 +211,15 @@ end
     d_za(A) = _d_za(A, i, j, k, _dz)
     av(A) = _av(A, i, j, k)
 
-    I = i + 1, j + 1, k + 1
+    I1 = i + 1, j + 1, k + 1
 
-    ResT[i, j, k] =
-        -av(ρCp) * (T[I...] - Told[I...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
+    ResT[i, j, k] = if isNotDirichlet(dirichlet.mask, I1...)
+        -av(ρCp) * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
         av(H) +
         av(shear_heating)
+    else
+        zero(_T)
+    end
 
     return nothing
 end
@@ -224,6 +236,7 @@ end
     adiabatic,
     rheology,
     phase,
+    dirichlet,
     _dt,
     _dx,
     _dy,
@@ -240,13 +253,15 @@ end
     args_ijk = (; T=T_ijk, P=av(args.P))
     phase_ijk = getindex_phase(phase, i, j, k)
 
-    ResT[i, j, k] =
+    ResT[i, j, k] = if isNotDirichlet(dirichlet.mask, I...)
         -compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt -
         (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
         av(H) +
         av(shear_heating) +
         adiabatic[i, j, k] * T_ijk
-
+    else
+        zero(_T)
+    end
     return nothing
 end
 
@@ -375,7 +390,18 @@ end
 end
 
 @parallel_indices (i, j) function update_T!(
-    T::AbstractArray{_T,2}, Told, qTx, qTy, H, shear_heating, ρCp, dτ_ρ, _dt, _dx, _dy
+    T::AbstractArray{_T,2},
+    Told,
+    qTx,
+    qTy,
+    H,
+    shear_heating,
+    ρCp,
+    dτ_ρ,
+    dirichlet,
+    _dt,
+    _dx,
+    _dy,
 ) where {_T}
     nx, ny = size(ρCp)
 
@@ -392,15 +418,18 @@ end
     end
     #! format: on
 
-    T[i + 1, j + 1] =
+    I1 = i + 1, j + 1
+    T[I1...] =
         (
             av(dτ_ρ) * (
                 -(d_xa(qTx) + d_ya(qTy)) +
-                Told[i + 1, j + 1] * av(ρCp) * _dt +
+                Told[I1...] * av(ρCp) * _dt +
                 av(H) +
                 av(shear_heating)
-            ) + T[i + 1, j + 1]
+            ) + T[I1...]
         ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
+
+    apply_dirichlet!(T, dirichlet, I1...)
 
     return nothing
 end
@@ -416,6 +445,7 @@ end
     rheology,
     phase,
     dτ_ρ,
+    dirichlet,
     _dt,
     _dx,
     _dy,
@@ -443,22 +473,36 @@ end
             compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
         ) * 0.25
 
-    T[i + 1, j + 1] =
+    I1 = i + 1, j + 1
+    T[I1...] =
         (
             av(dτ_ρ) * (
                 -(d_xa(qTx) + d_ya(qTy)) +
-                Told[i + 1, j + 1] * ρCp * _dt +
+                Told[I1...] * ρCp * _dt +
                 av(H) +
                 av(shear_heating) +
-                adiabatic[i, j] * T[i + 1, j + 1]
-            ) + T[i + 1, j + 1]
+                adiabatic[i, j] * T[I1...]
+            ) + T[I1...]
         ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
+
+    apply_dirichlet!(T, dirichlet, I1...)
 
     return nothing
 end
 
 @parallel_indices (i, j) function check_res!(
-    ResT::AbstractArray{_T,2}, T, Told, qTx2, qTy2, H, shear_heating, ρCp, _dt, _dx, _dy
+    ResT::AbstractArray{_T,2},
+    T,
+    Told,
+    qTx2,
+    qTy2,
+    H,
+    shear_heating,
+    ρCp,
+    dirichlet,
+    _dt,
+    _dx,
+    _dy,
 ) where {_T}
     nx, ny = size(ρCp)
 
@@ -475,11 +519,15 @@ end
     end
     #! format: on
 
-    ResT[i, j] =
-        -av(ρCp) * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt -
-        (d_xa(qTx2) + d_ya(qTy2)) +
+    I1 = i + 1, j + 1
+    ResT[i, j] = if isNotDirichlet(dirichlet.mask, I1...)
+        -av(ρCp) * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
         av(H) +
         av(shear_heating)
+    else
+        zero(_T)
+    end
+
     return nothing
 end
 
@@ -494,6 +542,7 @@ end
     adiabatic,
     rheology,
     phase,
+    dirichlet,
     _dt,
     _dx,
     _dy,
@@ -521,11 +570,15 @@ end
             compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
         ) * 0.25
 
-    ResT[i, j] =
-        -ρCp * (T[i + 1, j + 1] - Told[i + 1, j + 1]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
+    I1 = i + 1, j + 1
+    ResT[i, j] = if isNotDirichlet(dirichlet.mask, I1...)
+        -ρCp * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
         av(H) +
         av(shear_heating) +
-        adiabatic[i, j] * T[i + 1, j + 1]
+        adiabatic[i, j] * T[I1...]
+    else
+        zero(_T)
+    end
 
     return nothing
 end
@@ -535,7 +588,7 @@ end
     return nothing
 end
 
-function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
+function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, dirichlet, _dt, _di, ni)
     @parallel update_range(ni...) update_T!(
         thermal.T,
         thermal.Told,
@@ -544,13 +597,14 @@ function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, _dt, _di, ni)
         thermal.shear_heating,
         ρCp,
         pt_thermal.dτ_ρ,
+        dirichlet,
         _dt,
         _di...,
     )
 end
 
 function update_T(
-    ::Nothing, b_width, thermal, rheology, phase, pt_thermal, _dt, _di, ni, args
+    ::Nothing, b_width, thermal, rheology, phase, pt_thermal, dirichlet, _dt, _di, ni, args
 )
     @parallel update_range(ni...) update_T!(
         thermal.T,
@@ -562,6 +616,7 @@ function update_T(
         rheology,
         phase,
         pt_thermal.dτ_ρ,
+        dirichlet,
         _dt,
         _di...,
         args,

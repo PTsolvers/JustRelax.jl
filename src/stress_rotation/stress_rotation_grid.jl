@@ -1,72 +1,3 @@
-using StaticArrays
-
-## Stress Rotation on the particles
-
-@parallel_indices (i, j) function compute_vorticity!(vorticity, Vx, Vy, _dx, _dy)
-    dx(A) = _d_xa(A, i, j, _dx)
-    dy(A) = _d_ya(A, i, j, _dy)
-
-    vorticity[i, j] = 0.5 * (dx(Vy) - dy(Vx))
-
-    return nothing
-end
-
-@parallel_indices (i, j) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
-    cell = i, j
-
-    for ip in JustRelax.cellaxes(index)
-        !@index(index[ip, cell...]) && continue # no particle in this location
-
-        ω_xy = @index ω[ip, cell...]
-        τ_xx = @index xx[ip, cell...]
-        τ_yy = @index yy[ip, cell...]
-        τ_xy = @index xy[ip, cell...]
-
-        tmp = τ_xy * ω_xy * 2.0
-        @index xx[ip, cell...] = fma(dt, cte, τ_xx)
-        @index yy[ip, cell...] = fma(dt, cte, τ_yy)
-        @index xy[ip, cell...] = fma(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
-    end
-
-    return nothing
-end
-
-@parallel_indices (i, j) function rotate_stress_particles_rotation_matrix!(
-    xx, yy, xy, ω, index, dt
-)
-    cell = i, j
-
-    for ip in JustRelax.cellaxes(index)
-        !@index(index[ip, cell...]) && continue # no particle in this location
-
-        θ = dt * @index ω[ip, cell...]
-        sinθ, cosθ = sincos(θ)
-
-        τ_xx = @index xx[ip, cell...]
-        τ_yy = @index yy[ip, cell...]
-        τ_xy = @index xy[ip, cell...]
-
-        R = @SMatrix [
-            cosθ -sinθ
-            sinθ cosθ
-        ]
-
-        τ = @SMatrix [
-            τ_xx τ_xy
-            τ_xy τ_yy
-        ]
-
-        # this could be fully unrolled in 2D
-        τr = R * τ * R'
-
-        @index xx[ip, cell...] = τr[1, 1]
-        @index yy[ip, cell...] = τr[2, 2]
-        @index xy[ip, cell...] = τr[1, 2]
-    end
-
-    return nothing
-end
-
 ## Stress Rotation on the grid
 
 @parallel_indices (I...) function rotate_stress!(V, τ::NTuple{3,T}, _di, dt) where {T}
@@ -145,7 +76,7 @@ Base.@propagate_inbounds function advect_stress(τxx, τyy, τxy, Vx, Vy, i, j, 
     τ_adv = ntuple(Val(3)) do k
         Base.@_inline_meta
         dx_right, dx_left, dy_up, dy_down = upwind_derivatives(τ[k], i, j)
-        advection_term(Vx, Vy, dx_right, dx_left, dy_up, dy_down, _dx, _dy)
+        return advection_term(Vx, Vy, dx_right, dx_left, dy_up, dy_down, _dx, _dy)
     end
     return τ_adv
 end
@@ -160,7 +91,7 @@ Base.@propagate_inbounds function advect_stress(
         dx_right, dx_left, dy_back, dy_front, dz_up, dz_down = upwind_derivatives(
             τ[l], i, j, k
         )
-        advection_term(
+        return advection_term(
             Vx,
             Vy,
             Vz,

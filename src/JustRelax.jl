@@ -13,7 +13,18 @@ using Statistics
 @reexport using JustPIC
 
 function solve!() end
-
+#! format: off
+function __init__()
+    println("""
+         _           _   ____      _               _ _
+        | |_   _ ___| |_|  _ \\ ___| | __ ___  __  (_) |
+     _  | | | | / __| __| |_) / _ \\ |/ _` \\ \\/ /  | | |
+    | |_| | |_| \\__ \\ |_|  _ <  __/ | (_| |>  < _ | | |
+     \\___/ \\__,_|___/\\__|_| \\_\\___|_|\\__,_/_/\\_(_)/ |_|
+                                                |__/
+    """)
+end
+#! format: on
 abstract type AbstractBackend end
 struct CPUBackend <: AbstractBackend end
 struct AMDGPUBackend <: AbstractBackend end
@@ -24,6 +35,9 @@ PTArray(::T) where {T} = error(ArgumentError("Unknown backend $T"))
 
 export PTArray, CPUBackend, CUDABackend, AMDGPUBackend
 
+include("stress_rotation/types.jl")
+export unwrap
+
 include("types/stokes.jl")
 # export StokesArrays, PTStokesCoeffs
 
@@ -31,6 +45,10 @@ include("types/heat_diffusion.jl")
 # export ThermalArrays, PTThermalCoeffs
 
 include("types/weno.jl")
+
+include("mask/mask.jl")
+
+include("boundaryconditions/Dirichlet.jl")
 
 include("boundaryconditions/types.jl")
 export TemperatureBoundaryConditions,

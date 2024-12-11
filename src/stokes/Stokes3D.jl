@@ -144,7 +144,9 @@ function _solve!(
     end
 
     av_time = wtime0 / (iter - 1) # average time per iteration
-    update_τ_o!(stokes) # copy τ into τ_o
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter=iter,
@@ -208,7 +210,7 @@ function _solve!(
     θ = @zeros(ni...)
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
@@ -238,7 +240,7 @@ function _solve!(
             )
 
             # Update buoyancy
-            update_ρg!(ρg[3], rheology, args)
+            update_ρg!(ρg, rheology, args)
 
             update_viscosity!(
                 stokes,
@@ -345,11 +347,16 @@ function _solve!(
 
     av_time = wtime0 / (iter - 1) # average time per iteration
 
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+    # compute vorticity
+    @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+    )
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter=iter,
@@ -417,7 +424,7 @@ function _solve!(
     ητ = deepcopy(η)
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
@@ -449,7 +456,7 @@ function _solve!(
             )
 
             # Update buoyancy
-            update_ρg!(ρg[end], phase_ratios, rheology, args)
+            update_ρg!(ρg, phase_ratios, rheology, args)
 
             # Update viscosity
             update_viscosity!(
@@ -483,6 +490,9 @@ function _solve!(
                 rheology,
                 phase_ratios.center,
                 phase_ratios.vertex,
+                phase_ratios.xy,
+                phase_ratios.yz,
+                phase_ratios.xz,
             )
             update_halo!(stokes.τ.yz)
             update_halo!(stokes.τ.xz)
@@ -541,11 +551,16 @@ function _solve!(
 
     av_time = wtime0 / (iter - 1) # average time per iteration
 
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+    # compute vorticity
+    @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+    )
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter=iter,

@@ -49,7 +49,7 @@ function checkpointing_jld2(dst, stokes, thermal, time, timestep, fname::String)
             timestep=timestep,
         )
         # Move the checkpoint file from the temporary directory to the destination directory
-        mv(tmpfname, fname; force=true)
+        return mv(tmpfname, fname; force=true)
     end
 
     return nothing

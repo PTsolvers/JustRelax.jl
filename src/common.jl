@@ -1,3 +1,5 @@
+using Adapt, MuladdMacro
+
 include("types/constructors/stokes.jl")
 export StokesArrays, PTStokesCoeffs
 
@@ -33,6 +35,8 @@ export @allocate,
 include("types/displacement.jl")
 export velocity2displacement!, displacement2velocity!
 
+include("mask/constructors.jl")
+
 include("boundaryconditions/BoundaryConditions.jl")
 export AbstractBoundaryConditions,
     TemperatureBoundaryConditions,
@@ -57,14 +61,12 @@ export compute_viscosity!
 include("rheology/Melting.jl")
 export compute_melt_fraction!
 
-# include("thermal_diffusion/DiffusionExplicit.jl")
-# export ThermalParameters
-
 include("particles/subgrid_diffusion.jl")
 export subgrid_characteristic_time!
 
 include("Interpolations.jl")
-export vertex2center!, center2vertex!, temperature2center!, velocity2vertex!
+export vertex2center!,
+    center2vertex!, temperature2center!, velocity2vertex!, velocity2center!
 
 include("advection/weno5.jl")
 export WENO_advection!
@@ -72,13 +74,22 @@ export WENO_advection!
 # Stokes
 
 include("rheology/GeoParams.jl")
+
 include("rheology/StressUpdate.jl")
-include("stokes/StressRotation.jl")
+
 include("stokes/StressKernels.jl")
 export tensor_invariant!
 
 include("stokes/PressureKernels.jl")
+export rotate_stress_particles!
+
 include("stokes/VelocityKernels.jl")
+
+include("stress_rotation/constructors.jl")
+export StressParticles
+
+include("stress_rotation/stress_rotation_particles.jl")
+export rotate_stress!, stress2grid!
 
 # thermal diffusion
 

@@ -427,8 +427,15 @@ end
 
 # marker chain
 
-function JR2D.update_phases_given_markerchain!(phase, chain::MarkerChain{CUDABackend}, particles::Particles{CUDABackend}, origin, di, air_phase)
-    update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
+function JR2D.update_phases_given_markerchain!(
+    phase,
+    chain::MarkerChain{CUDABackend},
+    particles::Particles{CUDABackend},
+    origin,
+    di,
+    air_phase,
+)
+    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
 end
 
 end

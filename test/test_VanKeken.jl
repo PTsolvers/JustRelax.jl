@@ -127,7 +127,7 @@ function VanKeken2D(ny=32, nx=32)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
     # Rheology
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, 0, (-Inf, Inf))
 
     # Boundary conditions
     flow_bcs             = VelocityBoundaryConditions(;

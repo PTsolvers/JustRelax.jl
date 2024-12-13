@@ -126,7 +126,7 @@ function main(igg; nx=64, ny=64)
 
     # Rheology
     compute_viscosity!(
-        stokes, phase_ratios, args, rheology, (-Inf, Inf)
+        stokes, phase_ratios, args, rheology, 0, (-Inf, Inf)
     )
 
     # Boundary conditions

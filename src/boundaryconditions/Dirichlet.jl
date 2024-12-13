@@ -27,14 +27,14 @@ end
 
 # struct ConstantArray{T,N} <: AbstractArray{T,N}
 #     val::T
-    
+
 #     ConstantArray(val::T, ::Val{N}) where {T<:Number,N} = new{T,N}(val)
 # end
 # Adapt.@adapt_structure ConstantArray
 
 struct ConstantArray{T}
     val::T
-    
+
     ConstantArray(val::T) where {T<:Number} = new{T}(val)
 end
 Adapt.@adapt_structure ConstantArray

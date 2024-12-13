@@ -45,9 +45,7 @@ Update the rock ratio `ϕ` based on the provided `phase_ratios` and `air_phase`.
 - `phase_ratios`: The ratios of different phases present.
 - `air_phase`: The phase representing air.
 """
-function update_rock_ratio!(
-    ϕ::JustRelax.RockRatio{T, 2}, phase_ratios, air_phase
-) where {T}
+function update_rock_ratio!(ϕ::JustRelax.RockRatio{T,2}, phase_ratios, air_phase) where {T}
     nvi = size_v(ϕ)
     @parallel (@idx nvi) update_rock_ratio_cv!(
         ϕ, phase_ratios.center, phase_ratios.vertex, air_phase
@@ -63,17 +61,17 @@ function update_rock_ratio!(
     return nothing
 end
 
-function update_rock_ratio!(
-    ϕ::JustRelax.RockRatio{T, 3}, phase_ratios, air_phase
-) where {T}
+function update_rock_ratio!(ϕ::JustRelax.RockRatio{T,3}, phase_ratios, air_phase) where {T}
     nvi = size_v(ϕ)
     @parallel (@idx nvi) update_rock_ratio_cv!(
         ϕ, phase_ratios.center, phase_ratios.vertex, air_phase
     )
 
     dst = ϕ.Vx, ϕ.Vy, ϕ.Vz, ϕ.xy, ϕ.yz, ϕ.xz
-    src = phase_ratios.Vx, phase_ratios.Vy, phase_ratios.Vz, phase_ratios.xy, phase_ratios.yz, phase_ratios.xz
-    
+    src = phase_ratios.Vx,
+    phase_ratios.Vy, phase_ratios.Vz, phase_ratios.xy, phase_ratios.yz,
+    phase_ratios.xz
+
     for (dstᵢ, srcᵢ) in zip(dst, src)
         @parallel (@idx size(dstᵢ)) _update_rock_ratio!(dstᵢ, srcᵢ, air_phase)
     end
@@ -81,9 +79,9 @@ function update_rock_ratio!(
     return nothing
 end
 
-@inline compute_rock_ratio(
-    phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
-) where {N} = (x = 1 - @index phase_ratio[air_phase, I...]; x *= x > 1e-5)
+@inline compute_rock_ratio(phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}) where {N} = (
+    x = 1 - @index phase_ratio[air_phase, I...]; x *= x > 1e-5
+)
 
 @inline compute_air_ratio(
     phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}

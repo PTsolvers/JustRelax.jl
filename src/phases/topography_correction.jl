@@ -1,25 +1,34 @@
 import JustPIC._2D: cell_index, interp1D_inner, interp1D_extremas, distance
 using StaticArrays
 
-
-function update_phases_given_markerchain!(phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase) where {backend}
-    (; coords, index) = particles;
+function update_phases_given_markerchain!(
+    phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase
+) where {backend}
+    (; coords, index) = particles
     dy = di[2]
-    @parallel (1:size(index,1)) _update_phases_given_markerchain!(phase, coords, index, chain.coords, chain.cell_vertices, origin, dy, air_phase)
+    @parallel (1:size(index, 1)) _update_phases_given_markerchain!(
+        phase, coords, index, chain.coords, chain.cell_vertices, origin, dy, air_phase
+    )
 end
 
-@parallel_indices (icell) function _update_phases_given_markerchain!(phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase)
-    _update_phases_given_markerchain_kernel!(phase, coords, index, chain_coords,cell_vertices, origin, dy, air_phase, icell)
+@parallel_indices (icell) function _update_phases_given_markerchain!(
+    phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase
+)
+    _update_phases_given_markerchain_kernel!(
+        phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell
+    )
     return nothing
 end
 
-function _update_phases_given_markerchain_kernel!(phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell)
-    T                       = eltype(eltype(phase))
-    chain_yi                = @cell chain_coords[2][icell]
-    min_cell_j, max_cell_j  = find_minmax_cell_indices(chain_yi, origin[2], dy)
-    min_cell_j              = max(1, min_cell_j - 10)
-    max_cell_j              = min(size(index, 2), max_cell_j + 10)
-    cell_range              = min_cell_j:max_cell_j
+function _update_phases_given_markerchain_kernel!(
+    phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell
+)
+    T = eltype(eltype(phase))
+    chain_yi = @cell chain_coords[2][icell]
+    min_cell_j, max_cell_j = find_minmax_cell_indices(chain_yi, origin[2], dy)
+    min_cell_j = max(1, min_cell_j - 10)
+    max_cell_j = min(size(index, 2), max_cell_j + 10)
+    cell_range = min_cell_j:max_cell_j
 
     # iterate over cells with marker chain on them
     for j in cell_range
@@ -58,7 +67,7 @@ function extrema_CA(x::AbstractArray)
     max_val = x[1]
     min_val = x[1]
     for i in 2:length(x)
-        xᵢ = x[i] 
+        xᵢ = x[i]
         isnan(xᵢ) && continue
         if xᵢ > max_val
             max_val = xᵢ
@@ -89,10 +98,12 @@ end
 end
 
 # find closest phase different than the given `skip_phase`
-function closest_phase(coords, pn, index, current_particle, phases, skip_phase, I::Vararg{Int, N}) where N
+function closest_phase(
+    coords, pn, index, current_particle, phases, skip_phase, I::Vararg{Int,N}
+) where {N}
     new_phase = @index phases[current_particle, I...]
-    dist_min  = Inf
-    px, py    = coords
+    dist_min = Inf
+    px, py = coords
 
     for ip in cellaxes(index)
         # early escape conditions
@@ -108,7 +119,7 @@ function closest_phase(coords, pn, index, current_particle, phases, skip_phase, 
         # update the closest phase
         if d < dist_min
             new_phase = phaseᵢ
-            dist_min  = d
+            dist_min = d
         end
     end
 

@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -181,28 +181,9 @@ function main(igg, nx, ny)
 
     # Time loop
     t, it = 0.0, 0
-    dt = 1e3 * (3600 * 24 * 365.25)
-    while it < 40
-
-        # solve!(
-        #     stokes,
-        #     pt_stokes,
-        #     di,
-        #     flow_bcs,
-        #     ρg,
-        #     phase_ratios,
-        #     rheology,
-        #     args,
-        #     dt,
-        #     igg;
-        #     kwargs = (;
-        #         iterMax          =        50e3,
-        #         nout             =         1e3,
-        #         viscosity_cutoff = (-Inf, Inf),
-        #         free_surface     =        true
-        #     )
-        # )
-
+    dt = 10e3 * (3600 * 24 * 365.25)
+    while it < 150
+        # Stokes -----------------------
         solve_VariationalStokes!(
             stokes,
             pt_stokes,
@@ -221,12 +202,12 @@ function main(igg, nx, ny)
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
-        dt = compute_dt(stokes, di) / 2
+        # dt = compute_dt(stokes, di) / 2
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
@@ -272,7 +253,6 @@ function main(igg, nx, ny)
 
             fig
             save(joinpath(figdir, "$(it).png"), fig)
-
         end
     end
 

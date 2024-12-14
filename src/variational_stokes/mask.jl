@@ -79,21 +79,27 @@ function update_rock_ratio!(ϕ::JustRelax.RockRatio{T,3}, phase_ratios, air_phas
     return nothing
 end
 
-@inline compute_rock_ratio(phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}) where {N} = (
-    x = 1 - @index phase_ratio[air_phase, I...]; x *= x > 1e-5
-)
+@inline function compute_rock_ratio(phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}) where {N} 
+    1 ≤ air_phase ≤ numphases(phase_ratio) || return 1e0
+    x = 1 - @index phase_ratio[air_phase, I...]
+    x *= x > 1e-5
+    return x
+end
 
-@inline compute_air_ratio(
+@inline function compute_air_ratio(
     phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
-) where {N} = @index phase_ratio[air_phase, I...]
+) where {N} 
+    1 ≤ air_phase ≤ numphases(phase_ratio) || return 1e0
+    return @index phase_ratio[air_phase, I...]
+end
 
 @parallel_indices (I...) function update_rock_ratio_cv!(
     ϕ, ratio_center, ratio_vertex, air_phase
 )
     if all(I .≤ size(ratio_center))
-        ϕ.center[I...] = Float64(Float16(compute_rock_ratio(ratio_center, air_phase, I...)))
+        ϕ.center[I...] = compute_rock_ratio(ratio_center, air_phase, I...)
     end
-    ϕ.vertex[I...] = Float64(Float16(compute_rock_ratio(ratio_vertex, air_phase, I...)))
+    ϕ.vertex[I...] = compute_rock_ratio(ratio_vertex, air_phase, I...)
     return nothing
 end
 
@@ -364,3 +370,4 @@ Base.@propagate_inbounds @inline isvalid(ϕ, I::Vararg{Integer,N}) where {N} = �
 #     cv = c || v
 #     return cv || isvalid(ϕ.Vy, i, j)
 # end
+

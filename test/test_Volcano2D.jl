@@ -82,28 +82,66 @@ function apply_pure_shear(Vx,Vy, εbg, xvi, lx, ly)
 
     return nothing
 end
+
+function extract_topo_from_GMG_phases(phases_GMG, xvi, air_phase)
+    topo_idx = [findfirst(x->x==air_phase, row) - 1 for row in eachrow(phases_GMG)]
+    yv = xvi[2]
+    topo_y = yv[topo_idx]
+    return topo_y
+end
+
+function thermal_anomaly!(Temp, Ω_T, phase_ratios, T_chamber, T_air, conduit_phase, magma_phase, air_phase)
+
+    @parallel_indices (i, j) function _thermal_anomaly!(Temp, Ω_T, T_chamber, T_air, vertex_ratio, conduit_phase, magma_phase, air_phase)
+        # quick escape
+        conduit_ratio_ij = @index vertex_ratio[conduit_phase, i, j]
+        magma_ratio_ij   = @index vertex_ratio[magma_phase, i, j]
+        air_ratio_ij     = @index vertex_ratio[air_phase, i, j]
+
+        if conduit_ratio_ij > 0.5 || magma_ratio_ij > 0.5
+        # if isone(conduit_ratio_ij) || isone(magma_ratio_ij)
+            Ω_T[i+1, j] = Temp[i+1, j] = T_chamber
+
+        elseif air_ratio_ij > 0.5
+            Ω_T[i+1, j] = Temp[i+1, j] = T_air
+        end
+
+        return nothing
+    end
+
+    ni = size(phase_ratios.vertex)
+
+    @parallel (@idx ni) _thermal_anomaly!(Temp, Ω_T, T_chamber, T_air, phase_ratios.vertex, conduit_phase, magma_phase, air_phase)
+
+    @views Ω_T[1, :]    .= Ω_T[2, :]
+    @views Ω_T[end, :]  .= Ω_T[end-1, :]
+    @views Temp[1, :]   .= Temp[2, :]
+    @views Temp[end, :] .= Temp[end-1, :]
+
+    return nothing
+end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
+function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false, extension = 1e-15 * 0)
 
     # Physical domain ------------------------------------
     ni                  = nx, ny           # number of cells
     di                  = @. li / ni       # grid steps
     grid                = Geometry(ni, li; origin = origin)
-    (; xci, xvi)        = grid # nodes at the center and vertices of the cells
+    (; xci, xvi)        = grid             # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology            = init_rheologies()
-    dt                  = 5e2 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt                  = 5e2 * 3600 * 24 * 365
     # dt                  = Inf # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell              = 40
-    max_xcell           = 60
-    min_xcell           = 20
+    nxcell              = 100
+    max_xcell           = 150
+    min_xcell           = 75
     particles           = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
@@ -113,24 +151,36 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     # material phase & temperature
     pPhases, pT         = init_cell_arrays(particles, Val(2))
 
-    # particle fields for the stress rotation
-    pτ  = pτxx, pτyy, pτxy        = init_cell_arrays(particles, Val(3)) # stress
-    # pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
-    pω   = pωxy,                  = init_cell_arrays(particles, Val(1)) # vorticity
-    particle_args                 = (pT, pPhases, pτ..., pω...)
-    particle_args_reduced         = (pT, pτ..., pω...)
-
     # Assign particles phases anomaly
     phases_device    = PTArray(backend)(phases_GMG)
     phase_ratios     = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni);
     init_phases!(pPhases, phases_device, particles, xvi)
+
+    # Initialize marker chain
+    nxcell, max_xcell, min_xcell = 100, 150, 75
+    initial_elevation            = 0e0
+    chain                        = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation);
+    air_phase                    = 6
+    topo_y                       = extract_topo_from_GMG_phases(phases_GMG, xvi, air_phase)
+    for _ in 1:3
+        @views hn               = 0.5 .* (topo_y[1:end-1] .+ topo_y[2:end])
+        @views topo_y[2:end-1] .= 0.5 .* (hn[1:end-1] .+ hn[2:end])
+        fill_chain_from_vertices!(chain, PTArray(backend)(topo_y))
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+    end
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+
+    # particle fields for the stress rotation
+    pτ                    = StressParticles(particles)
+    particle_args         = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT,  unwrap(pτ)...)
 
     # rock ratios for variational stokes
     # RockRatios
-    air_phase   = 5
     ϕ           = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios,  air_phase)
+    # update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    compute_rock_fraction!(ϕ, chain, xvi, di)
+
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -142,8 +192,17 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     # TEMPERATURE PROFILE --------------------------------
     thermal          = ThermalArrays(backend, ni)
     @views thermal.T[2:end-1, :] .= PTArray(backend)(T_GMG)
+
+    # Add thermal anomaly BC's
+    T_chamber = 1223e0
+    T_air     = 273e0
+    Ω_T       = @zeros(size(thermal.T)...)
+    thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, air_phase)
+    JustRelax.DirichletBoundaryCondition(Ω_T)
+
     thermal_bc       = TemperatureBoundaryConditions(;
-        no_flux      = (left = true, right = true, top = false, bot = false),
+        no_flux      = (; left = true, right = true, top = false, bot = false),
+        dirichlet    = (; mask = Ω_T)
     )
     thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
@@ -153,9 +212,14 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
 
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+    compute_ρg!(ρg, phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
     stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
 
+    # Melt fraction
+    ϕ_m    = @zeros(ni...)
+    compute_melt_fraction!(
+        ϕ_m, phase_ratios, rheology, (T=thermal.Tc, P=stokes.P)
+    )
     # Rheology
     args0            = (T=thermal.Tc, P=stokes.P, dt = Inf)
     viscosity_cutoff = (1e18, 1e23)
@@ -179,7 +243,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     # flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     # displacement2velocity!(stokes, dt)
 
-    εbg          = 1e-15 * 1
+    εbg          = extension
     apply_pure_shear(@velocity(stokes)..., εbg, xvi, li...)
 
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -211,11 +275,16 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
         @views T_buffer[:, end]      .= Ttop
         @views T_buffer[:, 1]        .= Tbot
         @views thermal.T[2:end-1, :] .= T_buffer
+        if mod(round(t/(1e3 * 3600 * 24 *365.25); digits=3), 1.5e3) == 0.0
+            thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, air_phase)
+        end
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
 
         # args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
-        args = (; T=thermal.Tc, P=stokes.P, dt=Inf)
+        args = (; ϕ=ϕ_m, T=thermal.Tc, P=stokes.P, dt=Inf)
+
+        stress2grid!(stokes, pτ, xvi, xci, particles)
 
         iters = solve_VariationalStokes!(
             stokes,
@@ -236,18 +305,13 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
             )
         )
 
-        center2vertex!(τxx_v, stokes.τ.xx)
-        center2vertex!(τyy_v, stokes.τ.yy)
-        centroid2particle!(pτxx , xci, stokes.τ.xx, particles)
-        centroid2particle!(pτyy , xci, stokes.τ.yy, particles)
-        grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
-        grid2particle!(pωxy, xvi, stokes.ω.xy, particles)
-        rotate_stress_particles!(pτ, pω, particles, dt)
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
 
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
         dtmax = 2e3 * 3600 * 24 * 365.25
-        dt    = compute_dt(stokes, di, dtmax)
+        dt    = compute_dt(stokes, di, dtmax) * 0.5
 
         println("dt = $(dt/(3600 * 24 *365.25)) years")
         # ------------------------------
@@ -264,7 +328,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
             kwargs = (
                 igg     = igg,
                 phase   = phase_ratios,
-                iterMax = 50e3,
+                iterMax = 100e3,
                 nout    = 1e2,
                 verbose = true,
             )
@@ -289,6 +353,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        center2vertex!(τxx_v, stokes.τ.xx)
+        center2vertex!(τyy_v, stokes.τ.yy)
         inject_particles_phase!(
             particles,
             pPhases,
@@ -297,13 +363,19 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
             xvi
         )
 
+        # advect marker chain
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        compute_melt_fraction!(
+            ϕ_m, phase_ratios, rheology, (T=thermal.Tc, P=stokes.P)
+        )
+
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios,  air_phase)
+        # update_rock_ratio!(ϕ, phase_ratios, air_phase)
+        compute_rock_fraction!(ϕ, chain, xvi, di)
 
-        particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
-        particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
-        particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
         tensor_invariant!(stokes.τ)
 
         @show it += 1
@@ -311,7 +383,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
 
     end
 
-    return iters
+     return iters
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------

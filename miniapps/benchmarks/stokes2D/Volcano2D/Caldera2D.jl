@@ -104,7 +104,7 @@ function thermal_anomaly!(Temp, Ω_T, phase_ratios, T_chamber, T_air, conduit_ph
         # if isone(conduit_ratio_ij) || isone(magma_ratio_ij)
             Ω_T[i+1, j] = Temp[i+1, j] = T_chamber
 
-        elseif air_ratio_ij > 0.5 
+        elseif air_ratio_ij > 0.5
             Ω_T[i+1, j] = Temp[i+1, j] = T_air
         end
 
@@ -114,7 +114,7 @@ function thermal_anomaly!(Temp, Ω_T, phase_ratios, T_chamber, T_air, conduit_ph
     ni = size(phase_ratios.vertex)
 
     @parallel (@idx ni) _thermal_anomaly!(Temp, Ω_T, T_chamber, T_air, phase_ratios.vertex, conduit_phase, magma_phase, air_phase)
-    
+
     @views Ω_T[1, :]    .= Ω_T[2, :]
     @views Ω_T[end, :]  .= Ω_T[end-1, :]
     @views Temp[1, :]   .= Temp[2, :]
@@ -205,7 +205,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     Ω_T       = @zeros(size(thermal.T)...)
     thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, air_phase)
     JustRelax.DirichletBoundaryCondition(Ω_T)
-    
+
     thermal_bc       = TemperatureBoundaryConditions(;
         no_flux      = (; left = true, right = true, top = false, bot = false),
         dirichlet    = (; mask = Ω_T)
@@ -486,27 +486,38 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
                 ax3 = Axis(fig[1,3], aspect = ar, title = "τII [MPa]")
                 # ax4 = Axis(fig[2,3], aspect = ar, title = "log10(εII)")
                 ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+                ax5 = Axis(fig[3,1], aspect = ar, title = "EII_pl")
+                ax6 = Axis(fig[3,3], aspect = ar, title = "Melt fraction ϕ")
                 # Plot temperature
                 h1  = heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
                 # Plot particles phase
-                # h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 3)
-                # scatter!(ax2, Array(chain_x), Array(chain_y), color=:red, markersize = 3)
 
                 h2  = heatmap!(ax2, xvi[1].*1e-3, xvi[2].*1e-3, uconvert.(u"cm/yr",Array(stokes.V.Vy)u"m/s") , colormap=:batlow)
+                scatter!(ax2, Array(chain_x), Array(chain_y), color=:red, markersize = 3)
+
                 # Plot 2nd invariant of strain rate
                 # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε_pl.II)) , colormap=:batlow)
                 h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.τ.II)./1e6 , colormap=:batlow)
                 # Plot effective viscosity
                 # h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:lipari)
                 h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.viscosity.η_vep)), colorrange=log10.(viscosity_cutoff), colormap=:batlow)
+                h5  = heatmap!(ax5, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.EII_pl) , colormap=:batlow)
+                h6  = heatmap!(ax6, xci[1].*1e-3, xci[2].*1e-3, Array(ϕ_m) , colormap=:lipari)
                 hidexdecorations!(ax1)
                 hidexdecorations!(ax2)
                 hidexdecorations!(ax3)
+                hidexdecorations!(ax4)
+                hideydecorations!(ax3)
+                hideydecorations!(ax4)
+                hideydecorations!(ax6)
+
                 Colorbar(fig[1,2], h1)
                 Colorbar(fig[2,2], h2)
                 Colorbar(fig[1,4], h3)
                 Colorbar(fig[2,4], h4)
-                linkaxes!(ax1, ax2, ax3, ax4)
+                Colorbar(fig[3,2], h5)
+                # Colorbar(fig[3,4], h6)
+                linkaxes!(ax1, ax2, ax3, ax4, ax5)
                 fig
                 save(joinpath(figdir, "$(it).png"), fig)
 
@@ -549,8 +560,18 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
                         Y./1e3,
                     )
                     hideydecorations!(ax2)
-                    # save(joinpath(figdir, "thermal_profile_$it.png"), fig)
+                    save(joinpath(figdir, "thermal_profile_$it.png"), fig)
                     fig
+                end
+
+                fig1 = let
+                    fig = Figure(; size=(1200, 900))
+                    ax  = Axis(fig[1, 1];title="Drucker Prager")
+                    lines!(ax,[0e6, maximum(stokes.P)]./1e6,[10e6; (maximum(stokes.P)*sind(rheology[1].CompositeRheology[1].elements[end].ϕ.val) - rheology[1].CompositeRheology[1].elements[end].C.val*cosd(rheology[1].CompositeRheology[1].elements[end].ϕ.val))]./1e6, color=:black, linewidth=2)
+                    s1=scatter!(ax, Array(stokes.P./1e6)[:], Array(stokes.τ.II./1e6)[:]; color=Array(stokes.R.RP)[:], colormap=:roma, markersize=3)
+                    Colorbar(fig[1,2], s1)
+                    fig
+                    save(joinpath(figdir, "DruckerPrager_$it.png"), fig)
                 end
             end
             # ------------------------------

@@ -15,8 +15,9 @@ end
 Adapt.@adapt_structure DirichletBoundaryCondition
 
 function DirichletBoundaryCondition(A::AbstractArray{T}) where {T}
-    m = Mask(A)
-    copyto!(m.mask, T.(A .!= 0))
+    m = Mask(copy(A))
+    copyto!(m.mask, T.(.!iszero.(A)))
+
     return DirichletBoundaryCondition(A, m)
 end
 

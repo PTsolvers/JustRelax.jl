@@ -1,5 +1,5 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -92,17 +92,20 @@ function extract_topo_from_GMG_phases(phases_GMG, xvi, air_phase)
     return topo_y
 end
 
-function thermal_anomaly!(Temp, mask, Ω_T, phase_ratios, conduit_phase, magma_phase)
+function thermal_anomaly!(Temp, Ω_T, phase_ratios, T_chamber, T_air, conduit_phase, magma_phase, air_phase)
 
-    @parallel_indices (i, j) function _thermal_anomaly!(Temp, mask, Ω_T, vertex_ratio, conduit_phase, magma_phase)
+    @parallel_indices (i, j) function _thermal_anomaly!(Temp, Ω_T, T_chamber, T_air, vertex_ratio, conduit_phase, magma_phase, air_phase)
         # quick escape
         conduit_ratio_ij = @index vertex_ratio[conduit_phase, i, j]
         magma_ratio_ij   = @index vertex_ratio[magma_phase, i, j]
+        air_ratio_ij     = @index vertex_ratio[air_phase, i, j]
 
         if conduit_ratio_ij > 0.5 || magma_ratio_ij > 0.5
         # if isone(conduit_ratio_ij) || isone(magma_ratio_ij)
-            Temp[i+1, j] = Ω_T
-            mask[i+1, j] = 1
+            Ω_T[i+1, j] = Temp[i+1, j] = T_chamber
+
+        elseif air_ratio_ij > 0.5 
+            Ω_T[i+1, j] = Temp[i+1, j] = T_air
         end
 
         return nothing
@@ -110,11 +113,15 @@ function thermal_anomaly!(Temp, mask, Ω_T, phase_ratios, conduit_phase, magma_p
 
     ni = size(phase_ratios.vertex)
 
-    @parallel (@idx ni) _thermal_anomaly!(Temp, mask, Ω_T, phase_ratios.vertex, conduit_phase, magma_phase)
+    @parallel (@idx ni) _thermal_anomaly!(Temp, Ω_T, T_chamber, T_air, phase_ratios.vertex, conduit_phase, magma_phase, air_phase)
+    
+    @views Ω_T[1, :]    .= Ω_T[2, :]
+    @views Ω_T[end, :]  .= Ω_T[end-1, :]
+    @views Temp[1, :]   .= Temp[2, :]
+    @views Temp[end, :] .= Temp[end-1, :]
 
     return nothing
 end
-
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
@@ -177,7 +184,9 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     # rock ratios for variational stokes
     # RockRatios
     ϕ           = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    # update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    compute_rock_fraction!(ϕ, chain, xvi, di)
+
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -191,12 +200,15 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     @views thermal.T[2:end-1, :] .= PTArray(backend)(T_GMG)
 
     # Add thermal anomaly BC's
-    Ω_T                 = 1223e0 # inner BCs temperature
-    mask                = @zeros(size(thermal.T)...)
-    thermal_anomaly!(thermal.T, mask, Ω_T, phase_ratios, 5, 3)
+    T_chamber = 1223e0
+    T_air     = 273e0
+    Ω_T       = @zeros(size(thermal.T)...)
+    thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, air_phase)
+    JustRelax.DirichletBoundaryCondition(Ω_T)
+    
     thermal_bc       = TemperatureBoundaryConditions(;
-        no_flux      = (left = true, right = true, top = false, bot = false),
-        dirichlet    = (constant = Ω_T, mask=mask)
+        no_flux      = (; left = true, right = true, top = false, bot = false),
+        dirichlet    = (; mask = Ω_T)
     )
     thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
@@ -307,9 +319,9 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
         @views T_buffer[:, end]      .= Ttop
         @views T_buffer[:, 1]        .= Tbot
         @views thermal.T[2:end-1, :] .= T_buffer
-        if mod(round(t/(1e3 * 3600 * 24 *365.25); digits=3), 1.5e3) == 0.0
-            thermal_anomaly!(thermal.T, mask, Ω_T, phase_ratios, 5, 3)
-        end
+        # if mod(round(t/(1e3 * 3600 * 24 *365.25); digits=3), 1.5e3) == 0.0
+        thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, air_phase)
+        # end
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
 
@@ -407,13 +419,14 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, air_phase)
+        # update_rock_ratio!(ϕ, phase_ratios, air_phase)
+        compute_rock_fraction!(ϕ, chain, xvi, di)
 
         tensor_invariant!(stokes.τ)
 
         # track deformation of free_surface
-        push!(deformation_x, chain.coords[1].data[:]./1e3)
-        push!(deformation_y, chain.coords[2].data[:]./1e3)
+        # push!(deformation_x, chain.coords[1].data[:]./1e3)
+        # push!(deformation_y, chain.coords[2].data[:]./1e3)
         @show it += 1
         t        += dt
         if plotting
@@ -553,7 +566,7 @@ const plotting = true
 do_vtk   = true # set to true to generate VTK files for ParaView
 # figdir   = "Caldera2D_noPguess"
 figdir   = "$(today())_Conduit"
-n        = 128
+n        = 64
 nx, ny   = n, n >>> 1
 li, origin, phases_GMG, T_GMG = setup2D(
     nx+1, ny+1;
@@ -575,7 +588,7 @@ else
     igg
 end
 
-# main(li, origin, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(li, origin, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
 
 # function plot_particles(particles, pPhases, chain)
 #     p = particles.coords

@@ -15,7 +15,7 @@ end
 Adapt.@adapt_structure DirichletBoundaryCondition
 
 function DirichletBoundaryCondition(A::AbstractArray{T}) where {T}
-    m = Mask(size(A)...)
+    m = Mask(A)
     copyto!(m.mask, T.(A .!= 0))
     return DirichletBoundaryCondition(A, m)
 end
@@ -24,13 +24,6 @@ Base.getindex(x::DirichletBoundaryCondition{Nothing,Nothing}, ::Vararg{Int,N}) w
 function Base.getindex(x::DirichletBoundaryCondition, inds::Vararg{Int,N}) where {N}
     return x.value[inds...] * x.mask[inds...]
 end
-
-# struct ConstantArray{T,N} <: AbstractArray{T,N}
-#     val::T
-
-#     ConstantArray(val::T, ::Val{N}) where {T<:Number,N} = new{T,N}(val)
-# end
-# Adapt.@adapt_structure ConstantArray
 
 struct ConstantArray{T}
     val::T

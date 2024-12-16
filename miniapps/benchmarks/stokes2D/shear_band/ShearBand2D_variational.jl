@@ -1,4 +1,4 @@
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -81,7 +81,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         ),
         # High density phase
         SetMaterialParams(;
-            Phase             = 2,
+            Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
             # CompositeRheology = CompositeRheology((visc, el_inc, )),
@@ -97,7 +97,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     radius       = 0.1
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(phase_ratios, xci, xvi, radius)
-    air_phase    = 2
+    air_phase    = 0
     ϕ           = RockRatio(backend, ni)
     update_rock_ratio!(ϕ, phase_ratios, air_phase)
     # STOKES ---------------------------------------------

@@ -3,8 +3,8 @@ using StaticArrays
 # Vorticity tensor
 
 @parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _dx, _dy)
-    @inline dx(A) = _d_xa(A, I..., _dx)
-    @inline dy(A) = _d_ya(A, I..., _dy)
+    @inline dx(A) = _d_xa(A, _dx, I...)
+    @inline dy(A) = _d_ya(A, _dy, I...)
 
     ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
 
@@ -14,9 +14,9 @@ end
 @parallel_indices (I...) function compute_vorticity!(
     ωyz, ωxz, ωxy, Vx, Vy, Vz, _dx, _dy, _dz
 )
-    dx(A) = _d_xa(A, I..., _dx)
-    dy(A) = _d_ya(A, I..., _dy)
-    dz(A) = _d_za(A, I..., _dz)
+    dx(A) = _d_xa(A, _dx, I...)
+    dy(A) = _d_ya(A, _dy, I...)
+    dz(A) = _d_za(A, _dz, I...)
 
     if all(I .≤ size(ωyz))
         ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))

@@ -46,16 +46,17 @@ function init_rheologies(; linear=false)
     η_reg   = 1e18
     C       = linear ? Inf : 10e6
     ϕ       = 15
-    soft_C  = NonLinearSoftening(; ξ₀=C, Δ = C / 2)       # nonlinear softening law
+    soft_C  = NonLinearSoftening(; ξ₀=C, Δ = C / 1e5)       # nonlinear softening law
     # soft_C  = NonLinearSoftening()       # nonlinear softening law
-    pl      = DruckerPrager_regularised(; C=C, ϕ=ϕ, η_vp=η_reg, Ψ=0.0, softening_C=soft_C)
+    pl      = DruckerPrager_regularised(; C=C*MPa, ϕ=ϕ, η_vp=(η_reg)*Pas, Ψ=0.0, softening_C=soft_C)
     el      = ConstantElasticity(; G = 25e9, ν = 0.45)
     β       = 1 / el.Kb.val
     Cp      = 1200.0
 
     magma_visc = ViscosityPartialMelt_Costa_etal_2009(η=LinearMeltViscosity(A = -8.1590, B = 2.4050e+04K, T0 = -430.9606K,η0=1e3Pa*s))
     #dislocation laws
-    disl_top  = SetDislocationCreep(Dislocation.dry_olivine_Karato_2003)
+    disl_top  = DislocationCreep(; A=1.67e-24, n=3.5, E=1.87e5, V=6e-6, r=0.0, R=8.3145)
+    # disl_top  = SetDislocationCreep(Dislocation.dry_olivine_Karato_2003)
     # diffusion laws
     disl_bot  = SetDislocationCreep(Dislocation.wet_quartzite_Hirth_2001)
 

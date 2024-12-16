@@ -80,8 +80,8 @@ function setup2D(
 
     ph      = Phases[:,1,:]
     T       = Temp[:,1,:] .+ 273
-    V       = 4/3 * π * (chamber_radius*aspect_x) * chamber_radius * 1.0
-    printstyled("Magma volume of the initial chamber: $(round(V; digits=3)) km³ \n"; bold=true, color=:red)
+    V       = 4/3 * π * (chamber_radius*aspect_x) * chamber_radius * (chamber_radius*aspect_x)
+    printstyled("Magma volume of the initial chamber: $(round(V; digits=3)) km³ \n"; bold=true, color=:red, blink=true)
     # write_paraview(Grid, "Volcano2D")
     return li, origin, ph, T, Grid
 end

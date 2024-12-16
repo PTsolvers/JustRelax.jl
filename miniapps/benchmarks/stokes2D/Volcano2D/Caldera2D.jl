@@ -124,7 +124,7 @@ function thermal_anomaly!(Temp, Ω_T, phase_ratios, T_chamber, T_air, conduit_ph
 end
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
+function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false, extension = 1e-15 * 0)
 
     # Physical domain ------------------------------------
     ni                  = nx, ny           # number of cells
@@ -249,7 +249,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx=16, ny=16, figdir="figs2D",
     # flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     # displacement2velocity!(stokes, dt)
 
-    εbg          = 1e-15 * 1
+    εbg          = extension
     apply_pure_shear(@velocity(stokes)..., εbg, xvi, li...)
 
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -583,12 +583,12 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 const plotting = true
-
+extension = 1e-15 * 1
 do_vtk   = true # set to true to generate VTK files for ParaView
-# figdir   = "Caldera2D_noPguess"
-figdir   = "$(today())_Conduit"
+figdir   = "Caldera2D"
 n        = 64
 nx, ny   = n, n >>> 1
+
 li, origin, phases_GMG, T_GMG = setup2D(
     nx+1, ny+1;
     sticky_air     = 4e0,
@@ -596,11 +596,11 @@ li, origin, phases_GMG, T_GMG = setup2D(
     flat           = false,
     chimney        = true,
     volcano_size   = (3e0, 5e0),
-    conduit_radius = 0.5e0,
+    conduit_radius = 2e-1,
     chamber_T      = 900e0,
     chamber_depth  = 7e0,
-    chamber_radius = 1e0,
-    aspect_x       = 6,
+    chamber_radius = 1.25,
+    aspect_x       = 2,
 )
 
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -609,21 +609,4 @@ else
     igg
 end
 
-main(li, origin, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
-
-# function plot_particles(particles, pPhases, chain)
-#     p = particles.coords
-#     # pp = [argmax(p) for p in phase_ratios.center] #if you want to plot it in a heatmap rather than scatter
-#     ppx, ppy = p
-#     # pxv = ustrip.(dimensionalize(ppx.data[:], km, CharDim))
-#     # pyv = ustrip.(dimensionalize(ppy.data[:], km, CharDim))
-#     pxv = ppx.data[:]
-#     pyv = ppy.data[:]
-#     clr = pPhases.data[:]
-#     # clr = pϕ.data[:]
-#     idxv = particles.index.data[:]
-#     f,ax,h=scatter(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:roma, markersize=1)
-
-#     Colorbar(f[1,2], h)
-#     f
-# end
+main(li, origin, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, extension = extension);

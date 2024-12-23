@@ -195,7 +195,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, thermal_perturbation = 
 
     # Rheology
     viscosity_cutoff = (1e16, 1e24)
-    compute_viscosity!(stokes, args, rheology, viscosity_cutoff)
+    compute_viscosity!(stokes, args, rheology, 0, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -225,7 +225,7 @@ function thermal_convection2D(igg; ar=8, ny=16, nx=ny*8, thermal_perturbation = 
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
         compute_ρg!(ρg[end], rheology, (T=thermal.Tc, P=stokes.P))
         compute_viscosity!(
-            stokes, args, rheology, viscosity_cutoff
+            stokes, args, rheology, 0, viscosity_cutoff
         )
         # ------------------------------
         iters = solve!(

@@ -65,7 +65,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         C    = C,
         ϕ    = ϕ,
         η_vp = η_reg,
-        Ψ    = 0
+        Ψ    = 15
     )
 
     rheology = (
@@ -101,7 +101,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, CFL = 0.95 / √2.1)
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
@@ -109,7 +110,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Rheology
     compute_viscosity!(
-        stokes, phase_ratios, args, rheology, (-Inf, Inf)
+        stokes, phase_ratios, args, rheology, 0, (-Inf, Inf)
     )
     # Boundary conditions
     flow_bcs     = VelocityBoundaryConditions(;
@@ -191,7 +192,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     return nothing
 end
 
-n      = 32
+n      = 128
 nx     = n
 ny     = n
 figdir = "ShearBands2D"

@@ -1,6 +1,6 @@
 # Viscous
 function compute_stress_increment(τij::Real, τij_o::Real, ηij, εij::Real, _Gdt, dτ_r)
-    dτij = dτ_r * fma(2.0 * ηij, εij, fma(-((τij - τij_o)) * ηij, _Gdt, -τij))
+    dτij = dτ_r * fma(2.0 * ηij, εij, fma(-(τij - τij_o) * ηij, _Gdt, -τij))
     return dτij
 end
 
@@ -935,8 +935,7 @@ end
         # yield function @ center
         F = τII_ij - C - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij)
-            F > 0
+        if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +

@@ -42,7 +42,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     lx           = ly           # domain length in x
     ni           = nx, ny       # number of cells
     li           = lx, ly       # domain length in x- and y-
-    di           = @. li / ni   # grid step in x- and -y
+    di           = @. li / (nx_g(),ny_g())   # grid step in x- and -y
     origin       = 0.0, 0.0     # origin coordinates
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells

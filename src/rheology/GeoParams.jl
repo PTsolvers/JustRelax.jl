@@ -22,14 +22,13 @@ function get_α(rho::MeltDependent_Density; ϕ::T=0.0, kwargs...) where {T}
     return ϕ * αmelt + (1 - ϕ) * αsolid
 end
 
-
-function get_α(rho::BubbleFlow_Density; P = 0e0, kwargs...)
+function get_α(rho::BubbleFlow_Density; P=0e0, kwargs...)
     αmelt = get_α(rho.ρmelt, kwargs...)
-    αgas  = get_α(rho.ρgas, kwargs...)
+    αgas = get_α(rho.ρgas, kwargs...)
 
     @unpack_val c0, a = rho
 
-    cutoff = c0^2/a^2
+    cutoff = c0^2 / a^2
 
     if P < cutoff
         c = a * sqrt(abs(P))
@@ -37,12 +36,12 @@ function get_α(rho::BubbleFlow_Density; P = 0e0, kwargs...)
         c = c0
     end
 
-    return inv((c0-c)/αgas + (1-(c0-c))/αmelt)
+    return inv((c0 - c) / αgas + (1 - (c0 - c)) / αmelt)
 end
 
 function get_α(rho::GasPyroclast_Density; kwargs...)
     αmelt = get_α(rho.ρmelt, kwargs...)
-    αgas  = get_α(rho.ρgas, kwargs...)
+    αgas = get_α(rho.ρgas, kwargs...)
     @unpack_val δ, β = rho
 
     return δ * αgas + (1 - δ) * αmelt

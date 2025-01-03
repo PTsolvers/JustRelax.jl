@@ -79,7 +79,9 @@ function update_rock_ratio!(ϕ::JustRelax.RockRatio{T,3}, phase_ratios, air_phas
     return nothing
 end
 
-@inline function compute_rock_ratio(phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}) where {N} 
+@inline function compute_rock_ratio(
+    phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
+) where {N}
     1 ≤ air_phase ≤ numphases(phase_ratio) || return 1e0
     x = 1 - @index phase_ratio[air_phase, I...]
     x *= x > 1e-5
@@ -88,7 +90,7 @@ end
 
 @inline function compute_air_ratio(
     phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
-) where {N} 
+) where {N}
     1 ≤ air_phase ≤ numphases(phase_ratio) || return 1e0
     return @index phase_ratio[air_phase, I...]
 end
@@ -370,4 +372,3 @@ Base.@propagate_inbounds @inline isvalid(ϕ, I::Vararg{Integer,N}) where {N} = �
 #     cv = c || v
 #     return cv || isvalid(ϕ.Vy, i, j)
 # end
-

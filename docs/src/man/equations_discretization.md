@@ -2,8 +2,6 @@
 
 We discretize both the Stokes and heat diffussion equations using a Finite Differences approach on a staggered grid (ref Taras book here).
 
-
-
 ## Heat diffusion
 The heat diffusion equation is discretized on a staggered grid as sketched below:
 
@@ -39,8 +37,7 @@ The equations of conservation of mass and momentum are discretized on a staggere
 ![](../assets/stokes_stag2D.png)
 
 
-where dotted lines represent the velocity ghost nodes. The APT Stokes equations are then discretized as follows:
-
+where dotted lines represent the velocity ghost nodes. 
 <!-- $$
 \begin{align}
 \widetilde{\rho}\frac{\boldsymbol{u}}{\Delta\psi} + \nabla\cdot\boldsymbol{\tau} - 
@@ -48,6 +45,8 @@ where dotted lines represent the velocity ghost nodes. The APT Stokes equations 
 \boldsymbol{f} \\
 \end{align}
 $$ -->
+
+### Conservation of momentum
 
 $$
 \begin{align}
@@ -73,3 +72,8 @@ $$
 
 \end{align}
 $$
+
+### Conservation of mass
+
+
+### Constitutive equation

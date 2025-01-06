@@ -17,12 +17,37 @@ $$
 \begin{align}
 \boldsymbol{\dot\varepsilon} = 
 \frac{1}{2\eta_{\text{eff}}}\boldsymbol{\tau} +
-\frac{1}{2G} \frac{D\boldsymbol{\tau}}{Dt}  + \dot\lambda\frac{\partial Q}{\partial \boldsymbol{\tau_{II}}}
+\frac{1}{2G} \frac{D\boldsymbol{\tau}}{Dt}  + \dot\lambda\frac{\partial Q}{\partial \boldsymbol{\tau}_{II}}
 \end{align}
 $$
 
-where $\eta_{\text{eff}}$ is the effective viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ is the plastic multiplier, and $Q$ is the plastic flow potential.
+where $\eta_{\text{eff}}$ is the effective viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ is the plastic multiplier, and $Q$ is the plastic flow potential is:
+$$
+\begin{align}
+Q = \boldsymbol{\tau}_{II} - p\sin{\psi}
+\end{align}
+$$
+where $\psi$ is the dilation angle.
 
+## Effective viscosity
+
+The effective material of a material defined as:
+$$
+\begin{align}
+\eta_{\text{eff}} = \frac{1}{\frac{1}{\eta^{\text{diff}}} + \frac{1}{\eta^{\text{disl}}}}
+\end{align}
+$$
+
+where $\eta^{\text{diff}}$ and $\eta^{\text{disl}}$ are the diffusion and dislocation creep viscosities, which are computed from their respective strain rate equations:
+
+$$
+\begin{align}
+\dot{ε}_{II}^{\text{diff}} = A^{\text{diff}} τ_{II}^{n^{\text{diff}}} d^{p} f_{H_2O}^{r^{\text{diff}}} \exp \left(- {{E^{\text{diff}} + PV^{\text{diff}}} \over RT} \right) \\
+\dot{ε}_{II}^{\text{disl}} = A^{\text{disl}} τ_{II}^{n^{\text{disl}}} f_{H_2O}^{r^{\text{disl}}} \exp \left(- {{E^{\text{disl}} + PV^{\text{disl}}} \over RT} \right)
+\end{align}
+$$
+
+where $A$ material specific parameter, $n$ is the stress powerlaw exponent, $p$ is the negative defined grain size exponent, $f$ is the water fugacity, $r$ is the water fugacity exponent, $E$ is the activation energy, $PV$ is the activation volume, and $R$ is the universal gas constant.
 ## Elastic stress
 
 ### Method (1): Jaumann derivative
@@ -45,24 +70,6 @@ $$
 $$
 
 ### Method (2): Euler-Rodrigues rotation
-
-```julia
-# from Anton's talk
-@inline Base.@propagate_inbounds function rotate_elastic_stress3D(ωi, τ, dt)
-    # vorticity
-    ω = √(sum(x^2 for x in ωi))
-    # unit rotation axis
-    n = SVector{3,  Float64}(inv(ω) * ωi[i] for i in 1:3)
-    # integrate rotation angle
-    θ = dt * 0.5 * ω
-    # Euler Rodrigues rotation matrix
-    R = rodrigues_euler(θ, n)
-    # rotate tensor
-    τij = voigt2tensor(τ)
-    τij_rot = R * (τij * R')
-    tensor2voigt(τij_rot)
-end
-```
 
 1. Compute unit rotation axis
 $$
@@ -87,11 +94,11 @@ $$
 \begin{align}
     \boldsymbol{c} = \boldsymbol{n}\sin{\theta} \\
     \boldsymbol{R_1} = 
-    \left[
-        c0   -c_3   c_2 \\
-        c_3    c0  -c_1 \\
-       -c_2   c_1    c0 \\
-    \right] \\
+    \begin{bmatrix}
+        c0  & -c_3 &  c_2 \\
+        c_3 &  c0  & -c_1 \\
+       -c_2 &  c_1 &  c0 \\
+    \end{bmatrix} \\
     \boldsymbol{R_2} = (1-\cos{\theta}) \boldsymbol{n} \boldsymbol{n}^T \\
     \boldsymbol{R}=\boldsymbol{R_1}+\boldsymbol{R_2}
 \end{align}
@@ -107,11 +114,11 @@ $$
 
 ## Plastic formulation
 
-JustRelax.jl implements the regularised plasticity model from (refs). In this formulation, the yield function is given by
+JustRelax.jl implements the regularised plasticity model from [Thibault et al 2021](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021GC009675). In this formulation, the yield function is given by
 
 $$
 \begin{align}
-F = \tau_y - \left( P \sin{\phi} + C \cos{\phi} + \eta_{\text{reg}} + \dot\lambda \right) \leq 0
+F = \tau_y - \left( P \sin{\phi} + C \cos{\phi} + \dot\lambda \eta_{\text{reg}}\right) \leq 0
 \end{align}
 $$
 
@@ -119,8 +126,77 @@ where $\eta_{\text{reg}}$ is a regularization term and
 
 $$
 \begin{align}
-\dot\lambda = \frac{F}{x}
+\dot\lambda = \frac{F^{\text{trial}}}{\eta + \eta_{\text{reg}} + K \Delta t \sin{\psi}\sin{\phi}}
 \end{align}
 $$
 
-Note that since we are using an iterative method to solve the APT Stokes equation, the non-linearities are dealt by the iterative scheme. Othwersie, one would need to solve a non-linear problem to compute $\dot\lambda$, which typically requires to compute $\frac{\partial F}{\partial \dot\lambda}$
+Note that since we are using an iterative method to solve the APT Stokes equation, the non-linearities are dealt by the iterative scheme. Othwersie, one would need to solve a non-linear problem to compute $\dot\lambda$, which requires to compute $\frac{\partial F}{\partial \dot\lambda}$
+
+# Selecting the constitutive model in JustRelax.jl
+
+All the local calculations corresponding to the effective rheology are implemented in GeoParams.jl. The composite rheology is implemented using the `CompositeRheology` object. An example of how to set up the a visco-elasto-viscoplastic rheology is shown below:
+
+```julia
+# elasticity
+el    = ConstantElasticity(; 
+    G = 40e9, # shear modulus [Pa]
+    ν = 0.45, # Poisson coeficient 
+)
+# Olivine dislocation law from Hirth and Kohlstedt 2003
+disl_wet_olivine  = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
+# Olivine diffusion law from Hirth and Kohlstedt 2003
+diff_wet_olivine  = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
+# plasticity
+ϕ     = 30   # friction angle
+Ψ     = 5    # dilation angle
+C     = 1e6  # cohesion [Pa]
+η_reg = 1e16 # viscosity regularization term [Pa s]
+pl    = DruckerPrager_regularised(; C = C, ϕ = ϕ, η_vp=η_reg, Ψ=Ψ)
+# composite rheology 
+rheology = CompositeRheology(
+    (el, disl_wet_olivine, diff_wet_olivine, pl)
+)
+```
+
+`rheology` then needs to be passed into a `MaterialParams` object with the help of `SetMaterialParams`:
+
+```julia
+rheology = (
+    SetMaterialParams(;
+        Phase             = 1,
+        CompositeRheology = rheology,
+        # other material properties here
+    ),
+)
+```
+
+### Multiple rheology phases
+
+It is common in geodynamic models to have multiple rheology phases. In this case, we just need to build a tuple containing every single material phase properties:
+```julia
+rheology = (
+    SetMaterialParams(;
+        Phase             = 1,
+        CompositeRheology = rheology_one,
+        # other material properties here
+    ),
+        SetMaterialParams(;
+        Phase             = 2,
+        CompositeRheology = rheology_two,
+        # other material properties here
+    ),
+)
+```
+
+### Computing the effective viscosity
+
+The effective viscosity is computed internally during the Stokes solver. However, it can also be computed externally with the `compute_viscosity!` function as follows:
+
+```julia
+# Rheology
+args             = (T=T, P=P, dt = dt) # or (T=thermal.Tc, P=stokes.P, dt=dt)
+viscosity_cutoff = (1e18, 1e23)
+compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+```
+
+where `T` and `P` are the temperature and pressure fields defined at the **cell centers**, `dt` is the time step, and `phase_ratios` is an object containing the phase ratios corresponding to each material phase, of each cell.

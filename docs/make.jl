@@ -79,7 +79,12 @@ makedocs(;
         "User guide"=> Any[
             "Installation" => "man/installation.md",
             "Backend"   => "man/backend.md",
-            "Equations" => "man/equations.md",
+            "Equations" => Any[
+                "Governing equations"    => "man/equations_basic.md",
+                "Constitutive equations" => "man/constitutive_equations.md",
+                "APT equations"          => "man/equations_APT.md",
+                "Discretization"         => "man/equations_discretization.md",
+            ],
             "Boundary conditions" => "man/boundary_conditions.md",
             "Advection" => "man/advection.md",
             ],

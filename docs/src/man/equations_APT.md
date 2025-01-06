@@ -1,7 +1,7 @@
-The pseudo-transient method consists in augmenting the right-hand-side of the target PDE with a pseudo-time derivative (where $\psi$ is the pseudo-time) of the primary variables. We then solve the resulting system of equations with an iterative method. The pseudo-time derivative is then gradually reduced, until the original PDE is solved and the changes in the primary variables are below a preset tolerance.
+The Accelerated Pseudo-Transient (APT) method consists in augmenting the right-hand-side of the target PDE with a pseudo-time derivative (where $\psi$ is the pseudo-time) of the primary variables. We then solve the resulting system of equations with an iterative method. The pseudo-time derivative is then gradually reduced, until the original PDE is solved and the changes in the primary variables are below a preset tolerance.
 
 ## Heat diffusion
-The pseudo-transient heat-diffusion equation is:
+The APT heat-diffusion equation is:
 
 $$
 \begin{align}
@@ -9,7 +9,7 @@ $$
 \end{align}
 $$
 
-We use a second order pseudo-transient scheme were continuation is also done on the flux, so that:
+We use a second order APT scheme were continuation is also done on the flux, so that:
 
 $$
 \begin{align}
@@ -19,7 +19,7 @@ $$
 
 ## Stokes equations
 
-For example, the pseudo-transient formulation of the Stokes equations yields:
+For example, the APT formulation of the Stokes equations yields:
 
 $$
 \begin{align}
@@ -34,7 +34,7 @@ $$
 $$
 
 ## Constitutive equations
-A pseudo-transient continuation is also done on the constitutive law:
+A APT continuation is also done on the constitutive law:
 
 $$
 \begin{align}
@@ -60,7 +60,7 @@ $$
 
 where the P-wave $\widetilde{V}=V_p$ is the characteristic velocity scale for Stokes, and $Re$ is the Reynolds number.
 
-### Physical parameters
+<!-- ### Physical parameters
 
 | Symbol                           | Parameter              |
 | :------------------------------- | :--------------------: |
@@ -77,7 +77,7 @@ where the P-wave $\widetilde{V}=V_p$ is the characteristic velocity scale for St
 | $G$                              | Shear modulus          |
 | $\alpha$                         | Thermal expansivity    |
 | $C_p$                            | Heat capacity          |
-| $\kappa$                         | Heat conductivity      |
+| $\kappa$                         | Heat conductivity      | -->
 
 ### Pseudo-transient parameters
 

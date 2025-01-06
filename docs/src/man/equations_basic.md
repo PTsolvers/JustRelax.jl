@@ -1,3 +1,5 @@
+# Governing equations
+
 ## Stokes equations
 
 Deformation of compressible viscous flow is desribed by the equations of conservation of momentum and mass:
@@ -16,6 +18,8 @@ $$
 
 where $\boldsymbol{\tau}$ is the deviatoric stress tensor, $p$ is pressure, $f$ is the external forces vector, $\boldsymbol{v}$ is the velocity vector, $\beta$ is the compressibility coefficient, $\alpha$ is the thermal expansivity coefficient and $T$ is temperature.
 
+## Constitutive equation
+
 To close the previous systems of equations, we further need the constitutive relationship between stress and deformationl. In its simplest linear form this is:
 
 $$
@@ -25,7 +29,6 @@ $$
 $$
 
 where $\eta$ is the shear viscosity and  $\boldsymbol{\dot\varepsilon}$ is the deviatoric strain tensor.
-
 ## Heat diffusion
 The pseudo-transient heat-diffusion equation is:
 
@@ -36,9 +39,3 @@ $$
 $$
 
 where $\rho$ is density, $C_p$ is specific heat capacity, $\kappa$ is thermal conductivity, $T$ is temperature $\boldsymbol{\tau}:\boldsymbol{\dot\varepsilon}$ is the energy dissipated by viscous deformation (shear heating), $\alpha T(\boldsymbol{v} \cdot \nabla P)$ is adiabatic heating, and $H$ is the sum any other source term, such as radiogenic heat production.
-
-# Discretization of the governing equations
-
-We discretize both the Stokes and heat diffussion equations using a Finite Differences approach on a staggered grid (ref Taras book here), as sketched below:
-
-![Staggered Velocity Grid](../assets/StaggeredVelocity.png)

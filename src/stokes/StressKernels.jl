@@ -935,12 +935,11 @@ end
         # yield function @ center
         F = τII_ij - C - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij)
-            F > 0
+        if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
-                relλ .* (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
+                relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
             dQdτij = @. 0.5 * (τij + dτij) / τII_ij
             # dτij        = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * (εij  - λ[I...] *dQdτij )) * dτ_r
             εij_pl = λ[I...] .* dQdτij

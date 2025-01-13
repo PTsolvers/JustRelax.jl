@@ -141,10 +141,14 @@ h_vertices = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 save_marker_chain("Example", cell_vertices, h_vertices)
 ```
 """
-function save_marker_chain(fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64})
+function save_marker_chain(
+    fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64}
+)
     cell_vertices_vec = collect(cell_vertices)  # Convert LinRange to Vector
     n_points = length(cell_vertices_vec)
-    points = [SVector{3, Float64}(cell_vertices_vec[i], h_vertices[i], 0.0) for i in 1:n_points]
+    points = [
+        SVector{3,Float64}(cell_vertices_vec[i], h_vertices[i], 0.0) for i in 1:n_points
+    ]
     lines = [MeshCell(PolyData.Lines(), 1:(n_points))]  # Create a single line connecting all points
 
     vtk_grid(fname, points, lines) do vtk

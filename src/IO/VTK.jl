@@ -122,3 +122,33 @@ function save_vtk(fname::String, xi, data::NamedTuple)
 
     return nothing
 end
+
+"""
+    save_marker_chain(fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64})
+
+Save a vector of points as a line in a VTK file. The X and Y coordinates of the points are given by `cell_vertices` and `h_vertices`, respectively.
+The Z coordinate is set to zero as we are working in 2D.
+
+## Arguments
+- `fname::String`: The name of the VTK file to save. The extension `.vtk` will be appended to the name.
+- `cell_vertices::LinRange{Float64}`: A range of X coordinates for the points.
+- `h_vertices::Vector{Float64}`: A vector of Y coordinates for the points.
+
+## Example
+```julia
+cell_vertices = LinRange(0.0, 1.0, 10)
+h_vertices = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+save_marker_chain("Example", cell_vertices, h_vertices)
+```
+"""
+function save_marker_chain(fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64})
+    cell_vertices_vec = collect(cell_vertices)  # Convert LinRange to Vector
+    n_points = length(cell_vertices_vec)
+    points = [SVector{3, Float64}(cell_vertices_vec[i], h_vertices[i], 0.0) for i in 1:n_points]
+    lines = [MeshCell(PolyData.Lines(), 1:(n_points))]  # Create a single line connecting all points
+
+    vtk_grid(fname, points, lines) do vtk
+        vtk["Points"] = points
+    end
+    return nothing
+end

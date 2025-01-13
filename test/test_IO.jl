@@ -154,6 +154,14 @@ using WriteVTK
         DataIO.append!(vtk, (Vy=stokes.V.Vy, η=stokes.viscosity.η), dt, time)
         @test isfile(joinpath(dst, "vtk_series.pvd"))
 
+        ## Test save_marker_chain
+        nxcell, max_xcell, min_xcell = 100, 150, 75
+        initial_elevation            = 0e0
+        chain                        = init_markerchain(backend, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation);
+
+        save_marker_chain(joinpath(dst,"MarkerChain"), chain.cell_vertices, chain.h_vertices)
+        @test isfile(joinpath(dst, "MarkerChain.vtp"))
+
         # 3D case
         ni = nx, ny, nz
         stokes  = StokesArrays(backend_JR, ni)

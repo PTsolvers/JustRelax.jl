@@ -35,13 +35,13 @@ end
 # Thermal rectangular perturbation
 function rectangular_perturbation!(T, xc, yc, r, xvi)
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
-        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            T[i, j] += .2
+        if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
+            T[i+1, j] += .2
         end
         return nothing
     end
-    ni = size(T)
-    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    nx, ny = size(T)
+    @parallel (1:nx-2, 1:ny) _rectangular_perturbation!(T, xc, yc, r, xvi...)
     return nothing
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------

@@ -56,7 +56,7 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
         return nothing
     end
 
-    nx, ny = size(thermal.T)
+    nx, ny = size(T)
     @parallel (1:nx-2, 1:ny) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 

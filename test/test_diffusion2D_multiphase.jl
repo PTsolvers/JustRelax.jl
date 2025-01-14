@@ -6,7 +6,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-using Test, Suppressor
+using Test#, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
@@ -34,8 +34,6 @@ else
     JustPIC.CPUBackend
 end
 
-
-
 distance(p1, p2) = mapreduce(x->(x[1]-x[2])^2, +, zip(p1, p2)) |> sqrt
 
 @parallel_indices (i, j) function init_T!(T, z)
@@ -52,13 +50,14 @@ end
 function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
-        @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i, j]  += δT
+         if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
+            T[i+1, j]  += δT
         end
         return nothing
     end
 
-    @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
+    nx, ny = size(thermal.T)
+    @parallel (1:nx-2, 1:ny) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 function init_phases!(phases, particles, xc, yc, r)
@@ -66,7 +65,7 @@ function init_phases!(phases, particles, xc, yc, r)
     center = xc, yc
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, center, r)
-        @inbounds for ip in cellaxes(phases)
+         for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
 

@@ -58,14 +58,14 @@ end
 
     dTdZ        = (1273-273)/1000e3
     offset      = 273e0
-    T[i, j]     = (depth) * dTdZ + offset
+    T[i + 1, j] = (depth) * dTdZ + offset
     return nothing
 end
 
 # Thermal rectangular perturbation
 function rectangular_perturbation!(T, xc, yc, r, xvi)
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
-        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
+         if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
             T[i, j] += 20.0
         end
         return nothing
@@ -124,7 +124,8 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 10)
         no_flux     = (left = true, right = true, top = false, bot = false),
     )
     # initialize thermal profile
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
+    nTx, nTy       = size(thermal.T)
+    @parallel (1:nTx-2, 1:nTy) init_T!(thermal.T, xvi[2])
     # Elliptical temperature anomaly
     xc_anomaly      = 0.0    # origin of thermal anomaly
     yc_anomaly      = -600e3  # origin of thermal anomaly

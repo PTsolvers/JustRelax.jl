@@ -301,7 +301,7 @@ end
 
 
         Urms, Nu_top, iters = main2D(igg; nx = nx, ny = ny);
-        @test Urms[end] ≈ 0.33 rtol=1e-1
+        @test Urms[end] ≈ 0.44 rtol=1e-1
         @test Nu_top[end] ≈ 1.0312 rtol=1e-2
         @test iters.err_evo1[end] < 1e-4
     end

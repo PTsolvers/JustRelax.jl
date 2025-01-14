@@ -328,8 +328,8 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
             fig
 
             fig2 = Figure(size = (900, 1200), title = "Time Series")
-            ax21 = Axis(fig2[1,1], aspect = 3, title = "V_{RMS}")
-            ax22 = Axis(fig2[2,1], aspect = 3, title = "Nu_{top}")
+            ax21 = Axis(fig2[1,1], aspect = 3, title = L"V_{RMS}")
+            ax22 = Axis(fig2[2,1], aspect = 3, title = L"Nu_{top}")
             l1 = lines!(ax21,trms./(1e6*(365.25*24*60*60)),Urms)
             l2 = lines!(ax22,trms./(1e6*(365.25*24*60*60)),Nu_top)
             save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)

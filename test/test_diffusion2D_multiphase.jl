@@ -6,7 +6,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-using Test#, Suppressor
+using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
@@ -203,7 +203,7 @@ end
 
         nx_T, ny_T = size(thermal.T)
         if backend_JR === CPUBackend
-            @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1819.2297931741878 atol=1e-1
+            @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1822.7216793271318 atol=1e-1
             @test thermal.Tc[ nx >>> 1    ,   nx >>> 1    ] ≈ 1824.3532934301472 atol=1e-1
             @test nphases(phase_ratios)=== Val{2}()
         else

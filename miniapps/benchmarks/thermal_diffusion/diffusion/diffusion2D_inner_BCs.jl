@@ -24,14 +24,14 @@ end
 function elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, x, y)
-        @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i, j]   += Ω_T
+        if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
+            T[i+1, j]   += Ω_T
             mask[i, j] = 1
         end
         return nothing
     end
-
-    @parallel _elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, xvi...)
+    nx, ny = size(T)
+    @parallel (1:nx-2, 1:ny) _elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, xvi...)
 end
 
 function init_phases!(phases, particles, xc, yc, r)
@@ -170,4 +170,3 @@ function diffusion_2D(; nx=32, ny=32, lx=100e3, ly=100e3, Cp0=1.2e3, K0=3.0)
 end
 
 thermal =  diffusion_2D()
-

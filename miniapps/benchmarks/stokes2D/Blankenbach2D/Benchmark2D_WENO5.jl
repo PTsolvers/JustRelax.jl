@@ -41,13 +41,13 @@ end
 # Thermal rectangular perturbation
 function rectangular_perturbation!(T, xc, yc, r, xvi)
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
-        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            T[i, j] += 20.0
+        if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
+            T[i+1, j] += 20.0
         end
         return nothing
     end
-    ni = size(T)
-    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    nx,ny = size(T)
+    @parallel (1:nx-2, 1:ny) _rectangular_perturbation!(T, xc, yc, r, xvi...)
     return nothing
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
@@ -328,8 +328,8 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 1e1, figdir="figs2D", do_vtk =fal
             fig
 
             fig2 = Figure(size = (900, 1200), title = "Time Series")
-            ax21 = Axis(fig2[1,1], aspect = 3, title = "V_{RMS}")
-            ax22 = Axis(fig2[2,1], aspect = 3, title = "Nu_{top}")
+            ax21 = Axis(fig2[1,1], aspect = 3, title = L"V_{RMS}")
+            ax22 = Axis(fig2[2,1], aspect = 3, title = L"Nu_{top}")
             l1 = lines!(ax21,trms./(1e6*(365.25*24*60*60)),Urms)
             l2 = lines!(ax22,trms./(1e6*(365.25*24*60*60)),Nu_top)
             save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)

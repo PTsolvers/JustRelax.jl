@@ -81,7 +81,7 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 10
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...);
     subgrid_arrays   = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
@@ -150,7 +150,7 @@ function Shearheating3D(igg; nx=16, ny=16, nz=16)
 
     # Time loop
     t, it = 0.0, 0
-    local iters
+    local iters, thermal
     while it < 5
 
         # interpolate fields from particle to grid vertices
@@ -236,7 +236,7 @@ end
 
 @testset "Shearheating3D" begin
     @suppress begin
-        n  = 16
+        n  = 32
         nx = n
         ny = n
         nz = n

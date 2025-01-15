@@ -103,7 +103,7 @@ function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi, 
         T, δT, xc_anomaly, yc_anomaly, r_anomaly, x, y, sticky_air
     )
         depth = -y[j] - sticky_air
-        @inbounds if ((x[i] - xc_anomaly)^2 + (depth[j] + yc_anomaly)^2 ≤ r_anomaly^2)
+        if ((x[i] - xc_anomaly)^2 + (depth[j] + yc_anomaly)^2 ≤ r_anomaly^2)
             # T[i + 1, j] *= δT / 100 + 1
             T[i + 1, j] = δT
         end
@@ -286,10 +286,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
 
-    η = @ones(ni...) # initialise viscosity
-
-    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
-    η_vep = copy(η)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, 0, cutoff_visc)
 
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
@@ -360,7 +357,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         # Update buoyancy and viscosity -
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
+        compute_viscosity!(stokes, phase_ratios, args, rheology, 0, cutoff_visc)
 
         # Stokes solver -----------------
         solve!(
@@ -691,8 +688,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 end
 
 figdir = "Thermal_stresses_around_cooling_magma"
-do_vtk = false # set to true to generate VTK files for ParaView
-n      = 64
+do_vtk = true # set to true to generate VTK files for ParaView
+n      = 128
 ar     = 2
 nx     = n * ar - 2
 ny     = n - 2

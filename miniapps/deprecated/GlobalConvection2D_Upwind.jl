@@ -54,26 +54,26 @@ end
 function circular_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _circular_perturbation!(T, δT, xc, yc, r, x, y)
-        @inbounds if (((x[i] - xc))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i, j] *= δT / 100 + 1
+        if (((x[i] - xc))^2 + ((y[j] - yc))^2) ≤ r^2
+            T[i+1, j] *= δT / 100 + 1
         end
         return nothing
     end
-
-    @parallel _circular_perturbation!(T, δT, xc, yc, r, xvi...)
+    nx, ny = size(T)
+    @parallel (1:nx-2, 1:ny) _circular_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 function random_perturbation!(T, δT, xbox, ybox, xvi)
 
     @parallel_indices (i, j) function _random_perturbation!(T, δT, xbox, ybox, x, y)
-        @inbounds if (xbox[1] ≤ x[i] ≤ xbox[2]) && (abs(ybox[1]) ≤ abs(y[j]) ≤ abs(ybox[2]))
+        if (xbox[1] ≤ x[i] ≤ xbox[2]) && (abs(ybox[1]) ≤ abs(y[j]) ≤ abs(ybox[2]))
             δTi = δT * (rand() - 0.5) # random perturbation within ±δT [%]
-            T[i, j] *= δTi / 100 + 1
+            T[i+1, j] *= δTi / 100 + 1
         end
         return nothing
     end
-
-    @parallel (@idx size(T)) _random_perturbation!(T, δT, xbox, ybox, xvi...)
+    nx, ny = size(T)
+    @parallel (1:nx-2, 1:ny) _random_perturbation!(T, δT, xbox, ybox, xvi...)
 end
 
 # --------------------------------------------------------------------------------

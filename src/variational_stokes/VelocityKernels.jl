@@ -157,6 +157,82 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function compute_V!(
+    Vx::AbstractArray{T,2},
+    Vy,
+    Vx_on_Vy,
+    Rx,
+    Ry,
+    P,
+    τxx,
+    τyy,
+    τxy,
+    ηdτ,
+    ρgx,
+    ρgy,
+    ητ,
+    ϕ::JustRelax.RockRatio,
+    _dx,
+    _dy,
+    dt,
+) where {T}
+    d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+    d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+    d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
+    av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
+
+    av_xa(A) = _av_xa(A, i, j)
+    av_ya(A) = _av_ya(A, i, j)
+    harm_xa(A) = _av_xa(A, i, j)
+    harm_ya(A) = _av_ya(A, i, j)
+
+    if all((i, j) .< size(Vx) .- 1)
+        if isvalid_vx(ϕ, i + 1, j)
+            Rx[i, j] =
+                R_Vx = (
+                    -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
+                    av_xa(ρgx, ϕ.center)
+                )
+            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
+        else
+            Rx[i, j] = zero(T)
+            Vx[i + 1, j + 1] = zero(T)
+        end
+    end
+
+    if all((i, j) .< size(Vy) .- 1)
+        if isvalid_vy(ϕ, i, j + 1)
+            θ = 1.0
+            # Interpolated Vx into Vy node (includes density gradient)
+            Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
+            # Vertical velocity
+            Vyᵢⱼ = Vy[i + 1, j + 1]
+            # Get necessary buoyancy forces
+            # i_W, i_E = max(i - 1, 1), min(i + 1, nx)
+            j_N = min(j + 1, size(ρgy,2))
+            ρg_S = ρgy[i, j] * ϕ.center[i, j]
+            ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
+            # Spatial derivatives
+            # ∂ρg∂x = (ρg_E - ρg_W) * _dx
+            ∂ρg∂y = (ρg_N - ρg_S) * _dy
+            # correction term
+            ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+            Ry[i, j] =
+                R_Vy =
+                    -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                    av_ya(ρgy, ϕ.center) + ρg_correction
+            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+        else
+            Ry[i, j] = zero(T)
+            Vy[i + 1, j + 1] = zero(T)
+        end
+    end
+
+    return nothing
+end
+
 @parallel_indices (i, j, k) function compute_V!(
     Vx::AbstractArray{T,3},
     Vy,

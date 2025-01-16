@@ -31,6 +31,7 @@ function _solve_VS!(
     nout=500,
     b_width=(4, 4, 0),
     verbose=true,
+    free_surface=false,
     kwargs...,
 ) where {T}
 
@@ -69,6 +70,7 @@ function _solve_VS!(
     θ = deepcopy(stokes.P)
     λ = @zeros(ni...)
     λv = @zeros(ni .+ 1...)
+    Vx_on_Vy = @zeros(size(stokes.V.Vy))
     η0 = deepcopy(η)
     do_visc = true
 
@@ -145,9 +147,14 @@ function _solve_VS!(
             )
             update_halo!(stokes.τ.xy)
 
+            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
+                Vx_on_Vy, stokes.V.Vx
+            )
+
             # @hide_communication b_width begin # communication/computation overlap
             @parallel (@idx ni .+ 1) compute_V!(
                 @velocity(stokes)...,
+                Vx_on_Vy,
                 stokes.R.Rx,
                 stokes.R.Ry,
                 stokes.P,
@@ -157,6 +164,7 @@ function _solve_VS!(
                 ητ,
                 ϕ,
                 _di...,
+                dt * free_surface,
             )
             # apply boundary conditions
             velocity2displacement!(stokes, dt)
@@ -184,7 +192,7 @@ function _solve_VS!(
             push!(err_evo1, err)
             push!(err_evo2, iter)
 
-            if igg.me == 0 #&& ((verbose && err > ϵ) || iter == iterMax)
+            if igg.me == 0 && verbose #((verbose && err > ϵ) || iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,

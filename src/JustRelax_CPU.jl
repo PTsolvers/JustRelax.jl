@@ -9,6 +9,7 @@ using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
 using Statistics
 using MPI
+using Enzyme
 
 import JustRelax: IGG, BackendTrait, CPUBackendTrait, backend, CPUBackend
 import JustRelax: PTStokesCoeffs
@@ -29,6 +30,7 @@ __init__() = @init_parallel_stencil(Threads, Float64, 2)
 
 include("common.jl")
 include("stokes/Stokes2D.jl")
+include("adjoint/Adjoint2D.jl")
 export solve!
 
 end

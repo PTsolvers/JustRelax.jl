@@ -9,6 +9,7 @@ using ParallelStencil, ParallelStencil.FiniteDifferences2D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
 using MPI
+using Enzyme
 
 import JustRelax.JustRelax2D as JR2D
 
@@ -36,6 +37,10 @@ include("../../stokes/Stokes2D.jl")
 # Types
 function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
     return StokesArrays(ni)
+end
+
+function JR2D.StokesArraysAdjoint(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
+    return StokesArraysAdjoint(ni)
 end
 
 function JR2D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N,Number}) where {N}

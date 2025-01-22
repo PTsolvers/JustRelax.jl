@@ -32,6 +32,38 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function interp_Vx∂ρ∂x_on_Vy!(Vx_on_Vy, Vx, ρg, ϕ, _dx)
+    nx, ny = size(ρg)
+
+    iW = clamp(i - 1, 1, nx)
+    iE = clamp(i + 1, 1, nx)
+    jS = clamp(j - 1, 1, ny)
+    jN = clamp(j, 1, ny)
+
+    # OPTION 1
+    ρg_L =
+        0.25 * (
+            ρg[iW, jS] * ϕ.center[iW, jS] +
+            ρg[i, jS] * ϕ.center[i, jS] +
+            ρg[iW, jN] * ϕ.center[iW, jN] +
+            ρg[i, jN] * ϕ.center[i, jN]
+        )
+    ρg_R =
+        0.25 * (
+            ρg[iE, jS] * ϕ.center[iE, jS] +
+            ρg[i, jS] * ϕ.center[i, jS] +
+            ρg[iE, jN] * ϕ.center[iE, jN] +
+            ρg[i, jN] * ϕ.center[i, jN]
+        )
+
+    Vx_on_Vy[i + 1, j] =
+        (0.25 * (Vx[i, j] + Vx[i + 1, j] + Vx[i, j + 1] + Vx[i + 1, j + 1])) *
+        (ρg_R - ρg_L) *
+        _dx
+
+    return nothing
+end
+
 # From cell vertices to cell center
 
 temperature2center!(thermal) = temperature2center!(backend(thermal), thermal)

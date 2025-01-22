@@ -147,25 +147,54 @@ function _solve_VS!(
             )
             update_halo!(stokes.τ.xy)
 
-            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
-                Vx_on_Vy, stokes.V.Vx
-            )
+            if free_surface
+                @parallel (@idx ni .+ 1) compute_Vx!(
+                    stokes.V.Vx,
+                    stokes.R.Rx,
+                    stokes.P,
+                    stokes.τ.xx,
+                    stokes.τ.xy,
+                    ηdτ,
+                    ρg[begin],
+                    ητ,
+                    ϕ,
+                    _di...,
+                )
+                @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
+                    Vx_on_Vy, stokes.V.Vx, last(ρg), ϕ, first(_di)
+                )
+                update_halo!(Vx_on_Vy)
 
-            # @hide_communication b_width begin # communication/computation overlap
-            @parallel (@idx ni .+ 1) compute_V!(
-                @velocity(stokes)...,
-                Vx_on_Vy,
-                stokes.R.Rx,
-                stokes.R.Ry,
-                stokes.P,
-                @stress(stokes)...,
-                ηdτ,
-                ρg...,
-                ητ,
-                ϕ,
-                _di...,
-                dt * free_surface,
-            )
+                @parallel (@idx ni .+ 1) compute_Vy!(
+                    stokes.V.Vy,
+                    Vx_on_Vy,
+                    stokes.R.Ry,
+                    stokes.P,
+                    stokes.τ.yy,
+                    stokes.τ.xy,
+                    ηdτ,
+                    ρg[end],
+                    ητ,
+                    ϕ,
+                    _di...,
+                    dt,
+                )
+            else
+                # @hide_communication b_width begin # communication/computation overlap
+                @parallel (@idx ni .+ 1) compute_V!(
+                    @velocity(stokes)...,
+                    Vx_on_Vy,
+                    stokes.R.Rx,
+                    stokes.R.Ry,
+                    stokes.P,
+                    @stress(stokes)...,
+                    ηdτ,
+                    ρg...,
+                    ητ,
+                    ϕ,
+                    _di...,
+                )
+            end
             # apply boundary conditions
             velocity2displacement!(stokes, dt)
             # free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)

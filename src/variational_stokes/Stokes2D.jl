@@ -183,7 +183,6 @@ function _solve_VS!(
                 # @hide_communication b_width begin # communication/computation overlap
                 @parallel (@idx ni .+ 1) compute_V!(
                     @velocity(stokes)...,
-                    Vx_on_Vy,
                     stokes.R.Rx,
                     stokes.R.Ry,
                     stokes.P,

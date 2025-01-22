@@ -31,14 +31,14 @@ where $\psi$ is the dilation angle.
 
 ## Effective viscosity
 
-The effective material of a material defined as:
+The effective viscosity of a non-Newtonian Maxwell body is defined as:
 $$
 \begin{align}
 \eta_{\text{eff}} = \frac{1}{\frac{1}{\eta^{\text{diff}}} + \frac{1}{\eta^{\text{disl}}}}
 \end{align}
 $$
 
-where $\eta^{\text{diff}}$ and $\eta^{\text{disl}}$ are the diffusion and dislocation creep viscosities, which are computed from their respective strain rate equations:
+where $\eta^{\text{diff}}$ and $\eta^{\text{disl}}$ are the diffusion and dislocation creep viscosities. These are computed from their respective strain rate equations:
 
 $$
 \begin{align}
@@ -95,9 +95,9 @@ $$
     \boldsymbol{c} = \boldsymbol{n}\sin{\theta} \\
     \boldsymbol{R_1} = 
     \begin{bmatrix}
-        c0  & -c_3 &  c_2 \\
-        c_3 &  c0  & -c_1 \\
-       -c_2 &  c_1 &  c0 \\
+        \cos{\theta}\sin{\theta} & -c_3 &  c_2 \\
+        c_3 &  \cos{\theta}\sin{\theta}  & -c_1 \\
+       -c_2 &  c_1 &  \cos{\theta}\sin{\theta} \\
     \end{bmatrix} \\
     \boldsymbol{R_2} = (1-\cos{\theta}) \boldsymbol{n} \boldsymbol{n}^T \\
     \boldsymbol{R}=\boldsymbol{R_1}+\boldsymbol{R_2}
@@ -200,3 +200,46 @@ compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 ```
 
 where `T` and `P` are the temperature and pressure fields defined at the **cell centers**, `dt` is the time step, and `phase_ratios` is an object containing the phase ratios corresponding to each material phase, of each cell.
+
+### Elastic stress rotation
+
+The elastic stress rotation is done on the particles.
+
+1. Allocate stress tensor on the particles:
+```julia
+pτ = StressParticles(particles)
+```
+
+2. Since JustPIC.jl requires the fields to be defined at the cell vertices, we need to allocate a couple of buffer arrays where we will interpolate the normal compononents of the stress tensor:
+```julia
+τxx_v = @zeros(ni.+1...)
+τyy_v = @zeros(ni.+1...)
+```
+
+3. During time stepping:
+```julia
+# 1. interpolate stress back to the grid
+stress2grid!(stokes, pτ, xvi, xci, particles)
+# 2. solve Stokes equations....
+#
+# 3. rotate stresses
+rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
+# 4. advection step
+    # advect particles in space
+advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+    # advect particles in memory
+move_particles!(particles, xvi, particle_args)
+    # check if we need to inject particles
+    # need stresses on the vertices for injection purposes
+center2vertex!(τxx_v, stokes.τ.xx)
+center2vertex!(τyy_v, stokes.τ.yy)
+inject_particles_phase!(
+        particles,
+        pPhases,
+        pτ,
+        (τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
+        xvi
+)
+```
+
+Note that `rotate_stress!` rotates the stress tensor using the Euler-Rodrigues rotation matrix.

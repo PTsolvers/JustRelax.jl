@@ -20,7 +20,7 @@ where $\boldsymbol{\tau}$ is the deviatoric stress tensor, $p$ is pressure, $f$ 
 
 ## Constitutive equation
 
-To close the previous systems of equations, we further need the constitutive relationship between stress and deformationl. In its simplest linear form this is:
+To close the system of equations (1)-(2), we further need the constitutive relationship between stress and deformation. In its simplest linear form this is:
 
 $$
 \begin{align}

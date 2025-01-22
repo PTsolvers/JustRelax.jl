@@ -1,35 +1,3 @@
-@parallel_indices (i, j) function interp_Vx∂ρ∂x_on_Vy!(Vx_on_Vy, Vx, ρg, ϕ, _dx)
-    nx, ny = size(ρg)
-
-    iW = clamp(i - 1, 1, nx)
-    iE = clamp(i + 1, 1, nx)
-    jS = clamp(j - 1, 1, ny)
-    jN = clamp(j, 1, ny)
-
-    # OPTION 1
-    ρg_L =
-        0.25 * (
-            ρg[iW, jS] * ϕ.center[iW, jS] +
-            ρg[i, jS] * ϕ.center[i, jS] +
-            ρg[iW, jN] * ϕ.center[iW, jN] +
-            ρg[i, jN] * ϕ.center[i, jN]
-        )
-    ρg_R =
-        0.25 * (
-            ρg[iE, jS] * ϕ.center[iE, jS] +
-            ρg[i, jS] * ϕ.center[i, jS] +
-            ρg[iE, jN] * ϕ.center[iE, jN] +
-            ρg[i, jN] * ϕ.center[i, jN]
-        )
-
-    Vx_on_Vy[i + 1, j] =
-        (0.25 * (Vx[i, j] + Vx[i + 1, j] + Vx[i, j + 1] + Vx[i + 1, j + 1])) *
-        (ρg_R - ρg_L) *
-        _dx
-
-    return nothing
-end
-
 @parallel_indices (I...) function compute_∇V!(
     ∇V::AbstractArray{T,N}, V::NTuple{N}, ϕ::JustRelax.RockRatio, _di::NTuple{N}
 ) where {T,N}
@@ -264,12 +232,20 @@ end
             # ∂ρg∂x = (ρg_E - ρg_W) * _dx
             ∂ρg∂y = (ρg_N - ρg_S) * _dy
             # correction term
-            ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+            ρg_correction  = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+            
             Ry[i, j] =
                 R_Vy =
                     -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                     av_ya(ρgy, ϕ.center) + ρg_correction
             Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+
+            # ρgx_correction = (Vxᵢⱼ) * θ * dt
+            # ρgy_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
+            # Ry[i, j] = R_Vy =
+            #     -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+            #     av_ya(ρgy, ϕ.center) + ρgx_correction
+            # Vy[i + 1, j + 1] += R_Vy * inv(inv(ηdτ / av_ya(ητ)) + ρgy_correction)
         else
             Ry[i, j] = zero(T)
             Vy[i + 1, j + 1] = zero(T)

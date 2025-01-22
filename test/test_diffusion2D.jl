@@ -39,13 +39,14 @@ end
 function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
-        @inbounds if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i, j]  += δT
+         if (((x[i]-xc ))^2 + ((y[j] - yc))^2) ≤ r^2
+            T[i+1, j]  += δT
         end
         return nothing
     end
 
-    @parallel _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
+    nx, ny = size(T)
+    @parallel (1:nx-2, 1:ny) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -130,7 +131,7 @@ end
         thermal = diffusion_2D(; nx = nx, ny = ny)
 
         nx_T, ny_T = size(thermal.T)
-        @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1823.6076461523571 atol=1e-1
+        @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1827.004536698498  atol=1e-1
         @test Array(thermal.Tc)[  nx >>> 1    ,   nx >>> 1    ] ≈ 1828.3169386441218 atol=1e-1
     end
 end

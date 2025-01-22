@@ -138,7 +138,7 @@ function main(x_global, z_global,li, origin, phases_GMG, T_GMG, igg; nx=16, ny=1
     # Rheology
     args0            = (T=thermal.Tc, P=stokes.P, dt = Inf)
     viscosity_cutoff = (1e18, 1e23)
-    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args0, rheology, 0, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
@@ -382,7 +382,7 @@ function main(x_global, z_global,li, origin, phases_GMG, T_GMG, igg; nx=16, ny=1
                     joinpath(vtk_dir, "vtk_" * lpad("$(it)", 6, "0")),
                     xci_v./1e3,
                     data_c,
-                    velocity_v,
+                    velocity_v;
                     t=t
                 )
             end
@@ -424,12 +424,15 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-nx, ny   = 256, 128
+nx, ny   = 128, 128
+
+
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
 else
     igg
 end
+extents = Array{NTuple}[]
 
 # GLOBAL Physical domain ------------------------------------
 model_depth = 660
@@ -446,5 +449,30 @@ grid_global  = Geometry(ni, li; origin = origin)
 figdir   = "Subduction2D_$(nx_g())x$(ny_g())"
 
 li_GMG, origin_GMG, phases_GMG, T_GMG = GMG_subduction_2D(model_depth, grid_global.xvi,nx+1, ny+1)
+
+
+function generate_extents(nx, ny, num_processes)
+    extents = Array{NTuple{2, UnitRange{Int}}}(undef, num_processes)
+    for i in 1:num_processes
+        x_start = (i - 1) * div(nx, num_processes[1]) + 1
+        x_end = i * div(nx, num_processes)
+        y_start = (i - 1) * div(ny, num_processes[2]) + 1
+        y_end = ny
+        extents[i] = (x_start:x_end, y_start:y_end)
+    end
+    return extents
+end
+
+
+ni                  = nx, ny           # number of cells
+di                  = @. li_GMG / (nx_g(), ny_g())       # grid steps
+grid                = Geometry(ni, li; origin = origin_GMG)
+(; xci, xvi)        = grid
+
+# extents = generate_extents(nx(), ny(), igg.dims)
+# push!(extents, xci...)
+# println("extents: ",extents)
+println("nx()", @nx())
+println("ny()", @ny())
 
 #  main(x_global, z_global,li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

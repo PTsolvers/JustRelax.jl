@@ -11,8 +11,6 @@ using JustRelax, JustRelax.JustRelax3D
 using JustRelax
 using ParallelStencil
 
-
-
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 3)
     AMDGPUBackend
@@ -23,7 +21,6 @@ else
     @init_parallel_stencil(Threads, Float64, 3)
     CPUBackend
 end
-
 
 using JustPIC
 using JustPIC._3D
@@ -37,8 +34,6 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
 else
     JustPIC.CPUBackend
 end
-
-
 
 @parallel_indices (i, j, k) function init_T!(T, z)
     if z[k] == maximum(z)

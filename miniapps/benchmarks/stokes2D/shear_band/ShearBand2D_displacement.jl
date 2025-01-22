@@ -81,7 +81,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         ),
         # High density phase
         SetMaterialParams(;
-            Phase             = 1,
+            Phase             = 2,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology((visc, el_inc, pl)),
@@ -90,7 +90,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     )
 
     # perturbation array for the cohesion
-    perturbation_C = @rand(ni...)
+    perturbation_C = @zeros(ni...)
 
     # Initialize phase ratios -------------------------------
     radius       = 0.1

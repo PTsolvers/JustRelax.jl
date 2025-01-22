@@ -4,6 +4,7 @@ using WriteVTK
 using HDF5
 using JLD2
 using MPI
+using StaticArrays
 
 import ..JustRelax: Geometry
 import ..JustRelax: IGG
@@ -24,7 +25,7 @@ export checkpointing_jld2, load_checkpoint_jld2
 
 include("VTK.jl")
 
-export VTKDataSeries, append!, save_vtk
+export VTKDataSeries, append!, save_vtk, save_marker_chain
 
 export metadata
 

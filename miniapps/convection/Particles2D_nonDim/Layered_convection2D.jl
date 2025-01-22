@@ -73,7 +73,7 @@ end
 function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air, CharDim)
 
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, CharDim, x, y)
-        @inbounds if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc - thick_air)^2 ≤ r^2)
+        if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc - thick_air)^2 ≤ r^2)
             depth       = -y[j] - thick_air
             dTdZ        = nondimensionalize((2047 - 2017)K / 50km, CharDim)
             offset      = nondimensionalize(2017e0K, CharDim)
@@ -82,8 +82,8 @@ function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air, CharDim)
         return nothing
     end
 
-    ni = length.(xvi)
-    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, CharDim, xvi...)
+    nx, ny = size(T)
+    @parallel (1:nx-2, 1:ny) _rectangular_perturbation!(T, xc, yc, r, CharDim, xvi...)
 
     return nothing
 end

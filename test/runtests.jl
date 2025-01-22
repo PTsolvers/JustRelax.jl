@@ -55,7 +55,7 @@ function runtests()
             try
                 @testset "$(basename(f))" begin
                     n = 2
-                    p= run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
+                    p= run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no $(joinpath(testdir, f))`)
                     @test success(p)
                 end
             catch ex
@@ -63,7 +63,7 @@ function runtests()
             end
         else
             try
-                run(`$(Base.julia_cmd()) -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
+                run(`$(Base.julia_cmd()) -O3 --startup-file=no $(joinpath(testdir, f))`)
             catch ex
                 nfail += 1
             end

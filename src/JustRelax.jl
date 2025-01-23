@@ -11,6 +11,7 @@ using HDF5
 using CellArrays
 using StaticArrays
 using Statistics
+using TOML
 @reexport using JustPIC
 
 function solve!() end
@@ -23,7 +24,8 @@ function __init__()
     | |_| | |_| \\__ \\ |_|  _ <  __/ | (_| |>  < _ | | |
      \\___/ \\__,_|___/\\__|_| \\_\\___|_|\\__,_/_/\\_(_)/ |_|
                                                 |__/
-    """, bold=true, color=:white)
+    Version: $(TOML.parsefile("Project.toml")["version"])
+""", bold=true, color=:white)
 end
 #! format: on
 abstract type AbstractBackend end

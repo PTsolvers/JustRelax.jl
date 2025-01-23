@@ -1,6 +1,6 @@
 # Discretization of the APT equations
 
-We discretize both the Stokes and heat diffussion equations using a Finite Differences approach on a staggered grid (ref Taras book here).
+We discretize both the Stokes and heat diffusion equations using a Finite Differences approach on a staggered grid (ref Taras book here).
 
 ## Heat diffusion
 The heat diffusion equation is discretized on a staggered grid as sketched below:

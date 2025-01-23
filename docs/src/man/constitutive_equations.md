@@ -140,7 +140,7 @@ All the local calculations corresponding to the effective rheology are implement
 # elasticity
 el    = ConstantElasticity(;
     G = 40e9, # shear modulus [Pa]
-    ν = 0.45, # Poisson coeficient
+    ν = 0.45, # Poisson coefficient
 )
 # Olivine dislocation law from Hirth and Kohlstedt 2003
 disl_wet_olivine  = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)

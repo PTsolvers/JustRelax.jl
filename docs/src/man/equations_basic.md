@@ -2,7 +2,7 @@
 
 ## Stokes equations
 
-Deformation of compressible viscous flow is desribed by the equations of conservation of momentum and mass:
+Deformation of compressible viscous flow is described by the equations of conservation of momentum and mass:
 
 $$
 \begin{align}

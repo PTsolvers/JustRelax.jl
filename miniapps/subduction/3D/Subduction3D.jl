@@ -1,16 +1,16 @@
-using CUDA
+# using CUDA
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
-# const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-const backend_JR = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# const backend_JR = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
-@init_parallel_stencil(CUDA, Float64, 3)
-# @init_parallel_stencil(Threads, Float64, 3)
+# @init_parallel_stencil(CUDA, Float64, 3)
+@init_parallel_stencil(Threads, Float64, 3)
 
 using JustPIC, JustPIC._3D
-const backend_JP = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-# const backend_JP = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# const backend_JP = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend_JP = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, GLMakie
@@ -208,7 +208,7 @@ function main3D(li, origin, phases_GMG, igg; nx=16, ny=16, nz=16, figdir="figs3D
                     xci,
                     data_v,
                     data_c,
-                    velocity_v,
+                    velocity_v;
                     t=t
                 )
             end
@@ -222,7 +222,6 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-# nx,ny,nz = 50, 50, 50
 nx,ny,nz = 150, 40, 150
 # nx,ny,nz = 128, 32, 64
 li, origin, phases_GMG, = GMG_only(nx+1, ny+1, nz+1)

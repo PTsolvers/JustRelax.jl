@@ -4,18 +4,18 @@ In the more general case, JustRelax.jl implements a elasto-visco-elastoplastic r
 
 $$
 \begin{align}
-\boldsymbol{\dot\varepsilon} = 
-\boldsymbol{\dot\varepsilon}^{\text{viscous}} + 
-\boldsymbol{\dot\varepsilon}^{\text{elastic}} + 
+\boldsymbol{\dot\varepsilon} =
+\boldsymbol{\dot\varepsilon}^{\text{viscous}} +
+\boldsymbol{\dot\varepsilon}^{\text{elastic}} +
 \boldsymbol{\dot\varepsilon}^{\text{plastic}}
 \end{align}
 $$
 
-or 
+or
 
 $$
 \begin{align}
-\boldsymbol{\dot\varepsilon} = 
+\boldsymbol{\dot\varepsilon} =
 \frac{1}{2\eta_{\text{eff}}}\boldsymbol{\tau} +
 \frac{1}{2G} \frac{D\boldsymbol{\tau}}{Dt}  + \dot\lambda\frac{\partial Q}{\partial \boldsymbol{\tau}_{II}}
 \end{align}
@@ -64,7 +64,7 @@ where $\boldsymbol{\omega}$ is the vorticity tensor
 
 $$
 \begin{align}
-\boldsymbol{\omega} = 
+\boldsymbol{\omega} =
 \frac{1}{2} \left(\nabla\boldsymbol{v} - \nabla^T \boldsymbol{v} \right)
 \end{align}
 $$
@@ -93,7 +93,7 @@ $$
 $$
 \begin{align}
     \boldsymbol{c} = \boldsymbol{n}\sin{\theta} \\
-    \boldsymbol{R_1} = 
+    \boldsymbol{R_1} =
     \begin{bmatrix}
         \cos{\theta}\sin{\theta} & -c_3 &  c_2 \\
         c_3 &  \cos{\theta}\sin{\theta}  & -c_1 \\
@@ -114,7 +114,7 @@ $$
 
 ## Plastic formulation
 
-JustRelax.jl implements the regularised plasticity model from [Thibault et al 2021](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021GC009675). In this formulation, the yield function is given by
+JustRelax.jl implements the regularised plasticity model from [Duretz et al 2021](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021GC009675). In this formulation, the yield function is given by
 
 $$
 \begin{align}
@@ -122,7 +122,7 @@ F = \tau_y - \left( P \sin{\phi} + C \cos{\phi} + \dot\lambda \eta_{\text{reg}}\
 \end{align}
 $$
 
-where $\eta_{\text{reg}}$ is a regularization term and 
+where $\eta_{\text{reg}}$ is a regularization term and
 
 $$
 \begin{align}
@@ -138,9 +138,9 @@ All the local calculations corresponding to the effective rheology are implement
 
 ```julia
 # elasticity
-el    = ConstantElasticity(; 
+el    = ConstantElasticity(;
     G = 40e9, # shear modulus [Pa]
-    ν = 0.45, # Poisson coeficient 
+    ν = 0.45, # Poisson coeficient
 )
 # Olivine dislocation law from Hirth and Kohlstedt 2003
 disl_wet_olivine  = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
@@ -152,7 +152,7 @@ diff_wet_olivine  = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
 C     = 1e6  # cohesion [Pa]
 η_reg = 1e16 # viscosity regularization term [Pa s]
 pl    = DruckerPrager_regularised(; C = C, ϕ = ϕ, η_vp=η_reg, Ψ=Ψ)
-# composite rheology 
+# composite rheology
 rheology = CompositeRheology(
     (el, disl_wet_olivine, diff_wet_olivine, pl)
 )

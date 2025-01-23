@@ -23,7 +23,7 @@ function __init__()
     | |_| | |_| \\__ \\ |_|  _ <  __/ | (_| |>  < _ | | |
      \\___/ \\__,_|___/\\__|_| \\_\\___|_|\\__,_/_/\\_(_)/ |_|
                                                 |__/
-    Version: $(TOML.parsefile("Project.toml")["version"])
+    Version: $(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"])
     Latest commit: $(strip(read(`git log -1 --pretty=%B`, String)))
     Commit date: $(strip(read(`git log -1 --pretty=%cd`, String)))
 """, bold=true, color=:white)

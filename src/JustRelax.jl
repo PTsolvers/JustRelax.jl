@@ -10,19 +10,24 @@ using HDF5
 using CellArrays
 using StaticArrays
 using Statistics
+using TOML
 @reexport using JustPIC
 
 function solve!() end
 #! format: off
 function __init__()
-    println("""
-         _           _   ____      _               _ _
-        | |_   _ ___| |_|  _ \\ ___| | __ ___  __  (_) |
-     _  | | | | / __| __| |_) / _ \\ |/ _` \\ \\/ /  | | |
-    | |_| | |_| \\__ \\ |_|  _ <  __/ | (_| |>  < _ | | |
-     \\___/ \\__,_|___/\\__|_| \\_\\___|_|\\__,_/_/\\_(_)/ |_|
-                                                |__/
-    """)
+    printstyled("""
+     ██╗██╗   ██╗███████╗████████╗██████╗ ███████╗██╗      █████╗ ██╗  ██╗
+     ██║██║   ██║██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║     ██╔══██╗╚██╗██╔╝
+     ██║██║   ██║███████╗   ██║   ██████╔╝█████╗  ██║     ███████║ ╚███╔╝
+██   ██║██║   ██║╚════██║   ██║   ██╔══██╗██╔══╝  ██║     ██╔══██║ ██╔██╗
+╚█████╔╝╚██████╔╝███████║   ██║   ██║  ██║███████╗███████╗██║  ██║██╔╝ ██╗
+ ╚════╝  ╚═════╝ ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝
+
+Version: $(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"])
+Latest commit: $(strip(read(`git log -1 --pretty=%B`, String)))
+Commit date: $(strip(read(`git log -1 --pretty=%cd`, String)))
+""", bold=true, color=:white)
 end
 #! format: on
 abstract type AbstractBackend end

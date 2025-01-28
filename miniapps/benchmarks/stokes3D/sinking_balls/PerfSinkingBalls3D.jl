@@ -1,8 +1,12 @@
+using CSV, DataFrames
+# using CUDA
+
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
 const backend_JR = CPUBackend
+# const backend_JR = CUDABackend
 
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
@@ -14,6 +18,7 @@ using JustPIC._3D
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CellArrays
@@ -130,6 +135,12 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
         Vy_v = @zeros(ni.+1...)
         Vz_v = @zeros(ni.+1...)
     end
+
+    #timers
+    iter_time      = zeros(1002)
+    advection_time = zeros(1002)
+    # df = DataFrame(iter_time=0e0, advection_time=0e0)
+    fi = joinpath("SinkingTimers.csv")
     # Time loop
     t, it = 0.0, 0
     while it < 1000
@@ -137,7 +148,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
             args = (; T = thermal.Tc, P = stokes.P,  dt = Inf)
 
             # Stokes solver ----------------
-            solve!(
+            iters = solve!(
                 stokes,
                 pt_stokes,
                 di,
@@ -156,18 +167,24 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
             )
             tensor_invariant!(stokes.ε)
             dt   = compute_dt(stokes, di, dt_diff)
+            iter_time[it+1] = iters.time / iters.iter
             # ------------------------------
 
             # Advection --------------------
-            # advect particles in space
-            advection!(particles, RungeKutta2(), @velocity(stokes), ( grid_vx, grid_vy, grid_vz), dt)
-            # advect particles in memory
-            move_particles!(particles, xvi, particle_args)
+            advection_time[it+1] = @elapsed begin
+                # advect particles in space
+                advection!(particles, RungeKutta2(), @velocity(stokes), ( grid_vx, grid_vy, grid_vz), dt)
+                # advect particles in memory
+                move_particles!(particles, xvi, particle_args)
+            end
             # interpolate fields from grid vertices to particles
             # check if we need to inject particles
             inject_particles_phase!(particles, pPhases, (), (), xvi)
             # update phase ratios
             update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+
+            df = DataFrame(iter_time=iter_time[it+1], advection_time=advection_time[it+1])
+            CSV.write(fi, df, writeheader = (it==0), append = true)
 
             @show it += 1
             t        += dt

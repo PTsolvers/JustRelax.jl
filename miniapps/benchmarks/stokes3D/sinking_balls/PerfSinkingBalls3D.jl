@@ -137,13 +137,13 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     end
 
     #timers
-    iter_time      = zeros(1002)
-    advection_time = zeros(1002)
+    iter_time      = zeros(102)
+    advection_time = zeros(102)
     # df = DataFrame(iter_time=0e0, advection_time=0e0)
-    fi = joinpath("SinkingTimers.csv")
+    fi = joinpath("SinkingTimers_$(igg.nprocs).csv")
     # Time loop
     t, it = 0.0, 0
-    while it < 1000
+    while it < 100
             # Update buoyancy and viscosity -
             args = (; T = thermal.Tc, P = stokes.P,  dt = Inf)
 
@@ -183,9 +183,10 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
             # update phase ratios
             update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
-            df = DataFrame(iter_time=iter_time[it+1], advection_time=advection_time[it+1])
-            CSV.write(fi, df, writeheader = (it==0), append = true)
-
+            if igg.me == 0
+                df = DataFrame(iter_time=iter_time[it+1], advection_time=advection_time[it+1])
+                CSV.write(fi, df, writeheader = (it==0), append = true)
+            end
             @show it += 1
             t        += dt
 

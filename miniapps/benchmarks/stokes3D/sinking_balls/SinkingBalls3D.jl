@@ -173,23 +173,18 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
             t        += dt
 
             # Data I/O and plotting ---------------------
-            if it == 1 || rem(it, 10) == 0
+            if it == 1 || rem(it, 50) == 0
                 checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                     data_v = (;
-                        T   = Array(T_buffer),
                         τII = Array(stokes.τ.II),
                         εII = Array(stokes.ε.II),
-                        Vx  = Array(Vx_v),
-                        Vy  = Array(Vy_v),
-                        Vz  = Array(Vz_v),
                     )
                     data_c = (;
-                        Tc  = Array(thermal.Tc),
                         P   = Array(stokes.P),
-                        η   = Array(stokes.viscosity.η_vep),
+                        η   = Array(stokes.viscosity.η),
                     )
                     velocity_v = (
                         Array(Vx_v),
@@ -207,32 +202,32 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                     )
                 end
 
-                # Make Makie figure
-                slice_j = ny >>> 1
-                fig     = Figure(size = (1200, 1200), title = "t = $t")
-                ar      = li[1] / li[3]
-                ax1     = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-                ax2     = Axis(fig[2,1], aspect = ar, title = "Shear heating [W/m3]")
-                ax3     = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
-                ax4     = Axis(fig[2,3], aspect = ar, title = "log10(η)")
-                # Plot temperature
-                h1      = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, slice_j, :].-273.0) , colormap=:batlow)
-                # Plot particles phase
-                h2      = heatmap!(ax2, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.shear_heating[:, slice_j, :]) , colormap=:batlow)
-                # Plot 2nd invariant of strain rate
-                h3      = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
-                # Plot effective viscosity
-                h4      = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.viscosity.η_vep[:, slice_j, :])) , colormap=:batlow)
-                hidexdecorations!(ax1)
-                hidexdecorations!(ax2)
-                hidexdecorations!(ax3)
-                Colorbar(fig[1,2], h1)
-                Colorbar(fig[2,2], h2)
-                Colorbar(fig[1,4], h3)
-                Colorbar(fig[2,4], h4)
-                linkaxes!(ax1, ax2, ax3, ax4)
-                save(joinpath(figdir, "$(it).png"), fig)
-                fig
+                # # Make Makie figure
+                # slice_j = ny >>> 1
+                # fig     = Figure(size = (1200, 1200), title = "t = $t")
+                # ar      = li[1] / li[3]
+                # ax1     = Axis(fig[1,1], aspect = ar, title = "T [C]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+                # ax2     = Axis(fig[2,1], aspect = ar, title = "Shear heating [W/m3]")
+                # ax3     = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
+                # ax4     = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+                # # Plot temperature
+                # h1      = heatmap!(ax1, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.T[:, slice_j, :].-273.0) , colormap=:batlow)
+                # # Plot particles phase
+                # h2      = heatmap!(ax2, xvi[1].*1e-3, xvi[3].*1e-3, Array(thermal.shear_heating[:, slice_j, :]) , colormap=:batlow)
+                # # Plot 2nd invariant of strain rate
+                # h3      = heatmap!(ax3, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.ε.II[:, slice_j, :])) , colormap=:batlow)
+                # # Plot effective viscosity
+                # h4      = heatmap!(ax4, xci[1].*1e-3, xci[3].*1e-3, Array(log10.(stokes.viscosity.η_vep[:, slice_j, :])) , colormap=:batlow)
+                # hidexdecorations!(ax1)
+                # hidexdecorations!(ax2)
+                # hidexdecorations!(ax3)
+                # Colorbar(fig[1,2], h1)
+                # Colorbar(fig[2,2], h2)
+                # Colorbar(fig[1,4], h3)
+                # Colorbar(fig[2,4], h4)
+                # linkaxes!(ax1, ax2, ax3, ax4)
+                # save(joinpath(figdir, "$(it).png"), fig)
+                # fig
             end
             # ------------------------------
 
@@ -241,8 +236,8 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     return nothing
 end
 
-figdir   = "3D_Benchmark_Duretz_etal_2014"
-do_vtk = false # set to true to generate VTK files for ParaView
+figdir   = "SinkingBalls3D"
+do_vtk   = false # set to true to generate VTK files for ParaView
 n        = 32
 nx       = n
 ny       = n
@@ -253,5 +248,5 @@ else
     igg
 end
 
-# main3D(igg; ar=ar, ny=ny, nx=nx, nz=nz,figdir=figdir, do_vtk=do_vtk)
+main3D(igg; ar=ar, ny=ny, nx=nx, nz=nz,figdir=figdir, do_vtk=do_vtk)
 

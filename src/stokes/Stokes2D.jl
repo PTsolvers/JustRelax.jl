@@ -924,12 +924,12 @@ function _solve!(
     ###############################
     ########## Adjoint ############
     ###############################
-    indx = 1
-    indy = 1
+    #indx = 1
+    #indy = 1
     if rem(Glit, ADout) == 0
 
         # adjoint solver
-        indx, indy = solve_adjoint_2D!(stokes,stokesAD,η, xci,xvi,Vx_on_Vy,ρg,_di,dt,free_surface,θ,λ,λv,relλ,ητ,rheology,phase_ratios,r,θ_dτ,args,flow_bcs,origin,ϵ,iterMax,ni,lx,ly,ηdτ,igg)
+        solve_adjoint_2D!(stokes,stokesAD,η, xci,xvi,Vx_on_Vy,ρg,_di,dt,free_surface,θ,λ,λv,relλ,ητ,rheology,phase_ratios,r,θ_dτ,args,flow_bcs,origin,ϵ,iterMax,ni,lx,ly,ηdτ,igg)
 
         # sensitivity calculation
         ηb, ρb = calc_sensitivity_2D(stokes,stokesAD,η,Vx_on_Vy,ρg,_di,dt,free_surface,θ,λ,λv,relλ,rheology,phase_ratios,r,θ_dτ,ni)
@@ -964,7 +964,7 @@ function _solve!(
         Ψ_P=stokesAD.PA,
         ηb=ηb,
         ρb=ρb,
-        Sensx = indx,
-        Sensy = indy,
+        #Sensx = indx,
+        #Sensy = indy,
     )
 end

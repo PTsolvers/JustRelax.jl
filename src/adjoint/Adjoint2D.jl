@@ -53,7 +53,6 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
             stokesAD.V.Vy .= 0.0
             stokesAD.P    .= 0.0
 
-
             stokesAD.V.Vy[indx.+1,indy] .= -1.0
             #stokesAD.V.Vx[indx,indy] .= -1.0
             #update_halo!(stokesAD.VA.Vx)
@@ -97,7 +96,7 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
             if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
             if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
             if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]   .= 0.0 end
-            update_halo!(stokesAD.τ.xy)
+            #update_halo!(stokesAD.τ.xy)
             
             @parallel (@idx ni.+1) configcall=update_stresses_center_vertex_psAD!(
                 @strain(stokes),
@@ -181,7 +180,7 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
 
 end
 
-return indx, indy
+#return indx, indy
 
 end
 
@@ -235,9 +234,9 @@ stokesAD.R.Ry .= -stokesAD.VA.Vy[2:end-1,2:end-1]
      _di..., 
      dt * free_surface
      ) AD.autodiff_deferred!(mode, Const(compute_Res!),Const{Nothing},DuplicatedNoNeed(stokes.R.Rx, stokesAD.R.Rx),DuplicatedNoNeed(stokes.R.Ry, stokesAD.R.Ry),Const(stokes.V.Vx),Const(stokes.V.Vy),Const(Vx_on_Vy),Const(stokes.P),DuplicatedNoNeed(stokes.τ.xx,stokesAD.τ.xx),DuplicatedNoNeed(stokes.τ.yy,stokesAD.τ.yy),DuplicatedNoNeed(stokes.τ.xy,stokesAD.τ.xy),Const(ρg[1]),DuplicatedNoNeed(ρg[2],ρb),Const(_di[1]),Const(_di[2]),Const(dt * free_surface))
-     update_halo!(stokesAD.τ.xx)
-     update_halo!(stokesAD.τ.yy)
-     update_halo!(stokesAD.τ.xy)
+     #update_halo!(stokesAD.τ.xx)
+     #update_halo!(stokesAD.τ.yy)
+     #update_halo!(stokesAD.τ.xy)
 
      @parallel (@idx ni.+1) assemble_parameter_matrices!(stokes.EII_pl,Gvb,Gcb,frvb,frcb,Cvb,Ccb,rheology, phase_ratios.center,phase_ratios.vertex)
 

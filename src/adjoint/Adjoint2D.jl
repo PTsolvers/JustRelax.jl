@@ -56,8 +56,8 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
 
             stokesAD.V.Vy[indx.+1,indy] .= -1.0
             #stokesAD.V.Vx[indx,indy] .= -1.0
-            update_halo!(stokesAD.VA.Vx)
-            update_halo!(stokesAD.VA.Vy)
+            #update_halo!(stokesAD.VA.Vx)
+            #update_halo!(stokesAD.VA.Vy)
     
             stokesAD.R.Rx .= stokesAD.VA.Vx[2:end-1,2:end-1]
             stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]
@@ -71,10 +71,10 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
                 ρg...,
                 _di...,
                 dt * free_surface) AD.autodiff_deferred!(mode, Const(compute_Res!), Const{Nothing}, DuplicatedNoNeed(stokes.R.Rx, stokesAD.R.Rx),DuplicatedNoNeed(stokes.R.Ry, stokesAD.R.Ry),Const(stokes.V.Vx),Const(stokes.V.Vy),Const(Vx_on_Vy),DuplicatedNoNeed(stokes.P,stokesAD.P),DuplicatedNoNeed(stokes.τ.xx,stokesAD.τ.xx),DuplicatedNoNeed(stokes.τ.yy,stokesAD.τ.yy),DuplicatedNoNeed(stokes.τ.xy,stokesAD.τ.xy),Const(ρg[1]),Const(ρg[2]),Const(_di[1]),Const(_di[2]),Const(dt * free_surface))
-                update_halo!(stokesAD.P)
-                update_halo!(stokesAD.τ.xx)
-                update_halo!(stokesAD.τ.yy)
-                update_halo!(stokesAD.τ.xy)
+                #update_halo!(stokesAD.P)
+                #update_halo!(stokesAD.τ.xx)
+                #update_halo!(stokesAD.τ.yy)
+                #update_halo!(stokesAD.τ.xy)
 
             compute_P!(
                 stokesAD.PA,
@@ -121,23 +121,23 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
                 phase_ratios.center,
                 phase_ratios.vertex,
             ) AD.autodiff_deferred!(mode,Const(update_stresses_center_vertex_psAD!),Const{Nothing},DuplicatedNoNeed(@strain(stokes),@strain(stokesAD)),Const(@tensor_center(stokes.ε_pl)),Const(stokes.EII_pl),DuplicatedNoNeed(@tensor_center(stokes.τ),@tensor_center(stokesAD.τ)),DuplicatedNoNeed((stokes.τ.xy,),(stokesAD.τ.xy,)),Const(@tensor_center(stokes.τ_o)),Const((stokes.τ_o.xy,)),Const(θ),Const(stokes.P),Const(stokes.viscosity.η),Const(λ),Const(λv),Const(stokes.τ.II),Const(stokes.viscosity.η_vep),Const(relλ),Const(dt),Const(θ_dτ),Const(rheology),Const(phase_ratios.center),Const(phase_ratios.vertex))
-            update_halo!(stokesAD.ε.xx)
-            update_halo!(stokesAD.ε.yy)
-            update_halo!(stokesAD.ε.xy)
+            #update_halo!(stokesAD.ε.xx)
+            #update_halo!(stokesAD.ε.yy)
+            #update_halo!(stokesAD.ε.xy)
 
             @parallel (@idx ni .+ 1) configcall=compute_strain_rate!(
                 @strain(stokes)...,
                 stokes.∇V,
                 @velocity(stokes)...,
                 _di...) AD.autodiff_deferred!(mode, Const(compute_strain_rate!),Const{Nothing},DuplicatedNoNeed(stokes.ε.xx,stokesAD.ε.xx),DuplicatedNoNeed(stokes.ε.yy,stokesAD.ε.yy),DuplicatedNoNeed(stokes.ε.xy,stokesAD.ε.xy),DuplicatedNoNeed(stokes.∇V,stokesAD.∇V),DuplicatedNoNeed(stokes.V.Vx,stokesAD.V.Vx),DuplicatedNoNeed(stokes.V.Vy,stokesAD.V.Vy),Const(_di[1]),Const(_di[2]))
-            update_halo!(stokesAD.VA.Vx)
-            update_halo!(stokesAD.VA.Vy)
+            #update_halo!(stokesAD.VA.Vx)
+            #update_halo!(stokesAD.VA.Vy)
 
             @parallel (@idx ni) configcall=compute_∇V!(stokes.∇V,@velocity(stokes)..., _di...) AD.autodiff_deferred!(mode, Const(compute_∇V!),Const{Nothing},DuplicatedNoNeed(stokes.∇V,stokesAD.∇V),DuplicatedNoNeed(stokes.V.Vx,stokesAD.V.Vx),DuplicatedNoNeed(stokes.V.Vy,stokesAD.V.Vy),Const(_di[1]),Const(_di[2]))
     
             @parallel update_V!(stokesAD.VA.Vx, stokesAD.VA.Vy, stokesAD.V.Vx, stokesAD.V.Vy, Vx_on_Vy, ηdτ, ρg[2], ητ, _di..., dt* free_surface)
-            update_halo!(stokesAD.VA.Vx)
-            update_halo!(stokesAD.VA.Vy)
+            #update_halo!(stokesAD.VA.Vx)
+            #update_halo!(stokesAD.VA.Vy)
     
             iter += 1
     

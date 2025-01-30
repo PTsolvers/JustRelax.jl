@@ -180,7 +180,7 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
 
 end
 
-#return indx, indy
+return indx, indy
 
 end
 

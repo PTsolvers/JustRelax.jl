@@ -133,13 +133,20 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     dt = 1
     # ----------------------------------------------------
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 12
+    nxcell, max_xcell, min_xcell = 40, 60, 20
         particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi...
     )
-    # temperature
-    pPhases,      = init_cell_arrays(particles, Val(1))
-    particle_args = (pPhases, )
+    subgrid_arrays        = SubgridDiffusionCellArrays(particles)
+    # velocity grids
+    grid_vxi              = velocity_grids(xci, xvi, di)
+    # material phase & temperature
+    pPhases, pT           = init_cell_arrays(particles, Val(2))
+    # particle fields for the stress rotation
+    pτ                    = StressParticles(particles)
+    particle_args         = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
+
     # Rectangular density anomaly
     xc_anomaly   =  0.0  # x origin of block
     yc_anomaly   =  0.0  # y origin of block
@@ -147,14 +154,13 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     #phase_ratios_vertex = PhaseRatio(backend, ni.+1, length(rheology))
     init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-    phase_ratios_center!(phase_ratios, particles, xci, pPhases)
-    phase_ratios_vertex!(phase_ratios, particles, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
     stokesAD  = StokesArraysAdjoint(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; Re=0.5, ϵ=1e-5,  CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-5, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=@ones(ni...), P=stokes.P))
@@ -162,7 +168,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     # ----------------------------------------------------
 
     # Viscosity
-    args     = (; dt = dt, ΔTc = @zeros(ni...))
+    args     = (; dt = dt, T = @zeros(ni...))
     η_cutoff = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
@@ -177,104 +183,132 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     update_halo!(@velocity(stokes)...)
 
     plottingInt = 1  # plotting interval
-    it = 1
+    t, it = 0.0, 0
 
     # IO ------------------------------------------------
     take(figdir)
     # ----------------------------------------------------
-    # Stokes solver ----------------
-    args = (; T = @ones(ni...), P = stokes.P, dt=dt, ΔTc = @zeros(ni...))
-    test = adjoint_solve!(
-        stokes,
-        stokesAD,
-        pt_stokes,
-        di,
-        flow_bcs,
-        ρg,
-        phase_ratios,
-        rheology,
-        args,
-        dt,
-        it, #Glit
-        igg;
-        kwargs = (
-            grid,
-            origin,
-            li,
-            iterMax=150e3,
-            nout=1e3,
-            viscosity_cutoff = η_cutoff,
-            verbose = false,
-            ADout=plottingInt
-        )
-    );
-
+    local Vx_v, Vy_v
     Vx_v    = @zeros(ni.+1...)
     Vy_v    = @zeros(ni.+1...)
-    velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-    velocity = @. √(Vx_v^2 + Vy_v^2 )
-    (; η_vep, η) = stokes.viscosity
+    τxx_v = @zeros(ni.+1...)
+    τyy_v = @zeros(ni.+1...)
 
-    Xc, Yc = meshgrid(xci[1], xci[2])
+    while it < 100
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, xvi, xci, particles)
+
+        args = (; T = @ones(ni...), P = stokes.P, dt=dt, ΔTc = @zeros(ni...))
+        # Stokes solver ----------------
+        test = adjoint_solve!(
+            stokes,
+            stokesAD,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            phase_ratios,
+            rheology,
+            args,
+            dt,
+            it, #Glit
+            igg;
+            kwargs = (
+                grid,
+                origin,
+                li,
+                iterMax=150e3,
+                nout=1e3,
+                viscosity_cutoff = η_cutoff,
+                verbose = false,
+                ADout=plottingInt
+            )
+        );
+
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
+        # compute time step
+        dt   = compute_dt(stokes, di) * 0.8
+        # compute strain rate 2nd invartian - for plotting
+        tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
+        tensor_invariant!(stokes.τ)
+        # ------------------------------
+        # advect particles in space
+        advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        # advect particles in memory
+        move_particles!(particles, xvi, particle_args)
+        # check if we need to inject particles
+        center2vertex!(τxx_v, stokes.τ.xx)
+        center2vertex!(τyy_v, stokes.τ.yy)
+        inject_particles_phase!(particles, pPhases, (), (), xvi)
+
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+
+        @show it += 1
+        t        += dt
+
+        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        velocity = @. √(Vx_v^2 + Vy_v^2 )
+        (; η_vep, η) = stokes.viscosity
+
+        Xc, Yc = meshgrid(xci[1], xci[2])
 
 
-    ind = findall(xci[2] .≤ 0.29)
-    #test.ηb[ind] = NaN
-    #test.ρb[ind] = NaN
+        ind = findall(xci[2] .≤ 0.29)
+        #test.ηb[ind] = NaN
+        #test.ρb[ind] = NaN
 
-    # Plotting ---------------------
-    ar  = 2
-    fig = Figure(size = (1200, 900), title = "Falling Block")
-    ax1 = Axis(fig[1,1], aspect = ar, title = "Density")
-    ax2 = Axis(fig[1,2], aspect = ar, title = "Viscosity")
-    ax3 = Axis(fig[2,1],aspect = ar, title = "Vx")
-    ax4 = Axis(fig[2,2],aspect = ar,  title = "Vy")
-    ax5 = Axis(fig[3,1],aspect = ar,  title = "sensitivity eta")
-    ax6 = Axis(fig[3,2],aspect = ar,  title = "sensitivity rho")
-    ax7 = Axis(fig[4,1],aspect = ar,  title = "sensitivity G")
-    ax8 = Axis(fig[4,2],aspect = ar,  title = "sensitivity fr")
+        # Plotting ---------------------
+        if it == 1 || rem(it, 10) == 0
+            ar  = DataAspect()
+            fig = Figure(size = (1200, 900), title = "Falling Block")
+            ax1 = Axis(fig[1,1], aspect = ar, title = "Density")
+            ax2 = Axis(fig[1,2], aspect = ar, title = "Viscosity")
+            ax3 = Axis(fig[2,1],aspect = ar, title = "Vx")
+            ax4 = Axis(fig[2,2],aspect = ar,  title = "Vy")
+            ax5 = Axis(fig[3,1],aspect = ar,  title = "sensitivity eta")
+            ax6 = Axis(fig[3,2],aspect = ar,  title = "sensitivity rho")
+            ax7 = Axis(fig[4,1],aspect = ar,  title = "sensitivity G")
+            ax8 = Axis(fig[4,2],aspect = ar,  title = "sensitivity fr")
 
-    h1  = heatmap!(ax1, xci[1], xci[2], Array(ρg[2]))
-    h2  = heatmap!(ax2, xci[1], xci[2], Array(log.(η)))
-    h3  = heatmap!(ax3, xvi[1], xvi[2], Array(Vx_v), colormap=:vikO)
-    h4  = heatmap!(ax4, xvi[1], xvi[2], Array(Vy_v), colormap=:vikO)
-    h5  = heatmap!(ax5, xci[1], xci[2][ind], Array(test.ηb)[:,ind])
-    h6  = heatmap!(ax6, xci[1], xci[2][ind], Array(test.ρb)[:,ind])
-    h7  = heatmap!(ax7, xci[1], xci[2][ind], Array(stokesAD.G)[:,ind])
-    h8  = heatmap!(ax8, xci[1], xci[2][ind], Array(stokesAD.fr)[:,ind])
-    hidexdecorations!(ax1)
-    hidexdecorations!(ax2)
-    hidexdecorations!(ax3)
-    hidexdecorations!(ax4)
-    hidexdecorations!(ax5)
-    hidexdecorations!(ax6)
-    hidexdecorations!(ax7)
-    hidexdecorations!(ax8)
-    Colorbar(fig[1,1][1,2], h1)
-    Colorbar(fig[1,2][1,2], h2)
-    Colorbar(fig[2,1][1,2], h3)
-    Colorbar(fig[2,2][1,2], h4)
-    Colorbar(fig[3,1][1,2], h5)
-    Colorbar(fig[3,2][1,2], h6)
-    Colorbar(fig[4,1][1,2], h7)
-    Colorbar(fig[4,2][1,2], h8)
-    linkaxes!(ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8)
-    #CUDA.allowscalar() do
-        scatter!(ax2, Xc[16:end-15,end-8], Yc[16:end-15,end-8], color=:red, markersize=10)
-    #end
-    #display(fig)
-    fig
-    #checkpoint = joinpath(figdir, "checkpoint")
-    save(joinpath(figdir, "AdjointOutput.png"), fig)
-    # ------------------------------
-
-#=
-    if igg.me == 0 && it == 1
-                metadata(pwd(), checkpoint, basename(@__FILE__))
-            end
-            checkpointing_jld2(checkpoint, stokes, thermal, t, dt, igg)
+            h1  = heatmap!(ax1, xci[1], xci[2], Array(ρg[2]))
+            h2  = heatmap!(ax2, xci[1], xci[2], Array(log.(η)))
+            h3  = heatmap!(ax3, xvi[1], xvi[2], Array(Vx_v), colormap=:vikO)
+            h4  = heatmap!(ax4, xvi[1], xvi[2], Array(Vy_v), colormap=:vikO)
+            h5  = heatmap!(ax5, xci[1], xci[2][ind], Array(test.ηb)[:,ind])
+            h6  = heatmap!(ax6, xci[1], xci[2][ind], Array(test.ρb)[:,ind])
+            h7  = heatmap!(ax7, xci[1], xci[2][ind], Array(stokesAD.G)[:,ind])
+            h8  = heatmap!(ax8, xci[1], xci[2][ind], Array(stokesAD.fr)[:,ind])
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax2)
+            hidexdecorations!(ax3)
+            hidexdecorations!(ax4)
+            hidexdecorations!(ax5)
+            hidexdecorations!(ax6)
+            hidexdecorations!(ax7)
+            hidexdecorations!(ax8)
+            Colorbar(fig[1,1][1,2], h1)
+            Colorbar(fig[1,2][1,2], h2)
+            Colorbar(fig[2,1][1,2], h3)
+            Colorbar(fig[2,2][1,2], h4)
+            Colorbar(fig[3,1][1,2], h5)
+            Colorbar(fig[3,2][1,2], h6)
+            Colorbar(fig[4,1][1,2], h7)
+            Colorbar(fig[4,2][1,2], h8)
+            linkaxes!(ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8)
+            #CUDA.allowscalar() do
+                scatter!(ax2, Xc[16:end-15,end-8], Yc[16:end-15,end-8], color=:red, markersize=10)
+            #end
+            #display(fig)
+            fig
+            #checkpoint = joinpath(figdir, "checkpoint")
+            save(joinpath(figdir, "AdjointOutput_$(it).png"), fig)
+            # ------------------------------
+        end
     end
-=#
 return stokes, stokesAD, xci, phase_ratios
 
 end

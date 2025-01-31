@@ -229,7 +229,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
-        dt   = compute_dt(stokes, di) * 0.001
+        dt   = compute_dt(stokes, di) * 0.0001
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)

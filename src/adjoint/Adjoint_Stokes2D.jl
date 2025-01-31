@@ -52,7 +52,6 @@ function _adjoint_solve!(
     # end
 
     # errors
-    ϵ = ϵ
     err = 2 * ϵ
     iter = 0
     err_evo1 = Float64[]
@@ -288,18 +287,16 @@ function _adjoint_solve!(
     ########## Adjoint ############
     ###############################
 
-    stokes.P .= θ # θ = P + plastic_overpressure
-
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
-
-    # compute vorticity
-    @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
-    )
-
-    # accumulate plastic strain tensor
-    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+        # compute vorticity
+        @parallel (@idx ni .+ 1) compute_vorticity!(
+            stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+        )
+    
+        # accumulate plastic strain tensor
+        @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+    
+        @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+        @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter=iter,

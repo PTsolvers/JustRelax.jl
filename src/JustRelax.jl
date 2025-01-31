@@ -10,20 +10,33 @@ using HDF5
 using CellArrays
 using StaticArrays
 using Statistics
-using TOML
+using TOML, Crayons
 @reexport using JustPIC
 
 function solve!() end
 #! format: off
-function __init__()
-    printstyled("""
-     ██╗██╗   ██╗███████╗████████╗██████╗ ███████╗██╗      █████╗ ██╗  ██╗
-     ██║██║   ██║██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║     ██╔══██╗╚██╗██╔╝
-     ██║██║   ██║███████╗   ██║   ██████╔╝█████╗  ██║     ███████║ ╚███╔╝
-██   ██║██║   ██║╚════██║   ██║   ██╔══██╗██╔══╝  ██║     ██╔══██║ ██╔██╗
-╚█████╔╝╚██████╔╝███████║   ██║   ██║  ██║███████╗███████╗██║  ██║██╔╝ ██╗
- ╚════╝  ╚═════╝ ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝
+function __init__(io = stdout)
+    j = string(Crayon(foreground = (50,74,201)))
+    u = string(Crayon(foreground = (50,74,201)))
+    s = string(Crayon(foreground = (50,74,201)))
+    t = string(Crayon(foreground = (50,74,201)))
+    r = string(Crayon(foreground = (47,138,29)))
+    e = string(Crayon(foreground = (47,138,29)))
+    l = string(Crayon(foreground = (189,39,39)))
+    a = string(Crayon(foreground = (189,39,39)))
+    x = string(Crayon(foreground = (130,63,163)))
+    res = string(Crayon(reset = true))
 
+    str = """
+     $(j)██╗$(u)██╗   ██╗$(s)███████╗$(t)████████╗$(r)██████╗ $(e)███████╗$(l)██╗      $(a)█████╗ $(x)██╗  ██╗$(res)
+     $(j)██║$(u)██║   ██║$(s)██╔════╝$(t)╚══██╔══╝$(r)██╔══██╗$(e)██╔════╝$(l)██║     $(a)██╔══██╗$(x)╚██╗██╔╝$(res)
+     $(j)██║$(u)██║   ██║$(s)███████╗$(t)   ██║   $(r)██████╔╝$(e)█████╗  $(l)██║     $(a)███████║$(x) ╚███╔╝$(res)
+$(j)██   ██║$(u)██║   ██║$(s)╚════██║$(t)   ██║   $(r)██╔══██╗$(e)██╔══╝  $(l)██║     $(a)██╔══██║$(x) ██╔██╗$(res)
+$(j)╚█████╔╝$(u)╚██████╔╝$(s)███████║$(t)   ██║   $(r)██║  ██║$(e)███████╗$(l)███████╗$(a)██║  ██║$(x)██╔╝ ██╗$(res)
+ $(j)╚════╝ $(u) ╚═════╝ $(s)╚══════╝$(t)   ╚═╝   $(r)╚═╝  ╚═╝$(e)╚══════╝$(l)╚══════╝$(a)╚═╝  ╚═╝$(x)╚═╝  ╚═╝$(res)
+     """
+    printstyled(io, "\n\n", str, "\n",
+"""
 Version: $(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"])
 Latest commit: $(strip(read(`git log -1 --pretty=%B`, String)))
 Commit date: $(strip(read(`git log -1 --pretty=%cd`, String)))

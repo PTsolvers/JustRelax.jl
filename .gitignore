@@ -25,5 +25,12 @@ docs/site/
 *.png
 *.vti
 *.vtm
+*.vtp
 *.h5
 *.jld2
+fig2D/
+*/checkpoint
+Systematics/*
+*.avi
+*.mp4
+*.pvsm

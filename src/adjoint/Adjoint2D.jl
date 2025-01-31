@@ -1,12 +1,28 @@
-
-
-function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_surface,θ,λ,λv,relλ, ητ,rheology,phase_ratios,r,θ_dτ,args,flow_bcs,origin,ϵ,iterMax,ni,lx,ly,ηdτ,igg)
-
-
-    print("############################################\n")
-    print("Pseudo transient adjoint solver incoooooming\n")
-    print("############################################\n")
-
+function adjoint_2D!(
+    stokes,
+    stokesAD,
+    pt_stokes,
+    _di,
+    flow_bcs,
+    ρg,
+    phase_ratios,
+    rheology,
+    grid,
+    Vx_on_Vy,
+    dt,
+    igg::IGG;
+    free_surface,
+    θ,
+    λ,
+    λv,
+    relλ,
+    ητ,
+    args,
+    origin,
+    iterMax,
+    ni,
+    li,
+    )
     free_surface = false    # deactivate free surface terms for AD
 
     print("############################################\n")
@@ -23,8 +39,9 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
             mode = Enzyme.set_runtime_activity(Enzyme.Reverse,true)
         end
 
+        (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
         # errors
-        ϵ  = 1e-2 * ϵ 
+        ϵ  = 1e-2 * ϵ
         #ϵ  = 1e0 * ϵ
         err = 2*ϵ
         err_evo1 = Float64[]
@@ -37,6 +54,8 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
         sizehint!(norm_∇V, Int(iterMax))
         sizehint!(err_evo1, Int(iterMax))
         sizehint!(err_evo2, Int(iterMax))
+        (; xvi, xci) = grid
+        lx, ly = li
         nout = 1e3
         iter = 1
         #iterMax = 20000
@@ -46,7 +65,7 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
             #indx = findall((xvi[1] .> 1750.0*1e3) .& (xvi[1] .< 2250.0*1e3))
             #indy = findall((xci[2] .> -20.0*1e3) .& (xci[2] .< -6.0*1e3))
 
-            
+
             while (iter ≤ iterMax && err > ϵ)
 
             stokesAD.V.Vx .= 0.0
@@ -57,15 +76,15 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
             #stokesAD.V.Vx[indx,indy] .= -1.0
             #update_halo!(stokesAD.VA.Vx)
             #update_halo!(stokesAD.VA.Vy)
-    
+
             stokesAD.R.Rx .= stokesAD.VA.Vx[2:end-1,2:end-1]
             stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]
-    
+
             @parallel (@idx ni) configcall=compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,
                 @velocity(stokes)...,
-                Vx_on_Vy, stokes.P, 
+                Vx_on_Vy, stokes.P,
                 @stress(stokes)...,
                 ρg...,
                 _di...,
@@ -88,16 +107,16 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
                 θ_dτ,
                 args,
                 )
-    
+
             stokesAD.∇V .= stokesAD.PA
-    
+
             # apply free slip boundary conditions for adjoint solve
             if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]   .= 0.0 end
             if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
             if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
             if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]   .= 0.0 end
             #update_halo!(stokesAD.τ.xy)
-            
+
             @parallel (@idx ni.+1) configcall=update_stresses_center_vertex_psAD!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -112,11 +131,11 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
                 λ,
                 λv,
                 stokes.τ.II,
-                stokes.viscosity.η_vep, 
+                stokes.viscosity.η_vep,
                 relλ,
                 dt,
                 θ_dτ,
-                rheology, 
+                rheology,
                 phase_ratios.center,
                 phase_ratios.vertex,
             ) AD.autodiff_deferred!(mode,Const(update_stresses_center_vertex_psAD!),Const{Nothing},DuplicatedNoNeed(@strain(stokes),@strain(stokesAD)),Const(@tensor_center(stokes.ε_pl)),Const(stokes.EII_pl),DuplicatedNoNeed(@tensor_center(stokes.τ),@tensor_center(stokesAD.τ)),DuplicatedNoNeed((stokes.τ.xy,),(stokesAD.τ.xy,)),Const(@tensor_center(stokes.τ_o)),Const((stokes.τ_o.xy,)),Const(θ),Const(stokes.P),Const(stokes.viscosity.η),Const(λ),Const(λv),Const(stokes.τ.II),Const(stokes.viscosity.η_vep),Const(relλ),Const(dt),Const(θ_dτ),Const(rheology),Const(phase_ratios.center),Const(phase_ratios.vertex))
@@ -133,15 +152,15 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
             #update_halo!(stokesAD.VA.Vy)
 
             @parallel (@idx ni) configcall=compute_∇V!(stokes.∇V,@velocity(stokes)..., _di...) AD.autodiff_deferred!(mode, Const(compute_∇V!),Const{Nothing},DuplicatedNoNeed(stokes.∇V,stokesAD.∇V),DuplicatedNoNeed(stokes.V.Vx,stokesAD.V.Vx),DuplicatedNoNeed(stokes.V.Vy,stokesAD.V.Vy),Const(_di[1]),Const(_di[2]))
-    
+
             @parallel update_V!(stokesAD.VA.Vx, stokesAD.VA.Vy, stokesAD.V.Vx, stokesAD.V.Vy, Vx_on_Vy, ηdτ, ρg[2], ητ, _di..., dt* free_surface)
             #update_halo!(stokesAD.VA.Vx)
             #update_halo!(stokesAD.VA.Vy)
-    
+
             iter += 1
-    
+
             if iter % nout == 0 && iter > 1
-    
+
                 #er_η = norm_mpi(@.(log10(η) - log10(η0)))
                 #er_η < 1e-3 && (do_visc = false)
                 #@parallel (@idx ni) compute_Res!(ResVx,ResVy,Vx,Vy,Vx_on_Vy, P, τxx, τyy, τxy, ρgx, ρgy, dx, dy, dt)
@@ -155,14 +174,14 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
                 )
                 #global normVx,normVy,normP,it
                 push!(norm_Rx,sqrt(sum((abs.(@velocity(stokesAD)[1]).^2)))); push!(norm_Ry,sqrt(sum((abs.(@velocity(stokesAD)[2]).^2)))); push!(norm_∇V,sqrt(sum((abs.(stokesAD.P).^2))))
-             
+
                 push!(norm_Rx, errs[1])
                 push!(norm_Ry, errs[2])
                 push!(norm_∇V, errs[3])
                 err = maximum_mpi(errs)
                 push!(err_evo1, err)
                 push!(err_evo2, iter)
-    
+
                 if igg.me == 0 #&& ((verbose && err > ϵ) || iter == iterMax)
                     @printf(
                         "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
@@ -175,7 +194,7 @@ function solve_adjoint_2D!(stokes,stokesAD,η,xci,xvi,Vx_on_Vy,ρg,_di,dt,free_s
                 end
                 isnan(err) && error("NaN(s)")
             end
-        
+
 
 
 end
@@ -185,7 +204,7 @@ return indx, indy
 end
 
 
-function calc_sensitivity_2D(stokes,stokesAD,η,Vx_on_Vy,ρg,_di,dt,free_surface,θ,λ,λv,relλ,rheology,phase_ratios,r,θ_dτ,ni)
+function calc_sensitivity_2D!(stokes,stokesAD,η,Vx_on_Vy,ρg,_di,dt,free_surface,θ,λ,λv,relλ,rheology,phase_ratios,r,θ_dτ,ni)
 
 if  isdefined(Main,:CUDA)
     mode = Enzyme.Reverse
@@ -193,7 +212,7 @@ else
     mode = Enzyme.set_runtime_activity(Enzyme.Reverse,true)
 end
 
-stokesAD.τ.xx   .= 0.0    
+stokesAD.τ.xx   .= 0.0
 stokesAD.τ.yy   .= 0.0
 stokesAD.τ.xy_c .= 0.0
 stokesAD.τ.xy   .= 0.0
@@ -228,10 +247,10 @@ stokesAD.R.Ry .= -stokesAD.VA.Vy[2:end-1,2:end-1]
     stokes.R.Ry,
     @velocity(stokes)...,
     Vx_on_Vy,
-    stokes.P, 
+    stokes.P,
     @stress(stokes)...,
-     ρg..., 
-     _di..., 
+     ρg...,
+     _di...,
      dt * free_surface
      ) AD.autodiff_deferred!(mode, Const(compute_Res!),Const{Nothing},DuplicatedNoNeed(stokes.R.Rx, stokesAD.R.Rx),DuplicatedNoNeed(stokes.R.Ry, stokesAD.R.Ry),Const(stokes.V.Vx),Const(stokes.V.Vy),Const(Vx_on_Vy),Const(stokes.P),DuplicatedNoNeed(stokes.τ.xx,stokesAD.τ.xx),DuplicatedNoNeed(stokes.τ.yy,stokesAD.τ.yy),DuplicatedNoNeed(stokes.τ.xy,stokesAD.τ.xy),Const(ρg[1]),DuplicatedNoNeed(ρg[2],ρb),Const(_di[1]),Const(_di[2]),Const(dt * free_surface))
      #update_halo!(stokesAD.τ.xx)
@@ -254,11 +273,11 @@ stokesAD.R.Ry .= -stokesAD.VA.Vy[2:end-1,2:end-1]
         λ,
         λv,
         stokes.τ.II,
-        stokes.viscosity.η_vep, 
+        stokes.viscosity.η_vep,
         relλ,
         dt,
         θ_dτ,
-        rheology, 
+        rheology,
         phase_ratios.center,
         phase_ratios.vertex,
         Gvb,
@@ -275,7 +294,7 @@ stokesAD.R.Ry .= -stokesAD.VA.Vy[2:end-1,2:end-1]
     stokesAD.fr .+= stokesAD.frc
     vertex2center!(stokesAD.C, stokesAD.Cv)
     stokesAD.C .+= stokesAD.Cc
-    
+
     return ηb, ρb
 
 print("############################################\n")

@@ -39,7 +39,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CellArrays, GLMakie
+using GeoParams, CellArrays, CairoMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

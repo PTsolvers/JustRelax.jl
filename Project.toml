@@ -6,6 +6,7 @@ version = "0.4.0"
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"

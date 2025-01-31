@@ -265,7 +265,24 @@ function _adjoint_solve!(
             )
 
         # sensitivity calculation
-        ηb, ρb = calc_sensitivity_2D!(stokes,stokesAD,η,Vx_on_Vy,ρg,_di,dt,free_surface,θ,λ,λv,relλ,rheology,phase_ratios,r,θ_dτ,ni)
+        ηb, ρb = calc_sensitivity_2D!(
+            stokes,
+            stokesAD,
+            η,
+            Vx_on_Vy,
+            ρg,
+            _di,
+            dt,
+            free_surface,
+            θ,
+            λ,
+            λv,
+            relλ,
+            rheology,
+            phase_ratios,
+            r,
+            θ_dτ,
+            ni)
 
     end
     ###############################

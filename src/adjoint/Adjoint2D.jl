@@ -41,8 +41,7 @@ function adjoint_2D!(
 
         (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
         # errors
-        ϵ  = 1e-2 * ϵ
-        #ϵ  = 1e0 * ϵ
+        ϵ  = 1e-1 * ϵ
         err = 2*ϵ
         err_evo1 = Float64[]
         err_evo2 = Float64[]
@@ -204,7 +203,23 @@ return indx, indy
 end
 
 
-function calc_sensitivity_2D!(stokes,stokesAD,η,Vx_on_Vy,ρg,_di,dt,free_surface,θ,λ,λv,relλ,rheology,phase_ratios,r,θ_dτ,ni)
+function calc_sensitivity_2D!(
+    stokes,
+    stokesAD,
+    η,
+    Vx_on_Vy,
+    ρg,
+    _di,
+    dt,
+    free_surface,
+    θ,
+    λ,
+    λv,
+    relλ,
+    rheology,
+    phase_ratios,
+    θ_dτ,
+    ni)
 
 if  isdefined(Main,:CUDA)
     mode = Enzyme.Reverse

@@ -280,7 +280,6 @@ function _adjoint_solve!(
             relλ,
             rheology,
             phase_ratios,
-            r,
             θ_dτ,
             ni)
 

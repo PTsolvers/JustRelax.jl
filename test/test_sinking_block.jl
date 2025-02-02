@@ -160,7 +160,7 @@ function Sinking_Block2D()
     # Viscosity
     args = (; T = @ones(ni...), P = stokes.P, dt=Inf)
     η_cutoff = -Inf, Inf
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, 0, (-Inf, Inf))
     # ----------------------------------------------------
 
     # Boundary conditions

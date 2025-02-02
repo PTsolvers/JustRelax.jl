@@ -1,36 +1,12 @@
-push!(LOAD_PATH, "..")
-@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    using AMDGPU
-
-elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
-end
-
-using Test, Suppressor
-using GeoParams, CellArrays
+using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
-elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
-else
-    @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
-end
+const backend = CPUBackend
 
 using JustPIC, JustPIC._2D
-
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
-elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
-else
-    JustPIC.CPUBackend
-end
+const backend_JP = JustPIC.CPUBackend
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -59,12 +35,7 @@ function init_phases!(phase_ratios, xci, xvi, radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function ShearBand2D()
-    n        = 32
-    nx       = n
-    ny       = n
-    init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg      = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+function main(igg; nx=64, ny=64, figdir="model_figs")
 
     # Physical domain ------------------------------------
     ly           = 1e0          # domain length in y
@@ -87,94 +58,102 @@ function ShearBand2D()
     εbg     = 1.0           # background strain-rate
     η_reg   = 8e-3          # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
-    dt     /= 5
     el_bg   = ConstantElasticity(; G=G0, Kb=4)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4)
     visc    = LinearViscous(; η=η0)
-    # soft_C  = LinearSoftening((C/2, C), (0e0, 2e0))
-    soft_C  = NonLinearSoftening(;ξ₀ = C, Δ=C/2)
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
         ϕ    = ϕ,
         η_vp = η_reg,
-        Ψ    = 0,
-        softening_C = soft_C
+        Ψ    = 15
     )
+
     rheology = (
         # Low density phase
         SetMaterialParams(;
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc, el_bg, pl)),
+            # CompositeRheology = CompositeRheology((visc, el_bg, )),
+                        CompositeRheology = CompositeRheology((visc, el_bg, pl)),
             Elasticity        = el_bg,
 
         ),
         # High density phase
         SetMaterialParams(;
+            Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc, el_inc, pl)),
+            # CompositeRheology = CompositeRheology((visc, el_inc, )),
+                        CompositeRheology = CompositeRheology((visc, el_inc, pl)),
             Elasticity        = el_inc,
         ),
     )
 
+    # perturbation array for the cohesion
+    perturbation_C = @rand(ni...)
+
     # Initialize phase ratios -------------------------------
     radius       = 0.1
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(phase_ratios, xci, xvi, radius)
-
+    air_phase    = 0
+    ϕ           = RockRatio(backend, ni)
+    update_rock_ratio!(ϕ, phase_ratios, air_phase)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes    = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.75 / √2.1)
+    stokes    = StokesArrays(backend, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, CFL = 0.95 / √2.1)
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
-    args      = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+    args      = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
     # Rheology
     compute_viscosity!(
-        stokes, phase_ratios, args, rheology, 0, (-Inf, Inf)
+        stokes, phase_ratios, args, rheology, air_phase, (-Inf, Inf)
     )
-
     # Boundary conditions
     flow_bcs     = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
-    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy .= PTArray(backend_JR)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend)([ x*εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray(backend)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
+    # IO -------------------------------------------------
+    take(figdir)
+
     # Time loop
     t, it      = 0.0, 0
-    tmax       = 3.5
+    tmax       = 5
     τII        = Float64[]
     sol        = Float64[]
     ttot       = Float64[]
-    local iters, τII, sol
 
-    while t < tmax
+    # while t < tmax
+    for _ in 1:15
 
         # Stokes solver ----------------
-        iters = solve!(
+        iters = solve_VariationalStokes!(
             stokes,
             pt_stokes,
             di,
             flow_bcs,
             ρg,
             phase_ratios,
+            ϕ,
             rheology,
             args,
             dt,
             igg;
-            kwargs = (
-                verbose          = false,
+            kwargs = (;
                 iterMax          = 50e3,
-                nout             = 1e2,
-                viscosity_cutoff = (-Inf, Inf)
+                nout             = 2e3,
+                viscosity_cutoff = (-Inf, Inf),
             )
         )
         tensor_invariant!(stokes.ε)
@@ -188,19 +167,40 @@ function ShearBand2D()
 
         println("it = $it; t = $t \n")
 
+        # visualisation
+        th    = 0:pi/50:3*pi;
+        xunit = @. radius * cos(th) + 0.5;
+        yunit = @. radius * sin(th) + 0.5;
+
+        fig   = Figure(size = (1600, 1600), title = "t = $t")
+        ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}", titlesize=35)
+        # ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
+        ax2   = Axis(fig[2,1], aspect = 1, title = L"E_{II}", titlesize=35)
+        ax3   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize=35)
+        ax4   = Axis(fig[2,2], aspect = 1)
+        heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
+        # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
+        heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
+        heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
+        lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
+        lines!(ax4, ttot, τII, color = :black)
+        lines!(ax4, ttot, sol, color = :red)
+        hidexdecorations!(ax1)
+        hidexdecorations!(ax3)
+        save(joinpath(figdir, "$(it).png"), fig)
+
     end
 
-    finalize_global_grid(; finalize_MPI = true)
-
-    return iters, τII, sol
-
+    return nothing
 end
 
-@testset "NonLinearSoftening_ShearBand2D" begin
-    @suppress begin
-        iters, τII, sol = ShearBand2D()
-        @test passed = iters.err_evo1[end] < 1e-6
-        @test τII[end] ≈ 1.59073 atol = 1e-4
-        @test sol[end] ≈ 1.94255 atol = 1e-4
-    end
+n      = 128
+nx     = n
+ny     = n
+figdir = "Variational_ShearBands2D"
+igg  = if !(JustRelax.MPI.Initialized())
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
 end
+main(igg; figdir = figdir, nx = nx, ny = ny);

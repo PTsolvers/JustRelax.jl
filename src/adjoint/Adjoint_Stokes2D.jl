@@ -22,6 +22,7 @@ function _adjoint_solve!(
     dt,
     Glit,
     SensInd,
+    SensType,
     igg::IGG;
     grid,
     origin,
@@ -263,6 +264,7 @@ function _adjoint_solve!(
             ni,
             li,
             SensInd,
+            SensType,
             )
 
         # sensitivity calculation

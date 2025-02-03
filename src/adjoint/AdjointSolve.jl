@@ -23,6 +23,7 @@ function adjoint_2D!(
     ni,
     li,
     SensInd,
+    SensType,
     )
 
         free_surface = false    # deactivate free surface terms for AD
@@ -56,21 +57,20 @@ function adjoint_2D!(
         nout   = 1e3
         iter   = 1
 
-        indx = findall((xci[1] .> -0.5) .& (xci[1] .< 0.5))
-        indy = findall((xvi[2] .> 0.19) .& (xvi[2] .< 0.21))
-        #indx = findall((xvi[1] .> 1750.0*1e3) .& (xvi[1] .< 2250.0*1e3))
-        #indy = findall((xci[2] .> -20.0*1e3) .& (xci[2] .< -6.0*1e3))
-
-
         while (iter ≤ iterMax && err > ϵ)
 
             stokesAD.V.Vx .= 0.0
             stokesAD.V.Vy .= 0.0
             stokesAD.P    .= 0.0
 
-            # only nonzero at sensitivity location
-            stokesAD.V.Vy[SensInd[1],SensInd[2]] .= -1.0
-            #stokesAD.V.Vx[indx,indy] .= -1.0
+            # sensitivity reference points for adjoint solve
+            if SensType == "Vx"
+                stokesAD.V.Vx[SensInd[1],SensInd[2]] .= -1.0
+            elseif SensType == "Vy"
+                stokesAD.V.Vy[SensInd[1],SensInd[2]] .= -1.0
+            elseif SensType == "P"
+                stokesAD.P[SensInd[1],SensInd[2]] .= -1.0
+            end
 
             @views stokesAD.R.Rx .= stokesAD.VA.Vx[2:end-1,2:end-1]
             @views stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]

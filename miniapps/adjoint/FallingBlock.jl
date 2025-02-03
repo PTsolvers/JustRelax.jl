@@ -158,13 +158,14 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes    = StokesArrays(backend, ni)
+    stokes   = StokesArrays(backend, ni)
 
     # Adjoint 
-    stokesAD  = StokesArraysAdjoint(backend, ni)
-    indx    = findall((xci[1] .> -0.5) .& (xci[1] .< 0.5))
-    indy    = findall((xvi[2] .> 0.19) .& (xvi[2] .< 0.21))
-    SensInd = [indx, indy]
+    stokesAD = StokesArraysAdjoint(backend, ni)
+    indx     = findall((xci[1] .> -0.5) .& (xci[1] .< 0.5))
+    indy     = findall((xvi[2] .> 0.19) .& (xvi[2] .< 0.21))
+    SensInd  = [indx, indy,]
+    SensType = "Vy"
 
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-5, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # Buoyancy forces
@@ -200,8 +201,6 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     τxx_v = @zeros(ni.+1...)
     τyy_v = @zeros(ni.+1...)
 
-
-
     while it < 1
 
         # interpolate stress back to the grid
@@ -222,6 +221,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             dt,
             it, #Glit
             SensInd,
+            SensType,
             igg;
             kwargs = (
                 grid,
@@ -235,10 +235,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             )
         );
 
-        ###################
         #### Advection ####
-        ###################
-        
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
@@ -267,10 +264,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
         velocity = @. √(Vx_v^2 + Vy_v^2 )
         (; η_vep, η) = stokes.viscosity
-
         Xc, Yc = meshgrid(xci[1], xci[2])
-
-
         ind = findall(xci[2] .≤ 0.29)
         #test.ηb[ind] = NaN
         #test.ρb[ind] = NaN
@@ -323,11 +317,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             # ------------------------------
         end
     end
-return stokes, stokesAD, xci, phase_ratios
-
 end
-
-
 
 figdir = "FallingBlock_Adjoint"
 ar     = 2 # aspect ratio
@@ -339,10 +329,4 @@ igg    = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
-stokes,stokesAD,xci = sinking_block2D(igg; ar=ar, nx=nx, ny=ny, figdir=figdir);
-
-#fig = Figure(size = (1200, 900));
-#ax1 = Axis(fig[1,1])
-#h1 = heatmap!(ax1, xci[1], xci[2], Array(eta))
-#Colorbar(fig[1,2], h1)
-#fig
+sinking_block2D(igg; ar=ar, nx=nx, ny=ny, figdir=figdir);

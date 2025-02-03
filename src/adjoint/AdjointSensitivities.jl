@@ -14,7 +14,8 @@ function calc_sensitivity_2D!(
     rheology,
     phase_ratios,
     θ_dτ,
-    ni)
+    ni,
+    )
 
     print("############################################\n")
     print("Calculating Sensitivities\n")
@@ -41,6 +42,7 @@ function calc_sensitivity_2D!(
     stokesAD.Cc  .= 0.0
     stokesAD.C   .= 0.0
 
+
     ηb      = @zeros(size(η))
     ρb      = @zeros(size(ρg[2]))
     Gvb     = @zeros(size(stokesAD.Gv))
@@ -53,9 +55,8 @@ function calc_sensitivity_2D!(
     Ccb     = @zeros(size(stokesAD.Cc))
     Cb      = @zeros(size(stokesAD.Cc))
 
-    stokesAD.R.Rx .= -stokesAD.VA.Vx[2:end-1,2:end-1]
-    stokesAD.R.Ry .= -stokesAD.VA.Vy[2:end-1,2:end-1]
-
+    @views stokesAD.R.Rx .= -stokesAD.VA.Vx[2:end-1,2:end-1]
+    @views stokesAD.R.Ry .= -stokesAD.VA.Vy[2:end-1,2:end-1]
 
     @parallel (@idx ni) configcall=compute_Res!(
         stokes.R.Rx,

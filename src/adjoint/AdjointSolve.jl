@@ -22,13 +22,14 @@ function adjoint_2D!(
     iterMax,
     ni,
     li,
+    SensInd,
     )
 
-    free_surface = false    # deactivate free surface terms for AD
+        free_surface = false    # deactivate free surface terms for AD
 
-    print("############################################\n")
-    print("Adjoint solve\n")
-    print("############################################\n")
+        print("############################################\n")
+        print("Adjoint solve\n")
+        print("############################################\n")
 
         if  isdefined(Main,:CUDA)
             mode = Enzyme.Reverse
@@ -65,13 +66,14 @@ function adjoint_2D!(
 
             stokesAD.V.Vx .= 0.0
             stokesAD.V.Vy .= 0.0
-            stokesAD.P    .= 0.0    
+            stokesAD.P    .= 0.0
+
             # only nonzero at sensitivity location
-            stokesAD.V.Vy[indx.+1,indy] .= -1.0
+            stokesAD.V.Vy[SensInd[1],SensInd[2]] .= -1.0
             #stokesAD.V.Vx[indx,indy] .= -1.0
 
-            stokesAD.R.Rx .= stokesAD.VA.Vx[2:end-1,2:end-1]
-            stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]
+            @views stokesAD.R.Rx .= stokesAD.VA.Vx[2:end-1,2:end-1]
+            @views stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]
             
             @parallel (@idx ni) configcall=compute_Res!(
                 stokes.R.Rx,
@@ -245,7 +247,5 @@ function adjoint_2D!(
                 end
                 isnan(err) && error("NaN(s)")
             end
-
     end
-    return indx, indy
 end

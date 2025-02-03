@@ -21,6 +21,7 @@ function _adjoint_solve!(
     args,
     dt,
     Glit,
+    SensInd,
     igg::IGG;
     grid,
     origin,
@@ -237,7 +238,7 @@ function _adjoint_solve!(
     if rem(Glit, ADout) == 0
 
         # adjoint solver
-        indx, indy = adjoint_2D!(
+        adjoint_2D!(
             stokes,
             stokesAD,
             pt_stokes,
@@ -261,6 +262,7 @@ function _adjoint_solve!(
             iterMax,
             ni,
             li,
+            SensInd,
             )
 
         # sensitivity calculation
@@ -280,7 +282,8 @@ function _adjoint_solve!(
             rheology,
             phase_ratios,
             θ_dτ,
-            ni)
+            ni,
+            )
 
     end
     ###############################
@@ -310,7 +313,5 @@ function _adjoint_solve!(
         Ψ_P=stokesAD.PA,
         ηb=ηb,
         ρb=ρb,
-        Sensx = indx,
-        Sensy = indy,
     )
 end

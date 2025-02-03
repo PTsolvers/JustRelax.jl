@@ -159,7 +159,13 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
+
+    # Adjoint 
     stokesAD  = StokesArraysAdjoint(backend, ni)
+    indx    = findall((xci[1] .> -0.5) .& (xci[1] .< 0.5))
+    indy    = findall((xvi[2] .> 0.19) .& (xvi[2] .< 0.21))
+    SensInd = [indx, indy]
+
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-5, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
@@ -194,7 +200,9 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     τxx_v = @zeros(ni.+1...)
     τyy_v = @zeros(ni.+1...)
 
-    while it < 100
+
+
+    while it < 1
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, xvi, xci, particles)
@@ -213,6 +221,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             args,
             dt,
             it, #Glit
+            SensInd,
             igg;
             kwargs = (
                 grid,
@@ -226,6 +235,10 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             )
         );
 
+        ###################
+        #### Advection ####
+        ###################
+        
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
@@ -235,6 +248,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
         tensor_invariant!(stokes.ε_pl)
         tensor_invariant!(stokes.τ)
         # ------------------------------
+
         # advect particles in space
         advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
@@ -300,7 +314,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             Colorbar(fig[4,2][1,2], h8)
             linkaxes!(ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8)
             #CUDA.allowscalar() do
-                scatter!(ax2, Xc[16:end-15,end-8], Yc[16:end-15,end-8], color=:red, markersize=10)
+                scatter!(ax2, vec(Xc[SensInd[1],SensInd[2]]), vec(Yc[SensInd[1],SensInd[2]]), color=:red, markersize=10)
             #end
             #display(fig)
             fig

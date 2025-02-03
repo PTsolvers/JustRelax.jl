@@ -104,7 +104,9 @@ include("adjoint/Adjoint_Stokes2D.jl")
 export adjoint_solve!
 include("adjoint/Adjoint_VelocityKernels.jl")
 export update_V!
-include("adjoint/Adjoint2D.jl")
-export adjoint_2D!, calc_sensitivity_2D!
+include("adjoint/AdjointSolve.jl")
+export adjoint_2D!
+include("adjoint/AdjointSensitivities.jl")
+calc_sensitivity_2D!
 
 end

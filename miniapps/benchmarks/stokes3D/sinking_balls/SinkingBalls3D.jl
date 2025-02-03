@@ -50,7 +50,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     origin       = 0.0, 0.0, 0.0                    # origin coordinates (15km f sticky air layer)
     grid         = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid                             # nodes at the center and vertices of the cells
-     # ----------------------------------------------------
+    # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology     = init_rheologies()
@@ -58,12 +58,12 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 125, 175, 1
+    nxcell, max_xcell, min_xcell = 25, 25, 1
         particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
-    grid_vx, grid_vy, grid_vz   = velocity_grids(xci, xvi, di)
+    grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     pPhases,      = init_cell_arrays(particles, Val(2))
     particle_args = (pPhases, )
@@ -72,12 +72,17 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     init_phases!(pPhases, particles)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_cell_halo!(phase_ratios.center)
+    update_cell_halo!(phase_ratios.vertex)
+    update_cell_halo!(phase_ratios.xy)
+    update_cell_halo!(phase_ratios.xz)
+    update_cell_halo!(phase_ratios.yz)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √3.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3e0, r = 0.7,  CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -87,7 +92,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     # Buoyancy forces
     ρg               = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[3], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-    @parallel init_P!(stokes.P, ρg[3], xci[3])
+    # @parallel init_P!(stokes.P, ρg[3], xci[3])
 
     # Rheology
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
@@ -98,6 +103,13 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
         free_slip    = (left = true , right = true , top = true , bot = true , front = true , back = true ),
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
+
+    # εbg         = 1.0           # background strain-rate
+    # stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
+    # stokes.V.Vz .= PTArray(backend_JR)([-z*εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
+    # flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    # update_halo!(@velocity(stokes)...)
+
    
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -132,7 +144,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     end
     # Time loop
     t, it = 0.0, 0
-    while it < 1000
+    while it < 1
             # Update buoyancy and viscosity -
             args = (; T = thermal.Tc, P = stokes.P,  dt = Inf)
 
@@ -149,8 +161,8 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                 dt,
                 igg;
                 kwargs = (;
-                    iterMax = 100e3,
-                    nout=1e3,
+                    iterMax = 5e3,
+                    nout=1e2,
                     viscosity_cutoff=(-Inf, Inf)
                 )
             )
@@ -158,23 +170,23 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
             dt   = compute_dt(stokes, di, dt_diff)
             # ------------------------------
 
-            # Advection --------------------
-            # advect particles in space
-            advection!(particles, RungeKutta2(), @velocity(stokes), ( grid_vx, grid_vy, grid_vz), dt)
-            # advect particles in memory
-            move_particles!(particles, xvi, particle_args)
-            # interpolate fields from grid vertices to particles
-            # check if we need to inject particles
-            inject_particles_phase!(particles, pPhases, (), (), xvi)
-            # update phase ratios
-            update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+            # # Advection --------------------
+            # # advect particles in space
+            # advection!(particles, RungeKutta2(), @velocity(stokes), ( grid_vx, grid_vy, grid_vz), dt)
+            # # advect particles in memory
+            # move_particles!(particles, xvi, particle_args)
+            # # interpolate fields from grid vertices to particles
+            # # check if we need to inject particles
+            # inject_particles_phase!(particles, pPhases, (), (), xvi)
+            # # update phase ratios
+            # update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
             @show it += 1
             t        += dt
 
             # Data I/O and plotting ---------------------
             if it == 1 || rem(it, 50) == 0
-                checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
+                # checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
@@ -192,7 +204,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
                         Array(Vz_v),
                     )
                     save_vtk(
-                        joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                        joinpath(vtk_dir, "vtk_rank_$(igg.me)_" * lpad("$it", 6, "0")),
                         xvi,
                         xci,
                         data_v,
@@ -238,10 +250,10 @@ end
 
 figdir   = "SinkingBalls3D"
 do_vtk   = true # set to true to generate VTK files for ParaView
-n        = 32
+n        = 16
 nx       = n
 ny       = n
-nz       = n
+nz       = n # (n - 1) * 2
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI= true)...)
 else

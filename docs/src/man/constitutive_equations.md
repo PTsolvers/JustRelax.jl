@@ -18,9 +18,11 @@ $\begin{align}
 \end{align}$
 
 where $\eta_{\text{eff}}$ is the effective viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ is the plastic multiplier, and $Q$ is the plastic flow potential is:
+
 $\begin{align}
 Q = \boldsymbol{\tau}_{II} - p\sin{\psi}
 \end{align}$
+
 where $\psi$ is the dilation angle.
 
 ## Effective viscosity

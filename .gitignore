@@ -26,6 +26,7 @@ docs/site/
 *.vti
 *.vtm
 *.vtp
+*.vtr
 *.h5
 *.jld2
 fig2D/

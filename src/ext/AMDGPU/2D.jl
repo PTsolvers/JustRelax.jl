@@ -45,6 +45,10 @@ function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N,Integer}) where {
     return StokesArrays(ni)
 end
 
+function JR2D.StokesArraysAdjoint(::Type{AMDGPUBackend}, ni::NTuple{N,Integer}) where {N}
+    return StokesArraysAdjoint(ni)
+end
+
 function JR2D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N,Number}) where {N}
     return ThermalArrays(ni...)
 end

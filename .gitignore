@@ -29,3 +29,9 @@ docs/site/
 *.vtr
 *.h5
 *.jld2
+fig2D/
+*/checkpoint
+Systematics/*
+*.avi
+*.mp4
+*.pvsm

@@ -98,7 +98,7 @@ $\begin{align}
 JustRelax.jl implements the regularised plasticity model from [Duretz et al 2021](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021GC009675). In this formulation, the yield function is given by
 
 $\begin{align}
-F = \tau_{II} - \left( P \sin{\phi} + C \cos{\phi} + \dot\lambda \eta_{\text{reg}}\right) \leq 0
+F = \tau_{II} - \left( P \sin{\phi} + C \cos{\phi} + \dot\lambda \eta_{\text{reg}}\right) \geq 0
 \end{align}$
 
 where $\eta_{\text{reg}}$ is a regularization term and

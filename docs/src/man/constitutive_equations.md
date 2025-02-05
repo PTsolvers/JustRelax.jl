@@ -2,96 +2,78 @@
 
 In the more general case, JustRelax.jl implements a elasto-visco-elastoplastic rheology. Where the constitutive equation is:
 
-$$
-\begin{align}
+$\begin{align}
 \boldsymbol{\dot\varepsilon} =
 \boldsymbol{\dot\varepsilon}^{\text{viscous}} +
 \boldsymbol{\dot\varepsilon}^{\text{elastic}} +
 \boldsymbol{\dot\varepsilon}^{\text{plastic}}
-\end{align}
-$$
+\end{align}$
 
 or
 
-$$
-\begin{align}
+$\begin{align}
 \boldsymbol{\dot\varepsilon} =
 \frac{1}{2\eta_{\text{eff}}}\boldsymbol{\tau} +
 \frac{1}{2G} \frac{D\boldsymbol{\tau}}{Dt}  + \dot\lambda\frac{\partial Q}{\partial \boldsymbol{\tau}_{II}}
-\end{align}
-$$
+\end{align}$
 
 where $\eta_{\text{eff}}$ is the effective viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ is the plastic multiplier, and $Q$ is the plastic flow potential is:
-$$
-\begin{align}
+$\begin{align}
 Q = \boldsymbol{\tau}_{II} - p\sin{\psi}
-\end{align}
-$$
+\end{align}$
 where $\psi$ is the dilation angle.
 
 ## Effective viscosity
 
 The effective viscosity of a non-Newtonian Maxwell body is defined as:
-$$
-\begin{align}
+
+$\begin{align}
 \eta_{\text{eff}} = \frac{1}{\frac{1}{\eta^{\text{diff}}} + \frac{1}{\eta^{\text{disl}}}}
-\end{align}
-$$
+\end{align}$
 
 where $\eta^{\text{diff}}$ and $\eta^{\text{disl}}$ are the diffusion and dislocation creep viscosities. These are computed from their respective strain rate equations:
 
-$$
-\begin{align}
+$\begin{align}
 \dot{ε}_{II}^{\text{diff}} = A^{\text{diff}} τ_{II}^{n^{\text{diff}}} d^{p} f_{H_2O}^{r^{\text{diff}}} \exp \left(- {{E^{\text{diff}} + PV^{\text{diff}}} \over RT} \right) \\
 \dot{ε}_{II}^{\text{disl}} = A^{\text{disl}} τ_{II}^{n^{\text{disl}}} f_{H_2O}^{r^{\text{disl}}} \exp \left(- {{E^{\text{disl}} + PV^{\text{disl}}} \over RT} \right)
-\end{align}
-$$
+\end{align}$
 
 where $A$ material specific parameter, $n$ is the stress powerlaw exponent, $p$ is the negative defined grain size exponent, $f$ is the water fugacity, $r$ is the water fugacity exponent, $E$ is the activation energy, $PV$ is the activation volume, and $R$ is the universal gas constant.
 ## Elastic stress
 
 ### Method (1): Jaumann derivative
-$$
-\begin{align}
+$\begin{align}
 \frac{D\boldsymbol{\tau}}{Dt} =
 \boldsymbol{v}\frac{\partial\boldsymbol{\tau}}{\partial t} +
 \boldsymbol{\omega}\boldsymbol{\tau} -
 \boldsymbol{\tau}\boldsymbol{\omega}^T
-\end{align}
-$$
+\end{align}$
 
 where $\boldsymbol{\omega}$ is the vorticity tensor
 
-$$
-\begin{align}
+$\begin{align}
 \boldsymbol{\omega} =
 \frac{1}{2} \left(\nabla\boldsymbol{v} - \nabla^T \boldsymbol{v} \right)
-\end{align}
-$$
+\end{align}$
 
 ### Method (2): Euler-Rodrigues rotation
 
 1. Compute unit rotation axis
-$$
-\begin{align}
+$\begin{align}
     \alpha = \sqrt{\boldsymbol{\omega} \cdot \boldsymbol{u}} \\
     \boldsymbol{n} = \alpha \boldsymbol{I} \frac{1}{\boldsymbol{\omega}}
-\end{align}
-$$
+\end{align}$
 
 where $\boldsymbol{u}$ is a unit vector of length $\mathbb{R}^n$.
 
 2. Integrate rotation angle
 
-$$
-\begin{align}
+$\begin{align}
     \theta = \frac{\alpha}{2\Delta t}
-\end{align}
-$$
+\end{align}$
 
 3. Euler-Rodrigues rotation matrix
-$$
-\begin{align}
+$\begin{align}
     \boldsymbol{c} = \boldsymbol{n}\sin{\theta} \\
     \boldsymbol{R_1} =
     \begin{bmatrix}
@@ -101,34 +83,27 @@ $$
     \end{bmatrix} \\
     \boldsymbol{R_2} = (1-\cos{\theta}) \boldsymbol{n} \boldsymbol{n}^T \\
     \boldsymbol{R}=\boldsymbol{R_1}+\boldsymbol{R_2}
-\end{align}
-$$
+\end{align}$
 
 4. Rotate stress tensor
 
-$$
-\begin{align}
+$\begin{align}
     \boldsymbol{\tau}^{\star}=\boldsymbol{R}\boldsymbol{\tau}\boldsymbol{R}^T
-\end{align}
-$$
+\end{align}$
 
 ## Plastic formulation
 
 JustRelax.jl implements the regularised plasticity model from [Duretz et al 2021](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021GC009675). In this formulation, the yield function is given by
 
-$$
-\begin{align}
-F = \tau_y - \left( P \sin{\phi} + C \cos{\phi} + \dot\lambda \eta_{\text{reg}}\right) \leq 0
-\end{align}
-$$
+$\begin{align}
+F = \tau_{II} - \left( P \sin{\phi} + C \cos{\phi} + \dot\lambda \eta_{\text{reg}}\right) \leq 0
+\end{align}$
 
 where $\eta_{\text{reg}}$ is a regularization term and
 
-$$
-\begin{align}
+$\begin{align}
 \dot\lambda = \frac{F^{\text{trial}}}{\eta + \eta_{\text{reg}} + K \Delta t \sin{\psi}\sin{\phi}}
-\end{align}
-$$
+\end{align}$
 
 Note that since we are using an iterative method to solve the APT Stokes equation, the non-linearities are dealt by the iterative scheme. Othwersie, one would need to solve a non-linear problem to compute $\dot\lambda$, which requires to compute $\frac{\partial F}{\partial \dot\lambda}$
 

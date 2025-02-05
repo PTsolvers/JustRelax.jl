@@ -1,4 +1,5 @@
 using Documenter, JustRelax
+using GeoParams, JustPIC
 push!(LOAD_PATH, "../src/")
 
 # Get JustRelax.jl root directory
@@ -71,7 +72,7 @@ makedocs(;
     modules=[JustRelax],
     format=Documenter.HTML(; assets = ["assets/favicon.ico"],
     prettyurls=get(ENV, "CI", nothing) == "true",
-    size_threshold_ignore = ["man/listfunctions.md"]), # easier local build
+    size_threshold_ignore = ["man/listfunctions.md", "man/JustPIC.md", "man/GeoParams.jl"]), # easier local build
 
     warnonly = Documenter.except(:footnote),
     pages=[
@@ -98,6 +99,10 @@ makedocs(;
                 ]
             ],
         "List of functions" => "man/listfunctions.md",
+        "References" => Any[
+              "JustPIC" => "man/JustPIC.md",
+              "GeoParams" => "man/GeoParams.md",
+              ],
         "Authors" => "man/authors.md",
         "Contributing" => "man/contributing.md",
         "Code of Conduct" => "man/code_of_conduct.md",

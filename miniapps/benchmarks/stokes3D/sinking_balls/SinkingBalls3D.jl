@@ -72,6 +72,9 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     init_phases!(pPhases, particles)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_cell_halo!(particles.coords...);
+    update_cell_halo!(particle_args...);
+    update_cell_halo!(particles.index)
     update_cell_halo!(phase_ratios.center)
     update_cell_halo!(phase_ratios.vertex)
     update_cell_halo!(phase_ratios.xy)
@@ -110,7 +113,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     # flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     # update_halo!(@velocity(stokes)...)
 
-   
+
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
@@ -261,4 +264,3 @@ else
 end
 
 main3D(igg; ny=ny, nx=nx, nz=nz,figdir=figdir, do_vtk=do_vtk)
-

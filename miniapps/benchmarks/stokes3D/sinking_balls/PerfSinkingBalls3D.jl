@@ -1,28 +1,28 @@
 using CSV, DataFrames
-# using CUDA
+using CUDA
 
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
-const backend_JR = CPUBackend
-# const backend_JR = CUDABackend
+# const backend_JR = CPUBackend
+const backend_JR = CUDABackend
 
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
-@init_parallel_stencil(Threads, Float64, 3)  #or (CUDA, Float64,  3) or (AMDGPU, Float64, 3)
+@init_parallel_stencil(CUDA, Float64, 3)  #or (CUDA, Float64,  3) or (AMDGPU, Float64, 3)
 
 using JustPIC
 using JustPIC._3D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 # const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CellArrays
-using GLMakie
+# using CairoMakie
 
 # Load file with all the rheology configurations
 include("SinkingBalls_rheology.jl")
@@ -63,7 +63,7 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 125, 175, 1
+    nxcell, max_xcell, min_xcell = 25, 25, 1
         particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi...
     )
@@ -77,6 +77,15 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     init_phases!(pPhases, particles)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_cell_halo!(particles.coords...);
+    update_cell_halo!(particle_args...);
+    update_cell_halo!(particles.index)
+
+    update_cell_halo!(phase_ratios.center)
+    update_cell_halo!(phase_ratios.vertex)
+    update_cell_halo!(phase_ratios.xy)
+    update_cell_halo!(phase_ratios.xz)
+    update_cell_halo!(phase_ratios.yz)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -103,11 +112,11 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
         free_slip    = (left = true , right = true , top = true , bot = true , front = true , back = true ),
         no_slip      = (left = false, right = false, top = false, bot = false, front = false, back = false),
     )
-   
+
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
-        vtk_dir      = joinpath(figdir,"vtk")
+        vtk_dir      = joinpath(figdir,"vtk_$(igg.nprocs)")
         take(vtk_dir)
     end
     take(figdir)
@@ -139,12 +148,13 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     #timers
     iter_time      = zeros(102)
     advection_time = zeros(102)
+    ttot2sol       = zeros(102)
     # df = DataFrame(iter_time=0e0, advection_time=0e0)
     fi = joinpath("SinkingTimers_$(igg.nprocs).csv")
     # Time loop
     t, it = 0.0, 0
-    while it < 100
-            # Update buoyancy and viscosity -
+    while it < 2
+         ttot2sol = @elapsed begin    # Update buoyancy and viscosity -
             args = (; T = thermal.Tc, P = stokes.P,  dt = Inf)
 
             # Stokes solver ----------------
@@ -182,9 +192,18 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
             inject_particles_phase!(particles, pPhases, (), (), xvi)
             # update phase ratios
             update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-
+            update_cell_halo!(particles.coords...);
+            update_cell_halo!(particle_args...);
+            update_cell_halo!(particles.index)
+            # ------------------------------
+            update_cell_halo!(phase_ratios.center)
+            update_cell_halo!(phase_ratios.vertex)
+            update_cell_halo!(phase_ratios.xy)
+            update_cell_halo!(phase_ratios.xz)
+            update_cell_halo!(phase_ratios.yz)
+        end
             if igg.me == 0
-                df = DataFrame(iter_time=iter_time[it+1], advection_time=advection_time[it+1])
+                df = DataFrame(iter_time=iter_time[it+1], advection_time=advection_time[it+1], time2sol = ttot2sol)
                 CSV.write(fi, df, writeheader = (it==0), append = true)
             end
             @show it += 1
@@ -254,17 +273,16 @@ function main3D(igg; ar=8, ny=16, nx=ny*8, nz=ny*8, figdir="figs3D", do_vtk =fal
     return nothing
 end
 
-figdir   = "SinkingBalls3D"
+figdir   = "Perf_SinkingBalls3D"
 do_vtk   = true # set to true to generate VTK files for ParaView
-n        = 32
+n        = 120
 nx       = n
 ny       = n
 nz       = n
 igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, nz; init_MPI= true)...)
+    IGG(init_global_grid(nx, ny, nz; init_MPI= true, select_device=false)...)
 else
     igg
 end
 
 main3D(igg; ny=ny, nx=nx, nz=nz,figdir=figdir, do_vtk=do_vtk)
-

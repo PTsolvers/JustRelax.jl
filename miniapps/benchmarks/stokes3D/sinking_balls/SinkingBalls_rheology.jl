@@ -28,7 +28,9 @@ end
 function init_phases!(phases, particles)
     ni = size(phases)
 
-    r = 0.1
+    r = (
+        0.05, 0.05, 0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1,
+    )
 
     cx = (
         0.9, 0.2, 0.5, 0.8, 0.2, 0.3, 0.6, 0.5, 0.5, 0.7,
@@ -51,8 +53,8 @@ function init_phases!(phases, particles)
             @index phases[ip, I...] = 1.0 # matrix
 
             # thermal anomaly - circular
-            for (cxᵢ, cyᵢ, czᵢ) in zip(cx, cy, cz)
-                if (x - cxᵢ)^2 + (y - cyᵢ)^2 + (z - czᵢ)^2 ≤ r^2
+            for (cxᵢ, cyᵢ, czᵢ, rᵢ) in zip(cx, cy, cz, r)
+                if (x - cxᵢ)^2 + (y - cyᵢ)^2 + (z - czᵢ)^2 ≤ rᵢ^2
                     @index phases[ip, I...] = 2.0
                 end
             end
@@ -62,4 +64,3 @@ function init_phases!(phases, particles)
 
     @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, cx, cy, cz)
 end
-

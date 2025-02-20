@@ -597,7 +597,7 @@ end
     ni = size(Pr)
     Ic = clamped_indices(ni, I...)
 
-    ## yz 
+    ## yz
     if all(I .≤ size(ε[4]))
         # interpolate to ith vertex
         ηv_ij = av_clamped_yz(η, Ic...)
@@ -647,7 +647,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv - Pv_ij * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
@@ -710,7 +710,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv - Pv_ij * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
@@ -774,7 +774,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv - Pv_ij * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
@@ -810,7 +810,7 @@ end
         dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij + 2.0 * ηij * εij) * dτ_r
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        F = τII_ij - C - Pr[I...] * sinϕ
+        F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
         if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
@@ -898,7 +898,7 @@ end
     τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
 
     # yield function @ center
-    Fv = τIIv_ij - Cv - Pv_ij * sinϕv
+    Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
     if is_pl && !iszero(τIIv_ij) && Fv > 0
         # stress correction @ vertex
         λv[I...] =
@@ -933,7 +933,7 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = GeoParams.second_invariant(dτij .+ τij)
         # yield function @ center
-        F = τII_ij - C - Pr[I...] * sinϕ
+        F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
         if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center

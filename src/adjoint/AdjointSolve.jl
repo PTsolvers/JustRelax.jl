@@ -26,7 +26,7 @@ function adjoint_2D!(
     SensType,
     )
 
-        free_surface = false    # deactivate free surface terms for AD
+        free_surface = false    # deactivate free surface terms for adjoint solve
 
         print("############################################\n")
         print("Adjoint solve\n")
@@ -56,9 +56,11 @@ function adjoint_2D!(
         lx, ly = li
         nout   = 1e3
         iter   = 1
+        iterMax = 4e4
 
         while (iter ≤ iterMax && err > ϵ)
 
+            # reset derivatives to zero
             stokesAD.V.Vx .= 0.0
             stokesAD.V.Vy .= 0.0
             stokesAD.P    .= 0.0
@@ -72,14 +74,17 @@ function adjoint_2D!(
                 stokesAD.P[SensInd[1],SensInd[2]] .= -1.0
             end
 
+            # initialize the residuals with the adjoint variables to act as a multiplier
             @views stokesAD.R.Rx .= stokesAD.VA.Vx[2:end-1,2:end-1]
             @views stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]
+            @views stokesAD.R.RP .= stokesAD.PA
             
             @parallel (@idx ni) configcall=compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,
                 @velocity(stokes)...,
-                Vx_on_Vy, stokes.P,
+                Vx_on_Vy, 
+                stokes.P,
                 @stress(stokes)...,
                 ρg...,
                 _di...,
@@ -88,39 +93,90 @@ function adjoint_2D!(
                     mode, 
                     Const(compute_Res!), 
                     Const{Nothing}, 
-                    DuplicatedNoNeed(stokes.R.Rx, stokesAD.R.Rx),DuplicatedNoNeed(stokes.R.Ry, stokesAD.R.Ry),
+                    DuplicatedNoNeed(stokes.R.Rx, stokesAD.R.Rx),
+                    DuplicatedNoNeed(stokes.R.Ry, stokesAD.R.Ry),
                     Const(stokes.V.Vx),
                     Const(stokes.V.Vy),
                     Const(Vx_on_Vy),
                     DuplicatedNoNeed(stokes.P,stokesAD.P),
                     DuplicatedNoNeed(stokes.τ.xx,stokesAD.τ.xx),
                     DuplicatedNoNeed(stokes.τ.yy,stokesAD.τ.yy),
-                    DuplicatedNoNeed(stokes.τ.xy,stokesAD.τ.xy),Const(ρg[1]),Const(ρg[2]),
+                    DuplicatedNoNeed(stokes.τ.xy,stokesAD.τ.xy),
+                    Const(ρg[1]),
+                    Const(ρg[2]),
                     Const(_di[1]),
                     Const(_di[2]),
                     Const(dt * free_surface))
 
-            compute_P!(
-                stokesAD.PA,
-                stokesAD.P0,
-                stokesAD.R.RP,
-                stokesAD.P,
+        
+                    #=
+            @parallel (@idx ni) configcall=compute_P_kernelAD!(
+                stokes.P,
+                stokes.P0,
+                stokes.R.RP,
+                stokes.∇V,
                 ητ,
                 rheology,
                 phase_ratios.center,
                 dt,
                 r,
                 θ_dτ,
-                args,
+                nothing,
+                nothing
+                ) AD.autodiff_deferred!(
+                    mode,
+                    Const(compute_P_kernelAD!),
+                    Const{Nothing},
+                    DuplicatedNoNeed(stokes.P,stokesAD.P),
+                    Const(stokes.P0),
+                    DuplicatedNoNeed(stokes.R.RP,stokesAD.R.RP),
+                    Const(stokes.∇V),
+                    Const(ητ),
+                    Const(rheology),
+                    Const(phase_ratios.center),
+                    Const(dt),
+                    Const(r),
+                    Const(θ_dτ),
+                    Const(nothing),
+                    Const(nothing)
+                    )
+                    =#
+                    
+                    
+            @parallel (@idx ni) ana_P!(
+                    stokesAD.P,
+                    stokes.P0,
+                    stokesAD.R.RP,
+                    stokes.∇V,
+                    ητ,
+                    rheology,
+                    phase_ratios.center,
+                    dt,
+                    r,
+                    θ_dτ,
+                    nothing,
+                    nothing
                 )
+                
 
-            stokesAD.∇V .= stokesAD.PA
+            @parallel (@idx ni) update_PAD!(
+                stokesAD.PA,
+                stokesAD.P,
+                stokesAD.R.RP,
+                stokes.∇V,
+                ητ,
+                rheology,
+                phase_ratios.center,
+                dt,
+                r,
+                θ_dτ,
+                args)
 
-            # apply free slip boundary conditions for adjoint solve
-            if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]   .= 0.0 end
+            # apply free slip or no slip boundary conditions for adjoint solve
+            if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
             if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
             if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
-            if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]   .= 0.0 end
+            if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
 
             @parallel (@idx ni.+1) configcall=update_stresses_center_vertex_psAD!(
                 @strain(stokes),
@@ -143,6 +199,9 @@ function adjoint_2D!(
                 rheology,
                 phase_ratios.center,
                 phase_ratios.vertex,
+                phase_ratios.xy,
+                phase_ratios.yz,
+                phase_ratios.xz
                 ) AD.autodiff_deferred!(
                     mode,
                     Const(update_stresses_center_vertex_psAD!),
@@ -168,26 +227,31 @@ function adjoint_2D!(
                     Const(θ_dτ),
                     Const(rheology),
                     Const(phase_ratios.center),
-                    Const(phase_ratios.vertex))
+                    Const(phase_ratios.vertex),
+                    Const(phase_ratios.xy),
+                    Const(phase_ratios.yz),
+                    Const(phase_ratios.xz)
+                    )
 
-            @parallel (@idx ni .+ 1) configcall=compute_strain_rate!(
+            @parallel (@idx ni .+ 1) configcall=compute_strain_rateAD!(
                 @strain(stokes)...,
-                stokes.∇V,
                 @velocity(stokes)...,
                 _di...
                 ) AD.autodiff_deferred!(
                     mode,
-                    Const(compute_strain_rate!),
+                    Const(compute_strain_rateAD!),
                     Const{Nothing},
                     DuplicatedNoNeed(stokes.ε.xx,stokesAD.ε.xx),
                     DuplicatedNoNeed(stokes.ε.yy,stokesAD.ε.yy),
                     DuplicatedNoNeed(stokes.ε.xy,stokesAD.ε.xy),
-                    DuplicatedNoNeed(stokes.∇V,stokesAD.∇V),
                     DuplicatedNoNeed(stokes.V.Vx,stokesAD.V.Vx),
                     DuplicatedNoNeed(stokes.V.Vy,stokesAD.V.Vy),
                     Const(_di[1]),
                     Const(_di[2]))
-
+    
+            # multiplier λP for ∂RP/∂V 
+            stokesAD.∇V .= -stokesAD.PA
+            # calculate ∂RP/∂V and multiply with λP
             @parallel (@idx ni) configcall=compute_∇V!(
                 stokes.∇V,
                 @velocity(stokes)...,
@@ -201,7 +265,8 @@ function adjoint_2D!(
                     DuplicatedNoNeed(stokes.V.Vy,stokesAD.V.Vy),
                     Const(_di[1]),
                     Const(_di[2]))
-
+                    
+            # update λV
             @parallel update_V!(
                 stokesAD.VA.Vx,
                 stokesAD.VA.Vy,
@@ -226,7 +291,7 @@ function adjoint_2D!(
                     norm_mpi(stokesAD.P) / length(stokesAD.P),
                 )
                 #global normVx,normVy,normP,it
-                push!(norm_Rx,sqrt(sum((abs.(@velocity(stokesAD)[1]).^2)))); push!(norm_Ry,sqrt(sum((abs.(@velocity(stokesAD)[2]).^2)))); push!(norm_∇V,sqrt(sum((abs.(stokesAD.P).^2))))
+                push!(norm_Rx,sqrt(sum((abs.(@velocity(stokesAD)[1]).^2)))); push!(norm_Ry,sqrt(sum((abs.(@velocity(stokesAD)[2]).^2)))); push!(norm_∇V,sum((abs.(stokesAD.P))))
 
                 push!(norm_Rx, errs[1])
                 push!(norm_Ry, errs[2])

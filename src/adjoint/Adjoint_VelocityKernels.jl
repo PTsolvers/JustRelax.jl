@@ -45,3 +45,21 @@
 
     return nothing
 end
+
+@parallel_indices (I...) function compute_strain_rateAD!(
+    εxx::AbstractArray{T,2}, εyy, εxy, Vx, Vy, _dx, _dy
+) where {T}
+    d_xi(A) = _d_xi(A, I[1], I[2], _dx)
+    d_yi(A) = _d_yi(A, I[1], I[2], _dy)
+    d_xa(A) = _d_xa(A, I[1], I[2], _dx)
+    d_ya(A) = _d_ya(A, I[1], I[2], _dy)
+
+    if all((I[1], I[2]) .≤ size(εxx))
+        ∇V_ij = (d_xi(Vx) + d_yi(Vy)) / 3.0
+        εxx[I[1], I[2]] = d_xi(Vx) - ∇V_ij
+        εyy[I[1], I[2]] = d_yi(Vy) - ∇V_ij
+    end
+    εxy[I[1], I[2]] = 0.5 * (d_ya(Vx) + d_xa(Vy))
+
+    return nothing
+end

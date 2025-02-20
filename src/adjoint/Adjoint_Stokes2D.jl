@@ -230,13 +230,14 @@ function _adjoint_solve!(
         end
     end
 
-
+    ηb = 0.0
+    ρb = 0.0
     ###############################
     ########## Adjoint ############
     ###############################
     indx = 1
     indy = 1
-    if rem(Glit, ADout) == 0
+    if rem(Glit+1, ADout) == 0
 
         # adjoint solver
         adjoint_2D!(

@@ -66,7 +66,7 @@ function _solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
             @parallel compute_P!(
-                stokes.P, stokes.P0, stokes.RP, stokes.∇V, η, K, dt, r, θ_dτ
+                stokes.P, stokes.P0, stokes.RP, stokes.∇V, stokes.Q, η, K, dt, r, θ_dτ
             )
             @parallel (@idx ni) compute_τ!(@stress(stokes)..., @strain(stokes)..., η, θ_dτ)
             @hide_communication b_width begin
@@ -196,7 +196,7 @@ function _solve!(
             @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
 
             @parallel compute_P!(
-                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, ητ, K, dt, r, θ_dτ
+                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, ητ, K, dt, r, θ_dτ
             )
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
@@ -339,7 +339,7 @@ function _solve!(
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
             @parallel compute_P!(
-                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, η, Kb, dt, r, θ_dτ
+                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, η, Kb, dt, r, θ_dτ
             )
 
             update_ρg!(ρg[2], rheology, args)
@@ -545,6 +545,7 @@ function _solve!(
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
+                stokes.Q,
                 ητ,
                 rheology,
                 phase_ratios.center,

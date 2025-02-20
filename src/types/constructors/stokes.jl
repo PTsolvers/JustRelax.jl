@@ -115,6 +115,7 @@ function StokesArrays(ni::NTuple{N,Integer}) where {N}
     P0 = @zeros(ni...)
     ∇V = @zeros(ni...)
     V = Velocity(ni...)
+    Q = @zeros(ni...) # volumetric source/sink term
     U = Displacement(ni...)
     ω = Vorticity(ni...)
     τ = SymmetricTensor(ni...)
@@ -125,5 +126,5 @@ function StokesArrays(ni::NTuple{N,Integer}) where {N}
     viscosity = Viscosity(ni)
     R = Residual(ni...)
 
-    return JustRelax.StokesArrays(P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω)
+    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω)
 end

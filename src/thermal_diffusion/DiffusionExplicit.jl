@@ -21,15 +21,17 @@ using ParallelStencil.FiniteDifferences1D
 using JustRelax
 using LinearAlgebra
 using Printf
-using CUDA, AMDGPU
+# using CUDA, AMDGPU
 
 import JustRelax:
-    ThermalParameters, solve!, assign!, thermal_boundary_conditions!, update_T!
+    ThermalParameters, solve!, assign!, thermal_bcs!, update_T!
 import JustRelax: ThermalArrays, PTThermalCoeffs, backend
 
 export solve!
 
-@eval @init_parallel_stencil($backend, Float64, 1)
+@eval @init_parallel_stencil(Threads, Float64, 1)
+
+include("../common.jl")
 
 ## KERNELS
 
@@ -160,12 +162,12 @@ using JustRelax
 using CUDA, AMDGPU
 using GeoParams
 
-import JustRelax: ThermalParameters, solve!, assign!, thermal_boundary_conditions!
+import JustRelax: ThermalParameters, solve!, assign!, thermal_bcs!
 import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity, backend
 
 export solve!
 
-@eval @init_parallel_stencil($backend, Float64, 2)
+@eval @init_parallel_stencil(Threads, Float64, 2)
 
 ## KERNELS
 
@@ -318,7 +320,7 @@ function JustRelax.solve!(
     )
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _dx, _dy)
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-    thermal_boundary_conditions!(thermal_bc, thermal.T)
+    thermal_bcs!(thermal_bc, thermal.T)
 
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -355,7 +357,7 @@ function JustRelax.solve!(
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_bcs!(thermal.T, thermal_bc)
 
-    # thermal_boundary_conditions!(thermal_bc, thermal.T)
+    # thermal_bcs!(thermal_bc, thermal.T)
 
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -388,7 +390,7 @@ function JustRelax.solve!(
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_bcs!(thermal.T, thermal_bc)
 
-    # thermal_boundary_conditions!(thermal_bc, thermal.T)
+    # thermal_bcs!(thermal_bc, thermal.T)
 
     @. thermal.ΔT = thermal.T - thermal.Told
     @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
@@ -519,12 +521,12 @@ using CUDA, AMDGPU
 using GeoParams
 
 import JustRelax:
-    IGG, ThermalParameters, solve!, assign!, norm_mpi, thermal_boundary_conditions!
+    IGG, ThermalParameters, solve!, assign!, norm_mpi, thermal_bcs!
 import JustRelax: ThermalArrays, PTThermalCoeffs, solve!, compute_diffusivity, backend
 
 export solve!
 
-@eval @init_parallel_stencil($backend, Float64, 3)
+@eval @init_parallel_stencil(Threads, Float64, 3)
 
 ## KERNELS
 

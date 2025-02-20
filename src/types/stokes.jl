@@ -143,6 +143,7 @@ struct StokesArrays{A,B,C,D,E,F,T}
     P0::T
     V::A
     ∇V::T
+    Q::T # volumetric source/sink term
     τ::B
     ε::B
     ε_pl::B

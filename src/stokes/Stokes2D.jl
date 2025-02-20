@@ -17,20 +17,20 @@ end
 solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...)
 
 function _solve!(
-    stokes::JustRelax.StokesArrays,
-    pt_stokes,
-    di::NTuple{2,T},
-    flow_bcs::AbstractFlowBoundaryConditions,
-    ρg,
-    K,
-    dt,
-    igg::IGG;
-    iterMax=10e3,
-    nout=500,
-    b_width=(4, 4, 1),
-    verbose=true,
-    kwargs...,
-) where {T}
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::NTuple{2, T},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        K,
+        dt,
+        igg::IGG;
+        iterMax = 10.0e3,
+        nout = 500,
+        b_width = (4, 4, 1),
+        verbose = true,
+        kwargs...,
+    ) where {T}
 
     # unpack
     _di = _dx, _dy = inv.(di)
@@ -40,7 +40,7 @@ function _solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, stokes.viscosity.η; window=(1, 1))
+    compute_maxloc!(ητ, stokes.viscosity.η; window = (1, 1))
     update_halo!(ητ)
     # end
 
@@ -137,32 +137,32 @@ function _solve!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_∇V=norm_∇V,
+        iter = iter,
+        err_evo1 = err_evo1,
+        err_evo2 = err_evo2,
+        norm_Rx = norm_Rx,
+        norm_Ry = norm_Ry,
+        norm_∇V = norm_∇V,
     )
 end
 
 # visco-elastic solver
 function _solve!(
-    stokes::JustRelax.StokesArrays,
-    pt_stokes,
-    di::NTuple{2,T},
-    flow_bcs::AbstractFlowBoundaryConditions,
-    ρg,
-    G,
-    K,
-    dt,
-    igg::IGG;
-    iterMax=10e3,
-    nout=500,
-    b_width=(4, 4, 1),
-    verbose=true,
-    kwargs...,
-) where {T}
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::NTuple{2, T},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        G,
+        K,
+        dt,
+        igg::IGG;
+        iterMax = 10.0e3,
+        nout = 500,
+        b_width = (4, 4, 1),
+        verbose = true,
+        kwargs...,
+    ) where {T}
 
     # unpack
     _di = inv.(di)
@@ -173,7 +173,7 @@ function _solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η; window=(1, 1))
+    compute_maxloc!(ητ, η; window = (1, 1))
     update_halo!(ητ)
     # end
 
@@ -263,36 +263,36 @@ function _solve!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_∇V=norm_∇V,
+        iter = iter,
+        err_evo1 = err_evo1,
+        err_evo2 = err_evo2,
+        norm_Rx = norm_Rx,
+        norm_Ry = norm_Ry,
+        norm_∇V = norm_∇V,
     )
 end
 
 # GeoParams: general (visco-elasto-plastic) solver
 
 function _solve!(
-    stokes::JustRelax.StokesArrays,
-    pt_stokes,
-    di::NTuple{2,T},
-    flow_bcs::AbstractFlowBoundaryConditions,
-    ρg,
-    rheology::MaterialParams,
-    args,
-    dt,
-    igg::IGG;
-    viscosity_cutoff=(-Inf, Inf),
-    viscosity_relaxation=1e-2,
-    iterMax=10e3,
-    nout=500,
-    b_width=(4, 4, 0),
-    verbose=true,
-    free_surface=false,
-    kwargs...,
-) where {T}
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::NTuple{2, T},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        rheology::MaterialParams,
+        args,
+        dt,
+        igg::IGG;
+        viscosity_cutoff = (-Inf, Inf),
+        viscosity_relaxation = 1.0e-2,
+        iterMax = 10.0e3,
+        nout = 500,
+        b_width = (4, 4, 0),
+        verbose = true,
+        free_surface = false,
+        kwargs...,
+    ) where {T}
 
     # unpack
     _di = inv.(di)
@@ -303,7 +303,7 @@ function _solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η; window=(1, 1))
+    compute_maxloc!(ητ, η; window = (1, 1))
     update_halo!(ητ)
     # end
 
@@ -349,9 +349,9 @@ function _solve!(
             )
 
             update_viscosity!(
-                stokes, args, rheology, viscosity_cutoff; relaxation=viscosity_relaxation
+                stokes, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation
             )
-            compute_maxloc!(ητ, η; window=(1, 1))
+            compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -450,38 +450,38 @@ function _solve!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_∇V=norm_∇V,
+        iter = iter,
+        err_evo1 = err_evo1,
+        err_evo2 = err_evo2,
+        norm_Rx = norm_Rx,
+        norm_Ry = norm_Ry,
+        norm_∇V = norm_∇V,
     )
 end
 
 ## With phase ratios
 
 function _solve!(
-    stokes::JustRelax.StokesArrays,
-    pt_stokes,
-    di::NTuple{2,T},
-    flow_bcs::AbstractFlowBoundaryConditions,
-    ρg,
-    phase_ratios::JustPIC.PhaseRatios,
-    rheology,
-    args,
-    dt,
-    igg::IGG;
-    viscosity_cutoff=(-Inf, Inf),
-    viscosity_relaxation=1e-2,
-    iterMax=50e3,
-    iterMin=1e2,
-    free_surface=false,
-    nout=500,
-    b_width=(4, 4, 0),
-    verbose=true,
-    kwargs...,
-) where {T}
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::NTuple{2, T},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        phase_ratios::JustPIC.PhaseRatios,
+        rheology,
+        args,
+        dt,
+        igg::IGG;
+        viscosity_cutoff = (-Inf, Inf),
+        viscosity_relaxation = 1.0e-2,
+        iterMax = 50.0e3,
+        iterMin = 1.0e2,
+        free_surface = false,
+        nout = 500,
+        b_width = (4, 4, 0),
+        verbose = true,
+        kwargs...,
+    ) where {T}
 
     # unpack
 
@@ -493,7 +493,7 @@ function _solve!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η; window=(1, 1))
+    compute_maxloc!(ητ, η; window = (1, 1))
     update_halo!(ητ)
     # end
 
@@ -535,7 +535,7 @@ function _solve!(
         iterMin < iter && err < ϵ && break
 
         wtime0 += @elapsed begin
-            compute_maxloc!(ητ, η; window=(1, 1))
+            compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
@@ -571,7 +571,7 @@ function _solve!(
                 args,
                 rheology,
                 viscosity_cutoff;
-                relaxation=viscosity_relaxation,
+                relaxation = viscosity_relaxation,
             )
             # end
 
@@ -645,9 +645,9 @@ function _solve!(
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             errs = (
                 norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
-                length(stokes.R.Rx),
+                    length(stokes.R.Rx),
                 norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
-                length(stokes.R.Ry),
+                    length(stokes.R.Ry),
                 norm_mpi(stokes.R.RP) / length(stokes.R.RP),
             )
             push!(norm_Rx, errs[1])
@@ -687,11 +687,11 @@ function _solve!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_∇V=norm_∇V,
+        iter = iter,
+        err_evo1 = err_evo1,
+        err_evo2 = err_evo2,
+        norm_Rx = norm_Rx,
+        norm_Ry = norm_Ry,
+        norm_∇V = norm_∇V,
     )
 end

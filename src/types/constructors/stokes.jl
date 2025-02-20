@@ -54,7 +54,7 @@ end
 
 ## Viscosity type
 
-function Viscosity(ni::NTuple{N,Integer}) where {N}
+function Viscosity(ni::NTuple{N, Integer}) where {N}
     η = @ones(ni...)
     η_vep = @ones(ni...)
     ητ = @zeros(ni...)
@@ -106,7 +106,7 @@ function Residual(nx::Integer, ny::Integer, nz::Integer)
 end
 
 ## StokesArrays type
-function StokesArrays(::Type{CPUBackend}, ni::NTuple{N,Integer}) where {N}
+function StokesArrays(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end
 """
@@ -131,7 +131,7 @@ Create the Stokes arrays object in 2D or 3D.
 - `R`: Residual fields
 
 """
-function StokesArrays(ni::NTuple{N,Integer}) where {N}
+function StokesArrays(ni::NTuple{N, Integer}) where {N}
     P = @zeros(ni...)
     P0 = @zeros(ni...)
     ∇V = @zeros(ni...)

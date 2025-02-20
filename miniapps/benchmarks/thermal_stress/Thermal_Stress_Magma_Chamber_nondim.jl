@@ -273,7 +273,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
 
     # Pure shear far-field boundary conditions
     stokes.V.Vx .= PTArray(backend_JR)([
-        εbg * (x - lx * 0.5) / (lx / 2) / 2 for x in xvi[1], _ in 1:(ny + 2)
+        εbg * (x - lx * 0.5) for x in xvi[1], _ in 1:(ny + 2)
     ])
     stokes.V.Vy .= PTArray(backend_JR)([
         (abs(y) - sticky_air) * εbg * (abs(y) > sticky_air) for _ in 1:(nx + 2), y in xvi[2]
@@ -286,7 +286,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
 
-    compute_viscosity!(stokes, phase_ratios, args, rheology, 0, cutoff_visc)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
@@ -357,7 +357,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         # Update buoyancy and viscosity -
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        compute_viscosity!(stokes, phase_ratios, args, rheology, 0, cutoff_visc)
+        compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
         # Stokes solver -----------------
         solve!(
@@ -438,7 +438,7 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
         thermal.ΔT .= thermal.T .- thermal.Told
-        vertex2center!(thermal.ΔTc, thermal.ΔT)
+        vertex2center!(thermal.ΔTc, thermal.ΔT[2:end-1, :])
 
         @show it += 1
         t += dt
@@ -446,7 +446,8 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
         #  # # Plotting -------------------------------------------------------
         if it == 1 || rem(it, 1) == 0
             checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
-
+            t_dim = (dimensionalize(t, yr, CharDim).val / 1e3)
+            t_Kyrs = t_dim / 1e3
             if igg.me == 0
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 if do_vtk
@@ -478,12 +479,10 @@ function main2D(igg; figdir=figdir, nx=nx, ny=ny, do_vtk=false)
                         data_v,
                         data_c,
                         velocity_v,
-                        t=t
+                        t=t_Kyrs
                     )
                 end
 
-                t_dim = (dimensionalize(t, yr, CharDim).val / 1e3)
-                t_Kyrs = t_dim * 1e3
                 # Make Makie figure
                 fig = Figure(; size=(2000, 1800), createmissing=true)
                 ar  = li[1] / li[2]

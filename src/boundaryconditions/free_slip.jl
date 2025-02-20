@@ -69,7 +69,7 @@ end
     return nothing
 end
 
-@parallel_indices (i) function free_slip!(T::_T, bc) where {_T<:AbstractArray{<:Any,2}}
+@parallel_indices (i) function free_slip!(T::_T, bc) where {_T <: AbstractArray{<:Any, 2}}
     @inbounds begin
         if i ≤ size(T, 1)
             bc.bot && (T[i, 1] = T[i, 2])
@@ -83,7 +83,7 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function free_slip!(T::_T, bc) where {_T<:AbstractArray{<:Any,3}}
+@parallel_indices (i, j) function free_slip!(T::_T, bc) where {_T <: AbstractArray{<:Any, 3}}
     nx, ny, nz = size(T)
     @inbounds begin
         if i ≤ nx && j ≤ ny

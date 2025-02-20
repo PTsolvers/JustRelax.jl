@@ -45,21 +45,21 @@ function _temperature2center!(thermal::JustRelax.ThermalArrays)
 end
 
 @parallel_indices (i, j) function temperature2center_kernel!(
-    T_center::T, T_vertex::T
-) where {T<:AbstractArray{_T,2} where {_T<:Real}}
+        T_center::T, T_vertex::T
+    ) where {T <: AbstractArray{_T, 2} where {_T <: Real}}
     T_center[i, j] =
         (
-            T_vertex[i + 1, j] +
+        T_vertex[i + 1, j] +
             T_vertex[i + 2, j] +
             T_vertex[i + 1, j + 1] +
             T_vertex[i + 2, j + 1]
-        ) * 0.25
+    ) * 0.25
     return nothing
 end
 
 @parallel_indices (i, j, k) function temperature2center_kernel!(
-    T_center::T, T_vertex::T
-) where {T<:AbstractArray{_T,3} where {_T<:Real}}
+        T_center::T, T_vertex::T
+    ) where {T <: AbstractArray{_T, 3} where {_T <: Real}}
     @inline av_T() = _av(T_vertex, i, j, k)
 
     T_center[i, j, k] = av_T()
@@ -107,37 +107,37 @@ function center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, c
 end
 
 @parallel_indices (i, j, k) function center2vertex_kernel!(
-    vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy
-)
+        vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy
+    )
     i1, j1, k1 = (i, j, k) .+ 1
     nx, ny, nz = size(center_yz)
 
     if i ≤ nx && j1 ≤ ny && k1 ≤ nz
         vertex_yz[i, j1, k1] =
             0.25 * (
-                center_yz[i, j, k] +
+            center_yz[i, j, k] +
                 center_yz[i, j1, k] +
                 center_yz[i, j, k1] +
                 center_yz[i, j1, k1]
-            )
+        )
     end
     if i1 ≤ nx && j ≤ ny && k1 ≤ nz
         vertex_xz[i1, j, k1] =
             0.25 * (
-                center_xz[i, j, k] +
+            center_xz[i, j, k] +
                 center_xz[i1, j, k] +
                 center_xz[i, j, k1] +
                 center_xz[i1, j, k1]
-            )
+        )
     end
     if i1 ≤ nx && j1 ≤ ny && k ≤ nz
         vertex_xy[i1, j1, k] =
             0.25 * (
-                center_xy[i, j, k] +
+            center_xy[i, j, k] +
                 center_xy[i1, j, k] +
                 center_xy[i, j1, k] +
                 center_xy[i1, j1, k]
-            )
+        )
     end
     return nothing
 end

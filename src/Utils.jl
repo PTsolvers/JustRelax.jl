@@ -10,8 +10,8 @@ macro idx(args...)
     end
 end
 
-@inline _idx(args::NTuple{N,Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
-@inline _idx(args::Vararg{Int,N}) where {N} = ntuple(i -> 1:args[i], Val(N))
+@inline _idx(args::NTuple{N, Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
+@inline _idx(args::Vararg{Int, N}) where {N} = ntuple(i -> 1:args[i], Val(N))
 
 """
     copy(B, A)
@@ -26,8 +26,8 @@ end
 
 multi_copyto!(B::AbstractArray, A::AbstractArray) = copyto!(B, A)
 
-function detect_args_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
-    ntuple(Val(Dims)) do i
+function detect_args_size(A::NTuple{N, AbstractArray{T, Dims}}) where {N, T, Dims}
+    return ntuple(Val(Dims)) do i
         Base.@_inline_meta
         s = ntuple(Val(N)) do j
             Base.@_inline_meta
@@ -38,8 +38,8 @@ function detect_args_size(A::NTuple{N,AbstractArray{T,Dims}}) where {N,T,Dims}
 end
 
 @parallel_indices (I...) function multi_copy!(
-    dst::NTuple{N,T}, src::NTuple{N,T}
-) where {N,T}
+        dst::NTuple{N, T}, src::NTuple{N, T}
+    ) where {N, T}
     ntuple(Val(N)) do k
         Base.@_inline_meta
         if all(I .≤ size(dst[k]))
@@ -50,8 +50,8 @@ end
 end
 
 Base.@propagate_inbounds @generated function unrolled_copy!(
-    dst::NTuple{N,T}, src::NTuple{N,T}, I::Vararg{Int,NI}
-) where {N,NI,T}
+        dst::NTuple{N, T}, src::NTuple{N, T}, I::Vararg{Int, NI}
+    ) where {N, NI, T}
     return quote
         Base.@_inline_meta
         Base.@nexprs $N n -> begin
@@ -81,11 +81,11 @@ macro tuple(A)
     end
 end
 
-@inline _tuple(V::JustRelax.Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
-@inline _tuple(V::JustRelax.Velocity{<:AbstractArray{T,3}}) where {T} = V.Vx, V.Vy, V.Vz
-@inline _tuple(A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}) where {T} =
+@inline _tuple(V::JustRelax.Velocity{<:AbstractArray{T, 2}}) where {T} = V.Vx, V.Vy
+@inline _tuple(V::JustRelax.Velocity{<:AbstractArray{T, 3}}) where {T} = V.Vx, V.Vy, V.Vz
+@inline _tuple(A::JustRelax.SymmetricTensor{<:AbstractArray{T, 2}}) where {T} =
     A.xx, A.yy, A.xy_c
-@inline function _tuple(A::JustRelax.SymmetricTensor{<:AbstractArray{T,3}}) where {T}
+@inline function _tuple(A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}) where {T}
     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
 end
 
@@ -100,8 +100,8 @@ macro velocity(A)
     end
 end
 
-@inline unpack_velocity(V::JustRelax.Velocity{<:AbstractArray{T,2}}) where {T} = V.Vx, V.Vy
-@inline unpack_velocity(V::JustRelax.Velocity{<:AbstractArray{T,3}}) where {T} =
+@inline unpack_velocity(V::JustRelax.Velocity{<:AbstractArray{T, 2}}) where {T} = V.Vx, V.Vy
+@inline unpack_velocity(V::JustRelax.Velocity{<:AbstractArray{T, 3}}) where {T} =
     V.Vx, V.Vy, V.Vz
 
 """
@@ -115,9 +115,9 @@ macro displacement(A)
     end
 end
 
-@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,2}}) where {T} =
+@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T, 2}}) where {T} =
     U.Ux, U.Uy
-@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T,3}}) where {T} =
+@inline unpack_displacement(U::JustRelax.Displacement{<:AbstractArray{T, 3}}) where {T} =
     U.Ux, U.Uy, U.Uz
 
 """
@@ -131,8 +131,8 @@ macro qT(A)
     end
 end
 
-@inline unpack_qT(A::JustRelax.ThermalArrays{<:AbstractArray{T,2}}) where {T} = A.qTx, A.qTy
-@inline unpack_qT(A::JustRelax.ThermalArrays{<:AbstractArray{T,3}}) where {T} =
+@inline unpack_qT(A::JustRelax.ThermalArrays{<:AbstractArray{T, 2}}) where {T} = A.qTx, A.qTy
+@inline unpack_qT(A::JustRelax.ThermalArrays{<:AbstractArray{T, 3}}) where {T} =
     A.qTx, A.qTy, A.qTz
 
 """
@@ -146,9 +146,9 @@ macro qT2(A)
     end
 end
 
-@inline unpack_qT2(A::JustRelax.ThermalArrays{<:AbstractArray{T,2}}) where {T} =
+@inline unpack_qT2(A::JustRelax.ThermalArrays{<:AbstractArray{T, 2}}) where {T} =
     A.qTx2, A.qTy2
-@inline function unpack_qT2(A::JustRelax.ThermalArrays{<:AbstractArray{T,3}}) where {T}
+@inline function unpack_qT2(A::JustRelax.ThermalArrays{<:AbstractArray{T, 3}}) where {T}
     return A.qTx2, A.qTy2, A.qTz2
 end
 
@@ -201,13 +201,13 @@ macro tensor(A)
 end
 
 @inline function unpack_tensor_stag(
-    A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}
-) where {T}
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 2}}
+    ) where {T}
     return A.xx, A.yy, A.xy
 end
 @inline function unpack_tensor_stag(
-    A::JustRelax.SymmetricTensor{<:AbstractArray{T,3}}
-) where {T}
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}
+    ) where {T}
     return A.xx, A.yy, A.zz, A.yz, A.xz, A.xy
 end
 
@@ -224,13 +224,13 @@ macro shear(A)
 end
 
 @inline function unpack_shear_components_stag(
-    A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}
-) where {T}
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 2}}
+    ) where {T}
     return A.xy
 end
 @inline function unpack_shear_components_stag(
-    A::JustRelax.SymmetricTensor{<:AbstractArray{T,3}}
-) where {T}
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}
+    ) where {T}
     return A.yz, A.xz, A.xy
 end
 
@@ -247,8 +247,8 @@ macro normal(A)
 end
 
 @generated function unpack_normal_components_stag(
-    A::JustRelax.SymmetricTensor{<:AbstractArray{T,N}}
-) where {T,N}
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, N}}
+    ) where {T, N}
     syms = (:xx, :yy, :zz)
     return quote
         Base.@_inline_meta
@@ -294,13 +294,13 @@ macro tensor_center(A)
 end
 
 @inline function unpack_tensor_center(
-    A::JustRelax.SymmetricTensor{<:AbstractArray{T,2}}
-) where {T}
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 2}}
+    ) where {T}
     return A.xx, A.yy, A.xy_c
 end
 @inline function unpack_tensor_center(
-    A::JustRelax.SymmetricTensor{<:AbstractArray{T,3}}
-) where {T}
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}
+    ) where {T}
     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
 end
 
@@ -315,10 +315,10 @@ macro residuals(A)
     end
 end
 
-@inline function unpack_residuals(A::JustRelax.Residual{<:AbstractArray{T,2}}) where {T}
+@inline function unpack_residuals(A::JustRelax.Residual{<:AbstractArray{T, 2}}) where {T}
     return A.Rx, A.Ry
 end
-@inline function unpack_residuals(A::JustRelax.Residual{<:AbstractArray{T,3}}) where {T}
+@inline function unpack_residuals(A::JustRelax.Residual{<:AbstractArray{T, 3}}) where {T}
     return A.Rx, A.Ry, A.Rz
 end
 
@@ -328,14 +328,14 @@ macro allocate(ni...)
     return esc(:(PTArray(undef, $(ni...))))
 end
 
-function indices(::NTuple{3,T}) where {T}
+function indices(::NTuple{3, T}) where {T}
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     k = (blockIdx().z - 1) * blockDim().z + threadIdx().z
     return i, j, k
 end
 
-function indices(::NTuple{2,T}) where {T}
+function indices(::NTuple{2, T}) where {T}
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     return i, j
@@ -346,7 +346,7 @@ end
 
 Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` and store the result in `B`.
 """
-function compute_maxloc!(B, A; window=(1, 1, 1))
+function compute_maxloc!(B, A; window = (1, 1, 1))
     ni = size(A)
 
     @parallel_indices (I...) function _maxloc!(B, A, window)
@@ -440,7 +440,7 @@ end
 @inline _compute_dt(S::JustRelax.StokesArrays, di, ::IGG) =
     _compute_dt(@velocity(S), di, Inf, maximum_mpi)
 
-@inline function _compute_dt(V::NTuple, di, dt_diff, max_fun::F) where {F<:Function}
+@inline function _compute_dt(V::NTuple, di, dt_diff, max_fun::F) where {F <: Function}
     n = inv(length(V) + 0.1)
     dt_adv = mapreduce(x -> x[1] * inv(max_fun(abs.(x[2]))), min, zip(di, V)) * n
     return min(dt_diff, dt_adv)
@@ -460,7 +460,7 @@ Check if all elements in `x` are zero.
 # Returns
 - `Bool`: `true` if all elements in `x` are zero, `false` otherwise.
 """
-@inline allzero(x::Vararg{T,N}) where {T,N} = all(x -> x == 0, x)
+@inline allzero(x::Vararg{T, N}) where {T, N} = all(x -> x == 0, x)
 
 """
     take(fldr::String)
@@ -491,7 +491,7 @@ Assigns the values of array `A` to array `B` in parallel.
 - `B::AbstractArray{T,N}`: The destination array.
 - `A::AbstractArray{T,N}`: The source array.
 """
-@parallel function assign!(B::AbstractArray{T,N}, A::AbstractArray{T,N}) where {T,N}
+@parallel function assign!(B::AbstractArray{T, N}, A::AbstractArray{T, N}) where {T, N}
     @all(B) = @all(A)
     return nothing
 end
@@ -519,8 +519,8 @@ function maximum_mpi(A)
 end
 
 for (f1, f2) in zip(
-    (:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum)
-)
+        (:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum)
+    )
     @eval begin
         $f1(A::AbstractArray) = $f2(Array(A))
         $f1(A) = $f2(A)

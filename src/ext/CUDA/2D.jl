@@ -34,60 +34,60 @@ include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 
 # Types
-function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}
+function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end
 
-function JR2D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N,Number}) where {N}
+function JR2D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N, Number}) where {N}
     return ThermalArrays(ni...)
 end
 
-function JR2D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number,N}) where {N}
+function JR2D.ThermalArrays(::Type{CUDABackend}, ni::Vararg{Number, N}) where {N}
     return ThermalArrays(ni...)
 end
 
-function JR2D.WENO5(::Type{CUDABackend}, method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
+function JR2D.WENO5(::Type{CUDABackend}, method::Val{T}, ni::NTuple{N, Integer}) where {N, T}
     return WENO5(method, tuple(ni...))
 end
 
 function JR2D.PTThermalCoeffs(
-    ::Type{CUDABackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
-)
-    return PTThermalCoeffs(K, ρCp, dt, di, li; ϵ=ϵ, CFL=CFL)
+        ::Type{CUDABackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / √3
+    )
+    return PTThermalCoeffs(K, ρCp, dt, di, li; ϵ = ϵ, CFL = CFL)
 end
 
 function JR2D.PTThermalCoeffs(
-    ::Type{CUDABackend},
-    rheology,
-    phase_ratios,
-    args,
-    dt,
-    ni,
-    di::NTuple{nDim,T},
-    li::NTuple{nDim,Any};
-    ϵ=1e-8,
-    CFL=0.9 / √3,
-) where {nDim,T}
-    return PTThermalCoeffs(rheology, phase_ratios, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
+        ::Type{CUDABackend},
+        rheology,
+        phase_ratios,
+        args,
+        dt,
+        ni,
+        di::NTuple{nDim, T},
+        li::NTuple{nDim, Any};
+        ϵ = 1.0e-8,
+        CFL = 0.9 / √3,
+    ) where {nDim, T}
+    return PTThermalCoeffs(rheology, phase_ratios, args, dt, ni, di, li; ϵ = ϵ, CFL = CFL)
 end
 
 function JR2D.PTThermalCoeffs(
-    ::Type{CUDABackend},
-    rheology::MaterialParams,
-    args,
-    dt,
-    ni,
-    di::NTuple,
-    li::NTuple;
-    ϵ=1e-8,
-    CFL=0.9 / √3,
-)
-    return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
+        ::Type{CUDABackend},
+        rheology::MaterialParams,
+        args,
+        dt,
+        ni,
+        di::NTuple,
+        li::NTuple;
+        ϵ = 1.0e-8,
+        CFL = 0.9 / √3,
+    )
+    return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ = ϵ, CFL = CFL)
 end
 
 function JR2D.update_thermal_coeffs!(
-    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, phase_ratios, args, dt
-) where {T}
+        pt_thermal::JustRelax.PTThermalCoeffs{T, <:CuArray}, rheology, phase_ratios, args, dt
+    ) where {T}
     ni = size(pt_thermal.dτ_ρ)
     @parallel (@idx ni) compute_pt_thermal_arrays!(
         pt_thermal.θr_dτ,
@@ -103,8 +103,8 @@ function JR2D.update_thermal_coeffs!(
 end
 
 function JR2D.update_thermal_coeffs!(
-    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, args, dt
-) where {T}
+        pt_thermal::JustRelax.PTThermalCoeffs{T, <:CuArray}, rheology, args, dt
+    ) where {T}
     ni = size(pt_thermal.dτ_ρ)
     @parallel (@idx ni) compute_pt_thermal_arrays!(
         pt_thermal.θr_dτ,
@@ -119,8 +119,8 @@ function JR2D.update_thermal_coeffs!(
 end
 
 function JR2D.update_thermal_coeffs!(
-    pt_thermal::JustRelax.PTThermalCoeffs{T,<:CuArray}, rheology, ::Nothing, args, dt
-) where {T}
+        pt_thermal::JustRelax.PTThermalCoeffs{T, <:CuArray}, rheology, ::Nothing, args, dt
+    ) where {T}
     ni = size(pt_thermal.dτ_ρ)
     @parallel (@idx ni) compute_pt_thermal_arrays!(
         pt_thermal.θr_dτ,
@@ -136,26 +136,26 @@ end
 
 # Boundary conditions
 function JR2D.flow_bcs!(
-    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
-)
+        ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
+    )
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
 function flow_bcs!(
-    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
-)
+        ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
+    )
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
 function JR2D.flow_bcs!(
-    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
-)
+        ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
+    )
     return _flow_bcs!(bcs, @displacement(stokes))
 end
 
 function flow_bcs!(
-    ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
-)
+        ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::DisplacementBoundaryConditions
+    )
     return _flow_bcs!(bcs, @displacement(stokes))
 end
 
@@ -175,8 +175,8 @@ function JR2D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology,
 end
 
 function JR2D.compute_viscosity!(
-    ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
-)
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
+    )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
@@ -189,8 +189,8 @@ function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cuto
 end
 
 function compute_viscosity!(
-    ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
-)
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
+    )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
@@ -204,13 +204,13 @@ function JR2D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor
 end
 
 ## Buoyancy forces
-function JR2D.compute_ρg!(ρg::Union{CuArray,NTuple{N,CuArray}}, rheology, args) where {N}
+function JR2D.compute_ρg!(ρg::Union{CuArray, NTuple{N, CuArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
 end
 
 function JR2D.compute_ρg!(
-    ρg::Union{CuArray,NTuple{N,CuArray}}, phase_ratios::JustPIC.PhaseRatios, rheology, args
-) where {N}
+        ρg::Union{CuArray, NTuple{N, CuArray}}, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    ) where {N}
     return compute_ρg!(ρg, phase_ratios, rheology, args)
 end
 
@@ -220,8 +220,8 @@ function JR2D.compute_melt_fraction!(ϕ::CuArray, rheology, args)
 end
 
 function JR2D.compute_melt_fraction!(
-    ϕ::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
-)
+        ϕ::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
@@ -234,22 +234,22 @@ function temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArray
     return _temperature2center!(thermal)
 end
 
-function JR2D.vertex2center!(center::T, vertex::T) where {T<:CuArray}
+function JR2D.vertex2center!(center::T, vertex::T) where {T <: CuArray}
     return vertex2center!(center, vertex)
 end
 
-function JR2D.center2vertex!(vertex::T, center::T) where {T<:CuArray}
+function JR2D.center2vertex!(vertex::T, center::T) where {T <: CuArray}
     return center2vertex!(vertex, center)
 end
 
 function JR2D.center2vertex!(
-    vertex_yz::T, vertex_xz::T, vertex_xy::T, center_yz::T, center_xz::T, center_xy::T
-) where {T<:CuArray}
+        vertex_yz::T, vertex_xz::T, vertex_xy::T, center_yz::T, center_xz::T, center_xy::T
+    ) where {T <: CuArray}
     center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
     return nothing
 end
 
-function JR2D.velocity2center!(Vx_c::T, Vy_c::T, Vx::T, Vy::T) where {T<:CuArray}
+function JR2D.velocity2center!(Vx_c::T, Vy_c::T, Vx::T, Vy::T) where {T <: CuArray}
     velocity2center!(Vx_c, Vy_c, Vx, Vy)
     return nothing
 end
@@ -292,16 +292,16 @@ end
 # Subgrid diffusion
 
 function JR2D.subgrid_characteristic_time!(
-    subgrid_arrays,
-    particles,
-    dt₀::CuArray,
-    phases::JustPIC.PhaseRatios,
-    rheology,
-    thermal::JustRelax.ThermalArrays,
-    stokes::JustRelax.StokesArrays,
-    xci,
-    di,
-)
+        subgrid_arrays,
+        particles,
+        dt₀::CuArray,
+        phases::JustPIC.PhaseRatios,
+        rheology,
+        thermal::JustRelax.ThermalArrays,
+        stokes::JustRelax.StokesArrays,
+        xci,
+        di,
+    )
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases.center, rheology, thermal.Tc, stokes.P, di
@@ -310,16 +310,16 @@ function JR2D.subgrid_characteristic_time!(
 end
 
 function JR2D.subgrid_characteristic_time!(
-    subgrid_arrays,
-    particles,
-    dt₀::CuArray,
-    phases::AbstractArray{Int,N},
-    rheology,
-    thermal::JustRelax.ThermalArrays,
-    stokes::JustRelax.StokesArrays,
-    xci,
-    di,
-) where {N}
+        subgrid_arrays,
+        particles,
+        dt₀::CuArray,
+        phases::AbstractArray{Int, N},
+        rheology,
+        thermal::JustRelax.ThermalArrays,
+        stokes::JustRelax.StokesArrays,
+        xci,
+        di,
+    ) where {N}
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases, rheology, thermal.Tc, stokes.P, di
@@ -343,8 +343,8 @@ function JR2D.compute_shear_heating!(::CUDABackendTrait, thermal, stokes, rheolo
 end
 
 function JR2D.compute_shear_heating!(
-    ::CUDABackendTrait, thermal, stokes, phase_ratios::JustPIC.PhaseRatios, rheology, dt
-)
+        ::CUDABackendTrait, thermal, stokes, phase_ratios::JustPIC.PhaseRatios, rheology, dt
+    )
     ni = size(thermal.shear_heating)
     @parallel (@idx ni) compute_shear_heating_kernel!(
         thermal.shear_heating,
@@ -366,8 +366,8 @@ end
 # stress rotation on particles
 
 function JR2D.rotate_stress_particles!(
-    τ::NTuple, ω::NTuple, particles::Particles{CUDABackend}, dt; method::Symbol=:matrix
-)
+        τ::NTuple, ω::NTuple, particles::Particles{CUDABackend}, dt; method::Symbol = :matrix
+    )
     fn = if method === :matrix
         rotate_stress_particles_rotation_matrix!
 
@@ -383,15 +383,15 @@ function JR2D.rotate_stress_particles!(
 end
 
 function JR2D.stress2grid!(
-    stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, xvi, xci, particles
-)
+        stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, xvi, xci, particles
+    )
     stress2grid!(stokes, τ_particles, xvi, xci, particles)
     return nothing
 end
 
 function JR2D.rotate_stress!(
-    τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, xci, xvi, dt
-)
+        τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, xci, xvi, dt
+    )
     rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
     return nothing
 end

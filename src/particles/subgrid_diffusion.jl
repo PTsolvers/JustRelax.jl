@@ -1,16 +1,16 @@
 # import JustRelax.compute_ρCp
 
 function subgrid_characteristic_time!(
-    subgrid_arrays,
-    particles,
-    dt₀,
-    phases::JustPIC.PhaseRatios,
-    rheology,
-    thermal::JustRelax.ThermalArrays,
-    stokes::JustRelax.StokesArrays,
-    xci,
-    di,
-)
+        subgrid_arrays,
+        particles,
+        dt₀,
+        phases::JustPIC.PhaseRatios,
+        rheology,
+        thermal::JustRelax.ThermalArrays,
+        stokes::JustRelax.StokesArrays,
+        xci,
+        di,
+    )
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases.center, rheology, thermal.Tc, stokes.P, di
@@ -19,16 +19,16 @@ function subgrid_characteristic_time!(
 end
 
 function subgrid_characteristic_time!(
-    subgrid_arrays,
-    particles,
-    dt₀,
-    phases::AbstractArray{Int,N},
-    rheology,
-    thermal::JustRelax.ThermalArrays,
-    stokes::JustRelax.StokesArrays,
-    xci,
-    di,
-) where {N}
+        subgrid_arrays,
+        particles,
+        dt₀,
+        phases::AbstractArray{Int, N},
+        rheology,
+        thermal::JustRelax.ThermalArrays,
+        stokes::JustRelax.StokesArrays,
+        xci,
+        di,
+    ) where {N}
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases, rheology, thermal.Tc, stokes.P, di
@@ -37,10 +37,10 @@ function subgrid_characteristic_time!(
 end
 
 @parallel_indices (I...) function subgrid_characteristic_time!(
-    dt₀, phase_ratios, rheology, T, P, di
-)
+        dt₀, phase_ratios, rheology, T, P, di
+    )
     Pᵢ, Tᵢ = P[I...], T[I...]
-    argsᵢ = (; P=Pᵢ, T=Tᵢ)
+    argsᵢ = (; P = Pᵢ, T = Tᵢ)
     phaseᵢ = @cell phase_ratios[I...]
 
     # Compute the characteristic timescale `dt₀` of the local cell

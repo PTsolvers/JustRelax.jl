@@ -17,8 +17,8 @@ end
 # With GeoParams
 
 @parallel_indices (I...) function compute_P!(
-    P, P0, RP, ∇V, Q, η, rheology::NTuple{N,MaterialParams}, phase, dt, r, θ_dτ, args
-) where {N}
+        P, P0, RP, ∇V, Q, η, rheology::NTuple{N, MaterialParams}, phase, dt, r, θ_dτ, args
+    ) where {N}
     K = get_bulk_modulus(rheology, phase[I...])
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
@@ -40,38 +40,38 @@ Compute the pressure field `P` and the residual `RP` for the compressible case. 
 - `phase_ratio`: phase field
 """
 function compute_P!(
-    P,
-    P0,
-    RP,
-    ∇V,
-    Q, # volumetric source/sink term
-    η,
-    rheology::NTuple{N,MaterialParams},
-    phase_ratio,
-    dt,
-    r,
-    θ_dτ,
-    kwargs::NamedTuple,
-) where {N}
+        P,
+        P0,
+        RP,
+        ∇V,
+        Q, # volumetric source/sink term
+        η,
+        rheology::NTuple{N, MaterialParams},
+        phase_ratio,
+        dt,
+        r,
+        θ_dτ,
+        kwargs::NamedTuple,
+    ) where {N}
     return compute_P!(P, P0, RP, ∇V, Q, η, rheology, phase_ratio, dt, r, θ_dτ; kwargs...)
 end
 
 function compute_P!(
-    P,
-    P0,
-    RP,
-    ∇V,
-    Q, # volumetric source/sink term
-    η,
-    rheology::NTuple{N,MaterialParams},
-    phase_ratio,
-    dt,
-    r,
-    θ_dτ;
-    ΔTc=nothing,
-    ϕ=nothing,
-    kwargs...,
-) where {N}
+        P,
+        P0,
+        RP,
+        ∇V,
+        Q, # volumetric source/sink term
+        η,
+        rheology::NTuple{N, MaterialParams},
+        phase_ratio,
+        dt,
+        r,
+        θ_dτ;
+        ΔTc = nothing,
+        ϕ = nothing,
+        kwargs...,
+    ) where {N}
     ni = size(P)
     @parallel (@idx ni) compute_P_kernel!(
         P, P0, RP, ∇V, Q, η, rheology, phase_ratio, dt, r, θ_dτ, ΔTc, ϕ
@@ -80,60 +80,60 @@ function compute_P!(
 end
 
 @parallel_indices (I...) function compute_P_kernel!(
-    P,
-    P0,
-    RP,
-    ∇V,
-    Q, # volumetric source/sink term
-    η,
-    rheology::NTuple{N,MaterialParams},
-    phase_ratio::C,
-    dt,
-    r,
-    θ_dτ,
-    ::Nothing,
-    ::Nothing,
-) where {N,C<:JustRelax.CellArray}
+        P,
+        P0,
+        RP,
+        ∇V,
+        Q, # volumetric source/sink term
+        η,
+        rheology::NTuple{N, MaterialParams},
+        phase_ratio::C,
+        dt,
+        r,
+        θ_dτ,
+        ::Nothing,
+        ::Nothing,
+    ) where {N, C <: JustRelax.CellArray}
     K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
 
 @parallel_indices (I...) function compute_P_kernel!(
-    P,
-    P0,
-    RP,
-    ∇V,
-    Q, # volumetric source/sink term
-    η,
-    rheology::NTuple{N,MaterialParams},
-    phase_ratio::C,
-    dt,
-    r,
-    θ_dτ,
-    ::Nothing,
-    ϕ,
-) where {N,C<:JustRelax.CellArray}
+        P,
+        P0,
+        RP,
+        ∇V,
+        Q, # volumetric source/sink term
+        η,
+        rheology::NTuple{N, MaterialParams},
+        phase_ratio::C,
+        dt,
+        r,
+        θ_dτ,
+        ::Nothing,
+        ϕ,
+    ) where {N, C <: JustRelax.CellArray}
     K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
 
 @parallel_indices (I...) function compute_P_kernel!(
-    P,
-    P0,
-    RP,
-    ∇V,
-    Q, # volumetric source/sink term
-    η,
-    rheology::NTuple{N,MaterialParams},
-    phase_ratio::C,
-    dt,
-    r,
-    θ_dτ,
-    ΔTc,
-    ::Nothing,
-) where {N,C<:JustRelax.CellArray}
+        P,
+        P0,
+        RP,
+        ∇V,
+        Q, # volumetric source/sink term
+        η,
+        rheology::NTuple{N, MaterialParams},
+        phase_ratio::C,
+        dt,
+        r,
+        θ_dτ,
+        ΔTc,
+        ::Nothing,
+    ) where {N, C <: JustRelax.CellArray}
     phase_ratio_I = phase_ratio[I...]
     K = fn_ratio(get_bulk_modulus, rheology, phase_ratio_I)
     α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
@@ -144,22 +144,22 @@ end
 end
 
 @parallel_indices (I...) function compute_P_kernel!(
-    P,
-    P0,
-    RP,
-    ∇V,
-    Q, # volumetric source/sink term
-    η,
-    rheology::NTuple{N,MaterialParams},
-    phase_ratio::C,
-    dt,
-    r,
-    θ_dτ,
-    ΔTc,
-    ϕ,
-) where {N,C<:JustRelax.CellArray}
+        P,
+        P0,
+        RP,
+        ∇V,
+        Q, # volumetric source/sink term
+        η,
+        rheology::NTuple{N, MaterialParams},
+        phase_ratio::C,
+        dt,
+        r,
+        θ_dτ,
+        ΔTc,
+        ϕ,
+    ) where {N, C <: JustRelax.CellArray}
     K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
-    α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ=ϕ[I...]))
+    α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = ϕ[I...]))
     RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
     )

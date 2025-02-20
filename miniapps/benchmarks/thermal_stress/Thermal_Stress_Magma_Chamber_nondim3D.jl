@@ -434,7 +434,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         if it == 1 || rem(it, 1) == 0
             (; η) = stokes.viscosity
             checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
-
+            t_dim = (dimensionalize(t, yr, CharDim).val / 1e3)
+            t_Kyrs = t_dim / 1e3
             if igg.me == 0
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
@@ -469,7 +470,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                         xci,
                         data_v,
                         data_c,
-                        velocity_v,
+                        velocity_v;
+                        t=t_Kyrs
                     )
                 end
 

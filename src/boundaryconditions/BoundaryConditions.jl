@@ -4,12 +4,12 @@ include("free_surface.jl")
 include("no_slip.jl")
 include("pure_shear.jl")
 
-@inline bc_index(x::T) where {T<:AbstractArray{_T,2} where {_T}} = max(size(x)...)
-@inline bc_index(x::T) where {T<:AbstractArray{_T,3} where {_T}} =
+@inline bc_index(x::T) where {T <: AbstractArray{_T, 2} where {_T}} = max(size(x)...)
+@inline bc_index(x::T) where {T <: AbstractArray{_T, 3} where {_T}} =
     max(size(x)...), max(size(x)...)
 
-@inline bc_index(x::NTuple{2,T}) where {T} = mapreduce(xi -> max(size(xi)...), max, x)
-@inline function bc_index(x::NTuple{3,T}) where {T}
+@inline bc_index(x::NTuple{2, T}) where {T} = mapreduce(xi -> max(size(xi)...), max, x)
+@inline function bc_index(x::NTuple{3, T}) where {T}
     n = mapreduce(xi -> max(size(xi)...), max, x)
     return n, n
 end
@@ -23,8 +23,8 @@ Apply the prescribed heat boundary conditions `bc` on the `T`
 """
 thermal_bcs!(thermal, bcs) = thermal_bcs!(backend(thermal), thermal, bcs)
 function thermal_bcs!(
-    ::CPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs::TemperatureBoundaryConditions
-)
+        ::CPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs::TemperatureBoundaryConditions
+    )
     return thermal_bcs!(thermal.T, bcs)
 end
 
@@ -59,7 +59,7 @@ function flow_bcs!(::CPUBackendTrait, stokes, bcs::DisplacementBoundaryCondition
     return _flow_bcs!(bcs, @displacement(stokes))
 end
 
-function flow_bcs!(bcs, V::Vararg{T,N}) where {T,N}
+function flow_bcs!(bcs, V::Vararg{T, N}) where {T, N}
     return _flow_bcs!(bcs, tuple(V...))
 end
 

@@ -108,8 +108,6 @@ function adjoint_2D!(
                     Const(_di[2]),
                     Const(dt * free_surface))
 
-        
-                    #=
             @parallel (@idx ni) configcall=compute_P_kernelAD!(
                 stokes.P,
                 stokes.P0,
@@ -140,25 +138,7 @@ function adjoint_2D!(
                     Const(nothing),
                     Const(nothing)
                     )
-                    =#
-                    
-                    
-            @parallel (@idx ni) ana_P!(
-                    stokesAD.P,
-                    stokes.P0,
-                    stokesAD.R.RP,
-                    stokes.∇V,
-                    ητ,
-                    rheology,
-                    phase_ratios.center,
-                    dt,
-                    r,
-                    θ_dτ,
-                    nothing,
-                    nothing
-                )
-                
-
+            
             @parallel (@idx ni) update_PAD!(
                 stokesAD.PA,
                 stokesAD.P,

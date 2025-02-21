@@ -1,8 +1,8 @@
-function ThermalArrays(::Type{CPUBackend}, ni::NTuple{N,Integer}) where {N}
+function ThermalArrays(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return ThermalArrays(ni...)
 end
 
-function ThermalArrays(::Type{CPUBackend}, ni::Vararg{Integer,N}) where {N}
+function ThermalArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}
     return ThermalArrays(ni...)
 end
 

@@ -32,8 +32,8 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_strain_rate!(
-    ∇V::AbstractArray{T,3}, εxx, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, _dx, _dy, _dz
-) where {T}
+        ∇V::AbstractArray{T, 3}, εxx, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, _dx, _dy, _dz
+    ) where {T}
     d_xi(A) = _d_xi(A, i, j, k, _dx)
     d_yi(A) = _d_yi(A, i, j, k, _dy)
     d_zi(A) = _d_zi(A, i, j, k, _dz)
@@ -53,25 +53,25 @@ end
         if all((i, j, k) .≤ size(εyz))
             εyz[i, j, k] =
                 0.5 * (
-                    _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
+                _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
                     _dy * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
-                )
+            )
         end
         # Compute ε_xz
         if all((i, j, k) .≤ size(εxz))
             εxz[i, j, k] =
                 0.5 * (
-                    _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
+                _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
                     _dx * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
-                )
+            )
         end
         # Compute ε_xy
         if all((i, j, k) .≤ size(εxy))
             εxy[i, j, k] =
                 0.5 * (
-                    _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
+                _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
                     _dx * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
-                )
+            )
         end
     end
     return nothing
@@ -178,28 +178,28 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_V!(
-    Vx::AbstractArray{T,3},
-    Vy,
-    Vz,
-    Rx,
-    Ry,
-    Rz,
-    P,
-    fx,
-    fy,
-    fz,
-    τxx,
-    τyy,
-    τzz,
-    τyz,
-    τxz,
-    τxy,
-    ητ,
-    ηdτ,
-    _dx,
-    _dy,
-    _dz,
-) where {T}
+        Vx::AbstractArray{T, 3},
+        Vy,
+        Vz,
+        Rx,
+        Ry,
+        Rz,
+        P,
+        fx,
+        fy,
+        fz,
+        τxx,
+        τyy,
+        τzz,
+        τyz,
+        τxz,
+        τxy,
+        ητ,
+        ηdτ,
+        _dx,
+        _dy,
+        _dz,
+    ) where {T}
     harm_x(A) = _harm_x(A, i, j, k)
     harm_y(A) = _harm_y(A, i, j, k)
     harm_z(A) = _harm_z(A, i, j, k)
@@ -214,25 +214,25 @@ end
         if all((i, j, k) .< size(Vx) .- 1)
             Rx_ijk =
                 Rx[i, j, k] =
-                    d_xa(τxx) +
-                    _dy * (τxy[i + 1, j + 1, k] - τxy[i + 1, j, k]) +
-                    _dz * (τxz[i + 1, j, k + 1] - τxz[i + 1, j, k]) - d_xa(P) - av_x(fx)
+                d_xa(τxx) +
+                _dy * (τxy[i + 1, j + 1, k] - τxy[i + 1, j, k]) +
+                _dz * (τxz[i + 1, j, k + 1] - τxz[i + 1, j, k]) - d_xa(P) - av_x(fx)
             Vx[i + 1, j + 1, k + 1] += Rx_ijk * ηdτ / av_x(ητ)
         end
         if all((i, j, k) .< size(Vy) .- 1)
             Ry_ijk =
                 Ry[i, j, k] =
-                    _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
-                    _dy * (τyy[i, j + 1, k] - τyy[i, j, k]) +
-                    _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) - d_ya(P) - av_y(fy)
+                _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
+                _dy * (τyy[i, j + 1, k] - τyy[i, j, k]) +
+                _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) - d_ya(P) - av_y(fy)
             Vy[i + 1, j + 1, k + 1] += Ry_ijk * ηdτ / av_y(ητ)
         end
         if all((i, j, k) .< size(Vz) .- 1)
             Rz_ijk =
                 Rz[i, j, k] =
-                    _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
-                    _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) +
-                    d_za(τzz) - d_za(P) - av_z(fz)
+                _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
+                _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) +
+                d_za(τzz) - d_za(P) - av_z(fz)
             Vz[i + 1, j + 1, k + 1] += Rz_ijk * ηdτ / av_z(ητ)
         end
     end

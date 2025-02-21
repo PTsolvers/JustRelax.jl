@@ -1,4 +1,4 @@
-struct VTKDataSeries{T,S,G}
+struct VTKDataSeries{T, S, G}
     series::T
     path::S
     name::S
@@ -12,8 +12,8 @@ struct VTKDataSeries{T,S,G}
         else
             pwd()
         end
-        series = paraview_collection(full_name; append=true)
-        return new{typeof(series),String,typeof(xi)}(series, path, name, xi)
+        series = paraview_collection(full_name; append = true)
+        return new{typeof(series), String, typeof(xi)}(series, path, name, xi)
     end
 end
 
@@ -32,7 +32,7 @@ function append!(data_series, data::NamedTuple, time_step, seconds)
     vtk_save(vtk)
     # open pvd file
     pvd_name = joinpath(data_series.path, data_series.name)
-    pvd = paraview_collection(pvd_name; append=true)
+    pvd = paraview_collection(pvd_name; append = true)
     # add vtk file to time series
     collection_add_timestep(pvd, vtk, seconds)
     # close pvd file
@@ -42,14 +42,14 @@ function append!(data_series, data::NamedTuple, time_step, seconds)
 end
 
 function save_vtk(
-    fname::String,
-    xvi,
-    xci,
-    data_v::NamedTuple,
-    data_c::NamedTuple,
-    velocity::NTuple{N,T};
-    t::Number=nothing,
-) where {N,T}
+        fname::String,
+        xvi,
+        xci,
+        data_v::NamedTuple,
+        data_c::NamedTuple,
+        velocity::NTuple{N, T};
+        t::Number = nothing,
+    ) where {N, T}
 
     # unpack data names and arrays
     data_names_v = string.(keys(data_v))
@@ -85,8 +85,8 @@ function save_vtk(
 end
 
 function save_vtk(
-    fname::String, xci, data_c::NamedTuple, velocity::NTuple{N,T}; t::Number=nothing
-) where {N,T}
+        fname::String, xci, data_c::NamedTuple, velocity::NTuple{N, T}; t::Number = nothing
+    ) where {N, T}
 
     # unpack data names and arrays
     data_names_c = string.(keys(data_c))
@@ -142,12 +142,12 @@ save_marker_chain("Example", cell_vertices, h_vertices)
 ```
 """
 function save_marker_chain(
-    fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64}
-)
+        fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64}
+    )
     cell_vertices_vec = collect(cell_vertices)  # Convert LinRange to Vector
     n_points = length(cell_vertices_vec)
     points = [
-        SVector{3,Float64}(cell_vertices_vec[i], h_vertices[i], 0.0) for i in 1:n_points
+        SVector{3, Float64}(cell_vertices_vec[i], h_vertices[i], 0.0) for i in 1:n_points
     ]
     lines = [MeshCell(PolyData.Lines(), 1:(n_points))]  # Create a single line connecting all points
 

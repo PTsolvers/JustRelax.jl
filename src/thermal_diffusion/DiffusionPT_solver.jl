@@ -1,5 +1,5 @@
 function heatdiffusion_PT!(thermal, args...; kwargs)
-    return heatdiffusion_PT!(backend(thermal), thermal, args...; kwargs=kwargs)
+    return heatdiffusion_PT!(backend(thermal), thermal, args...; kwargs = kwargs)
 end
 
 function heatdiffusion_PT!(::CPUBackendTrait, thermal, args...; kwargs)
@@ -12,20 +12,20 @@ end
 Heat diffusion solver using Pseudo-Transient iterations. Both `K` and `ρCp` are n-dimensional arrays.
 """
 function _heatdiffusion_PT!(
-    thermal::JustRelax.ThermalArrays,
-    pt_thermal::JustRelax.PTThermalCoeffs,
-    thermal_bc::TemperatureBoundaryConditions,
-    K::AbstractArray,
-    ρCp::AbstractArray,
-    dt,
-    di;
-    igg=nothing,
-    b_width=(4, 4, 1),
-    iterMax=50e3,
-    nout=1e3,
-    verbose=true,
-    kwargs...,
-)
+        thermal::JustRelax.ThermalArrays,
+        pt_thermal::JustRelax.PTThermalCoeffs,
+        thermal_bc::TemperatureBoundaryConditions,
+        K::AbstractArray,
+        ρCp::AbstractArray,
+        dt,
+        di;
+        igg = nothing,
+        b_width = (4, 4, 1),
+        iterMax = 50.0e3,
+        nout = 1.0e3,
+        verbose = true,
+        kwargs...,
+    )
     # Compute some constant stuff
     _dt = inv(dt)
     _di = inv.(di)
@@ -42,7 +42,7 @@ function _heatdiffusion_PT!(
 
     # Pseudo-transient iteration
     iter = 0
-    wtime0 = 0e0
+    wtime0 = 0.0e0
     err = 2 * ϵ
 
     println("\n ====================================\n")
@@ -97,13 +97,13 @@ function _heatdiffusion_PT!(
         end
     end
 
-    println("\n ...solver finished in $(round(wtime0, sigdigits=5)) seconds \n")
+    println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
     println("====================================\n")
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
     temperature2center!(thermal)
 
-    return (iter_count=iter_count, norm_ResT=norm_ResT)
+    return (iter_count = iter_count, norm_ResT = norm_ResT)
 end
 
 """
@@ -112,22 +112,22 @@ end
 Heat diffusion solver using Pseudo-Transient iterations.
 """
 function _heatdiffusion_PT!(
-    thermal::JustRelax.ThermalArrays,
-    pt_thermal::JustRelax.PTThermalCoeffs,
-    thermal_bc::TemperatureBoundaryConditions,
-    rheology,
-    args::NamedTuple,
-    dt,
-    di;
-    igg=nothing,
-    phase=nothing,
-    stokes=nothing,
-    b_width=(4, 4, 4),
-    iterMax=50e3,
-    nout=1e3,
-    verbose=true,
-    kwargs...,
-)
+        thermal::JustRelax.ThermalArrays,
+        pt_thermal::JustRelax.PTThermalCoeffs,
+        thermal_bc::TemperatureBoundaryConditions,
+        rheology,
+        args::NamedTuple,
+        dt,
+        di;
+        igg = nothing,
+        phase = nothing,
+        stokes = nothing,
+        b_width = (4, 4, 4),
+        iterMax = 50.0e3,
+        nout = 1.0e3,
+        verbose = true,
+        kwargs...,
+    )
     phases = get_phase(phase)
 
     # Compute some constant stuff
@@ -150,7 +150,7 @@ function _heatdiffusion_PT!(
 
     # Pseudo-transient iteration
     iter = 0
-    wtime0 = 0e0
+    wtime0 = 0.0e0
     err = 2 * ϵ
 
     println("\n ====================================\n")
@@ -221,13 +221,13 @@ function _heatdiffusion_PT!(
         end
     end
 
-    println("\n ...solver finished in $(round(wtime0, sigdigits=5)) seconds \n")
+    println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
     println("====================================\n")
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
     temperature2center!(thermal)
 
-    return (iter_count=iter_count, norm_ResT=norm_ResT)
+    return (iter_count = iter_count, norm_ResT = norm_ResT)
 end
 
 @inline flux_range(nx, ny) = @idx (nx + 3, ny + 1)

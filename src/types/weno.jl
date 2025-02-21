@@ -29,7 +29,7 @@ weno = WENO5(Val(2), (nx, ny))
 The `WENO5` structure contains the parameters and temporary variables used in the WENO scheme. These include the upwind and downwind constants, the constants for betas, the stencil candidate weights, the tolerance, the grid size, the fluxes, and the method.
 """
 # Define the WENO5 struct
-struct WENO5{T,N,A,M} <: AbstractWENO
+struct WENO5{T, N, A, M} <: AbstractWENO
     # upwind constants
     d0L::T
     d1L::T
@@ -50,7 +50,7 @@ struct WENO5{T,N,A,M} <: AbstractWENO
     # tolerance
     ϵ::T
     # grid size
-    ni::NTuple{N,Int64}
+    ni::NTuple{N, Int64}
     # fluxes
     ut::A
     fL::A

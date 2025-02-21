@@ -32,7 +32,7 @@ Base.@propagate_inbounds @inline top(
 ) where {I<:Integer} = A[i, j, k + 1]
 
 ## 2D mini kernels
-const T2 = AbstractArray{T,2} where {T}
+const T2 = AbstractArray{T, 2} where {T}
 
 # finite differences
 Base.@propagate_inbounds @inline _d_xa(
@@ -86,7 +86,7 @@ Base.@propagate_inbounds @inline function _gather(A::T, I::Vararg{Integer,2}) wh
 end
 
 ## 3D mini kernels
-const T3 = AbstractArray{T,3} where {T}
+const T3 = AbstractArray{T, 3} where {T}
 
 # finite differences
 @inline function _d_zi(A::T, i, j, k, _dz) where {T<:T3}
@@ -126,22 +126,22 @@ end
 @inline function _harm_z(A::T, i, j, k) where {T<:T3}
     return eltype(A)(2) * inv(inv(center(A, i, j, k)) + inv(top(A, i, j, k)))
 end
-@inline function _harm_xy(A::T, i, j, k) where {T<:T3}
+@inline function _harm_xy(A::T, i, j, k) where {T <: T3}
     return eltype(A)(4) * inv(mysum(A, i:(i + 1), j:(j + 1), k:k))
 end
-@inline function _harm_xz(A::T, i, j, k) where {T<:T3}
+@inline function _harm_xz(A::T, i, j, k) where {T <: T3}
     return eltype(A)(4) * inv(mysum(A, i:(i + 1), j:j, k:(k + 1)))
 end
-@inline function _harm_yz(A::T, i, j, k) where {T<:T3}
+@inline function _harm_yz(A::T, i, j, k) where {T <: T3}
     return eltype(A)(4) * inv(mysum(A, i:i, j:(j + 1), k:(k + 1)))
 end
-@inline function _harm_xyi(A::T, i, j, k) where {T<:T3}
+@inline function _harm_xyi(A::T, i, j, k) where {T <: T3}
     return eltype(A)(4) * inv(mysum(A, (i - 1):i, (j - 1):j, k:k))
 end
-@inline function _harm_xzi(A::T, i, j, k) where {T<:T3}
+@inline function _harm_xzi(A::T, i, j, k) where {T <: T3}
     return eltype(A)(4) * inv(mysum(A, (i - 1):i, j:j, (k - 1):k))
 end
-@inline function _harm_yzi(A::T, i, j, k) where {T<:T3}
+@inline function _harm_yzi(A::T, i, j, k) where {T <: T3}
     return eltype(A)(4) * inv(mysum(A, i:i, (j - 1):j, (k - 1):k))
 end
 
@@ -158,7 +158,7 @@ end
 @inline _current(A::T, i, j, k) where {T<:T3} = center(A, i, j, k)
 
 ## Because mysum(::generator) does not work inside CUDA kernels...
-@inline mysum(A, ranges::Vararg{T,N}) where {T,N} = mysum(identity, A, ranges...)
+@inline mysum(A, ranges::Vararg{T, N}) where {T, N} = mysum(identity, A, ranges...)
 
 @inline function mysum(f::F, A::AbstractArray, ranges_i) where {F<:Function}
     s = 0.0

@@ -1,6 +1,6 @@
 @parallel function update_τ_o!(
-    τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o, τxx, τyy, τzz, τxy, τxz, τyz
-)
+        τxx_o, τyy_o, τzz_o, τxy_o, τxz_o, τyz_o, τxx, τyy, τzz, τxy, τxz, τyz
+    )
     @all(τxx_o) = @all(τxx)
     @all(τyy_o) = @all(τyy)
     @all(τzz_o) = @all(τzz)
@@ -11,7 +11,7 @@
 end
 
 function update_τ_o!(stokes::JustRelax.StokesArrays)
-    @parallel update_τ_o!(@tensor(stokes.τ_o)..., @stress(stokes)...)
+    return @parallel update_τ_o!(@tensor(stokes.τ_o)..., @stress(stokes)...)
 end
 
 ## 3D VISCO-ELASTIC STOKES SOLVER
@@ -23,22 +23,22 @@ end
 solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...)
 
 function _solve!(
-    stokes::JustRelax.StokesArrays,
-    pt_stokes,
-    di::NTuple{3,T},
-    flow_bcs::AbstractFlowBoundaryConditions,
-    ρg,
-    K,
-    G,
-    dt,
-    igg::IGG;
-    viscosity_relaxation=1e-2,
-    iterMax=10e3,
-    nout=500,
-    b_width=(4, 4, 4),
-    verbose=true,
-    kwargs...,
-) where {T}
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::NTuple{3, T},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        K,
+        G,
+        dt,
+        igg::IGG;
+        viscosity_relaxation = 1.0e-2,
+        iterMax = 10.0e3,
+        nout = 500,
+        b_width = (4, 4, 4),
+        verbose = true,
+        kwargs...,
+    ) where {T}
 
     # solver related
     ϵ = pt_stokes.ϵ
@@ -76,6 +76,7 @@ function _solve!(
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
+                stokes.Q,
                 η,
                 K,
                 dt,
@@ -149,38 +150,38 @@ function _solve!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_Rz=norm_Rz,
-        norm_∇V=norm_∇V,
-        time=wtime0,
-        av_time=av_time,
+        iter = iter,
+        err_evo1 = err_evo1,
+        err_evo2 = err_evo2,
+        norm_Rx = norm_Rx,
+        norm_Ry = norm_Ry,
+        norm_Rz = norm_Rz,
+        norm_∇V = norm_∇V,
+        time = wtime0,
+        av_time = av_time,
     )
 end
 
 ## 3D VISCO-ELASTO-PLASTIC STOKES SOLVER WITH GeoParams.jl
 
 function _solve!(
-    stokes::JustRelax.StokesArrays,
-    pt_stokes,
-    di::NTuple{3,T},
-    flow_bcs::AbstractFlowBoundaryConditions,
-    ρg,
-    rheology::MaterialParams,
-    args,
-    dt,
-    igg::IGG;
-    iterMax=10e3,
-    nout=500,
-    b_width=(4, 4, 4),
-    viscosity_relaxation=1e-2,
-    viscosity_cutoff=(-Inf, Inf),
-    verbose=true,
-    kwargs...,
-) where {T}
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::NTuple{3, T},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        rheology::MaterialParams,
+        args,
+        dt,
+        igg::IGG;
+        iterMax = 10.0e3,
+        nout = 500,
+        b_width = (4, 4, 4),
+        viscosity_relaxation = 1.0e-2,
+        viscosity_cutoff = (-Inf, Inf),
+        verbose = true,
+        kwargs...,
+    ) where {T}
 
     # solver related
     ϵ = pt_stokes.ϵ
@@ -229,6 +230,7 @@ function _solve!(
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
+                stokes.Q,
                 ητ,
                 Kb,
                 dt,
@@ -248,7 +250,7 @@ function _solve!(
                 args,
                 rheology,
                 viscosity_cutoff;
-                relaxation=viscosity_relaxation,
+                relaxation = viscosity_relaxation,
             )
 
             @parallel (@idx ni) compute_τ_nonlinear!(
@@ -309,17 +311,17 @@ function _solve!(
             push!(
                 norm_Rx,
                 norm_mpi(stokes.R.Rx[2:(end - 1), 2:(end - 1), 2:(end - 1)]) /
-                length(stokes.R.Rx),
+                    length(stokes.R.Rx),
             )
             push!(
                 norm_Ry,
                 norm_mpi(stokes.R.Ry[2:(end - 1), 2:(end - 1), 2:(end - 1)]) /
-                length(stokes.R.Ry),
+                    length(stokes.R.Ry),
             )
             push!(
                 norm_Rz,
                 norm_mpi(stokes.R.Rz[2:(end - 1), 2:(end - 1), 2:(end - 1)]) /
-                length(stokes.R.Rz),
+                    length(stokes.R.Rz),
             )
             push!(norm_∇V, norm_mpi(stokes.R.RP) / length(stokes.R.RP))
 
@@ -359,38 +361,38 @@ function _solve!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_Rz=norm_Rz,
-        norm_∇V=norm_∇V,
-        time=wtime0,
-        av_time=av_time,
+        iter = iter,
+        err_evo1 = err_evo1,
+        err_evo2 = err_evo2,
+        norm_Rx = norm_Rx,
+        norm_Ry = norm_Ry,
+        norm_Rz = norm_Rz,
+        norm_∇V = norm_∇V,
+        time = wtime0,
+        av_time = av_time,
     )
 end
 
 # GeoParams and multiple phases
 function _solve!(
-    stokes::JustRelax.StokesArrays,
-    pt_stokes,
-    di::NTuple{3,T},
-    flow_bcs::AbstractFlowBoundaryConditions,
-    ρg,
-    phase_ratios::JustPIC.PhaseRatios,
-    rheology::NTuple{N,AbstractMaterialParamsStruct},
-    args,
-    dt,
-    igg::IGG;
-    iterMax=10e3,
-    nout=500,
-    b_width=(4, 4, 4),
-    verbose=true,
-    viscosity_relaxation=1e-2,
-    viscosity_cutoff=(-Inf, Inf),
-    kwargs...,
-) where {T,N}
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::NTuple{3, T},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        phase_ratios::JustPIC.PhaseRatios,
+        rheology::NTuple{N, AbstractMaterialParamsStruct},
+        args,
+        dt,
+        igg::IGG;
+        iterMax = 10.0e3,
+        nout = 500,
+        b_width = (4, 4, 4),
+        verbose = true,
+        viscosity_relaxation = 1.0e-2,
+        viscosity_cutoff = (-Inf, Inf),
+        kwargs...,
+    ) where {T, N}
 
     ## UNPACK
 
@@ -442,6 +444,7 @@ function _solve!(
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
+                stokes.Q,
                 ητ,
                 rheology,
                 phase_ratios,
@@ -465,7 +468,7 @@ function _solve!(
                 args,
                 rheology,
                 viscosity_cutoff;
-                relaxation=viscosity_relaxation,
+                relaxation = viscosity_relaxation,
             )
             # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
@@ -563,14 +566,14 @@ function _solve!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_Rz=norm_Rz,
-        norm_∇V=norm_∇V,
-        time=wtime0,
-        av_time=av_time,
+        iter = iter,
+        err_evo1 = err_evo1,
+        err_evo2 = err_evo2,
+        norm_Rx = norm_Rx,
+        norm_Ry = norm_Ry,
+        norm_Rz = norm_Rz,
+        norm_∇V = norm_∇V,
+        time = wtime0,
+        av_time = av_time,
     )
 end

@@ -1,5 +1,5 @@
-abstract type AbstractDirichletBoundaryCondition{T,M} end
-struct DirichletBoundaryCondition{T,M} <: AbstractDirichletBoundaryCondition{T,M}
+abstract type AbstractDirichletBoundaryCondition{T, M} end
+struct DirichletBoundaryCondition{T, M} <: AbstractDirichletBoundaryCondition{T, M}
     value::T
     mask::M
 end
@@ -21,8 +21,8 @@ function DirichletBoundaryCondition(A::AbstractArray{T}) where {T}
     return DirichletBoundaryCondition(A, m)
 end
 
-Base.getindex(x::DirichletBoundaryCondition{Nothing,Nothing}, ::Vararg{Int,N}) where {N} = 0
-function Base.getindex(x::DirichletBoundaryCondition, inds::Vararg{Int,N}) where {N}
+Base.getindex(x::DirichletBoundaryCondition{Nothing, Nothing}, ::Vararg{Int, N}) where {N} = 0
+function Base.getindex(x::DirichletBoundaryCondition, inds::Vararg{Int, N}) where {N}
     return x.value[inds...] * x.mask[inds...]
 end
 
@@ -45,7 +45,7 @@ function Base.show(io::IO, A::ConstantArray{T}) where {T}
     return println(io, "  ", A.val)
 end
 
-struct ConstantDirichletBoundaryCondition{T,M} <: AbstractDirichletBoundaryCondition{T,M}
+struct ConstantDirichletBoundaryCondition{T, M} <: AbstractDirichletBoundaryCondition{T, M}
     value::T
     mask::M
 end
@@ -61,7 +61,7 @@ end
 
 Adapt.@adapt_structure ConstantDirichletBoundaryCondition
 
-function Base.getindex(x::ConstantDirichletBoundaryCondition, inds::Vararg{Int,N}) where {N}
+function Base.getindex(x::ConstantDirichletBoundaryCondition, inds::Vararg{Int, N}) where {N}
     return x.value * x.mask[inds...]
 end
 function Base.getindex(
@@ -76,20 +76,20 @@ end
 end
 
 @inline function apply_dirichlet!(
-    ::AbstractArray, ::AbstractDirichletBoundaryCondition{Nothing,Nothing}
-)
+        ::AbstractArray, ::AbstractDirichletBoundaryCondition{Nothing, Nothing}
+    )
     return nothing
 end
 
 @inline function apply_dirichlet!(
-    A::AbstractArray, bc::AbstractDirichletBoundaryCondition, inds::Vararg{Int,N}
-) where {N}
+        A::AbstractArray, bc::AbstractDirichletBoundaryCondition, inds::Vararg{Int, N}
+    ) where {N}
     return apply_mask!(A, bc.value, bc.mask, inds...)
 end
 
 @inline function apply_dirichlet!(
-    ::AbstractArray, ::AbstractDirichletBoundaryCondition{Nothing,Nothing}, ::Vararg{Int,N}
-) where {N}
+        ::AbstractArray, ::AbstractDirichletBoundaryCondition{Nothing, Nothing}, ::Vararg{Int, N}
+    ) where {N}
     return nothing
 end
 
@@ -98,27 +98,27 @@ end
 end
 
 @inline function apply_dirichlet(
-    A::AbstractArray, ::AbstractDirichletBoundaryCondition{Nothing,Nothing}
-)
+        A::AbstractArray, ::AbstractDirichletBoundaryCondition{Nothing, Nothing}
+    )
     return A
 end
 
 @inline function apply_dirichlet(
-    A::AbstractArray, bc::AbstractDirichletBoundaryCondition, inds::Vararg{Int,N}
-) where {N}
+        A::AbstractArray, bc::AbstractDirichletBoundaryCondition, inds::Vararg{Int, N}
+    ) where {N}
     return apply_mask(A, bc.value, bc.mask, inds...)
 end
 
 @inline function apply_dirichlet(
-    A::AbstractArray,
-    ::AbstractDirichletBoundaryCondition{Nothing,Nothing},
-    inds::Vararg{Int,N},
-) where {N}
+        A::AbstractArray,
+        ::AbstractDirichletBoundaryCondition{Nothing, Nothing},
+        inds::Vararg{Int, N},
+    ) where {N}
     return A[inds...]
 end
 
 @inline Dirichlet(x::NamedTuple) = Dirichlet(; x...)
-@inline Dirichlet(; constant=nothing, mask=nothing) = Dirichlet(constant, mask)
+@inline Dirichlet(; constant = nothing, mask = nothing) = Dirichlet(constant, mask)
 @inline Dirichlet(::Nothing, mask::Nothing) = DirichletBoundaryCondition()
 @inline Dirichlet(::Nothing, mask::AbstractArray) = DirichletBoundaryCondition(mask)
 @inline Dirichlet(constant::Number, mask::AbstractArray) =

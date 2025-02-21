@@ -34,8 +34,8 @@ end
 ## Stress Rotation on the particles
 
 function rotate_stress_particles!(
-    τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol=:matrix
-)
+        τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol = :matrix
+    )
     @parallel (@idx size(particles.index)) rotate_stress_particles_GeoParams!(
         τ..., ω..., particles.index, dt
     )
@@ -43,8 +43,8 @@ function rotate_stress_particles!(
 end
 
 @parallel_indices (I...) function rotate_stress_particles_GeoParams!(
-    xx, yy, xy, ω, index, dt
-)
+        xx, yy, xy, ω, index, dt
+    )
     for ip in cellaxes(index)
         @index(index[ip, I...]) || continue # no particle in this location
 
@@ -64,8 +64,8 @@ end
 end
 
 @parallel_indices (I...) function rotate_stress_particles_GeoParams!(
-    xx, yy, zz, yz, xz, xy, ωyz, ωxz, ωxy, index, dt
-)
+        xx, yy, zz, yz, xz, xy, ωyz, ωxz, ωxy, index, dt
+    )
     for ip in cellaxes(index)
         @index(index[ip, I...]) || continue # no particle in this location
 
@@ -112,8 +112,8 @@ end
 end
 
 @parallel_indices (I...) function rotate_stress_particles_rotation_matrix!(
-    xx, yy, xy, ω, index, dt
-)
+        xx, yy, xy, ω, index, dt
+    )
     for ip in cellaxes(index)
         !@index(index[ip, I...]) && continue # no particle in this location
 
@@ -148,8 +148,8 @@ end
 # Interpolations between stress on the particles and the grid
 
 function stress2grid!(
-    stokes, τ_particles::JustRelax.StressParticles{backend}, xvi, xci, particles
-) where {backend}
+        stokes, τ_particles::JustRelax.StressParticles{backend}, xvi, xci, particles
+    ) where {backend}
     return stress2grid!(
         stokes,
         normal_stress(τ_particles)...,
@@ -184,8 +184,8 @@ function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, xvi, xci
 end
 
 function rotate_stress!(
-    τ_particles::JustRelax.StressParticles{backend}, stokes, particles, xci, xvi, dt
-) where {backend}
+        τ_particles::JustRelax.StressParticles{backend}, stokes, particles, xci, xvi, dt
+    ) where {backend}
     return rotate_stress!(unwrap(τ_particles)..., stokes, particles, xci, xvi, dt)
 end
 
@@ -204,8 +204,8 @@ function rotate_stress!(pτxx, pτyy, pτxy, pω, stokes, particles, xci, xvi, d
 end
 
 function rotate_stress!(
-    pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, pωxy, stokes, particles, xci, xvi, dt
-)
+        pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, pωxy, stokes, particles, xci, xvi, dt
+    )
     # normal components
     centroid2particle!(pτxx, xci, stokes.τ.xx, particles)
     centroid2particle!(pτyy, xci, stokes.τ.yy, particles)

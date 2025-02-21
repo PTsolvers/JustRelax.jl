@@ -43,13 +43,13 @@ function checkpointing_jld2(dst, stokes, thermal, time, timestep, fname::String)
         tmpfname = joinpath(tmpdir, basename(fname))
         jldsave(
             tmpfname;
-            stokes=Array(stokes),
-            thermal=Array(thermal),
-            time=time,
-            timestep=timestep,
+            stokes = Array(stokes),
+            thermal = Array(thermal),
+            time = time,
+            timestep = timestep,
         )
         # Move the checkpoint file from the temporary directory to the destination directory
-        return mv(tmpfname, fname; force=true)
+        return mv(tmpfname, fname; force = true)
     end
 
     return nothing

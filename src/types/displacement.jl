@@ -45,8 +45,8 @@ function _displacement2velocity!(stokes::JustRelax.StokesArrays, dt)
 end
 
 @parallel_indices (I...) function _displacement2velocity_kernel!(
-    Ux, Uy, Uz, Vx, Vy, Vz, _dt
-)
+        Ux, Uy, Uz, Vx, Vy, Vz, _dt
+    )
     if all(I .≤ size(Ux))
         Vx[I...] = Ux[I...] * _dt
     end

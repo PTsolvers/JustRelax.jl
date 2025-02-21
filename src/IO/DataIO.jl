@@ -46,6 +46,7 @@ function metadata(src, dst, files...)
         isfile(newfile) && rm(newfile)
         cp(joinpath(src, f), newfile)
     end
+    return
 end
 
 end

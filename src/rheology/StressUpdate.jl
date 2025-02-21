@@ -1,19 +1,19 @@
 # inner kernel to compute the plastic stress update within Pseudo-Transient stress continuation
 function _compute_τ_nonlinear!(
-    τ::NTuple{N1,T},
-    τII,
-    τ_old::NTuple{N1,T},
-    ε::NTuple{N1,T},
-    ε_pl::NTuple{N1,T},
-    P,
-    ηij,
-    η_vep,
-    λ,
-    dτ_r,
-    _Gdt,
-    plastic_parameters,
-    idx::Vararg{Integer,N2},
-) where {N1,N2,T}
+        τ::NTuple{N1, T},
+        τII,
+        τ_old::NTuple{N1, T},
+        ε::NTuple{N1, T},
+        ε_pl::NTuple{N1, T},
+        P,
+        ηij,
+        η_vep,
+        λ,
+        dτ_r,
+        _Gdt,
+        plastic_parameters,
+        idx::Vararg{Integer, N2},
+    ) where {N1, N2, T}
 
     # cache tensors
     τij, τij_o, εij = cache_tensors(τ, τ_old, ε, idx...)
@@ -59,7 +59,7 @@ function _compute_τ_nonlinear!(
 end
 
 # fill plastic strain rate tensor
-@generated function update_plastic_strain_rate!(ε_pl::NTuple{N,T}, λdQdτ, idx) where {N,T}
+@generated function update_plastic_strain_rate!(ε_pl::NTuple{N, T}, λdQdτ, idx) where {N, T}
     return quote
         Base.@_inline_meta
         Base.@nexprs $N i -> ε_pl[i][idx...] = !isinf(λdQdτ[i]) * λdQdτ[i]
@@ -72,19 +72,19 @@ end
 @inline compute_dτ_r(θ_dτ, ηij, _Gdt) = inv(θ_dτ + fma(ηij, _Gdt, 1.0))
 
 function compute_stress_increment_and_trial(
-    τij::NTuple{N,T}, τij_o::NTuple{N,T}, ηij, εij::NTuple{N,T}, _Gdt, dτ_r
-) where {N,T}
+        τij::NTuple{N, T}, τij_o::NTuple{N, T}, ηij, εij::NTuple{N, T}, _Gdt, dτ_r
+    ) where {N, T}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
         return dτ_r *
-               fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
+            fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
     end
     return dτij, second_invariant((τij .+ dτij)...)
 end
 
 function compute_dτ_pl(
-    τij::NTuple{N,T}, dτij, τy, τII_trial, ηij, λ0, η_reg, dτ_r, volume
-) where {N,T}
+        τij::NTuple{N, T}, dτij, τy, τII_trial, ηij, λ0, η_reg, dτ_r, volume
+    ) where {N, T}
     # yield function
     F = τII_trial - τy
     # Plastic multiplier
@@ -108,8 +108,8 @@ end
 
 # update the global arrays τ::NTuple{N, AbstractArray} with the local τij::NTuple{3, Float64} at indices idx::Vararg{Integer, N}
 @generated function correct_stress!(
-    τ, τij::NTuple{N1}, idx::Vararg{Integer,N2}
-) where {N1,N2}
+        τ, τij::NTuple{N1}, idx::Vararg{Integer, N2}
+    ) where {N1, N2}
     return quote
         Base.@_inline_meta
         Base.@nexprs $N1 i -> τ[i][idx...] = τij[i]
@@ -130,8 +130,8 @@ end
 @inline plastic_params(v) = plastic_params(v.CompositeRheology[1].elements)
 @inline plastic_params(v, EII) = plastic_params(v.CompositeRheology[1].elements, EII)
 
-@generated function plastic_params(v::NTuple{N,Any}, EII) where {N}
-    quote
+@generated function plastic_params(v::NTuple{N, Any}, EII) where {N}
+    return quote
         Base.@_inline_meta
         Base.@nexprs $N i -> begin
             vᵢ = v[i]
@@ -146,18 +146,18 @@ end
 end
 
 function plastic_params_phase(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio, kwargs
-) where {N}
+        rheology::NTuple{N, AbstractMaterialParamsStruct}, EII, ratio, kwargs
+    ) where {N}
     return plastic_params_phase(rheology, EII, ratio; kwargs...)
 end
 
 function plastic_params_phase(
-    rheology::NTuple{N,AbstractMaterialParamsStruct},
-    EII,
-    ratio;
-    perturbation_C=nothing,
-    kwargs...,
-) where {N}
+        rheology::NTuple{N, AbstractMaterialParamsStruct},
+        EII,
+        ratio;
+        perturbation_C = nothing,
+        kwargs...,
+    ) where {N}
     @inline perturbation(::Nothing) = 1.0
     @inline perturbation(x::Real) = x
 
@@ -178,21 +178,21 @@ function plastic_params_phase(
 end
 
 @generated function _plastic_params_phase(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, EII, ratio
-) where {N}
+        rheology::NTuple{N, AbstractMaterialParamsStruct}, EII, ratio
+    ) where {N}
     return quote
         Base.@_inline_meta
         empty_args = false, 0.0, 0.0, 0.0, 0.0, 0.0
         Base.@nexprs $N i ->
-            a_i = ratio[i] == 0 ? empty_args : plastic_params(rheology[i], EII)
+        a_i = ratio[i] == 0 ? empty_args : plastic_params(rheology[i], EII)
         Base.@ncall $N tuple a
     end
 end
 
 # cache tensors
 function cache_tensors(
-    τ::NTuple{3,Any}, τ_old::NTuple{3,Any}, ε::NTuple{3,Any}, idx::Vararg{Integer,2}
-)
+        τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, idx::Vararg{Integer, 2}
+    )
     @inline av_shear(A) = 0.25 * sum(_gather(A, idx...))
 
     εij = ε[1][idx...], ε[2][idx...], av_shear(ε[3])
@@ -203,8 +203,8 @@ function cache_tensors(
 end
 
 function cache_tensors(
-    τ::NTuple{6,Any}, τ_old::NTuple{6,Any}, ε::NTuple{6,Any}, idx::Vararg{Integer,3}
-)
+        τ::NTuple{6, Any}, τ_old::NTuple{6, Any}, ε::NTuple{6, Any}, idx::Vararg{Integer, 3}
+    )
     @inline av_yz(A) = _av_yz(A, idx...)
     @inline av_xz(A) = _av_xz(A, idx...)
     @inline av_xy(A) = _av_xy(A, idx...)
@@ -224,51 +224,51 @@ end
 ## softening kernels
 
 @inline function soften_cohesion(
-    v::DruckerPrager{T,U,U1,S1,NoSoftening}, ::T
-) where {T,U,U1,S1}
+        v::DruckerPrager{T, U, U1, S1, NoSoftening}, ::T
+    ) where {T, U, U1, S1}
     return v.C.val
 end
 
 @inline function soften_cohesion(
-    v::DruckerPrager_regularised{T,U,U1,U2,S1,NoSoftening}, ::T
-) where {T,U,U1,U2,S1}
+        v::DruckerPrager_regularised{T, U, U1, U2, S1, NoSoftening}, ::T
+    ) where {T, U, U1, U2, S1}
     return v.C.val
 end
 
 @inline function soften_cohesion(
-    v::DruckerPrager{T,U,U1,S1,S2}, EII::T
-) where {T,U,U1,S1,S2}
+        v::DruckerPrager{T, U, U1, S1, S2}, EII::T
+    ) where {T, U, U1, S1, S2}
     return v.softening_C(EII, v.C.val)
 end
 
 @inline function soften_cohesion(
-    v::DruckerPrager_regularised{T,U,U1,U2,S1,S2}, EII::T
-) where {T,U,U1,U2,S1,S2}
+        v::DruckerPrager_regularised{T, U, U1, U2, S1, S2}, EII::T
+    ) where {T, U, U1, U2, S1, S2}
     return v.softening_C(EII, v.C.val)
 end
 
 @inline function soften_friction_angle(
-    v::DruckerPrager{T,U,U1,NoSoftening,S2}, ::T
-) where {T,U,U1,S2}
+        v::DruckerPrager{T, U, U1, NoSoftening, S2}, ::T
+    ) where {T, U, U1, S2}
     return (v.sinϕ.val, v.cosϕ.val)
 end
 
 @inline function soften_friction_angle(
-    v::DruckerPrager_regularised{T,U,U1,U2,NoSoftening,S2}, ::T
-) where {T,U,U1,U2,S2}
+        v::DruckerPrager_regularised{T, U, U1, U2, NoSoftening, S2}, ::T
+    ) where {T, U, U1, U2, S2}
     return (v.sinϕ.val, v.cosϕ.val)
 end
 
 @inline function soften_friction_angle(
-    v::DruckerPrager{T,U,U1,S1,S2}, EII::T
-) where {T,U,U1,S1,S2}
+        v::DruckerPrager{T, U, U1, S1, S2}, EII::T
+    ) where {T, U, U1, S1, S2}
     ϕ = v.softening_ϕ(EII, v.ϕ.val)
     return sincosd(ϕ)
 end
 
 @inline function soften_friction_angle(
-    v::DruckerPrager_regularised{T,U,U1,U2,S1,S2}, EII::T
-) where {T,U,U1,U2,S1,S2}
+        v::DruckerPrager_regularised{T, U, U1, U2, S1, S2}, EII::T
+    ) where {T, U, U1, U2, S1, S2}
     ϕ = v.softening_ϕ(EII, v.ϕ.val)
     return sincosd(ϕ)
 end

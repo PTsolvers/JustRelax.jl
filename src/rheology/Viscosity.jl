@@ -2,41 +2,41 @@
 
 # without phase ratios
 @inline function update_viscosity!(
-    stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation=1e0
-)
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
+    )
     update_viscosity!(
-        islinear(rheology), stokes, args, rheology, cutoff; relaxation=relaxation
+        islinear(rheology), stokes, args, rheology, cutoff; relaxation = relaxation
     )
     return nothing
 end
 
 @inline function update_viscosity!(
-    ::LinearRheologyTrait,
-    stokes::JustRelax.StokesArrays,
-    args,
-    rheology,
-    cutoff;
-    relaxation=1e0,
-)
+        ::LinearRheologyTrait,
+        stokes::JustRelax.StokesArrays,
+        args,
+        rheology,
+        cutoff;
+        relaxation = 1.0e0,
+    )
     return nothing
 end
 
 @inline function update_viscosity!(
-    ::NonLinearRheologyTrait,
-    stokes::JustRelax.StokesArrays,
-    args,
-    rheology,
-    cutoff;
-    relaxation=1e0,
-)
-    compute_viscosity!(stokes, args, rheology, cutoff; relaxation=relaxation)
+        ::NonLinearRheologyTrait,
+        stokes::JustRelax.StokesArrays,
+        args,
+        rheology,
+        cutoff;
+        relaxation = 1.0e0,
+    )
+    compute_viscosity!(stokes, args, rheology, cutoff; relaxation = relaxation)
     return nothing
 end
 
 # with phase ratios
 @inline function update_viscosity!(
-    stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation=1e0
-)
+        stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation = 1.0e0
+    )
     update_viscosity!(
         islinear(rheology),
         stokes,
@@ -44,40 +44,40 @@ end
         args,
         rheology,
         cutoff;
-        relaxation=relaxation,
+        relaxation = relaxation,
     )
     return nothing
 end
 
 @inline function update_viscosity!(
-    ::LinearRheologyTrait,
-    stokes::JustRelax.StokesArrays,
-    phase_ratios,
-    args,
-    rheology,
-    cutoff;
-    relaxation=1e0,
-)
+        ::LinearRheologyTrait,
+        stokes::JustRelax.StokesArrays,
+        phase_ratios,
+        args,
+        rheology,
+        cutoff;
+        relaxation = 1.0e0,
+    )
     return nothing
 end
 
 @inline function update_viscosity!(
-    ::NonLinearRheologyTrait,
-    stokes::JustRelax.StokesArrays,
-    phase_ratios,
-    args,
-    rheology,
-    cutoff;
-    relaxation=1e0,
-)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff; relaxation=relaxation)
+        ::NonLinearRheologyTrait,
+        stokes::JustRelax.StokesArrays,
+        phase_ratios,
+        args,
+        rheology,
+        cutoff;
+        relaxation = 1.0e0,
+    )
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff; relaxation = relaxation)
     return nothing
 end
 
 ## 2D KERNELS
 function compute_viscosity!(
-    stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation=1e0
-)
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
+    )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff)
 end
 
@@ -94,8 +94,8 @@ function _compute_viscosity!(stokes::JustRelax.StokesArrays, ν, args, rheology,
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-    η, ν, εxx, εyy, εxyv, args, rheology, cutoff
-)
+        η, ν, εxx, εyy, εxyv, args, rheology, cutoff
+    )
 
     # convenience closure
     @inline gather(A) = _gather(A, I...)
@@ -130,8 +130,8 @@ function compute_viscosity!(η::AbstractArray, ν, εII::AbstractArray, args, rh
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-    η, ν, εII, args, rheology, cutoff
-)
+        η, ν, εII, args, rheology, cutoff
+    )
     @inbounds begin
         # argument fields at local index
         args_ij = local_viscosity_args(args, I...)
@@ -149,33 +149,33 @@ end
 end
 
 function compute_viscosity!(
-    stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation=1e0
-)
+        stokes::JustRelax.StokesArrays, phase_ratios, args, rheology, cutoff; relaxation = 1.0e0
+    )
     return compute_viscosity!(
         backend(stokes), stokes, relaxation, phase_ratios, args, rheology, cutoff
     )
 end
 
 function compute_viscosity!(
-    ::CPUBackendTrait,
-    stokes::JustRelax.StokesArrays,
-    ν,
-    phase_ratios,
-    args,
-    rheology,
-    cutoff,
-)
+        ::CPUBackendTrait,
+        stokes::JustRelax.StokesArrays,
+        ν,
+        phase_ratios,
+        args,
+        rheology,
+        cutoff,
+    )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
 function _compute_viscosity!(
-    stokes::JustRelax.StokesArrays,
-    ν,
-    phase_ratios::JustPIC.PhaseRatios,
-    args,
-    rheology,
-    cutoff,
-)
+        stokes::JustRelax.StokesArrays,
+        ν,
+        phase_ratios::JustPIC.PhaseRatios,
+        args,
+        rheology,
+        cutoff,
+    )
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(
         stokes.viscosity.η,
@@ -190,8 +190,8 @@ function _compute_viscosity!(
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-    η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
-)
+        η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, cutoff
+    )
 
     # convenience closure
     @inline gather(A) = _gather(A, I...)
@@ -225,8 +225,8 @@ end
 ## 3D KERNELS
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-    η, ν, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
-)
+        η, ν, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
+    )
 
     # convenience closures
     @inline gather_yz(A) = _gather_yz(A, I...)
@@ -258,8 +258,8 @@ end
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-    η, ν, ratios_center, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
-)
+        η, ν, ratios_center, εxx, εyy, εzz, εyzv, εxzv, εxyv, args, rheology, cutoff
+    )
 
     # convenience closures
     @inline gather_yz(A) = _gather_yz(A, I...)
@@ -295,21 +295,21 @@ end
 
 ## HELPER FUNCTIONS
 
-@inline function local_viscosity_args(args, I::Vararg{Integer,N}) where {N}
+@inline function local_viscosity_args(args, I::Vararg{Integer, N}) where {N}
     v = getindex.(values(args), I...)
-    local_args = (; zip(keys(args), v)..., dt=args.dt, τII_old=0.0)
+    local_args = (; zip(keys(args), v)..., dt = args.dt, τII_old = 0.0)
     return local_args
 end
 
-@inline function local_args(args, I::Vararg{Integer,N}) where {N}
+@inline function local_args(args, I::Vararg{Integer, N}) where {N}
     v = getindex.(values(args), I...)
     local_args = (; zip(keys(args), v)...)
     return local_args
 end
 
 @generated function compute_phase_viscosity_εII(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio, εII, args
-) where {N}
+        rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio, εII, args
+    ) where {N}
     return quote
         Base.@_inline_meta
         η = 0.0

@@ -97,6 +97,7 @@ function _solve_VS!(
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
+                stokes.Q,
                 ητ,
                 rheology,
                 phase_ratios,

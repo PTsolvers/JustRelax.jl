@@ -833,7 +833,6 @@ end
             τII[I...] = τII_ij
         end
 
-        Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
     end
 
     return nothing
@@ -957,7 +956,6 @@ end
             τII[I...] = τII_ij
         end
 
-        Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
     end
 
     return nothing

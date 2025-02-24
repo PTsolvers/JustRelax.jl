@@ -66,7 +66,7 @@
         )
 
         # yield function @ center
-        Fv = τIIv_ij - Cv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[I...] =
@@ -106,7 +106,7 @@
             dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
             τII_ij = GeoParams.second_invariant(dτij .+ τij)
             # yield function @ center
-            F = τII_ij - C - max(Pr[I...], 0.0) * sinϕ
+            F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
 
             if is_pl && !iszero(τII_ij) && F > 0
                 # stress correction @ center
@@ -225,7 +225,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
@@ -288,7 +288,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
@@ -352,7 +352,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
@@ -388,7 +388,7 @@ end
         dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij + 2.0 * ηij * εij) * dτ_r
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        F = τII_ij - C - max(Pr[I...], 0.0) * sinϕ
+        F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
 
         if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center

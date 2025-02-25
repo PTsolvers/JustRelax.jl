@@ -1,7 +1,13 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+DocumenterVitepress = "4710194d-e776-4893-9690-8d956a29c365"
+GeoParams = "e018b62d-d9de-4a26-8697-af89c310ae38"
+JustPIC = "10dc771f-8528-4cd9-9d3b-b21b2e693339"
 JustRelax = "34418575-392d-4e26-8c6d-96b0910afa06"
+
+[sources]
+JustRelax = {path = ".."}
 
 [compat]
 Documenter = "1"
-JustRelax = "0.2, 0.3, 0.4"
+DocumenterVitepress = "0.1"

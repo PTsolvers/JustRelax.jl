@@ -1,9 +1,13 @@
 # Pkg
 Manifest.toml
+LocalPreferences.toml
 
 # documentation
 docs/build/
 docs/site/
+
+package-lock.json
+node_modules
 
 # VS code
 /.vscode

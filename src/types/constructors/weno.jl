@@ -1,9 +1,9 @@
-function WENO5(::Type{CPUBackend}, method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
+function WENO5(::Type{CPUBackend}, method::Val{T}, ni::NTuple{N, Integer}) where {N, T}
     return WENO5(method, tuple(ni...))
 end
 
 # Define the WENO5 constructor
-function WENO5(method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
+function WENO5(method::Val{T}, ni::NTuple{N, Integer}) where {N, T}
     d0L = 1 / 10
     d1L = 3 / 5
     d2L = 3 / 10
@@ -21,7 +21,7 @@ function WENO5(method::Val{T}, ni::NTuple{N,Integer}) where {N,T}
     sc4 = 1 / 6
     sc5 = 5 / 6
     # tolerance
-    ϵ = 1e-6
+    ϵ = 1.0e-6
     # fluxes
     ut = @zeros(ni...)
     fL = @zeros(ni...)

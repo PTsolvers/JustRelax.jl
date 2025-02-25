@@ -1,11 +1,11 @@
-isNotDirichlet(m, inds::Vararg{Int,N}) where {N} = iszero(m[inds...])
-isNotDirichlet(::Nothing, ::Vararg{Int,N}) where {N} = true
+isNotDirichlet(m, inds::Vararg{Int, N}) where {N} = iszero(m[inds...])
+isNotDirichlet(::Nothing, ::Vararg{Int, N}) where {N} = true
 
 ## 3D KERNELS
 
 @parallel_indices (i, j, k) function compute_flux!(
-    qTx::AbstractArray{_T,3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
-) where {_T}
+        qTx::AbstractArray{_T, 3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
+    ) where {_T}
     d_xi(A) = _d_xi(A, i, j, k, _dx)
     d_yi(A) = _d_yi(A, i, j, k, _dy)
     d_zi(A) = _d_zi(A, i, j, k, _dz)
@@ -34,21 +34,21 @@ isNotDirichlet(::Nothing, ::Vararg{Int,N}) where {N} = true
 end
 
 @parallel_indices (i, j, k) function compute_flux!(
-    qTx::AbstractArray{_T,3},
-    qTy,
-    qTz,
-    qTx2,
-    qTy2,
-    qTz2,
-    T,
-    rheology,
-    phase,
-    θr_dτ,
-    _dx,
-    _dy,
-    _dz,
-    args,
-) where {_T}
+        qTx::AbstractArray{_T, 3},
+        qTy,
+        qTz,
+        qTx2,
+        qTy2,
+        qTz2,
+        T,
+        rheology,
+        phase,
+        θr_dτ,
+        _dx,
+        _dy,
+        _dz,
+        args,
+    ) where {_T}
     d_xi(A) = _d_xi(A, i, j, k, _dx)
     d_yi(A) = _d_yi(A, i, j, k, _dy)
     d_zi(A) = _d_zi(A, i, j, k, _dz)
@@ -62,14 +62,14 @@ end
 
     @inbounds if all(I .≤ size(qTx))
         T_ijk = (T[(I .+ 1)...] + T[i, j + 1, k + 1]) * 0.5
-        args_ijk = (; T=T_ijk, P=av_yz(args.P))
+        args_ijk = (; T = T_ijk, P = av_yz(args.P))
         K =
             (
-                get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
+            get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
                 get_K(getindex_phase(phase, i, j, k + 1), args_ijk) +
                 get_K(getindex_phase(phase, i, j + 1, k + 1), args_ijk) +
                 get_K(getindex_phase(phase, i, j, k), args_ijk)
-            ) * 0.25
+        ) * 0.25
 
         qx = qTx2[I...] = -K * d_xi(T)
         qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
@@ -77,14 +77,14 @@ end
 
     @inbounds if all(I .≤ size(qTy))
         T_ijk = (T[(I .+ 1)...] + T[i + 1, j, k + 1]) * 0.5
-        args_ijk = (; T=T_ijk, P=av_xz(args.P))
+        args_ijk = (; T = T_ijk, P = av_xz(args.P))
         K =
             (
-                get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
+            get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
                 get_K(getindex_phase(phase, i, j, k + 1), args_ijk) +
                 get_K(getindex_phase(phase, i + 1, j, k + 1), args_ijk) +
                 get_K(getindex_phase(phase, i, j, k), args_ijk)
-            ) * 0.25
+        ) * 0.25
 
         qy = qTy2[I...] = -K * d_yi(T)
         qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
@@ -92,14 +92,14 @@ end
 
     @inbounds if all(I .≤ size(qTz))
         T_ijk = (T[(I .+ 1)...] + T[i + 1, j + 1, k]) * 0.5
-        args_ijk = (; T=T_ijk, P=av_xy(args.P))
+        args_ijk = (; T = T_ijk, P = av_xy(args.P))
         K =
             (
-                get_K(getindex_phase(phase, i + 1, j + 1, k), args_ijk) +
+            get_K(getindex_phase(phase, i + 1, j + 1, k), args_ijk) +
                 get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
                 get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
                 get_K(getindex_phase(phase, i, j, k), args_ijk)
-            ) * 0.25
+        ) * 0.25
 
         qz = qTz2[I...] = -K * d_zi(T)
         qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
@@ -109,21 +109,21 @@ end
 end
 
 @parallel_indices (I...) function update_T!(
-    T::AbstractArray{_T,3},
-    Told,
-    qTx,
-    qTy,
-    qTz,
-    H,
-    shear_heating,
-    ρCp,
-    dτ_ρ,
-    dirichlet,
-    _dt,
-    _dx,
-    _dy,
-    _dz,
-) where {_T}
+        T::AbstractArray{_T, 3},
+        Told,
+        qTx,
+        qTy,
+        qTz,
+        H,
+        shear_heating,
+        ρCp,
+        dτ_ρ,
+        dirichlet,
+        _dt,
+        _dx,
+        _dy,
+        _dz,
+    ) where {_T}
     av(A) = _av(A, I...)
     d_xa(A) = _d_xa(A, I..., _dx)
     d_ya(A) = _d_ya(A, I..., _dy)
@@ -132,37 +132,37 @@ end
     I1 = I .+ 1
     T[I1...] =
         (
-            av(dτ_ρ) * (
-                -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
+        av(dτ_ρ) * (
+            -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
                 Told[I1...] * av(ρCp) * _dt +
                 av(H) +
                 av(shear_heating)
-            ) + T[I1...]
-        ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
+        ) + T[I1...]
+    ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
     apply_dirichlet!(T, dirichlet, I1...)
 
     return nothing
 end
 
 @parallel_indices (i, j, k) function update_T!(
-    T::AbstractArray{_T,3},
-    Told,
-    qTx,
-    qTy,
-    qTz,
-    H,
-    shear_heating,
-    adiabatic,
-    rheology,
-    phase,
-    dτ_ρ,
-    dirichlet,
-    _dt,
-    _dx,
-    _dy,
-    _dz,
-    args,
-) where {_T}
+        T::AbstractArray{_T, 3},
+        Told,
+        qTx,
+        qTy,
+        qTz,
+        H,
+        shear_heating,
+        adiabatic,
+        rheology,
+        phase,
+        dτ_ρ,
+        dirichlet,
+        _dt,
+        _dx,
+        _dy,
+        _dz,
+        args,
+    ) where {_T}
     av(A) = _av(A, i, j, k)
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
@@ -171,41 +171,41 @@ end
     I1 = i + 1, j + 1, k + 1
 
     T_ijk = T[I1...]
-    args_ijk = (; T=T_ijk, P=av(args.P))
+    args_ijk = (; T = T_ijk, P = av(args.P))
     phase_ijk = getindex_phase(phase, i, j, k)
     ρCp = compute_ρCp(rheology, phase_ijk, args_ijk)
 
     T[I1...] =
         (
-            av(dτ_ρ) * (
-                -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
+        av(dτ_ρ) * (
+            -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
                 Told[I1...] * ρCp * _dt +
                 av(H) +
                 av(shear_heating) +
                 adiabatic[i, j, k] * T_ijk
-            ) + T_ijk
-        ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
+        ) + T_ijk
+    ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
     apply_dirichlet!(T, dirichlet, I1...)
 
     return nothing
 end
 
 @parallel_indices (i, j, k) function check_res!(
-    ResT::AbstractArray{_T,3},
-    T,
-    Told,
-    qTx2,
-    qTy2,
-    qTz2,
-    H,
-    shear_heating,
-    ρCp,
-    dirichlet,
-    _dt,
-    _dx,
-    _dy,
-    _dz,
-) where {_T}
+        ResT::AbstractArray{_T, 3},
+        T,
+        Told,
+        qTx2,
+        qTy2,
+        qTz2,
+        H,
+        shear_heating,
+        ρCp,
+        dirichlet,
+        _dt,
+        _dx,
+        _dy,
+        _dz,
+    ) where {_T}
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
     d_za(A) = _d_za(A, i, j, k, _dz)
@@ -215,8 +215,8 @@ end
 
     ResT[i, j, k] = if isNotDirichlet(dirichlet.mask, I1...)
         -av(ρCp) * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
-        av(H) +
-        av(shear_heating)
+            av(H) +
+            av(shear_heating)
     else
         zero(_T)
     end
@@ -225,24 +225,24 @@ end
 end
 
 @parallel_indices (i, j, k) function check_res!(
-    ResT::AbstractArray{_T,3},
-    T,
-    Told,
-    qTx2,
-    qTy2,
-    qTz2,
-    H,
-    shear_heating,
-    adiabatic,
-    rheology,
-    phase,
-    dirichlet,
-    _dt,
-    _dx,
-    _dy,
-    _dz,
-    args,
-) where {_T}
+        ResT::AbstractArray{_T, 3},
+        T,
+        Told,
+        qTx2,
+        qTy2,
+        qTz2,
+        H,
+        shear_heating,
+        adiabatic,
+        rheology,
+        phase,
+        dirichlet,
+        _dt,
+        _dx,
+        _dy,
+        _dz,
+        args,
+    ) where {_T}
     d_xa(A) = _d_xa(A, i, j, k, _dx)
     d_ya(A) = _d_ya(A, i, j, k, _dy)
     d_za(A) = _d_za(A, i, j, k, _dz)
@@ -250,15 +250,15 @@ end
 
     I = i + 1, j + 1, k + 1
     T_ijk = T[I...]
-    args_ijk = (; T=T_ijk, P=av(args.P))
+    args_ijk = (; T = T_ijk, P = av(args.P))
     phase_ijk = getindex_phase(phase, i, j, k)
 
     ResT[i, j, k] = if isNotDirichlet(dirichlet.mask, I...)
         -compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt -
-        (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
-        av(H) +
-        av(shear_heating) +
-        adiabatic[i, j, k] * T_ijk
+            (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
+            av(H) +
+            av(shear_heating) +
+            adiabatic[i, j, k] * T_ijk
     else
         zero(_T)
     end
@@ -268,8 +268,8 @@ end
 ## 2D KERNELS
 
 @parallel_indices (i, j) function compute_flux!(
-    qTx::AbstractArray{_T,2}, qTy, qTx2, qTy2, T, K, θr_dτ, _dx, _dy
-) where {_T}
+        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _dx, _dy
+    ) where {_T}
     nx = size(θr_dτ, 1)
 
     d_xi(A) = _d_xi(A, i, j, _dx)
@@ -290,8 +290,8 @@ end
 end
 
 @parallel_indices (i, j) function compute_flux!(
-    qTx::AbstractArray{_T,2}, qTy, qTx2, qTy2, T, rheology, phase, θr_dτ, _dx, _dy, args
-) where {_T}
+        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, rheology, phase, θr_dτ, _dx, _dy, args
+    ) where {_T}
     nx = size(θr_dτ, 1)
 
     d_xi(A) = _d_xi(A, i, j, _dx)
@@ -335,18 +335,18 @@ end
 end
 
 @parallel_indices (i, j) function compute_flux!(
-    qTx::AbstractArray{_T,2},
-    qTy,
-    qTx2,
-    qTy2,
-    T,
-    rheology::NTuple{N,AbstractMaterialParamsStruct},
-    phase_ratios::CellArray{C1,C2,C3,C4},
-    θr_dτ,
-    _dx,
-    _dy,
-    args,
-) where {_T,N,C1,C2,C3,C4}
+        qTx::AbstractArray{_T, 2},
+        qTy,
+        qTx2,
+        qTy2,
+        T,
+        rheology::NTuple{N, AbstractMaterialParamsStruct},
+        phase_ratios::CellArray{C1, C2, C3, C4},
+        θr_dτ,
+        _dx,
+        _dy,
+        args,
+    ) where {_T, N, C1, C2, C3, C4}
     nx = size(θr_dτ, 1)
 
     d_xi(A) = _d_xi(A, i, j, _dx)
@@ -390,19 +390,19 @@ end
 end
 
 @parallel_indices (i, j) function update_T!(
-    T::AbstractArray{_T,2},
-    Told,
-    qTx,
-    qTy,
-    H,
-    shear_heating,
-    ρCp,
-    dτ_ρ,
-    dirichlet,
-    _dt,
-    _dx,
-    _dy,
-) where {_T}
+        T::AbstractArray{_T, 2},
+        Told,
+        qTx,
+        qTy,
+        H,
+        shear_heating,
+        ρCp,
+        dτ_ρ,
+        dirichlet,
+        _dt,
+        _dx,
+        _dy,
+    ) where {_T}
     nx, ny = size(ρCp)
 
     d_xa(A) = _d_xa(A, i, j, _dx)
@@ -421,13 +421,13 @@ end
     I1 = i + 1, j + 1
     T[I1...] =
         (
-            av(dτ_ρ) * (
-                -(d_xa(qTx) + d_ya(qTy)) +
+        av(dτ_ρ) * (
+            -(d_xa(qTx) + d_ya(qTy)) +
                 Told[I1...] * av(ρCp) * _dt +
                 av(H) +
                 av(shear_heating)
-            ) + T[I1...]
-        ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
+        ) + T[I1...]
+    ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
 
     apply_dirichlet!(T, dirichlet, I1...)
 
@@ -435,22 +435,22 @@ end
 end
 
 @parallel_indices (i, j) function update_T!(
-    T::AbstractArray{_T,2},
-    Told,
-    qTx,
-    qTy,
-    H,
-    shear_heating,
-    adiabatic,
-    rheology,
-    phase,
-    dτ_ρ,
-    dirichlet,
-    _dt,
-    _dx,
-    _dy,
-    args::NamedTuple,
-) where {_T}
+        T::AbstractArray{_T, 2},
+        Told,
+        qTx,
+        qTy,
+        H,
+        shear_heating,
+        adiabatic,
+        rheology,
+        phase,
+        dτ_ρ,
+        dirichlet,
+        _dt,
+        _dx,
+        _dy,
+        args::NamedTuple,
+    ) where {_T}
     nx, ny = size(args.P)
 
     i0 = clamp(i - 1, 1, nx)
@@ -463,27 +463,27 @@ end
     av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
 
     T_ij = T[i + 1, j + 1]
-    args_ij = (; T=T_ij, P=av(args.P))
+    args_ij = (; T = T_ij, P = av(args.P))
 
     ρCp =
         (
-            compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
+        compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
             compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
             compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
             compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
-        ) * 0.25
+    ) * 0.25
 
     I1 = i + 1, j + 1
     T[I1...] =
         (
-            av(dτ_ρ) * (
-                -(d_xa(qTx) + d_ya(qTy)) +
+        av(dτ_ρ) * (
+            -(d_xa(qTx) + d_ya(qTy)) +
                 Told[I1...] * ρCp * _dt +
                 av(H) +
                 av(shear_heating) +
                 adiabatic[i, j] * T[I1...]
-            ) + T[I1...]
-        ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
+        ) + T[I1...]
+    ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
 
     apply_dirichlet!(T, dirichlet, I1...)
 
@@ -491,19 +491,19 @@ end
 end
 
 @parallel_indices (i, j) function check_res!(
-    ResT::AbstractArray{_T,2},
-    T,
-    Told,
-    qTx2,
-    qTy2,
-    H,
-    shear_heating,
-    ρCp,
-    dirichlet,
-    _dt,
-    _dx,
-    _dy,
-) where {_T}
+        ResT::AbstractArray{_T, 2},
+        T,
+        Told,
+        qTx2,
+        qTy2,
+        H,
+        shear_heating,
+        ρCp,
+        dirichlet,
+        _dt,
+        _dx,
+        _dy,
+    ) where {_T}
     nx, ny = size(ρCp)
 
     d_xa(A) = _d_xa(A, i, j, _dx)
@@ -522,8 +522,8 @@ end
     I1 = i + 1, j + 1
     ResT[i, j] = if isNotDirichlet(dirichlet.mask, I1...)
         -av(ρCp) * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
-        av(H) +
-        av(shear_heating)
+            av(H) +
+            av(shear_heating)
     else
         zero(_T)
     end
@@ -532,22 +532,22 @@ end
 end
 
 @parallel_indices (i, j) function check_res!(
-    ResT::AbstractArray{_T,2},
-    T,
-    Told,
-    qTx2,
-    qTy2,
-    H,
-    shear_heating,
-    adiabatic,
-    rheology,
-    phase,
-    dirichlet,
-    _dt,
-    _dx,
-    _dy,
-    args,
-) where {_T}
+        ResT::AbstractArray{_T, 2},
+        T,
+        Told,
+        qTx2,
+        qTy2,
+        H,
+        shear_heating,
+        adiabatic,
+        rheology,
+        phase,
+        dirichlet,
+        _dt,
+        _dx,
+        _dy,
+        args,
+    ) where {_T}
     nx, ny = size(args.P)
 
     i0 = clamp(i - 1, 1, nx)
@@ -560,22 +560,22 @@ end
     av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
 
     T_ij = T[i + 1, j + 1]
-    args_ij = (; T=T_ij, P=av(args.P))
+    args_ij = (; T = T_ij, P = av(args.P))
 
     ρCp =
         (
-            compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
+        compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
             compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
             compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
             compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
-        ) * 0.25
+    ) * 0.25
 
     I1 = i + 1, j + 1
     ResT[i, j] = if isNotDirichlet(dirichlet.mask, I1...)
         -ρCp * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
-        av(H) +
-        av(shear_heating) +
-        adiabatic[i, j] * T[I1...]
+            av(H) +
+            av(shear_heating) +
+            adiabatic[i, j] * T[I1...]
     else
         zero(_T)
     end
@@ -589,7 +589,7 @@ end
 end
 
 function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, dirichlet, _dt, _di, ni)
-    @parallel update_range(ni...) update_T!(
+    return @parallel update_range(ni...) update_T!(
         thermal.T,
         thermal.Told,
         @qT(thermal)...,
@@ -604,9 +604,9 @@ function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, dirichlet, _dt,
 end
 
 function update_T(
-    ::Nothing, b_width, thermal, rheology, phase, pt_thermal, dirichlet, _dt, _di, ni, args
-)
-    @parallel update_range(ni...) update_T!(
+        ::Nothing, b_width, thermal, rheology, phase, pt_thermal, dirichlet, _dt, _di, ni, args
+    )
+    return @parallel update_range(ni...) update_T!(
         thermal.T,
         thermal.Told,
         @qT(thermal)...,
@@ -624,14 +624,14 @@ function update_T(
 end
 
 @parallel_indices (i, j, k) function adiabatic_heating(
-    A, Vx, Vy, Vz, P, rheology, phases, _dx, _dy, _dz
-)
+        A, Vx, Vy, Vz, P, rheology, phases, _dx, _dy, _dz
+    )
     I = i, j, k
     I1 = i1, j1, k1 = I .+ 1
     @inbounds begin
         α =
             (
-                compute_α(rheology, getindex_phase(phases, I...)) +
+            compute_α(rheology, getindex_phase(phases, I...)) +
                 compute_α(rheology, getindex_phase(phases, i, j1, k)) +
                 compute_α(rheology, getindex_phase(phases, i1, j, k)) +
                 compute_α(rheology, getindex_phase(phases, i1, j1, k)) +
@@ -639,7 +639,7 @@ end
                 compute_α(rheology, getindex_phase(phases, i1, j, k1)) +
                 compute_α(rheology, getindex_phase(phases, i1, j1, k1)) +
                 compute_α(rheology, getindex_phase(phases, I1...))
-            ) * 0.125
+        ) * 0.125
         # cache P around T node
         P111 = P[I...]
         P112 = P[i, j, k1]
@@ -677,18 +677,18 @@ end
 end
 
 @parallel_indices (i, j) function adiabatic_heating(
-    A, Vx, Vy, P, rheology, phases, _dx, _dy
-)
+        A, Vx, Vy, P, rheology, phases, _dx, _dy
+    )
     I = i, j
     I1 = i1, j1 = I .+ 1
     @inbounds begin
         α =
             (
-                compute_α(rheology, getindex_phase(phases, I...)) +
+            compute_α(rheology, getindex_phase(phases, I...)) +
                 compute_α(rheology, getindex_phase(phases, i, j1)) +
                 compute_α(rheology, getindex_phase(phases, i1, j)) +
                 compute_α(rheology, getindex_phase(phases, I1...))
-            ) * 0.25
+        ) * 0.25
         # cache P around T node
         P11 = P[I...]
         P12 = P[i, j1]
@@ -713,9 +713,9 @@ end
 function adiabatic_heating!(thermal, stokes, rheology, phases, di)
     idx = @idx (size(stokes.P) .- 1)
     _di = inv.(di)
-    @parallel idx adiabatic_heating(
+    return @parallel idx adiabatic_heating(
         thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, _di...
     )
 end
 
-@inline adiabatic_heating!(thermal, ::Nothing, ::Vararg{Any,N}) where {N} = nothing
+@inline adiabatic_heating!(thermal, ::Nothing, ::Vararg{Any, N}) where {N} = nothing

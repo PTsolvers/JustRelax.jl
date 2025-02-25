@@ -25,5 +25,7 @@ docs/site/
 *.png
 *.vti
 *.vtm
+*.vtp
+*.vtr
 *.h5
 *.jld2

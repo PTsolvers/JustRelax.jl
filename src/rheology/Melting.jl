@@ -12,14 +12,14 @@ end
 
 function compute_melt_fraction!(ϕ, phase_ratios::JustPIC.PhaseRatios, rheology, args)
     ni = size(ϕ)
-    @parallel (@idx ni) compute_melt_fraction_kernel!(
+    return @parallel (@idx ni) compute_melt_fraction_kernel!(
         ϕ, phase_ratios.center, rheology, args
     )
 end
 
 @parallel_indices (I...) function compute_melt_fraction_kernel!(
-    ϕ, phase_ratios, rheology, args
-)
+        ϕ, phase_ratios, rheology, args
+    )
     args_ijk = ntuple_idx(args, I...)
     ϕ[I...] = fn_ratio(compute_meltfraction, rheology, @cell(phase_ratios[I...]), args_ijk)
     return nothing

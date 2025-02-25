@@ -40,7 +40,7 @@ function adjoint_2D!(
 
         (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
         # errors
-        ϵ        = 1e-1 * ϵ
+        ϵ        = 1e0 * ϵ
         err      = 2*ϵ
         err_evo1 = Float64[]
         err_evo2 = Float64[]
@@ -56,7 +56,7 @@ function adjoint_2D!(
         lx, ly = li
         nout   = 1e3
         iter   = 1
-        iterMax = 4e4
+        iterMax = 2e4
 
         while (iter ≤ iterMax && err > ϵ)
 
@@ -64,7 +64,7 @@ function adjoint_2D!(
             stokesAD.V.Vx .= 0.0
             stokesAD.V.Vy .= 0.0
             stokesAD.P    .= 0.0
-
+            
             # sensitivity reference points for adjoint solve
             if SensType == "Vx"
                 stokesAD.V.Vx[SensInd[1],SensInd[2]] .= -1.0
@@ -78,7 +78,7 @@ function adjoint_2D!(
             @views stokesAD.R.Rx .= stokesAD.VA.Vx[2:end-1,2:end-1]
             @views stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]
             @views stokesAD.R.RP .= stokesAD.PA
-            
+
             @parallel (@idx ni) configcall=compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,
@@ -109,7 +109,7 @@ function adjoint_2D!(
                     Const(dt * free_surface))
 
             @parallel (@idx ni) configcall=compute_P_kernelAD!(
-                stokes.P,
+                θ,
                 stokes.P0,
                 stokes.R.RP,
                 stokes.∇V,
@@ -125,7 +125,7 @@ function adjoint_2D!(
                     mode,
                     Const(compute_P_kernelAD!),
                     Const{Nothing},
-                    DuplicatedNoNeed(stokes.P,stokesAD.P),
+                    DuplicatedNoNeed(θ,stokesAD.P),
                     Const(stokes.P0),
                     DuplicatedNoNeed(stokes.R.RP,stokesAD.R.RP),
                     Const(stokes.∇V),
@@ -139,31 +139,23 @@ function adjoint_2D!(
                     Const(nothing)
                     )
             
-            @parallel (@idx ni) update_PAD!(
-                stokesAD.PA,
-                stokesAD.P,
-                stokesAD.R.RP,
-                stokes.∇V,
-                ητ,
-                rheology,
-                phase_ratios.center,
-                dt,
-                r,
-                θ_dτ,
-                args)
-
             # apply free slip or no slip boundary conditions for adjoint solve
             if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
             if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
             if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
             if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
 
+            # copy stokes stress, if not stokes.τ is changed during the Enzyme call
+            stokesAD.dτ.xx   .= stokes.τ.xx
+            stokesAD.dτ.yy   .= stokes.τ.yy
+            stokesAD.dτ.xy_c .= stokes.τ.xy_c
+            stokesAD.dτ.xy   .= stokes.τ.xy
             @parallel (@idx ni.+1) configcall=update_stresses_center_vertex_psAD!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
                 stokes.EII_pl,
-                @tensor_center(stokes.τ),
-                (stokes.τ.xy,),
+                @tensor_center(stokesAD.dτ),
+                (stokesAD.dτ.xy,),
                 @tensor_center(stokes.τ_o),
                 (stokes.τ_o.xy,),
                 θ,
@@ -186,16 +178,14 @@ function adjoint_2D!(
                     mode,
                     Const(update_stresses_center_vertex_psAD!),
                     Const{Nothing},
-                    DuplicatedNoNeed(@strain(stokes),
-                    @strain(stokesAD)),
+                    DuplicatedNoNeed(@strain(stokes), @strain(stokesAD)),
                     Const(@tensor_center(stokes.ε_pl)),
                     Const(stokes.EII_pl),
-                    DuplicatedNoNeed(@tensor_center(stokes.τ),
-                    @tensor_center(stokesAD.τ)),
-                    DuplicatedNoNeed((stokes.τ.xy,),(stokesAD.τ.xy,)),
+                    DuplicatedNoNeed(@tensor_center(stokesAD.dτ), @tensor_center(stokesAD.τ)),
+                    DuplicatedNoNeed((stokesAD.dτ.xy,),(stokesAD.τ.xy,)),
                     Const(@tensor_center(stokes.τ_o)),
                     Const((stokes.τ_o.xy,)),
-                    Const(θ),
+                    DuplicatedNoNeed(θ,stokesAD.P),
                     Const(stokes.P),
                     Const(stokes.viscosity.η),
                     Const(λ),
@@ -212,6 +202,19 @@ function adjoint_2D!(
                     Const(phase_ratios.yz),
                     Const(phase_ratios.xz)
                     )
+                
+            @parallel (@idx ni) update_PAD!(
+                stokesAD.PA,
+                stokesAD.P,
+                stokesAD.R.RP,
+                stokes.∇V,
+                ητ,
+                rheology,
+                phase_ratios.center,
+                dt,
+                r,
+                θ_dτ,
+                args)
 
             @parallel (@idx ni .+ 1) configcall=compute_strain_rateAD!(
                 @strain(stokes)...,
@@ -228,7 +231,7 @@ function adjoint_2D!(
                     DuplicatedNoNeed(stokes.V.Vy,stokesAD.V.Vy),
                     Const(_di[1]),
                     Const(_di[2]))
-    
+
             # multiplier λP for ∂RP/∂V 
             stokesAD.∇V .= -stokesAD.PA
             # calculate ∂RP/∂V and multiply with λP

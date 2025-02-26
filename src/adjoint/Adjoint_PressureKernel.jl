@@ -12,18 +12,21 @@
     kwargs,
 ) where {N,C<:JustRelax.CellArray}
 
-    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
-    RP[I...], P[I...] = _update_PAD!(P[I...], ResP[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
+    K    = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
+    _Kdt = inv(K * dt)
+    P[I...] = P[I...] + ResP[I...] / (1.0 / (r / θ_dτ * η[I...]) + 1.0 * _Kdt)
+    #RP[I...], P[I...] = _update_PAD!(P[I...], ResP[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
 
+#=
 function _update_PAD!(P, ResP, ∇V, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
-    RP = ResP
-    P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
+    P += ResP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
 
-    return RP, P
+    return ResP, P
 end
+=#
 
 @parallel_indices (I...) function compute_P_kernelAD!(
     P,
@@ -53,3 +56,4 @@ function _compute_PAD!(P, P0, ∇V, η, K, dt, r, θ_dτ)
     #P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
     return RP, P
 end
+

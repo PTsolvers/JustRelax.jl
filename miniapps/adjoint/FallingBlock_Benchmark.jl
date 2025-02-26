@@ -94,27 +94,27 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     dt           = 1
 
     # Physical properties using GeoParams
+    el = ConstantElasticity(G=1.0, ν=0.45)
     rheology = (
         SetMaterialParams(;
             Name              = "Matrix",
             Phase             = 1,
             Density           = ConstantDensity(; ρ=1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0), ConstantElasticity(G=1.0, ν=0.5) )),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),el)),
             Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
             Name              = "Block",
             Phase             = 2,
             Density           = ConstantDensity(; ρ=1.5),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0), ConstantElasticity(G=1.0, ν=0.5) )),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0),el)),
             Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
             Name              = "StickyAir",
             Phase             = 3,
             Density           = ConstantDensity(; ρ=0.1),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 0.1), ConstantElasticity(G=1.0, ν=0.5) )),
-
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 0.1),el)),
             Gravity           = ConstantGravity(; g=1.0),
     )
 )

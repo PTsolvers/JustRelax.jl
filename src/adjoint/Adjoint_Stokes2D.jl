@@ -239,6 +239,7 @@ function _adjoint_solve!(
     indy = 1
     if rem(Glit+1, ADout) == 0
 
+        
         # adjoint solver
         adjoint_2D!(
             stokes,

@@ -56,7 +56,7 @@ function adjoint_2D!(
         lx, ly = li
         nout   = 1e3
         iter   = 1
-        iterMax = 2e4
+        iterMax = 1e4
 
         while (iter ≤ iterMax && err > ϵ)
 
@@ -150,6 +150,7 @@ function adjoint_2D!(
             stokesAD.dτ.yy   .= stokes.τ.yy
             stokesAD.dτ.xy_c .= stokes.τ.xy_c
             stokesAD.dτ.xy   .= stokes.τ.xy
+            stokesAD.P0      .= stokes.P
             @parallel (@idx ni.+1) configcall=update_stresses_center_vertex_psAD!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -159,7 +160,7 @@ function adjoint_2D!(
                 @tensor_center(stokes.τ_o),
                 (stokes.τ_o.xy,),
                 θ,
-                stokes.P,
+                stokesAD.P0,
                 stokes.viscosity.η,
                 λ,
                 λv,
@@ -186,7 +187,8 @@ function adjoint_2D!(
                     Const(@tensor_center(stokes.τ_o)),
                     Const((stokes.τ_o.xy,)),
                     DuplicatedNoNeed(θ,stokesAD.P),
-                    Const(stokes.P),
+                    #Const(θ),
+                    Const(stokesAD.P0),
                     Const(stokes.viscosity.η),
                     Const(λ),
                     Const(λv),
@@ -202,7 +204,7 @@ function adjoint_2D!(
                     Const(phase_ratios.yz),
                     Const(phase_ratios.xz)
                     )
-                
+        
             @parallel (@idx ni) update_PAD!(
                 stokesAD.PA,
                 stokesAD.P,

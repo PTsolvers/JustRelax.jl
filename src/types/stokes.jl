@@ -176,6 +176,7 @@ struct StokesArraysAdjoint{A,B,C,D,E,F,T}
     VA::A
     ∇V::T
     τ::B
+    dτ::B
     ε::B
     ε_pl::B
     EII_pl::T

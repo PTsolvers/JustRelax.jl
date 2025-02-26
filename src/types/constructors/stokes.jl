@@ -143,6 +143,7 @@ function StokesArraysAdjoint(ni::NTuple{N,Integer}) where {N}
     U = Displacement(ni...)
     ω = Vorticity(ni...)
     τ = SymmetricTensor(ni...)
+    dτ = SymmetricTensor(ni...)
     τ_o = SymmetricTensor(ni...)
     ε = SymmetricTensor(ni...)
     ε_pl = SymmetricTensor(ni...)
@@ -159,5 +160,5 @@ function StokesArraysAdjoint(ni::NTuple{N,Integer}) where {N}
     Cc = @zeros(ni...)
     C = @zeros(ni...)
 
-    return JustRelax.StokesArraysAdjoint(P, PA, P0, V, VA, ∇V, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, Gv, Gc, G, frv, frc, fr, Cv, Cc, C)
+    return JustRelax.StokesArraysAdjoint(P, PA, P0, V, VA, ∇V, τ, dτ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, Gv, Gc, G, frv, frc, fr, Cv, Cc, C)
 end

@@ -80,7 +80,7 @@ end
     relaxation=1e0,
 )
     compute_viscosity!(
-        stokes, phase_ratios, args, rheology, air_phase, cutoff; relaxation=relaxation
+        stokes, phase_ratios, args, rheology, cutoff; relaxation=relaxation, air_phase = air_phase
     )
     return nothing
 end
@@ -164,8 +164,8 @@ function compute_viscosity!(
     phase_ratios,
     args,
     rheology,
-    air_phase::Integer,
     cutoff;
+    air_phase::Integer = 0,
     relaxation=1e0,
 )
     return compute_viscosity!(

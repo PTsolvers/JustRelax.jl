@@ -1,5 +1,6 @@
 module JustRelax
 
+using Adapt
 using Reexport
 @reexport using ImplicitGlobalGrid
 using LinearAlgebra
@@ -57,10 +58,10 @@ include("stress_rotation/types.jl")
 export unwrap
 
 include("types/stokes.jl")
-# export StokesArrays, PTStokesCoeffs
 
 include("types/heat_diffusion.jl")
-# export ThermalArrays, PTThermalCoeffs
+
+include("variational_stokes/types.jl")
 
 include("types/weno.jl")
 

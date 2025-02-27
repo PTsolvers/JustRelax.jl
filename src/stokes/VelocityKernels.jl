@@ -1,36 +1,25 @@
 ## DIVERGENCE
 
 @parallel_indices (i, j) function compute_∇V!(
-        ∇V::AbstractArray{T, 2}, Vx, Vy, _dx, _dy
-    ) where {T}
-    d_xi(A) = _d_xi(A, i, j, _dx)
-    d_yi(A) = _d_yi(A, i, j, _dy)
+    ∇V::AbstractArray{T,2}, Vx, Vy, _dx, _dy
+) where {T}
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
 
     ∇V[i, j] = d_xi(Vx) + d_yi(Vy)
 
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_∇V!(
-        ∇V::AbstractArray{T, 3}, Vx, Vy, Vz, _dx, _dy, _dz
-    ) where {T}
-    d_xi(A) = _d_xi(A, i, j, k, _dx)
-    d_yi(A) = _d_yi(A, i, j, k, _dy)
-    d_zi(A) = _d_zi(A, i, j, k, _dz)
-
-    @inbounds ∇V[i, j, k] = d_xi(Vx) + d_yi(Vy) + d_zi(Vz)
-    return nothing
-end
-
 ## DEVIATORIC STRAIN RATE TENSOR
 
 @parallel_indices (i, j) function compute_strain_rate!(
-        εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
-    ) where {T}
-    d_xi(A) = _d_xi(A, i, j, _dx)
-    d_yi(A) = _d_yi(A, i, j, _dy)
-    d_xa(A) = _d_xa(A, i, j, _dx)
-    d_ya(A) = _d_ya(A, i, j, _dy)
+    εxx::AbstractArray{T,2}, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
+) where {T}
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
 
     if all((i, j) .≤ size(εxx))
         ∇V_ij = ∇V[i, j] / 3.0
@@ -91,12 +80,12 @@ end
 ## VELOCITY
 
 @parallel_indices (i, j) function compute_V!(
-        Vx::AbstractArray{T, 2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy
-    ) where {T}
-    d_xi(A) = _d_xi(A, i, j, _dx)
-    d_yi(A) = _d_yi(A, i, j, _dy)
-    d_xa(A) = _d_xa(A, i, j, _dx)
-    d_ya(A) = _d_ya(A, i, j, _dy)
+    Vx::AbstractArray{T,2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy
+) where {T}
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
     av_xa(A) = _av_xa(A, i, j)
     av_ya(A) = _av_ya(A, i, j)
     harm_xa(A) = _av_xa(A, i, j)
@@ -115,12 +104,12 @@ end
 
 # with free surface stabilization
 @parallel_indices (i, j) function compute_V!(
-        Vx::AbstractArray{T, 2}, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy, dt
-    ) where {T}
-    d_xi(A) = _d_xi(A, i, j, _dx)
-    d_yi(A) = _d_yi(A, i, j, _dy)
-    d_xa(A) = _d_xa(A, i, j, _dx)
-    d_ya(A) = _d_ya(A, i, j, _dy)
+    Vx::AbstractArray{T,2}, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy, dt
+) where {T}
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
     av_xa(A) = _av_xa(A, i, j)
     av_ya(A) = _av_ya(A, i, j)
     harm_xa(A) = _av_xa(A, i, j)
@@ -254,12 +243,12 @@ end
 ## RESIDUALS
 
 @parallel_indices (i, j) function compute_Res!(
-        Rx::AbstractArray{T, 2}, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
-    ) where {T}
-    @inline d_xa(A) = _d_xa(A, i, j, _dx)
-    @inline d_ya(A) = _d_ya(A, i, j, _dy)
-    @inline d_xi(A) = _d_xi(A, i, j, _dx)
-    @inline d_yi(A) = _d_yi(A, i, j, _dy)
+    Rx::AbstractArray{T,2}, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
+) where {T}
+    @inline d_xa(A) = _d_xa(A, _dx, i, j)
+    @inline d_ya(A) = _d_ya(A, _dy, i, j)
+    @inline d_xi(A) = _d_xi(A, _dx, i, j)
+    @inline d_yi(A) = _d_yi(A, _dy, i, j)
     @inline av_xa(A) = _av_xa(A, i, j)
     @inline av_ya(A) = _av_ya(A, i, j)
 
@@ -275,12 +264,12 @@ end
 end
 
 @parallel_indices (i, j) function compute_Res!(
-        Rx::AbstractArray{T, 2}, Ry, Vx, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
-    ) where {T}
-    @inline d_xa(A) = _d_xa(A, i, j, _dx)
-    @inline d_ya(A) = _d_ya(A, i, j, _dy)
-    @inline d_xi(A) = _d_xi(A, i, j, _dx)
-    @inline d_yi(A) = _d_yi(A, i, j, _dy)
+    Rx::AbstractArray{T,2}, Ry, Vx, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
+) where {T}
+    @inline d_xa(A) = _d_xa(A, _dx, i, j)
+    @inline d_ya(A) = _d_ya(A, _dy, i, j)
+    @inline d_xi(A) = _d_xi(A, _dx, i, j)
+    @inline d_yi(A) = _d_yi(A, _dy, i, j)
     @inline av_xa(A) = _av_xa(A, i, j)
     @inline av_ya(A) = _av_ya(A, i, j)
 
@@ -289,34 +278,8 @@ end
         if all((i, j) .≤ size(Rx))
             Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
         end
-        if all((i, j) .≤ size(Ry))
-            # θ = 1.0
-            # Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
-            # # Vertical velocity
-            # Vyᵢⱼ = Vy[i + 1, j + 1]
-            # # Get necessary buoyancy forces
-            # i_W, i_E = max(i - 1, 1), min(i + 1, nx)
-            # j_N = min(j + 1, ny)
-            # ρg_stencil = (
-            #     ρgy[i_W, j],
-            #     ρgy[i, j],
-            #     ρgy[i_E, j],
-            #     ρgy[i_W, j_N],
-            #     ρgy[i, j_N],
-            #     ρgy[i_E, j_N],
-            # )
-            # ρg_W = (ρg_stencil[1] + ρg_stencil[2] + ρg_stencil[4] + ρg_stencil[5]) * 0.25
-            # ρg_E = (ρg_stencil[2] + ρg_stencil[3] + ρg_stencil[5] + ρg_stencil[6]) * 0.25
-            # ρg_S = ρg_stencil[2]
-            # ρg_N = ρg_stencil[5]
-            # # Spatial derivatives
-            # ∂ρg∂x = (ρg_E - ρg_W) * _dx
-            # ∂ρg∂y = (ρg_N - ρg_S) * _dy
-            # # correction term
-            # ρg_correction = (Vxᵢⱼ * ∂ρg∂x + Vyᵢⱼ * ∂ρg∂y) * θ * dt
-            # Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + ρg_correction
-            # # Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
 
+        if all((i, j) .≤ size(Ry))
             θ = 1.0
             # Interpolated Vx into Vy node (includes density gradient)
             Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]

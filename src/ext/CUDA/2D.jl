@@ -32,6 +32,7 @@ __init__() = @init_parallel_stencil(CUDA, Float64, 2)
 
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
+include("../../variational_stokes/Stokes2D.jl")
 
 # Types
 function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
@@ -48,6 +49,14 @@ end
 
 function JR2D.WENO5(::Type{CUDABackend}, method::Val{T}, ni::NTuple{N, Integer}) where {N, T}
     return WENO5(method, tuple(ni...))
+end
+
+function JR2D.RockRatio(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
+    return RockRatio(ni...)
+end
+
+function JR2D.RockRatio(::Type{CUDABackend}, ni::Vararg{Integer, N}) where {N}
+    return RockRatio(ni...)
 end
 
 function JR2D.PTThermalCoeffs(
@@ -180,6 +189,12 @@ function JR2D.compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
+function JR2D.compute_viscosity!(
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
+    )
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
+end
+
 function JR2D.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
@@ -189,9 +204,9 @@ function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cuto
 end
 
 function compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
     )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
 end
 
 function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
@@ -278,6 +293,10 @@ end
 # Solvers
 function JR2D.solve!(::CUDABackendTrait, stokes, args...; kwargs)
     return _solve!(stokes, args...; kwargs...)
+end
+
+function JR2D.solve_VariationalStokes!(::CUDABackendTrait, stokes, args...; kwargs)
+    return _solve_VS!(stokes, args...; kwargs...)
 end
 
 function JR2D.heatdiffusion_PT!(::CUDABackendTrait, thermal, args...; kwargs)
@@ -382,6 +401,15 @@ function JR2D.rotate_stress_particles!(
     return nothing
 end
 
+# rock ratios
+
+function JR2D.update_rock_ratio!(
+        ϕ::JustRelax.RockRatio{CuArray{T, nD, D}, 2}, phase_ratios, air_phase
+    ) where {T, nD, D}
+    update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    return nothing
+end
+
 function JR2D.stress2grid!(
         stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, xvi, xci, particles
     )
@@ -394,6 +422,19 @@ function JR2D.rotate_stress!(
     )
     rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
     return nothing
+end
+
+# marker chain
+
+function JR2D.update_phases_given_markerchain!(
+        phase,
+        chain::MarkerChain{CUDABackend},
+        particles::Particles{CUDABackend},
+        origin,
+        di,
+        air_phase,
+    )
+    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
 end
 
 end

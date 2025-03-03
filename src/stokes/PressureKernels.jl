@@ -69,12 +69,12 @@ function compute_P!(
         r,
         θ_dτ;
         ΔTc = nothing,
-        ϕ = nothing,
+        melt_fraction = nothing,
         kwargs...,
     ) where {N}
     ni = size(P)
     @parallel (@idx ni) compute_P_kernel!(
-        P, P0, RP, ∇V, Q, η, rheology, phase_ratio, dt, r, θ_dτ, ΔTc, ϕ
+        P, P0, RP, ∇V, Q, η, rheology, phase_ratio.center, dt, r, θ_dτ, ΔTc, melt_fraction
     )
     return nothing
 end
@@ -112,7 +112,7 @@ end
         r,
         θ_dτ,
         ::Nothing,
-        ϕ,
+        melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
     K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
     RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
@@ -156,10 +156,10 @@ end
         r,
         θ_dτ,
         ΔTc,
-        ϕ,
+        melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
     K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
-    α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = ϕ[I...]))
+    α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
     RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
     )

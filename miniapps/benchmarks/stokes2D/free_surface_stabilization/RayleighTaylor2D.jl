@@ -1,17 +1,19 @@
-# using CUDA
-using JustRelax, JustRelax.JustRelax2D
-const backend_JR = CPUBackend
+using CUDA
+using JustRelax,  JustRelax.JustRelax2D
+const backend_JR = CUDABackend
+# const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend
+const backend = CUDABackend
+# const backend = JustPIC.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2)
+@init_parallel_stencil(CUDA, Float64, 2)
 
 # Load script dependencies
-using LinearAlgebra, GeoParams, CairoMakie#GLMakie
+using LinearAlgebra, GeoParams, GLMakie
 
-## START OF HELPER FUNCTION ----------------------------------------------------------
+# Velocity helper grids for the particle advection
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
         @all(A) = @inn_x(B)
@@ -26,8 +28,9 @@ macro all_j(A)
     esc(:($A[$idx_j]))
 end
 
-@parallel_indices (i, j) function init_P!(P, ρg, z)
-    P[i, j] = sum(abs(ρg[i, jj] * z[jj]) for jj in j:size(P, 2))
+# Initial pressure profile - not accurate
+@parallel function init_P!(P, ρg, z)
+    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
     return nothing
 end
 
@@ -62,8 +65,18 @@ function init_phases!(phases, particles, A)
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
+# (Path)/folder where output data and figures are stored
+n        = 101
+nx       = n
+ny       = n
+igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
+else
+    igg
+end
+
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function RT_2D(igg, nx, ny)
+function main(igg, nx, ny)
 
     # Physical domain ------------------------------------
     thick_air    = 100e3             # thickness of sticky air layer
@@ -104,7 +117,7 @@ function RT_2D(igg, nx, ny)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 30, 40, 10
+    nxcell, max_xcell, min_xcell = 60, 80, 40
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
@@ -121,10 +134,15 @@ function RT_2D(igg, nx, ny)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
+    # RockRatios
+    air_phase = 1
+    ϕ         = RockRatio(backend, ni)
+    update_rock_ratio!(ϕ, phase_ratios, air_phase)
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3e0, r=0.7, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -153,18 +171,30 @@ function RT_2D(igg, nx, ny)
 
     # Time loop
     t, it   = 0.0, 0
-    dt      = 1e3 * (3600 * 24 * 365.25)
+    dt      = 10e3 * (3600 * 24 * 365.25)
     dt_max  = 50e3 * (3600 * 24 * 365.25)
-    while it < 500
+    
+    _di = inv.(di)
+    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; η, η_vep) = stokes.viscosity
+    ni = size(stokes.P)
+    iterMax          =        15e3
+    nout             =         1e3
+    viscosity_cutoff = (-Inf, Inf)
+    free_surface     =       false
+    ητ = @zeros(ni...)
+    while it < 1000
 
+        ## variational solver
         # Stokes solver ----------------
-        solve!(
+        solve_VariationalStokes!(
             stokes,
             pt_stokes,
             di,
             flow_bcs,
             ρg,
             phase_ratios,
+            ϕ,
             rheology,
             args,
             dt,
@@ -173,20 +203,11 @@ function RT_2D(igg, nx, ny)
                 iterMax              =  50e3,
                 iterMin              =   1e3,
                 viscosity_relaxation =  1e-2,
-                nout                 =   5e3,
-                free_surface         =  true,
+                nout                 =   2e3,
                 viscosity_cutoff     = (-Inf, Inf)
             )
         )
-        dt = if it ≤ 10
-            min(compute_dt(stokes, di),  1e3 * (3600 * 24 * 365.25))
-        elseif 10 < it ≤ 20
-            min(compute_dt(stokes, di), 10e3 * (3600 * 24 * 365.25))
-        elseif 20 < it ≤ 30
-            min(compute_dt(stokes, di), 25e3 * (3600 * 24 * 365.25))
-        else
-            min(compute_dt(stokes, di), dt_max)
-        end
+        dt = compute_dt(stokes, di, dt_max) 
         # ------------------------------
 
         # Advection --------------------
@@ -198,52 +219,33 @@ function RT_2D(igg, nx, ny)
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
         @show it += 1
         t        += dt
 
         if it == 1 || rem(it, 5) == 0
+            px, py = particles.coords
+
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-            nt = 2
-
-            p        = particles.coords
-            ppx, ppy = p
-            pxv      = ppx.data[:]./1e3
-            pyv      = ppy.data[:]./1e3
-            clr      = pPhases.data[:]
-
+            nt = 5
             fig = Figure(size = (900, 900), title = "t = $t")
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(round.(t/(1e3 * 3600 * 24 *365.25); digits=3)) Kyrs")
-            scatter!(
-                ax,
-                pxv, pyv,
-                color=clr,
-                colormap = :lajolla,
-                markersize = 3
-            )
+            # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
+            scatter!(ax, Array(px.data[:]).*1e-3, Array(py.data[:]).*1e-3, color =Array(pPhases.data[:]), colormap = :grayC)
             arrows!(
                 ax,
                 xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
                 lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
-                color = :darkblue,
+                color = :red,
             )
             fig
             save(joinpath(figdir, "$(it).png"), fig)
+
         end
-
     end
-    return
+    return nothing
 end
+
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-
-# (Path)/folder where output data and figures are stored
-n        = 100
-nx       = n
-ny       = n
-igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
-else
-    igg
-end
-
-RT_2D(igg, nx, ny)
+main(igg, nx, ny)

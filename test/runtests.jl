@@ -6,7 +6,7 @@ using Test
 
 push!(LOAD_PATH, "..")
 
-function parse_flags!(args, flag; default=nothing, type=typeof(default))
+function parse_flags!(args, flag; default = nothing, type = typeof(default))
     for f in args
         startswith(f, flag) || continue
 
@@ -73,7 +73,7 @@ function runtests()
     return nfail
 end
 
-_, backend_name = parse_flags!(ARGS, "--backend"; default="CPU", type=String)
+_, backend_name = parse_flags!(ARGS, "--backend"; default="CPU", type = String)
 
 @static if backend_name == "AMDGPU"
     Pkg.add("AMDGPU")

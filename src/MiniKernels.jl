@@ -45,20 +45,14 @@ Base.@propagate_inbounds @inline _d_za(
 ) where {N} = (-center(A, I...) + top(A, I...)) * _dz
 Base.@propagate_inbounds @inline _d_xi(
     A::AbstractArray, _dx, I::Vararg{Integer, 2}
-) where {N} = (-front(A, I...) + next(A, I...)) * _dx
+) = (-front(A, I...) + next(A, I...)) * _dx
 Base.@propagate_inbounds @inline _d_yi(
     A::AbstractArray, _dy, I::Vararg{Integer, 2}
-) where {N} = (-right(A, I...) + next(A, I...)) * _dy
+) = (-right(A, I...) + next(A, I...)) * _dy
 
-@inline function _d_xi(A, _dx, i::I, j::I, k::I) where {I <: Integer}
-    return (-A[i, j + 1, k + 1] + next(A, i, j, k)) * _dx
-end
-@inline function _d_yi(A, _dy, i::I, j::I, k::I) where {I <: Integer}
-    return (-A[i + 1, j, k + 1] + next(A, i, j, k)) * _dy
-end
-@inline function _d_zi(A, _dz, i::I, j::I, k::I) where {I <: Integer}
-    return (-A[i + 1, j + 1, k] + next(A, i, j, k)) * _dz
-end
+@inline _d_xi(A, _dx, i::I, j::I, k::I) where {I <: Integer} = (-A[i, j + 1, k + 1] + next(A, i, j, k)) * _dx
+@inline _d_yi(A, _dy, i::I, j::I, k::I) where {I <: Integer} = (-A[i + 1, j, k + 1] + next(A, i, j, k)) * _dy
+@inline _d_zi(A, _dz, i::I, j::I, k::I) where {I <: Integer} = (-A[i + 1, j + 1, k] + next(A, i, j, k)) * _dz
 
 Base.@propagate_inbounds @inline div(Ax, Ay, _dx, _dy, I::Vararg{Integer, 2}) =
     _d_xi(Ax, _dx, I...) + _d_yi(Ay, _dy, I...)

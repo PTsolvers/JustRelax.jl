@@ -30,7 +30,6 @@ Base.@propagate_inbounds @inline bot(
 Base.@propagate_inbounds @inline top(
     A::AbstractArray, i::I, j::I, k::I
 ) where {I<:Integer} = A[i, j, k + 1]
-
 ## 2D mini kernels
 const T2 = AbstractArray{T, 2} where {T}
 
@@ -45,14 +44,21 @@ Base.@propagate_inbounds @inline _d_za(
     A::AbstractArray, _dz, I::Vararg{Integer,N}
 ) where {N} = (-center(A, I...) + top(A, I...)) * _dz
 Base.@propagate_inbounds @inline _d_xi(
-    A::AbstractArray, _dx, I::Vararg{Integer,N}
+    A::AbstractArray, _dx, I::Vararg{Integer,2}
 ) where {N} = (-front(A, I...) + next(A, I...)) * _dx
 Base.@propagate_inbounds @inline _d_yi(
-    A::AbstractArray, _dy, I::Vararg{Integer,N}
+    A::AbstractArray, _dy, I::Vararg{Integer,2}
 ) where {N} = (-right(A, I...) + next(A, I...)) * _dy
-Base.@propagate_inbounds @inline _d_zi(
-    A::AbstractArray, _dz, I::Vararg{Integer,N}
-) where {N} = (-top(A, I...) + next(A, I...)) * _dz
+
+@inline function _d_xi(A, _dx, i::I, j::I, k::I) where {I<:Integer}
+    return (-A[i, j + 1, k + 1] + next(A, i, j, k)) * _dx
+end
+@inline function _d_yi(A, _dy, i::I, j::I, k::I) where {I<:Integer}
+    return (-A[i + 1, j, k + 1] + next(A, i, j, k)) * _dy
+end
+@inline function _d_zi(A, _dz, i::I, j::I, k::I) where {I<:Integer}
+    return (-A[i + 1, j + 1, k] + next(A, i, j, k)) * _dz
+end
 
 Base.@propagate_inbounds @inline div(Ax, Ay, _dx, _dy, I::Vararg{Integer,2}) =
     _d_xi(Ax, _dx, I...) + _d_yi(Ay, _dy, I...)

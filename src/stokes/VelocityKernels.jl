@@ -1,13 +1,7 @@
 ## DIVERGENCE
 
-@parallel_indices (i, j) function compute_∇V!(
-    ∇V::AbstractArray{T,2}, Vx, Vy, _dx, _dy
-) where {T}
-    d_xi(A) = _d_xi(A, _dx, i, j)
-    d_yi(A) = _d_yi(A, _dy, i, j)
-
-    ∇V[i, j] = d_xi(Vx) + d_yi(Vy)
-
+@parallel_indices (I...) function compute_∇V!(∇V::AbstractArray, V::NTuple, _di::NTuple)
+    @inbounds ∇V[I...] = div(V..., _di..., I...)
     return nothing
 end
 
@@ -22,7 +16,7 @@ end
     d_ya(A) = _d_ya(A, _dy, i, j)
 
     if all((i, j) .≤ size(εxx))
-        ∇V_ij = ∇V[i, j] / 3.0
+        ∇V_ij = ∇V[i, j] / 3
         εxx[i, j] = d_xi(Vx) - ∇V_ij
         εyy[i, j] = d_yi(Vy) - ∇V_ij
     end
@@ -34,9 +28,9 @@ end
 @parallel_indices (i, j, k) function compute_strain_rate!(
         ∇V::AbstractArray{T, 3}, εxx, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, _dx, _dy, _dz
     ) where {T}
-    d_xi(A) = _d_xi(A, i, j, k, _dx)
-    d_yi(A) = _d_yi(A, i, j, k, _dy)
-    d_zi(A) = _d_zi(A, i, j, k, _dz)
+    @inline d_xi(A) = _d_xi(A, _dx, i, j, k)
+    @inline d_yi(A) = _d_yi(A, _dy, i, j, k)
+    @inline d_zi(A) = _d_zi(A, _dz, i, j, k)
 
     @inbounds begin
         # normal components are all located @ cell centers
@@ -200,15 +194,15 @@ end
         _dy,
         _dz,
     ) where {T}
-    harm_x(A) = _harm_x(A, i, j, k)
-    harm_y(A) = _harm_y(A, i, j, k)
-    harm_z(A) = _harm_z(A, i, j, k)
-    av_x(A) = _av_x(A, i, j, k)
-    av_y(A) = _av_y(A, i, j, k)
-    av_z(A) = _av_z(A, i, j, k)
-    d_xa(A) = _d_xa(A, i, j, k, _dx)
-    d_ya(A) = _d_ya(A, i, j, k, _dy)
-    d_za(A) = _d_za(A, i, j, k, _dz)
+    @inline harm_x(A) = _harm_x(A, i, j, k)
+    @inline harm_y(A) = _harm_y(A, i, j, k)
+    @inline harm_z(A) = _harm_z(A, i, j, k)
+    @inline av_x(A) = _av_x(A, i, j, k)
+    @inline av_y(A) = _av_y(A, i, j, k)
+    @inline av_z(A) = _av_z(A, i, j, k)
+    @inline d_xa(A) = _d_xa(A, _dx, i, j, k)
+    @inline d_ya(A) = _d_ya(A, _dy, i, j, k)
+    @inline d_za(A) = _d_za(A, _dz, i, j, k)
 
     @inbounds begin
         if all((i, j, k) .< size(Vx) .- 1)

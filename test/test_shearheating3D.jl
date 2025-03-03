@@ -247,19 +247,20 @@ end
         end
 
         # Initialize iters and thermal to ensure they are defined
-        iters = nothing
-        thermal = nothing
+        iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
+        # iters = nothing
+        # thermal = nothing
 
-        try
-            iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
-        catch e
-            @warn e
-            try
-                iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
-            catch e2
-                @warn e2
-            end
-        end
+        # try
+        #     iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
+        # catch e
+        #     @warn e
+        #     try
+        #         iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
+        #     catch e2
+        #         @warn e2
+        #     end
+        # end
 
         # Ensure iters is defined before running the test
         @test iters != nothing && iters.err_evo1[end] < 1e-4

@@ -22,7 +22,6 @@ else
 end
 
 include("../miniapps/benchmarks/stokes3D/solvi/SolVi3D.jl")
-
 function check_convergence_case1()
     nx = 16
     ny = 16

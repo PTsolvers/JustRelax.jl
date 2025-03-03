@@ -28,27 +28,27 @@ function check_convergence_case1()
     nz = 16
 
     # model specific parameters
-    Δη = 1e-3 # viscosity ratio between matrix and inclusion
-    rc = 1e0 # radius of the inclusion
-    εbg = 1e0 # background strain rate
-    lx, ly, lz = 1e1, 1e1, 1e1 # domain siye in x and y directions
+    Δη = 1.0e-3 # viscosity ratio between matrix and inclusion
+    rc = 1.0e0 # radius of the inclusion
+    εbg = 1.0e0 # background strain rate
+    lx, ly, lz = 1.0e1, 1.0e1, 1.0e1 # domain siye in x and y directions
 
     # run model
     _, _, iters = solVi3D(;
-        Δη=Δη,
-        nx=nx,
-        ny=ny,
-        nz=nz,
-        lx=lx,
-        ly=ly,
-        lz=lz,
-        rc=rc,
-        εbg=εbg,
-        init_MPI=JustRelax.MPI.Initialized() ? false : true,
-        finalize_MPI=false,
+        Δη = Δη,
+        nx = nx,
+        ny = ny,
+        nz = nz,
+        lx = lx,
+        ly = ly,
+        lz = lz,
+        rc = rc,
+        εbg = εbg,
+        init_MPI = JustRelax.MPI.Initialized() ? false : true,
+        finalize_MPI = false,
     )
 
-    tol = 1e-8
+    tol = 1.0e-8
     passed = iters.norm_Rx[end] < tol
 
     return passed

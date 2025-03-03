@@ -36,7 +36,7 @@ function runtests()
         ),
     )
     nfail = 0
-    printstyled("Testing package JustRelax.jl\n"; bold=true, color=:white)
+    printstyled("Testing package JustRelax.jl\n"; bold = true, color = :white)
 
     f0 = ("test_traits.jl", "test_types.jl", "test_arrays_conversions.jl")
     for f in f0
@@ -55,7 +55,7 @@ function runtests()
             try
                 @testset "$(basename(f))" begin
                     n = 2
-                    p= run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no $(joinpath(testdir, f))`)
+                    p = run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no $(joinpath(testdir, f))`)
                     @test success(p)
                 end
             catch ex

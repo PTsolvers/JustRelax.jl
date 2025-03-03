@@ -48,7 +48,7 @@ function copyinn_x!(A, B)
         return nothing
     end
 
-    @parallel f_x(A, B)
+    return @parallel f_x(A, B)
 end
 
 import ParallelStencil.INDICES
@@ -65,22 +65,22 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function Shearheating2D(igg; nx=32, ny=32)
+function Shearheating2D(igg; nx = 32, ny = 32)
 
     # Physical domain ------------------------------------
-    ly           = 40e3              # domain length in y
-    lx           = 70e3           # domain length in x
-    ni           = nx, ny            # number of cells
-    li           = lx, ly            # domain length in x- and y-
-    di           = @. li / ni        # grid step in x- and -y
-    origin       = 0.0, -ly          # origin coordinates (15km f sticky air layer)
-    grid         = Geometry(ni, li; origin = origin)
+    ly = 40.0e3              # domain length in y
+    lx = 70.0e3           # domain length in x
+    ni = nx, ny            # number of cells
+    li = lx, ly            # domain length in x- and y-
+    di = @. li / ni        # grid step in x- and -y
+    origin = 0.0, -ly          # origin coordinates (15km f sticky air layer)
+    grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology     = init_rheologies(; is_TP_Conductivity=false)
-    κ            = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
+    rheology = init_rheologies(; is_TP_Conductivity = false)
+    κ = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
     dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -90,28 +90,28 @@ function Shearheating2D(igg; nx=32, ny=32)
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases      = init_cell_arrays(particles, Val(3))
-    particle_args    = (pT, pPhases)
+    pT, pPhases = init_cell_arrays(particles, Val(3))
+    particle_args = (pT, pPhases)
 
     # Elliptical temperature anomaly
-    xc_anomaly       = lx / 2 # origin of thermal anomaly
-    yc_anomaly       = 40e3   # origin of thermal anomaly
-    r_anomaly        = 3e3    # radius of perturbation
-    phase_ratios     = PhaseRatios(backend, length(rheology), ni)
+    xc_anomaly = lx / 2 # origin of thermal anomaly
+    yc_anomaly = 40.0e3   # origin of thermal anomaly
+    r_anomaly = 3.0e3    # radius of perturbation
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.9 / √2.1)
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal          = ThermalArrays(backend_JR, ni)
-    thermal_bc       = TemperatureBoundaryConditions(;
-        no_flux      = (left = true, right = true, top = false, bot = false),
+    thermal = ThermalArrays(backend_JR, ni)
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = false, bot = false),
     )
 
     # Initialize constant temperature
@@ -121,31 +121,31 @@ function Shearheating2D(igg; nx=32, ny=32)
     # ----------------------------------------------------
 
     # Buoyancy forces
-    ρg               = @zeros(ni...), @zeros(ni...)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+    ρg = @zeros(ni...), @zeros(ni...)
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology
-    args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
-    pt_thermal       = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL= 1 / √2.1
+    pt_thermal = PTThermalCoeffs(
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 1 / √2.1
     )
 
     # Boundary conditions
-    flow_bcs         = VelocityBoundaryConditions(;
-        free_slip    = (left = true, right=true, top=true, bot=true),
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true),
     )
     ## Compression and not extension - fix this
-    εbg              = 5e-14
-    stokes.V.Vx     .= PTArray(backend_JR)([ -(x - lx/2) * εbg for x in xvi[1], _ in 1:ny+2])
-    stokes.V.Vy     .= PTArray(backend_JR)([ (ly - abs(y)) * εbg for _ in 1:nx+2, y in xvi[2]])
+    εbg = 5.0e-14
+    stokes.V.Vx .= PTArray(backend_JR)([ -(x - lx / 2) * εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend_JR)([ (ly - abs(y)) * εbg for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    T_buffer    = @zeros(ni.+1)
+    T_buffer = @zeros(ni .+ 1)
     Told_buffer = similar(T_buffer)
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
@@ -170,9 +170,9 @@ function Shearheating2D(igg; nx=32, ny=32)
             dt,
             igg;
             kwargs = (;
-                iterMax = 75e3,
-                nout=1e3,
-                viscosity_cutoff=(-Inf, Inf)
+                iterMax = 75.0e3,
+                nout = 1.0e3,
+                viscosity_cutoff = (-Inf, Inf),
             )
         )
         tensor_invariant!(stokes.ε)
@@ -197,10 +197,10 @@ function Shearheating2D(igg; nx=32, ny=32)
             dt,
             di;
             kwargs = (;
-                igg     = igg,
-                phase   = phase_ratios,
-                iterMax = 10e3,
-                nout    = 1e2,
+                igg = igg,
+                phase = phase_ratios,
+                iterMax = 10.0e3,
+                nout = 1.0e2,
                 verbose = true,
             )
         )
@@ -223,12 +223,12 @@ function Shearheating2D(igg; nx=32, ny=32)
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]      .= 273.0 + 400
-        @views thermal.T[2:end-1, :] .= T_buffer
+        @views T_buffer[:, end] .= 273.0 + 400
+        @views thermal.T[2:(end - 1), :] .= T_buffer
         temperature2center!(thermal)
 
         @show it += 1
-        t        += dt
+        t += dt
 
     end
 
@@ -243,13 +243,13 @@ end
         nx = n
         ny = n
         igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, 1; init_MPI=true)...)
+            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
         else
             igg
         end
 
         # Initialize iters and thermal to ensure they are defined
-        iters, thermal = Shearheating2D(igg; nx=nx, ny=ny)
+        iters, thermal = Shearheating2D(igg; nx = nx, ny = ny)
         # iters = nothing
         # thermal = nothing
 
@@ -265,7 +265,7 @@ end
         # end
 
         # Ensure iters is defined before running the test
-        @test iters != nothing && iters.err_evo1[end] < 1e-4
+        @test iters != nothing && iters.err_evo1[end] < 1.0e-4
         @test any(x -> x < 0, thermal.shear_heating) == false
     end
 end

@@ -38,7 +38,7 @@ function runtests()
     nfail = 0
     printstyled("Testing package JustRelax.jl\n"; bold=true, color=:white)
 
-    f0 = ("test_traits.jl", "test_typees.jl", "test_arrays_conversions.jl")
+    f0 = ("test_traits.jl", "test_types.jl", "test_arrays_conversions.jl")
     for f in f0
         include(f)
     end

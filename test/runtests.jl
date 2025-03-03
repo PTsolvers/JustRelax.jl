@@ -6,7 +6,7 @@ using Test
 
 push!(LOAD_PATH, "..")
 
-function parse_flags!(args, flag; default=nothing, type=typeeof(default))
+function parse_flags!(args, flag; default=nothing, type=typeof(default))
     for f in args
         startswith(f, flag) || continue
 

@@ -60,7 +60,7 @@ function JR2D.WENO5(
     return WENO5(method, tuple(ni...))
 end
 
-function JR2D.RockRatio(::Type{AMDGPUBackend}, ni::NTuple{N,Integer}) where {N}
+function JR2D.RockRatio(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
     return RockRatio(ni...)
 end
 
@@ -415,8 +415,8 @@ end
 # rock ratios
 
 function JR2D.update_rock_ratio!(
-    ϕ::JustRelax.RockRatio{ROCArray{T,nD,D},2}, phase_ratios, air_phase
-) where {T,nD,D}
+        ϕ::JustRelax.RockRatio{ROCArray{T, nD, D}, 2}, phase_ratios, air_phase
+    ) where {T, nD, D}
     update_rock_ratio!(ϕ, phase_ratios, air_phase)
     return nothing
 end
@@ -447,13 +447,13 @@ end
 # marker chain
 
 function JR2D.update_phases_given_markerchain!(
-    phase,
-    chain::MarkerChain{JustPIC.AMDGPUBackend},
-    particles::Particles{JustPIC.AMDGPUBackend},
-    origin,
-    di,
-    air_phase,
-)
+        phase,
+        chain::MarkerChain{JustPIC.AMDGPUBackend},
+        particles::Particles{JustPIC.AMDGPUBackend},
+        origin,
+        di,
+        air_phase,
+    )
     return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
 end
 

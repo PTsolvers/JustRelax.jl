@@ -35,14 +35,14 @@ end
 
 # with phase ratios
 @inline function update_viscosity!(
-    stokes::JustRelax.StokesArrays,
-    phase_ratios,
-    args,
-    rheology,
-    cutoff;
-    air_phase::Integer=0,
-    relaxation=1e0,
-)
+        stokes::JustRelax.StokesArrays,
+        phase_ratios,
+        args,
+        rheology,
+        cutoff;
+        air_phase::Integer = 0,
+        relaxation = 1.0e0,
+    )
     update_viscosity!(
         islinear(rheology),
         stokes,
@@ -57,30 +57,30 @@ end
 end
 
 @inline function update_viscosity!(
-    ::LinearRheologyTrait,
-    stokes::JustRelax.StokesArrays,
-    phase_ratios,
-    args,
-    rheology,
-    air_phase,
-    cutoff;
-    relaxation=1e0,
-)
+        ::LinearRheologyTrait,
+        stokes::JustRelax.StokesArrays,
+        phase_ratios,
+        args,
+        rheology,
+        air_phase,
+        cutoff;
+        relaxation = 1.0e0,
+    )
     return nothing
 end
 
 @inline function update_viscosity!(
-    ::NonLinearRheologyTrait,
-    stokes::JustRelax.StokesArrays,
-    phase_ratios,
-    args,
-    rheology,
-    air_phase,
-    cutoff;
-    relaxation=1e0,
-)
+        ::NonLinearRheologyTrait,
+        stokes::JustRelax.StokesArrays,
+        phase_ratios,
+        args,
+        rheology,
+        air_phase,
+        cutoff;
+        relaxation = 1.0e0,
+    )
     compute_viscosity!(
-        stokes, phase_ratios, args, rheology, cutoff; relaxation=relaxation, air_phase = air_phase
+        stokes, phase_ratios, args, rheology, cutoff; relaxation = relaxation, air_phase = air_phase
     )
     return nothing
 end
@@ -160,41 +160,41 @@ end
 end
 
 function compute_viscosity!(
-    stokes::JustRelax.StokesArrays,
-    phase_ratios,
-    args,
-    rheology,
-    cutoff;
-    air_phase::Integer = 0,
-    relaxation=1e0,
-)
+        stokes::JustRelax.StokesArrays,
+        phase_ratios,
+        args,
+        rheology,
+        cutoff;
+        air_phase::Integer = 0,
+        relaxation = 1.0e0,
+    )
     return compute_viscosity!(
         backend(stokes), stokes, relaxation, phase_ratios, args, rheology, air_phase, cutoff
     )
 end
 
 function compute_viscosity!(
-    ::CPUBackendTrait,
-    stokes::JustRelax.StokesArrays,
-    ν,
-    phase_ratios,
-    args,
-    rheology,
-    air_phase,
-    cutoff,
-)
+        ::CPUBackendTrait,
+        stokes::JustRelax.StokesArrays,
+        ν,
+        phase_ratios,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+    )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
 end
 
 function _compute_viscosity!(
-    stokes::JustRelax.StokesArrays,
-    ν,
-    phase_ratios::JustPIC.PhaseRatios,
-    args,
-    rheology,
-    air_phase,
-    cutoff;
-)
+        stokes::JustRelax.StokesArrays,
+        ν,
+        phase_ratios::JustPIC.PhaseRatios,
+        args,
+        rheology,
+        air_phase,
+        cutoff
+    )
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(
         stokes.viscosity.η,
@@ -210,8 +210,8 @@ function _compute_viscosity!(
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-    η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, air_phase::Integer, cutoff
-)
+        η, ν, ratios_center, εxx, εyy, εxyv, args, rheology, air_phase::Integer, cutoff
+    )
 
     # convenience closure
     @inline gather(A) = _gather(A, I...)
@@ -280,20 +280,20 @@ end
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-    η,
-    ν,
-    ratios_center,
-    εxx,
-    εyy,
-    εzz,
-    εyzv,
-    εxzv,
-    εxyv,
-    args,
-    rheology,
-    air_phase::Integer,
-    cutoff,
-)
+        η,
+        ν,
+        ratios_center,
+        εxx,
+        εyy,
+        εzz,
+        εyzv,
+        εxzv,
+        εxyv,
+        args,
+        rheology,
+        air_phase::Integer,
+        cutoff,
+    )
 
     # convenience closures
     @inline gather_yz(A) = _gather_yz(A, I...)
@@ -377,11 +377,11 @@ end
 #     end
 # end
 
-function correct_phase_ratio(air_phase, ratio::SVector{N,T}) where {N,T}
+function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
     if iszero(air_phase)
         return ratio
     elseif ratio[air_phase] ≈ 1
-        return SVector{N,T}(zero(T) for _ in 1:N)
+        return SVector{N, T}(zero(T) for _ in 1:N)
     else
         mask = ntuple(i -> (i !== air_phase), Val(N))
         # set air phase ratio to zero

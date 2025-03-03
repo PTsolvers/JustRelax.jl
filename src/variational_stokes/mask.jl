@@ -1,4 +1,4 @@
-function RockRatio(::Type{CPUBackend}, ni::NTuple{N,Integer}) where {N}
+function RockRatio(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return RockRatio(ni...)
 end
 
@@ -45,7 +45,7 @@ Update the rock ratio `ϕ` based on the provided `phase_ratios` and `air_phase`.
 - `phase_ratios`: The ratios of different phases present.
 - `air_phase`: The phase representing air.
 """
-function update_rock_ratio!(ϕ::JustRelax.RockRatio{T,2}, phase_ratios, air_phase) where {T}
+function update_rock_ratio!(ϕ::JustRelax.RockRatio{T, 2}, phase_ratios, air_phase) where {T}
     nvi = size_v(ϕ)
     @parallel (@idx nvi) update_rock_ratio_cv!(
         ϕ, phase_ratios.center, phase_ratios.vertex, air_phase
@@ -61,7 +61,7 @@ function update_rock_ratio!(ϕ::JustRelax.RockRatio{T,2}, phase_ratios, air_phas
     return nothing
 end
 
-function update_rock_ratio!(ϕ::JustRelax.RockRatio{T,3}, phase_ratios, air_phase) where {T}
+function update_rock_ratio!(ϕ::JustRelax.RockRatio{T, 3}, phase_ratios, air_phase) where {T}
     nvi = size_v(ϕ)
     @parallel (@idx nvi) update_rock_ratio_cv!(
         ϕ, phase_ratios.center, phase_ratios.vertex, air_phase
@@ -69,8 +69,8 @@ function update_rock_ratio!(ϕ::JustRelax.RockRatio{T,3}, phase_ratios, air_phas
 
     dst = ϕ.Vx, ϕ.Vy, ϕ.Vz, ϕ.xy, ϕ.yz, ϕ.xz
     src = phase_ratios.Vx,
-    phase_ratios.Vy, phase_ratios.Vz, phase_ratios.xy, phase_ratios.yz,
-    phase_ratios.xz
+        phase_ratios.Vy, phase_ratios.Vz, phase_ratios.xy, phase_ratios.yz,
+        phase_ratios.xz
 
     for (dstᵢ, srcᵢ) in zip(dst, src)
         @parallel (@idx size(dstᵢ)) _update_rock_ratio!(dstᵢ, srcᵢ, air_phase)
@@ -80,24 +80,24 @@ function update_rock_ratio!(ϕ::JustRelax.RockRatio{T,3}, phase_ratios, air_phas
 end
 
 @inline function compute_rock_ratio(
-    phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
-) where {N}
-    1 ≤ air_phase ≤ numphases(phase_ratio) || return 1e0
+        phase_ratio::CellArray, air_phase, I::Vararg{Integer, N}
+    ) where {N}
+    1 ≤ air_phase ≤ numphases(phase_ratio) || return 1.0e0
     x = 1 - @index phase_ratio[air_phase, I...]
-    x *= x > 1e-5
+    x *= x > 1.0e-5
     return x
 end
 
 @inline function compute_air_ratio(
-    phase_ratio::CellArray, air_phase, I::Vararg{Integer,N}
-) where {N}
-    1 ≤ air_phase ≤ numphases(phase_ratio) || return 1e0
+        phase_ratio::CellArray, air_phase, I::Vararg{Integer, N}
+    ) where {N}
+    1 ≤ air_phase ≤ numphases(phase_ratio) || return 1.0e0
     return @index phase_ratio[air_phase, I...]
 end
 
 @parallel_indices (I...) function update_rock_ratio_cv!(
-    ϕ, ratio_center, ratio_vertex, air_phase
-)
+        ϕ, ratio_center, ratio_vertex, air_phase
+    )
     if all(I .≤ size(ratio_center))
         ϕ.center[I...] = compute_rock_ratio(ratio_center, air_phase, I...)
     end
@@ -168,8 +168,8 @@ Check if  `ϕ.Vx[inds...]` is a not a nullspace.
 - `inds`: Cartesian indices to check.
 """
 Base.@propagate_inbounds @inline function isvalid_vx(
-    ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}
-) where {N}
+        ϕ::JustRelax.RockRatio, I::Vararg{Integer, N}
+    ) where {N}
     return isvalid(ϕ.Vx, I...)
 end
 
@@ -198,8 +198,8 @@ Check if  `ϕ.Vy[inds...]` is a not a nullspace.
 #     return (ϕ.Vy[i, j] > 0)
 # end
 Base.@propagate_inbounds @inline function isvalid_vy(
-    ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}
-) where {N}
+        ϕ::JustRelax.RockRatio, I::Vararg{Integer, N}
+    ) where {N}
     return isvalid(ϕ.Vy, I...)
 end
 
@@ -213,8 +213,8 @@ Check if  `ϕ.Vz[inds...]` is a not a nullspace.
 - `inds`: Cartesian indices to check.
 """
 Base.@propagate_inbounds @inline function isvalid_vz(
-    ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}
-) where {N}
+        ϕ::JustRelax.RockRatio, I::Vararg{Integer, N}
+    ) where {N}
     return isvalid(ϕ.Vz, I...)
 end
 
@@ -311,7 +311,7 @@ Base.@propagate_inbounds @inline function isvalid_yz(ϕ::JustRelax.RockRatio, i,
     return v * vy * vz * isvalid(ϕ.vertex, i, j, k)
 end
 
-Base.@propagate_inbounds @inline isvalid(ϕ, I::Vararg{Integer,N}) where {N} = ϕ[I...] > 0
+Base.@propagate_inbounds @inline isvalid(ϕ, I::Vararg{Integer, N}) where {N} = ϕ[I...] > 0
 
 ######
 

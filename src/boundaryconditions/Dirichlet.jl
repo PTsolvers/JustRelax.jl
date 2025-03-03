@@ -9,7 +9,7 @@ end
 # end
 
 function DirichletBoundaryCondition()
-    return DirichletBoundaryCondition{Nothing,Nothing}(nothing, nothing)
+    return DirichletBoundaryCondition{Nothing, Nothing}(nothing, nothing)
 end
 
 Adapt.@adapt_structure DirichletBoundaryCondition
@@ -29,12 +29,12 @@ end
 struct ConstantArray{T}
     val::T
 
-    ConstantArray(val::T) where {T<:Number} = new{T}(val)
+    ConstantArray(val::T) where {T <: Number} = new{T}(val)
 end
 Adapt.@adapt_structure ConstantArray
 
-Base.getindex(A::ConstantArray, ::Vararg{Int,N}) where {N} = A.val
-Base.setindex!(::ConstantArray, ::Any, ::Vararg{Int,N}) where {N} = nothing
+Base.getindex(A::ConstantArray, ::Vararg{Int, N}) where {N} = A.val
+Base.setindex!(::ConstantArray, ::Any, ::Vararg{Int, N}) where {N} = nothing
 function Base.show(io::IO, ::MIME"text/plain", A::ConstantArray{T}) where {T}
     println(io, "ConstantArray{$T}:")
     return println(io, "  ", A.val)
@@ -50,13 +50,13 @@ struct ConstantDirichletBoundaryCondition{T, M} <: AbstractDirichletBoundaryCond
     mask::M
 end
 
-function ConstantDirichletBoundaryCondition(value::T, mask::M) where {T<:Number,M}
+function ConstantDirichletBoundaryCondition(value::T, mask::M) where {T <: Number, M}
     v = ConstantArray(value)
-    return ConstantDirichletBoundaryCondition{typeof(v),M}(v, mask)
+    return ConstantDirichletBoundaryCondition{typeof(v), M}(v, mask)
 end
 
 function ConstantDirichletBoundaryCondition()
-    return ConstantDirichletBoundaryCondition{Nothing,Nothing}(nothing, nothing)
+    return ConstantDirichletBoundaryCondition{Nothing, Nothing}(nothing, nothing)
 end
 
 Adapt.@adapt_structure ConstantDirichletBoundaryCondition
@@ -65,8 +65,8 @@ function Base.getindex(x::ConstantDirichletBoundaryCondition, inds::Vararg{Int, 
     return x.value * x.mask[inds...]
 end
 function Base.getindex(
-    ::ConstantDirichletBoundaryCondition{Nothing,Nothing}, ::Vararg{Int,N}
-) where {N}
+        ::ConstantDirichletBoundaryCondition{Nothing, Nothing}, ::Vararg{Int, N}
+    ) where {N}
     return 0
 end
 

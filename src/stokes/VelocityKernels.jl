@@ -8,8 +8,8 @@ end
 ## DEVIATORIC STRAIN RATE TENSOR
 
 @parallel_indices (i, j) function compute_strain_rate!(
-    εxx::AbstractArray{T,2}, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
-) where {T}
+        εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
+    ) where {T}
     d_xi(A) = _d_xi(A, _dx, i, j)
     d_yi(A) = _d_yi(A, _dy, i, j)
     d_xa(A) = _d_xa(A, _dx, i, j)
@@ -74,8 +74,8 @@ end
 ## VELOCITY
 
 @parallel_indices (i, j) function compute_V!(
-    Vx::AbstractArray{T,2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy
-) where {T}
+        Vx::AbstractArray{T, 2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy
+    ) where {T}
     d_xi(A) = _d_xi(A, _dx, i, j)
     d_yi(A) = _d_yi(A, _dy, i, j)
     d_xa(A) = _d_xa(A, _dx, i, j)
@@ -98,8 +98,8 @@ end
 
 # with free surface stabilization
 @parallel_indices (i, j) function compute_V!(
-    Vx::AbstractArray{T,2}, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy, dt
-) where {T}
+        Vx::AbstractArray{T, 2}, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _dx, _dy, dt
+    ) where {T}
     d_xi(A) = _d_xi(A, _dx, i, j)
     d_yi(A) = _d_yi(A, _dy, i, j)
     d_xa(A) = _d_xa(A, _dx, i, j)
@@ -237,8 +237,8 @@ end
 ## RESIDUALS
 
 @parallel_indices (i, j) function compute_Res!(
-    Rx::AbstractArray{T,2}, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
-) where {T}
+        Rx::AbstractArray{T, 2}, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
+    ) where {T}
     @inline d_xa(A) = _d_xa(A, _dx, i, j)
     @inline d_ya(A) = _d_ya(A, _dy, i, j)
     @inline d_xi(A) = _d_xi(A, _dx, i, j)
@@ -258,8 +258,8 @@ end
 end
 
 @parallel_indices (i, j) function compute_Res!(
-    Rx::AbstractArray{T,2}, Ry, Vx, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
-) where {T}
+        Rx::AbstractArray{T, 2}, Ry, Vx, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
+    ) where {T}
     @inline d_xa(A) = _d_xa(A, _dx, i, j)
     @inline d_ya(A) = _d_ya(A, _dy, i, j)
     @inline d_xi(A) = _d_xi(A, _dx, i, j)

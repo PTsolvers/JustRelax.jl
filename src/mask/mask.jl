@@ -37,14 +37,14 @@ Base.similar(m::Mask) = Mask(size(m)...)
 
 @inline apply_mask!(A::AbstractArray, B::Any, m::Mask) = (A .= inv(m) .* A .+ m.mask .* B)
 @inline apply_mask!(::AbstractArray, ::Any, ::Nothing) = nothing
-@inline apply_mask!(A::AbstractArray, B::Any, m::Mask, inds::Vararg{Int,N}) where {N} =
+@inline apply_mask!(A::AbstractArray, B::Any, m::Mask, inds::Vararg{Int, N}) where {N} =
     (A[inds...] = inv(m, inds...) * A[inds...] + m[inds...] * B[inds...])
-@inline apply_mask!(::AbstractArray, ::Any, ::Nothing, inds::Vararg{Int,N}) where {N} =
+@inline apply_mask!(::AbstractArray, ::Any, ::Nothing, inds::Vararg{Int, N}) where {N} =
     nothing
 
 @inline apply_mask(A::AbstractArray, B::Any, m::Mask) = inv(m) .* A .+ m.mask .* B
-@inline apply_mask(A::AbstractArray, B::Any, m::Mask, inds::Vararg{Int,N}) where {N} =
+@inline apply_mask(A::AbstractArray, B::Any, m::Mask, inds::Vararg{Int, N}) where {N} =
     @muladd inv(m, inds...) * A[inds...] + m[inds...] * B[inds...]
 @inline apply_mask(A::AbstractArray, ::Any, ::Nothing) = A
-@inline apply_mask(A::AbstractArray, ::Any, ::Nothing, inds::Vararg{Int,N}) where {N} =
+@inline apply_mask(A::AbstractArray, ::Any, ::Nothing, inds::Vararg{Int, N}) where {N} =
     A[inds...]

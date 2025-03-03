@@ -12,28 +12,28 @@ function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
 end
 
 function _solve_VS!(
-    stokes::JustRelax.StokesArrays,
-    pt_stokes,
-    di::NTuple{2,T},
-    flow_bcs::AbstractFlowBoundaryConditions,
-    ρg,
-    phase_ratios::JustPIC.PhaseRatios,
-    ϕ::JustRelax.RockRatio,
-    rheology,
-    args,
-    dt,
-    igg::IGG;
-    air_phase::Integer=0,
-    viscosity_cutoff=(-Inf, Inf),
-    viscosity_relaxation=1e-2,
-    iterMax=50e3,
-    iterMin=1e2,
-    nout=500,
-    b_width=(4, 4, 0),
-    verbose=true,
-    free_surface=false,
-    kwargs...,
-) where {T}
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::NTuple{2, T},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        phase_ratios::JustPIC.PhaseRatios,
+        ϕ::JustRelax.RockRatio,
+        rheology,
+        args,
+        dt,
+        igg::IGG;
+        air_phase::Integer = 0,
+        viscosity_cutoff = (-Inf, Inf),
+        viscosity_relaxation = 1.0e-2,
+        iterMax = 50.0e3,
+        iterMin = 1.0e2,
+        nout = 500,
+        b_width = (4, 4, 0),
+        verbose = true,
+        free_surface = false,
+        kwargs...,
+    ) where {T}
 
     # unpack
 
@@ -45,7 +45,7 @@ function _solve_VS!(
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η; window=(1, 1))
+    compute_maxloc!(ητ, η; window = (1, 1))
     update_halo!(ητ)
     # end
 
@@ -80,14 +80,14 @@ function _solve_VS!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase=air_phase)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
     displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
         iterMin < iter && err < ϵ && break
 
         wtime0 += @elapsed begin
-            compute_maxloc!(ητ, η; window=(1, 1))
+            compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
@@ -119,8 +119,8 @@ function _solve_VS!(
                 args,
                 rheology,
                 viscosity_cutoff;
-                air_phase=air_phase,
-                relaxation=viscosity_relaxation,
+                air_phase = air_phase,
+                relaxation = viscosity_relaxation,
             )
 
             @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
@@ -208,11 +208,11 @@ function _solve_VS!(
         if iter % nout == 0 && iter > 1
             errs = (
                 norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
-                length(stokes.R.Rx),
+                    length(stokes.R.Rx),
                 norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
-                length(stokes.R.Ry),
+                    length(stokes.R.Ry),
                 norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) /
-                length(@views stokes.R.RP[ϕ.center .> 0]),
+                    length(@views stokes.R.RP[ϕ.center .> 0]),
             )
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
@@ -251,11 +251,11 @@ function _solve_VS!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_∇V=norm_∇V,
+        iter = iter,
+        err_evo1 = err_evo1,
+        err_evo2 = err_evo2,
+        norm_Rx = norm_Rx,
+        norm_Ry = norm_Ry,
+        norm_∇V = norm_∇V,
     )
 end

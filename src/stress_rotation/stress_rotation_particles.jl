@@ -12,8 +12,8 @@ using StaticArrays
 end
 
 @parallel_indices (I...) function compute_vorticity!(
-    ωyz, ωxz, ωxy, Vx, Vy, Vz, _dx, _dy, _dz
-)
+        ωyz, ωxz, ωxy, Vx, Vy, Vz, _dx, _dy, _dz
+    )
     dx(A) = _d_xa(A, _dx, I...)
     dy(A) = _d_ya(A, _dy, I...)
     dz(A) = _d_za(A, _dz, I...)

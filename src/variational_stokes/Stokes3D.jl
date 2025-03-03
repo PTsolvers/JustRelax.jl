@@ -13,26 +13,26 @@ end
 
 # GeoParams and multiple phases
 function _solve_VS!(
-    stokes::JustRelax.StokesArrays,
-    pt_stokes,
-    di::NTuple{3,T},
-    flow_bcs::AbstractFlowBoundaryConditions,
-    ρg,
-    phase_ratios::JustPIC.PhaseRatios,
-    ϕ::JustRelax.RockRatio,
-    rheology::NTuple{N,AbstractMaterialParamsStruct},
-    args,
-    dt,
-    igg::IGG;
-    air_phase::Integer=0,
-    iterMax=10e3,
-    nout=500,
-    b_width=(4, 4, 4),
-    verbose=true,
-    viscosity_relaxation=1e-2,
-    viscosity_cutoff=(-Inf, Inf),
-    kwargs...,
-) where {T,N}
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::NTuple{3, T},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        phase_ratios::JustPIC.PhaseRatios,
+        ϕ::JustRelax.RockRatio,
+        rheology::NTuple{N, AbstractMaterialParamsStruct},
+        args,
+        dt,
+        igg::IGG;
+        air_phase::Integer = 0,
+        iterMax = 10.0e3,
+        nout = 500,
+        b_width = (4, 4, 4),
+        verbose = true,
+        viscosity_relaxation = 1.0e-2,
+        viscosity_cutoff = (-Inf, Inf),
+        kwargs...,
+    ) where {T, N}
 
     ## UNPACK
 
@@ -108,8 +108,8 @@ function _solve_VS!(
                 args,
                 rheology,
                 viscosity_cutoff;
-                air_phase=air_phase,
-                relaxation=viscosity_relaxation,
+                air_phase = air_phase,
+                relaxation = viscosity_relaxation,
             )
             # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
@@ -209,14 +209,14 @@ function _solve_VS!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
-        iter=iter,
-        err_evo1=err_evo1,
-        err_evo2=err_evo2,
-        norm_Rx=norm_Rx,
-        norm_Ry=norm_Ry,
-        norm_Rz=norm_Rz,
-        norm_∇V=norm_∇V,
-        time=wtime0,
-        av_time=av_time,
+        iter = iter,
+        err_evo1 = err_evo1,
+        err_evo2 = err_evo2,
+        norm_Rx = norm_Rx,
+        norm_Ry = norm_Ry,
+        norm_Rz = norm_Rz,
+        norm_∇V = norm_∇V,
+        time = wtime0,
+        av_time = av_time,
     )
 end

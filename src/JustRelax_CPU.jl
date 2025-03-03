@@ -31,8 +31,8 @@ module JustRelax2D
     include("stokes/Stokes2D.jl")
     export solve!
 
-include("variational_stokes/Stokes2D.jl")
-export solve_VariationalStokes!
+    include("variational_stokes/Stokes2D.jl")
+    export solve_VariationalStokes!
 
 end
 
@@ -68,7 +68,7 @@ module JustRelax3D
     include("stokes/Stokes3D.jl")
     export solve!
 
-include("variational_stokes/Stokes3D.jl")
-export solve_VariationalStokes!
+    include("variational_stokes/Stokes3D.jl")
+    export solve_VariationalStokes!
 
 end

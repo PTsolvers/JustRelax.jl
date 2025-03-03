@@ -22,7 +22,7 @@ function get_α(rho::MeltDependent_Density; ϕ::T = 0.0, kwargs...) where {T}
     return ϕ * αmelt + (1 - ϕ) * αsolid
 end
 
-function get_α(rho::BubbleFlow_Density; P=0e0, kwargs...)
+function get_α(rho::BubbleFlow_Density; P = 0.0e0, kwargs...)
     αmelt = get_α(rho.ρmelt, kwargs...)
     αgas = get_α(rho.ρgas, kwargs...)
 

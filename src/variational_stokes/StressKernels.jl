@@ -1,27 +1,27 @@
 # 2D kernel
 @parallel_indices (I...) function update_stresses_center_vertex!(
-    ε::NTuple{3,T},      # normal components @ centers; shear components @ vertices
-    ε_pl::NTuple{3},      # whole Voigt tensor @ centers
-    EII,                  # accumulated plastic strain rate @ centers
-    τ::NTuple{3},         # whole Voigt tensor @ centers
-    τshear_v::NTuple{1},  # shear tensor components @ vertices
-    τ_o::NTuple{3},
-    τshear_ov::NTuple{1}, # shear tensor components @ vertices
-    Pr,
-    Pr_c,
-    η,
-    λ,
-    λv,
-    τII,
-    η_vep,
-    relλ,
-    dt,
-    θ_dτ,
-    rheology,
-    phase_center,
-    phase_vertex,
-    ϕ::JustRelax.RockRatio,
-) where {T}
+        ε::NTuple{3, T},      # normal components @ centers; shear components @ vertices
+        ε_pl::NTuple{3},      # whole Voigt tensor @ centers
+        EII,                  # accumulated plastic strain rate @ centers
+        τ::NTuple{3},         # whole Voigt tensor @ centers
+        τshear_v::NTuple{1},  # shear tensor components @ vertices
+        τ_o::NTuple{3},
+        τshear_ov::NTuple{1}, # shear tensor components @ vertices
+        Pr,
+        Pr_c,
+        η,
+        λ,
+        λv,
+        τII,
+        η_vep,
+        relλ,
+        dt,
+        θ_dτ,
+        rheology,
+        phase_center,
+        phase_vertex,
+        ϕ::JustRelax.RockRatio,
+    ) where {T}
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
     ni = size(Pr)
@@ -58,9 +58,9 @@
             dτ_rv
         dτxyv =
             (
-                -(τxyv[I...] - τxyv_old[I...]) * ηv_ij * _Gvdt - τxyv[I...] +
+            -(τxyv[I...] - τxyv_old[I...]) * ηv_ij * _Gvdt - τxyv[I...] +
                 2.0 * ηv_ij * ε[3][I...]
-            ) * dτ_rv
+        ) * dτ_rv
         τIIv_ij = √(
             0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2
         )
@@ -144,31 +144,31 @@ end
 
 # 3D kernel
 @parallel_indices (I...) function update_stresses_center_vertex!(
-    ε::NTuple{6},         # normal components @ centers; shear components @ vertices
-    ε_pl::NTuple{6},      # whole Voigt tensor @ centers
-    EII,                  # accumulated plastic strain rate @ centers
-    τ::NTuple{6},         # whole Voigt tensor @ centers
-    τshear_v::NTuple{3},  # shear tensor components @ vertices
-    τ_o::NTuple{6},
-    τshear_ov::NTuple{3}, # shear tensor components @ vertices
-    Pr,
-    Pr_c,
-    η,
-    λ,
-    λv::NTuple{3},
-    τII,
-    η_vep,
-    relλ,
-    dt,
-    θ_dτ,
-    rheology,
-    phase_center,
-    phase_vertex,
-    phase_xy,
-    phase_yz,
-    phase_xz,
-    ϕ::JustRelax.RockRatio,
-)
+        ε::NTuple{6},         # normal components @ centers; shear components @ vertices
+        ε_pl::NTuple{6},      # whole Voigt tensor @ centers
+        EII,                  # accumulated plastic strain rate @ centers
+        τ::NTuple{6},         # whole Voigt tensor @ centers
+        τshear_v::NTuple{3},  # shear tensor components @ vertices
+        τ_o::NTuple{6},
+        τshear_ov::NTuple{3}, # shear tensor components @ vertices
+        Pr,
+        Pr_c,
+        η,
+        λ,
+        λv::NTuple{3},
+        τII,
+        η_vep,
+        relλ,
+        dt,
+        θ_dτ,
+        rheology,
+        phase_center,
+        phase_vertex,
+        phase_xy,
+        phase_yz,
+        phase_xz,
+        ϕ::JustRelax.RockRatio,
+    )
     τyzv, τxzv, τxyv = τshear_v
     τyzv_old, τxzv_old, τxyv_old = τshear_ov
 

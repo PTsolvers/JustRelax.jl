@@ -1,6 +1,6 @@
 @parallel_indices (I...) function compute_∇V!(
-    ∇V::AbstractArray{T,N}, V::NTuple{N}, ϕ::JustRelax.RockRatio, _di::NTuple{N}
-) where {T,N}
+        ∇V::AbstractArray{T, N}, V::NTuple{N}, ϕ::JustRelax.RockRatio, _di::NTuple{N}
+    ) where {T, N}
     if isvalid_c(ϕ, I...)
         @inbounds ∇V[I...] = div(V..., _di..., I...)
     else
@@ -10,8 +10,8 @@
 end
 
 @parallel_indices (i, j) function compute_strain_rate!(
-    εxx::AbstractArray{T,2}, εyy, εxy, ∇V, Vx, Vy, ϕ::JustRelax.RockRatio, _dx, _dy
-) where {T}
+        εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, ϕ::JustRelax.RockRatio, _dx, _dy
+    ) where {T}
     @inline d_xi(A) = _d_xi(A, _dx, i, j)
     @inline d_yi(A) = _d_yi(A, _dy, i, j)
     @inline d_xa(A) = _d_xa(A, _dx, i, j)
@@ -38,21 +38,21 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_strain_rate!(
-    ∇V::AbstractArray{T,3},
-    εxx,
-    εyy,
-    εzz,
-    εyz,
-    εxz,
-    εxy,
-    Vx,
-    Vy,
-    Vz,
-    ϕ::JustRelax.RockRatio,
-    _dx,
-    _dy,
-    _dz,
-) where {T}
+        ∇V::AbstractArray{T, 3},
+        εxx,
+        εyy,
+        εzz,
+        εyz,
+        εxz,
+        εxy,
+        Vx,
+        Vy,
+        Vz,
+        ϕ::JustRelax.RockRatio,
+        _dx,
+        _dy,
+        _dz,
+    ) where {T}
     d_xi(A) = _d_xi(A, _dx, i, j, k)
     d_yi(A) = _d_yi(A, _dy, i, j, k)
     d_zi(A) = _d_zi(A, _dz, i, j, k)
@@ -74,47 +74,47 @@ end
         if all((i, j, k) .≤ size(εyz)) && isvalid_yz(ϕ, i, j, k)
             εyz[i, j, k] =
                 0.5 * (
-                    _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
+                _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
                     _dy * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
-                )
+            )
         end
         # Compute ε_xz
         if all((i, j, k) .≤ size(εxz)) && isvalid_xz(ϕ, i, j, k)
             εxz[i, j, k] =
                 0.5 * (
-                    _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
+                _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
                     _dx * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
-                )
+            )
         end
         # Compute ε_xy
         if all((i, j, k) .≤ size(εxy)) && isvalid_xy(ϕ, i, j, k)
             εxy[i, j, k] =
                 0.5 * (
-                    _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
+                _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
                     _dx * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
-                )
+            )
         end
     end
     return nothing
 end
 
 @parallel_indices (i, j) function compute_V!(
-    Vx::AbstractArray{T,2},
-    Vy,
-    Rx,
-    Ry,
-    P,
-    τxx,
-    τyy,
-    τxy,
-    ηdτ,
-    ρgx,
-    ρgy,
-    ητ,
-    ϕ::JustRelax.RockRatio,
-    _dx,
-    _dy,
-) where {T}
+        Vx::AbstractArray{T, 2},
+        Vy,
+        Rx,
+        Ry,
+        P,
+        τxx,
+        τyy,
+        τxy,
+        ηdτ,
+        ρgx,
+        ρgy,
+        ητ,
+        ϕ::JustRelax.RockRatio,
+        _dx,
+        _dy,
+    ) where {T}
     d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
     d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
@@ -131,9 +131,9 @@ end
         if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j] =
                 R_Vx = (
-                    -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
+                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
-                )
+            )
             Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
         else
             Rx[i, j] = zero(T)
@@ -145,8 +145,8 @@ end
         if isvalid_vy(ϕ, i, j + 1)
             Ry[i, j] =
                 R_Vy =
-                    -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
-                    av_ya(ρgy, ϕ.center)
+                -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                av_ya(ρgy, ϕ.center)
             Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
         else
             Ry[i, j] = zero(T)
@@ -158,8 +158,8 @@ end
 end
 
 @parallel_indices (i, j) function compute_Vx!(
-    Vx::AbstractArray{T,2}, Rx, P, τxx, τxy, ηdτ, ρgx, ητ, ϕ::JustRelax.RockRatio, _dx, _dy
-) where {T}
+        Vx::AbstractArray{T, 2}, Rx, P, τxx, τxy, ηdτ, ρgx, ητ, ϕ::JustRelax.RockRatio, _dx, _dy
+    ) where {T}
     d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
     d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
@@ -176,9 +176,9 @@ end
         if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j] =
                 R_Vx = (
-                    -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
+                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
-                )
+            )
             Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
         else
             Rx[i, j] = zero(T)
@@ -190,20 +190,20 @@ end
 end
 
 @parallel_indices (i, j) function compute_Vy!(
-    Vy::AbstractArray{T,2},
-    Vx_on_Vy,
-    Ry,
-    P,
-    τyy,
-    τxy,
-    ηdτ,
-    ρgy,
-    ητ,
-    ϕ::JustRelax.RockRatio,
-    _dx,
-    _dy,
-    dt,
-) where {T}
+        Vy::AbstractArray{T, 2},
+        Vx_on_Vy,
+        Ry,
+        P,
+        τyy,
+        τxy,
+        ηdτ,
+        ρgy,
+        ητ,
+        ϕ::JustRelax.RockRatio,
+        _dx,
+        _dy,
+        dt,
+    ) where {T}
     d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
     d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
@@ -232,12 +232,12 @@ end
             # ∂ρg∂x = (ρg_E - ρg_W) * _dx
             ∂ρg∂y = (ρg_N - ρg_S) * _dy
             # correction term
-            ρg_correction  = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
-            
+            ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+
             Ry[i, j] =
                 R_Vy =
-                    -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
-                    av_ya(ρgy, ϕ.center) + ρg_correction
+                -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                av_ya(ρgy, ϕ.center) + ρg_correction
             Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
 
             # ρgx_correction = (Vxᵢⱼ) * θ * dt
@@ -256,24 +256,24 @@ end
 end
 
 @parallel_indices (i, j) function compute_V!(
-    Vx::AbstractArray{T,2},
-    Vy,
-    Vx_on_Vy,
-    Rx,
-    Ry,
-    P,
-    τxx,
-    τyy,
-    τxy,
-    ηdτ,
-    ρgx,
-    ρgy,
-    ητ,
-    ϕ::JustRelax.RockRatio,
-    _dx,
-    _dy,
-    dt,
-) where {T}
+        Vx::AbstractArray{T, 2},
+        Vy,
+        Vx_on_Vy,
+        Rx,
+        Ry,
+        P,
+        τxx,
+        τyy,
+        τxy,
+        ηdτ,
+        ρgx,
+        ρgy,
+        ητ,
+        ϕ::JustRelax.RockRatio,
+        _dx,
+        _dy,
+        dt,
+    ) where {T}
     d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
     d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
@@ -290,9 +290,9 @@ end
         if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j] =
                 R_Vx = (
-                    -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
+                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
-                )
+            )
             Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
         else
             Rx[i, j] = zero(T)
@@ -319,8 +319,8 @@ end
             ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
             Ry[i, j] =
                 R_Vy =
-                    -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
-                    av_ya(ρgy, ϕ.center) + ρg_correction
+                -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                av_ya(ρgy, ϕ.center) + ρg_correction
             Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
         else
             Ry[i, j] = zero(T)
@@ -332,29 +332,29 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_V!(
-    Vx::AbstractArray{T,3},
-    Vy,
-    Vz,
-    Rx,
-    Ry,
-    Rz,
-    P,
-    fx,
-    fy,
-    fz,
-    τxx,
-    τyy,
-    τzz,
-    τyz,
-    τxz,
-    τxy,
-    ητ,
-    ηdτ,
-    ϕ::JustRelax.RockRatio,
-    _dx,
-    _dy,
-    _dz,
-) where {T}
+        Vx::AbstractArray{T, 3},
+        Vy,
+        Vz,
+        Rx,
+        Ry,
+        Rz,
+        P,
+        fx,
+        fy,
+        fz,
+        τxx,
+        τyy,
+        τzz,
+        τyz,
+        τxz,
+        τxy,
+        ητ,
+        ηdτ,
+        ϕ::JustRelax.RockRatio,
+        _dx,
+        _dy,
+        _dz,
+    ) where {T}
     @inline harm_x(A) = _harm_x(A, i, j, k)
     @inline harm_y(A) = _harm_y(A, i, j, k)
     @inline harm_z(A) = _harm_z(A, i, j, k)
@@ -376,8 +376,8 @@ end
             if isvalid_vx(ϕ, i + 1, j, k)
                 Rx_ijk =
                     Rx[i, j, k] =
-                        d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.xy) + d_zi(τxz, ϕ.xz) -
-                        d_xa(P, ϕ.center) - av_x(fx, ϕ.center)
+                    d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.xy) + d_zi(τxz, ϕ.xz) -
+                    d_xa(P, ϕ.center) - av_x(fx, ϕ.center)
                 Vx[i + 1, j + 1, k + 1] += Rx_ijk * ηdτ / av_x(ητ)
             else
                 Rx[i, j, k] = zero(T)
@@ -388,8 +388,8 @@ end
             if isvalid_vy(ϕ, i, j + 1, k)
                 Ry_ijk =
                     Ry[i, j, k] =
-                        d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.xy) + d_zi(τyz, ϕ.yz) -
-                        d_ya(P, ϕ.center) - av_y(fy, ϕ.center)
+                    d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.xy) + d_zi(τyz, ϕ.yz) -
+                    d_ya(P, ϕ.center) - av_y(fy, ϕ.center)
                 Vy[i + 1, j + 1, k + 1] += Ry_ijk * ηdτ / av_y(ητ)
             else
                 Ry[i, j, k] = zero(T)
@@ -400,8 +400,8 @@ end
             if isvalid_vz(ϕ, i, j, k + 1)
                 Rz_ijk =
                     Rz[i, j, k] =
-                        d_za(τzz, ϕ.center) + d_xi(τxz, ϕ.xz) + d_yi(τyz, ϕ.yz) -
-                        d_za(P, ϕ.center) - av_z(fz, ϕ.center)
+                    d_za(τzz, ϕ.center) + d_xi(τxz, ϕ.xz) + d_yi(τyz, ϕ.yz) -
+                    d_za(P, ϕ.center) - av_z(fz, ϕ.center)
                 Vz[i + 1, j + 1, k + 1] += Rz_ijk * ηdτ / av_z(ητ)
             else
                 Rz[i, j, k] = zero(T)

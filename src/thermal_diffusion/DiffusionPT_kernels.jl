@@ -4,8 +4,8 @@ isNotDirichlet(::Nothing, ::Vararg{Int, N}) where {N} = true
 ## 3D KERNELS
 
 @parallel_indices (I...) function compute_flux!(
-    qTx::AbstractArray{_T,3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
-) where {_T}
+        qTx::AbstractArray{_T, 3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
+    ) where {_T}
     d_xi(A) = _d_xi(A, _dx, I...)
     d_yi(A) = _d_yi(A, _dy, I...)
     d_zi(A) = _d_zi(A, _dz, I...)
@@ -32,21 +32,21 @@ isNotDirichlet(::Nothing, ::Vararg{Int, N}) where {N} = true
 end
 
 @parallel_indices (i, j, k) function compute_flux!(
-    qTx::AbstractArray{_T,3},
-    qTy,
-    qTz,
-    qTx2,
-    qTy2,
-    qTz2,
-    T,
-    rheology,
-    phase,
-    θr_dτ,
-    _dx,
-    _dy,
-    _dz,
-    args,
-) where {_T}
+        qTx::AbstractArray{_T, 3},
+        qTy,
+        qTz,
+        qTx2,
+        qTy2,
+        qTz2,
+        T,
+        rheology,
+        phase,
+        θr_dτ,
+        _dx,
+        _dy,
+        _dz,
+        args,
+    ) where {_T}
     I = i, j, k
 
     @inline d_xi(A) = _d_xi(A, _dx, I...)
@@ -189,21 +189,21 @@ end
 end
 
 @parallel_indices (i, j, k) function check_res!(
-    ResT::AbstractArray{_T,3},
-    T,
-    Told,
-    qTx2,
-    qTy2,
-    qTz2,
-    H,
-    shear_heating,
-    ρCp,
-    dirichlet,
-    _dt,
-    _dx,
-    _dy,
-    _dz,
-) where {_T}
+        ResT::AbstractArray{_T, 3},
+        T,
+        Told,
+        qTx2,
+        qTy2,
+        qTz2,
+        H,
+        shear_heating,
+        ρCp,
+        dirichlet,
+        _dt,
+        _dx,
+        _dy,
+        _dz,
+    ) where {_T}
     d_xa(A) = _d_xa(A, _dx, i, j, k)
     d_ya(A) = _d_ya(A, _dy, i, j, k)
     d_za(A) = _d_za(A, _dz, i, j, k)
@@ -223,24 +223,24 @@ end
 end
 
 @parallel_indices (i, j, k) function check_res!(
-    ResT::AbstractArray{_T,3},
-    T,
-    Told,
-    qTx2,
-    qTy2,
-    qTz2,
-    H,
-    shear_heating,
-    adiabatic,
-    rheology,
-    phase,
-    dirichlet,
-    _dt,
-    _dx,
-    _dy,
-    _dz,
-    args,
-) where {_T}
+        ResT::AbstractArray{_T, 3},
+        T,
+        Told,
+        qTx2,
+        qTy2,
+        qTz2,
+        H,
+        shear_heating,
+        adiabatic,
+        rheology,
+        phase,
+        dirichlet,
+        _dt,
+        _dx,
+        _dy,
+        _dz,
+        args,
+    ) where {_T}
     d_xa(A) = _d_xa(A, _dx, i, j, k)
     d_ya(A) = _d_ya(A, _dy, i, j, k)
     d_za(A) = _d_za(A, _dz, i, j, k)

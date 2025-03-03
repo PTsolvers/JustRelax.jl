@@ -43,18 +43,18 @@ end
     # OPTION 1
     ρg_L =
         0.25 * (
-            ρg[iW, jS] * ϕ.center[iW, jS] +
+        ρg[iW, jS] * ϕ.center[iW, jS] +
             ρg[i, jS] * ϕ.center[i, jS] +
             ρg[iW, jN] * ϕ.center[iW, jN] +
             ρg[i, jN] * ϕ.center[i, jN]
-        )
+    )
     ρg_R =
         0.25 * (
-            ρg[iE, jS] * ϕ.center[iE, jS] +
+        ρg[iE, jS] * ϕ.center[iE, jS] +
             ρg[i, jS] * ϕ.center[i, jS] +
             ρg[iE, jN] * ϕ.center[iE, jN] +
             ρg[i, jN] * ϕ.center[i, jN]
-        )
+    )
 
     Vx_on_Vy[i + 1, j] =
         (0.25 * (Vx[i, j] + Vx[i + 1, j] + Vx[i, j + 1] + Vx[i + 1, j + 1])) *

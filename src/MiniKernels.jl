@@ -50,6 +50,9 @@ Base.@propagate_inbounds @inline _d_xi(
 Base.@propagate_inbounds @inline _d_yi(
     A::AbstractArray, _dy, I::Vararg{Integer,N}
 ) where {N} = (-right(A, I...) + next(A, I...)) * _dy
+Base.@propagate_inbounds @inline _d_zi(
+    A::AbstractArray, _dz, I::Vararg{Integer,N}
+) where {N} = (-top(A, I...) + next(A, I...)) * _dz
 
 Base.@propagate_inbounds @inline div(Ax, Ay, _dx, _dy, I::Vararg{Integer,2}) =
     _d_xi(Ax, _dx, I...) + _d_yi(Ay, _dy, I...)
@@ -89,9 +92,6 @@ end
 const T3 = AbstractArray{T, 3} where {T}
 
 # finite differences
-@inline function _d_zi(A::T, i, j, k, _dz) where {T<:T3}
-    return (-A[i + 1, j + 1, k] + next(A, i, j, k)) * _dz
-end
 Base.@propagate_inbounds @inline div(Ax, Ay, Az, _dx, _dy, _dz, I::Vararg{Integer,3}) =
     _d_xi(Ax, _dx, I...) + _d_yi(Ay, _dy, I...) + _d_zi(Az, _dz, I...)
 

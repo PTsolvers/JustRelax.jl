@@ -5,7 +5,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-using Test #, Suppressor
+using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -294,7 +294,6 @@ end
         else
             igg
         end
-
 
         Urms, Nu_top, iters = main2D(igg; nx = nx, ny = ny)
         @test Urms[end] ≈ 0.55 rtol = 1.0e-1

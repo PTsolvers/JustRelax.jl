@@ -1,12 +1,11 @@
 push!(LOAD_PATH, "..")
-
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-using Test, Suppressor
+using Test#, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil,  ParallelStencil.FiniteDifferences2D
@@ -143,7 +142,7 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 10)
     η                = @ones(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
     compute_viscosity!(
-        stokes, phase_ratios, args, rheology, 0, (-Inf, Inf)
+        stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
 
     # PT coefficients for thermal diffusion -------------
@@ -183,8 +182,6 @@ function main2D(igg; ar=1, nx=32, ny=32, nit = 10)
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
-        compute_viscosity!(stokes, phase_ratios, args, rheology, 0, (-Inf, Inf))
-        compute_ρg!(ρg[2], phase_ratios, rheology, args)
         # ------------------------------
 
         # Stokes solver ----------------
@@ -291,7 +288,6 @@ end
 
 @testset "Blankenbach 2D" begin
     @suppress begin
-
         nx, ny   = 32, 32           # number of cells
         igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
             IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)

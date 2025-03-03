@@ -127,7 +127,7 @@ function Shearheating2D(igg; nx=32, ny=32)
 
     # Rheology
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, 0, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(

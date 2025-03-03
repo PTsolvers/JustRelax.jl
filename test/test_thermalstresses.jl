@@ -308,7 +308,7 @@ function main2D(igg; nx=32, ny=32)
     )
     flow_bcs!(stokes, flow_bcs)
 
-    compute_viscosity!(stokes, phase_ratios, args, rheology, 0, cutoff_visc)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     ϕ = @zeros(ni...)
     compute_melt_fraction!(
@@ -346,9 +346,7 @@ function main2D(igg; nx=32, ny=32)
 
         # Update buoyancy and viscosity -
         args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-        compute_viscosity!(stokes, phase_ratios, args, rheology, 0, cutoff_visc)
-
+    
         # Stokes solver -----------------
         solve!(
             stokes,

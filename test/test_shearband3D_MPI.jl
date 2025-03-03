@@ -135,7 +135,7 @@ function main(igg; nx=64, ny=64, nz=64)
     args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
     # Rheology
     cutoff_visc = -Inf, Inf
-    compute_viscosity!(stokes, phase_ratios, args, rheology, 0, cutoff_visc)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # Boundary conditions
     flow_bcs     = VelocityBoundaryConditions(;

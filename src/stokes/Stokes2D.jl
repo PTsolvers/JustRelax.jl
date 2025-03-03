@@ -193,7 +193,7 @@ function _solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, ητ, K, dt, r, θ_dτ

@@ -51,8 +51,8 @@ end
 function _compute_PAD!(P, P0, ∇V, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
     RP = fma(-(P - P0), _Kdt, -∇V)
-    ψ = inv(inv(r / θ_dτ * η) + _Kdt)
-    P = ((fma(P0, _Kdt, -∇V)) * ψ + P) / (1 + _Kdt * ψ)
+    #ψ = inv(inv(r / θ_dτ * η) + _Kdt)
+    #P = ((fma(P0, _Kdt, -∇V)) * ψ + P) / (1 + _Kdt * ψ)
     #P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
     return RP, P
 end

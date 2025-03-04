@@ -40,7 +40,7 @@ function adjoint_2D!(
 
         (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
         # errors
-        ϵ        = 1e0 * ϵ
+        ϵ        = 1e-1 * ϵ
         err      = 2*ϵ
         err_evo1 = Float64[]
         err_evo2 = Float64[]
@@ -78,7 +78,7 @@ function adjoint_2D!(
             @views stokesAD.R.Rx .= stokesAD.VA.Vx[2:end-1,2:end-1]
             @views stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]
             @views stokesAD.R.RP .= stokesAD.PA
-
+            
             @parallel (@idx ni) configcall=compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,
@@ -107,7 +107,7 @@ function adjoint_2D!(
                     Const(_di[1]),
                     Const(_di[2]),
                     Const(dt * free_surface))
-
+            
             @parallel (@idx ni) configcall=compute_P_kernelAD!(
                 θ,
                 stokes.P0,
@@ -145,6 +145,7 @@ function adjoint_2D!(
             if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
             if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
 
+            
             # copy stokes stress, if not stokes.τ is changed during the Enzyme call
             stokesAD.dτ.xx   .= stokes.τ.xx
             stokesAD.dτ.yy   .= stokes.τ.yy
@@ -186,9 +187,10 @@ function adjoint_2D!(
                     DuplicatedNoNeed((stokesAD.dτ.xy,),(stokesAD.τ.xy,)),
                     Const(@tensor_center(stokes.τ_o)),
                     Const((stokes.τ_o.xy,)),
-                    #DuplicatedNoNeed(θ,stokesAD.P),
-                    Const(θ),
+                    DuplicatedNoNeed(θ,stokesAD.P),
+                    #Const(θ),
                     Const(stokesAD.P0),
+                    #DuplicatedNoNeed(stokesAD.P0,stokesAD.P),
                     Const(stokes.viscosity.η),
                     Const(λ),
                     Const(λv),

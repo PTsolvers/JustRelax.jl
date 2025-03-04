@@ -2,21 +2,22 @@ abstract type AbstractDirichletBoundaryCondition{T, M} end
 struct DirichletBoundaryCondition{T, M} <: AbstractDirichletBoundaryCondition{T, M}
     value::T
     mask::M
+end
 
-    function DirichletBoundaryCondition(value::T, mask::M) where {T, M}
-        return new{T, M}(value, mask)
-    end
+# function DirichletBoundaryCondition(value::T, mask::M) where {T,M}
+#     return DirichletBoundaryCondition{T,M}(value, mask)
+# end
 
-    function DirichletBoundaryCondition()
-        return new{Nothing, Nothing}(nothing, nothing)
-    end
+function DirichletBoundaryCondition()
+    return DirichletBoundaryCondition{Nothing, Nothing}(nothing, nothing)
 end
 
 Adapt.@adapt_structure DirichletBoundaryCondition
 
 function DirichletBoundaryCondition(A::AbstractArray{T}) where {T}
-    m = Mask(size(A)...)
-    copyto!(m.mask, T.(A .!= 0))
+    m = Mask(copy(A))
+    copyto!(m.mask, T.(.!iszero.(A)))
+
     return DirichletBoundaryCondition(A, m)
 end
 
@@ -25,38 +26,37 @@ function Base.getindex(x::DirichletBoundaryCondition, inds::Vararg{Int, N}) wher
     return x.value[inds...] * x.mask[inds...]
 end
 
-struct ConstantArray{T, N} <: AbstractArray{T, N}
+struct ConstantArray{T}
     val::T
 
-    ConstantArray(val::T, ::Val{N}) where {T <: Number, N} = new{T, N}(val)
+    ConstantArray(val::T) where {T <: Number} = new{T}(val)
 end
 Adapt.@adapt_structure ConstantArray
 
 Base.getindex(A::ConstantArray, ::Vararg{Int, N}) where {N} = A.val
 Base.setindex!(::ConstantArray, ::Any, ::Vararg{Int, N}) where {N} = nothing
-function Base.show(io::IO, ::MIME"text/plain", A::ConstantArray{T, N}) where {T, N}
-    println(io, "ConstantArray{$T,$N}:")
+function Base.show(io::IO, ::MIME"text/plain", A::ConstantArray{T}) where {T}
+    println(io, "ConstantArray{$T}:")
     return println(io, "  ", A.val)
 end
 
-function Base.show(io::IO, A::ConstantArray{T, N}) where {T, N}
-    println(io, "ConstantArray{$T,$N}:")
+function Base.show(io::IO, A::ConstantArray{T}) where {T}
+    println(io, "ConstantArray{$T}:")
     return println(io, "  ", A.val)
 end
 
 struct ConstantDirichletBoundaryCondition{T, M} <: AbstractDirichletBoundaryCondition{T, M}
     value::T
     mask::M
+end
 
-    function ConstantDirichletBoundaryCondition(value::N, mask::M) where {N <: Number, M}
-        v = ConstantArray(value, Val(dims(mask)))
-        T = typeof(v)
-        return new{T, M}(v, mask)
-    end
+function ConstantDirichletBoundaryCondition(value::T, mask::M) where {T <: Number, M}
+    v = ConstantArray(value)
+    return ConstantDirichletBoundaryCondition{typeof(v), M}(v, mask)
+end
 
-    function ConstantDirichletBoundaryCondition()
-        return new{Nothing, Nothing}(nothing, nothing)
-    end
+function ConstantDirichletBoundaryCondition()
+    return ConstantDirichletBoundaryCondition{Nothing, Nothing}(nothing, nothing)
 end
 
 Adapt.@adapt_structure ConstantDirichletBoundaryCondition
@@ -65,13 +65,14 @@ function Base.getindex(x::ConstantDirichletBoundaryCondition, inds::Vararg{Int, 
     return x.value * x.mask[inds...]
 end
 function Base.getindex(
-        x::ConstantDirichletBoundaryCondition{Nothing, Nothing}, ::Vararg{Int, N}
+        ::ConstantDirichletBoundaryCondition{Nothing, Nothing}, ::Vararg{Int, N}
     ) where {N}
     return 0
 end
 
 @inline function apply_dirichlet!(A::AbstractArray, bc::AbstractDirichletBoundaryCondition)
-    return apply_mask!(A, bc.value, bc.mask)
+    apply_mask!(A, bc.value, bc.mask)
+    return nothing
 end
 
 @inline function apply_dirichlet!(

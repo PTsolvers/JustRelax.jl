@@ -39,6 +39,7 @@ __init__() = @init_parallel_stencil(AMDGPU, Float64, 2)
 
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
+include("../../variational_stokes/Stokes2D.jl")
 
 # Types
 function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
@@ -57,6 +58,10 @@ function JR2D.WENO5(
         ::Type{AMDGPUBackend}, method::Val{T}, ni::NTuple{N, Integer}
     ) where {N, T}
     return WENO5(method, tuple(ni...))
+end
+
+function JR2D.RockRatio(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return RockRatio(ni...)
 end
 
 function JR2D.PTThermalCoeffs(
@@ -298,6 +303,10 @@ function JR2D.solve!(::AMDGPUBackendTrait, stokes, args...; kwargs)
     return _solve!(stokes, args...; kwargs...)
 end
 
+function JR2D.solve_VariationalStokes!(::AMDGPUBackendTrait, stokes, args...; kwargs)
+    return _solve_VS!(stokes, args...; kwargs...)
+end
+
 function JR2D.heatdiffusion_PT!(::AMDGPUBackendTrait, thermal, args...; kwargs)
     return _heatdiffusion_PT!(thermal, args...; kwargs...)
 end
@@ -403,6 +412,15 @@ function JR2D.rotate_stress_particles!(
     return nothing
 end
 
+# rock ratios
+
+function JR2D.update_rock_ratio!(
+        ϕ::JustRelax.RockRatio{ROCArray{T, nD, D}, 2}, phase_ratios, air_phase
+    ) where {T, nD, D}
+    update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    return nothing
+end
+
 function JR2D.stress2grid!(
         stokes,
         τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
@@ -424,6 +442,19 @@ function JR2D.rotate_stress!(
     )
     rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
     return nothing
+end
+
+# marker chain
+
+function JR2D.update_phases_given_markerchain!(
+        phase,
+        chain::MarkerChain{JustPIC.AMDGPUBackend},
+        particles::Particles{JustPIC.AMDGPUBackend},
+        origin,
+        di,
+        air_phase,
+    )
+    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
 end
 
 end

@@ -6,24 +6,24 @@ import JustRelax.JustRelax2D as JR2
 @testset "Mask" begin
     ni = 10, 10
 
-    # Test basics 
-    m  = Mask(ni...)
+    # Test basics
+    m = Mask(ni...)
 
-    @test size(m)      == ni
-    @test length(m)    == prod(ni)
-    @test axes(m)      == (Base.OneTo(ni[1]), Base.OneTo(ni[2]))
+    @test size(m) == ni
+    @test length(m) == prod(ni)
+    @test axes(m) == (Base.OneTo(ni[1]), Base.OneTo(ni[2]))
     @test eachindex(m) == Base.OneTo(prod(ni))
-    @test similar(m)   isa Mask{Matrix{Float64}}
-    @test !all(m) 
+    @test similar(m) isa Mask{Matrix{Float64}}
+    @test !all(m)
 
-    m  = JR2.Mask(ni..., 4:7, 4:7)
+    m = JR2.Mask(ni..., 4:7, 4:7)
     @test all(isone, m[4:7, 4:7])
 
     # test masking
-    A  = rand(ni...)
-    B  = zeros(ni...)
+    A = rand(ni...)
+    B = zeros(ni...)
     B[4:7, 4:7] .= 5
-    m  = JR2.Mask(ni..., 4:7, 4:7)
+    m = JR2.Mask(ni..., 4:7, 4:7)
 
     C = apply_mask(A, B, m)
     @test all(C[4:7, 4:7] .== 5)
@@ -31,7 +31,7 @@ import JustRelax.JustRelax2D as JR2
     apply_mask!(A, B, m)
     @test all(A[4:7, 4:7] .== 5)
 
-    A  = rand(ni...)
+    A = rand(ni...)
     @test apply_mask(A, B, m, 1, 1) == A[1, 1]
     @test apply_mask(A, B, m, 5, 5) == 5
 

@@ -59,6 +59,10 @@ function JR3D.WENO5(
     return WENO5(method, tuple(ni...))
 end
 
+function JR3D.RockRatio(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return RockRatio(ni...)
+end
+
 function JR3D.PTThermalCoeffs(
         ::Type{AMDGPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / √3
     )
@@ -302,9 +306,14 @@ end
 function displacement2velocity!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, dt)
     return _displacement2velocity!(stokes, dt)
 end
+
 # Solvers
 function JR3D.solve!(::AMDGPUBackendTrait, stokes, args...; kwargs)
     return _solve!(stokes, args...; kwargs...)
+end
+
+function JR3D.solve_VariationalStokes!(::AMDGPUBackendTrait, stokes, args...; kwargs)
+    return _solve_VS!(stokes, args...; kwargs...)
 end
 
 function JR3D.heatdiffusion_PT!(::AMDGPUBackendTrait, thermal, args...; kwargs)
@@ -421,6 +430,15 @@ function JR3D.rotate_stress_particles!(
     end
     @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
 
+    return nothing
+end
+
+# rock ratios
+
+function JR3D.update_rock_ratio!(
+        ϕ::JustRelax.RockRatio{ROCArray{T, nD, D}, 3}, phase_ratios, air_phase
+    ) where {T, nD, D}
+    update_rock_ratio!(ϕ, phase_ratios, air_phase)
     return nothing
 end
 

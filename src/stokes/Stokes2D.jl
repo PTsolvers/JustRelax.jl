@@ -60,7 +60,7 @@ function _solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -193,7 +193,7 @@ function _solve!(
     wtime0 = 0.0
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, stokes.V.Vx, stokes.V.Vy, _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, ητ, K, dt, r, θ_dτ
@@ -337,7 +337,7 @@ function _solve!(
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, η, Kb, dt, r, θ_dτ
             )
@@ -538,7 +538,7 @@ function _solve!(
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes)..., _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
             compute_P!(
                 θ,
@@ -548,7 +548,7 @@ function _solve!(
                 stokes.Q,
                 ητ,
                 rheology,
-                phase_ratios.center,
+                phase_ratios,
                 dt,
                 r,
                 θ_dτ,

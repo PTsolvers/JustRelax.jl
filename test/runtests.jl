@@ -6,15 +6,15 @@ using Test
 
 push!(LOAD_PATH, "..")
 
-function parse_flags!(args, flag; default=nothing, typ=typeof(default))
+function parse_flags!(args, flag; default = nothing, type = typeof(default))
     for f in args
         startswith(f, flag) || continue
 
         if f != flag
             val = split(f, '=')[2]
-            if !(typ ≡ nothing || typ <: AbstractString)
-                @show typ val
-                val = parse(typ, val)
+            if !(type ≡ nothing || type <: AbstractString)
+                @show type val
+                val = parse(type, val)
             end
         else
             val = default
@@ -36,7 +36,7 @@ function runtests()
         ),
     )
     nfail = 0
-    printstyled("Testing package JustRelax.jl\n"; bold=true, color=:white)
+    printstyled("Testing package JustRelax.jl\n"; bold = true, color = :white)
 
     f0 = ("test_traits.jl", "test_types.jl", "test_arrays_conversions.jl")
     for f in f0
@@ -55,7 +55,7 @@ function runtests()
             try
                 @testset "$(basename(f))" begin
                     n = 2
-                    p= run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no $(joinpath(testdir, f))`)
+                    p = run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no $(joinpath(testdir, f))`)
                     @test success(p)
                 end
             catch ex
@@ -73,7 +73,7 @@ function runtests()
     return nfail
 end
 
-_, backend_name = parse_flags!(ARGS, "--backend"; default="CPU", typ=String)
+_, backend_name = parse_flags!(ARGS, "--backend"; default = "CPU", type = String)
 
 @static if backend_name == "AMDGPU"
     Pkg.add("AMDGPU")

@@ -124,23 +124,16 @@ function save_vtk(fname::String, xi, data::NamedTuple)
 end
 
 """
-    save_marker_chain(fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64})
+    save_marker_chain(fname::String, chain::MarkerChain)
 
-Save a vector of points as a line in a VTK file. The X and Y coordinates of the points are given by `cell_vertices` and `h_vertices`, respectively.
-The Z coordinate is set to zero as we are working in 2D.
+Save a vector of points as a line in a VTK file.
 
 ## Arguments
 - `fname::String`: The name of the VTK file to save. The extension `.vtk` will be appended to the name.
-- `cell_vertices::LinRange{Float64}`: A range of X coordinates for the points.
-- `h_vertices::Vector{Float64}`: A vector of Y coordinates for the points.
-
-## Example
-```julia
-cell_vertices = LinRange(0.0, 1.0, 10)
-h_vertices = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-save_marker_chain("Example", cell_vertices, h_vertices)
-```
+- `chain::MarkerChain`: Marker chain object from JustPIC.jl.
 """
+save_marker_chain(fname::String, chain; conversion = 1.0e3) = save_marker_chain(fname, chain.cell_vertices ./ conversion, chain.h_vertices ./ conversion)
+
 function save_marker_chain(
         fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64}
     )
@@ -155,4 +148,124 @@ function save_marker_chain(
         vtk["Points"] = points
     end
     return nothing
+end
+
+"""
+    save_particles(particles::Particles{B, 2}, pPhases; conversion = 1e3, fname::String = "./particles") where B
+
+Save particle data and their material phase to a VTK file.
+
+## Arguments
+- `particles::Particles{B, 2}`: The particle data, where `B` is the type of the particle coordinates.
+- `pPhases`: The phases of the particles.
+- `conversion`: A conversion factor for the particle coordinates (default is 1e3).
+- `fname::String`: The name of the VTK file to save (default is "./particles").
+"""
+function save_particles(particles, pPhases; conversion = 1.0e3, fname::String = "./particles")
+    N = length(size(particles.index))
+    return if N == 2
+        save_particles2D(particles, pPhases; conversion = conversion, fname = fname)
+    elseif N == 3
+        save_particles3D(particles, pPhases; conversion = conversion, fname = fname)
+    else
+        error("The dimension of the model is $N. It must be 2 or 3!")
+    end
+end
+
+function save_particles2D(particles, pPhases; conversion = 1.0e3, fname::String = "./particles")
+    p = particles.coords
+    ppx, ppy = p
+    pxv = Array(ppx.data)[:] ./ conversion
+    pyv = Array(ppy.data)[:] ./ conversion
+    clr = Array(pPhases.data)[:]
+    idxv = Array(particles.index.data[:])
+
+    x = pxv[idxv]
+    y = pyv[idxv]
+    phase = clr[idxv]
+    npoints = length(x)
+    z = zeros(npoints)
+    cells = [MeshCell(VTKCellTypes.VTK_VERTEX, (i,)) for i in 1:npoints]
+
+    return vtk_grid(fname, x, y, z, cells) do vtk
+        vtk["phase", VTKPointData()] = phase
+    end
+end
+
+function save_particles3D(particles, pPhases; conversion = 1.0e3, fname::String = "./particles")
+    p = particles.coords
+    ppx, ppy = p
+    pxv = Array(ppx.data)[:] ./ conversion
+    pyv = Array(ppy.data)[:] ./ conversion
+    pzv = Array(ppz.data)[:] ./ conversion
+    clr = Array(pPhases.data)[:]
+    idxv = Array(particles.index.data[:])
+
+    x = pxv[idxv]
+    y = pyv[idxv]
+    z = pzv[idxv]
+    phase = clr[idxv]
+    npoints = length(x)
+    cells = [MeshCell(VTKCellTypes.VTK_VERTEX, (i,)) for i in 1:npoints]
+    return vtk_grid(fname, x, y, z, cells) do vtk
+        vtk["phase", VTKPointData()] = phase
+    end
+end
+
+"""
+    save_particles(particles::Particles{B, 2}; conversion = 1e3, fname::String = "./particles") where B
+
+Save particle data to a VTK file.
+
+## Arguments
+- `particles::Particles{B, 2}`: The particle data, where `B` is the type of the particle coordinates.
+- `pPhases`: The phases of the particles.
+- `conversion`: A conversion factor for the particle coordinates (default is 1e3).
+- `fname::String`: The name of the VTK file to save (default is "./particles").
+"""
+function save_particles(particles; conversion = 1.0e3, fname::String = "./particles")
+    N = length(size(particles.index))
+    return if N == 2
+        save_particles2D(particles; conversion = conversion, fname = fname)
+    elseif N == 3
+        save_particles3D(particles; conversion = conversion, fname = fname)
+    else
+        error("The dimension of the model is $N. It must be 2 or 3!")
+    end
+end
+
+function save_particles2D(particles; conversion = 1.0e3, fname::String = "./particles")
+    p = particles.coords
+    ppx, ppy = p
+    pxv = Array(ppx.data)[:] ./ conversion
+    pyv = Array(ppy.data)[:] ./ conversion
+    idxv = Array(particles.index.data[:])
+
+    x = pxv[idxv]
+    y = pyv[idxv]
+    npoints = length(x)
+    z = zeros(npoints)
+    cells = [MeshCell(VTKCellTypes.VTK_VERTEX, (i,)) for i in 1:npoints]
+
+    return vtk_grid(fname, x, y, z, cells) do vtk
+        vtk["phase", VTKPointData()] = 1
+    end
+end
+
+function save_particles3D(particles; conversion = 1.0e3, fname::String = "./particles")
+    p = particles.coords
+    ppx, ppy = p
+    pxv = Array(ppx.data)[:] ./ conversion
+    pyv = Array(ppy.data)[:] ./ conversion
+    pzv = Array(ppz.data)[:] ./ conversion
+    idxv = Array(particles.index.data[:])
+
+    x = pxv[idxv]
+    y = pyv[idxv]
+    z = pzv[idxv]
+    npoints = length(x)
+    cells = [MeshCell(VTKCellTypes.VTK_VERTEX, (i,)) for i in 1:npoints]
+    return vtk_grid(fname, x, y, z, cells) do vtk
+        vtk["phase", VTKPointData()] = 1
+    end
 end

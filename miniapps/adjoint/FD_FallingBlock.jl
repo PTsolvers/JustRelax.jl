@@ -1,5 +1,3 @@
-using Enzyme
-
 const isCUDA = false
 @static if isCUDA
     using CUDA
@@ -39,35 +37,6 @@ function meshgrid(x, y)
     return X, Y
 end
 
-function init_phases!(phases, particles, xc, yc, r)
-    ni = size(phases)
-
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, xc, yc, r)
-        @inbounds for ip in cellaxes(phases)
-            # quick escape
-            @index(index[ip, i, j]) == 0 && continue
-
-            x = @index px[ip, i, j]
-            y = @index py[ip, i, j]
-            depth = -(@index py[ip, i, j])
-            # plume - rectangular
-
-            @index phases[ip, i, j] = if ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
-                2.0
-            elseif (y >= 0.3)
-                3.0
-            else
-                1.0
-            end
-
-
-        end
-        return nothing
-    end
-
-    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, xc, yc, r)
-end
-
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
 macro all_j(A)
@@ -79,8 +48,42 @@ end
     return nothing
 end
 
+
+function init_phasesFD!(phases, particles, xc, yc, r, FDxmin, FDxmax, FDymin, FDymax)
+    ni = size(phases)
+
+    @parallel_indices (i, j) function init_phases!(phases, px, py, index, xc, yc, r, FDxmin, FDxmax, FDymin, FDymax)
+        @inbounds for ip in cellaxes(phases)
+            # quick escape
+            @index(index[ip, i, j]) == 0 && continue
+
+            x      = @index px[ip, i, j]
+            y      = @index py[ip, i, j]
+            CPhase = @index phases[ip, i, j]
+            depth  = -(@index py[ip, i, j])
+            # plume - rectangular
+
+            @index phases[ip, i, j] = if (y >= 0.3)
+                3.0
+            elseif ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
+                2.0
+            elseif (x <= FDxmax) && (x >= FDxmin) && (y <= FDymax) && (y >= FDymin) 
+                4.0
+            elseif (x <= FDxmax) && (x >= FDxmin) && (y <= FDymax) && (y >= FDymin) && ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
+                5.0
+            else
+                1.0
+            end
+
+        end
+        return nothing
+    end
+
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, xc, yc, r, FDxmin, FDxmax, FDymin, FDymax)
+end
+
 #### BEGIN MAIN SCRIPT ####
-function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
+function sinking_block2D_changeG(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
 
     # Physical domain
     ly           = 1.0
@@ -116,8 +119,23 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             Density           = ConstantDensity(; ρ=0.1),
             CompositeRheology = CompositeRheology((LinearViscous(; η = 0.1),el)),
             Gravity           = ConstantGravity(; g=1.0),
+        ),
+        SetMaterialParams(;
+            Name              = "GAnomaly_Matrix",
+            Phase             = 4,
+            Density           = ConstantDensity(; ρ=5.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 600.0),ConstantElasticity(G=1.1, ν=0.45))),
+            Gravity           = ConstantGravity(; g=1.0),
+        ),
+        SetMaterialParams(;
+        Name              = "GAnomaly_Block",
+        Phase             = 5,
+        Density           = ConstantDensity(; ρ=10.5),
+        CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0),ConstantElasticity(G=1.1, ν=0.45))),
+        Gravity           = ConstantGravity(; g=1.0),
+        ),       
     )
-)
+
     # Initialize particles
     nxcell, max_xcell, min_xcell = 40, 60, 20
         particles = init_particles(
@@ -132,8 +150,8 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     yc_anomaly   =  0.0  # y origin of block
     r_anomaly    =  0.1  # half-width of block
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    #phase_ratios_vertex = PhaseRatio(backend, ni.+1, length(rheology))
-    init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
+
+    init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, -0.5, 0.5, -0.2, 0.2)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # STOKES ---------------------------------------------
@@ -277,7 +295,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     end
 end
 
-figdir = "FallingBlock_Adjoint"
+figdir = "FallingBlock_FD_benchmark"
 ar     = 2 # aspect ratio
 n      = 32
 nx     = n*ar - 2
@@ -287,4 +305,4 @@ igg    = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
-sinking_block2D(igg; ar=ar, nx=nx, ny=ny, figdir=figdir);
+sinking_block2D_changeG(igg; ar=ar, nx=nx, ny=ny, figdir=figdir);

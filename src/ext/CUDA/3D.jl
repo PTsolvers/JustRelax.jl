@@ -195,10 +195,16 @@ function JR3D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology,
     return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
 end
 
-function JR3D.compute_viscosity!(
+function JR2D.compute_viscosity!(
         ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
     )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+end
+
+function JR3D.compute_viscosity!(
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
+    )
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
 end
 
 function JR3D.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
@@ -210,15 +216,14 @@ function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cuto
 end
 
 function compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
     )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
 end
 
 function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
-
 ## Stress
 function JR3D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
     return _tensor_invariant!(A)

@@ -198,7 +198,13 @@ function JR2D.compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
 end
 
-function JR2D.compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
+function JR2D.compute_viscosity!(
+        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
+    )
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
+end
+
+function JR2D.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
@@ -207,12 +213,12 @@ function compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cu
 end
 
 function compute_viscosity!(
-        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
+        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
     )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
 end
 
-function compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
+function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 

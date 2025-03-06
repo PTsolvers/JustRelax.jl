@@ -1,3 +1,4 @@
+using Enzyme
 const isCUDA = false
 @static if isCUDA
     using CUDA
@@ -28,7 +29,7 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-using GeoParams, CellArrays, GLMakie
+using GeoParams, CellArrays, CairoMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 function meshgrid(x, y)
@@ -65,12 +66,12 @@ function init_phasesFD!(phases, particles, xc, yc, r, FDxmin, FDxmax, FDymin, FD
 
             @index phases[ip, i, j] = if (y >= 0.3)
                 3.0
-            elseif ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
-                2.0
-            elseif (x <= FDxmax) && (x >= FDxmin) && (y <= FDymax) && (y >= FDymin) 
-                4.0
             elseif (x <= FDxmax) && (x >= FDxmin) && (y <= FDymax) && (y >= FDymin) && ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
                 5.0
+            elseif (x <= FDxmax) && (x >= FDxmin) && (y <= FDymax) && (y >= FDymin) 
+                4.0
+            elseif ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
+                2.0
             else
                 1.0
             end
@@ -97,41 +98,41 @@ function sinking_block2D_changeG(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     dt           = 1
 
     # Physical properties using GeoParams
-    el = ConstantElasticity(G=1.0, ν=0.45)
+    el = ConstantElasticity(G=1.0, ν=0.5)
     rheology = (
         SetMaterialParams(;
             Name              = "Matrix",
             Phase             = 1,
             Density           = ConstantDensity(; ρ=1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0,),el)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0,),)),
             Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
             Name              = "Block",
             Phase             = 2,
             Density           = ConstantDensity(; ρ=1.5),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0),el)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0),)),
             Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
             Name              = "StickyAir",
             Phase             = 3,
             Density           = ConstantDensity(; ρ=0.1),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 0.1),el)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 0.1),)),
             Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
             Name              = "GAnomaly_Matrix",
             Phase             = 4,
-            Density           = ConstantDensity(; ρ=5.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 600.0),ConstantElasticity(G=1.1, ν=0.45))),
+            Density           = ConstantDensity(; ρ=4.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 100.0),)),
             Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
         Name              = "GAnomaly_Block",
         Phase             = 5,
-        Density           = ConstantDensity(; ρ=10.5),
-        CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0),ConstantElasticity(G=1.1, ν=0.45))),
+        Density           = ConstantDensity(; ρ=10.0),
+        CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0),)),
         Gravity           = ConstantGravity(; g=1.0),
         ),       
     )
@@ -151,7 +152,7 @@ function sinking_block2D_changeG(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     r_anomaly    =  0.1  # half-width of block
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
 
-    init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, -0.5, 0.5, -0.2, 0.2)
+    init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, 100.0, 100.0, 100.0, 100.0)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # STOKES ---------------------------------------------
@@ -199,8 +200,62 @@ function sinking_block2D_changeG(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     Vx_v    = @zeros(ni.+1...)
     Vy_v    = @zeros(ni.+1...)
 
-    while it < 1
+    # init matrixes for FD sensitivity test
+    cost = @zeros(nx,ny)  # cost function
+    dp   = @zeros(nx,ny)  # parameter variation
+    refcost = 0.0
+    t = 0
 
+    for j in eachindex(cost)
+
+    t+= 1
+
+    if t == 1
+
+        test = adjoint_solve!(
+            stokes,
+            stokesAD,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            phase_ratios,
+            rheology,
+            args,
+            dt,
+            it, #Glit
+            SensInd,
+            SensType,
+            igg;
+            kwargs = (
+                grid,
+                origin,
+                li,
+                iterMax=150e3,
+                nout=1e3,
+                viscosity_cutoff = η_cutoff,
+                verbose = false,
+                ADout=plottingInt
+            )
+        );
+
+            # evaluate cost function
+    refcost = sum(stokes.V.Vy[indx,indy])
+
+    end
+
+    # Initialize particles for every new solve
+    nxcell, max_xcell, min_xcell = 40, 60, 20
+    particles = init_particles(
+    backend, nxcell, max_xcell, min_xcell, xvi...)
+    pPhases, pT           = init_cell_arrays(particles, Val(2))
+    pτ                    = StressParticles(particles)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+
+    init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, xvi[1][j], xvi[1][j+1], xvi[2][j], xvi[2][j+1])
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+
+    # Stokes solve
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, xvi, xci, particles)
 
@@ -233,6 +288,11 @@ function sinking_block2D_changeG(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             )
         );
 
+
+    # evaluate cost function
+    cost[j] = sum(stokes.V.Vy[indx,indy])
+
+
         it += 1
 
         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -242,7 +302,7 @@ function sinking_block2D_changeG(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
         ind = findall(xci[2] .≤ 0.29)
 
         # Plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 1) == 0
             ar  = DataAspect()
             fig = Figure(size = (1200, 900), title = "Falling Block")
             ax1 = Axis(fig[1,1], aspect = ar, title = "Density")
@@ -255,7 +315,7 @@ function sinking_block2D_changeG(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             ax8 = Axis(fig[4,2],aspect = ar,  title = "sensitivity fr")
 
             h1  = heatmap!(ax1, xci[1], xci[2], Array(ρg[2]))
-            h2  = heatmap!(ax2, xci[1], xci[2], Array(log.(η)))
+            h2  = heatmap!(ax2, xci[1], xci[2], Array(log10.(η)))
             h3  = heatmap!(ax3, xvi[1], xvi[2], Array(Vx_v), colormap=:vikO)
             h4  = heatmap!(ax4, xvi[1], xvi[2], Array(Vy_v), colormap=:vikO)
             h5  = heatmap!(ax5, xci[1], xci[2][ind], Array(test.ηb)[:,ind])
@@ -287,17 +347,18 @@ function sinking_block2D_changeG(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
                 #scatter!(ax2, vec(Xc[SensInd[1],SensInd[2]]), vec(Yc[SensInd#[1],SensInd[2]]), color=:red, markersize=10)
             #end
             #display(fig)
-            fig
+            #fig
             #checkpoint = joinpath(figdir, "checkpoint")
-            save(joinpath(figdir, "AdjointOutput_$(it).png"), fig)
+            save(joinpath(figdir, "AdjointOutput_$(t).png"), fig)
             # ------------------------------
         end
     end
 end
 
+
 figdir = "FallingBlock_FD_benchmark"
 ar     = 2 # aspect ratio
-n      = 32
+n      = 16
 nx     = n*ar - 2
 ny     = n - 2
 igg    = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

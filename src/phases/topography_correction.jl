@@ -108,9 +108,9 @@ function closest_phase(
     px, py = coords
     nx, ny = size(index)
     i, j = I
-    for j in j-1:j+1
+    for j in (j - 1):(j + 1)
         !(1 ≤ j ≤ ny) && continue
-        for i in i-1:i+1 
+        for i in (i - 1):(i + 1)
             !(1 ≤ i ≤ nx) && continue
 
             for ip in cellaxes(index)

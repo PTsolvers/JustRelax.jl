@@ -6,20 +6,28 @@
 using JustRelax
 ```
 
-The GPU backends are implemented as extensions, and can be selected upon loading the appropriate GPU package before loading JustRelax. If running on Nvidia GPUs, use the [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) package:
-```julia
+The GPU backends are implemented as extensions, and can be selected upon loading the appropriate GPU package before loading JustRelax. If running on Nvidia or AMD GPUs, use the [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) or the [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl) package, respectively:
+
+:::code-group
+
+```julia [Nvidia GPUs]
 using CUDA, JustRelax
 ```
-and if running on AMD GPUs, use the [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl) package:
-```julia
+
+```julia [AMD GPUs]
 using AMDGPU, JustRelax
 ```
 
-Two and three dimensional solvers are implemented in different submodules, which also need to be loaded. To access the two-dimensional module:
-```julia
+:::
+
+Two and three dimensional solvers are implemented in different submodules, which also need to be loaded:
+
+:::code-group
+
+```julia [2D module]
 using JustRelax.JustRelax2D
 ```
-and for the three-dimensional module:
-```julia
+
+```julia [3D module]
 using JustRelax.JustRelax3D
 ```

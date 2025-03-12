@@ -233,7 +233,7 @@ end
             ∂ρg∂y = (ρg_N - ρg_S) * _dy
             # correction term
             # ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
-            ρg_correction = ( Vyᵢⱼ * ∂ρg∂y) * θ * dt
+            ρg_correction = Vyᵢⱼ * ∂ρg∂y * θ * dt
 
             Ry[i, j] =
                 R_Vy =

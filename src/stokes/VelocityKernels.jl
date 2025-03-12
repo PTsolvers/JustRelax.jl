@@ -123,7 +123,7 @@ end
         Vyᵢⱼ = Vy[i + 1, j + 1]
         # Get necessary buoyancy forces
         j_N = min(j + 1, ny)
-             ρg_S = ρgy[i, j]
+        ρg_S = ρgy[i, j]
         ρg_N = ρgy[i, j_N]
         # Spatial derivatives
         ∂ρg∂y = (ρg_N - ρg_S) * _dy

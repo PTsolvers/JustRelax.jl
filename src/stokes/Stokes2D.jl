@@ -602,14 +602,9 @@ function _solve!(
             )
             update_halo!(stokes.τ.xy)
 
-            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
-                Vx_on_Vy, stokes.V.Vx, ρg[2], _di[1]
-            )
-
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
-                    Vx_on_Vy,
                     stokes.P,
                     @stress(stokes)...,
                     ηdτ,

@@ -1,11 +1,15 @@
-using JustRelax, JustRelax.JustRelax2D
-const backend_JR = CPUBackend
+using CUDA
+using JustRelax,  JustRelax.JustRelax2D
+const backend_JR = CUDABackend
+# const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend
+const backend = CUDABackend
+# const backend = JustPIC.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2)
+@init_parallel_stencil(CUDA, Float64, 2)
+
 
 # Load script dependencies
 using LinearAlgebra, GeoParams, GLMakie
@@ -126,7 +130,7 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend_JR, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-6, Re=15π, r=1e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -143,7 +147,7 @@ function main(igg, nx, ny)
     # Boundary conditions
     flow_bcs         = VelocityBoundaryConditions(;
         free_slip    = (left = true, right = true, top = true, bot = true),
-        free_surface = true
+        free_surface = false
     )
 
     Vx_v = @zeros(ni.+1...)
@@ -155,7 +159,7 @@ function main(igg, nx, ny)
     # Time loop
     t, it = 0.0, 0
     dt = 1e3 * (3600 * 24 * 365.25)
-    while it < 15
+    while it < 250
 
         solve!(
             stokes,
@@ -175,7 +179,7 @@ function main(igg, nx, ny)
                 free_surface     =        true
             )
         )
-        dt = compute_dt(stokes, di) / 2
+        dt = compute_dt(stokes, di) * 0.95
         # ------------------------------
 
         # Advection --------------------
@@ -191,7 +195,7 @@ function main(igg, nx, ny)
         @show it += 1
         t        += dt
 
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 10) == 0
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 5
             fig = Figure(size = (900, 900), title = "t = $t")

@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -171,7 +171,7 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3e0, r=0.7, CFL = 0.98 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-6, Re=15π, r=1e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -183,13 +183,13 @@ function main(igg, nx, ny)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
     # @parallel init_P!(stokes.P, ρg[2], xci[2])
-    compute_viscosity!(stokes, phase_ratios, args, rheology, air_phase, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase=air_phase)
 
     # Boundary conditions
     flow_bcs         = VelocityBoundaryConditions(;
         free_slip    = (left =  true, right =  true, top =  true, bot = false),
         no_slip      = (left = false, right = false, top = false, bot =  true),
-        free_surface = true,
+        free_surface = false,
     )
 
     Vx_v = @zeros(ni.+1...)
@@ -200,15 +200,11 @@ function main(igg, nx, ny)
 
     # Time loop
     t, it   = 0.0, 0
-    dt      = 1e3 * (3600 * 24 * 365.25)
-    dt_max  = 3e3 * (3600 * 24 * 365.25)
+    dt      = 25e3 * (3600 * 24 * 365.25)
+    dt_max  = 50e3 * (3600 * 24 * 365.25)
     
     while it < 1000 #00
-        
-        if t / (1e3 * 3600 * 24 *365.25) > 500
-            dt_max  = 25e3 * (3600 * 24 * 365.25)
-        end
-        ## variational solver
+
         # Stokes solver ----------------
         solve_VariationalStokes!(
             stokes,
@@ -255,6 +251,7 @@ function main(igg, nx, ny)
 
         if it == 1 || rem(it, 5) == 0
             px, py = particles.coords
+            chain_x, chain_y = chain.coords
 
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 5
@@ -262,6 +259,7 @@ function main(igg, nx, ny)
             ax  = Axis(fig[1,1], aspect = 1, title = " t=$(round.(t/(1e3 * 3600 * 24 *365.25); digits=3)) Kyrs")
             # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
             scatter!(ax, Array(px.data[:]).*1e-3, Array(py.data[:]).*1e-3, color =Array(pPhases.data[:]), colormap = :grayC)
+            scatter!(ax, Array(chain_x.data[:]).*1e-3, Array(chain_y.data[:]).*1e-3, color =:red)
             arrows!(
                 ax,
                 xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,

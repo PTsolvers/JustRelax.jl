@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -154,7 +154,7 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 0.95 / √2.1)
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-6, Re=15π, r=1e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -166,12 +166,12 @@ function main(igg, nx, ny)
     args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     compute_ρg!(ρg, phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
-    compute_viscosity!(stokes, phase_ratios, args, rheology, air_phase, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase=air_phase)
 
     # Boundary conditions
     flow_bcs         = VelocityBoundaryConditions(;
         free_slip    = (left = true, right = true, top = true, bot = true),
-        free_surface = true
+        free_surface = false
     )
 
     Vx_v = @zeros(ni.+1...)
@@ -204,7 +204,7 @@ function main(igg, nx, ny)
                 free_surface     = true,
             )
         )
-        dt = compute_dt(stokes, di) / 2
+        dt = compute_dt(stokes, di) * 0.95
         # ------------------------------
 
         # Advection --------------------

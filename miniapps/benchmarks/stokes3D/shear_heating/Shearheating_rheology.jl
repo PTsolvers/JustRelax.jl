@@ -1,16 +1,16 @@
 # from Duretz et al. 2014 - http://dx.doi.org/10.1002/2014GL060438
 
-function init_rheologies(; is_TP_Conductivity=true)
+function init_rheologies(; is_TP_Conductivity = true)
 
     # Dislocation creep
-    Matrix        = DislocationCreep(A=3.20e-20, n=3.0, E=276e3, V=0e0,  r=0.0, R=8.3145)
-    Inclusion     = DislocationCreep(A=3.16e-26, n=3.3, E=186e3, V=0e0,  r=0.0, R=8.3145)
+    Matrix = DislocationCreep(A = 3.2e-20, n = 3.0, E = 276.0e3, V = 0.0e0, r = 0.0, R = 8.3145)
+    Inclusion = DislocationCreep(A = 3.16e-26, n = 3.3, E = 186.0e3, V = 0.0e0, r = 0.0, R = 8.3145)
 
     K_Matrix = if is_TP_Conductivity
         # crust
         TP_Conductivity(;
             a = 1.72,
-            b = 807e0,
+            b = 807.0e0,
             c = 350,
             d = 0.0,
         )
@@ -21,7 +21,7 @@ function init_rheologies(; is_TP_Conductivity=true)
     K_Inclusion = if is_TP_Conductivity
         TP_Conductivity(;
             a = 1.72,
-            b = 807e0,
+            b = 807.0e0,
             c = 350,
             d = 0.0,
         )
@@ -30,25 +30,25 @@ function init_rheologies(; is_TP_Conductivity=true)
     end
 
     # Define rheolgy struct
-    rheology = (
+    return rheology = (
         # Name              = "Matrix",
         SetMaterialParams(;
-            Phase             = 1,
-            Density           = ConstantDensity(ρ = 2700),
-            HeatCapacity      = ConstantHeatCapacity(; Cp=1050.0),
-            Conductivity      = K_Matrix,
-            ShearHeat         = ConstantShearheating(1.0NoUnits),
-            CompositeRheology = CompositeRheology((Matrix, )),
-            Gravity           = ConstantGravity(; g=9.81),
+            Phase = 1,
+            Density = ConstantDensity(ρ = 2700),
+            HeatCapacity = ConstantHeatCapacity(; Cp = 1050.0),
+            Conductivity = K_Matrix,
+            ShearHeat = ConstantShearheating(1.0NoUnits),
+            CompositeRheology = CompositeRheology((Matrix,)),
+            Gravity = ConstantGravity(; g = 9.81),
         ),
         # Name              = "LowerCrust",
         SetMaterialParams(;
-            Phase             = 2,
-            Density           = ConstantDensity(ρ = 2700),
-            HeatCapacity      = ConstantHeatCapacity(; Cp=1050.0),
-            Conductivity      = K_Inclusion,
-            ShearHeat         = ConstantShearheating(1.0NoUnits),
-            CompositeRheology = CompositeRheology((Inclusion, )),
+            Phase = 2,
+            Density = ConstantDensity(ρ = 2700),
+            HeatCapacity = ConstantHeatCapacity(; Cp = 1050.0),
+            Conductivity = K_Inclusion,
+            ShearHeat = ConstantShearheating(1.0NoUnits),
+            CompositeRheology = CompositeRheology((Inclusion,)),
         ),
     )
 end
@@ -74,5 +74,5 @@ function init_phases!(phases, particles, Lx, Ly, d, r)
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, Ly, d)
+    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, Ly, d)
 end

@@ -20,7 +20,7 @@ function viscosity(xi, di, β)
     return η
 end
 
-function body_forces(xi::NTuple{3,T}, η, β) where {T}
+function body_forces(xi::NTuple{3, T}, η, β) where {T}
     xx, yy, zz = xi
     x = PTArray([x for x in xx, y in yy, z in zz])
     y = PTArray([y for x in xx, y in yy, z in zz])
@@ -31,13 +31,13 @@ function body_forces(xi::NTuple{3,T}, η, β) where {T}
     dηdz = @. -β * (1 - 2 * z) * η
 
     fx = @. ((y * z + 3 * x^2 * y^3 * z) - η * (2 + 6 * x * y)) -
-            dηdx * (2 + 4 * x + 2 * y + 6 * x^2 * y) - dηdy * (x + x^3 + y + 2 * x * y^2) -
+        dηdx * (2 + 4 * x + 2 * y + 6 * x^2 * y) - dηdy * (x + x^3 + y + 2 * x * y^2) -
         dηdz * (-3 * z - 10 * x * y * z)
     fy = @. ((x * z + 3 * x^3 * y^2 * z) - η * (2 + 2 * x^2 + 2 * y^2)) -
-            dηdx * (x + x^3 + y + 2 * x * y^2) - dηdy * (2 + 2 * x + 4 * y + 4 * x^2 * y) -
+        dηdx * (x + x^3 + y + 2 * x * y^2) - dηdy * (2 + 2 * x + 4 * y + 4 * x^2 * y) -
         dηdz * (-3 * z - 5 * x^2 * z)
     fz = @. ((x * y + x^3 * y^3) - η * (-10 * y * z)) - dηdx * (-3 * z - 10 * x * y * z) -
-            dηdy * (-3 * z - 5 * x^2 * z) - dηdz * (-4 - 6 * x - 6 * y - 10 * x^2 * y)
+        dηdy * (-3 * z - 5 * x^2 * z) - dηdz * (-4 - 6 * x - 6 * y - 10 * x^2 * y)
 
     return fx, fy, fz
 end
@@ -104,11 +104,11 @@ function velocity!(stokes, xci, xvi, di)
         T = eltype(Vx)
         if all((i, j, k) .≤ size(Vx))
             if (i == size(Vx, 1)) ||
-                (j == size(Vx, 2)) ||
-                (k == size(Vx, 3)) ||
-                (i == 1) ||
-                (j == 1) ||
-                (k == 1)
+                    (j == size(Vx, 2)) ||
+                    (k == size(Vx, 3)) ||
+                    (i == 1) ||
+                    (j == 1) ||
+                    (k == 1)
                 Vx[i, j, k] = _velocity_x(xv[i], yc[j])
             else
                 Vx[i, j, k] = zero(T)
@@ -116,11 +116,11 @@ function velocity!(stokes, xci, xvi, di)
         end
         if all((i, j, k) .≤ size(Vy))
             if (i == size(Vy, 1)) ||
-                (j == size(Vy, 2)) ||
-                (k == size(Vy, 3)) ||
-                (i == 1) ||
-                (j == 1) ||
-                (k == 1)
+                    (j == size(Vy, 2)) ||
+                    (k == size(Vy, 3)) ||
+                    (i == 1) ||
+                    (j == 1) ||
+                    (k == 1)
                 Vy[i, j, k] = _velocity_y(xc[i], yv[j])
             else
                 Vy[i, j, k] = zero(T)
@@ -128,11 +128,11 @@ function velocity!(stokes, xci, xvi, di)
         end
         if all((i, j, k) .≤ size(Vz))
             if (i == size(Vz, 1)) ||
-                (j == size(Vz, 2)) ||
-                (k == size(Vz, 3)) ||
-                (i == 1) ||
-                (j == 1) ||
-                (k == 1)
+                    (j == size(Vz, 2)) ||
+                    (k == size(Vz, 3)) ||
+                    (i == 1) ||
+                    (j == 1) ||
+                    (k == 1)
                 Vz[i, j, k] = _velocity_z(xc[i], yc[j], zv[k])
             else
                 Vz[i, j, k] = zero(T)
@@ -143,7 +143,7 @@ function velocity!(stokes, xci, xvi, di)
     end
 
     # @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-    @parallel _velocity!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, xc, yc, zc, xv, yv, zv)
+    return @parallel _velocity!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, xc, yc, zc, xv, yv, zv)
 end
 
 function analytical_velocity!(stokes, xci, xvi, di)
@@ -172,45 +172,45 @@ function analytical_velocity!(stokes, xci, xvi, di)
         return nothing
     end
 
-    @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+    return @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
 end
 
-function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
+function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = false)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
-    ni           = (nx, ny, nz) # number of nodes in x- and y-
-    lx           = ly = lz = 1e0
-    li           = (lx, ly, lz)  # domain length in x- and y-
-    origin       = zero(nx), zero(ny), zero(nz)
-    igg          = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
-    di           = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    grid         = Geometry(ni, li; origin = origin)
+    ni = (nx, ny, nz) # number of nodes in x- and y-
+    lx = ly = lz = 1.0e0
+    li = (lx, ly, lz)  # domain length in x- and y-
+    origin = zero(nx), zero(ny), zero(nz)
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI)...) # init MPI
+    di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
+    grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
     ttot = 1 # total siηlation time
-    Δt   = 1 # physical time step
+    Δt = 1 # physical time step
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes    = StokesArrays(backend, ni)
+    stokes = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √3)
+    pt_stokes = PTStokesCoeffs(li, di; CFL = 1 / √3)
 
     ## Setup-specific parameters and fields
-    β  = 10.0
-    η  = viscosity(xci, di, β) # add reference
+    β = 10.0
+    η = viscosity(xci, di, β) # add reference
     ρg = body_forces(xci, η, β) # => ρ*(gx, gy, gz)
     dt = Inf
-    G  = @fill(Inf, ni...)
-    K  = @fill(Inf, ni...)
+    G = @fill(Inf, ni...)
+    K = @fill(Inf, ni...)
 
     ## Boundary conditions
     flow_bcs = VelocityBoundaryConditionsionsions(;
-        free_slip   = (left=false, right=false, top=false, bot=false, back=false, front=false),
-        no_slip     = (left=false, right=false, top=false, bot=false, back=false, front=false),
+        free_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),
+        no_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
     # impose analytical velociity at the boundaries of the domain
     velocity!(stokes, xci, xvi, di)
@@ -233,15 +233,15 @@ function burstedde(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             K,
             dt,
             igg;
-            iterMax=10e3,
-            nout=1e3,
-            b_width=(4, 4, 4),
+            iterMax = 10.0e3,
+            nout = 1.0e3,
+            b_width = (4, 4, 4),
             verbose = false,
         )
         t += Δt
     end
 
-    finalize_global_grid(; finalize_MPI=finalize_MPI)
+    finalize_global_grid(; finalize_MPI = finalize_MPI)
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters
+    return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), stokes, iters
 end

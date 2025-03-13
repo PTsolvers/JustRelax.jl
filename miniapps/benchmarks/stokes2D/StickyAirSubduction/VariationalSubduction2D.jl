@@ -78,7 +78,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell    = 100
+    nxcell = 100
     max_xcell = 125
     min_xcell = 75
     particles = init_particles(
@@ -155,7 +155,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
     # Time loop
     t, it = 0.0, 0
-    dt     = 25.0e3 * (3600 * 24 * 365.25)
+    dt = 25.0e3 * (3600 * 24 * 365.25)
     dt_max = 250.0e3 * (3600 * 24 * 365.25)
     while it < 500 # run only for 5 Myrs
 

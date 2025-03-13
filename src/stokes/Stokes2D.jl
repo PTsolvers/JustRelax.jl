@@ -526,7 +526,7 @@ function _solve!(
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
     end
-    
+
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)

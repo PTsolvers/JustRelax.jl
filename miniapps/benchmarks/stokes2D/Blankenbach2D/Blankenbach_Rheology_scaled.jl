@@ -2,15 +2,15 @@
 
 function init_rheologies()
     # Define rheolgy struct
-    rheology = (
+    return rheology = (
         SetMaterialParams(;
-            Phase             = 1,
-            Density           = PT_Density(; ρ0=1, α = 1, β = 0.0),
-            HeatCapacity      = ConstantHeatCapacity(; Cp=1.0),
-            Conductivity      = ConstantConductivity(;k=1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1),)),
-            RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-            Gravity           = ConstantGravity(; g = 1e4),
+            Phase = 1,
+            Density = PT_Density(; ρ0 = 1, α = 1, β = 0.0),
+            HeatCapacity = ConstantHeatCapacity(; Cp = 1.0),
+            Conductivity = ConstantConductivity(; k = 1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1),)),
+            RadioactiveHeat = ConstantRadioactiveHeat(0.0),
+            Gravity = ConstantGravity(; g = 1.0e4),
         ),
     )
 end

@@ -225,7 +225,7 @@ end
 end
 
 @parallel_indices (i, j) function compute_Res!(
-        Rx::AbstractArray{T, 2}, Ry, Vx, Vy, Vx_on_Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
+        Rx::AbstractArray{T, 2}, Ry, Vx, Vy, P, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
     ) where {T}
     @inline d_xa(A) = _d_xa(A, _dx, i, j)
     @inline d_ya(A) = _d_ya(A, _dy, i, j)
@@ -242,8 +242,6 @@ end
 
         if all((i, j) .≤ size(Ry))
             θ = 1.0
-            # Interpolated Vx into Vy node (includes density gradient)
-            Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
             # Vertical velocity
             Vyᵢⱼ = Vy[i + 1, j + 1]
             # Get necessary buoyancy forces
@@ -253,7 +251,7 @@ end
             # Spatial derivatives
             ∂ρg∂y = (ρg_N - ρg_S) * _dy
             # correction term
-            ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+            ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
 
             Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy) + ρg_correction
         end

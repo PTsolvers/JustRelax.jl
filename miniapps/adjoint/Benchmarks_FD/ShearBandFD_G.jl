@@ -96,6 +96,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     G0      = 1.0           # elastic shear modulus
     Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
     εbg     = 1.0           # background strain-rate
+    #εbg     = 0.001           # background strain-rate
     η_reg   = 1e-2#8e-3          # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     el_bg   = ConstantElasticity(; G=G0, Kb=4.0)
@@ -208,7 +209,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     test    = 0.0
     param = 0.0
 
-
     ##########################
     ####### Preparing ########
     ##########################
@@ -256,7 +256,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     ##############################
     #### Reference Simulation ####
     ##############################
-
     stokesP       = deepcopy(stokes)
     ρgP           = deepcopy(ρg)
     phase_ratiosP = deepcopy(phase_ratios)
@@ -296,14 +295,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     #AD.ηb .= AD.ηb .* ηref ./ refcost
     #AD.ρb .= AD.ρb .* ρref ./ refcost
 
-
     ##########################
     #### Parameter change ####
     ##########################
     for (xit,i) in enumerate(xvi[1][1:end-1])
         for (yit,j) in enumerate(xvi[2][1:end-1])
 
-            
         # Initialize phase ratios -------------------------------
             radius       = 2*di[1]*f
             phase_ratiosP = PhaseRatios(backend_JP, length(rheology), ni)
@@ -340,12 +337,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
                 )
             );
         tensor_invariant!(stokesP.ε)
-
         cost[xit,yit]  = sum_kbn(BigFloat.(stokesP.V.Vy[indx.+1,indy]))
             
-    
         println("it = $it; t = $t \n")
-
         it += 1
 
         (; η_vep, η) = stokesP.viscosity
@@ -386,16 +380,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
             hidexdecorations!(ax3)
             save(joinpath(figdir, "$(it).png"), fig)
         end
-
-        end 
-
-        
+        end  
     end
-
     return refcost, cost, dp, Adjoint, ηref, ρref, stokesAD
 end
 
-f =1
+f      = 1
 n      = 16*f
 nx     = n
 ny     = n
@@ -413,7 +403,8 @@ function meshgrid(x, y)
     return X, Y
 end
 
-function plot_FD_vs_AD(refcost,cost,dp,AD,nx,ny,ηref,ρref,stokesAD,figdir,f)
+#cost .= rand(n,n)
+function plot_FD_vs_AD(refcost,cost,dp,AD,nx,ny,ηref,ρref,stokesAD,figdir,f, Adjoint)
 
     # Physical domain ------------------------------------
     ly           = 1e0          # domain length in y
@@ -440,16 +431,19 @@ function plot_FD_vs_AD(refcost,cost,dp,AD,nx,ny,ηref,ρref,stokesAD,figdir,f)
     #sol_FD[ind_block] = (cost[ind_block] .- refcost) ./ 0.0005
 
     AD_G = deepcopy(stokesAD.G)
+    #AD_G .*= 2.0
+    #AD_G[ind_block] ./= 2.0
     #AD_G[ind_block] .*= 0.5
-    AD_G .= AD_G ./ abs(refcost) ./(di[1] * di[2])
+    AD_G .= AD_G# ./ abs(refcost) #./(di[1] * di[2]) 
 
     #sol_FD .= sol_FD .* ηref ./refcost
     #sol_FD .= sol_FD .* ρref  ./refcost
-
+    sumFD = round(sum(abs.(sol_FD)),digits=6)
+    sumAD = round(sum(abs.(AD_G)),digits=6)
     ar = 1.0
     fig = Figure(size = (600, 600), title = "Compare Adjoint Sensitivities with Finite Difference Sensitivities")
-    ax1 = Axis(fig[1,1], aspect = ar, title = "FD solution")
-    ax2 = Axis(fig[2,1], aspect = ar, title = "Adjoint Solution")
+    ax1 = Axis(fig[1,1], aspect = ar, title = "FD solution sum(abs)=$sumFD")
+    ax2 = Axis(fig[2,1], aspect = ar, title = "Adjoint Solution sum(abs)=$sumAD")
     ax3 = Axis(fig[3,1], aspect = ar, title = "log10.(Error)")
     h1  = heatmap!(ax1, xci[1], xci[2], Array(sol_FD))
     h2  = heatmap!(ax2, xci[1], xci[2], Array(AD_G))
@@ -466,11 +460,16 @@ function plot_FD_vs_AD(refcost,cost,dp,AD,nx,ny,ηref,ρref,stokesAD,figdir,f)
     return sol_FD
 end
 
-FD = plot_FD_vs_AD(refcost,cost,dp,AD,nx,ny,ηref,ρref,stokesAD,figdir,f)
+FD = plot_FD_vs_AD(refcost,cost,dp,AD,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint)
 
+#heatmap(Adjoint.ηb)
+print(sum(abs.(stokesAD.G)))
+
+#=
 ad     = sum(stokesAD.G)
 fd     = sum(FD)
-fd_vol = sum(FD.*(di[1] * di[2]))
+fd_vol = sum(FD./(di[1] * di[2]))
 
 ad /fd
 ad / fd_vol
+=#

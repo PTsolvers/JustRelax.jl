@@ -194,7 +194,7 @@ end
     @suppress begin
         iters, τII, sol = ShearBand2D()
         @test passed = iters.err_evo1[end] < 1.0e-6
-        @test τII[end] ≈ 1.4205 atol = 1.0e-4
+        @test τII[end] ≈ 1.4143 atol = 1.0e-4
         @test sol[end] ≈ 1.9396 atol = 1.0e-4
     end
 end

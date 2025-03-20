@@ -37,10 +37,10 @@ function meshgrid(x, y)
     return X, Y
 end
 
-function init_phases!(phases, particles, xc, yc, r)
+function init_phases!(phases, particles, xc, yc, r,di)
     ni = size(phases)
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, xc, yc, r)
+    @parallel_indices (i, j) function init_phases!(phases, px, py, index, xc, yc, r,di)
         @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
@@ -52,7 +52,7 @@ function init_phases!(phases, particles, xc, yc, r)
 
             @index phases[ip, i, j] = if ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
                 2.0
-            elseif (y >= 0.3)
+            elseif (y >= 0.5-3*di[1])
                 3.0
             else
                 1.0
@@ -63,13 +63,13 @@ function init_phases!(phases, particles, xc, yc, r)
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, xc, yc, r)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, xc, yc, r,di)
 end
 
-function init_phasesFD!(phases, particles, xc, yc, r, FDxmin, FDxmax, FDymin, FDymax)
+function init_phasesFD!(phases, particles, xc, yc, r, FDxmin, FDxmax, FDymin, FDymax,di)
     ni = size(phases)
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, xc, yc, r, FDxmin, FDxmax, FDymin, FDymax)
+    @parallel_indices (i, j) function init_phases!(phases, px, py, index, xc, yc, r, FDxmin, FDxmax, FDymin, FDymax,di)
         @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
@@ -80,7 +80,7 @@ function init_phasesFD!(phases, particles, xc, yc, r, FDxmin, FDxmax, FDymin, FD
             depth  = -(@index py[ip, i, j])
             # plume - rectangular
 
-            @index phases[ip, i, j] = if (y >= 0.3)
+            @index phases[ip, i, j] = if (y >= 0.5-3*di[1])
                 3.0
             elseif (x <= FDxmax) && (x >= FDxmin) && (y <= FDymax) && (y >= FDymin) && ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
                 5.0
@@ -96,7 +96,7 @@ function init_phasesFD!(phases, particles, xc, yc, r, FDxmin, FDxmax, FDymin, FD
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, xc, yc, r, FDxmin, FDxmax, FDymin, FDymax)
+    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, xc, yc, r, FDxmin, FDxmax, FDymin, FDymax,di)
 end
 
 import ParallelStencil.INDICES
@@ -132,7 +132,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             Name              = "Matrix",
             Phase             = 1,
             Density           = ConstantDensity(; ρ=1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0,),el)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),el)),
             Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
@@ -180,8 +180,8 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     r_anomaly    =  2*di[1]  # half-width of block
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     #phase_ratios_vertex = PhaseRatio(backend, ni.+1, length(rheology))
-    init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-    #init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, -0.5, 0.5, -0.2, 0.2)
+    init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly,di)
+    #init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, -0.5, 0.5, -0.2, 0.2,di)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # STOKES ---------------------------------------------
@@ -199,7 +199,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     SensInd  = [indx, indy,]
     SensType = "Vy"
 
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-8, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=@ones(ni...), P=stokes.P))
@@ -299,8 +299,8 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
         phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
 
         #init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-        init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, i, i+di[1], j, j+di[2])
-        #init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, -0.0, 0.0, -0.0, 0.0)
+        init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, i, i+di[1], j, j+di[2],di)
+        #init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, -0.0, 0.0, -0.0, 0.0,di)
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         stokes   = StokesArrays(backend, ni)
@@ -388,7 +388,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             ax8 = Axis(fig[4,2],aspect = ar,  title = "sensitivity fr")
 
             h1  = heatmap!(ax1, xci[1], xci[2], Array(ρg[2]))
-            h2  = heatmap!(ax2, xci[1], xci[2], Array(log.(η)))
+            h2  = heatmap!(ax2, xci[1], xci[2], Array(log10.(η)))
             h3  = heatmap!(ax3, xvi[1], xvi[2], Array(Vx_v), colormap=:vikO)
             h4  = heatmap!(ax4, xvi[1], xvi[2], Array(Vy_v), colormap=:vikO)
             h5  = heatmap!(ax5, xci[1], xci[2][ind], Array(test.ηb)[:,ind])
@@ -431,7 +431,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     return refcost, cost, dp, AD, ηref, ρref
 end
 
-figdir = "FallingBlock_AdjointFD"
+figdir = "FallingBlock_viscous_rho"
 ar     = 2 # aspect ratio
 n      = 16
 nx     = n*ar# - 2
@@ -444,7 +444,7 @@ end
 refcost, cost, dP, AD, ηref, ρref = sinking_block2D(igg; ar=ar, nx=nx, ny=ny, figdir=figdir);
 
 
-function plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref)
+function plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref,figdir)
 
     # Physical domain
     ly           = 1.0
@@ -461,7 +461,7 @@ function plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref)
 
     xc   =  0.0  # x origin of block
     yc   =  0.0  # y origin of block
-    r    =  0.1  # half-width of block
+    r    =  2*di[1]  # half-width of block
     
     ind_block = findall(((Xc .-xc).^2 .≤ r^2) .& (((.-Yc) .- yc).^2 .≤ r.^2))
     sol_FD = @zeros(nx,ny)
@@ -474,8 +474,8 @@ function plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref)
     ar  = DataAspect()
     fig = Figure(size = (1200, 900), title = "Compare Adjoint Sensitivities with Finite Difference Sensitivities")
     ax1 = Axis(fig[1,1], aspect = ar, title = "FD solution")
-    ax2 = Axis(fig[1,2], aspect = ar, title = "Adjoint Solution")
-    ax3 = Axis(fig[1,3], aspect = ar, title = "log10.(Error)")
+    ax2 = Axis(fig[2,1], aspect = ar, title = "Adjoint Solution")
+    ax3 = Axis(fig[3,1], aspect = ar, title = "log10.(Error)")
     #h1  = heatmap!(ax1, xci[1], xci[2][ind], Array(cost)[:,ind])
     h1  = heatmap!(ax1, xci[1], xci[2][ind], Array(sol_FD)[:,ind])
     h2  = heatmap!(ax2, xci[1], xci[2][ind], Array(AD.ρb)[:,ind])
@@ -484,12 +484,13 @@ function plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref)
     hidexdecorations!(ax2)
     hidexdecorations!(ax3)
     Colorbar(fig[1,1][1,2], h1)
-    Colorbar(fig[1,2][1,2], h2)
-    Colorbar(fig[1,3][1,2], h3)
+    Colorbar(fig[2,1][1,2], h2)
+    Colorbar(fig[3,1][1,2], h3)
+    linkaxes!(ax1, ax2, ax3)    
+    save(joinpath(figdir, "Comparison.png"), fig)
 
-    save("Comparison.png", fig)
-
+    return sol_FD
 end
 
 
-plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref)
+FD = plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref,figdir)

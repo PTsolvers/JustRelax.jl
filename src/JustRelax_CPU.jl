@@ -107,8 +107,12 @@ export update_V!, compute_strain_rateAD!
 include("adjoint/AdjointSolve.jl")
 export adjoint_2D!
 include("adjoint/AdjointSensitivities.jl")
-calc_sensitivity_2D!
+export calc_sensitivity_2D!
 include("adjoint/Adjoint_PressureKernel.jl")
 export compute_P_kernelAD!, update_PAD!, ana_P!
+include("adjoint/AdjointStressKernels.jl")
+export update_stresses_center_vertex_psAD! 
+export update_stresses_center_vertex_psADSens! 
+export assemble_parameter_matrices!
 
 end

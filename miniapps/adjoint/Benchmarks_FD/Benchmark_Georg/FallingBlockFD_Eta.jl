@@ -132,35 +132,35 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             Name              = "Matrix",
             Phase             = 1,
             Density           = ConstantDensity(; ρ=1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0,),el)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
             Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
             Name              = "Block",
             Phase             = 2,
             Density           = ConstantDensity(; ρ=1.5),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0),el)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0),)),
             Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
             Name              = "StickyAir",
             Phase             = 3,
             Density           = ConstantDensity(; ρ=0.1),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 0.1),el)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 0.1),)),
             Gravity           = ConstantGravity(; g=1.0),
     ),
         SetMaterialParams(;
             Name              = "GAnomaly_Matrix",
             Phase             = 4,
-            Density           = ConstantDensity(; ρ=1.01),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),el)),
+            Density           = ConstantDensity(; ρ=1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0001),)),
             Gravity           = ConstantGravity(; g=1.0),
     ),
         SetMaterialParams(;
             Name              = "GAnomaly_Block",
             Phase             = 5,
-            Density           = ConstantDensity(; ρ=1.515),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0),el)),
+            Density           = ConstantDensity(; ρ=1.5),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0001),)),
             Gravity           = ConstantGravity(; g=1.0),
     ),       
 )
@@ -199,7 +199,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     SensInd  = [indx, indy,]
     SensType = "Vy"
 
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-8, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=@ones(ni...), P=stokes.P))
@@ -234,7 +234,6 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
 
     # init matrixes for FD sensitivity test
     cost  = @zeros(length(xci[1]),length(xci[2]))  # cost function
-    cost2 = @zeros(length(xci[2]),length(xci[1]))  # cost function
     dp    = @zeros(length(xci[1]),length(xci[2]))  # parameter variation
     refcost = 0.0
     test    = 0.0
@@ -299,15 +298,14 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
         phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
 
         #init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-        init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, i, i+di[1], j, j+di[2],di)
-        #init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, -0.0, 0.0, -0.0, 0.0,di)
+        init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, i, i+di[1], j, j+di[2], di)
+        #init_phasesFD!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly, -0.0, 0.0, -0.0, 0.0, di)
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         stokes   = StokesArrays(backend, ni)
         stokesAD = StokesArraysAdjoint(backend, ni)
 
-
-  pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-8, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+# Re=3π, r=0.7
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=@ones(ni...), P=stokes.P))
@@ -431,7 +429,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     return refcost, cost, dp, AD, ηref, ρref
 end
 
-figdir = "FallingBlock_AdjointFD"
+figdir = "FallingBlock_viscous_eta"
 ar     = 2 # aspect ratio
 n      = 16
 nx     = n*ar# - 2
@@ -444,7 +442,7 @@ end
 refcost, cost, dP, AD, ηref, ρref = sinking_block2D(igg; ar=ar, nx=nx, ny=ny, figdir=figdir);
 
 
-function plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref)
+function plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref,figdir)
 
     # Physical domain
     ly           = 1.0
@@ -465,8 +463,8 @@ function plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref)
     
     ind_block = findall(((Xc .-xc).^2 .≤ r^2) .& (((.-Yc) .- yc).^2 .≤ r.^2))
     sol_FD = @zeros(nx,ny)
-    sol_FD .= (cost .- refcost) ./0.01
-    sol_FD[ind_block] = (cost[ind_block] .- refcost) ./ 0.015
+    sol_FD .= (cost .- refcost) ./ 0.0001
+    #sol_FD[ind_block] = (cost[ind_block] .- refcost) ./ 0.1
 
     #sol_FD .= sol_FD .* ηref ./refcost
     #sol_FD .= sol_FD .* ρref  ./refcost
@@ -478,19 +476,20 @@ function plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref)
     ax3 = Axis(fig[3,1], aspect = ar, title = "log10.(Error)")
     #h1  = heatmap!(ax1, xci[1], xci[2][ind], Array(cost)[:,ind])
     h1  = heatmap!(ax1, xci[1], xci[2][ind], Array(sol_FD)[:,ind])
-    h2  = heatmap!(ax2, xci[1], xci[2][ind], Array(AD.ρb)[:,ind])
-    h3  = heatmap!(ax3, xci[1], xci[2][ind], log10.(abs.(Array(sol_FD)[:,ind] .- Array(AD.ρb)[:,ind])))
+    #h2  = heatmap!(ax2, xci[1], xci[2][ind], Array(AD.ρb)[:,ind])
+    h2  = heatmap!(ax2, xci[1], xci[2][ind], Array(AD.ηb)[:,ind])
+    #h3  = heatmap!(ax3, xci[1], xci[2][ind], abs.(Array(sol_FD)[:,ind] .- Array#(AD.ηb)[:,ind])/(abs.(Array(AD.ηb)[:,ind])), colormap=:hawaii)
+    h3  = heatmap!(ax3, xci[1], xci[2][ind], Array(AD.ηb)[:,ind]./Array(sol_FD)[:,ind], colormap=:hawaii)
     hidexdecorations!(ax1)
     hidexdecorations!(ax2)
     hidexdecorations!(ax3)
     Colorbar(fig[1,1][1,2], h1)
     Colorbar(fig[2,1][1,2], h2)
     Colorbar(fig[3,1][1,2], h3)
-    linkaxes!(ax1, ax2, ax3)    
-    save("Comparison.png", fig)
+    linkaxes!(ax1, ax2, ax3)
+    save(joinpath(figdir, "Comparison.png"), fig)
 
-    return sol_FD
 end
 
 
-FD = plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref)
+plot_FD_vs_AD(refcost,cost,AD,nx,ny,ηref,ρref,figdir)

@@ -80,7 +80,7 @@ include("rheology/StressUpdate.jl")
 include("stokes/StressKernels.jl")
 export tensor_invariant!
 
-include("adjoint/AdjointStressKernels.jl")
+#include("adjoint/AdjointStressKernels.jl")
 
 include("stokes/PressureKernels.jl")
 export rotate_stress_particles!

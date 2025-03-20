@@ -66,19 +66,22 @@ function adjoint_2D!(
             stokesAD.P    .= 0.0
             
             # sensitivity reference points for adjoint solve
+            #N_norm = length(SensInd[1])*length(SensInd[2])
+            #di = inv.(_di)
+            #norm = (di[1]*di[2])/N_norm
             if SensType == "Vx"
-                stokesAD.V.Vx[SensInd[1],SensInd[2]] .= -1.0
+                stokesAD.V.Vx[SensInd[1],SensInd[2].+1] .= -1.0#*norm
             elseif SensType == "Vy"
-                stokesAD.V.Vy[SensInd[1],SensInd[2]] .= -1.0
+                stokesAD.V.Vy[SensInd[1].+1,SensInd[2]] .= -1.0#*norm
             elseif SensType == "P"
-                stokesAD.P[SensInd[1],SensInd[2]] .= -1.0
+                stokesAD.P[SensInd[1],SensInd[2]] .= -1.0#*norm
             end
 
             # initialize the residuals with the adjoint variables to act as a multiplier
             @views stokesAD.R.Rx .= stokesAD.VA.Vx[2:end-1,2:end-1]
             @views stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]
             @views stokesAD.R.RP .= stokesAD.PA
-            
+
             @parallel (@idx ni) configcall=compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,
@@ -138,15 +141,14 @@ function adjoint_2D!(
                     Const(nothing),
                     Const(nothing)
                     )
-            
+                
             # apply free slip or no slip boundary conditions for adjoint solve
             if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
             if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
             if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
             if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
 
-            
-            # copy stokes stress, if not stokes.τ is changed during the Enzyme call
+            # Copy stokes stress. If not, stokes.τ is changed during the Enzyme call
             stokesAD.dτ.xx   .= stokes.τ.xx
             stokesAD.dτ.yy   .= stokes.τ.yy
             stokesAD.dτ.xy_c .= stokes.τ.xy_c
@@ -187,8 +189,8 @@ function adjoint_2D!(
                     DuplicatedNoNeed((stokesAD.dτ.xy,),(stokesAD.τ.xy,)),
                     Const(@tensor_center(stokes.τ_o)),
                     Const((stokes.τ_o.xy,)),
-                    DuplicatedNoNeed(θ,stokesAD.P),
-                    #Const(θ),
+                    #DuplicatedNoNeed(stokesAD.P0,stokesAD.P),
+                    Const(θ),
                     Const(stokesAD.P0),
                     #DuplicatedNoNeed(stokesAD.P0,stokesAD.P),
                     Const(stokes.viscosity.η),

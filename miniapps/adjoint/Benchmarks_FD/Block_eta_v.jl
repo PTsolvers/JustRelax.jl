@@ -1,10 +1,35 @@
-using GeoParams, CairoMakie, CellArrays, JustRelax
-using JustRelax.JustRelax2D_AD, ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
-using Enzyme, KahanSummation
-const backend = CPUBackend
+#const isCUDA = false
+const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+using JustRelax, JustRelax.JustRelax2D_AD, JustRelax.DataIO
+using GeoParams, GLMakie, CellArrays, JLD2
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 using JustPIC, JustPIC._2D
-const backend_JP = JustPIC.CPUBackend
+const backend_JP = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+#using GeoParams, CairoMakie, CellArrays, JustRelax
+#@init_parallel_stencil(Threads, Float64, 2)
+using Enzyme, KahanSummation
+#const backend = CPUBackend
+#using JustPIC, JustPIC._2D
+#const backend_JP = JustPIC.CPUBackend
 include("/home/chris/Documents/2024_projects/JustRelax.jl/miniapps/adjoint/Benchmarks_FD/helper_functions.jl")
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -36,6 +61,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     dp = 1e-4
     visc_bg_p   = LinearViscous(; η=1.0+dp)
     visc_block_p = LinearViscous(; η=100.0+dp)
+
 
     rheology = (
         # Low density phase
@@ -81,7 +107,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6,  CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-16,  CFL = 0.95 / √2.1)
 
     # Adjoint 
     stokesAD = StokesArraysAdjoint(backend, ni)
@@ -91,6 +117,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     indy     = findall((xvi[2] .>= di[2]) .& (xvi[2] .<= 1.0-(di[2]))) 
     SensInd  = [indx, indy,]
     SensType = "Vy"
+    #Xc, Yc = meshgrid(xci[1], xci[2])
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
@@ -122,7 +149,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     ttot       = Float64[]
 
     # init matrixes for FD sensitivity test
-    cost    = BigFloat.(@zeros(length(xci[1]),length(xci[2])))  # cost function
+    #cost    = BigFloat.(@zeros(length(xci[1]),length(xci[2])))  # cost function
+    cost    = @zeros(length(xci[1]),length(xci[2])) # cost function
     refcost = 0.0
     test    = 0.0
     param   = 0.0
@@ -131,7 +159,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     ####### Preparing ########
     ##########################
     # while t < tmax
-    for _ in 1:4
+    for _ in 1:1
 
         # Stokes solver ----------------
         adjoint_solve!(
@@ -201,14 +229,17 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
         )
     );
     tensor_invariant!(stokesRef.ε)
-    refcost = sum_kbn(BigFloat.(stokesRef.V.Vy[indx.+1,indy]))
+    #refcost = sum_kbn(BigFloat.(stokesRef.V.Vy[indx.+1,indy]))
+    CUDA.allowscalar() do
+    refcost = sum(stokesRef.V.Vy[indx.+1,indy])
+    end
 
     (; η_vep, η) = stokes.viscosity
     ηref = η
     ##scale η sensitivity
     #AD.ηb .= AD.ηb .* ηref ./ refcost
     #AD.ρb .= AD.ρb .* ρref ./ refcost
-    #=
+    
     ##########################
     #### Parameter change ####
     ##########################
@@ -250,19 +281,22 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
                 )
             );
             tensor_invariant!(stokesP.ε)
-            cost[xit,yit]  = sum_kbn(BigFloat.(stokesP.V.Vy[indx.+1,indy]))
+            #cost[xit,yit]  = sum_kbn(BigFloat.(stokesP.V.Vy[indx.+1,indy]))
+            CUDA.allowscalar() do
+            cost[xit,yit]  = sum(stokesP.V.Vy[indx.+1,indy])
+            end
             println("it = $it \n")
             it += 1
 
         (; η_vep, η) = stokesP.viscosity
 
         # Plotting ---------------------
-        if it == 1 || rem(it, 40) == 0
+        if it == 1 || rem(it, 100) == 0
             plot_forward_solve(stokesP,xci,ρgP,it)
         end
         end  
     end
-    =#
+    
     return refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef
 end
 
@@ -278,4 +312,6 @@ else
 end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef = main(igg; figdir = figdir, nx = nx, ny = ny,f);
 
-FD = plot_FD_vs_AD(refcost,cost,dp,AD,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef)
+#which sensitivity to plot
+plot_sens = Adjoint.ηb
+FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef)

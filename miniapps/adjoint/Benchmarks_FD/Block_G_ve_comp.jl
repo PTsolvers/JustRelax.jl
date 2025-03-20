@@ -56,12 +56,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     visc_bg    = LinearViscous(; η=1.0)
     visc_block = LinearViscous(; η=100.0)
-    el         = ConstantElasticity(G=G0, ν=0.45)
+    el      = ConstantElasticity(G=G0, ν=0.45)
+
 
     # parameter pertubation
-    dp   = 1e-4
-    visc_bg_p   = LinearViscous(; η=1.0+dp)
-    visc_block_p = LinearViscous(; η=100.0+dp)
+    dp = 1e-4
+    el_p = ConstantElasticity(G=G0+dp, ν=0.45)
+
 
     rheology = (
         # Low density phase
@@ -84,7 +85,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
             Phase             = 3,
             Density           = ConstantDensity(; ρ = 1.0),
             Gravity           = ConstantGravity(; g = 1.0),
-            CompositeRheology = CompositeRheology((visc_bg_p,el)),
+            CompositeRheology = CompositeRheology((visc_bg,el_p)),
 
         ),
         # High density phase
@@ -92,7 +93,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
             Phase             = 4,
             Density           = ConstantDensity(; ρ = 1.5),
             Gravity           = ConstantGravity(; g = 1.0),
-            CompositeRheology = CompositeRheology((visc_block_p,el)),
+            CompositeRheology = CompositeRheology((visc_block,el_p)),
         ),
     )
 
@@ -304,7 +305,7 @@ end
 f      = 1
 nx     = 16*f
 ny     = 16*f
-figdir = "miniapps/adjoint/Benchmarks_FD/Block_eta_ve_comp"
+figdir = "miniapps/adjoint/Benchmarks_FD/Block_G_ve_comp"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
@@ -313,5 +314,5 @@ end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef = main(igg; figdir = figdir, nx = nx, ny = ny,f);
 
 #which sensitivity to plot
-plot_sens = Adjoint.ηb
+plot_sens = stokesAD.G
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef)

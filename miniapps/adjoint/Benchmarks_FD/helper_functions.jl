@@ -73,7 +73,7 @@ function plot_forward_solve(stokes,xci,ρg,par)
 end
 
 #### Plotting Comparison ####
-function plot_FD_vs_AD(refcost,cost,dp,AD,nx,ny,ηref,ρref,stokesAD,figdir,f, Adjoint, Ref)
+function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f, Adjoint, Ref)
 
     # Physical domain ------------------------------------
     ly           = 1e0          # domain length in y
@@ -100,7 +100,7 @@ function plot_FD_vs_AD(refcost,cost,dp,AD,nx,ny,ηref,ρref,stokesAD,figdir,f, A
     #sol_FD[ind_block] = (cost[ind_block] .- refcost) ./ 0.0005
 
     #AD = deepcopy(stokesAD.G)
-    AD = Adjoint.ηb
+    AD = Sens
     #AD_G .*= 2.0
     #AD_G[ind_block] ./= 2.0
     #AD_G[ind_block] .*= 0.5

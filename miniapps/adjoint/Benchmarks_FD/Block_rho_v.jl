@@ -312,5 +312,6 @@ else
 end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef = main(igg; figdir = figdir, nx = nx, ny = ny,f);
 
-
-FD = plot_FD_vs_AD(refcost,cost,dp,AD,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef)
+#which sensitivity to plot
+plot_sens = Adjoint.ρb
+FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef)

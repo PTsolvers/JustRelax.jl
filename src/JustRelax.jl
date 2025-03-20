@@ -39,8 +39,8 @@ $(j)╚█████╔╝$(u)╚██████╔╝$(s)█████�
     printstyled(io, "\n\n", str, "\n",
 """
 Version: $(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"])
-Latest commit: $(strip(read(`git log -1 --pretty=%B`, String)))
-Commit date: $(strip(read(`git log -1 --pretty=%cd`, String)))
+Latest commit: $(try strip(read(`git log -1 --pretty=%B`, String)) catch _ "N/A" end)
+Commit date: $(try strip(read(`git log -1 --pretty=%cd`, String)) catch _ "N/A" end)
 """, bold=true, color=:default)
 end
 #! format: on

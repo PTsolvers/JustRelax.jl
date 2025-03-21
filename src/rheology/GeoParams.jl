@@ -49,10 +49,11 @@ end
 
 @inline get_α(p::MaterialParams) = get_α(p.Density[1])
 @inline get_α(p::MaterialParams, args::NamedTuple) = get_α(p.Density[1], args)
-@inline get_α(p::Union{T_Density, PT_Density}) = GeoParams.get_α(p)
-@inline get_α(p::Union{T_Density, PT_Density}, ::Any) = GeoParams.get_α(p)
+@inline get_α(p::Union{T_Density, PT_Density, Melt_DensityX}) = GeoParams.get_α(p)
+@inline get_α(p::Union{T_Density, PT_Density, Melt_DensityX}, ::Any) = GeoParams.get_α(p)
 @inline get_α(rho::MeltDependent_Density, ::Any) = get_α(rho)
 @inline get_α(rho::BubbleFlow_Density, ::Any) = get_α(rho)
 @inline get_α(rho::GasPyroclast_Density, ::Any) = get_α(rho)
+@inline get_α(rho::Melt_DensityX, ::Any) = get_α(rho)
 @inline get_α(rho::ConstantDensity, args) = 0
 @inline get_α(rho::ConstantDensity) = 0

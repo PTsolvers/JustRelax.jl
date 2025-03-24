@@ -52,18 +52,27 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     η0      = 1.0           # viscosity
     εbg     = 1.0           # background strain-rate
     G0      = 1.0           # elastic shear modulus
-    Gi      = G0/(6.0-4.0)+0.2  # elastic shear modulus perturbation
+    Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
+    η_reg   = 8e-3 #1e-2          # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     visc_bg    = LinearViscous(; η=1.0)
     visc_block = LinearViscous(; η=1.0)
-    el         = ConstantElasticity(G=G0, ν=0.45)
-    el_inc     = ConstantElasticity(G=Gi, ν=0.45)
-
+    el         = ConstantElasticity(G=G0, Kb=4.0)
+    el_inc     = ConstantElasticity(G=Gi, Kb=4.0)
+    pl      = DruckerPrager_regularised(;  # non-regularized plasticity
+    C    = C,
+    ϕ    = ϕ,
+    η_vp = η_reg,
+    Ψ    = 0)
 
     # parameter pertubation
     dp = 1e-6
-    el_p         = ConstantElasticity(G=G0+dp, ν=0.45)
-    el_inc_p     = ConstantElasticity(G=Gi+dp, ν=0.45)
+
+    pl_p      = DruckerPrager_regularised(;  # non-regularized plasticity
+    C    = C,
+    ϕ    = ϕ+dp,
+    η_vp = η_reg,
+    Ψ    = 0)
 
 
     rheology = (
@@ -72,7 +81,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc_bg,el)),
+            CompositeRheology = CompositeRheology((visc_bg,el,pl)),
 
         ),
         # High density phase
@@ -80,14 +89,14 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
             Phase             = 2,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc_block,el_inc)),
+            CompositeRheology = CompositeRheology((visc_block,el_inc,pl)),
         ),
         # Low density phase
         SetMaterialParams(;
             Phase             = 3,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc_bg,el_p)),
+            CompositeRheology = CompositeRheology((visc_bg,el,pl_p)),
 
         ),
         # High density phase
@@ -95,7 +104,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
             Phase             = 4,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc_block,el_inc_p)),
+            CompositeRheology = CompositeRheology((visc_block,el_inc,pl_p)),
         ),
     )
 
@@ -162,7 +171,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     ####### Preparing ########
     ##########################
     # while t < tmax
-    for _ in 1:4
+    for _ in 1:8
 
         # Stokes solver ----------------
         adjoint_solve!(
@@ -320,8 +329,8 @@ end
 f      = 1
 nx     = 16*f
 ny     = 16*f
-run_param = true
-figdir = "miniapps/adjoint/Benchmarks_FD/Shear_G_ve_comp"
+run_param = false
+figdir = "miniapps/adjoint/Benchmarks_FD/Shear_fr_vep_comp"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
@@ -330,5 +339,5 @@ end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param);
 
 #which sensitivity to plot
-plot_sens = stokesAD.G
+plot_sens = stokesAD.fr
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef)

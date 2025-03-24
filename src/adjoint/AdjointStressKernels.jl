@@ -45,7 +45,11 @@
     _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     Kv = fn_ratio(get_bulk_modulus, rheology, phase)
     #volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-    volumev = 0.0
+    if isinf(Kv)
+        volumev = 0.0
+    else
+        volumev = Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
+    end
     ηv_ij = av_clamped(η, Ic...)
     dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
@@ -56,7 +60,7 @@
         τxyv[I...], τxyv_old[I...], ηv_ij, ε[3][I...], _Gvdt, dτ_rv
     )
     τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
-
+    
     # yield function @ center
     Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
     if is_pl && !iszero(τIIv_ij) && Fv > 0
@@ -70,7 +74,7 @@
         # stress correction @ vertex
         τxyv[I...] += dτxyv
     end
-
+    
     ## center
     if all(I .≤ ni)
         # Material properties
@@ -79,7 +83,11 @@
         is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
         K = fn_ratio(get_bulk_modulus, rheology, phase)
         #volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
-        volume= 0.0
+        if isinf(K)
+            volume= 0.0
+        else 
+            volume = K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
+        end
         ηij = η[I...]
         dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
 
@@ -87,13 +95,14 @@
         τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
 
         # visco-elastic strain rates @ center
-        εij_ve = @. εij + 0.5 * τij_o * _Gdt
-        εII_ve = GeoParams.second_invariant(εij_ve)
+        #εij_ve = @. εij + 0.5 * τij_o * _Gdt
+        #εII_ve = GeoParams.second_invariant(εij_ve)
         # stress increments @ center
         # dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
         dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = GeoParams.second_invariant(dτij .+ τij)
         # yield function @ center
+        
         F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
 
         if is_pl && !iszero(τII_ij) && F > 0
@@ -110,12 +119,12 @@
             setindex!.(ε_pl, εij_pl, I...)
             τII[I...] = GeoParams.second_invariant(τij)
             # Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
-            η_vep[I...] = 0.5 * τII_ij / εII_ve
+            #η_vep[I...] = 0.5 * τII_ij / εII_ve
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)
-            η_vep[I...] = ηij
-            τII[I...] = τII_ij
+            #η_vep[I...] = ηij
+            #τII[I...] = τII_ij
         end
 
     #    Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
@@ -151,11 +160,6 @@ end
     phase_yz,
     phase_xz,
     Sens,
-    #Gc,
-    #ϕv,
-    #ϕc,
-    #Cv,
-    #Cc,
 )
 τxyv = τshear_v[1]
 τxyv_old = τshear_ov[1]
@@ -177,16 +181,21 @@ phase = @inbounds phase_vertex[I...]
 #is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
 #_Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
 Gv_ij       = av_clamped(Sens[1],Ic...)
-ϕv_ij       = av_clamped(Sens[3],Ic...)
-Cv_ij       = av_clamped(Sens[5],Ic...)
-is_pl, CvNot, sinϕvNot, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
+ϕv_ij       = av_clamped(Sens[2],Ic...)
+Cv_ij       = av_clamped(Sens[3],Ic...)
+is_pl, CvNot, sinϕvNot, cosϕvNot, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
 _Gvdt = inv(Gv_ij * dt)
-sinϕv = ϕv_ij
+sinϕv = sind(ϕv_ij)
+cosϕv = cosd(ϕv_ij)
 Cv    = Cv_ij
 
 Kv = fn_ratio(get_bulk_modulus, rheology, phase)
 #volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-volumev = 0.0
+if isinf(Kv)
+    volumev = 0.0
+else
+    volumev = Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
+end
 ηv_ij = av_clamped(η, Ic...)
 dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
@@ -218,17 +227,22 @@ if all(I .≤ ni)
     phase = @inbounds phase_center[I...]
     #_Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     #is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII#[I...], phase)
-    Gc_ij       = Sens[2][I...]
-    ϕc_ij       = Sens[4][I...]
-    Cc_ij       = Sens[6][I...]
-    is_pl, CNot, sinϕNot, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
+    Gc_ij       = Sens[1][I...]
+    ϕc_ij       = Sens[2][I...]
+    Cc_ij       = Sens[3][I...]
+    is_pl, CNot, sinϕNot, cosϕNot, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
     _Gdt = inv(Gc_ij * dt)
-    sinϕ = ϕc_ij
+    sinϕ = sind(ϕc_ij)
+    cosϕ = cosd(ϕc_ij)
     C    = Cc_ij
 
     K = fn_ratio(get_bulk_modulus, rheology, phase)
     #volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
-    volume= 0.0
+    if isinf(K)
+        volume= 0.0
+    else 
+        volume = K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
+    end
     ηij = η[I...]
     dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
 
@@ -236,12 +250,14 @@ if all(I .≤ ni)
     τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
 
     # visco-elastic strain rates @ center
-    εij_ve = @. εij + 0.5 * τij_o * _Gdt
-    εII_ve = GeoParams.second_invariant(εij_ve)
+    #εij_ve = @. εij + 0.5 * τij_o * _Gdt
+    #εII_ve = GeoParams.second_invariant(εij_ve)
     # stress increments @ center
     # dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
     dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
     τII_ij = GeoParams.second_invariant(dτij .+ τij)
+
+    
     # yield function @ center
     F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
 
@@ -257,14 +273,14 @@ if all(I .≤ ni)
         τij = dτij .+ τij
         setindex!.(τ, τij, I...)
         setindex!.(ε_pl, εij_pl, I...)
-        τII[I...] = GeoParams.second_invariant(τij)
+        #τII[I...] = GeoParams.second_invariant(τij)
         # Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
-        η_vep[I...] = 0.5 * τII_ij / εII_ve
+        #η_vep[I...] = 0.5 * τII_ij / εII_ve
     else
         # stress correction @ center
         setindex!.(τ, dτij .+ τij, I...)
-        η_vep[I...] = ηij
-        τII[I...] = τII_ij
+        #η_vep[I...] = ηij
+        #τII[I...] = τII_ij
     end
 
 #    Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
@@ -275,11 +291,8 @@ end
 
 @parallel_indices (I...) function assemble_parameter_matrices!(
     EII,
-    Gv,
     Gc,
-    ϕv,
     ϕc,
-    Cv,
     Cc,
     rheology, 
     phase_center,
@@ -289,6 +302,7 @@ end
 
     ni = size(Gc)
 
+    #=
     Ic       = clamped_indices(ni, I...)
     EIIv_ij  = av_clamped(EII, Ic...)
     phase    = @inbounds phase_vertex[I...]
@@ -296,14 +310,14 @@ end
 
     is_pl, Cvi, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
     ϕv[I...] =  sinϕv #asind(sinϕv)
-    Cv[I...] = Cvi
+    Cv[I...] = Cvi=#
 
     if all(I .≤ ni)
         phase = @inbounds phase_center[I...]
         Gc[I...] = fn_ratio(get_shear_modulus, rheology, phase)
 
         is_pl, Cci, sinϕc, cosϕc, sinψc, η_regc = plastic_params_phase(rheology, EII[I...], phase)
-        ϕc[I...] = sinϕc # asind(sinϕc)
+        ϕc[I...] = asind(sinϕc) # sinϕc
         Cc[I...] = Cci
     end
 

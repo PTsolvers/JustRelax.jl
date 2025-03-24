@@ -23,12 +23,7 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-#using GeoParams, CairoMakie, CellArrays, JustRelax
-#@init_parallel_stencil(Threads, Float64, 2)
-using Enzyme, KahanSummation
-#const backend = CPUBackend
-#using JustPIC, JustPIC._2D
-#const backend_JP = JustPIC.CPUBackend
+using Enzyme
 include("/home/chris/Documents/2024_projects/JustRelax.jl/miniapps/adjoint/Benchmarks_FD/helper_functions.jl")
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -50,52 +45,47 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     ϕ       = 30            # friction angle
     C       = 1.6           # Cohesion
     η0      = 1.0           # viscosity
-    εbg     = 1.0           # background strain-rate
+    εbg     = 0.0           # background strain-rate
     G0      = 1.0           # elastic shear modulus
-    Gi      = G0/(6.0-4.0)+0.2  # elastic shear modulus perturbation
-    dt      = η0/G0/4.0     # assumes Maxwell time of 4
+    dt      = η0/G0/4.0/2.0     # assumes Maxwell time of 4
     visc_bg    = LinearViscous(; η=1.0)
-    visc_block = LinearViscous(; η=1.0)
-    el         = ConstantElasticity(G=G0, ν=0.45)
-    el_inc     = ConstantElasticity(G=Gi, ν=0.45)
-
+    visc_block = LinearViscous(; η=100.0)
+    el      = ConstantElasticity(G=G0, ν=0.5)
 
     # parameter pertubation
-    dp = 1e-6
-    el_p         = ConstantElasticity(G=G0+dp, ν=0.45)
-    el_inc_p     = ConstantElasticity(G=Gi+dp, ν=0.45)
-
+    dp = 1e-8
+    el_p = ConstantElasticity(G=G0+dp, ν=0.5)
 
     rheology = (
         # Low density phase
         SetMaterialParams(;
             Phase             = 1,
-            Density           = ConstantDensity(; ρ = 0.0),
-            Gravity           = ConstantGravity(; g = 0.0),
+            Density           = ConstantDensity(; ρ = 1.0),
+            Gravity           = ConstantGravity(; g = 1.0),
             CompositeRheology = CompositeRheology((visc_bg,el)),
 
         ),
         # High density phase
         SetMaterialParams(;
             Phase             = 2,
-            Density           = ConstantDensity(; ρ = 0.0),
-            Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc_block,el_inc)),
+            Density           = ConstantDensity(; ρ = 1.5),
+            Gravity           = ConstantGravity(; g = 1.0),
+            CompositeRheology = CompositeRheology((visc_block,el)),
         ),
         # Low density phase
         SetMaterialParams(;
             Phase             = 3,
-            Density           = ConstantDensity(; ρ = 0.0),
-            Gravity           = ConstantGravity(; g = 0.0),
+            Density           = ConstantDensity(; ρ = 1.0),
+            Gravity           = ConstantGravity(; g = 1.0),
             CompositeRheology = CompositeRheology((visc_bg,el_p)),
 
         ),
         # High density phase
         SetMaterialParams(;
             Phase             = 4,
-            Density           = ConstantDensity(; ρ = 0.0),
-            Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc_block,el_inc_p)),
+            Density           = ConstantDensity(; ρ = 1.5),
+            Gravity           = ConstantGravity(; g = 1.0),
+            CompositeRheology = CompositeRheology((visc_block,el_p)),
         ),
     )
 
@@ -110,7 +100,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-12,  CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-15,  CFL = 0.95 / √2.1)
 
     # Adjoint 
     stokesAD = StokesArraysAdjoint(backend, ni)
@@ -162,7 +152,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     ####### Preparing ########
     ##########################
     # while t < tmax
-    for _ in 1:4
+    for _ in 1:9
 
         # Stokes solver ----------------
         adjoint_solve!(
@@ -235,10 +225,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     #refcost = sum_kbn(BigFloat.(stokesRef.V.Vy[indx.+1,indy]))
     if isCUDA
         CUDA.allowscalar() do
-            refcost = sum(stokesRef.V.Vy[indx.+1,indy])
+        refcost = sum(BigFloat.(stokesRef.V.Vy[indx.+1,indy]))
         end
     else
-        refcost = sum(stokesRef.V.Vy[indx.+1,indy])
+        refcost = sum(BigFloat.(stokesRef.V.Vy[indx.+1,indy]))
     end
 
     (; η_vep, η) = stokes.viscosity
@@ -246,6 +236,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     ##scale η sensitivity
     #AD.ηb .= AD.ηb .* ηref ./ refcost
     #AD.ρb .= AD.ρb .* ρref ./ refcost
+    
     if (run_param)
     ##########################
     #### Parameter change ####
@@ -291,10 +282,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
             #cost[xit,yit]  = sum_kbn(BigFloat.(stokesP.V.Vy[indx.+1,indy]))
             if isCUDA
                 CUDA.allowscalar() do
-                    cost[xit,yit]  = sum(stokesP.V.Vy[indx.+1,indy])
+                cost[xit,yit]  = sum(BigFloat.(stokesP.V.Vy[indx.+1,indy]))
                 end
             else
-                cost[xit,yit]  = sum(stokesP.V.Vy[indx.+1,indy])
+                cost[xit,yit]  = sum(BigFloat.(stokesP.V.Vy[indx.+1,indy]))
             end
             println("it = $it \n")
             it += 1
@@ -305,6 +296,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
         if it == 1 || rem(it, 100) == 0
             plot_forward_solve(stokesP,xci,ρgP,it)
         end
+
         end  
     end
     cost_cpu = Array(cost)
@@ -313,6 +305,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
         #cost = load(joinpath(figdir, "FD_solution.jld2"),"sol_FD_cpu")
         cost = load(joinpath(figdir, "FD_cost.jld2"),"cost_cpu")
     end
+    
     return refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef
 end
 
@@ -320,8 +313,8 @@ end
 f      = 1
 nx     = 16*f
 ny     = 16*f
-run_param = true
-figdir = "miniapps/adjoint/Benchmarks_FD/Shear_G_ve_comp"
+run_param = false
+figdir = "miniapps/adjoint/Benchmarks_FD/Block_G_ve_incomp"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
@@ -331,4 +324,10 @@ refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef = main(igg; figdir
 
 #which sensitivity to plot
 plot_sens = stokesAD.G
-FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef)
+if isCUDA
+    CUDA.allowscalar() do
+        FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef)
+    end
+else 
+    FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef)
+end

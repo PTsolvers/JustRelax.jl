@@ -185,14 +185,10 @@ struct StokesArraysAdjoint{A,B,C,D,E,F,T}
     R::C
     U::E
     ω::F
-    Gv::T
-    Gc::T
+    η::T
+    ρ::T
     G::T
-    frv::T
-    frc::T
     fr::T
-    Cv::T
-    Cc::T
     C::T
 end
 

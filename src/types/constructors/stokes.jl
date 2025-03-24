@@ -150,15 +150,10 @@ function StokesArraysAdjoint(ni::NTuple{N,Integer}) where {N}
     EII_pl = @zeros(ni...)
     viscosity = Viscosity(ni)
     R = Residual(ni...)
-    Gv = @zeros((ni.+1)...)
-    Gc = @zeros(ni...)
+    η = @zeros(ni...)
+    ρ = @zeros(ni...)
     G  = @zeros(ni...)
-    frv = @zeros((ni.+1)...)
-    frc = @zeros(ni...)
     fr = @zeros(ni...)
-    Cv = @zeros((ni.+1)...)
-    Cc = @zeros(ni...)
     C = @zeros(ni...)
-
-    return JustRelax.StokesArraysAdjoint(P, PA, P0, V, VA, ∇V, τ, dτ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, Gv, Gc, G, frv, frc, fr, Cv, Cc, C)
+    return JustRelax.StokesArraysAdjoint(P, PA, P0, V, VA, ∇V, τ, dτ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, η, ρ, G, fr, C)
 end

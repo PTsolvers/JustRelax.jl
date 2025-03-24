@@ -1,11 +1,10 @@
-#const isCUDA = false
-const isCUDA = true
+const isCUDA = false
 
 @static if isCUDA
     using CUDA
 end
 using JustRelax, JustRelax.JustRelax2D_AD, JustRelax.DataIO
-using GeoParams, GLMakie, CellArrays, JLD2
+using GeoParams, CairoMakie, CellArrays, JLD2
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
@@ -33,7 +32,7 @@ using Enzyme, KahanSummation
 include("/home/chris/Documents/2024_projects/JustRelax.jl/miniapps/adjoint/Benchmarks_FD/helper_functions.jl")
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, figdir="model_figs",f)
+function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
 
     # Physical domain ------------------------------------
     ly           = 1e0          # domain length in y
@@ -61,7 +60,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
 
     # parameter pertubation
     dp = 1e-4
-    el_p = ConstantElasticity(G=G0+dp, ν=0.45)
+    el_p      = ConstantElasticity(G=G0+dp, ν=0.45)
+    #visc_bg_p   = LinearViscous(; η=1.0+dp)
+    #visc_block_p = LinearViscous(; η=100.0+dp)
 
 
     rheology = (
@@ -231,16 +232,20 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     );
     tensor_invariant!(stokesRef.ε)
     #refcost = sum_kbn(BigFloat.(stokesRef.V.Vy[indx.+1,indy]))
-    CUDA.allowscalar() do
-    refcost = sum(stokesRef.V.Vy[indx.+1,indy])
+    if isCUDA
+        CUDA.allowscalar() do
+            refcost = sum(stokesRef.V.Vy[indx.+1,indy])
+        end
+    else
+        refcost = sum(stokesRef.V.Vy[indx.+1,indy])
     end
-
     (; η_vep, η) = stokes.viscosity
     ηref = η
     ##scale η sensitivity
     #AD.ηb .= AD.ηb .* ηref ./ refcost
     #AD.ρb .= AD.ρb .* ρref ./ refcost
     
+    if (run_param)
     ##########################
     #### Parameter change ####
     ##########################
@@ -283,8 +288,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
             );
             tensor_invariant!(stokesP.ε)
             #cost[xit,yit]  = sum_kbn(BigFloat.(stokesP.V.Vy[indx.+1,indy]))
-            CUDA.allowscalar() do
-            cost[xit,yit]  = sum(stokesP.V.Vy[indx.+1,indy])
+            if isCUDA
+                CUDA.allowscalar() do
+                    cost[xit,yit]  = sum(stokesP.V.Vy[indx.+1,indy])
+                end
+            else
+                cost[xit,yit]  = sum(stokesP.V.Vy[indx.+1,indy])
             end
             println("it = $it \n")
             it += 1
@@ -297,6 +306,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
         end
         end  
     end
+    cost_cpu = Array(cost)
+    jldsave(joinpath(figdir, "FD_cost.jld2"),cost_cpu=cost_cpu)
+    else
+        #cost = load(joinpath(figdir, "FD_solution.jld2"),"sol_FD_cpu")
+        cost = load(joinpath(figdir, "FD_cost.jld2"),"cost_cpu")
+    end
     
     return refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef
 end
@@ -305,13 +320,14 @@ end
 f      = 1
 nx     = 16*f
 ny     = 16*f
+run_param = true
 figdir = "miniapps/adjoint/Benchmarks_FD/Block_G_ve_comp"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
-refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef = main(igg; figdir = figdir, nx = nx, ny = ny,f);
+refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param);
 
 #which sensitivity to plot
 plot_sens = stokesAD.G

@@ -93,7 +93,7 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     r    =  1*di[1]*f  # half-width of block
     
     ind_block = findall(((Xc.-o_x).^2 .≤ r^2) .& ((Yc.-o_y).^2 .≤ r.^2))
-    sol_FD = @zeros(nx,ny)
+    sol_FD = Array(@zeros(nx,ny))
     sol_FD .= ((cost .- refcost)./dp)#./(abs(refcost)) ./ (di[1] * di[2])
     #sol_FD[ind_block] .*= 1e-2
     #sol_FD .= ((cost .- refcost)./dp) * di[1] * di[2] #./ refcost
@@ -111,10 +111,10 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
 
 
     # scale the Sensitivities
-    AD_norm = (AD .+ abs(minimum(AD)))
+    AD_norm = Array(AD .- (minimum(AD)))
     AD_norm .= AD_norm ./ maximum(AD_norm)
 
-    sol_FD_norm = (sol_FD .+ abs(minimum(sol_FD)))
+    sol_FD_norm = Array(sol_FD .+ abs(minimum(sol_FD)))
     sol_FD_norm .= sol_FD_norm ./ maximum(sol_FD_norm)
 
     sumFD = round(sum(abs.(sol_FD)),digits=2)
@@ -140,8 +140,10 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     #λVy_range = maximum(abs.(stokesAD.VA.Vy))
     h5  = heatmap!(ax5, xci[1], xci[2], Array(stokesAD.VA.Vx),colormap=:lipari)#, colorrange=(-λVx_range,λVx_range))
     h6  = heatmap!(ax6, xci[1], xci[2], Array(stokesAD.VA.Vy),colormap=:lipari)#, colorrange=(-λVy_range,λVy_range))
-    h7  = heatmap!(ax7, xci[1], xci[2], Array(sol_FD),colormap=:lipari)
-    h8  = heatmap!(ax8, xci[1], xci[2], Array(AD),colormap=:lipari)
+    #h7  = heatmap!(ax7, xci[1], xci[2], Array(sol_FD),colormap=:lipari)
+    #h8  = heatmap!(ax8, xci[1], xci[2], Array(AD),colormap=:lipari)
+    h7  = heatmap!(ax7, xci[1], xci[2], Array(sol_FD_norm),colormap=:lipari)
+    h8  = heatmap!(ax8, xci[1], xci[2], Array(AD_norm),colormap=:lipari)
     h9  = heatmap!(ax9, xci[1], xci[2], Array(sol_FD_norm .- AD_norm),colormap=:jet)
     h10 = heatmap!(ax10, xci[1], xci[2], Array(log10.(abs.((sol_FD_norm .- AD_norm)./sol_FD_norm))),colormap=:jet,colorrange=(-1,4))
     hidexdecorations!(ax1);hidexdecorations!(ax2);hidexdecorations!(ax3);hidexdecorations!(ax4);hidexdecorations!(ax5);hidexdecorations!(ax6);hidexdecorations!(ax7);hidexdecorations!(ax8) 
@@ -163,7 +165,8 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     #rowgap!(fig.layout, 4.0)
     #linkaxes!(ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9)    
     save(joinpath(figdir, "Comparison.png"), fig)
-    jldsave(joinpath(figdir, "FD_solution.jld2"),sol_FD=sol_FD)
+    sol_FD_cpu = Array(sol_FD)
+    #jldsave(joinpath(figdir, "FD_solution.jld2"),sol_FD_cpu=sol_FD_cpu)
 
     return sol_FD
 end

@@ -32,28 +32,13 @@ function calc_sensitivity_2D!(
     stokesAD.τ.xy_c .= 0.0
     stokesAD.τ.xy   .= 0.0
 
-    stokesAD.Gv  .= 0.0
-    stokesAD.Gc  .= 0.0
     stokesAD.G   .= 0.0
-    stokesAD.frv .= 0.0
-    stokesAD.frc .= 0.0
     stokesAD.fr  .= 0.0
-    stokesAD.Cv  .= 0.0
-    stokesAD.Cc  .= 0.0
     stokesAD.C   .= 0.0
 
-
-    ηb      = @zeros(size(η))
-    ρb      = @zeros(size(ρg[2]))
-    Gvb     = @zeros(size(stokesAD.Gv))
-    Gcb     = @zeros(size(stokesAD.Gc))
-    Gb      = @zeros(size(stokesAD.Gc))
-    frvb    = @zeros(size(stokesAD.frv))
-    frcb    = @zeros(size(stokesAD.frc))
-    frb     = @zeros(size(stokesAD.frc))
-    Cvb     = @zeros(size(stokesAD.Cv))
-    Ccb     = @zeros(size(stokesAD.Cc))
-    Cb      = @zeros(size(stokesAD.Cc))
+    G  = @zeros(size(stokesAD.G))
+    fr = @zeros(size(stokesAD.fr))
+    C  = @zeros(size(stokesAD.C))
 
     @views stokesAD.R.Rx .= -stokesAD.VA.Vx[2:end-1,2:end-1]
     @views stokesAD.R.Ry .= -stokesAD.VA.Vy[2:end-1,2:end-1]
@@ -82,7 +67,7 @@ function calc_sensitivity_2D!(
             DuplicatedNoNeed(stokes.τ.yy,stokesAD.τ.yy),
             DuplicatedNoNeed(stokes.τ.xy,stokesAD.τ.xy),
             Const(ρg[1]),
-            DuplicatedNoNeed(ρg[2],ρb),
+            DuplicatedNoNeed(ρg[2],stokesAD.ρ),
             Const(_di[1]),
             Const(_di[2]),
             Const(dt * free_surface)
@@ -90,20 +75,15 @@ function calc_sensitivity_2D!(
 
     @parallel (@idx ni.+1) assemble_parameter_matrices!(
         stokes.EII_pl,
-        Gvb,
-        Gcb,
-        frvb,
-        frcb,
-        Cvb,
-        Ccb,
+        G,
+        fr,
+        C,
         rheology,
         phase_ratios.center,
         phase_ratios.vertex)
 
-        Sens  = (Gvb, Gcb, frvb, frcb, Cvb, Ccb)
-        SensA = (stokesAD.Gv, stokesAD.Gc, stokesAD.frv, stokesAD.frc, stokesAD.Cv, stokesAD.Cc)
-        #Sens = (Gvb, Gcb)#, frvb, frcb, Cvb, Ccb)
-
+    Sens  = (G, fr, C)
+    SensA = (stokesAD.G, stokesAD.fr, stokesAD.C)
 
     # copy stokes stress, if not stokes.τ is changed during the Enzyme call
     stokesAD.dτ.xx   .= stokes.τ.xx
@@ -111,6 +91,8 @@ function calc_sensitivity_2D!(
     stokesAD.dτ.xy_c .= stokes.τ.xy_c
     stokesAD.dτ.xy   .= stokes.τ.xy
     stokesAD.P0      .= stokes.P0
+    λtemp   = deepcopy(λ)
+    λvtemp  = deepcopy(λv)
 
     @parallel (@idx ni.+1) configcall=update_stresses_center_vertex_psADSens!(
         @strain(stokes),
@@ -123,8 +105,8 @@ function calc_sensitivity_2D!(
         θ,
         stokesAD.P0,
         stokes.viscosity.η,
-        λ,
-        λv,
+        λtemp,
+        λvtemp,
         stokes.τ.II,
         stokes.viscosity.η_vep,
         relλ,
@@ -136,12 +118,7 @@ function calc_sensitivity_2D!(
         phase_ratios.xy,
         phase_ratios.yz,
         phase_ratios.xz,
-        Sens#,
-        #Gcb,
-        #frvb,
-        #frcb#,
-        #Cvb,
-        #Ccb
+        Sens
         ) AD.autodiff_deferred!(
             mode,
             Const(update_stresses_center_vertex_psADSens!),
@@ -155,9 +132,9 @@ function calc_sensitivity_2D!(
             Const((stokes.τ_o.xy,)),
             Const(θ),
             Const(stokesAD.P0),
-            DuplicatedNoNeed(stokes.viscosity.η,ηb),
-            Const(λ),
-            Const(λv),
+            DuplicatedNoNeed(stokes.viscosity.η,stokesAD.η),
+            Const(λtemp),
+            Const(λvtemp),
             Const(stokes.τ.II),
             Const(stokes.viscosity.η_vep),
             Const(relλ),
@@ -169,90 +146,8 @@ function calc_sensitivity_2D!(
             Const(phase_ratios.xy),
             Const(phase_ratios.yz),
             Const(phase_ratios.xz),
-            DuplicatedNoNeed(Sens,SensA)#,
-            #Const(Gcb),
-            #Const(frvb),
-            #Const(frcb)#,
-            #Const(Cvb),
-            #Const(Ccb)
+            DuplicatedNoNeed(Sens,SensA)
             )
-    
-            #=
-    @parallel (@idx ni.+1) configcall=update_stresses_center_vertex_psAD!(
-            @strain(stokes),
-            @tensor_center(stokes.ε_pl),
-            stokes.EII_pl,
-            @tensor_center(stokesAD.dτ),
-            (stokesAD.dτ.xy,),
-            @tensor_center(stokes.τ_o),
-            (stokes.τ_o.xy,),
-            θ,
-            stokesAD.P0,
-            stokes.viscosity.η,
-            λ,
-            λv,
-            stokes.τ.II,
-            stokes.viscosity.η_vep,
-            relλ,
-            dt,
-            θ_dτ,
-            rheology,
-            phase_ratios.center,
-            phase_ratios.vertex,
-            phase_ratios.xy,
-            phase_ratios.yz,
-            phase_ratios.xz#,
-            #Gvb,
-            #Gcb,
-            #frvb,
-            #frcb,
-            #Cvb,
-            #Ccb
-        ) AD.autodiff_deferred!(
-            mode,
-            Const(update_stresses_center_vertex_psADSens!),
-            Const{Nothing},
-            Const(@strain(stokes)),
-            Const(@tensor_center(stokes.ε_pl)),
-            Const(stokes.EII_pl),
-            DuplicatedNoNeed(@tensor_center(stokesAD.dτ),@tensor_center(stokesAD.τ)),
-            DuplicatedNoNeed((stokesAD.dτ.xy,),(stokesAD.τ.xy,)),
-            Const(@tensor_center(stokes.τ_o)),
-            Const((stokes.τ_o.xy,)),
-            Const(θ),
-            Const(stokesAD.P0),
-            DuplicatedNoNeed(stokes.viscosity.η,ηb),
-            Const(λ),
-            Const(λv),
-            Const(stokes.τ.II),
-            Const(stokes.viscosity.η_vep),
-            Const(relλ),
-            Const(dt),
-            Const(θ_dτ),
-            Const(rheology),
-            Const(phase_ratios.center),
-            Const(phase_ratios.vertex),
-            Const(phase_ratios.xy),
-            Const(phase_ratios.yz),
-            Const(phase_ratios.xz)#,
-            #DuplicatedNoNeed(Gvb,stokesAD.Gv),
-            #DuplicatedNoNeed(Gcb,stokesAD.Gc),
-            #DuplicatedNoNeed(frvb,stokesAD.frv),
-            #DuplicatedNoNeed(frcb,stokesAD.frc),
-            #DuplicatedNoNeed(Cvb,stokesAD.Cv),
-            #DuplicatedNoNeed(Ccb,stokesAD.Cc)
-            )
-    =#
-        vertex2center!(stokesAD.G, stokesAD.Gv)
-        stokesAD.G .+= stokesAD.Gc
-        #stokesAD.G .= 0.0
-        #stokesAD.G .= stokesAD.Gc
-        vertex2center!(stokesAD.fr, stokesAD.frv)
-        stokesAD.fr .+= stokesAD.frc
-        vertex2center!(stokesAD.C, stokesAD.Cv)
-        stokesAD.C .+= stokesAD.Cc
-
-        return ηb, ρb
 
 end
 

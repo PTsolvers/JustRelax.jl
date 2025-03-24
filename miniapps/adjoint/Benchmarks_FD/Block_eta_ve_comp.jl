@@ -1,11 +1,11 @@
 #const isCUDA = false
-const isCUDA = true
+const isCUDA = false
 
 @static if isCUDA
     using CUDA
 end
 using JustRelax, JustRelax.JustRelax2D_AD, JustRelax.DataIO
-using GeoParams, GLMakie, CellArrays, JLD2
+using GeoParams, CairoMakie, CellArrays, JLD2
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
@@ -230,9 +230,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
     );
     tensor_invariant!(stokesRef.ε)
     #refcost = sum_kbn(BigFloat.(stokesRef.V.Vy[indx.+1,indy]))
+    if isCUDA
     CUDA.allowscalar() do
     refcost = sum(stokesRef.V.Vy[indx.+1,indy])
     end
+else
+    refcost = sum(stokesRef.V.Vy[indx.+1,indy])
+end
 
     (; η_vep, η) = stokes.viscosity
     ηref = η
@@ -282,9 +286,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f)
             );
             tensor_invariant!(stokesP.ε)
             #cost[xit,yit]  = sum_kbn(BigFloat.(stokesP.V.Vy[indx.+1,indy]))
+            if isCUDA
             CUDA.allowscalar() do
             cost[xit,yit]  = sum(stokesP.V.Vy[indx.+1,indy])
             end
+        else
+            cost[xit,yit]  = sum(stokesP.V.Vy[indx.+1,indy])
+        end
             println("it = $it \n")
             it += 1
 

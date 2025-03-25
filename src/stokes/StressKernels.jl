@@ -976,11 +976,3 @@ end
 function av_clamped(A, i0, j0, ic, jc)
     return 0.25 * (A[i0, j0] + A[ic, jc] + A[i0, jc] + A[ic, j0])
 end
-
-function line(p, K, Δt, η_ve, ψ, p1, t1)
-    p2 = p1 + K*Δt*sind(ψ)
-    t2 = t1 - η_ve
-    a  = (t2-t1)/(p2-p1)
-    b  = t2 - a*p2
-    return a*p + b
-end

@@ -825,14 +825,14 @@ end
             setindex!.(ε_pl, εij_pl, I...)
             τII[I...] = τII_ij = second_invariant(τij)
             # Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
-            η_vep[I...] = 0.5 * τII_ij / εII_ve
+            # η_vep[I...] = 0.5 * τII_ij / εII_ve
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)
-            η_vep[I...] = ηij
+            # η_vep[I...] = ηij
             τII[I...] = τII_ij
         end
-
+        η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
         Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
     end
 
@@ -949,13 +949,14 @@ end
             setindex!.(ε_pl, εij_pl, I...)
             τII[I...] = τII_ij = GeoParams.second_invariant(τij)
             # Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
-            η_vep[I...] = 0.5 * τII_ij / εII_ve
+            # η_vep[I...] = 0.5 * τII_ij / εII_ve
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)
-            η_vep[I...] = ηij
+            # η_vep[I...] = ηij
             τII[I...] = τII_ij
         end
+        η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
 
         Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
     end
@@ -974,4 +975,12 @@ end
 
 function av_clamped(A, i0, j0, ic, jc)
     return 0.25 * (A[i0, j0] + A[ic, jc] + A[i0, jc] + A[ic, j0])
+end
+
+function line(p, K, Δt, η_ve, ψ, p1, t1)
+    p2 = p1 + K*Δt*sind(ψ)
+    t2 = t1 - η_ve
+    a  = (t2-t1)/(p2-p1)
+    b  = t2 - a*p2
+    return a*p + b
 end

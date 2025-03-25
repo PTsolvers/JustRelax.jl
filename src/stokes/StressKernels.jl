@@ -823,7 +823,7 @@ end
             τij = dτij .+ τij
             setindex!.(τ, τij, I...)
             setindex!.(ε_pl, εij_pl, I...)
-            τII[I...] = second_invariant(τij)
+            τII[I...] = τII_ij = second_invariant(τij)
             # Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
             η_vep[I...] = 0.5 * τII_ij / εII_ve
         else
@@ -947,7 +947,7 @@ end
             τij = dτij .+ τij
             setindex!.(τ, τij, I...)
             setindex!.(ε_pl, εij_pl, I...)
-            τII[I...] = GeoParams.second_invariant(τij)
+            τII[I...] = τII_ij = GeoParams.second_invariant(τij)
             # Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
             η_vep[I...] = 0.5 * τII_ij / εII_ve
         else

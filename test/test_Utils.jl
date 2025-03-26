@@ -45,35 +45,35 @@ end
     @testset "Macros" begin
         # Set up mock data
         # Physical domain ------------------------------------
-        ly           = 1.0       # domain length in y
-        lx           = 1.0       # domain length in x
-        nx, ny, nz   = 4, 4, 4   # number of cells
-        ni           = nx, ny     # number of cells
-        igg          = IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
-        li           = lx, ly     # domain length in x- and y-
-        di           = @. li / ni # grid step in x- and -y
-        origin       = 0.0, -ly   # origin coordinates (15km f sticky air layer)
-        grid         = Geometry(ni, li; origin = origin)
+        ly = 1.0       # domain length in y
+        lx = 1.0       # domain length in x
+        nx, ny, nz = 4, 4, 4   # number of cells
+        ni = nx, ny     # number of cells
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+        li = lx, ly     # domain length in x- and y-
+        di = @. li / ni # grid step in x- and -y
+        origin = 0.0, -ly   # origin coordinates (15km f sticky air layer)
+        grid = Geometry(ni, li; origin = origin)
         (; xci, xvi) = grid
 
         # 2D case
         dst = "test_Utils"
-        stokes  = StokesArrays(backend_JR, ni)
+        stokes = StokesArrays(backend_JR, ni)
         thermal = ThermalArrays(backend_JR, ni)
         take(dst)
         @test isdir(dst)
-        rm(dst; recursive=true)
+        rm(dst; recursive = true)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
         # temperature
-        pT, pPhases      = init_cell_arrays(particles, Val(2))
+        pT, pPhases = init_cell_arrays(particles, Val(2))
         time = 1.0
         dt = 0.1
 
         stokes.viscosity.η .= @fill(1.0)
-        stokes.V.Vy        .= @fill(10)
-        thermal.T          .= @fill(100)
+        stokes.V.Vy .= @fill(10)
+        thermal.T .= @fill(100)
 
         args = (P = stokes.P, T = thermal.T)
         tuple_args = (args.P, args.T)
@@ -126,7 +126,7 @@ end
         thermal.T .= @fill(100)
         # Stokes
         @test _tuple(stokes.τ) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c)
-        @test _tuple(stokes.V) === (stokes.V.Vx,stokes.V.Vy, stokes.V.Vz)
+        @test _tuple(stokes.V) === (stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
 
         @test @velocity(stokes) === (stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
         @test @displacement(stokes) === (stokes.U.Ux, stokes.U.Uy, stokes.U.Uz)

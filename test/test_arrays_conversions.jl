@@ -14,19 +14,19 @@ else
     CPUBackend
 end
 
-ni      = 2, 2
-stokes  = StokesArrays(backend, ni)
+ni = 2, 2
+stokes = StokesArrays(backend, ni)
 thermal = ThermalArrays(backend, ni)
 
 @testset "Type conversions" begin
-    A1      = Array(stokes.V)
-    A2      = Array(stokes.τ)
-    A3      = Array(stokes.R)
-    A4      = Array(stokes.P)
-    A5      = Array(stokes)
-    A6      = Array(thermal)
-    A7      = Array(stokes.U)
-    A8      = Array(stokes.ω)
+    A1 = Array(stokes.V)
+    A2 = Array(stokes.τ)
+    A3 = Array(stokes.R)
+    A4 = Array(stokes.P)
+    A5 = Array(stokes)
+    A6 = Array(thermal)
+    A7 = Array(stokes.U)
+    A8 = Array(stokes.ω)
 
     @test typeof(A1) <: JustRelax.Velocity{<:Array}
     @test typeof(A2) <: JustRelax.SymmetricTensor{<:Array}
@@ -39,15 +39,15 @@ thermal = ThermalArrays(backend, ni)
 end
 
 @testset "Type copy" begin
-    S1      = copy(stokes.V)
-    S2      = copy(stokes.τ)
-    S3      = copy(stokes.R)
-    S4      = copy(stokes.P)
-    S5      = copy(stokes)
-    S6      = copy(stokes.U)
-    S7      = copy(stokes.ω)
-    T1      = copy(thermal)
-        
+    S1 = copy(stokes.V)
+    S2 = copy(stokes.τ)
+    S3 = copy(stokes.R)
+    S4 = copy(stokes.P)
+    S5 = copy(stokes)
+    S6 = copy(stokes.U)
+    S7 = copy(stokes.ω)
+    T1 = copy(thermal)
+
     @test typeof(S1) <: JustRelax.Velocity
     @test typeof(S2) <: JustRelax.SymmetricTensor
     @test typeof(S3) <: JustRelax.Residual

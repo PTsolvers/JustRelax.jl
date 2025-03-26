@@ -1,10 +1,10 @@
 function PTThermalCoeffs(
-    ::Type{CPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
-)
-    return PTThermalCoeffs(K, ρCp, dt, di, li; ϵ=ϵ, CFL=CFL)
+        ::Type{CPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / √3
+    )
+    return PTThermalCoeffs(K, ρCp, dt, di, li; ϵ = ϵ, CFL = CFL)
 end
 
-function PTThermalCoeffs(K, ρCp, dt, di, li::NTuple; ϵ=1e-8, CFL=0.9 / √3)
+function PTThermalCoeffs(K, ρCp, dt, di, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / √3)
     Vpdτ = min(di...) * CFL
     max_lxyz = max(li...)
     max_lxyz2 = max_lxyz^2
@@ -17,23 +17,23 @@ end
 
 # with phase ratios
 function PTThermalCoeffs(
-    ::Type{CPUBackend},
-    rheology,
-    phase_ratios,
-    args,
-    dt,
-    ni,
-    di::NTuple,
-    li::NTuple;
-    ϵ=1e-8,
-    CFL=0.9 / √3,
-)
-    return PTThermalCoeffs(rheology, phase_ratios, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
+        ::Type{CPUBackend},
+        rheology,
+        phase_ratios,
+        args,
+        dt,
+        ni,
+        di::NTuple,
+        li::NTuple;
+        ϵ = 1.0e-8,
+        CFL = 0.9 / √3,
+    )
+    return PTThermalCoeffs(rheology, phase_ratios, args, dt, ni, di, li; ϵ = ϵ, CFL = CFL)
 end
 
 function PTThermalCoeffs(
-    rheology, phase_ratios, args, dt, ni, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
-)
+        rheology, phase_ratios, args, dt, ni, di::NTuple, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / √3
+    )
     Vpdτ = min(di...) * CFL
     max_lxyz = max(li...)
     θr_dτ, dτ_ρ = @zeros(ni...), @zeros(ni...)
@@ -47,22 +47,22 @@ end
 
 # without phase ratios
 function PTThermalCoeffs(
-    ::Type{CPUBackend},
-    rheology::MaterialParams,
-    args,
-    dt,
-    ni,
-    di::NTuple,
-    li::NTuple;
-    ϵ=1e-8,
-    CFL=0.9 / √3,
-)
-    return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ=ϵ, CFL=CFL)
+        ::Type{CPUBackend},
+        rheology::MaterialParams,
+        args,
+        dt,
+        ni,
+        di::NTuple,
+        li::NTuple;
+        ϵ = 1.0e-8,
+        CFL = 0.9 / √3,
+    )
+    return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ = ϵ, CFL = CFL)
 end
 
 function PTThermalCoeffs(
-    rheology::MaterialParams, args, dt, ni, di::NTuple, li::NTuple; ϵ=1e-8, CFL=0.9 / √3
-)
+        rheology::MaterialParams, args, dt, ni, di::NTuple, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / √3
+    )
     Vpdτ = min(di...) * CFL
     max_lxyz = max(li...)
     θr_dτ, dτ_ρ = @zeros(ni...), @zeros(ni...)
@@ -75,8 +75,8 @@ function PTThermalCoeffs(
 end
 
 @parallel_indices (I...) function compute_pt_thermal_arrays!(
-    θr_dτ::AbstractArray, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt
-)
+        θr_dτ::AbstractArray, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt
+    )
     _compute_pt_thermal_arrays!(
         θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, I...
     )
@@ -85,17 +85,17 @@ end
 end
 
 @parallel_indices (I...) function compute_pt_thermal_arrays!(
-    θr_dτ::AbstractArray, dτ_ρ, rheology, args, max_lxyz, Vpdτ, _dt
-)
+        θr_dτ::AbstractArray, dτ_ρ, rheology, args, max_lxyz, Vpdτ, _dt
+    )
     _compute_pt_thermal_arrays!(θr_dτ, dτ_ρ, rheology, args, max_lxyz, Vpdτ, _dt, I...)
 
     return nothing
 end
 
 function _compute_pt_thermal_arrays!(
-    θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int,N}
-) where {N}
-    args_ij = (; T=args.T[Idx...], P=args.P[Idx...])
+        θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int, N}
+    ) where {N}
+    args_ij = (; T = args.T[Idx...], P = args.P[Idx...])
     phase_ij = phase[Idx...]
     ρCp = compute_ρCp(rheology, phase_ij, args_ij)
     _K = inv(fn_ratio(compute_conductivity, rheology, phase_ij, args_ij))
@@ -108,9 +108,9 @@ function _compute_pt_thermal_arrays!(
 end
 
 function _compute_pt_thermal_arrays!(
-    θr_dτ, dτ_ρ, rheology, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int,N}
-) where {N}
-    args_ij = (; T=args.T[Idx...], P=args.P[Idx...])
+        θr_dτ, dτ_ρ, rheology, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int, N}
+    ) where {N}
+    args_ij = (; T = args.T[Idx...], P = args.P[Idx...])
 
     ρCp = compute_ρCp(rheology, args_ij)
     _K = inv(compute_conductivity(rheology, args_ij))
@@ -123,8 +123,8 @@ function _compute_pt_thermal_arrays!(
 end
 
 function update_thermal_coeffs!(
-    pt_thermal::JustRelax.PTThermalCoeffs, rheology, phase_ratios, args, dt
-)
+        pt_thermal::JustRelax.PTThermalCoeffs, rheology, phase_ratios, args, dt
+    )
     ni = size(pt_thermal.dτ_ρ)
     @parallel (@idx ni) compute_pt_thermal_arrays!(
         pt_thermal.θr_dτ,
@@ -154,8 +154,8 @@ function update_thermal_coeffs!(pt_thermal::JustRelax.PTThermalCoeffs, rheology,
 end
 
 function update_thermal_coeffs!(
-    pt_thermal::JustRelax.PTThermalCoeffs, rheology, ::Nothing, args, dt
-)
+        pt_thermal::JustRelax.PTThermalCoeffs, rheology, ::Nothing, args, dt
+    )
     ni = size(pt_thermal.dτ_ρ)
     @parallel (@idx ni) compute_pt_thermal_arrays!(
         pt_thermal.θr_dτ,

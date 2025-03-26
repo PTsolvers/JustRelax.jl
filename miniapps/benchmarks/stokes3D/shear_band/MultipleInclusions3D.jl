@@ -19,14 +19,14 @@ solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
 function init_phases!(phase_ratios, xci, xvi)
-    ni      = size(phase_ratios.center)
- 
-    @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, radii::NTuple{N}, centers) where N
+    ni = size(phase_ratios.center)
+
+    @parallel_indices (i, j, k) function init_phases!(phases, xc, yc, zc, radii::NTuple{N}, centers) where {N}
         x, y, z = xc[i], yc[j], zc[k]
 
         inside = false
         for I in 1:N
-            if ((x-centers[I][1])^2 + (y-centers[I][2])^2 + (z-centers[I][3])^2) < radii[I]^2
+            if ((x - centers[I][1])^2 + (y - centers[I][2])^2 + (z - centers[I][3])^2) < radii[I]^2
                 inside = true
                 break
             end
@@ -43,12 +43,12 @@ function init_phases!(phase_ratios, xci, xvi)
         return nothing
     end
 
-    radii   = (0.075, 0.075, 0.075, 0.075, 0.1)
-    c1      = (0.4, 0.25, 0.25)
-    c2      = (0.25, 0.6, 0.25)
-    c3      = (0.25, 0.85, 0.75)
-    c4      = (0.75, 0.35, 0.75)
-    c5      = (0.5, 0.5, 0.5)
+    radii = (0.075, 0.075, 0.075, 0.075, 0.1)
+    c1 = (0.4, 0.25, 0.25)
+    c2 = (0.25, 0.6, 0.25)
+    c3 = (0.25, 0.85, 0.75)
+    c4 = (0.75, 0.35, 0.75)
+    c5 = (0.5, 0.5, 0.5)
     centers = (c1, c2, c3, c4, c5)
 
     @parallel (@idx ni)      init_phases!(phase_ratios.center, xci..., radii, centers)
@@ -58,55 +58,56 @@ function init_phases!(phase_ratios, xci, xvi)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
+function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
 
     # Physical domain ------------------------------------
-    lx = ly = lz = 1e0             # domain length in y
-    ni           = nx, ny, nz      # number of cells
-    li           = lx, ly, lz      # domain length in x- and y-
-    di           = @. li / ni      # grid step in x- and -y
-    origin       = 0.0, 0.0, 0.0   # origin coordinates
-    grid         = Geometry(ni, li; origin = origin)
+    lx = ly = lz = 1.0e0             # domain length in y
+    ni = nx, ny, nz      # number of cells
+    li = lx, ly, lz      # domain length in x- and y-
+    di = @. li / ni      # grid step in x- and -y
+    origin = 0.0, 0.0, 0.0   # origin coordinates
+    grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells    dt          = Inf
 
     # Physical properties using GeoParams ----------------
-    τ_y         = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ           = 30            # friction angle
-    C           = τ_y           # Cohesion
-    η0          = 1.0           # viscosity
-    G0          = 1.0           # elastic shear modulus
-    Gi          = G0/(6.0-4.0)  # elastic shear modulus perturbation
+    τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ = 30            # friction angle
+    C = τ_y           # Cohesion
+    η0 = 1.0           # viscosity
+    G0 = 1.0           # elastic shear modulus
+    Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
     # Gi          = G0            # elastic shear modulus perturbation
-    εbg         = 1.0           # background strain-rate
-    η_reg       = 1.25e-2       # regularisation "viscosity"
-    dt          = η0/G0/4.0     # assumes Maxwell time of 4
-    dt         /= 2     
-    el_bg       = ConstantElasticity(; G=G0, ν=0.5)
-    el_inc      = ConstantElasticity(; G=Gi, ν=0.5)
-    visc        = LinearViscous(; η=η0)
-    visc_inc    = LinearViscous(; η=η0/10)
-    pl          = DruckerPrager_regularised(;  # non-regularized plasticity
-        C    = C,
-        ϕ    = ϕ,
+    εbg = 1.0           # background strain-rate
+    η_reg = 1.25e-2       # regularisation "viscosity"
+    dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
+    dt /= 2
+    el_bg = ConstantElasticity(; G = G0, ν = 0.5)
+    el_inc = ConstantElasticity(; G = Gi, ν = 0.5)
+    visc = LinearViscous(; η = η0)
+    visc_inc = LinearViscous(; η = η0 / 10)
+    pl = DruckerPrager_regularised(;
+        # non-regularized plasticity
+        C = C,
+        ϕ = ϕ,
         η_vp = η_reg,
-        Ψ    = 0.0,
+        Ψ = 0.0,
     )
-    rheology    = (
+    rheology = (
         # Low density phase
         SetMaterialParams(;
-            Phase             = 1,
-            Density           = ConstantDensity(; ρ = 0.0),
-            Gravity           = ConstantGravity(; g = 0.0),
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 0.0),
+            Gravity = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology((visc, el_bg, pl)),
-            Elasticity        = el_bg,
+            Elasticity = el_bg,
 
         ),
         # High density phase
         SetMaterialParams(;
-            Density           = ConstantDensity(; ρ = 0.0),
-            Gravity           = ConstantGravity(; g = 0.0),
+            Density = ConstantDensity(; ρ = 0.0),
+            Gravity = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology((visc, el_inc, pl)),
-            Elasticity        = el_inc,
+            Elasticity = el_inc,
         ),
     )
 
@@ -116,23 +117,23 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes       = StokesArrays(backend_JR, ni)
-    pt_stokes    = PTStokesCoeffs(li, di; ϵ = 1e-5,  CFL = 0.75 / √3.1)
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-5, CFL = 0.75 / √3.1)
     # Buoyancy forces
-    ρg           = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-    args         = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
+    ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
+    args = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
     # Rheology
     cutoff_visc = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # Boundary conditions
-    flow_bcs     = VelocityBoundaryConditions(;
-        free_slip   = (left = true , right = true , top = true , bot = true , back = true , front = true),
-        no_slip     = (left = false, right = false, top = false, bot = false, back = false, front = false),
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true, back = true, front = true),
+        no_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
 
-    stokes.V.Vx .= PTArray(backend_JR)([ x*εbg for x in xvi[1], _ in 1:ny+2, _ in 1:nz+2])
-    stokes.V.Vz .= PTArray(backend_JR)([-z*εbg for _ in 1:nx+2, _ in 1:ny+2, z in xvi[3]])
+    stokes.V.Vx .= PTArray(backend_JR)([ x * εbg for x in xvi[1], _ in 1:(ny + 2), _ in 1:(nz + 2)])
+    stokes.V.Vz .= PTArray(backend_JR)([-z * εbg for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -147,10 +148,10 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 5
-    τII   = Float64[]
-    sol   = Float64[]
-    ttot  = Float64[]
+    tmax = 5
+    τII = Float64[]
+    sol = Float64[]
+    ttot = Float64[]
 
     pc = [argmax(p) for p in Array(phase_ratios.center)]
     while t < tmax
@@ -167,9 +168,9 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
             dt,
             igg;
             kwargs = (;
-                iterMax          = 75e3,
-                nout             = 1e3,
-                viscosity_cutoff = (-Inf, Inf)
+                iterMax = 75.0e3,
+                nout = 1.0e3,
+                viscosity_cutoff = (-Inf, Inf),
             )
         )
 
@@ -178,7 +179,7 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
-        t  += dt
+        t += dt
 
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
@@ -187,14 +188,14 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
 
         velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
         data_v = (;
-            τII    = Array(stokes.τ.II),
-            εII    = Array(stokes.ε.II),
+            τII = Array(stokes.τ.II),
+            εII = Array(stokes.ε.II),
             εII_pl = Array(stokes.ε_pl.II),
-            phase  = pc, 
+            phase = pc,
         )
         data_c = (;
-            P   = Array(stokes.P),
-            η   = Array(stokes.viscosity.η_vep),
+            P = Array(stokes.P),
+            η = Array(stokes.viscosity.η_vep),
         )
         velocity_v = (
             Array(Vx_v),
@@ -211,15 +212,15 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
         )
 
         # visualisation
-        jslice  = ni[2] >>> 1 
-        fig     = Figure(size = (1600, 1600), title = "t = $t")
-        ax1     = Axis(fig[1,1], aspect = 1, title = "τII")
-        ax2     = Axis(fig[2,1], aspect = 1, title = "η_vep")
-        ax3     = Axis(fig[1,2], aspect = 1, title = "log10(εxy)")
-        ax4     = Axis(fig[2,2], aspect = 1)
-        heatmap!(ax1, xci[1], xci[3], Array(stokes.τ.II[:, jslice, :]) , colormap=:batlow)
-        heatmap!(ax2, xci[1], xci[3], Array(stokes.viscosity.η_vep[:, jslice, :]) , colormap=:batlow)
-        heatmap!(ax3, xci[1], xci[3], Array(stokes.ε_pl.II[:, jslice, :]) , colormap=:batlow)
+        jslice = ni[2] >>> 1
+        fig = Figure(size = (1600, 1600), title = "t = $t")
+        ax1 = Axis(fig[1, 1], aspect = 1, title = "τII")
+        ax2 = Axis(fig[2, 1], aspect = 1, title = "η_vep")
+        ax3 = Axis(fig[1, 2], aspect = 1, title = "log10(εxy)")
+        ax4 = Axis(fig[2, 2], aspect = 1)
+        heatmap!(ax1, xci[1], xci[3], Array(stokes.τ.II[:, jslice, :]), colormap = :batlow)
+        heatmap!(ax2, xci[1], xci[3], Array(stokes.viscosity.η_vep[:, jslice, :]), colormap = :batlow)
+        heatmap!(ax3, xci[1], xci[3], Array(stokes.ε_pl.II[:, jslice, :]), colormap = :batlow)
         lines!(ax4, ttot, τII, color = :black)
         lines!(ax4, ttot, sol, color = :red)
         hidexdecorations!(ax1)
@@ -236,10 +237,10 @@ function main(igg; nx=64, ny=64, nz=64, figdir="model_figs")
     return nothing
 end
 
-n            = 100
+n = 100
 nx = ny = nz = n
-figdir       = "MultiInclusions_$n"
-igg          = if !(JustRelax.MPI.Initialized())
+figdir = "MultiInclusions_$n"
+igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
 else
     igg

@@ -38,7 +38,7 @@ function checkpointing_hdf5(dst, stokes, T, time, timestep)
             return write(file, @namevar(T)...)
         end
         # Move the checkpoint file from the temporary directory to the destination directory
-        return mv("$(tmpfname).h5", "$(fname).h5"; force=true)
+        return mv("$(tmpfname).h5", "$(fname).h5"; force = true)
     end
 
     return nothing
@@ -95,14 +95,14 @@ end
 
 Save `data` as the `fname.h5` HDF5 file in the folder `dst`
 """
-function save_hdf5(dst, fname, data::Vararg{Any,N}) where {N}
+function save_hdf5(dst, fname, data::Vararg{Any, N}) where {N}
     !isdir(dst) && mkpath(dst) # creat folder in case it does not exist
     pth_name = joinpath(dst, fname)
     return save_hdf5(pth_name, data)
 end
 
 # comm_cart, info comm_cart, MPI.Info()
-function save_hdf5(fname, dim_g, I, comm_cart, info, data::Vararg{Any,N}) where {N}
+function save_hdf5(fname, dim_g, I, comm_cart, info, data::Vararg{Any, N}) where {N}
     @assert HDF5.has_parallel()
     h5open("$(fname).h5", "w", comm_cart, info) do file
         for data_i in data
@@ -121,8 +121,8 @@ end
 
 Save `data` as the `fname.h5` HDF5 file
 """
-function save_hdf5(fname, data::Vararg{Any,N}) where {N}
-    h5open("$(fname).h5", "w") do file
+function save_hdf5(fname, data::Vararg{Any, N}) where {N}
+    return h5open("$(fname).h5", "w") do file
         for data_i in data
             save_data(file, data_i)
         end

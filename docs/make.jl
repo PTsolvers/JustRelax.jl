@@ -22,11 +22,13 @@ write(joinpath(@__DIR__, "src", "man", "authors.md"), authors_text)
 # Based on: https://github.com/ranocha/SummationByPartsOperators.jl/blob/0206a74140d5c6eb9921ca5021cb7bf2da1a306d/docs/make.jl#L27-L41
 open(joinpath(@__DIR__, "src", "man", "license.md"), "w") do io
     # Point to source license file
-    println(io, """
+    println(
+        io, """
         ```@meta
         EditURL = "https://github.com/PTsolvers/JustRelax.jl/blob/main/LICENSE.md"
         ```
-        """)
+        """
+    )
     # Write the modified contents
     println(io, "# [License](@id license)")
     println(io, "")
@@ -38,11 +40,13 @@ end
 
 open(joinpath(@__DIR__, "src", "man", "code_of_conduct.md"), "w") do io
     # Point to source license file
-    println(io, """
+    println(
+        io, """
         ```@meta
         EditURL = "https://github.com/PTsolvers/JustRelax.jl/blob/main/CODE_OF_CONDUCT.md"
         ```
-        """)
+        """
+    )
     # Write the modified contents
     println(io, "# [Code of Conduct](@id code-of-conduct)")
     println(io, "")
@@ -54,19 +58,20 @@ end
 
 open(joinpath(@__DIR__, "src", "man", "contributing.md"), "w") do io
     # Point to source license file
-    println(io, """
+    println(
+        io, """
         ```@meta
         EditURL = "https://github.com/PTsolvers/JustRelax.jl/blob/main/CONTRIBUTING.md"
         ```
-        """)
+        """
+    )
     # Write the modified contents
     for line in eachline(joinpath(dirname(@__DIR__), "CONTRIBUTING.md"))
         line = replace(line, "[LICENSE.md](LICENSE.md)" => "[License](@ref)")
         line = replace(line, "[AUTHORS.md](AUTHORS.md)" => "[Authors](@ref)")
-        println(io,line)
+        println(io, line)
     end
 end
-
 @info "Making documentation..."
 
 makedocs(;
@@ -81,7 +86,7 @@ makedocs(;
     warnonly = Documenter.except(:footnote),
     pages = [
         "Home" => "index.md",
-        "User guide"=> Any[
+        "User guide" => Any[
             "Installation" => "man/installation.md",
             "Backend" => "man/backend.md",
             "Equations" => Any[
@@ -99,9 +104,11 @@ makedocs(;
             "Subduction 2D" => Any[
                 "Model setup" => "man/subduction2D/setup.md",
                 "Rheology" => "man/subduction2D/rheology.md",
+                "Model setup" => "man/subduction2D/setup.md",
+                "Rheology" => "man/subduction2D/rheology.md",
                 "Setting up the model" => "man/subduction2D/subduction2D.md",
-                ]
             ],
+        ],
         "List of functions" => "man/listfunctions.md",
         "References" => Any[
               "JustPIC" => "man/JustPIC.md",
@@ -111,7 +118,7 @@ makedocs(;
         "Contributing" => "man/contributing.md",
         "Code of Conduct" => "man/code_of_conduct.md",
         "Security" => "man/security.md",
-        "License" => "man/license.md"
+        "License" => "man/license.md",
     ],
 )
 

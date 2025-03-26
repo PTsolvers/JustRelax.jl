@@ -6,8 +6,8 @@
 # update_pt_thermal_arrays!(::Vararg{Any,N}) where {N} = nothing
 
 function update_pt_thermal_arrays!(
-    pt_thermal, phase_ratios::JustPIC.PhaseRatios, rheology, args, _dt
-)
+        pt_thermal, phase_ratios::JustPIC.PhaseRatios, rheology, args, _dt
+    )
     ni = size(phase_ratios.center)
 
     @parallel (@idx ni) compute_pt_thermal_arrays!(
@@ -44,21 +44,21 @@ end
 @inline compute_phase(fn::F, rheology, ::Nothing) where {F} = fn(rheology)
 
 @inline Base.@propagate_inbounds function getindex_phase(
-    phase::AbstractArray, I::Vararg{Int,N}
-) where {N}
+        phase::AbstractArray, I::Vararg{Int, N}
+    ) where {N}
     return phase[I...]
 end
 
-@inline getindex_phase(::Nothing, I::Vararg{Int,N}) where {N} = nothing
+@inline getindex_phase(::Nothing, I::Vararg{Int, N}) where {N} = nothing
 
 # Diffusivity
 
 @inline function compute_diffusivity(rheology, args)
     return compute_conductivity(rheology, args) *
-           inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
+        inv(compute_heatcapacity(rheology, args) * compute_density(rheology, args))
 end
 
-@inline function compute_diffusivity(rheology, phase::Union{Nothing,Int}, args)
+@inline function compute_diffusivity(rheology, phase::Union{Nothing, Int}, args)
     return compute_conductivity(rheology, phase, args) * inv(
         compute_heatcapacity(rheology, phase, args) * compute_density(rheology, phase, args)
     )
@@ -66,17 +66,17 @@ end
 
 @inline function compute_diffusivity(rheology, ρ, args)
     return compute_conductivity(rheology, args) *
-           inv(compute_heatcapacity(rheology, args) * ρ)
+        inv(compute_heatcapacity(rheology, args) * ρ)
 end
 
-@inline function compute_diffusivity(rheology, ρ, phase::Union{Nothing,Int}, args)
+@inline function compute_diffusivity(rheology, ρ, phase::Union{Nothing, Int}, args)
     return compute_conductivity(rheology, phase, args) *
-           inv(compute_heatcapacity(rheology, phase, args) * ρ)
+        inv(compute_heatcapacity(rheology, phase, args) * ρ)
 end
 
 @inline function compute_diffusivity(
-    rheology::NTuple{N,AbstractMaterialParamsStruct}, phase_ratios::SArray, args
-) where {N}
+        rheology::NTuple{N, AbstractMaterialParamsStruct}, phase_ratios::SArray, args
+    ) where {N}
     ρ = compute_density_ratio(phase_ratios, rheology, args)
     conductivity = fn_ratio(compute_conductivity, rheology, phase_ratios, args)
     heatcapacity = fn_ratio(compute_heatcapacity, rheology, phase_ratios, args)
@@ -89,22 +89,22 @@ end
     return compute_heatcapacity(rheology, args) * compute_density(rheology, args)
 end
 
-@inline function compute_ρCp(rheology, phase::Union{Nothing,Int}, args)
+@inline function compute_ρCp(rheology, phase::Union{Nothing, Int}, args)
     return compute_phase(compute_heatcapacity, rheology, phase, args) *
-           compute_phase(compute_density, rheology, phase, args)
+        compute_phase(compute_density, rheology, phase, args)
 end
 
 @inline function compute_ρCp(rheology, ρ, args)
     return compute_heatcapacity(rheology, args) * ρ
 end
 
-@inline function compute_ρCp(rheology, ρ, phase::Union{Nothing,Int}, args)
+@inline function compute_ρCp(rheology, ρ, phase::Union{Nothing, Int}, args)
     return compute_phase(compute_heatcapacity, rheology, phase, args) * ρ
 end
 
 @inline function compute_ρCp(rheology, phase_ratios::SArray, args)
     return fn_ratio(compute_heatcapacity, rheology, phase_ratios, args) *
-           fn_ratio(compute_density, rheology, phase_ratios, args)
+        fn_ratio(compute_density, rheology, phase_ratios, args)
 end
 
 @inline function compute_ρCp(rheology, ρ, phase_ratios::SArray, args)
@@ -117,6 +117,6 @@ function compute_α(rheology, phase::SArray)
     return fn_ratio(get_α, rheology, phase)
 end
 
-function compute_α(rheology, phase::Union{Int,Nothing})
+function compute_α(rheology, phase::Union{Int, Nothing})
     return compute_phase(get_α, rheology, phase)
 end

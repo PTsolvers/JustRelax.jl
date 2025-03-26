@@ -66,7 +66,7 @@ function _solve_VS!(
     # solver loop
     @copy stokes.P0 stokes.P
     wtime0 = 0.0
-    relλ = 0.2
+    relλ = 0.2 #Duvaut-Lyons relaxation
     θ = deepcopy(stokes.P)
     λ = @zeros(ni...)
     λv = @zeros(ni .+ 1...)
@@ -213,9 +213,11 @@ function _solve_VS!(
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+    @parallel (@idx ni) accumulate_array!(stokes.γ_vol, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+    multi_copyto!(stokes.ε_vol_pl_o, stokes.ε_vol_pl)
 
     return (
         iter = iter,

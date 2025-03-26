@@ -482,6 +482,7 @@ function _solve!(
         nout = 500,
         b_width = (4, 4, 0),
         verbose = true,
+        tensile = false,
         kwargs...,
     ) where {T}
 
@@ -581,6 +582,7 @@ function _solve!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
                 stokes.EII_pl,
+                stokes.ε_vol_pl,
                 @tensor_center(stokes.τ),
                 (stokes.τ.xy,),
                 @tensor_center(stokes.τ_o),
@@ -596,11 +598,13 @@ function _solve!(
                 dt,
                 θ_dτ,
                 rheology,
+                stokes.pl_domain,
                 phase_ratios.center,
                 phase_ratios.vertex,
                 phase_ratios.xy,
                 phase_ratios.yz,
                 phase_ratios.xz,
+                args,
             )
             update_halo!(stokes.τ.xy)
 
@@ -678,9 +682,11 @@ function _solve!(
 
     # accumulate plastic strain tensor
     @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+    @parallel (@idx ni) accumulate_array!(stokes.γ_vol, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+    multi_copyto!(stokes.ε_vol_pl_o, stokes.ε_vol_pl)
 
     return (
         iter = iter,

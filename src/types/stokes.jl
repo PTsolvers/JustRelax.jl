@@ -147,12 +147,16 @@ struct StokesArrays{A, B, C, D, E, F, T}
     τ::B
     ε::B
     ε_pl::B
+    ε_vol_pl::T
     EII_pl::T
+    γ_vol::T
     viscosity::D
     τ_o::Union{B, Nothing}
+    ε_vol_pl_o::T
     R::C
     U::E
     ω::F
+    pl_domain::T
 end
 
 function StokesArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}

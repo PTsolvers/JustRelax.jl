@@ -25,7 +25,7 @@ export checkpointing_jld2, load_checkpoint_jld2
 
 include("VTK.jl")
 
-export VTKDataSeries, append!, save_vtk, save_marker_chain
+export VTKDataSeries, append!, save_vtk, save_marker_chain, save_particles
 
 export metadata
 
@@ -46,6 +46,7 @@ function metadata(src, dst, files...)
         isfile(newfile) && rm(newfile)
         cp(joinpath(src, f), newfile)
     end
+    return
 end
 
 end

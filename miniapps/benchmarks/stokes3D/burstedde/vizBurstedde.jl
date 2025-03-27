@@ -52,39 +52,39 @@ function analytical_solution(xci, xvi)
     return Vx, Vy, Vz, P
 end
 
-function plot(stokes::JustRelax.StokesArrays, geometry; cmap=:vik)
+function plot(stokes::JustRelax.StokesArrays, geometry; cmap = :vik)
     xci, xvi = geometry.xci, geometry.xvi
     vx, vy, vz, p = analytical_solution(xci, xvi)
 
     islice = geometry.ni[1] ÷ 2
 
-    f = Figure(; size=(2600, 900), fontsize=20)
+    f = Figure(; size = (2600, 900), fontsize = 20)
 
     # Pressure
-    ax = Axis(f[1, 1]; title="Pressure numeric")
-    h = heatmap!(ax, xci[1], xci[2], stokes.P[islice, :, :]; colormap=cmap)
+    ax = Axis(f[1, 1]; title = "Pressure numeric")
+    h = heatmap!(ax, xci[1], xci[2], stokes.P[islice, :, :]; colormap = cmap)
     Colorbar(f[1, 2], h)
 
-    ax = Axis(f[2, 1]; title="Pressure analytical")
-    h = heatmap!(ax, xci[1], xci[2], p[islice, :, :]; colormap=:vik)
+    ax = Axis(f[2, 1]; title = "Pressure analytical")
+    h = heatmap!(ax, xci[1], xci[2], p[islice, :, :]; colormap = :vik)
     Colorbar(f[2, 2], h)
 
     # Vx
-    ax = Axis(f[1, 3]; title="Vx numeric")
-    h = heatmap!(ax, xvi[1], xci[2], stokes.V.Vx[islice, :, :]; colormap=cmap)
+    ax = Axis(f[1, 3]; title = "Vx numeric")
+    h = heatmap!(ax, xvi[1], xci[2], stokes.V.Vx[islice, :, :]; colormap = cmap)
     Colorbar(f[1, 4], h)
 
-    ax = Axis(f[2, 3]; title="Vx analytical")
-    h = heatmap!(ax, xvi[1], xci[2], vx[islice, :, :]; colormap=cmap)
+    ax = Axis(f[2, 3]; title = "Vx analytical")
+    h = heatmap!(ax, xvi[1], xci[2], vx[islice, :, :]; colormap = cmap)
     Colorbar(f[2, 4], h)
 
     # Vy
-    ax = Axis(f[1, 5]; title="Vy numeric")
-    h = heatmap!(ax, xvi[1], xci[2], stokes.V.Vy[islice, :, :]; colormap=cmap)
+    ax = Axis(f[1, 5]; title = "Vy numeric")
+    h = heatmap!(ax, xvi[1], xci[2], stokes.V.Vy[islice, :, :]; colormap = cmap)
     Colorbar(f[1, 6], h)
 
-    ax = Axis(f[2, 5]; title="Vy analytical")
-    h = heatmap!(ax, xvi[1], xci[2], vy[islice, :, :]; colormap=cmap)
+    ax = Axis(f[2, 5]; title = "Vy analytical")
+    h = heatmap!(ax, xvi[1], xci[2], vy[islice, :, :]; colormap = cmap)
     Colorbar(f[2, 6], h)
 
     save("Burstedde.png", f)

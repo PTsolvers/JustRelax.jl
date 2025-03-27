@@ -4,9 +4,9 @@
 Average the function `fn` over the material phases in `rheology` using the phase ratios `ratio`.
 """
 @generated function fn_ratio(
-    fn::F, rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio
-) where {N,F}
-    quote
+        fn::F, rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio
+    ) where {N, F}
+    return quote
         Base.@_inline_meta
         x = 0.0
         Base.@nexprs $N i -> x += iszero(ratio[i]) ? 0.0 : fn(rheology[i]) * ratio[i]
@@ -15,9 +15,9 @@ Average the function `fn` over the material phases in `rheology` using the phase
 end
 
 @generated function fn_ratio(
-    fn::F, rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio, args::NamedTuple
-) where {N,F}
-    quote
+        fn::F, rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio, args::NamedTuple
+    ) where {N, F}
+    return quote
         Base.@_inline_meta
         x = 0.0
         Base.@nexprs $N i -> x += begin

@@ -27,9 +27,9 @@ function check_convergence_case1()
     nx = 16
     ny = 16
     nz = 16
-    _, _, iters = burstedde(; nx=nx, ny=ny, nz=nz, init_MPI=true, finalize_MPI=true)
+    _, _, iters = burstedde(; nx = nx, ny = ny, nz = nz, init_MPI = true, finalize_MPI = true)
 
-    tol = 1e-8
+    tol = 1.0e-8
     passed = iters.err_evo1[end] < tol
 
     return passed

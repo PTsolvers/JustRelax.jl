@@ -1,4 +1,4 @@
-using MuladdMacro, Adapt
+using MuladdMacro
 # check if index is on the boundary, if yes take value on the opposite for periodic, if not, don't change the value
 # @inline limit_periodic(a, n) = a > n ? n : (a < 1 ? 1 : a)
 @inline function limit_periodic(a, n)
@@ -82,8 +82,8 @@ end
 end
 
 @inline function _WENO_u(
-    u1, u2, u3, u4, u5, weno, fun_alphas::F1, fun_stencil::F2
-) where {F1,F2}
+        u1, u2, u3, u4, u5, weno, fun_alphas::F1, fun_stencil::F2
+    ) where {F1, F2}
 
     # Smoothness indicators
     β = weno_betas(u1, u2, u3, u4, u5, weno)
@@ -158,9 +158,9 @@ end
     return r = @inbounds begin
         @muladd begin
             max(vx_ij, 0) * (weno.fL[i, j] - weno.fL[i, jW]) * _dx +
-            min(vx_ij, 0) * (weno.fR[i, jE] - weno.fR[i, j]) * _dx +
-            max(vy_ij, 0) * (weno.fB[i, j] - weno.fB[iS, j]) * _dy +
-            min(vy_ij, 0) * (weno.fT[iN, j] - weno.fT[i, j]) * _dy
+                min(vx_ij, 0) * (weno.fR[i, jE] - weno.fR[i, j]) * _dx +
+                max(vy_ij, 0) * (weno.fB[i, j] - weno.fB[iS, j]) * _dy +
+                min(vy_ij, 0) * (weno.fT[iN, j] - weno.fT[i, j]) * _dy
         end
     end
 end
@@ -203,7 +203,7 @@ function WENO_advection!(u, Vxi, weno, di, dt)
     @parallel (1:nx, 1:ny) weno_step2!(weno, u, Vxi, _di, ni, dt)
 
     @parallel (1:nx, 1:ny) weno_f!(weno.ut, weno, nx, ny)
-    @parallel (1:nx, 1:ny) weno_step3!(u, weno, Vxi, _di, ni, dt, one_third, two_thirds)
+    return @parallel (1:nx, 1:ny) weno_step3!(u, weno, Vxi, _di, ni, dt, one_third, two_thirds)
 end
 
 @parallel_indices (i, j) function weno_step1!(weno, u, Vxi, _di, ni, dt)
@@ -219,8 +219,8 @@ end
 end
 
 @parallel_indices (i, j) function weno_step3!(
-    u, weno, Vxi, _di, ni, dt, one_third, two_thirds
-)
+        u, weno, Vxi, _di, ni, dt, one_third, two_thirds
+    )
     rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j)
     @inbounds u[i, j] = @muladd one_third * u[i, j] + two_thirds * weno.ut[i, j] -
         two_thirds * dt * rᵢ

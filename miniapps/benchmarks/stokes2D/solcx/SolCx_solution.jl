@@ -5,8 +5,8 @@ the code is released under the  GNU LESSER GENERAL PUBLIC LICENSE (LGPL-3) licen
 function _solCx_solution(x, z, _eta_A, _eta_B)
     n, nx = 1, 1
 
-    ZA = _eta_A # left column viscosity 
-    ZB = _eta_B # right column viscosity 
+    ZA = _eta_A # left column viscosity
+    ZB = _eta_B # right column viscosity
     xc = 0.5
 
     _C1A = 0
@@ -397,7 +397,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
 
     _C2A =
         (
-            t147 - 0.4e1 * t65 * t217 + t418 + 0.2e1 * t150 * t222 + t327 -
+        t147 - 0.4e1 * t65 * t217 + t418 + 0.2e1 * t150 * t222 + t327 -
             0.2e1 * t149 * t19 + 0.2e1 * t335 * ZB * t24 * ZA -
             0.16e2 * t312 * t313 * t355 * t59 - 0.4e1 * t281 * ZB * ZA * t597 -
             0.2e1 * t505 * t45 * t281 * t58 - 0.4e1 * t211 * t2 * t53 * t76 +
@@ -419,7 +419,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
             t232 * t96 +
             0.2e1 * t567 * t441 +
             t561
-        ) / (t740 + t789 + t834 + t874 + t911 + t948 + t987 + t1021)
+    ) / (t740 + t789 + t834 + t874 + t911 + t948 + t987 + t1021)
 
     t1 = n * n
     t2 = t1 * n
@@ -825,7 +825,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
 
     _C3A =
         (
-            t72 +
+        t72 +
             t132 +
             t169 +
             t210 +
@@ -841,7 +841,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
             t573 +
             t600 +
             t627
-        ) / (t682 + t717 + t758 + t809 + t855 + t901 + t943 + t977)
+    ) / (t682 + t717 + t758 + t809 + t855 + t901 + t943 + t977)
     #**************************************************************************************
     _C4A = 0
     #**************************************************************************************
@@ -970,7 +970,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
         0.16e2 * t142 * t143 - t147 * t148 * t149 + 0.8e1 * t153 * t155 -
         0.4e1 * t7 * t160 +
         0.2e1 * t7 * t164 +
-        0.10e2 * t102 * t40 +
+        0.1e2 * t102 * t40 +
         0.16e2 * t170 * t174 +
         0.2e1 * t83 * t178 - 0.2e1 * t181 * t182 * t65 - t111 * t187 - 0.2e1 * t70 * t87 +
         0.4e1 * t102 * t160 - 0.2e1 * t131 * t193 - 0.16e2 * t142 * t75 +
@@ -1115,7 +1115,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
         0.2e1 * t24 * t36 * t13 * t10 +
         0.4e1 * t131 * t387 * ZB +
         0.12e2 * t102 * t465 - 0.8e1 * t142 * t530 + t111 * t291 - 0.2e1 * t102 * t534 -
-        0.4e1 * t70 * t394 - 0.10e2 * t102 * t128 +
+        0.4e1 * t70 * t394 - 0.1e2 * t102 * t128 +
         0.4e1 * t237 * t305 +
         0.8e1 * t102 * t19 +
         0.2e1 * t83 * t346 - 0.16e2 * t35 * t128
@@ -1374,7 +1374,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
 
     _C1B =
         (
-            t127 +
+        t127 +
             t204 +
             t270 +
             t329 +
@@ -1390,7 +1390,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
             t821 +
             t867 +
             t909
-        ) / (t953 + t1013 + t1057 + t1094 + t1140 + t1182 + t1225 + t1263)
+    ) / (t953 + t1013 + t1057 + t1094 + t1140 + t1182 + t1225 + t1263)
 
     t1 = n * n
     t2 = t1 * n
@@ -2047,7 +2047,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
 
     _C2B =
         (
-            t1133 +
+        t1133 +
             t1196 +
             t1068 +
             t811 +
@@ -2079,7 +2079,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
             t1228 +
             t741 +
             t944
-        ) / (t1292 + t1344 + t1386 + t1427 + t1468 + t1511 + t1545 + t1583)
+    ) / (t1292 + t1344 + t1386 + t1427 + t1468 + t1511 + t1545 + t1583)
     #**************************************************************************************
     t1 = n * n
     t2 = t1 * n
@@ -2677,7 +2677,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
         0.32e2 * t1336 * t10 * t1338 - 0.4e1 * t75 * t1119
     _C3B =
         (
-            t606 + t722 + t1089 + t781 + 0.16e2 * t48 * t51 + t978 + t868 + t507 -
+        t606 + t722 + t1089 + t781 + 0.16e2 * t48 * t51 + t978 + t868 + t507 -
             t304 * t256 +
             0.8e1 * t9 * t22 +
             t752 +
@@ -2713,7 +2713,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
             t240 +
             t1055 +
             t1003
-        ) / (t1170 + t1218 + 0.2e1 * t1236 + t1280 + t1323 + t1370 + t1411 + t1450)
+    ) / (t1170 + t1218 + 0.2e1 * t1236 + t1280 + t1323 + t1370 + t1411 + t1450)
 
     t1 = n * n
     t2 = t1 * xc
@@ -3119,7 +3119,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
         -0.8e1 * t159 * t750 - 0.16e2 * t412 * t162 - t290 * t129 + 0.8e1 * t310 * t323 -
         0.4e1 * t319 * t342 +
         t75 * t272 +
-        t192 * t402 - 0.8e1 * t359 * t89 * t128 - 0.10e2 * t61 * t350 * t502 +
+        t192 * t402 - 0.8e1 * t359 * t89 * t128 - 0.1e2 * t61 * t350 * t502 +
         0.8e1 * t818 * t323 - 0.4e1 * t108 * t907
     t1042 = t89 * t97
     t1055 =
@@ -3265,7 +3265,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
 
     _C4B =
         (
-            -t424 * t508 + 0.8e1 * t412 * t750 - 0.2e1 * t232 * t595 - 0.4e1 * t126 * t323 +
+        -t424 * t508 + 0.8e1 * t412 * t750 - 0.2e1 * t232 * t595 - 0.4e1 * t126 * t323 +
             t1096 - t76 * t204 +
             t728 +
             0.2e1 * t548 * t827 +
@@ -3319,10 +3319,10 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
             0.4e1 * t138 * t20 * ZA * t10 - 0.4e1 * t20 * ZB * ZA * t326 +
             0.4e1 * t196 * t88 * t77 * t744 - 0.16e2 * t67 * xc * t179 * t181 -
             0.8e1 * t95 * t480 - t249 * t488 - t76 * t475 + t1055 - 0.4e1 * t408 * t22 -
-            0.10e2 * t28 * t379 +
+            0.1e2 * t28 * t379 +
             0.2e1 * t335 * t974 +
             t153 - 0.8e1 * t95 * t1042 - 0.2e1 * t734 * t735
-        ) / (t1156 + t1201 + t1242 + t1282 + t1317 + t1350 + t1388 + t1420)
+    ) / (t1156 + t1201 + t1242 + t1282 + t1317 + t1350 + t1388 + t1420)
 
     if x > xc
         _C1 = _C1B
@@ -3470,7 +3470,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
 
     u2 =
         (
-            -0.4e1 * t6 * t7 * t8 + 0.2e1 * t14 * t15 * t19 - 0.2e1 * t23 * t7 * t24 +
+        -0.4e1 * t6 * t7 * t8 + 0.2e1 * t14 * t15 * t19 - 0.2e1 * t23 * t7 * t24 +
             0.2e1 * t28 * t29 +
             0.2e1 * t33 * t34 +
             0.4e1 * t6 * t37 * t8 - 0.2e1 * t14 * t5 * _C2 * Z +
@@ -3480,7 +3480,7 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
             t91 +
             t121 +
             t156
-        ) /
+    ) /
         (0.4e1 * t159 * t18 * t12 + 0.8e1 * t159 * t18 * t1 * t8 + 0.4e1 * t159 * t18 * t24)
 
     t1 = 0.3141592654e1 * 0.3141592654e1
@@ -3630,19 +3630,19 @@ function _solCx_solution(x, z, _eta_A, _eta_B)
         (t57 + t95 + t135 + t164) /
         (0.4e1 * t24 * t15 + 0.8e1 * t127 * t15 * t18 + 0.4e1 * t131 * t15 * t19)
 
-    u5 = (-2 * Z * n * π * u2 - u3 * 2 * n * π) * cos(n * π * z) # pressure 
+    u5 = (-2 * Z * n * π * u2 - u3 * 2 * n * π) * cos(n * π * z) # pressure
 
-    u6 = (u3 * 2 * n * π + 4 * Z * n * π * u2) * cos(n * π * z) # zz stress 
+    u6 = (u3 * 2 * n * π + 4 * Z * n * π * u2) * cos(n * π * z) # zz stress
     sum5 = u5
     sum6 = u6
 
-    u1 *= cos(n * π * z) # x velocity 
+    u1 *= cos(n * π * z) # x velocity
     sum1 = u1
-    u2 *= sin(n * π * z) # z velocity 
+    u2 *= sin(n * π * z) # z velocity
     sum2 = u2
-    u3 *= 2 * n * π * cos(n * π * z) # xx stress 
+    u3 *= 2 * n * π * cos(n * π * z) # xx stress
     sum3 = u3
-    u4 *= 2 * n * π * sin(n * π * z) # zx stress 
+    u4 *= 2 * n * π * sin(n * π * z) # zx stress
     sum4 = u4
 
     vx = sum1

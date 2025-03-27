@@ -1,21 +1,27 @@
 # Viscous
 function compute_stress_increment(τij::Real, τij_o::Real, ηij, εij::Real, _Gdt, dτ_r)
     dτij = dτ_r * fma(2.0 * ηij, εij, fma(-(τij - τij_o) * ηij, _Gdt, -τij))
+    dτij = dτ_r * fma(2.0 * ηij, εij, fma(-(τij - τij_o) * ηij, _Gdt, -τij))
     return dτij
 end
 
 function compute_stress_increment(
         τij::NTuple{N}, τij_o::NTuple{N}, ηij, εij::NTuple{N}, _Gdt, dτ_r
     ) where {N}
+        τij::NTuple{N}, τij_o::NTuple{N}, ηij, εij::NTuple{N}, _Gdt, dτ_r
+    ) where {N}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
         return dτ_r *
+            fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
             fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
     end
     return dτij
 end
 
 @parallel_indices (i, j) function compute_τ!(
+        τxx::AbstractArray{T, 2}, τyy, τxy, εxx, εyy, εxy, η, θ_dτ
+    ) where {T}
         τxx::AbstractArray{T, 2}, τyy, τxy, εxx, εyy, εxy, η, θ_dτ
     ) where {T}
     @inline av(A) = _av_a(A, i, j)
@@ -26,8 +32,10 @@ end
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
     Δτxx = compute_stress_increment(τxx[i, j], 0.0e0, ηij, εxx[i, j], _Gdt, dτ_r)
+    Δτxx = compute_stress_increment(τxx[i, j], 0.0e0, ηij, εxx[i, j], _Gdt, dτ_r)
     τxx[i, j] += Δτxx
 
+    Δτyy = compute_stress_increment(τyy[i, j], 0.0e0, ηij, εyy[i, j], _Gdt, dτ_r)
     Δτyy = compute_stress_increment(τyy[i, j], 0.0e0, ηij, εyy[i, j], _Gdt, dτ_r)
     τyy[i, j] += Δτyy
 
@@ -35,6 +43,7 @@ end
         ηij = av(η)
         dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
         Δτxy = compute_stress_increment(
+            τxy[i + 1, j + 1], 0.0e0, ηij, εxy[i + 1, j + 1], _Gdt, dτ_r
             τxy[i + 1, j + 1], 0.0e0, ηij, εxy[i + 1, j + 1], _Gdt, dτ_r
         )
         τxy[i + 1, j + 1] += Δτxy
@@ -45,6 +54,8 @@ end
 # Visco-elastic
 
 @parallel_indices (i, j) function compute_τ!(
+        τxx::AbstractArray{T, 2}, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
+    ) where {T}
         τxx::AbstractArray{T, 2}, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
     ) where {T}
     @inline av(A) = _av_a(A, i, j)
@@ -89,6 +100,21 @@ end
         phase_center,
         rheology,
     ) where {T}
+        τxx::AbstractArray{T, 2}, # centers
+        τyy, # centers
+        τxy, # centers
+        τxx_o, # centers
+        τyy_o, # centers
+        τxy_o, # centers
+        εxx, # centers
+        εyy, # centers
+        εxy, # vertices
+        η, # centers
+        θ_dτ,
+        dt,
+        phase_center,
+        rheology,
+    ) where {T}
     @inline av(A) = _av_a(A, i, j)
 
     # Normal components
@@ -114,6 +140,8 @@ end
 @parallel_indices (i, j) function compute_τ_vertex!(
         τxy::AbstractArray{T, 2}, εxy, η, θ_dτ
     ) where {T}
+        τxy::AbstractArray{T, 2}, εxy, η, θ_dτ
+    ) where {T}
     @inline av(A) = _av_a(A, i, j)
     @inline harm(A) = _harm_a(A, i, j)
 
@@ -130,6 +158,29 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_τ!(
+        τxx::AbstractArray{T, 3},
+        τyy,
+        τzz,
+        τyz,
+        τxz,
+        τxy,
+        τxx_o,
+        τyy_o,
+        τzz_o,
+        τyz_o,
+        τxz_o,
+        τxy_o,
+        εxx,
+        εyy,
+        εzz,
+        εyz,
+        εxz,
+        εxy,
+        η,
+        G,
+        dt,
+        θ_dτ,
+    ) where {T}
         τxx::AbstractArray{T, 3},
         τyy,
         τzz,
@@ -218,6 +269,8 @@ end
 @parallel_indices (i, j, k) function compute_τ_vertex!(
         τyz, τxz, τxy, εyz, εxz, εxy, ηvep, θ_dτ
     )
+        τyz, τxz, τxy, εyz, εxz, εxy, ηvep, θ_dτ
+    )
     harm_xy(A) = _harm_xyi(A, i, j, k)
     harm_xz(A) = _harm_xzi(A, i, j, k)
     harm_yz(A) = _harm_yzi(A, i, j, k)
@@ -253,6 +306,22 @@ end
 # Single phase visco-elasto-plastic flow
 
 @parallel_indices (I...) function compute_τ_nonlinear!(
+        τ,     # @ centers
+        τII,   # @ centers
+        τ_old, # @ centers
+        ε,     # @ vertices
+        ε_pl,  # @ centers
+        EII,   # accumulated plastic strain rate @ centers
+        P,
+        θ,
+        η,
+        η_vep,
+        λ,
+        rheology,
+        dt,
+        θ_dτ,
+        args,
+    )
         τ,     # @ centers
         τII,   # @ centers
         τ_old, # @ centers
@@ -314,6 +383,23 @@ end
         θ_dτ,
         args,
     )
+        τ,      # @ centers
+        τII,    # @ centers
+        τ_old,  # @ centers
+        ε,      # @ vertices
+        ε_pl,   # @ centers
+        EII,    # accumulated plastic strain rate @ centers
+        P,
+        θ,
+        η,
+        η_vep,
+        λ,
+        phase_center,
+        rheology,
+        dt,
+        θ_dτ,
+        args,
+    )
     # numerics
     ηij = @inbounds η[I...]
     phase = @inbounds phase_center[I...]
@@ -341,12 +427,16 @@ end
 @parallel_indices (I...) function accumulate_tensor!(
         II, tensor::NTuple{N, T}, dt
     ) where {N, T}
+        II, tensor::NTuple{N, T}, dt
+    ) where {N, T}
     @inbounds II[I...] += second_invariant(getindex.(tensor, I...)...) * dt
     return nothing
 end
 
 ## Stress invariants
 @parallel_indices (I...) function tensor_invariant_center!(
+        II, tensor::NTuple{N, T}
+    ) where {N, T}
         II, tensor::NTuple{N, T}
     ) where {N, T}
     @inbounds II[I...] = second_invariant_staggered(getindex.(tensor, I...)...)
@@ -415,6 +505,9 @@ function update_stress!(
         ::LinearRheologyTrait, stokes, ::Any, ::Any, phase_ratios, rheology, dt, θ_dτ, args
     )
     dim(::AbstractArray{T, N}) where {T, N} = Val(N)
+        ::LinearRheologyTrait, stokes, ::Any, ::Any, phase_ratios, rheology, dt, θ_dτ, args
+    )
+    dim(::AbstractArray{T, N}) where {T, N} = Val(N)
 
     function f!(stokes, ::Val{2})
         center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
@@ -455,6 +548,16 @@ function update_stress!(
 end
 
 function update_stress!(
+        ::NonLinearRheologyTrait,
+        stokes,
+        θ,
+        λ::AbstractArray{T, N},
+        phase_ratios,
+        rheology,
+        dt,
+        θ_dτ,
+        args,
+    ) where {N, T}
         ::NonLinearRheologyTrait,
         stokes,
         θ,
@@ -513,6 +616,7 @@ end
 #####
 
 function clamped_indices(ni::NTuple{3, Integer}, i, j, k)
+function clamped_indices(ni::NTuple{3, Integer}, i, j, k)
     nx, ny, nz = ni
     i0 = clamp(i - 1, 1, nx)
     ic = clamp(i, 1, nx)
@@ -527,13 +631,16 @@ function clamped_indices(ni::NTuple{3, Integer}, i, j, k)
 end
 
 function av_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+function av_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
     return 0.25 * (A[ic, j0, k0] + A[ic, jc, k0] + A[ic, j0, kc] + A[ic, jc, kc])
 end
 
 function av_clamped_xz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+function av_clamped_xz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
     return 0.25 * (A[i0, jc, k0] + A[ic, jc, k0] + A[i0, jc, kc] + A[ic, jc, kc])
 end
 
+function av_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
 function av_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
     return 0.25 * (A[i0, j0, kc] + A[ic, j0, kc] + A[i0, jc, kc] + A[ic, jc, kc])
 end
@@ -591,12 +698,37 @@ end
         phase_yz,
         phase_xz,
     )
+        ε::NTuple{6},         # normal components @ centers; shear components @ vertices
+        ε_pl::NTuple{6},      # whole Voigt tensor @ centers
+        EII,                  # accumulated plastic strain rate @ centers
+        τ::NTuple{6},         # whole Voigt tensor @ centers
+        τshear_v::NTuple{3},  # shear tensor components @ vertices
+        τ_o::NTuple{6},
+        τshear_ov::NTuple{3}, # shear tensor components @ vertices
+        Pr,
+        Pr_c,
+        η,
+        λ,
+        λv::NTuple{3},
+        τII,
+        η_vep,
+        relλ,
+        dt,
+        θ_dτ,
+        rheology,
+        phase_center,
+        phase_vertex,
+        phase_xy,
+        phase_yz,
+        phase_xz,
+    )
     τyzv, τxzv, τxyv = τshear_v
     τyzv_old, τxzv_old, τxyv_old = τshear_ov
 
     ni = size(Pr)
     Ic = clamped_indices(ni, I...)
 
+    ## yz
     ## yz
     if all(I .≤ size(ε[4]))
         # interpolate to ith vertex
@@ -648,6 +780,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
@@ -655,6 +788,7 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτyz = 0.5 * (τyzv_ij + dτyzv) / τIIv_ij
+            τyzv[I...] += dτyzv - 2.0 * ηv_ij * λv[1][I...] * dQdτyz * dτ_rv
             τyzv[I...] += dτyzv - 2.0 * ηv_ij * λv[1][I...] * dQdτyz * dτ_rv
         else
             # stress correction @ vertex
@@ -711,6 +845,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
@@ -718,6 +853,7 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτxz = 0.5 * (τxzv_ij + dτxzv) / τIIv_ij
+            τxzv[I...] += dτxzv - 2.0 * ηv_ij * λv[2][I...] * dQdτxz * dτ_rv
             τxzv[I...] += dτxzv - 2.0 * ηv_ij * λv[2][I...] * dQdτxz * dτ_rv
         else
             # stress correction @ vertex
@@ -775,6 +911,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
@@ -782,6 +919,7 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτxy = 0.5 * (τxyv_ij + dτxyv) / τIIv_ij
+            τxyv[I...] += dτxyv - 2.0 * ηv_ij * λv[3][I...] * dQdτxy * dτ_rv
             τxyv[I...] += dτxyv - 2.0 * ηv_ij * λv[3][I...] * dQdτxy * dτ_rv
         else
             # stress correction @ vertex
@@ -811,6 +949,7 @@ end
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
         F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
+        F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
 
         if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
@@ -829,10 +968,10 @@ end
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)
-            η_vep[I...] = ηij
+            # η_vep[I...] = ηij
             τII[I...] = τII_ij
         end
-
+        η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
         Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
     end
 
@@ -841,6 +980,30 @@ end
 
 # 2D kernel
 @parallel_indices (I...) function update_stresses_center_vertex_ps!(
+        ε::NTuple{3},         # normal components @ centers; shear components @ vertices
+        ε_pl::NTuple{3},      # whole Voigt tensor @ centers
+        EII,                  # accumulated plastic strain rate @ centers
+        τ::NTuple{3},         # whole Voigt tensor @ centers
+        τshear_v::NTuple{1},  # shear tensor components @ vertices
+        τ_o::NTuple{3},
+        τshear_ov::NTuple{1}, # shear tensor components @ vertices
+        Pr,
+        Pr_c,
+        η,
+        λ,
+        λv,
+        τII,
+        η_vep,
+        relλ,
+        dt,
+        θ_dτ,
+        rheology,
+        phase_center,
+        phase_vertex,
+        phase_xy,
+        phase_yz,
+        phase_xz,
+    )
         ε::NTuple{3},         # normal components @ centers; shear components @ vertices
         ε_pl::NTuple{3},      # whole Voigt tensor @ centers
         EII,                  # accumulated plastic strain rate @ centers
@@ -899,12 +1062,14 @@ end
 
     # yield function @ center
     Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
+    Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
     if is_pl && !iszero(τIIv_ij) && Fv > 0
         # stress correction @ vertex
         λv[I...] =
             (1.0 - relλ) * λv[I...] +
             relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
         dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
+        τxyv[I...] += dτxyv - 2.0 * ηv_ij * λv[I...] * dQdτxy * dτ_rv
         τxyv[I...] += dτxyv - 2.0 * ηv_ij * λv[I...] * dQdτxy * dτ_rv
     else
         # stress correction @ vertex
@@ -934,6 +1099,7 @@ end
         τII_ij = GeoParams.second_invariant(dτij .+ τij)
         # yield function @ center
         F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
+        F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
 
         if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
@@ -953,9 +1119,10 @@ end
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)
-            η_vep[I...] = ηij
+            # η_vep[I...] = ηij
             τII[I...] = τII_ij
         end
+        η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
 
         Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
     end
@@ -963,6 +1130,7 @@ end
     return nothing
 end
 
+function clamped_indices(ni::NTuple{2, Integer}, i, j)
 function clamped_indices(ni::NTuple{2, Integer}, i, j)
     nx, ny = ni
     i0 = clamp(i - 1, 1, nx)

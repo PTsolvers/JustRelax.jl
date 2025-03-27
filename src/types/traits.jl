@@ -15,14 +15,14 @@ struct AMDGPUBackendTrait <: GPUBackendTrait end
 # Custom struct's
 
 for type in (
-    JustRelax.Velocity,
-    JustRelax.Displacement,
-    JustRelax.Vorticity,
-    JustRelax.SymmetricTensor,
-    JustRelax.Residual,
-    JustRelax.Viscosity,
-    JustRelax.ThermalArrays,
-)
+        JustRelax.Velocity,
+        JustRelax.Displacement,
+        JustRelax.Vorticity,
+        JustRelax.SymmetricTensor,
+        JustRelax.Residual,
+        JustRelax.Viscosity,
+        JustRelax.ThermalArrays,
+    )
     @eval @inline backend(::$(type){T}) where {T} = backend(T)
 end
 

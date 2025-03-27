@@ -1,48 +1,48 @@
 function init_rheologies()
     # Define rheolgy struct
-    rheology = (
+    return rheology = (
 
         # Name              = "slab",
         SetMaterialParams(;
-            Phase             = 1,
-            Density           = ConstantDensity(; ρ=3.28e3),
-            CompositeRheology = CompositeRheology( (LinearViscous(η = 2e23), ) ),
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 3.28e3),
+            CompositeRheology = CompositeRheology((LinearViscous(η = 2.0e23),)),
             # Elasticity        = el_upper_crust,
-            Gravity           = ConstantGravity(; g=9.81),
+            Gravity = ConstantGravity(; g = 9.81),
         ),
         # Name              = "crust",
         SetMaterialParams(;
-            Phase             = 2,
-            Density           = ConstantDensity(; ρ=3.28e3),
-            CompositeRheology = CompositeRheology( (LinearViscous(η = 1e21), ) ),
+            Phase = 2,
+            Density = ConstantDensity(; ρ = 3.28e3),
+            CompositeRheology = CompositeRheology((LinearViscous(η = 1.0e21),)),
             # Elasticity        = el_upper_crust,
-            Gravity           = ConstantGravity(; g=9.81),
+            Gravity = ConstantGravity(; g = 9.81),
         ),
         # Name              = "mantle",
         SetMaterialParams(;
-            Phase             = 3,
-            Density           = ConstantDensity(; ρ=3.2e3),
-            CompositeRheology = CompositeRheology( (LinearViscous(η = 1e21), ) ),
+            Phase = 3,
+            Density = ConstantDensity(; ρ = 3.2e3),
+            CompositeRheology = CompositeRheology((LinearViscous(η = 1.0e21),)),
             # Elasticity        = el_upper_crust,
-            Gravity           = ConstantGravity(; g=9.81),
+            Gravity = ConstantGravity(; g = 9.81),
         ),
         # Name              = "StickyAir",
         SetMaterialParams(;
-            Phase             = 4,
-            Density           = ConstantDensity(; ρ=100), # water density
-            HeatCapacity      = ConstantHeatCapacity(; Cp=3e3),
-            Conductivity      = ConstantConductivity(; k=1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η=1e19),)),
+            Phase = 4,
+            Density = ConstantDensity(; ρ = 100), # water density
+            HeatCapacity = ConstantHeatCapacity(; Cp = 3.0e3),
+            Conductivity = ConstantConductivity(; k = 1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e19),)),
         ),
     )
 end
 
 function init_phases!(phases, phase_grid, particles, xvi)
     ni = size(phases)
-    @parallel (@idx ni) _init_phases!(phases, phase_grid, particles.coords, particles.index, xvi)
+    return @parallel (@idx ni) _init_phases!(phases, phase_grid, particles.coords, particles.index, xvi)
 end
 
-@parallel_indices (I...) function _init_phases!(phases, phase_grid, pcoords::NTuple{N, T}, index, xvi) where {N,T}
+@parallel_indices (I...) function _init_phases!(phases, phase_grid, pcoords::NTuple{N, T}, index, xvi) where {N, T}
 
     ni = size(phases)
 
@@ -50,7 +50,7 @@ end
         # quick escape
         @index(index[ip, I...]) == 0 && continue
 
-        pᵢ = ntuple(Val(N)) do i 
+        pᵢ = ntuple(Val(N)) do i
             @index pcoords[i][ip, I...]
         end
 
@@ -64,9 +64,9 @@ end
             !(kk ≤ ni[3]) && continue
 
             xvᵢ = (
-                xvi[1][ii], 
-                xvi[2][jj], 
-                xvi[3][kk], 
+                xvi[1][ii],
+                xvi[2][jj],
+                xvi[3][kk],
             )
             # @show xvᵢ ii jj kk
             d_ijk = √(sum((pᵢ[i] - xvᵢ[i])^2 for i in 1:N))

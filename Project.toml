@@ -1,7 +1,7 @@
 name = "JustRelax"
 uuid = "34418575-392d-4e26-8c6d-96b0910afa06"
 authors = ["Albert De Montserrat <albertdemontserratnavarro@erdw.ethz.ch>, Pascal Aellig <paellig@uni-mainz.de>"]
-version = "0.4.0"
+version = "0.4.1"
 
 [deps]
 AccurateArithmetic = "22286c92-06ac-501d-9306-4abd417d9753"

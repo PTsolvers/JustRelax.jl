@@ -18,14 +18,14 @@ function check_convergence_case1()
 
     # run model
     _, _, iters = taylorGreen(;
-        nx=nx,
-        ny=ny,
-        nz=ny,
-        init_MPI=JustRelax.MPI.Initialized() ? false : true,
-        finalize_MPI=false,
+        nx = nx,
+        ny = ny,
+        nz = ny,
+        init_MPI = JustRelax.MPI.Initialized() ? false : true,
+        finalize_MPI = false,
     )
 
-    tol = 1e-8
+    tol = 1.0e-8
     passed = iters.err_evo1[end] < tol
 
     return passed

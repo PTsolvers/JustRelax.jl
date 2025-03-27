@@ -61,92 +61,92 @@ function init_phases!(phases, particles)
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index)
+    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index)
 end
 # END OF HELPER FUNCTIONS --------------------------------------------------------
 
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function VanKeken2D(ny=32, nx=32)
+function VanKeken2D(ny = 32, nx = 32)
 
     init_mpi = JustRelax.MPI.Initialized() ? false : true
-    igg    = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
     # Physical domain ------------------------------------
-    ly           = 1            # domain length in y
-    lx           = ly           # domain length in x
-    ni           = nx, ny       # number of cells
-    li           = lx, ly       # domain length in x- and y-
-    di           = @. li / ni   # grid step in x- and -y
-    origin       = 0.0, 0.0     # origin coordinates
-    grid         = Geometry(ni, li; origin = origin)
+    ly = 1            # domain length in y
+    lx = ly           # domain length in x
+    ni = nx, ny       # number of cells
+    li = lx, ly       # domain length in x- and y-
+    di = @. li / ni   # grid step in x- and -y
+    origin = 0.0, 0.0     # origin coordinates
+    grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    dt           = 1
+    dt = 1
 
     # Physical properties using GeoParams ----------------
     rheology = (
         # Low density phase
         SetMaterialParams(;
-            Phase             = 1,
-            Density           = ConstantDensity(; ρ = 1),
-            Gravity           = ConstantGravity(; g = 1),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1e0),)),
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 1),
+            Gravity = ConstantGravity(; g = 1),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e0),)),
 
         ),
         # High density phase
         SetMaterialParams(;
-            Phase             = 2,
-            Density           = ConstantDensity(; ρ = 2),
-            Gravity           = ConstantGravity(; g = 1),
-            CompositeRheology = CompositeRheology((LinearViscous(;η = 1e0),)),
+            Phase = 2,
+            Density = ConstantDensity(; ρ = 2),
+            Gravity = ConstantGravity(; g = 1),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e0),)),
         ),
     )
 
     # Initialize particles -------------------------------
     nxcell, max_p, min_p = 40, 80, 20
-    particles            = init_particles(
+    particles = init_particles(
         backend, nxcell, max_p, min_p, xvi..., di..., nx, ny
     )
     # velocity grids
-    grid_vx, grid_vy     = velocity_grids(xci, xvi, di)
+    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pPhases,             = init_cell_arrays(particles, Val(1))
-    particle_args        = (pPhases, )
-    phase_ratios         = PhaseRatios(backend, length(rheology), ni)
+    pPhases, = init_cell_arrays(particles, Val(1))
+    particle_args = (pPhases,)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes               = StokesArrays(backend_JR, ni)
-    pt_stokes            = PTStokesCoeffs(li, di; r=1e0, ϵ=1e-8,  CFL = 1 / √2.1)
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ = 1.0e-8, CFL = 1 / √2.1)
 
     # Buoyancy forces
-    ρg                   = @zeros(ni...), @zeros(ni...)
-    args                 = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    ρg = @zeros(ni...), @zeros(ni...)
+    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
     # Rheology
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
-    flow_bcs             = VelocityBoundaryConditions(;
-        free_slip = (left =  true, right =  true, top = false, bot = false),
-        no_slip   = (left = false, right = false, top =  true, bot =  true),
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = false, bot = false),
+        no_slip = (left = false, right = false, top = true, bot = true),
     )
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
 
     # Buffer arrays to compute velocity rms
-    Vx_v  = @zeros(ni.+1...)
-    Vy_v  = @zeros(ni.+1...)
+    Vx_v = @zeros(ni .+ 1...)
+    Vy_v = @zeros(ni .+ 1...)
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 0.5e3
-    nt    = 500
-    Urms  = Float64[]
-    trms  = Float64[]
+    tmax = 0.5e3
+    nt = 500
+    Urms = Float64[]
+    trms = Float64[]
     sizehint!(Urms, 100000)
     sizehint!(trms, 100000)
     local iters, Urms
@@ -166,9 +166,9 @@ function VanKeken2D(ny=32, nx=32)
             dt,
             igg;
             kwargs = (
-                iterMax          = 10e3,
-                nout             = 50,
-                viscosity_cutoff = (-Inf, Inf)
+                iterMax = 10.0e3,
+                nout = 50,
+                viscosity_cutoff = (-Inf, Inf),
             )
         )
         dt = compute_dt(stokes, di) / 10
@@ -179,7 +179,7 @@ function VanKeken2D(ny=32, nx=32)
             # velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
             velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
-            sum(Vx_v.^2) * prod(di) |> sqrt
+            sum(Vx_v .^ 2) * prod(di) |> sqrt
         end
         push!(Urms, Urms_it)
         push!(trms, t)
@@ -195,7 +195,7 @@ function VanKeken2D(ny=32, nx=32)
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         @show it += 1
-        t        += dt
+        t += dt
     end
 
     return iters, Urms
@@ -204,7 +204,7 @@ end
 @testset "VanKeken" begin
     @suppress begin
         iters, Urms = VanKeken2D()
-        @test passed = iters.err_evo1[end] < 1e-4
-        @test all(<(1e-2), Urms)
+        @test passed = iters.err_evo1[end] < 1.0e-4
+        @test all(<(1.0e-2), Urms)
     end
 end

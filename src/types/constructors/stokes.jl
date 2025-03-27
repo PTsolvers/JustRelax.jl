@@ -54,7 +54,7 @@ end
 
 ## Viscosity type
 
-function Viscosity(ni::NTuple{N,Integer}) where {N}
+function Viscosity(ni::NTuple{N, Integer}) where {N}
     η = @ones(ni...)
     η_vep = @ones(ni...)
     ητ = @zeros(ni...)
@@ -106,15 +106,37 @@ function Residual(nx::Integer, ny::Integer, nz::Integer)
 end
 
 ## StokesArrays type
-function StokesArrays(::Type{CPUBackend}, ni::NTuple{N,Integer}) where {N}
+function StokesArrays(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end
+"""
+    StokesArrays(ni::NTuple{N,Integer}) where {N}
 
-function StokesArrays(ni::NTuple{N,Integer}) where {N}
+Create the Stokes arrays object in 2D or 3D.
+
+## Fields
+- `P`: Pressure field
+- `P0`: Previous pressure field
+- `∇V`: Velocity gradient
+- `V`: Velocity fields
+- `Q`: Volumetric source/sink term e.g. `ΔV/V_tot [m³/m³]`
+- `U`: Displacement fields
+- `ω`: Vorticity field
+- `τ`: Stress tensors
+- `τ_o`: Old stress tensors
+- `ε`: Strain rate tensors
+- `ε_pl`: Plastic strain rate tensors
+- `EII_pl`: Second invariant of the accumulated plastic strain
+- `viscosity`: Viscosity fields
+- `R`: Residual fields
+
+"""
+function StokesArrays(ni::NTuple{N, Integer}) where {N}
     P = @zeros(ni...)
     P0 = @zeros(ni...)
     ∇V = @zeros(ni...)
     V = Velocity(ni...)
+    Q = @zeros(ni...) # volumetric source/sink term
     U = Displacement(ni...)
     ω = Vorticity(ni...)
     τ = SymmetricTensor(ni...)
@@ -125,7 +147,7 @@ function StokesArrays(ni::NTuple{N,Integer}) where {N}
     viscosity = Viscosity(ni)
     R = Residual(ni...)
 
-    return JustRelax.StokesArrays(P, P0, V, ∇V, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω)
+    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω)
 end
 
 ## StokesArraysAdjoint type

@@ -5,7 +5,7 @@ layout: home
 
 hero:
   name: JustRelax.jl Docs
-  text: Solving multi-physics problems
+  text: Solving multi-physical geodynamic problems
   tagline: A collection of iterative accelerated pseudo-transient solvers using MPI for distributed computing on GPUs or CPUs.
   actions:
     - theme: brand
@@ -25,22 +25,22 @@ features:
   - icon: 🚀
     title: Backend Agnostic
     details: Effortlessly execute your code on CPUs and GPUs with ParallelStencils.jl.
-    link: /concepts/architectures
+    link: /man/backend
 
   - icon: 🛠️
-    title: Framework
-    details: A collection of solvers to be used in prototyping new applications.
-    link: /getting_started/introduction
+    title: Governing equations
+    details: Governing equations of the solvers using the accelerated pseudo-transient method
+    link: /man/equations_basic
 
   - icon: ⚡
-    title: Standardization
-    details: Allow applications to handle local material properties and switch between solving strategies.
-    link: /concepts/distributed
+    title: Examples
+    details: An overview of available examples from shear bands to 2d subduction
+    link: man/subduction2D/setup
 
   - icon: 🧩
     title: Extensibility
     details: Provides a natural repository for contributions of new solvers for use by the larger community.
-    link: /concepts/kernels
+    link: /man/contributing
 ---
 ```
 

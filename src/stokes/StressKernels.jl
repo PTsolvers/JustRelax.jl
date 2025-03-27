@@ -858,6 +858,7 @@ end
 #         τshear_ov::NTuple{1}, # shear tensor components @ vertices
 #         Pr,
 #         Pr_c,
+#         ΔP,
 #         η,
 #         λ,
 #         λv,
@@ -930,6 +931,7 @@ end
 #         K = fn_ratio(get_bulk_modulus, rheology, phase)
 #         volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
 #         ηij = η[I...]
+#         εvol_ij = ε_vol_pl[I...]
 #         dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
 
 #         # cache strain rates for center calculations
@@ -955,10 +957,12 @@ end
 #             εij_pl = λ[I...] .* dQdτij
 #             dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
 #             τij = dτij .+ τij
+#             εvol_ij = (1.0 - relλ) * εvol_ij + relλ * λ[I...] * sinψ
 #             setindex!.(τ, τij, I...)
 #             setindex!.(ε_pl, εij_pl, I...)
+#             setindex!(ε_vol_pl, εvol_ij, I...)
 #             τII[I...] = τII_ij = GeoParams.second_invariant(τij)
-#             # Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
+#             ΔP[I...] = isinf(K) ? 0.0 : K * dt * λ[I...] * -sinψ
 #             # η_vep[I...] = 0.5 * τII_ij / εII_ve
 #             pl_domain[I...] = 1.0
 #         else
@@ -970,7 +974,7 @@ end
 #         end
 #         η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
 
-#         Pr_c[I...] = Pr[I...] - (isinf(K) ? 0.0 : K * dt * λ[I...] * -sinψ)
+#         Pr_c[I...] = Pr[I...] - ΔP[I...]
 #     end
 
 #     return nothing
@@ -1008,6 +1012,7 @@ end
         τshear_ov::NTuple{1}, # shear tensor components @ vertices
         Pr,
         Pr_c,
+        ΔP,
         η,
         λ,
         λv,
@@ -1028,7 +1033,6 @@ end
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
     ni = size(Pr)
-    ΔP = @zeros(ni...)
     Ic = clamped_indices(ni, I...)
 
     # tensile stuff
@@ -1136,8 +1140,8 @@ end
 
         Pc1    =     - (τ_tensile - δτ_tensile)                   # Pressure corner 1
         τc1    =     δτ_tensile
-        Pc2    =     - (τ_tensile - C * cosϕ) / (1.0 - sinϕ)                             # Pressure corner 2
-        τc2    =     Pc2 + τ_tensile         # dev stress corner2
+        Pc2    =     - (τ_tensile - C * cosϕ) / (1.0 - sinϕ)                         # Pressure corner 2
+        τc2    =     Pc2 + τ_tensile        # dev stress corner2
 
         l1     = line(Pr[I...], K, dt, η_ve, sind(90.0), Pc1, τc1)
         l2     = line(Pr[I...], K, dt, η_ve, sind(90.0), Pc2, τc2)
@@ -1217,7 +1221,7 @@ end
                 # τij = τII_ij - (ηij*dτ_r) * (τII_ij - τc2) * inv(ηij*dτ_r + η_reg)
                 dτij = @. dτij - (ηij*dτ_r) * (τII_ij - τc2) * inv(ηij*dτ_r + η_reg)
                 τij = dτij .+ τij
-                εvol_ij = (1.0 - relλ) * εvol_ij + relλ * (-Pr[I...] - Pc2) * inv(K*dt + 2.0/3.0 * η_reg)
+                εvol_ij = (1.0 - relλ) * εvol_ij + relλ * (-Pr[I...] - Pc2) * inv(K*dt + η_reg)
                 setindex!.(τ, τij, I...)
                 setindex!(ε_vol_pl, εvol_ij, I...)
                 τII[I...] = τII_ij = GeoParams.second_invariant(τij)

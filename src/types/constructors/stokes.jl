@@ -134,6 +134,7 @@ Create the Stokes arrays object in 2D or 3D.
 function StokesArrays(ni::NTuple{N, Integer}) where {N}
     P = @zeros(ni...)
     P0 = @zeros(ni...)
+    ΔP = @zeros(ni...)
     ∇V = @zeros(ni...)
     V = Velocity(ni...)
     Q = @zeros(ni...) # volumetric source/sink term
@@ -151,5 +152,5 @@ function StokesArrays(ni::NTuple{N, Integer}) where {N}
     R = Residual(ni...)
     pl_domain = @zeros(ni...)
 
-    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, ε_vol_pl, EII_pl, γ_vol, viscosity, τ_o, ε_vol_pl_o, R, U, ω, pl_domain)
+    return JustRelax.StokesArrays(P, P0, ΔP, V, ∇V, Q, τ, ε, ε_pl, ε_vol_pl, EII_pl, γ_vol, viscosity, τ_o, ε_vol_pl_o, R, U, ω, pl_domain)
 end

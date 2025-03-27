@@ -589,6 +589,7 @@ function _solve!(
                 (stokes.τ_o.xy,),
                 θ,
                 stokes.P,
+                stokes.ΔP,
                 stokes.viscosity.η,
                 λ,
                 λv,

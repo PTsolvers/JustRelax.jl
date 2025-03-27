@@ -1,4 +1,4 @@
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 using JustRelax
 using JustRelax.JustRelax2D_AD
 using ParallelStencil
@@ -20,7 +20,7 @@ function init_phases!(phase_ratios, xci, xvi, radius)
 
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
         x, y = xc[i], yc[j]
-        if ((x-o_x)^2 + (y-o_y)^2) > radius^2
+        if ((x-o_x)^2 ≤ radius^2) && ((y-o_y)^2 ≤ radius^2)
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
 
@@ -37,7 +37,7 @@ function init_phases!(phase_ratios, xci, xvi, radius)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, figdir="model_figs")
+function main(igg; nx=64, ny=64, figdir="model_figs",f)
 
     # Physical domain ------------------------------------
     ly           = 1e0          # domain length in y
@@ -56,12 +56,14 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     C       = 1.6           # Cohesion
     η0      = 1.0           # viscosity
     G0      = 1.0           # elastic shear modulus
-    Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
+    Gi      = G0/(6.0-4.0)+0.2  # elastic shear modulus perturbation
     εbg     = 1.0           # background strain-rate
     η_reg   = 8e-3          # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     el_bg   = ConstantElasticity(; G=G0, Kb=4.0)
     el_inc  = ConstantElasticity(; G=Gi, Kb=4.0)
+    #el_bg   = ConstantElasticity(; G=G0, ν=0.5)
+    #el_inc  = ConstantElasticity(; G=Gi, ν=0.5)
     visc    = LinearViscous(; η=η0)
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
         C    = C,
@@ -92,7 +94,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     perturbation_C = @zeros(ni...)
 
     # Initialize phase ratios -------------------------------
-    radius       = 0.1
+    radius       = 1*di[1]*f
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(phase_ratios, xci, xvi, radius)
 
@@ -105,8 +107,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     stokesAD = StokesArraysAdjoint(backend, ni)
     #indx     = findall((xci[1] .>= 0.48) .& (xci[1] .<= 0.52))
     #indy     = findall((xvi[2] .>= 0.7) .& (xvi[2] .<= 0.74))
-    indx     = findall((xci[1] .>= -1.0) .& (xci[1] .<= 2.0))
-    indy     = findall((xvi[2] .>= -1.0) .& (xvi[2] .<= 2.0))
+    indx     = findall((xci[1] .>= di[1]) .& (xci[1] .<= 1.0-(di[1])))
+    indy     = findall((xvi[2] .>= di[2]) .& (xvi[2] .<= 1.0-(di[2]))) 
     SensInd  = [indx, indy,]
     SensType = "Vy"
 
@@ -199,10 +201,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
         h1 = heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
-        h2 = heatmap!(ax2, xci..., Array(stokes.P) , colormap=:batlow)
+        #h2 = heatmap!(ax2, xci..., Array(stokes.P) , colormap=:batlow)
+        h2 = heatmap!(ax2, xci..., Array(stokesAD.VA.Vx) , colormap=:batlow)
         h3 = heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
         hfr = heatmap!(ax5, xci..., Array(stokesAD.fr) , colormap=:batlow)
         hG  = heatmap!(ax6, xci..., Array(stokesAD.G) , colormap=:batlow)
+        #hfr = heatmap!(ax5, xci..., Array(stokesAD.VA.Vx) , colormap=:batlow)
+        #hG  = heatmap!(ax6, xci..., Array(stokesAD.PA) , colormap=:batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
         lines!(ax4, ttot, sol, color = :red)
@@ -220,7 +225,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs")
     return nothing
 end
 
-n      = 64
+f = 2
+n      = 16*f
 nx     = n
 ny     = n
 figdir = "ShearBands2D"
@@ -229,4 +235,4 @@ igg  = if !(JustRelax.MPI.Initialized())
 else
     igg
 end
-main(igg; figdir = figdir, nx = nx, ny = ny);
+main(igg; figdir = figdir, nx = nx, ny = ny,f);

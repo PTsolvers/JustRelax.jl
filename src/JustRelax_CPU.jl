@@ -101,7 +101,7 @@ include("common.jl")
 include("stokes/Stokes2D.jl")
 export solve!
 include("adjoint/Adjoint_Stokes2D.jl")
-export adjoint_solve!
+export adjoint_solve!, adjoint_solveDot!
 include("adjoint/Adjoint_VelocityKernels.jl")
 export update_V!, compute_strain_rateAD!
 include("adjoint/AdjointSolve.jl")

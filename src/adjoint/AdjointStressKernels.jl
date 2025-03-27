@@ -59,7 +59,8 @@
     dτxyv = compute_stress_increment(
         τxyv[I...], τxyv_old[I...], ηv_ij, ε[3][I...], _Gvdt, dτ_rv
     )
-    τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+    #τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+    τIIv_ij = av_clamped(τII, Ic...)
     
     # yield function @ center
     Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
@@ -98,9 +99,11 @@
         #εij_ve = @. εij + 0.5 * τij_o * _Gdt
         #εII_ve = GeoParams.second_invariant(εij_ve)
         # stress increments @ center
-        # dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
-        dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
-        τII_ij = GeoParams.second_invariant(dτij .+ τij)
+        #dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
+        dτij = @. (-((τij - τij_o) * _Gdt) - (τij ./ (2.0 * ηij)) .+ εij) * dτ_r
+        #dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
+        τII_ij = τII[I...]
+        #τII_ij = GeoParams.second_invariant(dτij .+ τij)
         # yield function @ center
         
         F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
@@ -205,7 +208,8 @@ dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvd
 dτxyv = compute_stress_increment(
     τxyv[I...], τxyv_old[I...], ηv_ij, ε[3][I...], _Gvdt, dτ_rv
 )
-τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+#τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+τIIv_ij = av_clamped(τII, Ic...)
 
 # yield function @ center
 Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
@@ -255,7 +259,8 @@ if all(I .≤ ni)
     # stress increments @ center
     # dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
     dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
-    τII_ij = GeoParams.second_invariant(dτij .+ τij)
+    τII_ij = τII[I...]
+    #τII_ij = GeoParams.second_invariant(dτij .+ τij)
 
     
     # yield function @ center

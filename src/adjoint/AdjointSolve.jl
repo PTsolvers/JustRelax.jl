@@ -40,7 +40,7 @@ function adjoint_2D!(
 
         (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
         # errors
-        ϵ        = 1e-3 * ϵ
+        ϵ        = 1e-1 * ϵ
         err      = 2*ϵ
         err_evo1 = Float64[]
         err_evo2 = Float64[]
@@ -70,15 +70,15 @@ function adjoint_2D!(
             # sensitivity reference points for adjoint solve
             #N_norm = length(SensInd[1])*length(SensInd[2])
             #di = inv.(_di)
-            #norm = (di[1]*di[2])/N_norm
+            #norm = (di[1]*di[2])#/N_norm
             if SensType == "Vx"
-                stokesAD.V.Vx[SensInd[1],SensInd[2].+1] .= -1.0#*norm
+                stokesAD.V.Vx[SensInd[1],SensInd[2].+1] .= -1.0#*N_norm#*norm
             elseif SensType == "Vy"
-                stokesAD.V.Vy[SensInd[1].+1,SensInd[2]] .= -1.0#*norm
+                stokesAD.V.Vy[SensInd[1].+1,SensInd[2]] .= -1.0#*N_norm#*norm
             elseif SensType == "P"
-                stokesAD.P[SensInd[1],SensInd[2]] .= -1.0#*norm
+                stokesAD.P[SensInd[1],SensInd[2]] .= -1.0#*N_norm#*norm
             end
-
+            
             # initialize the residuals with the adjoint variables to act as a multiplier
             @views stokesAD.R.Rx .= stokesAD.VA.Vx[2:end-1,2:end-1]
             @views stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]
@@ -113,6 +113,7 @@ function adjoint_2D!(
                     Const(_di[2]),
                     Const(dt * free_surface))
             
+            #=
             @parallel (@idx ni) configcall=compute_P_kernelAD!(
                 θ,
                 stokes.P0,
@@ -143,13 +144,15 @@ function adjoint_2D!(
                     Const(nothing),
                     Const(nothing)
                     )
+            =#
+            
             
             # apply free slip or no slip boundary conditions for adjoint solve
             if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
             if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
             if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
             if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
-
+            
             # Copy stokes stress. If not, stokes.τ is changed during the Enzyme call
             stokesAD.dτ.xx   .= stokes.τ.xx
             stokesAD.dτ.yy   .= stokes.τ.yy
@@ -258,7 +261,7 @@ function adjoint_2D!(
                     DuplicatedNoNeed(stokes.V.Vy,stokesAD.V.Vy),
                     Const(_di[1]),
                     Const(_di[2]))
-                    
+
             # update λV
             @parallel update_V!(
                 stokesAD.VA.Vx,
@@ -305,5 +308,5 @@ function adjoint_2D!(
                 end
                 isnan(err) && error("NaN(s)")
             end
-    end
+        end
 end

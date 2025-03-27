@@ -1,30 +1,38 @@
 using Enzyme
+
 const isCUDA = false
+#const isCUDA = true
+
 @static if isCUDA
     using CUDA
 end
+
 using JustRelax, JustRelax.DataIO
 # using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using JustRelax.JustRelax2D_AD
+
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
+
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
 @static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
 else
     @init_parallel_stencil(Threads, Float64, 2)
 end
+
 using JustPIC, JustPIC._2D
 const backend_JP = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
-# Load script dependencies
-using GeoParams, CellArrays, CairoMakie #GLMakie
+using GeoParams, CellArrays, CairoMakie
+
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 function meshgrid(x, y)
     X = [i for i in x, j in 1:length(y)]
@@ -47,10 +55,8 @@ function init_phases!(phases, particles, xc, yc, r)
 
             @index phases[ip, i, j] = if ((x -xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
                 2.0
-            elseif (y >= 0.3*1e6)
+            elseif (y >= 0.3)
                 3.0
-            elseif ((y >= 0.15*1e6) && (y <= 0.3*1e6))
-                4.0
             else
                 1.0
             end
@@ -77,12 +83,12 @@ end
 #-------------------------------------------------------------------------------
 # BEGIN MAIN SCRIPT
 #-------------------------------------------------------------------------------
-function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
+function rising_sphere(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
 
     # Physical domain ------------------------------------
-    ly           = 1.0*1e6
-    lx           = 2.0*1e6
-    origin       = -1.0*1e6, -0.5*1e6                         # origin coordinates
+    ly           = 1.0
+    lx           = 2.0
+    origin       = -1.0, -0.5                         # origin coordinates
     ni           = nx, ny                           # number of cells
     li           = lx, ly                           # domain length in x- and y-
     di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
@@ -91,76 +97,69 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    el = ConstantElasticity(G=25e9, ν=0.5)
     rheology = (
         SetMaterialParams(;
             Name              = "Matrix",
             Phase             = 1,
-            Density           = ConstantDensity(; ρ=3300.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 3e20),el)),
-            Gravity           = ConstantGravity(; g=9.81),
+            Density           = ConstantDensity(; ρ=1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0), ConstantElasticity(G=1e12, ν=0.5) )),
+            Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
             Name              = "Block",
             Phase             = 2,
-            Density           = ConstantDensity(; ρ=3280.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1e20),el)),
-            Gravity           = ConstantGravity(; g=9.81),
+            Density           = ConstantDensity(; ρ=1.5),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1000.0), ConstantElasticity(G=1e12, ν=0.5) )),
+            Gravity           = ConstantGravity(; g=1.0),
         ),
         SetMaterialParams(;
             Name              = "StickyAir",
             Phase             = 3,
-            Density           = ConstantDensity(; ρ=100.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1e20),el)),
-            Gravity           = ConstantGravity(; g=9.81),
-    ),
-    SetMaterialParams(;
-    Name              = "Lithosphere",
-    Phase             = 3,
-    Density           = ConstantDensity(; ρ=3300.0),
-    CompositeRheology = CompositeRheology((LinearViscous(; η = 1e22),el)),
-    Gravity           = ConstantGravity(; g=9.81),
-)
-)
-    # ----------------------------------------------------
+            Density           = ConstantDensity(; ρ=0.1),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 0.1), ConstantElasticity(G=1e12, ν=0.5) )),
 
+            Gravity           = ConstantGravity(; g=1.0),
+    )
+)
+    # heat diffusivity
+    dt = 1
+    # ----------------------------------------------------
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 12
+    nxcell, max_xcell, min_xcell = 40, 60, 20
         particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, xvi...
     )
-    subgrid_arrays      = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays        = SubgridDiffusionCellArrays(particles)
     # velocity grids
-    grid_vxi            = velocity_grids(xci, xvi, di)
+    grid_vxi              = velocity_grids(xci, xvi, di)
     # material phase & temperature
-    pPhases, pT         = init_cell_arrays(particles, Val(2))
-    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    pPhases, pT           = init_cell_arrays(particles, Val(2))
+    # particle fields for the stress rotation
+    pτ                    = StressParticles(particles)
+    particle_args         = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
 
     # Rectangular density anomaly
-    xc_anomaly   =  0.0*1e6  # x origin of block
-    yc_anomaly   =  -0.2*1e6  # y origin of block
-    r_anomaly    =  0.1*1e6  # half-width of block
+    xc_anomaly   =  0.0  # x origin of block
+    yc_anomaly   =  0.0  # y origin of block
+    r_anomaly    =  0.1  # half-width of block
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    #phase_ratios_vertex = PhaseRatio(backend, ni.+1, length(rheology))
     init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-    pτ            = StressParticles(particles)
-    particle_args = (pT, pPhases, unwrap(pτ)...)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes   = StokesArrays(backend, ni)
 
-    dt                  = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
-
     # Adjoint 
     stokesAD = StokesArraysAdjoint(backend, ni)
-    indx     = findall((xci[1] .> -0.5*1e6) .& (xci[1] .< 0.5*1e6))
-    indy     = findall((xvi[2] .> 0.19*1e6) .& (xvi[2] .< 0.21*1e6))
+    indx     = findall((xci[1] .> -0.5) .& (xci[1] .< 0.5))
+    indy     = findall((xvi[2] .> 0.19) .& (xvi[2] .< 0.21))
     SensInd  = [indx, indy,]
     SensType = "Vy"
 
     pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-5, Re = 3e0, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
-    #pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-8, Re = 15π, r=1.0, CFL = 0.98 / √2.1)
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=@ones(ni...), P=stokes.P))
@@ -168,7 +167,6 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     # ----------------------------------------------------
 
     # Viscosity
-
     args     = (; dt = dt, T = @zeros(ni...))
     η_cutoff = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
@@ -183,7 +181,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    plottingInt = 1000  # plotting interval
+    plottingInt = 1  # plotting interval
     t, it = 0.0, 0
 
     # IO ------------------------------------------------
@@ -195,7 +193,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     τxx_v = @zeros(ni.+1...)
     τyy_v = @zeros(ni.+1...)
 
-    while it < 10000
+    while it < 1
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, xvi, xci, particles)
@@ -225,8 +223,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
                 nout=1e3,
                 viscosity_cutoff = η_cutoff,
                 verbose = false,
-                ADout=plottingInt,
-                free_surface = true
+                ADout=plottingInt
             )
         );
 
@@ -234,9 +231,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
-        #secMyr = 60 * 60 * 24 * 365.25
-        dtmax = 3600 * 24 * 365.25*1e6
-        dt   = compute_dt(stokes, di, dtmax) * 0.000001 # 0.001
+        dt   = compute_dt(stokes, di) * 0.0001
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
@@ -262,18 +257,12 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
         velocity = @. √(Vx_v^2 + Vy_v^2 )
         (; η_vep, η) = stokes.viscosity
         Xc, Yc = meshgrid(xci[1], xci[2])
-        ind = findall(xci[2] .≤ 0.29*1e6)
+        ind = findall(xci[2] .≤ 0.29)
         #test.ηb[ind] = NaN
         #test.ρb[ind] = NaN
 
-
-        tMyr = t/60/60/24/365.25/1e6
-        dtMyr = dt/60/60/24/365.25/1e6
-
-        print("it = $it, t = $tMyr, dt = $dtMyr\n")
-
         # Plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 10) == 0
             ar  = DataAspect()
             fig = Figure(size = (1200, 900), title = "Falling Block")
             ax1 = Axis(fig[1,1], aspect = ar, title = "Density")
@@ -285,13 +274,11 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
             ax7 = Axis(fig[4,1],aspect = ar,  title = "sensitivity G")
             ax8 = Axis(fig[4,2],aspect = ar,  title = "sensitivity fr")
 
-            h1  = heatmap!(ax1, xci[1], xci[2], Array(ρg[2]./9.81))
-            h2  = heatmap!(ax2, xci[1], xci[2], Array(log10.(η_vep)))
+            h1  = heatmap!(ax1, xci[1], xci[2], Array(ρg[2]))
+            h2  = heatmap!(ax2, xci[1], xci[2], Array(log.(η)))
             h3  = heatmap!(ax3, xvi[1], xvi[2], Array(Vx_v), colormap=:vikO)
             h4  = heatmap!(ax4, xvi[1], xvi[2], Array(Vy_v), colormap=:vikO)
             h5  = heatmap!(ax5, xci[1], xci[2][ind], Array(test.ηb)[:,ind])
-            #h7  = heatmap!(ax7, xci[1], xci[2][ind], Array(stokesAD.VA.Vx)[:,ind])
-            #h8  = heatmap!(ax8, xci[1], xci[2][ind], Array(stokesAD.VA.Vy)[:,ind])
             h6  = heatmap!(ax6, xci[1], xci[2][ind], Array(test.ρb)[:,ind])
             h7  = heatmap!(ax7, xci[1], xci[2][ind], Array(stokesAD.G)[:,ind])
             h8  = heatmap!(ax8, xci[1], xci[2][ind], Array(stokesAD.fr)[:,ind])
@@ -324,7 +311,7 @@ function sinking_block2D(igg; ar=2, ny=8, nx=ny*4, figdir="figs2D")
     end
 end
 
-figdir = "RisingPlume_Adjoint"
+figdir = "Rising_Sphere"
 ar     = 2 # aspect ratio
 n      = 32
 nx     = n*ar - 2
@@ -334,4 +321,4 @@ igg    = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
-sinking_block2D(igg; ar=ar, nx=nx, ny=ny, figdir=figdir);
+rising_sphere(igg; ar=ar, nx=nx, ny=ny, figdir=figdir);

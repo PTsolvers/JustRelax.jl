@@ -53,12 +53,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     εbg     = 1.0           # background strain-rate
     G0      = 1.0           # elastic shear modulus
     Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
-    η_reg   = 8e-3 #1e-2          # regularisation "viscosity"
+    η_reg   = 5e-2 #1e-2          # regularisation "viscosity"
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     visc_bg    = LinearViscous(; η=1.0)
-    visc_block = LinearViscous(; η=1.0)
+    visc_block = LinearViscous(; η=1.0e3)
     el         = ConstantElasticity(G=G0, Kb=4.0)
-    el_inc     = ConstantElasticity(G=Gi, Kb=4.0)
+    el_inc     = ConstantElasticity(G=G0, Kb=4.0)
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
     C    = C,
     ϕ    = ϕ,
@@ -66,8 +66,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     Ψ    = 0)
 
     # parameter pertubation
-    dp = 1e-2
-    visc_p    = LinearViscous(; η=1.0+dp)
+    dp = 1e-6
+    el_p = ConstantElasticity(G=G0+dp, Kb=4.0)
 
 
     rheology = (
@@ -91,7 +91,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
             Phase             = 3,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc_p,el,pl)),
+            CompositeRheology = CompositeRheology((visc_bg,el_p,pl)),
 
         ),
         # High density phase
@@ -99,7 +99,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
             Phase             = 4,
             Density           = ConstantDensity(; ρ = 0.0),
             Gravity           = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((visc_p,el_inc,pl)),
+            CompositeRheology = CompositeRheology((visc_block,el_p,pl)),
         ),
     )
 
@@ -114,7 +114,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-14,  CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-12,  CFL = 0.95 / √2.1)
 
     # Adjoint 
     stokesAD = StokesArraysAdjoint(backend, ni)
@@ -324,8 +324,8 @@ end
 f      = 1
 nx     = 16*f
 ny     = 16*f
-run_param = true
-figdir = "miniapps/adjoint/Benchmarks_FD/Shear_eta_vep_comp"
+run_param = false
+figdir = "miniapps/adjoint/Benchmarks_FD/strong_eta"
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
@@ -334,5 +334,5 @@ end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param);
 
 #which sensitivity to plot
-plot_sens = stokesAD.η
+plot_sens = stokesAD.fr
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef)

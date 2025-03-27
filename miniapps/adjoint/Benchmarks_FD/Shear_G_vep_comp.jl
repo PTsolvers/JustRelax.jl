@@ -243,7 +243,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
             refcost = sum(stokesRef.V.Vy[indx.+1,indy])
         end
     else
-        refcost = sum(stokesRef.V.Vy[indx.+1,indy])
+        refcost = sum_kbn(stokesRef.V.Vy[indx.+1,indy])
     end
 
     (; η_vep, η) = stokes.viscosity
@@ -299,7 +299,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
                     cost[xit,yit]  = sum(stokesP.V.Vy[indx.+1,indy])
                 end
             else
-                cost[xit,yit]  = sum(stokesP.V.Vy[indx.+1,indy])
+                cost[xit,yit]  = sum_kbn(stokesP.V.Vy[indx.+1,indy])
             end
             println("it = $it \n")
             it += 1

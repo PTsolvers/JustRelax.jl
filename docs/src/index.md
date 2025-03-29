@@ -1,11 +1,52 @@
-```@meta
-CurrentModule = JustRelax
-```# JustRelax.jl
+```@raw html
+---
+# https://vitepress.dev/reference/default-theme-home-page
+layout: home
 
-Need to solve a very large multi-physics problem on many GPUs in parallel? Just Relax!
+hero:
+  name: JustRelax.jl Docs
+  text: Solving multi-physical geodynamic problems
+  tagline: A collection of iterative accelerated pseudo-transient solvers using MPI for distributed computing on GPUs or CPUs.
+  actions:
+    - theme: brand
+      text: Getting Started
+      link: /man/installation
+    - theme: alt
+      text: API Reference 📚
+      link: /man/listfunctions
+    - theme: alt
+      text: View on GitHub
+      link: https://github.com/PTsolvers/JustRelax.jl
+  image:
+    src: /logo.png
+    alt: JustRelax.jl
 
-[JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) is a collection of accelerated iterative pseudo-transient solvers using MPI and multiple CPU or GPU backends. It's part of the [PTSolvers organisation](https://ptsolvers.github.io) and
-developed within the [GPU4GEO project](https://www.pasc-ch.org/projects/2021-2024/gpu4geo/). Current publications, outreach and news can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
+features:
+  - icon: 🚀
+    title: Backend Agnostic
+    details: Effortlessly execute your code on CPUs and GPUs with ParallelStencils.jl.
+    link: /man/backend
+
+  - icon: 🛠️
+    title: Governing equations
+    details: Governing equations of the solvers using the accelerated pseudo-transient method
+    link: /man/equations_basic
+
+  - icon: ⚡
+    title: Examples
+    details: An overview of available examples from shear bands to 2d subduction
+    link: man/subduction2D/setup
+
+  - icon: 🧩
+    title: Extensibility
+    details: Provides a natural repository for contributions of new solvers for use by the larger community.
+    link: /man/contributing
+---
+```
+
+## What is JustRelax.jl?
+
+[JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) is **a collection of accelerated iterative pseudo-transient solvers** using MPI for distributed memory parallelisation  and running on GPUs or CPUs.
 
 The package relies on other packages as building blocks and parallelisation tools:
 
@@ -14,19 +55,32 @@ The package relies on other packages as building blocks and parallelisation tool
 * [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl) - Material physics
 * [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) - Particle-in-cell advection
 
+Current publications, outreach and news can be found on the [GPU4GEO website](https://GPU4GEO.org).
 
-The package serves several purposes:
+## How to Install JustRelax.jl?
 
-  * It provides a collection of solvers to be used in prototyping new applications
-  * It provides some standardization so that application codes can
+To install JustRelax.jl, one can simply add it using the Julia package manager by running the following command in the Julia REPL:
 
-     - more easily handle local material properties through the use of [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)
-     - more easily switch between a pseudo-transient solver and another solvers (e.g. an explicit thermal solvers)
+```julia
+julia> using Pkg
 
-  * It provides a natural repository for contributions of new solvers for use by the larger community
+julia> Pkg.add("JustRelax")
+```
 
-We provide several miniapps, each designed to solve a well-specified benchmark problem, in order to provide
+After the package is installed, one can load the package by using:
 
-  - examples of usage in high-performance computing
-  - basis on which to build more full-featured application codes
-  - cases for reference and performance tests
+```julia
+julia> using JustRelax
+```
+
+If you want to use the latest unreleased version of JustRelax.jl, you can run the following command:
+
+```julia
+julia> using Pkg
+
+julia> Pkg.add(url="https://github.com/PTsolvers/JustRelax.jl")
+```
+
+## Funding
+
+The development of this package is supported by the [GPU4GEO](https://pasc-ch.org/projects/2021-2024/gpu4geo/index.html) and ∂GPU4GEO PASC projects. More information about the GPU4GEO project can be found on the [GPU4GEO website](https://GPU4GEO.org/).

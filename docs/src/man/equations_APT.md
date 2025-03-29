@@ -1,13 +1,13 @@
-The pseudo-transient method consists in augmenting the right-hand-side of the target PDE with a pseudo-time derivative (where $\psi$ is the pseudo-time) of the primary variables. We then solve the resulting system of equations with an iterative method. The pseudo-time derivative is then gradually reduced, until the original PDE is solved and the changes in the primary variables are below a preset tolerance.
+The Accelerated Pseudo-Transient (APT) method consists in augmenting the right-hand-side of the target PDE with a pseudo-time derivative (where $\psi$ is the pseudo-time) of the primary variables. We then solve the resulting system of equations with an iterative method. The pseudo-time derivative is then gradually reduced, until the original PDE is solved and the changes in the primary variables are below a preset tolerance.
 
 ## Heat diffusion
-The pseudo-transient heat-diffusion equation is:
+The APT heat-diffusion equation is:
 
 $\begin{align}
 \widetilde{\rho}\frac{\partial T}{\partial \psi} + \rho C_p \frac{\partial T}{\partial t} = \nabla \cdot (\kappa\nabla T) = -\nabla q
 \end{align}$
 
-We use a second order pseudo-transient scheme were continuation is also done on the flux, so that:
+We use a second order APT scheme were continuation is also done on the flux, so that:
 
 $\begin{align}
 \widetilde{\theta}\frac{\partial q}{\partial \psi} + q  = -\kappa\nabla T
@@ -15,7 +15,7 @@ $\begin{align}
 
 ## Stokes equations
 
-For example, the pseudo-transient formulation of the Stokes equations yields:
+For example, the APT formulation of the Stokes equations yields:
 
 $\begin{align}
 \widetilde{\rho}\frac{\partial \boldsymbol{u}}{\partial \psi} + \nabla\cdot\boldsymbol{\tau} - \nabla p = \boldsymbol{f}
@@ -26,7 +26,7 @@ $\begin{align}
 \end{align}$
 
 ## Constitutive equations
-A pseudo-transient continuation is also done on the constitutive law:
+A APT continuation is also done on the constitutive law:
 
 $\begin{align}
 \frac{1}{2\widetilde{G}} \frac{\partial\boldsymbol{\tau}}{\partial\psi}+ \frac{1}{2G}\frac{D\boldsymbol{\tau}}{Dt} + \frac{\boldsymbol{\tau}}{2\eta} = \dot{\boldsymbol{\varepsilon}}
@@ -46,6 +46,7 @@ $\begin{align}
 
 where the P-wave $\widetilde{V}=V_p$ is the characteristic velocity scale for Stokes, and $Re$ is the Reynolds number.
 
+<!--
 ### Physical parameters
 
 | Symbol                           | Parameter              |
@@ -64,12 +65,13 @@ where the P-wave $\widetilde{V}=V_p$ is the characteristic velocity scale for St
 | $\alpha$                         | Thermal expansivity    |
 | $C_p$                            | Heat capacity          |
 | $\kappa$                         | Heat conductivity      |
+-->
 
 ### Pseudo-transient parameters
 
 | Symbol               | Parameter                     |
 | :------------------- | :---------------------------: |
-| $\psi$               | Pseudo time step              |
+| $\psi$                | Pseudo time step              |
 | $\widetilde{K}$      | Pseudo bulk modulus           |
 | $\widetilde{G}$      | Pseudo shear modulus          |
 | $\widetilde{V}$      | Characteristic velocity scale |

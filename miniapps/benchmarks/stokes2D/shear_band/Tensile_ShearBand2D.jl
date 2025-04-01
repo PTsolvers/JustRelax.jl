@@ -34,6 +34,14 @@ function init_phases!(phase_ratios, xci, xvi, radius)
     return nothing
 end
 
+function line(p, K, Δt, η_ve, sinψ, p1, t1)
+    p2 = p1 + K*Δt*sinψ
+    t2 = t1 - η_ve
+    a  = (t2-t1)/(p2-p1)
+    b  = t2 - a*p2
+    return a*p + b
+end
+
 # MAIN SCRIPT --------------------------------------------------------------------
 function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
@@ -50,18 +58,19 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Physical properties using GeoParams ----------------
     τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    τ_T = 0.8          # tensile strength
+    τ_T = 0.8         # tensile strength
     δτ_T= 0.15          # pressure limiter (if τII_tr<δσ_T) only pressure correction is applied, Pa
     ϕ = 30            # friction angle
     C = τ_y           # Cohesion
     η0 = 1.0           # viscosity
     G0 = 1.0           # elastic shear modulus
     Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
-    εbg = 1.0           # background strain-rate
+    εbg = 2.0          # background strain-rate
     η_reg = 8.0e-3          # regularisation "viscosity"
-    dt = η0 / G0 / 4.0 * 0.1     # assumes Maxwell time of 4
-    el_bg = ConstantElasticity(; G = G0, Kb = 4, ν = 0.45)
-    el_inc = ConstantElasticity(; G = Gi, Kb = 4, ν = 0.45)
+    dt = η0 / G0 / 4.0 *0.1  # assumes Maxwell time of 4
+    el_bg = ConstantElasticity(; G = G0, Kb =4, ν = 0.25)
+    el_inc = ConstantElasticity(; G = Gi, Kb = 4, ν = 0.25)
+    β = 1 / get_Kb(el_bg)
     visc = LinearViscous(; η = η0)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
@@ -119,10 +128,11 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    # stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
-    # stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
-    stokes.V.Vx .= PTArray(backend)([ εbg * (x - lx * 0.5) for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
     stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    #Pure shear
+    # stokes.V.Vx .= PTArray(backend)([ εbg * (x - lx * 0.5) for x in xvi[1], _ in 1:(ny + 2)])
+    # stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -137,7 +147,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     ttot = Float64[]
 
     # while t < tmax
-    for _ in 1:25
+    for _ in 1:40
 
         # Stokes solver ----------------
         iters = solve!(
@@ -178,17 +188,17 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
         # ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
-        ax3 = Axis(fig[1, 2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
-        ax4 = Axis(fig[2, 2], aspect = 1)
+        ax3 = Axis(fig[1, 3], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
+        ax4 = Axis(fig[2, 3], aspect = 1)
         ax5 = Axis(fig[3, 1], aspect = 1, title = "Plastic domain", titlesize = 35)
-        ax6 = Axis(fig[3, 2], aspect = 1, title = "Pressure", titlesize = 35)
+        ax6 = Axis(fig[3, 3], aspect = 1, title = "Pressure", titlesize = 35)
         heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)), colormap = :batlow)
+        heatmap!(ax2, xci..., Array((stokes.γ_vol)), colormap = :batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
-        heatmap!(ax5, xci..., Array(stokes.pl_domain), colormap = :lipari10, colorrange = (0, 1))
+        h = heatmap!(ax5, xci..., Array(stokes.pl_domain), colormap = :lipari10, colorrange = (0, 5))
         heatmap!(ax6, xci..., Array(stokes.P), colormap = :batlow)
-        # Colorbar(fig[3, 2], h)
+        Colorbar(fig[3, 2], h)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
         lines!(ax4, ttot, sol, color = :red)
@@ -196,16 +206,49 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)
         fig = let
-            τ_tensile, δτ_tensile = τ_T, δτ_T
-            Pc1    =     - (τ_tensile - δτ_tensile)                   # Pressure corner 1
-            τc1    =     Pc1 + τ_tensile  #τ2 / (Pc2 + τT)*P1 + τ2          # dev stress corner1
-            Pc2    =     - (τ_tensile - rheology[1].CompositeRheology[1].elements[end].C.val * cosd(rheology[1].CompositeRheology[1].elements[end].ϕ.val) / (1.0 - sind(rheology[1].CompositeRheology[1].elements[end].ϕ.val)))                            # Pressure corner 2
-            τc2    =     Pc2 + τ_tensile         # dev stress corner2
+            stress_data = []
+            for I in CartesianIndices(ni)
+                phase = @inbounds phase_ratios.center[Tuple(I)...]
+                _Gdt = inv(fn_ratio(JustRelax.JustRelax2D.get_shear_modulus, rheology, phase) * dt)
+                is_pl, C, sinϕ, cosϕ, sinψ, η_reg = JustRelax.JustRelax2D.plastic_params_phase(rheology, stokes.EII_pl[Tuple(I)...], phase)
+                K = fn_ratio(JustRelax.JustRelax2D.get_bulk_modulus, rheology, phase)
+                volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
+                ηij = stokes.viscosity.η[Tuple(I)...]
+                dτ_r = 1.0 / (pt_stokes.θ_dτ + ηij * _Gdt + 1.0)
+                η_ve = ηij * dτ_r
+                ratio = η_ve * inv(K) *inv(dt)
+                τ_tensile, δτ_tensile = τ_T, δτ_T
+                Pc1 = - (τ_tensile - δτ_tensile)                   # Pressure corner 1
+                τc1 =   δτ_tensile
+                Pc2 = - (τ_tensile - C * cosϕ) / (1.0 - sinϕ)      # Pressure corner 2
+                τc2 = Pc2 + τ_tensile                              # dev stress corner2
+
+                push!(stress_data, (Pc1, τc1, Pc2, τc2, C, sinϕ, cosϕ, sinψ, η_reg, η_ve, K))
+            end
+
+            # Plotting outside the loop
             fig = Figure()
             ax = Axis(fig[1, 1], aspect = 1)
-            lines!(ax, [Pc1; Pc1; Pc2; 10], [0.0; τc1; τc2 ; (10 * sind(rheology[1].CompositeRheology[1].elements[end].ϕ.val) + rheology[1].CompositeRheology[1].elements[end].C.val * cosd(rheology[1].CompositeRheology[1].elements[end].ϕ.val))], color = :black, linewidth = 2)
-            s1 = scatter!(ax, Array(stokes.P)[:], Array(stokes.τ.II)[:]; color = Array(stokes.R.RP)[:], colormap = :roma, markersize = 3)
-            Colorbar(fig[1, 2], s1)
+            for (Pc1, τc1, Pc2, τc2, C, sinϕ, cosϕ, sinψ, η_reg, η_ve, K ) in stress_data
+
+                pr_tr1 = LinRange(-1.5, Pc1, prod(ni))
+                pr_tr2 = LinRange(0, Pc2, prod(ni))
+                pr_tr3 = LinRange(0, Pc2, prod(ni))
+                # Plot the Drucker-Prager yield surface
+                lines!(ax, [Pc1, Pc1, Pc2, 4], [0.0, τc1, τc2, (4 * sinϕ + Pc2 * C * cosϕ)], color = :black, linewidth = 2)
+                l1 = line.(pr_tr1, K, dt, η_ve, sind(90.0), Pc1, τc1)
+                l2 = line.(pr_tr2, K, dt, η_ve, sind(90.0), Pc2, τc2)
+                l3 = line.(pr_tr3, K, dt, η_ve, sinψ, Pc2, τc2)
+                # Plot the lines for the conditions
+                if !isempty(Pc1)
+                    lines!(ax, [-1.5, Pc1], [τc1, τc1], color = :purple, linewidth = 2, label = "Condition 0")
+                end
+                line1 = lines!(ax, pr_tr1, l1, color = :red)
+                line2 = lines!(ax, pr_tr2, l2, color = :blue)
+                line3 = lines!(ax, pr_tr3, l3, color = :green)
+
+            end
+            scatter!(ax, Array(stokes.P)[:], Array(stokes.τ.II)[:]; color = :red, markersize = 5)
             save(joinpath(figdir, "stress$(it).png"), fig)
         end
     end
@@ -216,7 +259,7 @@ end
 n = 32
 nx = n
 ny = n
-figdir = "ShearBands2D"
+figdir = "Tensile_plasticity"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

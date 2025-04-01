@@ -74,7 +74,8 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
-    dt = 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt    = 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dtmax = 50.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -156,7 +157,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     # Time loop
     t, it = 0.0, 0
     dt = 25.0e3 * (3600 * 24 * 365.25)
-    dt_max = 250.0e3 * (3600 * 24 * 365.25)
+    dtmax = 50.0e3 * (3600 * 24 * 365.25)
     while it < 500 # run only for 5 Myrs
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
@@ -186,7 +187,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di, dt_max)
+        dt = compute_dt(stokes, di, dtmax) * 0.8
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         println("           Δt:      $(dt / (3600 * 24 * 365.25)) kyrs")
@@ -212,7 +213,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 50) == 0
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -235,6 +236,11 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
                     data_v,
                     data_c,
                     velocity_v
+                )
+                save_marker_chain(
+                    joinpath(vtk_dir, "topo_" * lpad("$it", 6, "0")),
+                    xvi[1], 
+                    Array(chain.h_vertices),
                 )
             end
 
@@ -297,3 +303,21 @@ else
 end
 
 stokes = main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+
+
+nits = [
+    700
+    500
+    500
+    500
+    500
+    4400
+    2100
+    1400
+    1700
+    1900
+    1500
+    1100
+    800
+    600
+]

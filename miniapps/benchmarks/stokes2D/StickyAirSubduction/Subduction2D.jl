@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -74,13 +74,14 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
-    dt = 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt    = 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dtmax = 50.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell = 40
-    max_xcell = 60
-    min_xcell = 20
+    nxcell    = 100
+    max_xcell = 125
+    min_xcell = 75
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
@@ -96,10 +97,17 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
+    # marker chain
+    nxcell, min_xcell, max_xcell = 100, 75, 125
+    initial_elevation = 0.0e0
+    chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
+
+     
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -144,8 +152,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Time loop
     t, it = 0.0, 0
-
-    while it < 1000 # run only for 5 Myrs
+    air_phase = 3
+    while it < 750 # run only for 5 Myrs
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
@@ -167,7 +175,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     iterMax = 100.0e3,
                     nout = 2.0e3,
                     viscosity_cutoff = viscosity_cutoff,
-                    free_surface = false,
+                    free_surface = true,
                     viscosity_relaxation = 1.0e-2,
                 )
             )
@@ -177,7 +185,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di) * 0.8
+        dt = compute_dt(stokes, di, dtmax) * 0.8
         # ------------------------------
 
         # Advection --------------------
@@ -189,6 +197,10 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
 
+        # advect marker chain
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+  
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
@@ -196,7 +208,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 50) == 0
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -220,6 +232,11 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     data_c,
                     velocity_v,
                     t = t
+                )
+                save_marker_chain(
+                    joinpath(vtk_dir, "topo_" * lpad("$it", 6, "0")),
+                    xvi[1], 
+                    Array(chain.h_vertices),
                 )
             end
 

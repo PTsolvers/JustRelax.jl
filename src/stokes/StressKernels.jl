@@ -1048,6 +1048,7 @@ end
     τxxv_old_ij = av_clamped(τ_o[1], Ic...)
     τyyv_old_ij = av_clamped(τ_o[2], Ic...)
     EIIv_ij = av_clamped(EII, Ic...)
+    εxyv_pl_ij = av_clamped(ε_pl[3],Ic...)
 
     ## vertex
     phase = @inbounds phase_vertex[I...]
@@ -1096,7 +1097,8 @@ end
             # relλ * (max(F1, 0.0) / (Kv * dt))
             τxyv[I...] += dτxyv
         elseif τc1 < τIIv_ij ≤ l1
-            dτxyv = @. dτxyv - (ηv_ij * dτ_rv) * (τIIv_ij - τc1) / (ηv_ij * dτ_rv + η_regv)
+            εxyv_pl_ij = (ηv_ij * dτ_rv) * (τIIv_ij - τc1) / (ηv_ij * dτ_rv + η_regv)
+            dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
             # dτxyv = @. dτxyv - (ηv_ij * dτ_rv) * (τIIv_ij - τc1) / (ηv_ij * dτ_rv + η_regv*2.0/3.0)
             τxyv[I...] += dτxyv
 
@@ -1107,21 +1109,24 @@ end
             (1.0 - relλ) * λv[I...] +
             # relλ * (max(F3v, 0.0) / (ηv_ij * dτ_rv + η_regv*(1.0 + 2.0/3.0) + Kv * dt))
             relλ * (max(F3v, 0.0) / (ηv_ij * dτ_rv + η_regv + Kv * dt))
-            τxyv[I...] += dτxyv - 2.0 * ηv_ij * λv[I...] * dQdτxy * dτ_rv
+            εxyv_pl_ij = λv[I...] * dQdτxy
+            dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
 
         elseif l2 < τIIv_ij ≤ l3
             # corner region 2
             # dτxyv = @. dτxyv - (ηv_ij*dτ_rv) * (τIIv_ij - τc2) * inv(ηv_ij*dτ_rv + η_regv*2.0/3.0)
-            dτxyv = @. dτxyv - (ηv_ij*dτ_rv) * (τIIv_ij - τc2) * inv(ηv_ij*dτ_rv + η_regv)
+            εxyv_pl_ij = (ηv_ij*dτ_rv) * (τIIv_ij - τc2) * inv(ηv_ij*dτ_rv + η_regv)
+            dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
             τxyv[I...] += dτxyv
-        elseif F5v > 0#l3 < τIIv_ij
+        else#if F5v > 0# l3 < τIIv_ij
             # Drucker-Prager
             # stress correction @ vertex
             λv[I...] =
                 (1.0 - relλ) * λv[I...] +
                 relλ * (max(F5v, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-            τxyv[I...] += dτxyv - 2.0 * ηv_ij * λv[I...] * dQdτxy * dτ_rv
+            εxyv_pl_ij = λv[I...] * dQdτxy
+            dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
         end
     else
         # stress correction @ vertex
@@ -1189,7 +1194,8 @@ end
 
             elseif τc1 < τII_ij ≤ l1
                 # corner region 1
-                dτij = @. dτij - (ηij * dτ_r) * (τII_ij - τc1) / (ηij * dτ_r + η_reg)
+                εij_pl = (ηij * dτ_r) * (τII_ij - τc1) / (ηij * dτ_r + η_reg)
+                dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 τij = dτij .+ τij
                 εvol_ij = (1.0 - relλ) * εvol_ij + relλ * (τII_ij - τc1) / (ηij * dτ_r + η_reg)
                 setindex!.(τ, τij, I...)
@@ -1218,7 +1224,8 @@ end
 
             elseif l2 < τII_ij ≤ l3
                 # corner region 2
-                dτij = @. dτij - (ηij*dτ_r) * (τII_ij - τc2) * inv(ηij*dτ_r + η_reg)
+                εij_pl = (ηij*dτ_r) * (τII_ij - τc2) * inv(ηij*dτ_r + η_reg)
+                dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 # dτij = @. dτij - (ηij*dτ_r) * (τII_ij - τc2) * inv(ηij*dτ_r + η_reg*2.0/3.0)
                 τij = dτij .+ τij
                 εvol_ij = (1.0 - relλ) * εvol_ij + relλ * (-Pr[I...] + Pc2) * inv(K*dt + η_reg)
@@ -1228,7 +1235,7 @@ end
                 ΔP[I...] = (isinf(K) ? 0.0 : K * dt * (-Pr[I...] + Pc2) * inv(K*dt +η_reg))
                 pl_domain[I...] = 4.0
 
-            elseif F5 > 0#l3 < τIIv_ij
+            else#if F5 > 0 #l3 < τIIv_ij
                 # Drucker-Prager
                 # stress correction @ center
                 λ[I...] =

@@ -95,7 +95,7 @@ function ShearBand2D()
     soft_C = NonLinearSoftening(; ξ₀ = C, Δ = C / 2)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
-        C = C,
+        C = C / cosd(ϕ),
         ϕ = ϕ,
         η_vp = η_reg,
         Ψ = 0,

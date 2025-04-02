@@ -93,12 +93,15 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     r    =  1*di[1]*f  # half-width of block
     
     #ind_block = findall(((Xc.-o_x).^2 .≤ r^2) .& ((Yc.-o_y).^2 .≤ r.^2))
+    norm = (di[1]*di[2])#/N_norm
     if run_param
         sol_FD = Array(@zeros(nx,ny))
         sol_FD .= ((cost .- refcost)./dp)#./(abs(refcost)) ./ (di[1] * di[2])
+        sol_FD .*= norm .* refcost
     else
         sol_FD = Array(@zeros(nx,ny))
         sol_FD .= cost
+        sol_FD .*= norm .* refcost
     end
     #AD = deepcopy(stokesAD.G)
     AD = Sens
@@ -118,15 +121,17 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     sol_FD_norm = Array(sol_FD .+ abs(minimum(sol_FD)))
     sol_FD_norm .= sol_FD_norm ./ maximum(sol_FD_norm)
 
-    sumFD = round(sum(abs.(sol_FD)),digits=2)
-    sumAD = round(sum(abs.(AD)),digits=2)
+    sumλVx = round(sum(abs.(stokesAD.VA.Vx)),digits=10)
+    sumλVy = round(sum(abs.(stokesAD.VA.Vy)),digits=10)
+    sumFD = round(sum(abs.(sol_FD)),digits=4)
+    sumAD = round(sum(abs.(AD)),digits=4)
     fig = Figure(size = (720, 1000), title = "Compare Adjoint Sensitivities with Finite Difference Sensitivities",fontsize=16)
     ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}")
     ax2   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})")
     ax3   = Axis(fig[2,1], aspect = 1, title = L"Vx")
     ax4   = Axis(fig[2,2], aspect = 1, title = L"Vy")
-    ax5   = Axis(fig[3,1], aspect = 1, title = L"λ Vx")
-    ax6   = Axis(fig[3,2], aspect = 1, title = L"λ Vy")
+    ax5   = Axis(fig[3,1], aspect = 1, title = "λ Vx sum(abs)=$sumλVx")
+    ax6   = Axis(fig[3,2], aspect = 1, title = "λ Vy sum(abs)=$sumλVy")
     ax7   = Axis(fig[4,1], aspect = 1, title = "FD Sens. sum(abs)=$sumFD",titlesize=16)
     ax8   = Axis(fig[4,2], aspect = 1, title = "AD Sens. sum(abs)=$sumAD",titlesize=16)
     ax9   = Axis(fig[5,1], aspect = 1, title = "Error",titlesize=16)

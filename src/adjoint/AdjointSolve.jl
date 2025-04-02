@@ -8,7 +8,6 @@ function adjoint_2D!(
     phase_ratios,
     rheology,
     grid,
-    Vx_on_Vy,
     dt,
     igg::IGG;
     free_surface,
@@ -66,7 +65,7 @@ function adjoint_2D!(
             stokesAD.V.Vx .= 0.0
             stokesAD.V.Vy .= 0.0
             stokesAD.P    .= 0.0
-            
+       
             # sensitivity reference points for adjoint solve
             #N_norm = length(SensInd[1])*length(SensInd[2])
             #di = inv.(_di)
@@ -84,11 +83,17 @@ function adjoint_2D!(
             @views stokesAD.R.Ry .= stokesAD.VA.Vy[2:end-1,2:end-1]
             @views stokesAD.R.RP .= stokesAD.PA
 
+
+            ## initialize the residuals with the adjoint variables to act as a multiplier
+            #@views stokesAD.R.Rx .= 1.0
+            #@views stokesAD.R.Ry .= 1.0
+            #@views stokesAD.R.RP .= 1.0
+
             @parallel (@idx ni) configcall=compute_Res!(
                 stokes.R.Rx,
                 stokes.R.Ry,
                 @velocity(stokes)...,
-                Vx_on_Vy, 
+                #Vx_on_Vy, 
                 stokes.P,
                 @stress(stokes)...,
                 ρg...,
@@ -102,7 +107,7 @@ function adjoint_2D!(
                     DuplicatedNoNeed(stokes.R.Ry, stokesAD.R.Ry),
                     Const(stokes.V.Vx),
                     Const(stokes.V.Vy),
-                    Const(Vx_on_Vy),
+                    #Const(Vx_on_Vy),
                     DuplicatedNoNeed(stokes.P,stokesAD.P),
                     DuplicatedNoNeed(stokes.τ.xx,stokesAD.τ.xx),
                     DuplicatedNoNeed(stokes.τ.yy,stokesAD.τ.yy),
@@ -111,8 +116,9 @@ function adjoint_2D!(
                     Const(ρg[2]),
                     Const(_di[1]),
                     Const(_di[2]),
-                    Const(dt * free_surface))
-            
+                    Const(dt * free_surface)
+                    )
+
             #=
             @parallel (@idx ni) configcall=compute_P_kernelAD!(
                 θ,
@@ -145,14 +151,13 @@ function adjoint_2D!(
                     Const(nothing)
                     )
             =#
-            
-            
+           
             # apply free slip or no slip boundary conditions for adjoint solve
             if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
             if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
             if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
             if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
-            
+
             # Copy stokes stress. If not, stokes.τ is changed during the Enzyme call
             stokesAD.dτ.xx   .= stokes.τ.xx
             stokesAD.dτ.yy   .= stokes.τ.yy
@@ -215,7 +220,8 @@ function adjoint_2D!(
                     Const(phase_ratios.yz),
                     Const(phase_ratios.xz)
                     )
-        
+
+  
             @parallel (@idx ni) update_PAD!(
                 stokesAD.PA,
                 stokesAD.P,
@@ -250,17 +256,19 @@ function adjoint_2D!(
             # calculate ∂RP/∂V and multiply with λP
             @parallel (@idx ni) configcall=compute_∇V!(
                 stokes.∇V,
-                @velocity(stokes)...,
-                _di...
+                @velocity(stokes),
+                _di
                 ) AD.autodiff_deferred!(
                     mode,
                     Const(compute_∇V!),
                     Const{Nothing},
                     DuplicatedNoNeed(stokes.∇V,stokesAD.∇V),
-                    DuplicatedNoNeed(stokes.V.Vx,stokesAD.V.Vx),
-                    DuplicatedNoNeed(stokes.V.Vy,stokesAD.V.Vy),
-                    Const(_di[1]),
-                    Const(_di[2]))
+                    #DuplicatedNoNeed(stokes.V.Vx,stokesAD.V.Vx),
+                    #DuplicatedNoNeed(stokes.V.Vy,stokesAD.V.Vy),
+                    DuplicatedNoNeed(@velocity(stokes),@velocity(stokesAD)),
+                    #Const(_di[1]),
+                    #Const(_di[2])
+                    Const(_di))
 
             # update λV
             @parallel update_V!(
@@ -268,12 +276,18 @@ function adjoint_2D!(
                 stokesAD.VA.Vy,
                 stokesAD.V.Vx,
                 stokesAD.V.Vy,
-                Vx_on_Vy,
                 ηdτ,
-                ρg[2],
+                ρg...,
                 ητ,
                 _di...,
-                dt* free_surface)
+                )
+
+            
+                #print("###################\n")
+                #print(extrema(stokesAD.VA.Vx),"\n")
+                #print(extrema(stokesAD.VA.Vy),"\n")
+                #print(extrema(stokesAD.PA),"\n")
+                #print("###################\n")
 
             iter += 1
 

@@ -1,4 +1,26 @@
 # with free surface stabilization
+
+@parallel_indices (i, j) function update_V!(
+        Vx::AbstractArray{T, 2}, Vy, ResVx, ResVy, ηdτ, ρgx, ρgy, ητ, _dx, _dy
+    ) where {T}
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
+    av_xa(A) = _av_xa(A, i, j)
+    av_ya(A) = _av_ya(A, i, j)
+    harm_xa(A) = _av_xa(A, i, j)
+    harm_ya(A) = _av_ya(A, i, j)
+
+    if all((i, j) .< size(Vx) .- 1)
+        Vx[i + 1, j + 1] += ResVx[i+1,j+1] * ηdτ / av_xa(ητ)
+    end
+    if all((i, j) .< size(Vy) .- 1)
+        Vy[i + 1, j + 1] += ResVy[i+1,j+1] * ηdτ / av_ya(ητ)
+    end
+    return nothing
+end
+#=
 @parallel_indices (i, j) function update_V!(
     Vx::AbstractArray{T,2}, Vy, ResVx, ResVy, Vx_on_Vy, ηdτ, ρgy, ητ, _dx, _dy, dt
 ) where {T}
@@ -45,21 +67,22 @@
 
     return nothing
 end
+=#
 
-@parallel_indices (I...) function compute_strain_rateAD!(
+@parallel_indices (i, j) function compute_strain_rateAD!(
     εxx::AbstractArray{T,2}, εyy, εxy, Vx, Vy, _dx, _dy
 ) where {T}
-    d_xi(A) = _d_xi(A, I[1], I[2], _dx)
-    d_yi(A) = _d_yi(A, I[1], I[2], _dy)
-    d_xa(A) = _d_xa(A, I[1], I[2], _dx)
-    d_ya(A) = _d_ya(A, I[1], I[2], _dy)
+    d_xi(A) = _d_xi(A, _dx, i, j)
+    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xa(A) = _d_xa(A, _dx, i, j)
+    d_ya(A) = _d_ya(A, _dy, i, j)
 
-    if all((I[1], I[2]) .≤ size(εxx))
+    if all((i, j) .≤ size(εxx))
         ∇V_ij = (d_xi(Vx) + d_yi(Vy)) / 3.0
-        εxx[I[1], I[2]] = d_xi(Vx) - ∇V_ij
-        εyy[I[1], I[2]] = d_yi(Vy) - ∇V_ij
+        εxx[i, j] = d_xi(Vx) - ∇V_ij
+        εyy[i, j] = d_yi(Vy) - ∇V_ij
     end
-    εxy[I[1], I[2]] = 0.5 * (d_ya(Vx) + d_xa(Vy))
+    εxy[i, j] = 0.5 * (d_ya(Vx) + d_xa(Vy))
 
     return nothing
 end

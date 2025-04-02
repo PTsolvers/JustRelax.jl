@@ -26,7 +26,6 @@ module JustRelax2D
     import JustPIC._2D: numphases, nphases
 
     __init__() = @init_parallel_stencil(Threads, Float64, 2)
-@init_parallel_stencil(Threads, Float64, 2)
 
     include("common.jl")
     include("stokes/Stokes2D.jl")
@@ -63,7 +62,7 @@ module JustRelax3D
 
     import JustPIC._3D: numphases, nphases
 
-    @init_parallel_stencil(Threads, Float64, 3)
+    __init__() = @init_parallel_stencil(Threads, Float64, 3)
 
 include("common.jl")
 include("stokes/Stokes3D.jl")
@@ -99,7 +98,7 @@ import JustRelax: normal_stress, shear_stress, shear_vorticity
 
 import JustPIC._2D: numphases, nphases
 
-@init_parallel_stencil(Threads, Float64, 2)
+__init__() = @init_parallel_stencil(Threads, Float64, 2)
 
 include("common.jl")
 include("stokes/Stokes2D.jl")
@@ -118,11 +117,12 @@ include("adjoint/AdjointStressKernels.jl")
 export update_stresses_center_vertex_psAD! 
 export update_stresses_center_vertex_psADSens! 
 export assemble_parameter_matrices!
-    include("common.jl")
-    include("stokes/Stokes3D.jl")
-    export solve!
 
-    include("variational_stokes/Stokes3D.jl")
-    export solve_VariationalStokes!
+include("adjoint_variational/Adjoint_Variational2D.jl")
+export adjoint_solve_VariationalStokes!
+include("adjoint_variational/Adjoint_VelocityKernelsVS.jl")
+export update_V!, compute_Res!, compute_strain_rateAD!
+include("adjoint_variational/Adjoint_StressKernelsVS.jl")
+export update_stresses_center_vertexAD!, update_stresses_center_vertexADSens!
 
 end

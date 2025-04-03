@@ -2,15 +2,13 @@ abstract type AbstractDirichletBoundaryCondition{T, M} end
 struct DirichletBoundaryCondition{T, M} <: AbstractDirichletBoundaryCondition{T, M}
     value::T
     mask::M
+
+    function DirichletBoundaryCondition(value::T, mask::M) where {T, M}
+        return new{T, M}(value, mask)
+    end
 end
 
-# function DirichletBoundaryCondition(value::T, mask::M) where {T,M}
-#     return DirichletBoundaryCondition{T,M}(value, mask)
-# end
-
-function DirichletBoundaryCondition()
-    return DirichletBoundaryCondition{Nothing, Nothing}(nothing, nothing)
-end
+DirichletBoundaryCondition() = DirichletBoundaryCondition(nothing, nothing)
 
 Adapt.@adapt_structure DirichletBoundaryCondition
 

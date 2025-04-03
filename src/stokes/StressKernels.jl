@@ -929,7 +929,7 @@ end
         εij_ve = @. εij + 0.5 * τij_o * _Gdt
         εII_ve = GeoParams.second_invariant(εij_ve)
         # stress increments @ center
-        dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
+        dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = GeoParams.second_invariant(dτij .+ τij)
         # yield function @ center
         F = τII_ij - C * cosϕ - Pr[I...] * sinϕ

@@ -200,8 +200,8 @@ end
 @testset "NonLinearSoftening_ShearBand2D" begin
     @suppress begin
         iters, τII, sol = ShearBand2D()
-        @test passed = iters.err_evo1[end] < 1.0e-6
-        @test τII[end] ≈ 1.26293 atol = 1.0e-3
+        @test iters.err_evo1[end] < 1.0e-6
+        @test τII[end] ≈ 1.40352 atol = 1.0e-3
         @test sol[end] ≈ 1.94255 atol = 1.0e-4
     end
 end

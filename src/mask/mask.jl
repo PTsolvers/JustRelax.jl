@@ -12,7 +12,7 @@ Mask(ni::Vararg{Int, N}) where {N} = Mask(zeros(ni...))
 Mask(nx, ny, I, J) = Mask((nx, ny), (I, J))
 Mask(nx, ny, nz, I, J, K) = Mask((nx, ny, nz), (I, J, K))
 
-function Mask(ni::NTuple{N, Int}, inds::NTuple{N}) where N
+function Mask(ni::NTuple{N, Int}, inds::NTuple{N}) where {N}
     m = zeros(ni...)
     @views m[inds...] .= 1
     return Mask(m)

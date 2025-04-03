@@ -862,7 +862,7 @@ end
         phase_center,
         phase_vertex,
     )
-   
+
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
     ni = size(Pr)
@@ -899,7 +899,7 @@ end
     Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
 
     if is_pl && !iszero(τIIv_ij)  && Fv > 0
-             # stress correction @ vertex
+        # stress correction @ vertex
         λv[I...] =
             (1.0 - relλ) * λv[I...] +
             relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))

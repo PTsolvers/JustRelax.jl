@@ -3,8 +3,8 @@ struct DirichletBoundaryCondition{T, M} <: AbstractDirichletBoundaryCondition{T,
     value::T
     mask::M
 
-    function DirichletBoundaryCondition(value::T, mask::M) where {T,M}
-        return new{T,M}(value, mask)
+    function DirichletBoundaryCondition(value::T, mask::M) where {T, M}
+        return new{T, M}(value, mask)
     end
 end
 

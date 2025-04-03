@@ -6,7 +6,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
 end
 
 using JustRelax, JustRelax.JustRelax2D
-using Test#, Suppressor
+using Test #, Suppressor
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPUBackend
@@ -177,17 +177,17 @@ end
         end
 
         @testset "DirichletBoundaryCondition" begin
-            ni     = 10, 10
-            A      = rand(ni...)
-            value  = zeros(ni...)
+            ni = 10, 10
+            A = rand(ni...)
+            value = zeros(ni...)
             value[4:7, 4:7] .= 5
 
             bc = JustRelax.DirichletBoundaryCondition(value)
 
-            @test all(JustRelax.apply_dirichlet(A, bc)[4:7,4:7] .== 5)
+            @test all(JustRelax.apply_dirichlet(A, bc)[4:7, 4:7] .== 5)
 
             A = rand(ni...)
-            @test JustRelax.apply_dirichlet(A, bc, 1, 1) == A[1,1]
+            @test JustRelax.apply_dirichlet(A, bc, 1, 1) == A[1, 1]
             @test JustRelax.apply_dirichlet(A, bc, 5, 5) == 5
 
             bc = JustRelax.DirichletBoundaryCondition()
@@ -197,14 +197,14 @@ end
         end
 
         @testset "ConstantDirichletBoundaryCondition" begin
-            ni    = 10, 10
-            A     = rand(ni...)
-            value = 5e0
-            mask  = JustRelax.Mask(ni..., 4:7, 4:7)
+            ni = 10, 10
+            A = rand(ni...)
+            value = 5.0e0
+            mask = JustRelax.Mask(ni..., 4:7, 4:7)
 
             bc = JustRelax.ConstantDirichletBoundaryCondition(value, mask)
 
-            @test JustRelax.apply_dirichlet(A, bc, 1, 1) == A[1,1]
+            @test JustRelax.apply_dirichlet(A, bc, 1, 1) == A[1, 1]
             @test JustRelax.apply_dirichlet(A, bc, 5, 5) == 5
 
             bc = JustRelax.ConstantDirichletBoundaryCondition()

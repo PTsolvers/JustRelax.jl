@@ -28,7 +28,7 @@
     Ic = clamped_indices(ni, I...)
 
     if isvalid_v(ϕ, I...)
-       # interpolate to ith vertex
+        # interpolate to ith vertex
         Pv_ij = av_clamped(Pr, Ic...)
         εxxv_ij = av_clamped(ε[1], Ic...)
         εyyv_ij = av_clamped(ε[2], Ic...)
@@ -59,7 +59,7 @@
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
 
         if is_pl && !iszero(τIIv_ij)  && Fv > 0
-                # stress correction @ vertex
+            # stress correction @ vertex
             λv[I...] =
                 (1.0 - relλ) * λv[I...] +
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))

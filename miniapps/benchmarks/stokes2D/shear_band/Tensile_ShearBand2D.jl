@@ -57,20 +57,19 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     dt = Inf
 
     # Physical properties using GeoParams ----------------
-    τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    τ_T = 0.8         # tensile strength
+    τ_y = 1           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    τ_T = 0.5         # tensile strength
     δτ_T= 0.15          # pressure limiter (if τII_tr<δσ_T) only pressure correction is applied, Pa
     ϕ = 30            # friction angle
-    C = τ_y           # Cohesion
+    C = τ_y / cosd(ϕ)           # Cohesion
     η0 = 1.0           # viscosity
     G0 = 1.0           # elastic shear modulus
     Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
-    εbg = 2.0          # background strain-rate
+    εbg = 1.0           # background strain-rate
     η_reg = 8.0e-3          # regularisation "viscosity"
-    dt = η0 / G0 / 4.0 *0.1  # assumes Maxwell time of 4
-    el_bg = ConstantElasticity(; G = G0, Kb =4, ν = 0.25)
-    el_inc = ConstantElasticity(; G = Gi, Kb = 4, ν = 0.25)
-    β = 1 / get_Kb(el_bg)
+    dt = η0 / G0 / 4.0 *0.1    # assumes Maxwell time of 4
+    el_bg = ConstantElasticity(; G = G0, Kb = 4)
+    el_inc = ConstantElasticity(; G = Gi, Kb = 4)
     visc = LinearViscous(; η = η0)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
@@ -90,6 +89,14 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             Elasticity = el_bg,
 
         ),
+        # SetMaterialParams(;
+        #     Phase = 2,
+        #     Density = ConstantDensity(; ρ = 0.0),
+        #     Gravity = ConstantGravity(; g = 0.0),
+        #     CompositeRheology = CompositeRheology((visc, el_bg, pl)),
+        #     Elasticity = el_bg,
+
+        # ),
         # High density phase
         SetMaterialParams(;
             Phase = 2,
@@ -111,8 +118,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.95 / √2.1)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=6e0, r=0.7, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -130,9 +137,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     )
     stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
     stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
-    #Pure shear
-    # stokes.V.Vx .= PTArray(backend)([ εbg * (x - lx * 0.5) for x in xvi[1], _ in 1:(ny + 2)])
-    # stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -147,7 +151,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     ttot = Float64[]
 
     # while t < tmax
-    for _ in 1:40
+    for _ in 1:15
 
         # Stokes solver ----------------
         iters = solve!(
@@ -193,7 +197,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ax5 = Axis(fig[3, 1], aspect = 1, title = "Plastic domain", titlesize = 35)
         ax6 = Axis(fig[3, 3], aspect = 1, title = "Pressure", titlesize = 35)
         heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
-        # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
+        heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
         heatmap!(ax2, xci..., Array((stokes.γ_vol)), colormap = :batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
         h = heatmap!(ax5, xci..., Array(stokes.pl_domain), colormap = :lipari10, colorrange = (0, 5))
@@ -215,12 +219,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
                 ηij = stokes.viscosity.η[Tuple(I)...]
                 dτ_r = 1.0 / (pt_stokes.θ_dτ + ηij * _Gdt + 1.0)
-                η_ve = ηij * dτ_r
+                η_ve =  1 / (1/ηij + 1/_Gdt)
                 ratio = η_ve * inv(K) *inv(dt)
                 τ_tensile, δτ_tensile = τ_T, δτ_T
                 Pc1 = - (τ_tensile - δτ_tensile)                   # Pressure corner 1
-                τc1 =   δτ_tensile
-                Pc2 = - (τ_tensile - C * cosϕ) / (1.0 - sinϕ)      # Pressure corner 2
+                τc1 =   Pc1 + τ_tensile #δτ_tensile
+                Pc2 =  (τ_tensile + C * cosϕ) / (1.0 + sinϕ)      # Pressure corner 2
                 τc2 = Pc2 + τ_tensile                              # dev stress corner2
 
                 push!(stress_data, (Pc1, τc1, Pc2, τc2, C, sinϕ, cosϕ, sinψ, η_reg, η_ve, K))
@@ -228,17 +232,20 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
             # Plotting outside the loop
             fig = Figure()
-            ax = Axis(fig[1, 1], aspect = 1)
+            ax = Axis(fig[1, 1], aspect = 1, limits = (nothing, nothing, 0, 4))
             for (Pc1, τc1, Pc2, τc2, C, sinϕ, cosϕ, sinψ, η_reg, η_ve, K ) in stress_data
 
                 pr_tr1 = LinRange(-1.5, Pc1, prod(ni))
                 pr_tr2 = LinRange(0, Pc2, prod(ni))
                 pr_tr3 = LinRange(0, Pc2, prod(ni))
                 # Plot the Drucker-Prager yield surface
-                lines!(ax, [Pc1, Pc1, Pc2, 4], [0.0, τc1, τc2, (4 * sinϕ + Pc2 * C * cosϕ)], color = :black, linewidth = 2)
+                lines!(ax, [Pc1, Pc1, Pc2, 4], [0.0, τc1, τc2, (4 * sinϕ + C * cosϕ)], color = :black, linewidth = 2)
                 l1 = line.(pr_tr1, K, dt, η_ve, sind(90.0), Pc1, τc1)
                 l2 = line.(pr_tr2, K, dt, η_ve, sind(90.0), Pc2, τc2)
                 l3 = line.(pr_tr3, K, dt, η_ve, sinψ, Pc2, τc2)
+                # l1 = @. (η_ve + η_reg)/(K*dt + 2.0/3.0*η_reg)*(-pr_tr1 + Pc1) + τc1
+                # l2 = @. (η_ve + η_reg)/(K*dt + 2.0/3.0*η_reg)*(-pr_tr2 + Pc2) + τc2
+                # l3 = @. (η_ve + η_reg)/((K*dt + 2.0/3.0*η_reg)*sinψ)*(-pr_tr3 + Pc2) + τc2
                 # Plot the lines for the conditions
                 if !isempty(Pc1)
                     lines!(ax, [-1.5, Pc1], [τc1, τc1], color = :purple, linewidth = 2, label = "Condition 0")

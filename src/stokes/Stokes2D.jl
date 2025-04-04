@@ -602,9 +602,6 @@ function _solve!(
                 stokes.pl_domain,
                 phase_ratios.center,
                 phase_ratios.vertex,
-                phase_ratios.xy,
-                phase_ratios.yz,
-                phase_ratios.xz,
                 args,
             )
             update_halo!(stokes.τ.xy)

@@ -91,7 +91,7 @@ function ShearBand2D()
     visc = LinearViscous(; η = η0)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
-        C = C,
+        C = C / cosd(ϕ),
         ϕ = ϕ,
         η_vp = η_reg,
         Ψ = 0
@@ -184,17 +184,20 @@ function ShearBand2D()
         println("it = $it; t = $t \n")
 
     end
+    tensor_invariant!(stokes.τ)
 
     finalize_global_grid(; finalize_MPI = true)
 
-    return iters, τII, sol
+    return iters, τII, sol, extrema(stokes.τ.II)
 end
 
 @testset "ShearBand2D" begin
     @suppress begin
-        iters, τII, sol = ShearBand2D()
-        @test passed = iters.err_evo1[end] < 1.0e-6
-        @test τII[end] ≈ 1.4143 atol = 1.0e-4
+        iters, τII, sol, extrema_τII = ShearBand2D()
+        @test iters.err_evo1[end] < 1.0e-6
+        @test extrema_τII[1] ≈ 1.417 atol = 1.0e-3
+        @test extrema_τII[2] ≈ 1.647 atol = 1.0e-3
+        @test τII[end] ≈ 1.6421 atol = 1.0e-4
         @test sol[end] ≈ 1.9396 atol = 1.0e-4
     end
 end

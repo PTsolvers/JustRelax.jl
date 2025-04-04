@@ -64,7 +64,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     visc = LinearViscous(; η = η0)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
-        C = C,
+        C = C / cosd(ϕ),
         ϕ = ϕ,
         η_vp = η_reg,
         Ψ = 0

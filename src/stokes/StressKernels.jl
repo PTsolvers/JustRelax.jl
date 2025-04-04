@@ -647,7 +647,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
@@ -710,7 +710,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
@@ -774,7 +774,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
@@ -810,7 +810,7 @@ end
         dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij + 2.0 * ηij * εij) * dτ_r
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
+        F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
         if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
@@ -824,12 +824,9 @@ end
             setindex!.(τ, τij, I...)
             setindex!.(ε_pl, εij_pl, I...)
             τII[I...] = τII_ij = second_invariant(τij)
-            # Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
-            # η_vep[I...] = 0.5 * τII_ij / εII_ve
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)
-            # η_vep[I...] = ηij
             τII[I...] = τII_ij
         end
         η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
@@ -938,7 +935,7 @@ end
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
-                relλ .* (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
+                relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
             dQdτij = @. 0.5 * (τij + dτij) / τII_ij
             εij_pl = λ[I...] .* dQdτij
             dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r

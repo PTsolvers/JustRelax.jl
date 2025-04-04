@@ -66,7 +66,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         C = C / cosd(ϕ),
         ϕ = ϕ,
         η_vp = η_reg,
-        Ψ = 15
+        Ψ = 0
     )
 
     rheology = (
@@ -109,7 +109,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Rheology
     compute_viscosity!(
-        stokes, phase_ratios, args, rheology, 0, (-Inf, Inf)
+        stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
@@ -130,7 +130,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     τII = Float64[]
     sol = Float64[]
     ttot = Float64[]
-
     # while t < tmax
     for _ in 1:15
 
@@ -149,7 +148,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             kwargs = (
                 verbose = false,
                 iterMax = 50.0e3,
-                nout = 1.0e3,
+                nout = 1,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
@@ -171,7 +170,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
         fig = Figure(size = (1600, 1600), title = "t = $t")
         ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
-        # ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
         ax3 = Axis(fig[1, 2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
         ax4 = Axis(fig[2, 2], aspect = 1)

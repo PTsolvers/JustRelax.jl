@@ -67,7 +67,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
     εbg = 1.0           # background strain-rate
     η_reg = 8.0e-3          # regularisation "viscosity"
-    dt = η0 / G0 / 4.0 *0.1    # assumes Maxwell time of 4
+    dt = η0 / G0 / 4.0 *0.15    # assumes Maxwell time of 4
     el_bg = ConstantElasticity(; G = G0, Kb = 4)
     el_inc = ConstantElasticity(; G = Gi, Kb = 4)
     visc = LinearViscous(; η = η0)
@@ -89,14 +89,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             Elasticity = el_bg,
 
         ),
-        # SetMaterialParams(;
-        #     Phase = 2,
-        #     Density = ConstantDensity(; ρ = 0.0),
-        #     Gravity = ConstantGravity(; g = 0.0),
-        #     CompositeRheology = CompositeRheology((visc, el_bg, pl)),
-        #     Elasticity = el_bg,
-
-        # ),
         # High density phase
         SetMaterialParams(;
             Phase = 2,
@@ -151,7 +143,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     ttot = Float64[]
 
     # while t < tmax
-    for _ in 1:15
+    for _ in 1:20
 
         # Stokes solver ----------------
         iters = solve!(
@@ -211,7 +203,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         save(joinpath(figdir, "$(it).png"), fig)
         fig = let
             stress_data = []
-            for I in CartesianIndices(ni)
+            for I in (1,1)# CartesianIndices(1,1)
                 phase = @inbounds phase_ratios.center[Tuple(I)...]
                 _Gdt = inv(fn_ratio(JustRelax.JustRelax2D.get_shear_modulus, rheology, phase) * dt)
                 is_pl, C, sinϕ, cosϕ, sinψ, η_reg = JustRelax.JustRelax2D.plastic_params_phase(rheology, stokes.EII_pl[Tuple(I)...], phase)
@@ -233,19 +225,19 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             # Plotting outside the loop
             fig = Figure()
             ax = Axis(fig[1, 1], aspect = 1, limits = (nothing, nothing, 0, 4))
-            for (Pc1, τc1, Pc2, τc2, C, sinϕ, cosϕ, sinψ, η_reg, η_ve, K ) in stress_data
 
-                pr_tr1 = LinRange(-1.5, Pc1, prod(ni))
-                pr_tr2 = LinRange(0, Pc2, prod(ni))
-                pr_tr3 = LinRange(0, Pc2, prod(ni))
+            Pc1, τc1, Pc2, τc2, C, sinϕ, cosϕ, sinψ, η_reg, η_ve, K = stress_data[1]
+                pr_tr1 = LinRange(-1.5, Pc1, 100)
+                pr_tr2 = LinRange(0, Pc2, 100)
+                pr_tr3 = LinRange(0, Pc2, 100)
                 # Plot the Drucker-Prager yield surface
                 lines!(ax, [Pc1, Pc1, Pc2, 4], [0.0, τc1, τc2, (4 * sinϕ + C * cosϕ)], color = :black, linewidth = 2)
-                l1 = line.(pr_tr1, K, dt, η_ve, sind(90.0), Pc1, τc1)
-                l2 = line.(pr_tr2, K, dt, η_ve, sind(90.0), Pc2, τc2)
-                l3 = line.(pr_tr3, K, dt, η_ve, sinψ, Pc2, τc2)
-                # l1 = @. (η_ve + η_reg)/(K*dt + 2.0/3.0*η_reg)*(-pr_tr1 + Pc1) + τc1
-                # l2 = @. (η_ve + η_reg)/(K*dt + 2.0/3.0*η_reg)*(-pr_tr2 + Pc2) + τc2
-                # l3 = @. (η_ve + η_reg)/((K*dt + 2.0/3.0*η_reg)*sinψ)*(-pr_tr3 + Pc2) + τc2
+                # l1 = line.(pr_tr1, K, dt, η_ve, sind(90.0), Pc1, τc1)
+                # l2 = line.(pr_tr2, K, dt, η_ve, sind(90.0), Pc2, τc2)
+                # l3 = line.(pr_tr3, K, dt, η_ve, sinψ, Pc2, τc2)
+                l1 = @. (η_ve + η_reg)/(K*dt + 2.0/3.0*η_reg)*(-pr_tr1 + Pc1) + τc1
+                l2 = @. (η_ve + η_reg)/(K*dt + 2.0/3.0*η_reg)*(-pr_tr2 + Pc2) + τc2
+                l3 = @. (η_ve + η_reg)/((K*dt + 2.0/3.0*η_reg)*sinψ)*(-pr_tr3 + Pc2) + τc2
                 # Plot the lines for the conditions
                 if !isempty(Pc1)
                     lines!(ax, [-1.5, Pc1], [τc1, τc1], color = :purple, linewidth = 2, label = "Condition 0")
@@ -254,16 +246,17 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 line2 = lines!(ax, pr_tr2, l2, color = :blue)
                 line3 = lines!(ax, pr_tr3, l3, color = :green)
 
-            end
+            # end
             scatter!(ax, Array(stokes.P)[:], Array(stokes.τ.II)[:]; color = :red, markersize = 5)
             save(joinpath(figdir, "stress$(it).png"), fig)
+            # fig
         end
     end
 
     return nothing
 end
 
-n = 32
+n = 64
 nx = n
 ny = n
 figdir = "Tensile_plasticity"

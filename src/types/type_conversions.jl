@@ -2,6 +2,7 @@ import Base: Array, copy
 
 const JR_T = Union{
     StokesArrays,
+    StokesArraysAdjoint,
     SymmetricTensor,
     ThermalArrays,
     Velocity,

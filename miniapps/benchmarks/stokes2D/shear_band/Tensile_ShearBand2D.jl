@@ -67,7 +67,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
     εbg = 1.0           # background strain-rate
     η_reg = 8.0e-3          # regularisation "viscosity"
-    dt = η0 / G0 / 4.0 *0.15    # assumes Maxwell time of 4
+    dt = η0 / G0 / 4.0 *0.25    # assumes Maxwell time of 4
     el_bg = ConstantElasticity(; G = G0, Kb = 4)
     el_inc = ConstantElasticity(; G = Gi, Kb = 4)
     visc = LinearViscous(; η = η0)
@@ -110,8 +110,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.95 / √2.1)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=6e0, r=0.7, CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.95 / √2.1)
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=3π, r=0.7, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -128,7 +128,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         no_slip = (left = false, right = false, top = false, bot = false),
     )
     stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.V.Vy .= PTArray(backend)([ -y * εbg for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -143,7 +143,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     ttot = Float64[]
 
     # while t < tmax
-    for _ in 1:20
+    for _ in 1:35
 
         # Stokes solver ----------------
         iters = solve!(
@@ -190,7 +190,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ax6 = Axis(fig[3, 3], aspect = 1, title = "Pressure", titlesize = 35)
         heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array((stokes.γ_vol)), colormap = :batlow)
+        heatmap!(ax2, xci..., Array((stokes.EII_pl)), colormap = :batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
         h = heatmap!(ax5, xci..., Array(stokes.pl_domain), colormap = :lipari10, colorrange = (0, 5))
         heatmap!(ax6, xci..., Array(stokes.P), colormap = :batlow)
@@ -235,9 +235,9 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 # l1 = line.(pr_tr1, K, dt, η_ve, sind(90.0), Pc1, τc1)
                 # l2 = line.(pr_tr2, K, dt, η_ve, sind(90.0), Pc2, τc2)
                 # l3 = line.(pr_tr3, K, dt, η_ve, sinψ, Pc2, τc2)
-                l1 = @. (η_ve + η_reg)/(K*dt + 2.0/3.0*η_reg)*(-pr_tr1 + Pc1) + τc1
-                l2 = @. (η_ve + η_reg)/(K*dt + 2.0/3.0*η_reg)*(-pr_tr2 + Pc2) + τc2
-                l3 = @. (η_ve + η_reg)/((K*dt + 2.0/3.0*η_reg)*sinψ)*(-pr_tr3 + Pc2) + τc2
+                l1 = @. (η_ve + η_reg)/(K*dt + η_reg)*(-pr_tr1 + Pc1) + τc1
+                l2 = @. (η_ve + η_reg)/(K*dt + η_reg)*(-pr_tr2 + Pc2) + τc2
+                l3 = @. (η_ve + η_reg)/((K*dt + η_reg)*sinψ)*(-pr_tr3 + Pc2) + τc2
                 # Plot the lines for the conditions
                 if !isempty(Pc1)
                     lines!(ax, [-1.5, Pc1], [τc1, τc1], color = :purple, linewidth = 2, label = "Condition 0")
@@ -256,7 +256,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 64
+n = 96
 nx = n
 ny = n
 figdir = "Tensile_plasticity"

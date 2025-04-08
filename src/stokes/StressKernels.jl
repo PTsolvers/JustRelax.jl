@@ -960,6 +960,7 @@ end
 #             setindex!.(ε_pl, εij_pl, I...)
 #             setindex!(ε_vol_pl, εvol_ij, I...)
 #             ΔP[I...] = volume * λ[I...]
+#             # ΔP[I...] =  isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ
 #             pl_domain[I...] = 1.0
 #             τII_ij = GeoParams.second_invariant(τij)
 #         else
@@ -1047,9 +1048,12 @@ end
     Pc2    =     (τ_tensile + Cv * cosϕv) / (1.0 + sinϕv)                             # Pressure corner 2
     τc2    =     Pc2 + τ_tensile         # dev stress corner2
 
-    l1 = (ηvev_ij + η_regv)/(Kv*dt + 2.0/3.0*η_regv)*(Pv_ij - Pc1) + τc1
-    l2 = (ηvev_ij + η_regv)/(Kv*dt + 2.0/3.0*η_regv)*(Pv_ij - Pc2) + τc2
-    l3 = (ηvev_ij + η_regv)/((Kv*dt + 2.0/3.0*η_regv)*sinψv)*(Pv_ij - Pc2) + τc2
+    # l1 = (ηvev_ij + η_regv)/(Kv*dt + 2.0/3.0*η_regv)*(Pv_ij - Pc1) + τc1
+    # l2 = (ηvev_ij + η_regv)/(Kv*dt + 2.0/3.0*η_regv)* (Pv_ij - Pc2) + τc2
+    # l3 = (ηvev_ij + η_regv)/((Kv*dt + 2.0/3.0*η_regv)*sinψv)*(Pv_ij - Pc2) + τc2
+    l1     = line(Pv_ij[I...], Kv, dt, ηvev_ij, sind(90.0), Pc1, τc1)
+    l2     = line(Pv_ij[I...], Kv, dt, ηvev_ij, sind(90.0), Pc2, τc2)
+    l3     = line(Pv_ij[I...], Kv, dt, ηvev_ij, sinψv, Pc2, τc2)
 
     # stress increments @ vertex
     dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
@@ -1066,32 +1070,31 @@ end
     Fv_tot = max(F5v, F3v, F1v)
 
     if is_pl && !iszero(τIIv_ij) && Fv_tot > 0
-        if τIIv_ij ≤ τc1 && F1v > 0
+        if τIIv_ij ≤ τc1
             #pressure limiter
             # dQdPij = -1.0
             λv[I...] =
-            (1.0 - relλ) * λv[I...] +
-            relλ * (max(F1v, 0.0) / (Kv * dt))
+                (1.0 - relλ) * λv[I...] +
+                relλ * (max(F1v, 0.0) / (Kv * dt + η_regv*2.0/3.0))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εxyv_pl_ij = λv[I...] .* dQdτxy
             dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
             τxyv[I...] += dτxyv
         elseif τc1 < τIIv_ij ≤ l1
+            # corner region 1
             λv[I...] =
-            (1.0 - relλ) * λv[I...] +
-            relλ * (ηvev_ij  * (τIIv_ij - τc1) / (ηvev_ij + (2.0/3.0*η_regv)))
+                (1.0 - relλ) * λv[I...] +
+                relλ * (ηvev_ij  * (τIIv_ij - τc1) / (ηvev_ij + η_regv*2.0/3.0))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-            εxyv_pl_ij = λ[I...] .* dQdτxy
-            # εxyv_pl_ij = (ηvev_ij  * (τIIv_ij - τc1) / (ηvev_ij + (2.0/3.0*η_regv))) * dQdτxy
+            εxyv_pl_ij = λv[I...] .* dQdτxy
             dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
-            # dτxyv = @. dτxyv - (ηv_ij * dτ_rv) * (τIIv_ij - τc1) / (ηv_ij * dτ_rv + η_regv*2.0/3.0)
             τxyv[I...] += dτxyv
 
-        elseif l1 < τIIv_ij ≤ l2
+        elseif l1 < τIIv_ij ≤ l2 #&& F3v > 0
             #tensile
             λv[I...] =
-            (1.0 - relλ) * λv[I...] +
-            relλ * (max(F3v, 0.0) / (ηvev_ij + η_regv + Kv * dt))
+                (1.0 - relλ) * λv[I...] +
+                relλ * (max(F3v, 0.0) / (ηvev_ij + η_regv*(1.0 + 2.0/3.0) + Kv * dt))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εxyv_pl_ij = λv[I...] .* dQdτxy
             dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
@@ -1100,22 +1103,23 @@ end
         elseif l2 < τIIv_ij ≤ l3
             # corner region 2
             λv[I...] =
-            (1.0 - relλ) * λv[I...] +
-            relλ * (ηvev_ij  * (τIIv_ij - τc2) / (ηvev_ij + (2.0/3.0*η_regv)))
+                (1.0 - relλ) * λv[I...] +
+                relλ * (ηvev_ij  * (τIIv_ij - τc2) / (ηvev_ij + (2.0/3.0*η_regv)))
+                # relλ * (ηvev_ij  * (τIIv_ij - τc2) / (ηv_ij * dτ_rv + η_regv*2.0/3.0))
+                # relλ * (ηvev_ij  * (τIIv_ij - τc2) / (ηvev_ij + η_regv))
+                # relλ * (ηvev_ij  * (τIIv_ij - τc2) / (ηvev_ij + η_regv* 2.0/3.0))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εxyv_pl_ij = λv[I...] .* dQdτxy
-            # εxyv_pl_ij = (ηvev_ij  * (τIIv_ij - τc2) / (ηvev_ij + (2.0/3.0*η_regv))) * dQdτxy
             τxyv[I...] += dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
-        elseif  F5v > 0 && l3 < τIIv_ij
+        elseif F5v > 0 #l3 < τIIv_ij
             # Drucker-Prager
             # stress correction @ vertex
             λv[I...] =
-            (1.0 - relλ) * λv[I...] +
-            relλ * (max(F5v, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
-            # relλ * (max(F5v, 0.0) / (ηvev_ij + η_regv + volumev))
+                (1.0 - relλ) * λv[I...] +
+                relλ * (max(F5v, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
+                # relλ * (max(F5v, 0.0) / (ηvev_ij + η_regv*(1.0 + 2.0/3.0*sinϕv*sinψv) + volumev))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εxyv_pl_ij = λv[I...] .* dQdτxy
-            # dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
             τxyv[I...] += dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
         else
             # stress correction @ vertex
@@ -1144,9 +1148,12 @@ end
         Pc2    =     (τ_tensile + C * cosϕ) / (1.0 + sinϕ)                         # Pressure corner 2
         τc2    =     Pc2 + τ_tensile        # dev stress corner2
 
-        l1 = (ηve_ij + η_reg)/(K*dt + 2.0/3.0*η_reg )*(Pr[I...] - Pc1) + τc1
-        l2 = (ηve_ij + η_reg)/(K*dt + 2.0/3.0*η_reg )*(Pr[I...] - Pc2) + τc2
-        l3 = (ηve_ij + η_reg)/((K*dt + 2.0/3.0*η_reg)*sinψ)*(Pr[I...] - Pc2) + τc2
+        # l1 = (ηve_ij + η_reg)/(K*dt + 2.0/3.0*η_reg )*(Pr[I...] - Pc1) + τc1
+        # l2 = (ηve_ij + η_reg)/(K*dt + 2.0/3.0*η_reg )*(Pr[I...] - Pc2) + τc2
+        # l3 = (ηve_ij + η_reg)/((K*dt + 2.0/3.0*η_reg)*sinψ)*(Pr[I...] - Pc2) + τc2
+        l1     = line(Pr[I...], K, dt, ηve_ij, sind(90.0), Pc1, τc1)
+        l2     = line(Pr[I...], K, dt, ηve_ij, sind(90.0), Pc2, τc2)
+        l3     = line(Pr[I...], K, dt, ηve_ij, sinψ, Pc2, τc2)
 
         # cache strain rates for center calculations
         τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
@@ -1167,10 +1174,11 @@ end
         τII_ij = if is_pl && !iszero(τII_ij) && F_tot > 0
             τII_ij = if τII_ij ≤ τc1 #&& F1 > 0
                 #pressure limiter
+                # println("pressure limiter")
                 dQdPij = 1.0
                 λ[I...] =
-                (1.0 - relλ) * λ[I...] +
-                 relλ * (max(F1, 0.0) / (K * dt + η_reg))
+                    (1.0 - relλ) * λ[I...] +
+                    relλ * (max(F1, 0.0) / (K * dt + η_reg*2.0/3.0))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
                 dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
@@ -1179,65 +1187,65 @@ end
                 setindex!.(τ, τij, I...)
                 setindex!.(ε_pl, εij_pl, I...)
                 setindex!(ε_vol_pl, εvol_ij, I...)
-                ΔP[I...] = (isinf(K) ? 0.0 : K * dt * λ[I...] * dQdPij)
+                ΔP[I...] = (isinf(K) ? 0.0 : K * dt * εvol_ij) #positive
                 pl_domain[I...] = 1.0
                 τII_ij = GeoParams.second_invariant(τij)
 
             elseif τc1 < τII_ij ≤ l1
                 # corner region 1
                 λ[I...] =
-                (1.0 - relλ) * λ[I...] +
-                relλ * (ηve_ij * (τII_ij - τc1) / (ηve_ij + 2.0/3.0*η_reg))
+                    (1.0 - relλ) * λ[I...] +
+                    relλ * (ηve_ij * (τII_ij - τc1) / (ηve_ij + η_reg*2.0/3.0))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
-                # εij_pl = (ηve_ij * (τII_ij - τc1) / (ηve_ij + (2.0/3.0*η_reg))) * dQdτij
                 dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 τij = dτij .+ τij
-                εvol_ij = (1.0 - relλ) * εvol_ij + relλ * (Pr[I...] - τ_tensile) / (K*dt + (2.0/3.0*η_reg))
+                εvol_ij = (1.0 - relλ) * εvol_ij + relλ * (Pr[I...] - Pc1) / (K*dt + η_reg*2.0/3.0)
                 setindex!.(τ, τij, I...)
                 setindex!(ε_vol_pl, εvol_ij, I...)
-                ΔP[I...] = (isinf(K) ? 0.0 : K * dt * (Pr[I...] - Pc1) * inv(K*dt + (2.0/3.0*η_reg)))
+                ΔP[I...] = (isinf(K) ? 0.0 : K * dt * εvol_ij)
                 pl_domain[I...] = 2.0
+                # println("corner region 1")
                 τII_ij = GeoParams.second_invariant(τij)
 
-            elseif l1 < τII_ij ≤ l2 #&& F3 > 0
+            elseif  l1 < τII_ij ≤ l2 #&& F3 > 0
                 #tensile
-                dQdPij = 1.0
+                dQdPij = 1.0 #sind(90)
                 λ[I...] =
                 (1.0 - relλ) * λ[I...] +
-                relλ * (max(F3, 0.0) / (ηve_ij + (K * dt + η_reg)))
+                relλ * (max(F3, 0.0) / (ηve_ij + η_reg*(1.0 + 2.0/3.0) + K * dt))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
                 dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 τij = dτij .+ τij
-                εvol_ij =  (1.0 - relλ) * εvol_ij + relλ * λ[I...]
+                εvol_ij =  (1.0 - relλ) * εvol_ij + relλ * λ[I...] * dQdPij
                 setindex!.(τ, τij, I...)
                 setindex!.(ε_pl, εij_pl, I...)
                 setindex!(ε_vol_pl, εvol_ij, I...)
-                ΔP[I...] = (isinf(K) ? 0.0 : K * dt * λ[I...] * dQdPij)
+                ΔP[I...] = isinf(K) ? 0.0 : K * dt * εvol_ij
                 pl_domain[I...] = 3.0
                 τII_ij = GeoParams.second_invariant(τij)
 
             elseif l2 < τII_ij ≤ l3
                 # corner region 2
                 λ[I...] =
-                (1.0 - relλ) * λ[I...] +
-                relλ * (ηve_ij * (τII_ij - τc2) * inv(ηve_ij + η_reg*2.0/3.0))
+                    (1.0 - relλ) * λ[I...] +
+                    relλ * (ηve_ij * (τII_ij - τc2) * inv(ηve_ij + η_reg*2.0/3.0))
+                    # relλ * (ηve_ij * (τII_ij - τc2) * inv(η[I...] * dτ_r + η_reg*2.0/3.0))
+                    # relλ * (ηve_ij * (τII_ij - τc2) * inv(ηve_ij + η_reg))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
-                # εij_pl = (ηve_ij * (τII_ij - τc2) * inv(ηve_ij + η_reg)) * dQdτij
+
                 dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
-                # dτij = @. dτij - (ηij*dτ_r) * (τII_ij - τc2) * inv(ηij*dτ_r + η_reg*2.0/3.0)
                 τij = dτij .+ τij
                 εvol_ij = (1.0 - relλ) * εvol_ij + relλ * (Pr[I...] - Pc2) * inv(K*dt + η_reg*2.0/3.0)
                 setindex!.(τ, τij, I...)
                 setindex!(ε_vol_pl, εvol_ij, I...)
-                ΔP[I...] = (isinf(K) ? 0.0 : K * dt * (Pr[I...] - Pc2) * inv(K*dt +η_reg*2.0/3.0))
+                ΔP[I...] = isinf(K) ? 0.0 : K * dt * εvol_ij
                 pl_domain[I...] = 4.0
                 τII_ij = GeoParams.second_invariant(τij)
 
-            elseif F5 > 0.0 && l3 < τIIv_ij
-            # elseif is_pl && !iszero(τII_ij) && F5 > 0
+            elseif F5 > 0 #l3 < τIIv_ij
                 # Drucker-Prager
                 # stress correction @ center
                 λ[I...] =
@@ -1253,7 +1261,7 @@ end
                 setindex!.(τ, τij, I...)
                 setindex!.(ε_pl, εij_pl, I...)
                 setindex!(ε_vol_pl, εvol_ij, I...)
-                ΔP[I...] = volume * λ[I...]
+                ΔP[I...] =  isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ #εvol_ij
                 pl_domain[I...] = 5.0
                 τII_ij = GeoParams.second_invariant(τij)
             else

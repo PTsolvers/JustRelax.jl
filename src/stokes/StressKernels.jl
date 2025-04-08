@@ -951,7 +951,7 @@ end
         τII[I...] = τII_ij
 
         η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
-        Pr_c[I...] = Pr[I...] + volume * λ[I...]
+        Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
     end
 
     return nothing

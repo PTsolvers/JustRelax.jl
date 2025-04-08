@@ -118,7 +118,7 @@
             τII[I...] = τII_ij
 
             η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
-            Pr_c[I...] = Pr[I...] + volume * λ[I...]
+            Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
         else
             Pr_c[I...] = zero(eltype(T))
             # τij, = cache_tensors(τ, τ_o, ε, I...)
@@ -391,8 +391,6 @@ end
             setindex!.(τ, τij, I...)
             setindex!.(ε_pl, εij_pl, I...)
             τII[I...] = τII_ij = second_invariant(τij)
-            Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
-            # η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij_ve...))
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)

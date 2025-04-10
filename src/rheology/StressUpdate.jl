@@ -203,6 +203,19 @@ function cache_tensors(
 end
 
 function cache_tensors(
+    τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any},Δε::NTuple{3, Any}, idx::Vararg{Integer, 2}
+)
+@inline av_shear(A) = 0.25 * sum(_gather(A, idx...))
+
+εij = ε[1][idx...], ε[2][idx...], av_shear(ε[3])
+Δεij = Δε[1][idx...], Δε[2][idx...], av_shear(Δε[3])
+τij = getindex.(τ, idx...)
+τij_o = getindex.(τ_old, idx...)
+
+return τij, τij_o, εij, Δεij
+end
+
+function cache_tensors(
         τ::NTuple{6, Any}, τ_old::NTuple{6, Any}, ε::NTuple{6, Any}, idx::Vararg{Integer, 3}
     )
     @inline av_yz(A) = _av_yz(A, idx...)

@@ -26,14 +26,14 @@ end
 end
 
 @parallel_indices (i, j) function compute_strain_rate_from_increment!(
-        εxx::AbstractArray{T, 2}, εyy, εxy, Δεxx, Δεyy , Δεxy, _dt
+        εxx::AbstractArray{T, 2}, εyy, εxy, Δεxx, Δεyy, Δεxy, _dt
     ) where {T}
 
     if all((i, j) .≤ size(εxx))
-        εxx[i, j] =  Δεxx[i, j]*_dt
-        εyy[i, j] =  Δεyy[i, j]*_dt
+        εxx[i, j] = Δεxx[i, j] * _dt
+        εyy[i, j] = Δεyy[i, j] * _dt
     end
-    εxy[i, j] = Δεxy[i, j]*_dt
+    εxy[i, j] = Δεxy[i, j] * _dt
 
     return nothing
 end

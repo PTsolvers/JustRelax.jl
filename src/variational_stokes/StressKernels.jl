@@ -460,10 +460,10 @@ end
         dτ_rv = inv(θ_dτ * dt + ηv_ij * _Gv + dt)
 
         # stress increments @ vertex
-        dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, Δεxxv_ij, _Gv, dτ_rv,dt)
-        dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, Δεyyv_ij, _Gv, dτ_rv,dt)
+        dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, Δεxxv_ij, _Gv, dτ_rv, dt)
+        dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, Δεyyv_ij, _Gv, dτ_rv, dt)
         dτxyv = compute_stress_increment(
-            τxyv[I...], τxyv_old[I...], ηv_ij, Δε[3][I...], _Gv, dτ_rv,dt
+            τxyv[I...], τxyv_old[I...], ηv_ij, Δε[3][I...], _Gv, dτ_rv, dt
         )
         τIIv_ij = √(
             0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2
@@ -492,7 +492,7 @@ end
         if isvalid_c(ϕ, I...)
             # Material properties
             phase = @inbounds phase_center[I...]
-            _G = inv(fn_ratio(get_shear_modulus, rheology, phase) )
+            _G = inv(fn_ratio(get_shear_modulus, rheology, phase))
             _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
             is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(
                 rheology, EII[I...], phase
@@ -500,16 +500,16 @@ end
             K = fn_ratio(get_bulk_modulus, rheology, phase)
             volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
             ηij = η[I...]
-            dτ_r = 1.0 / (θ_dτ * dt  + ηij * _G + dt)
+            dτ_r = 1.0 / (θ_dτ * dt + ηij * _G + dt)
 
             # cache strain rates for center calculations
-            τij, τij_o, εij ,Δεij = cache_tensors(τ, τ_o, ε, Δε, I...)
+            τij, τij_o, εij, Δεij = cache_tensors(τ, τ_o, ε, Δε, I...)
 
             # visco-elastic strain rates @ center
             εij_ve = @. εij + 0.5 * τij_o * _Gdt
             εII_ve = GeoParams.second_invariant(εij_ve)
             # stress increments @ center
-            dτij = compute_stress_increment(τij, τij_o, ηij, Δεij, _G, dτ_r,dt)
+            dτij = compute_stress_increment(τij, τij_o, ηij, Δεij, _G, dτ_r, dt)
             τII_ij = GeoParams.second_invariant(dτij .+ τij)
             # yield function @ center
             F = τII_ij - C * cosϕ - Pr[I...] * sinϕ

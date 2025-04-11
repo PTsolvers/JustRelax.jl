@@ -123,16 +123,18 @@ function _solve_VS!(
                 relaxation = viscosity_relaxation,
             )
 
-            @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
+            update_stresses_center_vertex!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
                 stokes.EII_pl,
+                stokes.ε_vol_pl,
                 @tensor_center(stokes.τ),
                 (stokes.τ.xy,),
                 @tensor_center(stokes.τ_o),
                 (stokes.τ_o.xy,),
                 θ,
                 stokes.P,
+                stokes.ΔP,
                 stokes.viscosity.η,
                 λ,
                 λv,
@@ -142,9 +144,11 @@ function _solve_VS!(
                 dt,
                 θ_dτ,
                 rheology,
+                stokes.pl_domain,
                 phase_ratios.center,
                 phase_ratios.vertex,
                 ϕ,
+                args,
             )
             update_halo!(stokes.τ.xy)
 

@@ -578,7 +578,7 @@ function _solve!(
             )
             # end
 
-            @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
+            update_stresses_center_vertex!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
                 stokes.EII_pl,

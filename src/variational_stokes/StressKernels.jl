@@ -1,14 +1,16 @@
 # 2D kernel
-@parallel_indices (I...) function update_stresses_center_vertex!(
+function update_stresses_center_vertex!(
         ε::NTuple{3, T},      # normal components @ centers; shear components @ vertices
         ε_pl::NTuple{3},      # whole Voigt tensor @ centers
         EII,                  # accumulated plastic strain rate @ centers
+        ε_vol_pl,   # volumetric strain rate @ centers
         τ::NTuple{3},         # whole Voigt tensor @ centers
         τshear_v::NTuple{1},  # shear tensor components @ vertices
         τ_o::NTuple{3},
         τshear_ov::NTuple{1}, # shear tensor components @ vertices
         Pr,
         Pr_c,
+        ΔP,
         η,
         λ,
         λv,
@@ -18,10 +20,116 @@
         dt,
         θ_dτ,
         rheology,
+        pl_domain,
         phase_center,
         phase_vertex,
         ϕ::JustRelax.RockRatio,
+        kwargs::NamedTuple,
     ) where {T}
+    return update_stresses_center_vertex!(
+        ε, ε_pl, EII, ε_vol_pl, τ, τshear_v, τ_o, τshear_ov,
+        Pr, Pr_c, ΔP, η, λ, λv, τII, η_vep,
+        relλ, dt, θ_dτ,
+        rheology,
+        pl_domain,
+        phase_center,
+        phase_vertex,
+        ϕ::JustRelax.RockRatio;
+        kwargs...
+        )
+end
+
+function update_stresses_center_vertex!(
+        ε::NTuple{3, T},      # normal components @ centers; shear components @ vertices
+        ε_pl::NTuple{3},      # whole Voigt tensor @ centers
+        EII,                  # accumulated plastic strain rate @ centers
+        ε_vol_pl,   # volumetric strain rate @ centers
+        τ::NTuple{3},         # whole Voigt tensor @ centers
+        τshear_v::NTuple{1},  # shear tensor components @ vertices
+        τ_o::NTuple{3},
+        τshear_ov::NTuple{1}, # shear tensor components @ vertices
+        Pr,
+        Pr_c,
+        ΔP,
+        η,
+        λ,
+        λv,
+        τII,
+        η_vep,
+        relλ,
+        dt,
+        θ_dτ,
+        rheology,
+        pl_domain,
+        phase_center,
+        phase_vertex,
+        ϕ::JustRelax.RockRatio;
+        τ_tensile = nothing,
+        δτ_tensile = nothing,
+        kwargs...,
+        ) where {T}
+
+    ni = size(Pr)
+    @parallel (@idx ni .+ 1) update_stresses_center_vertex_kernel!(
+        ε::NTuple{3},         # normal components @ centers; shear components @ vertices
+        ε_pl::NTuple{3},      # whole Voigt tensor @ centers
+        EII,                  # accumulated plastic strain rate @ centers
+        ε_vol_pl,
+        τ::NTuple{3},         # whole Voigt tensor @ centers
+        τshear_v::NTuple{1},  # shear tensor components @ vertices
+        τ_o::NTuple{3},
+        τshear_ov::NTuple{1}, # shear tensor components @ vertices
+        Pr,
+        Pr_c,
+        ΔP,
+        η,
+        λ,
+        λv,
+        τII,
+        η_vep,
+        relλ,
+        dt,
+        θ_dτ,
+        rheology,
+        pl_domain,
+        phase_center,
+        phase_vertex,
+        ϕ::JustRelax.RockRatio,
+        τ_tensile,
+        δτ_tensile,
+        )
+    return nothing
+end
+
+@parallel_indices (I...) function update_stresses_center_vertex_kernel!(
+        ε::NTuple{3, T},      # normal components @ centers; shear components @ vertices
+        ε_pl::NTuple{3},      # whole Voigt tensor @ centers
+        EII,                  # accumulated plastic strain rate @ centers
+        ε_vol_pl,   # volumetric strain rate @ centers
+        τ::NTuple{3},         # whole Voigt tensor @ centers
+        τshear_v::NTuple{1},  # shear tensor components @ vertices
+        τ_o::NTuple{3},
+        τshear_ov::NTuple{1}, # shear tensor components @ vertices
+        Pr,
+        Pr_c,
+        ΔP,
+        η,
+        λ,
+        λv,
+        τII,
+        η_vep,
+        relλ,
+        dt,
+        θ_dτ,
+        rheology,
+        pl_domain,
+        phase_center,
+        phase_vertex,
+        ϕ::JustRelax.RockRatio,
+        ::Nothing,
+        ::Nothing,
+    ) where {T}
+
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
     ni = size(Pr)
@@ -84,6 +192,7 @@
             K = fn_ratio(get_bulk_modulus, rheology, phase)
             volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
             ηij = η[I...]
+            εvol_ij = ε_vol_pl[I...]
             dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
 
             # cache strain rates for center calculations
@@ -102,23 +211,348 @@
                 # stress correction @ center
                 λ[I...] =
                     (1.0 - relλ) * λ[I...] +
-                    relλ .* (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
+                    relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
                 dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 τij = dτij .+ τij
+                εvol_ij = (1.0 - relλ) * εvol_ij + relλ * λ[I...] * sinψ
                 setindex!.(τ, τij, I...)
                 setindex!.(ε_pl, εij_pl, I...)
+                setindex!(ε_vol_pl, εvol_ij, I...)
+                # ΔP[I...] = volume * λ[I...]
+                ΔP[I...] =  (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+                pl_domain[I...] = 1.0
                 τII_ij = GeoParams.second_invariant(τij)
             else
                 # stress correction @ center
                 setindex!.(τ, dτij .+ τij, I...)
+                pl_domain[I...] = 0.0
                 τII_ij
             end
             τII[I...] = τII_ij
 
             η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
-            Pr_c[I...] = Pr[I...] + volume * λ[I...]
+            Pr_c[I...] = Pr[I...] + ΔP[I...]
+        else
+            Pr_c[I...] = zero(eltype(T))
+            # τij, = cache_tensors(τ, τ_o, ε, I...)
+            dτij = zero(eltype(T)), zero(eltype(T)), zero(eltype(T))
+            # setindex!.(τ, dτij .+ τij, I...)
+            setindex!.(τ, dτij, I...)
+        end
+    end
+
+    return nothing
+end
+
+function line(p, K, Δt, η_ve, sinψ, p1, t1)
+    p2 = p1 + K*Δt*sinψ
+    t2 = t1 - η_ve
+    a  = (t2-t1)/(p2-p1)
+    b  = t2 - a*p2
+    return a*p + b
+end
+
+# tensile
+@parallel_indices (I...) function update_stresses_center_vertex_kernel!(
+        ε::NTuple{3},         # normal components @ centers; shear components @ vertices
+        ε_pl::NTuple{3},      # whole Voigt tensor @ centers
+        EII,                  # accumulated plastic strain rate @ centers
+        ε_vol_pl,
+        τ::NTuple{3},         # whole Voigt tensor @ centers
+        τshear_v::NTuple{1},  # shear tensor components @ vertices
+        τ_o::NTuple{3},
+        τshear_ov::NTuple{1}, # shear tensor components @ vertices
+        Pr,
+        Pr_c,
+        ΔP,
+        η,
+        λ,
+        λv,
+        τII,
+        η_vep,
+        relλ,
+        dt,
+        θ_dτ,
+        rheology,
+        pl_domain,
+        phase_center,
+        phase_vertex,
+        ϕ::JustRelax.RockRatio,
+        τ_tensile,
+        δτ_tensile,
+    )
+    τxyv = τshear_v[1]
+    τxyv_old = τshear_ov[1]
+    ni = size(Pr)
+    Ic = clamped_indices(ni, I...)
+
+    if isvalid_v(ϕ, I...)
+        # interpolate to ith vertex
+        Pv_ij = av_clamped(Pr, Ic...)
+        εxxv_ij = av_clamped(ε[1], Ic...)
+        εyyv_ij = av_clamped(ε[2], Ic...)
+        τxxv_ij = av_clamped(τ[1], Ic...)
+        τyyv_ij = av_clamped(τ[2], Ic...)
+        τxxv_old_ij = av_clamped(τ_o[1], Ic...)
+        τyyv_old_ij = av_clamped(τ_o[2], Ic...)
+        EIIv_ij = av_clamped(EII, Ic...)
+        εxyv_pl_ij = av_clamped(ε_pl[3],Ic...)
+
+
+        ## vertex
+        phase = @inbounds phase_vertex[I...]
+        is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
+        _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
+        Kv = fn_ratio(get_bulk_modulus, rheology, phase)
+        volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
+        ηv_ij = av_clamped(η, Ic...)
+        dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
+        ηvev_ij = 1 / (1/ηv_ij + _Gvdt)
+
+        Pc1    =     - (τ_tensile - δτ_tensile)                   # Pressure corner 1
+        τc1    =     Pc1 + τ_tensile #δτ_tensile    #τ2 / (Pc2 + τT)*P1 + τ2          # dev stress corner1
+        Pc2    =     (τ_tensile + Cv * cosϕv) / (1.0 + sinϕv)                             # Pressure corner 2
+        τc2    =     Pc2 + τ_tensile         # dev stress corner2
+
+        # l1 = (ηvev_ij + η_regv)/(Kv*dt + 2.0/3.0*η_regv)*(Pv_ij - Pc1) + τc1
+        # l2 = (ηvev_ij + η_regv)/(Kv*dt + 2.0/3.0*η_regv)*(Pv_ij - Pc2) + τc2
+        # l3 = (ηvev_ij + η_regv)/((Kv*dt + 2.0/3.0*η_regv)*sinψv)*(Pv_ij - Pc2) + τc2
+        l1     = line(Pv_ij[I...], Kv, dt, ηvev_ij, sind(90.0), Pc1, τc1)
+        l2     = line(Pv_ij[I...], Kv, dt, ηvev_ij, sind(90.0), Pc2, τc2)
+        l3     = line(Pv_ij[I...], Kv, dt, ηvev_ij, sinψv, Pc2, τc2)
+
+        # stress increments @ vertex
+        dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
+        dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
+        dτxyv = compute_stress_increment(
+            τxyv[I...], τxyv_old[I...], ηv_ij, ε[3][I...], _Gvdt, dτ_rv
+        )
+        τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+
+        # yield function @ center
+        F1v = - Pv_ij - (τ_tensile - δτ_tensile)
+        F3v = τIIv_ij - Pv_ij - τ_tensile
+        F5v = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        Fv_tot = max(F5v, F3v, F1v)
+
+        if is_pl && !iszero(τIIv_ij) && Fv_tot > 0
+            if τIIv_ij ≤ τc1
+                #pressure limiter
+                # dQdPij = -1.0
+                λv[I...] =
+                    (1.0 - relλ) * λv[I...] +
+                    relλ * (max(F1v, 0.0) / (Kv * dt + η_regv*2.0/3.0))
+                dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
+                εxyv_pl_ij = λv[I...] .* dQdτxy
+                dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
+                τxyv[I...] += dτxyv
+            elseif τc1 < τIIv_ij ≤ l1
+                # corner region 1
+                λv[I...] =
+                    (1.0 - relλ) * λv[I...] +
+                    relλ * (ηvev_ij  * (τIIv_ij - τc1) / (ηvev_ij + η_regv*2.0/3.0))
+                dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
+                εxyv_pl_ij = λv[I...] .* dQdτxy
+                dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
+                τxyv[I...] += dτxyv
+
+            elseif l1 < τIIv_ij ≤ l2 #&& F3v > 0
+                #tensile
+                λv[I...] =
+                    (1.0 - relλ) * λv[I...] +
+                    relλ * (max(F3v, 0.0) / (ηvev_ij + η_regv*(1.0 + 2.0/3.0) + Kv * dt))
+                dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
+                εxyv_pl_ij = λv[I...] .* dQdτxy
+                dτxyv = @. dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
+                τxyv[I...] += dτxyv
+
+            elseif l2 < τIIv_ij ≤ l3
+                # corner region 2
+                λv[I...] =
+                    (1.0 - relλ) * λv[I...] +
+                    relλ * (ηvev_ij  * (τIIv_ij - τc2) / (ηvev_ij + (2.0/3.0*η_regv)))
+                    # relλ * (ηvev_ij  * (τIIv_ij - τc2) / (ηv_ij * dτ_rv + η_regv*2.0/3.0))
+                    # relλ * (ηvev_ij  * (τIIv_ij - τc2) / (ηvev_ij + η_regv))
+                    # relλ * (ηvev_ij  * (τIIv_ij - τc2) / (ηvev_ij + η_regv* 2.0/3.0))
+                dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
+                εxyv_pl_ij = λv[I...] .* dQdτxy
+                τxyv[I...] += dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
+            elseif F5v > 0 #l3 < τIIv_ij
+                # Drucker-Prager
+                # stress correction @ vertex
+                λv[I...] =
+                    (1.0 - relλ) * λv[I...] +
+                    relλ * (max(F5v, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
+                    # relλ * (max(F5v, 0.0) / (ηvev_ij + η_regv*(1.0 + 2.0/3.0*sinϕv*sinψv) + volumev))
+                dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
+                εxyv_pl_ij = λv[I...] .* dQdτxy
+                τxyv[I...] += dτxyv - 2.0 * ηv_ij * εxyv_pl_ij * dτ_rv
+            else
+                # stress correction @ vertex
+                τxyv[I...] += dτxyv
+            end
+        else
+            # stress correction @ vertex
+            τxyv[I...] += dτxyv
+        end
+
+    else
+        τxyv[I...] = zero(eltype(T))
+    end
+
+    ## center
+    if all(I .≤ ni)
+        if isvalid_c(ϕ, I...)
+            # Material properties
+            phase = @inbounds phase_center[I...]
+            _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
+            is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
+            K = fn_ratio(get_bulk_modulus, rheology, phase)
+            volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
+            ηij = η[I...]
+            εvol_ij = ε_vol_pl[I...]
+            dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
+            ηve_ij = 1 / (1/ηij + _Gdt)
+
+            Pc1    =     - (τ_tensile - δτ_tensile)                   # Pressure corner 1
+            τc1    =     δτ_tensile
+            Pc2    =     (τ_tensile + C * cosϕ) / (1.0 + sinϕ)                         # Pressure corner 2
+            τc2    =     Pc2 + τ_tensile        # dev stress corner2
+
+            # l1 = (ηve_ij + η_reg)/(K*dt + 2.0/3.0*η_reg )*(Pr[I...] - Pc1) + τc1
+            # l2 = (ηve_ij + η_reg)/(K*dt + 2.0/3.0*η_reg )*(Pr[I...] - Pc2) + τc2
+            # l3 = (ηve_ij + η_reg)/((K*dt + 2.0/3.0*η_reg)*sinψ)*(Pr[I...] - Pc2) + τc2
+            l1     = line(Pr[I...], K, dt, ηve_ij, sind(90.0), Pc1, τc1)
+            l2     = line(Pr[I...], K, dt, ηve_ij, sind(90.0), Pc2, τc2)
+            l3     = line(Pr[I...], K, dt, ηve_ij, sinψ, Pc2, τc2)
+
+            # cache strain rates for center calculations
+            τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
+
+            # visco-elastic strain rates @ center
+            εij_ve = @. εij + 0.5 * τij_o * _Gdt
+            εII_ve = GeoParams.second_invariant(εij_ve)
+            # stress increments @ center
+            # dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
+            dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
+            τII_ij = GeoParams.second_invariant(dτij .+ τij)
+            # yield function @ center
+            F1 = - Pr[I...] - (τ_tensile - δτ_tensile)
+            F3 = τII_ij - Pr[I...] - τ_tensile
+            F5 = τII_ij - C * cosϕ - Pr[I...] * sinϕ
+            F_tot = max(F5, F3, F1)
+
+            τII_ij = if is_pl && !iszero(τII_ij) && F_tot > 0
+                τII_ij = if τII_ij ≤ τc1 #&& F1 > 0
+                    #pressure limiter
+                    dQdPij = 1.0
+                    λ[I...] =
+                        (1.0 - relλ) * λ[I...] +
+                        relλ * (max(F1, 0.0) / (K * dt + η_reg*2.0/3.0))
+                    dQdτij = @. 0.5 * (τij + dτij) / τII_ij
+                    εij_pl = λ[I...] .* dQdτij
+                    dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
+                    τij = dτij .+ τij
+                    εvol_ij =  (1.0 - relλ) * εvol_ij + relλ * (max(F1,0.0) / (K * dt + η_reg))
+                    setindex!.(τ, τij, I...)
+                    setindex!.(ε_pl, εij_pl, I...)
+                    setindex!(ε_vol_pl, εvol_ij, I...)
+                    ΔP[I...] = (isinf(K) ? 0.0 : K * dt * εvol_ij)
+                    pl_domain[I...] = 1.0
+                    τII_ij = GeoParams.second_invariant(τij)
+
+                elseif τc1 < τII_ij ≤ l1
+                    # corner region 1
+                    λ[I...] =
+                        (1.0 - relλ) * λ[I...] +
+                        relλ * (ηve_ij * (τII_ij - τc1) / (ηve_ij + η_reg*2.0/3.0))
+                    dQdτij = @. 0.5 * (τij + dτij) / τII_ij
+                    εij_pl = λ[I...] .* dQdτij
+                    dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
+                    τij = dτij .+ τij
+                    εvol_ij = (1.0 - relλ) * εvol_ij + relλ * (Pr[I...] - Pc1) / (K*dt + η_reg*2.0/3.0)
+                    setindex!.(τ, τij, I...)
+                    setindex!(ε_vol_pl, εvol_ij, I...)
+                    ΔP[I...] = (isinf(K) ? 0.0 : K * dt * εvol_ij)
+                    pl_domain[I...] = 2.0
+                    τII_ij = GeoParams.second_invariant(τij)
+
+                elseif  l1 < τII_ij ≤ l2 #&& F3 > 0
+                    #tensile
+                    dQdPij = 1.0 #sind(90)
+                    λ[I...] =
+                    (1.0 - relλ) * λ[I...] +
+                    relλ * (max(F3, 0.0) / (ηve_ij + η_reg*(1.0 + 2.0/3.0) + K * dt))
+                    dQdτij = @. 0.5 * (τij + dτij) / τII_ij
+                    εij_pl = λ[I...] .* dQdτij
+                    dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
+                    τij = dτij .+ τij
+                    εvol_ij =  (1.0 - relλ) * εvol_ij + relλ * λ[I...] * dQdPij
+                    setindex!.(τ, τij, I...)
+                    setindex!.(ε_pl, εij_pl, I...)
+                    setindex!(ε_vol_pl, εvol_ij, I...)
+                    ΔP[I...] = isinf(K) ? 0.0 : K * dt * εvol_ij
+                    pl_domain[I...] = 3.0
+                    τII_ij = GeoParams.second_invariant(τij)
+
+                elseif l2 < τII_ij ≤ l3
+                    # corner region 2
+                    λ[I...] =
+                        (1.0 - relλ) * λ[I...] +
+                        relλ * (ηve_ij * (τII_ij - τc2) * inv(ηve_ij + η_reg*2.0/3.0))
+                        # relλ * (ηve_ij * (τII_ij - τc2) * inv(η[I...] * dτ_r + η_reg*2.0/3.0))
+                        # relλ * (ηve_ij * (τII_ij - τc2) * inv(ηve_ij + η_reg))
+                    dQdτij = @. 0.5 * (τij + dτij) / τII_ij
+                    εij_pl = λ[I...] .* dQdτij
+
+                    dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
+                    τij = dτij .+ τij
+                    εvol_ij = (1.0 - relλ) * εvol_ij + relλ * (Pr[I...] - Pc2) * inv(K*dt + η_reg*2.0/3.0)
+                    setindex!.(τ, τij, I...)
+                    setindex!(ε_vol_pl, εvol_ij, I...)
+                    ΔP[I...] = isinf(K) ? 0.0 : K * dt * εvol_ij
+                    pl_domain[I...] = 4.0
+                    τII_ij = GeoParams.second_invariant(τij)
+
+                elseif F5 > 0 #l3 < τIIv_ij
+                    # Drucker-Prager
+                    # stress correction @ center
+                    λ[I...] =
+                        (1.0 - relλ) * λ[I...] +
+                        relλ * (max(F5, 0.0) / (η[I...] * dτ_r + η_reg + volume))
+                        # relλ * (max(F5, 0.0) / (ηve_ij + η_reg + volume))
+                        # relλ * (max(F5, 0.0) / (ηve_ij + η_reg * (1.0 + 2.0/3.0*sinϕ*sinψ) + volume))
+                    dQdτij = @. 0.5 * (τij + dτij) / τII_ij
+                    εij_pl = λ[I...] .* dQdτij
+                    dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
+                    τij = dτij .+ τij
+                    εvol_ij = (1.0 - relλ) * εvol_ij + relλ * λ[I...] * sinψ
+                    setindex!.(τ, τij, I...)
+                    setindex!.(ε_pl, εij_pl, I...)
+                    setindex!(ε_vol_pl, εvol_ij, I...)
+                    ΔP[I...] =  isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ #εvol_ij
+                    pl_domain[I...] = 5.0
+                    τII_ij = GeoParams.second_invariant(τij)
+                else
+                    # stress correction @ center
+                    setindex!.(τ, dτij .+ τij, I...)
+                    pl_domain[I...] = 0.0
+                    τII_ij
+                end
+
+            else
+                # stress correction @ center
+                setindex!.(τ, dτij .+ τij, I...)
+                pl_domain[I...] = 0.0
+                τII_ij
+            end
+            τII[I...] = τII_ij
+
+            η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
+
+            Pr_c[I...] = Pr[I...] + ΔP[I...]
         else
             Pr_c[I...] = zero(eltype(T))
             # τij, = cache_tensors(τ, τ_o, ε, I...)

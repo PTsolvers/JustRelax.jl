@@ -472,7 +472,7 @@ function _solve!(
             )
             # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
-            @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
+            @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
                 stokes.EII_pl,

@@ -106,22 +106,30 @@ function closest_phase(
     new_phase = @index phases[current_particle, I...]
     dist_min = Inf
     px, py = coords
+    nx, ny = size(index)
+    i, j = I
+    for j in (j - 1):(j + 1)
+        !(1 ≤ j ≤ ny) && continue
+        for i in (i - 1):(i + 1)
+            !(1 ≤ i ≤ nx) && continue
 
-    for ip in cellaxes(index)
-        # early escape conditions
-        (ip == current_particle) && continue # current particle
-        (@index index[ip, I...]) || continue
-        # get the phase of the particle and skip if it is the same as the `skip_phase`
-        phaseᵢ = @index phases[ip, I...]
-        phaseᵢ == skip_phase && continue
+            for ip in cellaxes(index)
+                # early escape conditions
+                (ip == current_particle) && continue # current particle
+                (@index index[ip, i, j]) || continue
+                # get the phase of the particle and skip if it is the same as the `skip_phase`
+                phaseᵢ = @index phases[ip, i, j]
+                phaseᵢ == skip_phase && continue
 
-        # distance from new point to the existing particle
-        pxi = @index(px[ip, I...]), @index(py[ip, I...])
-        d = distance(pxi, pn)
-        # update the closest phase
-        if d < dist_min
-            new_phase = phaseᵢ
-            dist_min = d
+                # distance from new point to the existing particle
+                pxi = @index(px[ip, i, j]), @index(py[ip, i, j])
+                d = distance(pxi, pn)
+                # update the closest phase
+                if d < dist_min
+                    new_phase = phaseᵢ
+                    dist_min = d
+                end
+            end
         end
     end
 

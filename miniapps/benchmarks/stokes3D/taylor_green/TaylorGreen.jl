@@ -8,7 +8,7 @@ using MPI
 
 include("vizTaylorGreen.jl")
 
-function body_forces(xi::NTuple{3,T}) where {T}
+function body_forces(xi::NTuple{3, T}) where {T}
     xx, yy, zz = xi
     x = PTArray([x for x in xx, y in yy, z in zz])
     y = PTArray([y for x in xx, y in yy, z in zz])
@@ -37,11 +37,11 @@ function velocity!(stokes, xci, xvi)
         # Vx
         if (ix ≤ size(Vx, 1)) && (iy ≤ size(Vx, 2)) && (iz ≤ size(Vx, 3))
             if (ix == size(Vx, 1)) ||
-                (iy == size(Vx, 2)) ||
-                (iz == size(Vx, 3)) ||
-                (ix == 1) ||
-                (iy == 1) ||
-                (iz == 1)
+                    (iy == size(Vx, 2)) ||
+                    (iz == size(Vx, 3)) ||
+                    (ix == 1) ||
+                    (iy == 1) ||
+                    (iz == 1)
                 Vx[ix, iy, iz] = _velocity_x(xv[ix], yc[iy], zc[iz])
             else
                 Vx[ix, iy, iz] = zero(eltype(Vx))
@@ -50,11 +50,11 @@ function velocity!(stokes, xci, xvi)
         # Vy
         if (ix ≤ size(Vy, 1)) && (iy ≤ size(Vy, 2)) && (iz ≤ size(Vy, 3))
             if (ix == size(Vy, 1)) ||
-                (iy == size(Vy, 2)) ||
-                (iz == size(Vy, 3)) ||
-                (ix == 1) ||
-                (iy == 1) ||
-                (iz == 1)
+                    (iy == size(Vy, 2)) ||
+                    (iz == size(Vy, 3)) ||
+                    (ix == 1) ||
+                    (iy == 1) ||
+                    (iz == 1)
                 Vy[ix, iy, iz] = _velocity_y(xc[ix], yv[iy], zc[iz])
             else
                 Vy[ix, iy, iz] = zero(eltype(Vx))
@@ -63,11 +63,11 @@ function velocity!(stokes, xci, xvi)
         # Vz
         if (ix ≤ size(Vz, 1)) && (iy ≤ size(Vz, 2)) && (iz ≤ size(Vz, 3))
             if (ix == size(Vz, 1)) ||
-                (iy == size(Vz, 2)) ||
-                (iz == size(Vz, 3)) ||
-                (ix == 1) ||
-                (iy == 1) ||
-                (iz == 1)
+                    (iy == size(Vz, 2)) ||
+                    (iz == size(Vz, 3)) ||
+                    (ix == 1) ||
+                    (iy == 1) ||
+                    (iz == 1)
                 Vz[ix, iy, iz] = _velocity_z(xc[ix], yc[iy], zv[iz])
             else
                 Vz[ix, iy, iz] = zero(eltype(Vx))
@@ -77,21 +77,21 @@ function velocity!(stokes, xci, xvi)
         return nothing
     end
 
-    @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
+    return @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
 end
 
-function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
+function taylorGreen(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = false)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
     # independent of (MPI) parallelization
     ni = (nx, ny, nz) # number of nodes in x- and y-
-    lx = ly = lz = 1e0
+    lx = ly = lz = 1.0e0
     li = (lx, ly, lz)  # domain length in x- and y-
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI=init_MPI)...) # init MPI
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI)...) # init MPI
     origin = zero(nx), zero(ny), zero(nz)
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
-    grid         = Geometry(ni, li; origin = origin)
+    grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
@@ -102,7 +102,7 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
     # general stokes arrays
     stokes = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; CFL=1 / √3)
+    pt_stokes = PTStokesCoeffs(li, di; CFL = 1 / √3)
 
     ## Setup-specific parameters and fields
     β = 10.0
@@ -114,8 +114,8 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
 
     ## Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
-        free_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
-        no_slip=(left=false, right=false, top=false, bot=false, back=false, front=false),
+        free_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),
+        no_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
     # impose analytical velocity at the boundaries of the domain
     velocity!(stokes, xci, xvi)
@@ -137,13 +137,13 @@ function taylorGreen(; nx=16, ny=16, nz=16, init_MPI=true, finalize_MPI=false)
             Gc,
             dt,
             igg;
-            iterMax=10e3,
-            b_width=(4, 4, 4),
+            iterMax = 10.0e3,
+            b_width = (4, 4, 4),
         )
         t += Δt
     end
 
-    finalize_global_grid(; finalize_MPI=finalize_MPI)
+    finalize_global_grid(; finalize_MPI = finalize_MPI)
 
-    return (ni=ni, xci=xci, xvi=xvi, li=li, di=di), stokes, iters
+    return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), stokes, iters
 end

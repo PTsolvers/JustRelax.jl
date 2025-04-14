@@ -326,7 +326,12 @@ function _solve!(
     wtime0 = 0.0
     λ = @zeros(ni...)
     θ = @zeros(ni...)
-    Vx_on_Vy = @zeros(size(stokes.V.Vy))
+    # ~preconditioner
+    ητ = deepcopy(η)
+    # @hide_communication b_width begin # communication/computation overlap
+    compute_maxloc!(ητ, η; window = (1, 1))
+    update_halo!(ητ)
+    # end
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], rheology, args)
@@ -337,6 +342,9 @@ function _solve!(
 
     while iter < 2 || (err > ϵ && iter ≤ iterMax)
         wtime0 += @elapsed begin
+            compute_maxloc!(ητ, η; window = (1, 1))
+            update_halo!(ητ)
+
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, η, Kb, dt, r, θ_dτ
@@ -374,15 +382,10 @@ function _solve!(
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
 
-            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx_on_Vy!(
-                Vx_on_Vy, stokes.V.Vx
-            )
-
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
-                    Vx_on_Vy,
-                    θ,
+                    stokes.P,
                     @stress(stokes)...,
                     pt_stokes.ηdτ,
                     ρg...,
@@ -403,7 +406,6 @@ function _solve!(
                 stokes.R.Rx,
                 stokes.R.Ry,
                 @velocity(stokes)...,
-                Vx_on_Vy,
                 stokes.P,
                 @stress(stokes)...,
                 ρg...,
@@ -524,7 +526,7 @@ function _solve!(
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
     end
-    Vx_on_Vy = @zeros(size(stokes.V.Vy))
+
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
@@ -596,20 +598,12 @@ function _solve!(
                 rheology,
                 phase_ratios.center,
                 phase_ratios.vertex,
-                phase_ratios.xy,
-                phase_ratios.yz,
-                phase_ratios.xz,
             )
             update_halo!(stokes.τ.xy)
-
-            @parallel (1:(size(stokes.V.Vy, 1) - 2), 1:size(stokes.V.Vy, 2)) interp_Vx∂ρ∂x_on_Vy!(
-                Vx_on_Vy, stokes.V.Vx, ρg[2], _di[1]
-            )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
-                    Vx_on_Vy,
                     stokes.P,
                     @stress(stokes)...,
                     ηdτ,
@@ -635,7 +629,6 @@ function _solve!(
                 stokes.R.Rx,
                 stokes.R.Ry,
                 @velocity(stokes)...,
-                Vx_on_Vy,
                 stokes.P,
                 @stress(stokes)...,
                 ρg...,

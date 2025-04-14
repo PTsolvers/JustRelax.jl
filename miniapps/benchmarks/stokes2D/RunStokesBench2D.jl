@@ -31,22 +31,22 @@ if benchmark == :solcx
     include("solcx/SolCx.jl") # need to call this again if we switch from gpu <-/-> cpu
 
     # viscosity contrast
-    Δη = 1e6
+    Δη = 1.0e6
     if runtype == :single
         # run model
         geometry, stokes, iters, ρ = solCx(
             Δη;
-            nx=nx,
-            ny=ny,
-            init_MPI=MPI.Initialized() ? false : true,
-            finalize_MPI=finalize_MPI,
+            nx = nx,
+            ny = ny,
+            init_MPI = MPI.Initialized() ? false : true,
+            finalize_MPI = finalize_MPI,
         )
 
         # plot model output and error
-        f = plot_solCx_error(geometry, stokes, Δη; cmap=:romaO)
+        f = plot_solCx_error(geometry, stokes, Δη; cmap = :romaO)
 
     elseif runtype == :multiple
-        f = multiple_solCx(; Δη=Δη, nrange=6:10) # nx = ny = 2^(nrange)-1
+        f = multiple_solCx(; Δη = Δη, nrange = 6:10) # nx = ny = 2^(nrange)-1
     end
 
 elseif benchmark == :solkz
@@ -60,22 +60,22 @@ elseif benchmark == :solkz
     include("solkz/SolKz.jl")
 
     # viscosity contrast
-    Δη = 1e6
+    Δη = 1.0e6
     if runtype == :single
         # run model
         geometry, stokes, iters, = solKz(;
-            Δη=Δη,
-            nx=nx,
-            ny=ny,
-            init_MPI=MPI.Initialized() ? false : true,
-            finalize_MPI=finalize_MPI,
+            Δη = Δη,
+            nx = nx,
+            ny = ny,
+            init_MPI = MPI.Initialized() ? false : true,
+            finalize_MPI = finalize_MPI,
         )
 
         # plot model output and error
-        f = plot_solKz_error(geometry, stokes; cmap=:romaO)
+        f = plot_solKz_error(geometry, stokes; cmap = :romaO)
 
     elseif runtype == :multiple
-        f = multiple_solKz(; Δη=Δη, nrange=4:10) # nx = ny = 2^(nrange)-1
+        f = multiple_solKz(; Δη = Δη, nrange = 4:10) # nx = ny = 2^(nrange)-1
     end
 
 elseif benchmark == :solvi
@@ -87,29 +87,29 @@ elseif benchmark == :solvi
     include("solvi/SolVi.jl") # need to call this again if we switch from gpu <-/-> cpu
 
     # model specific parameters
-    Δη = 1e-3 # viscosity ratio between matrix and inclusion
+    Δη = 1.0e-3 # viscosity ratio between matrix and inclusion
     rc = 0.2 # radius of the inclusion
-    εbg = 1e0 # background strain rate
-    lx, ly = 2e0, 2e0 # domain siye in x and y directions
+    εbg = 1.0e0 # background strain rate
+    lx, ly = 2.0e0, 2.0e0 # domain siye in x and y directions
     if runtype == :single
         # run model
         geometry, stokes, iters = solVi(;
-            Δη=Δη,
-            nx=nx,
-            ny=ny,
-            lx=lx,
-            ly=ly,
-            rc=rc,
-            εbg=εbg,
-            init_MPI=MPI.Initialized() ? false : true,
-            finalize_MPI=finalize_MPI,
+            Δη = Δη,
+            nx = nx,
+            ny = ny,
+            lx = lx,
+            ly = ly,
+            rc = rc,
+            εbg = εbg,
+            init_MPI = MPI.Initialized() ? false : true,
+            finalize_MPI = finalize_MPI,
         )
 
         # plot model output and error
         f = plot_solVi_error(geometry, stokes, Δη, εbg, rc)
 
     elseif runtype == :multiple
-        f = multiple_solVi(; Δη=Δη, lx=lx, ly=ly, rc=rc, εbg=εbg, nrange=4:8) # nx = ny = 2^(nrange)-1
+        f = multiple_solVi(; Δη = Δη, lx = lx, ly = ly, rc = rc, εbg = εbg, nrange = 4:8) # nx = ny = 2^(nrange)-1
     end
 
 elseif benchmark == :solviel
@@ -118,29 +118,29 @@ elseif benchmark == :solviel
     include("solvi/SolViEl.jl") # need to call this again if we switch from gpu <-/-> cpu
 
     # model specific parameters
-    Δη = 1e1 # viscosity ratio between matrix and inclusion
+    Δη = 1.0e1 # viscosity ratio between matrix and inclusion
     rc = 0.2 # radius of the inclusion
-    εbg = 1e0 # background strain rate
-    lx, ly = 2e0, 2e0 # domain siye in x and y directions
+    εbg = 1.0e0 # background strain rate
+    lx, ly = 2.0e0, 2.0e0 # domain siye in x and y directions
     if runtype == :single
         # run model
         geometry, stokes, iters = solViEl(;
-            Δη=Δη,
-            nx=nx,
-            ny=ny,
-            lx=lx,
-            ly=ly,
-            rc=rc,
-            εbg=εbg,
-            init_MPI=MPI.Initialized() ? false : true,
-            finalize_MPI=finalize_MPI,
+            Δη = Δη,
+            nx = nx,
+            ny = ny,
+            lx = lx,
+            ly = ly,
+            rc = rc,
+            εbg = εbg,
+            init_MPI = MPI.Initialized() ? false : true,
+            finalize_MPI = finalize_MPI,
         )
 
         # plot model output and error
         f = plot_solVi_error(geometry, stokes, Δη, εbg, rc)
 
     elseif runtype == :multiple
-        f = multiple_solViEl(; Δη=Δη, lx=lx, ly=ly, rc=rc, εbg=εbg, nrange=4:8) # nx = ny = 2^(nrange)-1
+        f = multiple_solViEl(; Δη = Δη, lx = lx, ly = ly, rc = rc, εbg = εbg, nrange = 4:8) # nx = ny = 2^(nrange)-1
     end
 
 elseif benchmark == :elastic_buildup
@@ -154,30 +154,30 @@ elseif benchmark == :elastic_buildup
 
     # model specific parameters
     endtime = 125 # duration of the model in kyrs
-    η0 = 1e22 # viscosity
-    εbg = 1e-14 # background strain rate (pure shear boundary conditions)
-    G = 10e9 # shear modulus
-    lx, ly = 100e3, 100e3 # length of the domain in meters
+    η0 = 1.0e22 # viscosity
+    εbg = 1.0e-14 # background strain rate (pure shear boundary conditions)
+    G = 10.0e9 # shear modulus
+    lx, ly = 100.0e3, 100.0e3 # length of the domain in meters
     if runtype == :single
         # run model
         geometry, stokes, av_τyy, sol_τyy, t, iters = elastic_buildup(;
-            nx=nx,
-            ny=ny,
-            lx=lx,
-            ly=ly,
-            endtime=endtime,
-            η0=η0,
-            εbg=εbg,
-            G=G,
-            init_MPI=MPI.Initialized() ? false : true,
-            finalize_MPI=finalize_MPI,
+            nx = nx,
+            ny = ny,
+            lx = lx,
+            ly = ly,
+            endtime = endtime,
+            η0 = η0,
+            εbg = εbg,
+            G = G,
+            init_MPI = MPI.Initialized() ? false : true,
+            finalize_MPI = finalize_MPI,
         )
         # plot model output and error
         f = plot_elastic_buildup(av_τyy, sol_τyy, t)
 
     elseif runtype == :multiple
         f = multiple_elastic_buildup(;
-            lx=lx, ly=ly, endtime=endtime, η0=η0, εbg=εbg, G=G, nrange=4:8
+            lx = lx, ly = ly, endtime = endtime, η0 = η0, εbg = εbg, G = G, nrange = 4:8
         )
     end
 

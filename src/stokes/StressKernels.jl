@@ -647,7 +647,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
@@ -655,7 +655,7 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτyz = 0.5 * (τyzv_ij + dτyzv) / τIIv_ij
-            τyzv[I...] += dτyzv - 2.0 * ηv_ij * 0.5 * λv[1][I...] * dQdτyz * dτ_rv
+            τyzv[I...] += dτyzv - 2.0 * ηv_ij * λv[1][I...] * dQdτyz * dτ_rv
         else
             # stress correction @ vertex
             τyzv[I...] += dτyzv
@@ -710,7 +710,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
@@ -718,7 +718,7 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτxz = 0.5 * (τxzv_ij + dτxzv) / τIIv_ij
-            τxzv[I...] += dτxzv - 2.0 * ηv_ij * 0.5 * λv[2][I...] * dQdτxz * dτ_rv
+            τxzv[I...] += dτxzv - 2.0 * ηv_ij * λv[2][I...] * dQdτxz * dτ_rv
         else
             # stress correction @ vertex
             τxzv[I...] += dτxzv
@@ -774,7 +774,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
@@ -782,7 +782,7 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτxy = 0.5 * (τxyv_ij + dτxyv) / τIIv_ij
-            τxyv[I...] += dτxyv - 2.0 * ηv_ij * 0.5 * λv[3][I...] * dQdτxy * dτ_rv
+            τxyv[I...] += dτxyv - 2.0 * ηv_ij * λv[3][I...] * dQdτxy * dτ_rv
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv
@@ -810,7 +810,7 @@ end
         dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij + 2.0 * ηij * εij) * dτ_r
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
+        F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
         if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
@@ -823,16 +823,13 @@ end
             τij = dτij .+ τij
             setindex!.(τ, τij, I...)
             setindex!.(ε_pl, εij_pl, I...)
-            τII[I...] = second_invariant(τij)
-            # Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
-            η_vep[I...] = 0.5 * τII_ij / εII_ve
+            τII[I...] = τII_ij = second_invariant(τij)
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)
-            η_vep[I...] = ηij
             τII[I...] = τII_ij
         end
-
+        η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
         Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
     end
 
@@ -861,10 +858,8 @@ end
         rheology,
         phase_center,
         phase_vertex,
-        phase_xy,
-        phase_yz,
-        phase_xz,
     )
+
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
     ni = size(Pr)
@@ -898,14 +893,16 @@ end
     τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
 
     # yield function @ center
-    Fv = τIIv_ij - Cv * cosϕv - max(Pv_ij, 0.0) * sinϕv
-    if is_pl && !iszero(τIIv_ij) && Fv > 0
+    Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+
+    if is_pl && !iszero(τIIv_ij)  && Fv > 0
         # stress correction @ vertex
         λv[I...] =
             (1.0 - relλ) * λv[I...] +
             relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
         dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-        τxyv[I...] += dτxyv - 2.0 * ηv_ij * 0.5 * λv[I...] * dQdτxy * dτ_rv
+        εij_pl = λv[I...] * dQdτxy
+        τxyv[I...] += dτxyv - 2.0 * ηv_ij * εij_pl * dτ_rv
     else
         # stress correction @ vertex
         τxyv[I...] += dτxyv
@@ -929,34 +926,31 @@ end
         εij_ve = @. εij + 0.5 * τij_o * _Gdt
         εII_ve = GeoParams.second_invariant(εij_ve)
         # stress increments @ center
-        # dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * εij) * dτ_r
         dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = GeoParams.second_invariant(dτij .+ τij)
         # yield function @ center
-        F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
+        F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij) && F > 0
+        τII_ij = if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
                 relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
             dQdτij = @. 0.5 * (τij + dτij) / τII_ij
-            # dτij        = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * (εij  - λ[I...] *dQdτij )) * dτ_r
             εij_pl = λ[I...] .* dQdτij
             dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
             τij = dτij .+ τij
             setindex!.(τ, τij, I...)
             setindex!.(ε_pl, εij_pl, I...)
-            τII[I...] = GeoParams.second_invariant(τij)
-            # Pr_c[I...] = Pr[I...] + K * dt * λ[I...] * sinψ
-            η_vep[I...] = 0.5 * τII_ij / εII_ve
+            τII_ij = GeoParams.second_invariant(τij)
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)
-            η_vep[I...] = ηij
-            τII[I...] = τII_ij
+            τII_ij
         end
+        τII[I...] = τII_ij
 
+        η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
         Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
     end
 

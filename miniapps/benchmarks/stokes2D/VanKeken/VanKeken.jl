@@ -40,73 +40,73 @@ function init_phases!(phases, particles)
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index)
+    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index)
 end
 # END OF HELPER FUNCTIONS --------------------------------------------------------
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main2D(igg; ny=64, nx=64, figdir="model_figs")
+function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
 
     # Physical domain ------------------------------------
-    ly           = 1            # domain length in y
-    lx           = ly           # domain length in x
-    ni           = nx, ny       # number of cells
-    li           = lx, ly       # domain length in x- and y-
-    di           = @. li / ni   # grid step in x- and -y
-    origin       = 0.0, 0.0     # origin coordinates
-    grid         = Geometry(ni, li; origin = origin)
+    ly = 1            # domain length in y
+    lx = ly           # domain length in x
+    ni = nx, ny       # number of cells
+    li = lx, ly       # domain length in x- and y-
+    di = @. li / ni   # grid step in x- and -y
+    origin = 0.0, 0.0     # origin coordinates
+    grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    dt           = 1e-10
+    dt = 1.0e-10
 
     # Physical properties using GeoParams ----------------
     rheology = (
         # Low density phase
         SetMaterialParams(;
-            Phase             = 1,
-            Density           = ConstantDensity(; ρ = 1),
-            Gravity           = ConstantGravity(; g = 1),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1e0),)),
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 1),
+            Gravity = ConstantGravity(; g = 1),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e0),)),
 
         ),
         # High density phase
         SetMaterialParams(;
-            Density           = ConstantDensity(; ρ = 2),
-            Gravity           = ConstantGravity(; g = 1),
-            CompositeRheology = CompositeRheology((LinearViscous(;η = 1e0),)),
+            Density = ConstantDensity(; ρ = 2),
+            Gravity = ConstantGravity(; g = 1),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e0),)),
         ),
     )
 
     # Initialize particles -------------------------------
     nxcell, max_p, min_p = 20, 30, 10
-    particles            = init_particles(
+    particles = init_particles(
         backend, nxcell, max_p, min_p, xvi, di, ni
     )
     # velocity grids
-    grid_vx, grid_vy     = velocity_grids(xci, xvi, di)
+    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pPhases,             = init_cell_arrays(particles, Val(1))
-    particle_args        = (pPhases, )
-    phase_ratios         = PhaseRatios(backend, length(rheology), ni)
+    pPhases, = init_cell_arrays(particles, Val(1))
+    particle_args = (pPhases,)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes               = StokesArrays(backend_JR, ni)
-    pt_stokes            = PTStokesCoeffs(li, di; r=1e0, ϵ=1e-8,  CFL = 1 / √2.1)
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ = 1.0e-8, CFL = 1 / √2.1)
 
     # Buoyancy forces
-    ρg                   = @zeros(ni...), @zeros(ni...)
-    args                 = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    ρg = @zeros(ni...), @zeros(ni...)
+    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
     # Rheology
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
-    flow_bcs             = VelocityBoundaryConditions(;
-        free_slip = (left =  true, right =  true, top = false, bot = false),
-        no_slip   = (left = false, right = false, top =  true, bot =  true),
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = false, bot = false),
+        no_slip = (left = false, right = false, top = true, bot = true),
     )
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
@@ -117,14 +117,14 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
     # ----------------------------------------------------
 
     # Buffer arrays to compute velocity rms
-    Vx_v  = @zeros(ni.+1...)
-    Vy_v  = @zeros(ni.+1...)
+    Vx_v = @zeros(ni .+ 1...)
+    Vy_v = @zeros(ni .+ 1...)
 
     # Time loop
     t, it = 0.0, 0
-    tmax  = 2e3
-    Urms  = Float64[]
-    trms  = Float64[]
+    tmax = 2.0e3
+    Urms = Float64[]
+    trms = Float64[]
     sizehint!(Urms, 100000)
     sizehint!(trms, 100000)
 
@@ -147,9 +147,9 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
             dt,
             igg;
             kwargs = (
-                iterMax          = 10e3,
-                nout             = 1e3,
-                viscosity_cutoff = (-Inf, Inf)
+                iterMax = 10.0e3,
+                nout = 1.0e3,
+                viscosity_cutoff = (-Inf, Inf),
             )
         )
         dt = compute_dt(stokes, di) * 0.8
@@ -157,9 +157,9 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
 
         # Compute U rms ---------------
         Urms_it = let
-            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
+            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes = true)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
-            sum(Vx_v.^2) * prod(di) |> sqrt
+            sum(Vx_v .^ 2) * prod(di) |> sqrt
         end
         push!(Urms, Urms_it)
         push!(trms, t)
@@ -175,14 +175,14 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         @show it += 1
-        t        += dt
+        t += dt
 
         # Plotting ---------------------
         if it == 1 || rem(it, 25) == 0 || t >= tmax
             fig = Figure(size = (1000, 1000), title = "t = $t")
-            ax1 = Axis(fig[1,1], aspect = 1/λ, title = "t=$t")
+            ax1 = Axis(fig[1, 1], aspect = 1 / λ, title = "t=$t")
             heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :oleron)
-            save( joinpath(figdir, "$(it).png"), fig)
+            save(joinpath(figdir, "$(it).png"), fig)
             fig
         end
 
@@ -195,10 +195,10 @@ function main2D(igg; ny=64, nx=64, figdir="model_figs")
 end
 
 figdir = "VanKeken"
-n      = 64
-nx     = n
-ny     = n
-igg  = if !(JustRelax.MPI.Initialized())
+n = 64
+nx = n
+ny = n
+igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg

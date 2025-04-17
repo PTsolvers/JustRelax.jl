@@ -6,6 +6,7 @@ const isCUDA = true
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JLD2
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -32,7 +33,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, GLMakie, CellArrays
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -105,12 +106,14 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     nxcell, min_xcell, max_xcell = 100, 75, 125
     initial_elevation = 0.0e0
     chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
+    compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
     # pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 3√(10)π, r = 0.5, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -162,8 +165,8 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
         # Stokes solver ----------------
-        t_stokes = @elapsed begin
-            solve_VariationalStokes!(
+        # t_stokes = @elapsed begin
+            out = solve_VariationalStokes!(
                 stokes,
                 pt_stokes,
                 di,
@@ -182,34 +185,42 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
-        end
+        # end
 
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di, dt_max)
-        println("Stokes solver time             ")
-        println("   Total time:      $t_stokes s")
-        println("           Δt:      $(dt / (3600 * 24 * 365.25)) kyrs")
-        # ------------------------------
+        # println("Stokes solver time             ")
+        # println("   Total time:      $t_stokes s")
+        # println("           Δt:      $(dt / (3600 * 24 * 365.25)) kyrs")
+        # # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
 
         # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advect_markerchain!(chain, RungeKutta4(), @velocity(stokes), grid_vxi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
         update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
+        # compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         @show it += 1
         t += dt
+
+        jldsave(
+            joinpath(figdir, "chain_" * lpad("$it", 6, "0") * ".jld2"); 
+            chain = Array(chain),
+            time  = t,
+            convergence = out,
+        )
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 1) == 0
@@ -287,7 +298,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_MQS_variational"
+figdir = "Subduction2D_MQS_variational_RK4_test"
 nx, ny = 250, 100
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -297,3 +308,27 @@ else
 end
 
 stokes = main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+
+# chain_x = Array(chain.coords[1].data)[:] ./ 1.0e3
+# chain_y = Array(chain.coords[2].data)[:] ./ 1.0e3
+
+# heatmap(xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η)), colormap = :batlow)
+# heatmap(xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
+# # heatmap(xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(ϕ_R.center), colormap = :batlow)
+# heatmap(xvi[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(ϕ_R.Vx), colormap = :batlow)
+# scatter!(chain_x, chain_y, markersize = 3, color = :red)
+
+# heatmap(xci[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(ϕ_R.Vy), colormap = :batlow)
+# scatter!(chain_x, chain_y, markersize = 3, color = :red)
+
+# for y in xvi[2]
+#     hlines!(y .* 1.0e-3, xmin=xvi[1][1] * 1.0e-3, xmax=xvi[1][end] * 1.0e-3, color = :black, linewidth = 2)
+# end
+
+# for x in xvi[1]
+#     vlines!(x .* 1.0e-3, ymin=xvi[2][1] * 1.0e-3, ymax=xvi[2][end] * 1.0e-3, color = :black, linewidth = 2)
+# end
+
+# v = [CUDA.@allowscalar JustRelax2D.isvalid_c(ϕ_R, i, j) for i in 1:ni[1], j in 1:ni[2]]
+# heatmap(xci[1] .* 1.0e-3, xvi[2] .* 1.0e-3, v, colormap = :batlow)
+# scatter!(chain_x, chain_y, markersize = 3, color = :red)

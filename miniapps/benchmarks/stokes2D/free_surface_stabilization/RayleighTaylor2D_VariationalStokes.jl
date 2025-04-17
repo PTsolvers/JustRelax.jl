@@ -6,6 +6,7 @@ const isCUDA = true
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JLD2
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -170,7 +171,7 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 3π * √(10) / 2, r = 0.5, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -194,18 +195,18 @@ function main(igg, nx, ny)
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    figdir = "RayleighTaylor2D"
+    figdir = "RayleighTaylor2D_VS_dt_100k"
     take(figdir)
 
     # Time loop
     t, it = 0.0, 0
-    dt = 25.0e3 * (3600 * 24 * 365.25)
-    dt_max = 50.0e3 * (3600 * 24 * 365.25)
+    dt = 10.0e3 * (3600 * 24 * 365.25)
+    dt_max = 100.0e3 * (3600 * 24 * 365.25)
 
-    while it < 1000 #00
+    while it < 250 #00
 
         # Stokes solver ----------------
-        solve_VariationalStokes!(
+        out = solve_VariationalStokes!(
             stokes,
             pt_stokes,
             di,
@@ -221,7 +222,7 @@ function main(igg, nx, ny)
                 iterMax = 50.0e3,
                 iterMin = 1.0e3,
                 viscosity_relaxation = 1.0e-2,
-                nout = 2.0e3,
+                nout = 5e2,
                 free_surface = true,
                 viscosity_cutoff = (-Inf, Inf),
             )
@@ -231,26 +232,58 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), (grid_vx, grid_vy), dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
 
         # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advect_markerchain!(chain, RungeKutta4(), @velocity(stokes), (grid_vx, grid_vy), dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
         update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
+        jldsave(
+            joinpath(figdir, "chain_" * lpad("$it", 6, "0") * ".jld2"); 
+            chain = Array(chain),
+            time  = t,
+            convergence = out,
+        )
+
         @show it += 1
         t += dt
 
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || rem(it, 10) == 0
             px, py = particles.coords
             chain_x, chain_y = chain.coords
+
+            (; η_vep, η) = stokes.viscosity
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            data_v = (;
+                # τII = Array(stokes.τ.II),
+                # εII = Array(stokes.ε.II),
+            )
+            data_c = (;
+                # P = Array(stokes.P),
+                # η = Array(η_vep),
+                phase = [argmax(p) for p in Array(phase_ratios.center)],
+            )
+            velocity_v = (
+                Array(Vx_v),
+                Array(Vy_v),
+            )
+            save_vtk(
+                joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
+                xvi,
+                xci,
+                data_v,
+                data_c,
+                velocity_v
+            )
+
 
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 5

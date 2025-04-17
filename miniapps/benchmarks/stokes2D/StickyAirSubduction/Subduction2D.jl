@@ -1,11 +1,12 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JLD2
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -96,6 +97,11 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
+     # marker chain
+    nxcell, min_xcell, max_xcell = 100, 75, 125
+    initial_elevation = 0.0e0
+    chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
+     
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
@@ -144,14 +150,16 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Time loop
     t, it = 0.0, 0
+    air_phase = 3
 
+    dt_max = 250.0e3 * 3600 * 24 * 365 # advective CFL timestep limiter
     while it < 1000 # run only for 5 Myrs
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
 
         # Stokes solver ----------------
-        t_stokes = @elapsed begin
+        # t_stokes = @elapsed begin
             out = solve!(
                 stokes,
                 pt_stokes,
@@ -171,13 +179,13 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     viscosity_relaxation = 1.0e-2,
                 )
             )
-        end
+        # end
 
-        println("Stokes solver time             ")
-        println("   Total time:      $t_stokes s")
-        println("   Time/iteration:  $(t_stokes / out.iter) s")
+        # println("Stokes solver time             ")
+        # println("   Total time:      $t_stokes s")
+        # println("   Time/iteration:  $(t_stokes / out.iter) s")
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di) * 0.8
+        dt = compute_dt(stokes, di, dt_max)
         # ------------------------------
 
         # Advection --------------------
@@ -189,11 +197,24 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
 
+        # advect marker chain
+        advect_markerchain!(chain, RungeKutta4(), @velocity(stokes), grid_vxi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        # update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
+        # compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         @show it += 1
         t += dt
+        
+        jldsave(
+            joinpath(figdir, "chain_" * lpad("$it", 6, "0") * ".jld2"); 
+            chain = Array(chain),
+            time = t,
+            convergence = out,
+        )
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 10) == 0

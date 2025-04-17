@@ -195,13 +195,13 @@ function main(igg, nx, ny)
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    figdir = "RayleighTaylor2D_VS_dt_100k"
+    figdir = "RayleighTaylor2D_VS_dt_50k"
     take(figdir)
 
     # Time loop
     t, it = 0.0, 0
     dt = 10.0e3 * (3600 * 24 * 365.25)
-    dt_max = 100.0e3 * (3600 * 24 * 365.25)
+    dt_max = 50.0e3 * (3600 * 24 * 365.25)
 
     while it < 250 #00
 
@@ -246,17 +246,10 @@ function main(igg, nx, ny)
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
         update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
-        jldsave(
-            joinpath(figdir, "chain_" * lpad("$it", 6, "0") * ".jld2"); 
-            chain = Array(chain),
-            time  = t,
-            convergence = out,
-        )
-
         @show it += 1
         t += dt
 
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 50) == 0
             px, py = particles.coords
             chain_x, chain_y = chain.coords
 
@@ -284,6 +277,12 @@ function main(igg, nx, ny)
                 velocity_v
             )
 
+            jldsave(
+                joinpath(figdir, "chain_" * lpad("$it", 6, "0") * ".jld2"); 
+                chain = Array(chain),
+                time  = t,
+                convergence = out,
+            )
 
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 5

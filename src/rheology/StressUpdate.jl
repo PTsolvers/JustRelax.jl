@@ -23,7 +23,7 @@ function _compute_τ_nonlinear!(
 
     # visco-elastic strain rates
     εij_ve = ntuple(Val(N1)) do i
-        Base.@_inline_meta
+        Base.@inline
         return fma(0.5 * τij_o[i], _Gdt, εij[i])
     end
     # get plastic parameters (if any...)
@@ -61,7 +61,7 @@ end
 # fill plastic strain rate tensor
 @generated function update_plastic_strain_rate!(ε_pl::NTuple{N, T}, λdQdτ, I) where {N, T}
     return quote
-        Base.@_inline_meta
+        Base.@inline
         Base.@nexprs $N i -> ε_pl[i][I...] = !isinf(λdQdτ[i]) * λdQdτ[i]
     end
 end
@@ -75,7 +75,7 @@ function compute_stress_increment_and_trial(
         τij::NTuple{N, T}, τij_o::NTuple{N, T}, ηij, εij::NTuple{N, T}, _Gdt, dτ_r
     ) where {N, T}
     dτij = ntuple(Val(N)) do i
-        Base.@_inline_meta
+        Base.@inline
         return dτ_r *
             fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
     end
@@ -93,13 +93,13 @@ function compute_dτ_pl(
     λ_τII = λ * 0.5 * inv(τII_trial)
 
     λdQdτ = ntuple(Val(N)) do i
-        Base.@_inline_meta
+        Base.@inline
         # derivatives of the plastic potential
         return (τij[i] + dτij[i]) * λ_τII
     end
 
     dτ_pl = ntuple(Val(N)) do i
-        Base.@_inline_meta
+        Base.@inline
         # corrected stress
         return fma(-dτ_r * 2.0, ηij * λdQdτ[i], dτij[i])
     end
@@ -111,7 +111,7 @@ end
         τ, τij::NTuple{N1}, I::Vararg{Integer, N2}
     ) where {N1, N2}
     return quote
-        Base.@_inline_meta
+        Base.@inline
         Base.@nexprs $N1 i -> τ[i][I...] = τij[i]
     end
 end
@@ -132,7 +132,7 @@ end
 
 @generated function plastic_params(v::NTuple{N, Any}, EII) where {N}
     return quote
-        Base.@_inline_meta
+        Base.@inline
         Base.@nexprs $N i -> begin
             vᵢ = v[i]
             if isplastic(vᵢ)
@@ -166,13 +166,13 @@ function plastic_params_phase(
     is_pl = false
     C = sinϕ = cosϕ = sinψ = η_reg = 0.0
     for n in 1:N
-        ratio_n = ratio[n]
+        data_n = data[n] .* ratio[n]
         data[n][1] && (is_pl = true)
-        C += data[n][2] * ratio_n * perturbation(perturbation_C)
-        sinϕ += data[n][3] * ratio_n
-        cosϕ += data[n][4] * ratio_n
-        sinψ += data[n][5] * ratio_n
-        η_reg += data[n][6] * ratio_n
+        C     += data_n[2] * perturbation(perturbation_C)
+        sinϕ  += data_n[3]
+        cosϕ  += data_n[4]
+        sinψ  += data_n[5]
+        η_reg += data_n[6]
     end
     return is_pl, C, sinϕ, cosϕ, sinψ, η_reg
 end
@@ -181,7 +181,7 @@ end
         rheology::NTuple{N, AbstractMaterialParamsStruct}, EII, ratio
     ) where {N}
     return quote
-        Base.@_inline_meta
+        Base.@inline
         empty_args = false, 0.0, 0.0, 0.0, 0.0, 0.0
         Base.@nexprs $N i ->
         a_i = ratio[i] == 0 ? empty_args : plastic_params(rheology[i], EII)

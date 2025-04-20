@@ -38,6 +38,7 @@
         τyyv_old_ij = av_clamped(τ_o[2], Ic...)
         EIIv_ij = av_clamped(EII, Ic...)
 
+
         ## vertex
         phase = phase_vertex[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
@@ -53,19 +54,21 @@
         dτxyv = compute_stress_increment(
             τxyv[I...], τxyv_old[I...], ηv_ij, ε[3][I...], _Gvdt, dτ_rv
         )
-        τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+        τijv = τxxv_ij, τyyv_ij, τxyv[I...]
+        dτijv = dτxxv, dτyyv, dτxyv
+        τIIv_ij = second_invariant(dτijv .+ τijv)
 
         # yield function @ center
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
 
-        if is_pl && !iszero(τIIv_ij)  && Fv > 0
+        if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[I...] =
-                (1.0 - relλ) * λv[I...] +
+                @muladd (1.0 - relλ) * λv[I...] +
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εij_pl = λv[I...] * dQdτxy
-            τxyv[I...] += dτxyv - 2.0 * ηv_ij * εij_pl * dτ_rv
+            τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_pl * dτ_rv
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv
@@ -91,29 +94,27 @@
 
             # visco-elastic strain rates @ center
             εij_ve = @. εij + 0.5 * τij_o * _Gdt
-            εII_ve = GeoParams.second_invariant(εij_ve)
+            εII_ve = second_invariant(εij_ve)
             # stress increments @ center
             dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
-            τII_ij = GeoParams.second_invariant(dτij .+ τij)
+            τII_ij = second_invariant(dτij .+ τij)
             # yield function @ center
             F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
             τII_ij = if is_pl && !iszero(τII_ij) && F > 0
                 # stress correction @ center
                 λ[I...] =
-                    (1.0 - relλ) * λ[I...] +
+                    @muladd (1.0 - relλ) * λ[I...] +
                     relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
-                dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
+                dτij = @. @muladd dτij - 2.0 * ηij * εij_pl * dτ_r
                 τij = dτij .+ τij
                 Base.@nexprs 3 i -> begin
                     τ[i][I...] = τij[i]
                     ε_pl[i][I...] = εij_pl[i]
                 end
-                # setindex!.(τ, τij, I...)
-                # setindex!.(ε_pl, εij_pl, I...)
-                τII_ij = GeoParams.second_invariant(τij)
+                τII_ij = second_invariant(τij)
             else
                 # stress correction @ center
                 Base.@nexprs 3 i -> begin

@@ -275,44 +275,44 @@ end
     @inline harm_xa(A) = _av_xa(A, i, j)
     @inline harm_ya(A) = _av_ya(A, i, j)
 
-    
-        if all((i, j) .< size(Vx) .- 1)
-            @inbounds if isvalid_vx(ϕ, i + 1, j)
-                Rx[i, j] =
-                    R_Vx = @inbounds (
-                    -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
-                        av_xa(ρgx, ϕ.center)
-                )
-                Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
-            else
-                Rx[i, j] = zero(T)
-                Vx[i + 1, j + 1] = zero(T)
-            end
-        end
 
-        if all((i, j) .< size(Vy) .- 1)
-            @inbounds if isvalid_vy(ϕ, i, j + 1)
-                θ = 1.0
-                # Vertical velocity
-                Vyᵢⱼ = Vy[i + 1, j + 1]
-                # Get necessary buoyancy forces
-                j_N = min(j + 1, size(ρgy, 2))
-                ρg_S = ρgy[i, j] * ϕ.center[i, j]
-                ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
-                # Spatial derivatives
-                ∂ρg∂y = (ρg_N - ρg_S) * _dy
-                # correction term
-                ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
-                Ry[i, j] =
-                    R_Vy = 
-                    @inbounds -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
-                    av_ya(ρgy, ϕ.center) + ρg_correction
-                Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
-            else
-                Ry[i, j] = zero(T)
-                Vy[i + 1, j + 1] = zero(T)
-            end
+    if all((i, j) .< size(Vx) .- 1)
+        @inbounds if isvalid_vx(ϕ, i + 1, j)
+            Rx[i, j] =
+                R_Vx = @inbounds (
+                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
+                    av_xa(ρgx, ϕ.center)
+            )
+            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
+        else
+            Rx[i, j] = zero(T)
+            Vx[i + 1, j + 1] = zero(T)
         end
+    end
+
+    if all((i, j) .< size(Vy) .- 1)
+        @inbounds if isvalid_vy(ϕ, i, j + 1)
+            θ = 1.0
+            # Vertical velocity
+            Vyᵢⱼ = Vy[i + 1, j + 1]
+            # Get necessary buoyancy forces
+            j_N = min(j + 1, size(ρgy, 2))
+            ρg_S = ρgy[i, j] * ϕ.center[i, j]
+            ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
+            # Spatial derivatives
+            ∂ρg∂y = (ρg_N - ρg_S) * _dy
+            # correction term
+            ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
+            Ry[i, j] =
+                R_Vy =
+                @inbounds -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                av_ya(ρgy, ϕ.center) + ρg_correction
+            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+        else
+            Ry[i, j] = zero(T)
+            Vy[i + 1, j + 1] = zero(T)
+        end
+    end
     return nothing
 end
 

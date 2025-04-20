@@ -190,8 +190,8 @@ end
 end
 
 @inline function cache_tensors(
-    τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, I::Vararg{Integer, 2}
-)
+        τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, I::Vararg{Integer, 2}
+    )
     Base.@propagate_inbounds @inline av_shear(A) = sum(JustRelax.JustRelax2D._gather(A, I...)) / 4
 
     # unpack
@@ -199,9 +199,9 @@ end
     τxx, τyy, τxy = τ
     τxx_old, τyy_old, τxy_old = τ_old
     # index
-    εij   = @inbounds εxx[I...], εyy[I...], av_shear(εxy)
-    τij   = @inbounds τxx[I...], τyy[I...], τxy[I...]
-    τij_o = @inbounds τxx_old[I...], τyy_old[I...], τxy_old[I...] 
+    εij = @inbounds εxx[I...], εyy[I...], av_shear(εxy)
+    τij = @inbounds τxx[I...], τyy[I...], τxy[I...]
+    τij_o = @inbounds τxx_old[I...], τyy_old[I...], τxy_old[I...]
 
     return τij, τij_o, εij
 end
@@ -223,10 +223,10 @@ end
     # shear components of the strain rate and old-stress tensors
     ε_shear = @inbounds av_yz(εyz), av_xz(εxz), av_xy(εxy)
     # cache ij-th components of the tensors into a tuple in Voigt notation
-    εij   = (ε_normal..., ε_shear...)
-    τij   = @inbounds τxx[I...], τyy[I...], τzz[I...], τyz[I...], τxz[I...], τxy[I...]
+    εij = (ε_normal..., ε_shear...)
+    τij = @inbounds τxx[I...], τyy[I...], τzz[I...], τyz[I...], τxz[I...], τxy[I...]
     τij_o = @inbounds τxx_old[I...], τyy_old[I...], τzz_old[I...], τyz_old[I...], τxz_old[I...], τxy_old[I...]
-    
+
     return τij, τij_o, εij
 end
 

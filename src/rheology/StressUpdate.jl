@@ -168,10 +168,10 @@ function plastic_params_phase(
     for n in 1:N
         data_n = data[n] .* ratio[n]
         data[n][1] && (is_pl = true)
-        C     += data_n[2] * perturbation(perturbation_C)
-        sinϕ  += data_n[3]
-        cosϕ  += data_n[4]
-        sinψ  += data_n[5]
+        C += data_n[2] * perturbation(perturbation_C)
+        sinϕ += data_n[3]
+        cosϕ += data_n[4]
+        sinψ += data_n[5]
         η_reg += data_n[6]
     end
     return is_pl, C, sinϕ, cosϕ, sinψ, η_reg

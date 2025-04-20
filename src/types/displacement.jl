@@ -8,7 +8,7 @@ end
 function _velocity2displacement!(stokes::JustRelax.StokesArrays, dt)
     ni = size(stokes.P)
     (; V, U) = stokes
-    @parallel (@idx ni .+ 2) _velocity2displacement_kernel!(
+    @parallel inbounds=true (@idx ni .+ 2) _velocity2displacement_kernel!(
         V.Vx, V.Vy, V.Vz, U.Ux, U.Uy, U.Uz, dt
     )
     return nothing

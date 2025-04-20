@@ -27,7 +27,7 @@
     ni = size(Pr)
     Ic = clamped_indices(ni, I...)
 
-    if isvalid_v(ϕ, I...)
+    @inbounds if isvalid_v(ϕ, I...)
         # interpolate to ith vertex
         Pv_ij = av_clamped(Pr, Ic...)
         εxxv_ij = av_clamped(ε[1], Ic...)
@@ -39,7 +39,7 @@
         EIIv_ij = av_clamped(EII, Ic...)
 
         ## vertex
-        phase = @inbounds phase_vertex[I...]
+        phase = phase_vertex[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
         _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
         Kv = fn_ratio(get_bulk_modulus, rheology, phase)
@@ -76,7 +76,7 @@
 
     ## center
     if all(I .≤ ni)
-        if isvalid_c(ϕ, I...)
+        @inbounds if isvalid_c(ϕ, I...)
             # Material properties
             phase = @inbounds phase_center[I...]
             _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
@@ -107,24 +107,30 @@
                 εij_pl = λ[I...] .* dQdτij
                 dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 τij = dτij .+ τij
-                setindex!.(τ, τij, I...)
-                setindex!.(ε_pl, εij_pl, I...)
+                Base.@nexprs 3 i -> begin
+                    τ[i][I...] = τij[i]
+                    ε_pl[i][I...] = εij_pl[i]
+                end
+                # setindex!.(τ, τij, I...)
+                # setindex!.(ε_pl, εij_pl, I...)
                 τII_ij = GeoParams.second_invariant(τij)
             else
                 # stress correction @ center
-                setindex!.(τ, dτij .+ τij, I...)
+                Base.@nexprs 3 i -> begin
+                    τ[i][I...] = dτij[i] + τij[i]
+                end
                 τII_ij
             end
             τII[I...] = τII_ij
-
             η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
             Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+        
         else
             Pr_c[I...] = zero(eltype(T))
-            # τij, = cache_tensors(τ, τ_o, ε, I...)
-            dτij = zero(eltype(T)), zero(eltype(T)), zero(eltype(T))
-            # setindex!.(τ, dτij .+ τij, I...)
-            setindex!.(τ, dτij, I...)
+            Base.@nexprs 3 i -> begin
+                τ[i][I...] = zero(eltype(T))
+            end
+
         end
     end
 

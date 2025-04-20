@@ -192,7 +192,7 @@ end
 @inline function cache_tensors(
         τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, I::Vararg{Integer, 2}
     )
-    Base.@propagate_inbounds @inline av_shear(A) = sum(JustRelax.JustRelax2D._gather(A, I...)) / 4
+    Base.@propagate_inbounds @inline av_shear(A) = sum(_gather(A, I...)) / 4
 
     # unpack
     εxx, εyy, εxy = ε

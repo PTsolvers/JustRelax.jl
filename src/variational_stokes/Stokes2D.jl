@@ -90,7 +90,7 @@ function _solve_VS!(
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
+            @parallel inbounds = true (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
 
             compute_P!(
                 θ,
@@ -109,7 +109,7 @@ function _solve_VS!(
 
             update_ρg!(ρg[2], phase_ratios, rheology, args)
 
-            @parallel (@idx ni .+ 1) compute_strain_rate!(
+            @parallel inbounds = true (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., ϕ, _di...
             )
 
@@ -123,7 +123,7 @@ function _solve_VS!(
                 relaxation = viscosity_relaxation,
             )
 
-            @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
+            @parallel inbounds = true (@idx ni .+ 1) update_stresses_center_vertex!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
                 stokes.EII_pl,
@@ -149,7 +149,7 @@ function _solve_VS!(
             update_halo!(stokes.τ.xy)
 
             # @hide_communication b_width begin # communication/computation overlap
-            @parallel (@idx ni .+ 1) compute_V!(
+            @parallel inbounds = true (@idx ni .+ 1) compute_V!(
                 @velocity(stokes)...,
                 stokes.R.Rx,
                 stokes.R.Ry,
@@ -207,15 +207,15 @@ function _solve_VS!(
     end
 
     # compute vorticity
-    @parallel (@idx ni .+ 1) compute_vorticity!(
+    @parallel inbounds = true (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.xy, @velocity(stokes)..., inv.(di)...
     )
 
     # accumulate plastic strain tensor
-    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+    @parallel inbounds = true (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
 
-    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+    @parallel inbounds = true (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel inbounds = true (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter = iter,

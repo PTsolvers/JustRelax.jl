@@ -1,5 +1,5 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -181,7 +181,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
                 kwargs = (;
                     iterMax = 50.0e3,
                     free_surface = true,
-                    nout = 2.0e3,
+                    nout = 5.0e3,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
@@ -214,7 +214,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
         @show it += 1
         t += dt
-
+        
         jldsave(
             joinpath(figdir, "chain_" * lpad("$it", 6, "0") * ".jld2"); 
             chain = Array(chain),
@@ -222,84 +222,85 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
             convergence = out,
         )
 
-        # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
-            (; η_vep, η) = stokes.viscosity
-            if do_vtk
-                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-                data_v = (;
-                    τII = Array(stokes.τ.II),
-                    εII = Array(stokes.ε.II),
-                )
-                data_c = (;
-                    P = Array(stokes.P),
-                    η = Array(η_vep),
-                )
-                velocity_v = (
-                    Array(Vx_v),
-                    Array(Vy_v),
-                )
-                save_vtk(
-                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                    xvi,
-                    xci,
-                    data_v,
-                    data_c,
-                    velocity_v
-                )
-            end
+        # # Data I/O and plotting ---------------------
+        # if it == 1 || rem(it, 1) == 0
+        #     (; η_vep, η) = stokes.viscosity
+        #     if do_vtk
+        #         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        #         data_v = (;
+        #             τII = Array(stokes.τ.II),
+        #             εII = Array(stokes.ε.II),
+        #         )
+        #         data_c = (;
+        #             P = Array(stokes.P),
+        #             η = Array(η_vep),
+        #         )
+        #         velocity_v = (
+        #             Array(Vx_v),
+        #             Array(Vy_v),
+        #         )
+        #         save_vtk(
+        #             joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+        #             xvi,
+        #             xci,
+        #             data_v,
+        #             data_c,
+        #             velocity_v
+        #         )
+        #     end
 
-            # Make particles plottable
-            p = particles.coords
-            ppx, ppy = p
-            pxv = ppx.data[:] ./ 1.0e3
-            pyv = ppy.data[:] ./ 1.0e3
-            clr = pPhases.data[:]
-            # clr      = pT.data[:]
-            idxv = particles.index.data[:]
+        #     # Make particles plottable
+        #     p = particles.coords
+        #     ppx, ppy = p
+        #     pxv = ppx.data[:] ./ 1.0e3
+        #     pyv = ppy.data[:] ./ 1.0e3
+        #     clr = pPhases.data[:]
+        #     # clr      = pT.data[:]
+        #     idxv = particles.index.data[:]
 
-            chain_x = Array(chain.coords[1].data)[:] ./ 1.0e3
-            chain_y = Array(chain.coords[2].data)[:] ./ 1.0e3
+        #     chain_x = Array(chain.coords[1].data)[:] ./ 1.0e3
+        #     chain_y = Array(chain.coords[2].data)[:] ./ 1.0e3
 
-            # Make Makie figure
-            ar = 3
-            fig = Figure(size = (1200, 900), title = "t = $t")
-            ax1 = Axis(fig[1, 1], aspect = ar, title = "log10(εII)  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
-            ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
-            ax3 = Axis(fig[1, 3], aspect = ar, title = "τII")
-            ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
-            # Plot temperature
-            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
-            scatter!(ax1, chain_x, chain_y, markersize = 3)
-            # Plot particles phase
-            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
-            # Plot 2nd invariant of strain rate
-            h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
-            scatter!(ax3, chain_x, chain_y, markersize = 3, color = :red)
-            # Plot effective viscosity
-            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
-            hidexdecorations!(ax1)
-            hidexdecorations!(ax2)
-            hidexdecorations!(ax3)
-            Colorbar(fig[1, 2], h1)
-            Colorbar(fig[2, 2], h2)
-            Colorbar(fig[1, 4], h3)
-            Colorbar(fig[2, 4], h4)
-            linkaxes!(ax1, ax2, ax3, ax4)
-            # display(fig)
-            save(joinpath(figdir, "$(it).png"), fig)
-        end
-        # ------------------------------
+        #     # Make Makie figure
+        #     ar = 3
+        #     fig = Figure(size = (1200, 900), title = "t = $t")
+        #     ax1 = Axis(fig[1, 1], aspect = ar, title = "log10(εII)  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
+        #     ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
+        #     ax3 = Axis(fig[1, 3], aspect = ar, title = "τII")
+        #     ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
+        #     # Plot temperature
+        #     h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
+        #     scatter!(ax1, chain_x, chain_y, markersize = 3)
+        #     # Plot particles phase
+        #     h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
+        #     # Plot 2nd invariant of strain rate
+        #     h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
+        #     scatter!(ax3, chain_x, chain_y, markersize = 3, color = :red)
+        #     # Plot effective viscosity
+        #     h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
+        #     hidexdecorations!(ax1)
+        #     hidexdecorations!(ax2)
+        #     hidexdecorations!(ax3)
+        #     Colorbar(fig[1, 2], h1)
+        #     Colorbar(fig[2, 2], h2)
+        #     Colorbar(fig[1, 4], h3)
+        #     Colorbar(fig[2, 4], h4)
+        #     linkaxes!(ax1, ax2, ax3, ax4)
+        #     # display(fig)
+        #     save(joinpath(figdir, "$(it).png"), fig)
+        # end
+        # # ------------------------------
 
     end
 
-    return stokes
+    # return stokes
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
 figdir = "Subduction2D_MQS_variational_RK4_test"
 nx, ny = 250, 100
+# nx, ny = 25, 10
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)

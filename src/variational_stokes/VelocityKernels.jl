@@ -12,13 +12,13 @@ end
 @parallel_indices (i, j) function compute_strain_rate!(
         εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, ϕ::JustRelax.RockRatio, _dx, _dy
     ) where {T}
-    @inline d_xi(A) = _d_xi(A, _dx, i, j)
-    @inline d_yi(A) = _d_yi(A, _dy, i, j)
-    @inline d_xa(A) = _d_xa(A, _dx, i, j)
-    @inline d_ya(A) = _d_ya(A, _dy, i, j)
+    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j)
+    Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j)
+    Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j)
 
     if all((i, j) .≤ size(εxx))
-        if isvalid_c(ϕ, i, j)
+        @inbounds if isvalid_c(ϕ, i, j)
             ∇V_ij = ∇V[i, j] / 3
             εxx[i, j] = d_xi(Vx) - ∇V_ij
             εyy[i, j] = d_yi(Vy) - ∇V_ij
@@ -28,7 +28,7 @@ end
         end
     end
 
-    εxy[i, j] = if isvalid_v(ϕ, i, j)
+    @inbounds εxy[i, j] = if isvalid_v(ϕ, i, j)
         0.5 * (d_ya(Vx) + d_xa(Vy))
     else
         zero(T)
@@ -53,9 +53,9 @@ end
         _dy,
         _dz,
     ) where {T}
-    d_xi(A) = _d_xi(A, _dx, i, j, k)
-    d_yi(A) = _d_yi(A, _dy, i, j, k)
-    d_zi(A) = _d_zi(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_zi(A) = _d_zi(A, _dz, i, j, k)
 
     @inbounds begin
         # normal components are all located @ cell centers
@@ -115,17 +115,16 @@ end
         _dx,
         _dy,
     ) where {T}
-    d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-    d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
-    d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
-    av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
-    av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
-
-    av_xa(A) = _av_xa(A, i, j)
-    av_ya(A) = _av_ya(A, i, j)
-    harm_xa(A) = _av_xa(A, i, j)
-    harm_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
 
     if all((i, j) .< size(Vx) .- 1)
         if isvalid_vx(ϕ, i + 1, j)
@@ -160,17 +159,16 @@ end
 @parallel_indices (i, j) function compute_Vx!(
         Vx::AbstractArray{T, 2}, Rx, P, τxx, τxy, ηdτ, ρgx, ητ, ϕ::JustRelax.RockRatio, _dx, _dy
     ) where {T}
-    d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-    d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
-    d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
-    av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
-    av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
-
-    av_xa(A) = _av_xa(A, i, j)
-    av_ya(A) = _av_ya(A, i, j)
-    harm_xa(A) = _av_xa(A, i, j)
-    harm_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
 
     if all((i, j) .< size(Vx) .- 1)
         if isvalid_vx(ϕ, i + 1, j)
@@ -204,55 +202,47 @@ end
         _dy,
         dt,
     ) where {T}
-    d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-    d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
-    d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
-    av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
-    av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
 
-    av_xa(A) = _av_xa(A, i, j)
-    av_ya(A) = _av_ya(A, i, j)
-    harm_xa(A) = _av_xa(A, i, j)
-    harm_ya(A) = _av_ya(A, i, j)
+    @inbounds begin
+        if all((i, j) .< size(Vy) .- 1)
+            if isvalid_vy(ϕ, i, j + 1)
+                θ = 1.0
+                # Interpolated Vx into Vy node (includes density gradient)
+                Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
+                # Vertical velocity
+                Vyᵢⱼ = Vy[i + 1, j + 1]
+                # Get necessary buoyancy forces
+                j_N = min(j + 1, size(ρgy, 2))
+                ρg_S = ρgy[i, j] * ϕ.center[i, j]
+                ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
+                # Spatial derivatives
+                ∂ρg∂y = (ρg_N - ρg_S) * _dy
+                # correction term
+                # ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
+                ρg_correction = Vyᵢⱼ * ∂ρg∂y * θ * dt
 
-    if all((i, j) .< size(Vy) .- 1)
-        if isvalid_vy(ϕ, i, j + 1)
-            θ = 1.0
-            # Interpolated Vx into Vy node (includes density gradient)
-            Vxᵢⱼ = Vx_on_Vy[i + 1, j + 1]
-            # Vertical velocity
-            Vyᵢⱼ = Vy[i + 1, j + 1]
-            # Get necessary buoyancy forces
-            # i_W, i_E = max(i - 1, 1), min(i + 1, nx)
-            j_N = min(j + 1, size(ρgy, 2))
-            ρg_S = ρgy[i, j] * ϕ.center[i, j]
-            ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
-            # Spatial derivatives
-            # ∂ρg∂x = (ρg_E - ρg_W) * _dx
-            ∂ρg∂y = (ρg_N - ρg_S) * _dy
-            # correction term
-            # ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
-            ρg_correction = Vyᵢⱼ * ∂ρg∂y * θ * dt
+                Ry[i, j] =
+                    R_Vy =
+                    -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                    av_ya(ρgy, ϕ.center) + ρg_correction
+                Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
 
-            Ry[i, j] =
-                R_Vy =
-                -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
-                av_ya(ρgy, ϕ.center) + ρg_correction
-            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
-
-            # ρgx_correction = (Vxᵢⱼ) * θ * dt
-            # ρgy_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
-            # Ry[i, j] = R_Vy =
-            #     -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
-            #     av_ya(ρgy, ϕ.center) + ρgx_correction
-            # Vy[i + 1, j + 1] += R_Vy * inv(inv(ηdτ / av_ya(ητ)) + ρgy_correction)
-        else
-            Ry[i, j] = zero(T)
-            Vy[i + 1, j + 1] = zero(T)
+            else
+                Ry[i, j] = zero(T)
+                Vy[i + 1, j + 1] = zero(T)
+            end
         end
     end
-
     return nothing
 end
 
@@ -274,21 +264,21 @@ end
         _dy,
         dt,
     ) where {T}
-    @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-    @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
-    @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
-    @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
-    @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
-    @inline av_xa(A) = _av_xa(A, i, j)
-    @inline av_ya(A) = _av_ya(A, i, j)
-    @inline harm_xa(A) = _av_xa(A, i, j)
-    @inline harm_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
 
     if all((i, j) .< size(Vx) .- 1)
-        if isvalid_vx(ϕ, i + 1, j)
+        @inbounds if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j] =
-                R_Vx = (
+                R_Vx = @inbounds (
                 -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
             )
@@ -300,7 +290,7 @@ end
     end
 
     if all((i, j) .< size(Vy) .- 1)
-        if isvalid_vy(ϕ, i, j + 1)
+        @inbounds if isvalid_vy(ϕ, i, j + 1)
             θ = 1.0
             # Vertical velocity
             Vyᵢⱼ = Vy[i + 1, j + 1]
@@ -314,7 +304,7 @@ end
             ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
             Ry[i, j] =
                 R_Vy =
-                -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                @inbounds -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                 av_ya(ρgy, ϕ.center) + ρg_correction
             Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
         else
@@ -322,7 +312,6 @@ end
             Vy[i + 1, j + 1] = zero(T)
         end
     end
-
     return nothing
 end
 
@@ -350,21 +339,21 @@ end
         _dy,
         _dz,
     ) where {T}
-    @inline harm_x(A) = _harm_x(A, i, j, k)
-    @inline harm_y(A) = _harm_y(A, i, j, k)
-    @inline harm_z(A) = _harm_z(A, i, j, k)
-    @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j, k)
-    @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j, k)
-    @inline d_za(A, ϕ) = _d_za(A, ϕ, _dz, i, j, k)
-    @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j, k)
-    @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j, k)
-    @inline d_zi(A, ϕ) = _d_zi(A, ϕ, _dz, i, j, k)
-    @inline av_x(A) = _av_x(A, i, j, k)
-    @inline av_y(A) = _av_y(A, i, j, k)
-    @inline av_z(A) = _av_z(A, i, j, k)
-    @inline av_x(A, ϕ) = _av_x(A, ϕ, i, j, k)
-    @inline av_y(A, ϕ) = _av_y(A, ϕ, i, j, k)
-    @inline av_z(A, ϕ) = _av_z(A, ϕ, i, j, k)
+    Base.@propagate_inbounds @inline harm_x(A) = _harm_x(A, i, j, k)
+    Base.@propagate_inbounds @inline harm_y(A) = _harm_y(A, i, j, k)
+    Base.@propagate_inbounds @inline harm_z(A) = _harm_z(A, i, j, k)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, ϕ) = _d_za(A, ϕ, _dz, i, j, k)
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_zi(A, ϕ) = _d_zi(A, ϕ, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A, ϕ) = _av_x(A, ϕ, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A, ϕ) = _av_y(A, ϕ, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A, ϕ) = _av_z(A, ϕ, i, j, k)
 
     @inbounds begin
         if all((i, j, k) .< size(Vx) .- 1)

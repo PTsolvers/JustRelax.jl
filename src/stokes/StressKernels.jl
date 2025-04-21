@@ -512,7 +512,7 @@ end
 
 #####
 
-function clamped_indices(ni::NTuple{3, Integer}, i, j, k)
+Base.@propagate_inbounds @inline function clamped_indices(ni::NTuple{3, Integer}, i, j, k)
     nx, ny, nz = ni
     i0 = clamp(i - 1, 1, nx)
     ic = clamp(i, 1, nx)
@@ -526,42 +526,42 @@ function clamped_indices(ni::NTuple{3, Integer}, i, j, k)
     return i0, j0, k0, ic, jc, kc, i1, j1, k1
 end
 
-function av_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+Base.@propagate_inbounds @inline function av_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
     return 0.25 * (A[ic, j0, k0] + A[ic, jc, k0] + A[ic, j0, kc] + A[ic, jc, kc])
 end
 
-function av_clamped_xz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+Base.@propagate_inbounds @inline function av_clamped_xz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
     return 0.25 * (A[i0, jc, k0] + A[ic, jc, k0] + A[i0, jc, kc] + A[ic, jc, kc])
 end
 
-function av_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+Base.@propagate_inbounds @inline function av_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
     return 0.25 * (A[i0, j0, kc] + A[ic, j0, kc] + A[i0, jc, kc] + A[ic, jc, kc])
 end
 
 # on yz
-function av_clamped_yz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
+Base.@propagate_inbounds @inline function av_clamped_yz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
     return 0.25 * (A[ic, jc, k0] + A[i1, jc, k0] + A[ic, jc, kc] + A[i1, jc, kc])
 end
 
-function av_clamped_yz_y(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
+Base.@propagate_inbounds @inline function av_clamped_yz_y(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
     return 0.25 * (A[ic, j0, kc] + A[i1, j0, kc] + A[ic, jc, kc] + A[i1, jc, kc])
 end
 
 # on xz
-function av_clamped_xz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
+Base.@propagate_inbounds @inline function av_clamped_xz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
     return 0.25 * (A[ic, jc, k0] + A[ic, j1, k0] + A[ic, jc, kc] + A[ic, j1, kc])
 end
 
-function av_clamped_xz_x(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
+Base.@propagate_inbounds @inline function av_clamped_xz_x(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
     return 0.25 * (A[i0, jc, kc] + A[ic, jc, kc] + A[ic, j1, kc] + A[i0, j1, kc])
 end
 
 # on xy
-function av_clamped_xy_y(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
+Base.@propagate_inbounds @inline function av_clamped_xy_y(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
     return 0.25 * (A[ic, j0, kc] + A[ic, jc, kc] + A[ic, j0, k1] + A[ic, jc, k1])
 end
 
-function av_clamped_xy_x(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
+Base.@propagate_inbounds @inline function av_clamped_xy_x(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
     return 0.25 * (A[i0, jc, kc] + A[ic, jc, kc] + A[i0, jc, k1] + A[ic, jc, k1])
 end
 
@@ -598,7 +598,7 @@ end
     Ic = clamped_indices(ni, I...)
 
     ## yz
-    if all(I .≤ size(ε[4]))
+    @inbounds if all(I .≤ size(ε[4]))
         # interpolate to ith vertex
         ηv_ij = av_clamped_yz(η, Ic...)
         Pv_ij = av_clamped_yz(Pr, Ic...)
@@ -663,7 +663,7 @@ end
     end
 
     ## xz
-    if all(I .≤ size(ε[5]))
+    @inbounds if all(I .≤ size(ε[5]))
         # interpolate to ith vertex
         ηv_ij = av_clamped_xz(η, Ic...)
         EIIv_ij = av_clamped_xz(EII, Ic...)
@@ -957,7 +957,7 @@ end
     return nothing
 end
 
-function clamped_indices(ni::NTuple{2, Integer}, i, j)
+Base.@propagate_inbounds @inline function clamped_indices(ni::NTuple{2, Integer}, i, j)
     nx, ny = ni
     i0 = clamp(i - 1, 1, nx)
     ic = clamp(i, 1, nx)
@@ -966,6 +966,6 @@ function clamped_indices(ni::NTuple{2, Integer}, i, j)
     return i0, j0, ic, jc
 end
 
-function av_clamped(A, i0, j0, ic, jc)
+Base.@propagate_inbounds @inline function av_clamped(A, i0, j0, ic, jc)
     return 0.25 * (A[i0, j0] + A[ic, jc] + A[i0, jc] + A[ic, j0])
 end

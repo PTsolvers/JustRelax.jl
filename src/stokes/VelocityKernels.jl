@@ -10,17 +10,22 @@ end
 @parallel_indices (i, j) function compute_strain_rate!(
         εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
     ) where {T}
-    d_xi(A) = _d_xi(A, _dx, i, j)
-    d_yi(A) = _d_yi(A, _dy, i, j)
-    d_xa(A) = _d_xa(A, _dx, i, j)
-    d_ya(A) = _d_ya(A, _dy, i, j)
+
+    Vx1 = Vx[i, j]
+    Vx2 = Vx[i, j + 1]
+    Vy1 = Vy[i, j]
+    Vy2 = Vy[i + 1, j]
 
     if all((i, j) .≤ size(εxx))
+        Vx3 = Vx[i + 1, j + 1]
+        Vy3 = Vy[i + 1, j + 1]
+
         ∇V_ij = ∇V[i, j] / 3
-        εxx[i, j] = d_xi(Vx) - ∇V_ij
-        εyy[i, j] = d_yi(Vy) - ∇V_ij
+        εxx[i, j] = (Vx3 - Vx2) * _dx - ∇V_ij
+        εyy[i, j] = (Vy3 - Vy2) * _dy - ∇V_ij
     end
-    εxy[i, j] = 0.5 * (d_ya(Vx) + d_xa(Vy))
+
+    εxy[i, j] = 0.5 * ((Vx2 - Vx1) * _dy + (Vy2 - Vy1) * _dx)
 
     return nothing
 end

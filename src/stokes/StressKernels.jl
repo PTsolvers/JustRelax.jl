@@ -941,15 +941,14 @@ end
             dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
             τij = dτij .+ τij
 
-            Base.Base.@nexprs 3 -> begin
+            Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] =  τij[i]
                 @inbounds ε_pl[i][I...] =  εij_pl[i]
             end
             τII_ij = second_invariant(τij)
         else
             # stress correction @ center
-            setindex!.(τ, dτij .+ τij, I...)
-            Base.Base.@nexprs 3 -> @inbounds τ[i][I...] =  dτij[i] .+ τij[i]
+            Base.@nexprs 3 i -> @inbounds τ[i][I...] =  dτij[i] .+ τij[i]
             τII_ij
         end
         @inbounds τII[I...] = τII_ij

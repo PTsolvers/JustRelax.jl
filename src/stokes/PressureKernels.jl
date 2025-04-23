@@ -73,7 +73,7 @@ function compute_P!(
         kwargs...,
     ) where {N}
     ni = size(P)
-    @parallel inbounds = true (@idx ni) compute_P_kernel!(
+    @parallel  (@idx ni) compute_P_kernel!(
         P, P0, RP, ∇V, Q, η, rheology, phase_ratio.center, dt, r, θ_dτ, ΔTc, melt_fraction
     )
     return nothing

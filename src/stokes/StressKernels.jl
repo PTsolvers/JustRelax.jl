@@ -866,14 +866,14 @@ end
     Ic = clamped_indices(ni, I...)
 
     # interpolate to ith vertex
-    Pv_ij = av_clamped(Pr, Ic...)
-    εxxv_ij = av_clamped(ε[1], Ic...)
-    εyyv_ij = av_clamped(ε[2], Ic...)
-    τxxv_ij = av_clamped(τ[1], Ic...)
-    τyyv_ij = av_clamped(τ[2], Ic...)
-    τxxv_old_ij = av_clamped(τ_o[1], Ic...)
-    τyyv_old_ij = av_clamped(τ_o[2], Ic...)
-    EIIv_ij = av_clamped(EII, Ic...)
+    Pv_ij       = @inbounds av_clamped(Pr, Ic...)
+    εxxv_ij     = @inbounds av_clamped(ε[1], Ic...)
+    εyyv_ij     = @inbounds av_clamped(ε[2], Ic...)
+    τxxv_ij     = @inbounds av_clamped(τ[1], Ic...)
+    τyyv_ij     = @inbounds av_clamped(τ[2], Ic...)
+    τxxv_old_ij = @inbounds av_clamped(τ_o[1], Ic...)
+    τyyv_old_ij = @inbounds av_clamped(τ_o[2], Ic...)
+    EIIv_ij     = @inbounds av_clamped(EII, Ic...)
 
     ## vertex
     phase = @inbounds phase_vertex[I...]
@@ -881,21 +881,21 @@ end
     _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     Kv = fn_ratio(get_bulk_modulus, rheology, phase)
     volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-    ηv_ij = av_clamped(η, Ic...)
+    ηv_ij = @inbounds av_clamped(η, Ic...)
     dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
     # stress increments @ vertex
     dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
     dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
-    dτxyv = compute_stress_increment(
+    dτxyv = @inbounds compute_stress_increment(
         τxyv[I...], τxyv_old[I...], ηv_ij, ε[3][I...], _Gvdt, dτ_rv
     )
-    τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+    τIIv_ij = @inbounds  √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
 
     # yield function @ center
     Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
 
-    if is_pl && !iszero(τIIv_ij)  && Fv > 0
+    @inbounds if is_pl && !iszero(τIIv_ij)  && Fv > 0
         # stress correction @ vertex
         λv[I...] =
             (1.0 - relλ) * λv[I...] +
@@ -913,7 +913,7 @@ end
         # Material properties
         phase = @inbounds phase_center[I...]
         _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
-        is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
+        is_pl, C, sinϕ, cosϕ, sinψ, η_reg = @inbounds plastic_params_phase(rheology, EII[I...], phase)
         K = fn_ratio(get_bulk_modulus, rheology, phase)
         volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
         ηij = η[I...]
@@ -929,9 +929,9 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = GeoParams.second_invariant(dτij .+ τij)
         # yield function @ center
-        F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
+        F = @inbounds  τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-        τII_ij = if is_pl && !iszero(τII_ij) && F > 0
+        τII_ij = @inbounds if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
@@ -940,18 +940,21 @@ end
             εij_pl = λ[I...] .* dQdτij
             dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
             τij = dτij .+ τij
-            setindex!.(τ, τij, I...)
-            setindex!.(ε_pl, εij_pl, I...)
-            τII_ij = GeoParams.second_invariant(τij)
+
+            Base.Base.@nexprs 3 -> begin
+                @inbounds τ[i][I...] =  τij[i]
+                @inbounds ε_pl[i][I...] =  εij_pl[i]
+            end
+            τII_ij = second_invariant(τij)
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)
+            Base.Base.@nexprs 3 -> @inbounds τ[i][I...] =  dτij[i] .+ τij[i]
             τII_ij
         end
-        τII[I...] = τII_ij
-
-        η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
-        Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+        @inbounds τII[I...] = τII_ij
+        @inbounds η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
+        @inbounds Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
     end
 
     return nothing

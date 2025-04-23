@@ -1,11 +1,7 @@
 @parallel_indices (I...) function compute_∇V!(
         ∇V::AbstractArray{T, N}, V::NTuple{N}, ϕ::JustRelax.RockRatio, _di::NTuple{N}
     ) where {T, N}
-    if isvalid_c(ϕ, I...)
-        @inbounds ∇V[I...] = div(V..., _di..., I...)
-    else
-        @inbounds ∇V[I...] = zero(T)
-    end
+    @inbounds ∇V[I...] = isvalid_c(ϕ, I...) ? div(V..., _di..., I...) : zero(T)
     return nothing
 end
 

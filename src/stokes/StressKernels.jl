@@ -1076,14 +1076,6 @@ end
     return nothing
 end
 
-function line(p, K, Δt, η_ve, sinψ, p1, t1)
-    p2 = p1 + K*Δt*sinψ
-    t2 = t1 - η_ve
-    a  = (t2-t1)/(p2-p1)
-    b  = t2 - a*p2
-    return a*p + b
-end
-
 # tensile function
 @parallel_indices (I...) function update_stresses_center_vertex_kernel!(
         ε::NTuple{3},         # normal components @ centers; shear components @ vertices

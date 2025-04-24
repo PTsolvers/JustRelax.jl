@@ -246,17 +246,9 @@ end
     return nothing
 end
 
-function line(p, K, Δt, η_ve, sinψ, p1, t1)
-    p2 = p1 + K*Δt*sinψ
-    t2 = t1 - η_ve
-    a  = (t2-t1)/(p2-p1)
-    b  = t2 - a*p2
-    return a*p + b
-end
-
 # tensile
 @parallel_indices (I...) function update_stresses_center_vertex_kernel!(
-        ε::NTuple{3},         # normal components @ centers; shear components @ vertices
+        ε::NTuple{3, T},         # normal components @ centers; shear components @ vertices
         ε_pl::NTuple{3},      # whole Voigt tensor @ centers
         EII,                  # accumulated plastic strain rate @ centers
         ε_vol_pl,
@@ -282,7 +274,7 @@ end
         ϕ::JustRelax.RockRatio,
         τ_tensile,
         δτ_tensile,
-    )
+    ) where {T}
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
     ni = size(Pr)

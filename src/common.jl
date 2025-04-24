@@ -30,7 +30,8 @@ export @allocate,
     @residuals,
     compute_dt,
     multi_copy!,
-    take
+    take,
+    line
 
 include("types/displacement.jl")
 export velocity2displacement!, displacement2velocity!

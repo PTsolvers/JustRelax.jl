@@ -526,3 +526,11 @@ for (f1, f2) in zip(
         $f1(A) = $f2(A)
     end
 end
+
+function line(p, K, Δt, η_ve, sinψ, p1, t1)
+    p2 = p1 + K*Δt*sinψ
+    t2 = t1 - η_ve
+    a  = (t2-t1)/(p2-p1)
+    b  = t2 - a*p2
+    return a*p + b
+end

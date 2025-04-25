@@ -3,7 +3,7 @@
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
 [![Ask us anything](https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg)](https://github.com/PTsolvers/JustRelax.jl/discussions/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
-![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml)
 [![Build status](https://badge.buildkite.com/6b970b1066dc828a56a75bccc65a8bc896a8bb76012a61fe96.svg?branch=main)](https://buildkite.com/julialang/justrelax-dot-jl)
 [![codecov](https://codecov.io/gh/PTsolvers/JustRelax.jl/graph/badge.svg?token=4ZJO7ZGT8H)](https://codecov.io/gh/PTsolvers/JustRelax.jl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

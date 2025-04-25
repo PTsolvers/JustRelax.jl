@@ -350,7 +350,7 @@ function compute_maxloc!(B, A; window = (1, 1, 1))
     ni = size(A)
 
     @parallel_indices (I...) function _maxloc!(B, A, window)
-        B[I...] = _maxloc_window_clamped(A, I..., window...)
+        @inbounds B[I...] = _maxloc_window_clamped(A, I..., window...)
         return nothing
     end
 
@@ -358,7 +358,7 @@ function compute_maxloc!(B, A; window = (1, 1, 1))
     return nothing
 end
 
-@inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
+Base.@propagate_inbounds @inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
     nx, ny = size(A)
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)
@@ -377,7 +377,7 @@ end
     return x
 end
 
-@inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
+Base.@propagate_inbounds @inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
     nx, ny, nz = size(A)
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)

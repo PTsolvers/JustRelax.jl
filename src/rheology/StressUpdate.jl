@@ -12,33 +12,31 @@ function _compute_τ_nonlinear!(
         dτ_r,
         _Gdt,
         plastic_parameters,
-        idx::Vararg{Integer, N2},
+        I::Vararg{Integer, N2},
     ) where {N1, N2, T}
 
     # cache tensors
-    τij, τij_o, εij = cache_tensors(τ, τ_old, ε, idx...)
+    τij, τij_o, εij = cache_tensors(τ, τ_old, ε, I...)
 
     # Stress increment and trial stress
     dτij, τII_trial = compute_stress_increment_and_trial(τij, τij_o, ηij, εij, _Gdt, dτ_r)
 
     # visco-elastic strain rates
-    εij_ve = ntuple(Val(N1)) do i
-        Base.@_inline_meta
-        return fma(0.5 * τij_o[i], _Gdt, εij[i])
-    end
+    εij_ve = ntuple(i -> fma(0.5 * τij_o[i], _Gdt, εij[i]), Val(N1))
+
     # get plastic parameters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
 
     # yield stess (GeoParams could be used here...)
-    τy = max(C * cosϕ + P[idx...] * sinϕ, 0)
+    τy = @inbounds max(C * cosϕ + P[I...] * sinϕ, 0)
 
     # check if yielding; if so, compute plastic strain rate (λdQdτ),
     # plastic stress increment (dτ_pl), and update the plastic
     # multiplier (λ)
     dτij, λdQdτ = if isyielding(is_pl, τII_trial, τy)
         # derivatives plastic stress correction
-        dτ_pl, λ[idx...], λdQdτ = compute_dτ_pl(
-            τij, dτij, τy, τII_trial, ηij, λ[idx...], η_reg, dτ_r, volume
+        dτ_pl, λ[I...], λdQdτ = compute_dτ_pl(
+            τij, dτij, τy, τII_trial, ηij, λ[I...], η_reg, dτ_r, volume
         )
         dτ_pl, λdQdτ
 
@@ -48,21 +46,21 @@ function _compute_τ_nonlinear!(
     end
 
     # fill plastic strain rate tensor
-    update_plastic_strain_rate!(ε_pl, λdQdτ, idx)
+    update_plastic_strain_rate!(ε_pl, λdQdτ, I)
     # update and correct stress
-    correct_stress!(τ, τij .+ dτij, idx...)
+    correct_stress!(τ, τij .+ dτij, I...)
 
-    τII[idx...] = τII_ij = second_invariant((τij .+ dτij)...)
-    η_vep[idx...] = τII_ij * 0.5 * inv(second_invariant(εij...))
+    τII[I...] = τII_ij = second_invariant((τij .+ dτij)...)
+    η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij...))
 
     return nothing
 end
 
 # fill plastic strain rate tensor
-@generated function update_plastic_strain_rate!(ε_pl::NTuple{N, T}, λdQdτ, idx) where {N, T}
+@generated function update_plastic_strain_rate!(ε_pl::NTuple{N, T}, λdQdτ, I) where {N, T}
     return quote
-        Base.@_inline_meta
-        Base.@nexprs $N i -> ε_pl[i][idx...] = !isinf(λdQdτ[i]) * λdQdτ[i]
+        Base.@inline
+        Base.@nexprs $N i -> ε_pl[i][I...] = !isinf(λdQdτ[i]) * λdQdτ[i]
     end
 end
 
@@ -75,7 +73,7 @@ function compute_stress_increment_and_trial(
         τij::NTuple{N, T}, τij_o::NTuple{N, T}, ηij, εij::NTuple{N, T}, _Gdt, dτ_r
     ) where {N, T}
     dτij = ntuple(Val(N)) do i
-        Base.@_inline_meta
+        Base.@inline
         return dτ_r *
             fma(2.0 * ηij, εij[i], fma(-((τij[i] - τij_o[i])) * ηij, _Gdt, -τij[i]))
     end
@@ -93,26 +91,26 @@ function compute_dτ_pl(
     λ_τII = λ * 0.5 * inv(τII_trial)
 
     λdQdτ = ntuple(Val(N)) do i
-        Base.@_inline_meta
+        Base.@inline
         # derivatives of the plastic potential
         return (τij[i] + dτij[i]) * λ_τII
     end
 
     dτ_pl = ntuple(Val(N)) do i
-        Base.@_inline_meta
+        Base.@inline
         # corrected stress
         return fma(-dτ_r * 2.0, ηij * λdQdτ[i], dτij[i])
     end
     return dτ_pl, λ, λdQdτ
 end
 
-# update the global arrays τ::NTuple{N, AbstractArray} with the local τij::NTuple{3, Float64} at indices idx::Vararg{Integer, N}
+# update the global arrays τ::NTuple{N, AbstractArray} with the local τij::NTuple{3, Float64} at indices I::Vararg{Integer, N}
 @generated function correct_stress!(
-        τ, τij::NTuple{N1}, idx::Vararg{Integer, N2}
+        τ, τij::NTuple{N1}, I::Vararg{Integer, N2}
     ) where {N1, N2}
     return quote
-        Base.@_inline_meta
-        Base.@nexprs $N1 i -> τ[i][idx...] = τij[i]
+        Base.@inline
+        Base.@nexprs $N1 i -> τ[i][I...] = τij[i]
     end
 end
 
@@ -132,7 +130,7 @@ end
 
 @generated function plastic_params(v::NTuple{N, Any}, EII) where {N}
     return quote
-        Base.@_inline_meta
+        Base.@inline
         Base.@nexprs $N i -> begin
             vᵢ = v[i]
             if isplastic(vᵢ)
@@ -166,13 +164,13 @@ function plastic_params_phase(
     is_pl = false
     C = sinϕ = cosϕ = sinψ = η_reg = 0.0
     for n in 1:N
-        ratio_n = ratio[n]
+        data_n = data[n] .* ratio[n]
         data[n][1] && (is_pl = true)
-        C += data[n][2] * ratio_n * perturbation(perturbation_C)
-        sinϕ += data[n][3] * ratio_n
-        cosϕ += data[n][4] * ratio_n
-        sinψ += data[n][5] * ratio_n
-        η_reg += data[n][6] * ratio_n
+        C += data_n[2] * perturbation(perturbation_C)
+        sinϕ += data_n[3]
+        cosϕ += data_n[4]
+        sinψ += data_n[5]
+        η_reg += data_n[6]
     end
     return is_pl, C, sinϕ, cosϕ, sinψ, η_reg
 end
@@ -181,7 +179,7 @@ end
         rheology::NTuple{N, AbstractMaterialParamsStruct}, EII, ratio
     ) where {N}
     return quote
-        Base.@_inline_meta
+        Base.@inline
         empty_args = false, 0.0, 0.0, 0.0, 0.0, 0.0
         Base.@nexprs $N i ->
         a_i = ratio[i] == 0 ? empty_args : plastic_params(rheology[i], EII)
@@ -189,34 +187,43 @@ end
     end
 end
 
-# cache tensors
-function cache_tensors(
-        τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, idx::Vararg{Integer, 2}
+@inline function cache_tensors(
+        τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, I::Vararg{Integer, 2}
     )
-    @inline av_shear(A) = 0.25 * sum(_gather(A, idx...))
+    Base.@propagate_inbounds @inline av_shear(A) = sum(_gather(A, I...)) / 4
 
-    εij = ε[1][idx...], ε[2][idx...], av_shear(ε[3])
-    τij = getindex.(τ, idx...)
-    τij_o = getindex.(τ_old, idx...)
+    # unpack
+    εxx, εyy, εxy = ε
+    τxx, τyy, τxy = τ
+    τxx_old, τyy_old, τxy_old = τ_old
+    # index
+    εij = @inbounds εxx[I...], εyy[I...], av_shear(εxy)
+    τij = @inbounds τxx[I...], τyy[I...], τxy[I...]
+    τij_o = @inbounds τxx_old[I...], τyy_old[I...], τxy_old[I...]
 
     return τij, τij_o, εij
 end
 
-function cache_tensors(
-        τ::NTuple{6, Any}, τ_old::NTuple{6, Any}, ε::NTuple{6, Any}, idx::Vararg{Integer, 3}
+@inline function cache_tensors(
+        τ::NTuple{6, Any}, τ_old::NTuple{6, Any}, ε::NTuple{6, Any}, I::Vararg{Integer, 3}
     )
-    @inline av_yz(A) = _av_yz(A, idx...)
-    @inline av_xz(A) = _av_xz(A, idx...)
-    @inline av_xy(A) = _av_xy(A, idx...)
+    Base.@propagate_inbounds @inline av_yz(A) = _av_yz(A, I...)
+    Base.@propagate_inbounds @inline av_xz(A) = _av_xz(A, I...)
+    Base.@propagate_inbounds @inline av_xy(A) = _av_xy(A, I...)
+
+    # unpack
+    εxx, εyy, εzz, εyz, εxz, εxy = ε
+    τxx, τyy, τzz, τyz, τxz, τxy = τ
+    τxx_old, τyy_old, τzz_old, τyz_old, τxz_old, τxy_old = τ_old
 
     # normal components of the strain rate and old-stress tensors
-    ε_normal = ntuple(i -> ε[i][idx...], Val(3))
+    ε_normal = @inbounds εxx[I...], εyy[I...], εzz[I...]
     # shear components of the strain rate and old-stress tensors
-    ε_shear = av_yz(ε[4]), av_xz(ε[5]), av_xy(ε[6])
+    ε_shear = @inbounds av_yz(εyz), av_xz(εxz), av_xy(εxy)
     # cache ij-th components of the tensors into a tuple in Voigt notation
     εij = (ε_normal..., ε_shear...)
-    τij_o = getindex.(τ_old, idx...)
-    τij = getindex.(τ, idx...)
+    τij = @inbounds τxx[I...], τyy[I...], τzz[I...], τyz[I...], τxz[I...], τxy[I...]
+    τij_o = @inbounds τxx_old[I...], τyy_old[I...], τzz_old[I...], τyz_old[I...], τxz_old[I...], τxy_old[I...]
 
     return τij, τij_o, εij
 end

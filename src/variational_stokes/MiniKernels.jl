@@ -71,10 +71,10 @@ Base.@propagate_inbounds @inline _av_zi(A::T, ϕ::T, I::Vararg{Integer, 3}) wher
     (top(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
 
 ## Because mymaskedsum(::generator) does not work inside CUDA kernels...
-@inline mymaskedsum(A::AbstractArray, ϕ::AbstractArray, ranges::Vararg{T, N}) where {T, N} =
+Base.@propagate_inbounds @inline mymaskedsum(A::AbstractArray, ϕ::AbstractArray, ranges::Vararg{T, N}) where {T, N} =
     mymaskedsum(identity, A, ϕ, ranges...)
 
-@inline function mymaskedsum(
+Base.@propagate_inbounds @inline function mymaskedsum(
         f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i
     ) where {F <: Function}
     s = 0.0
@@ -84,7 +84,7 @@ Base.@propagate_inbounds @inline _av_zi(A::T, ϕ::T, I::Vararg{Integer, 3}) wher
     return s
 end
 
-@inline function mymaskedsum(
+Base.@propagate_inbounds @inline function mymaskedsum(
         f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i, ranges_j
     ) where {F <: Function}
     s = 0.0
@@ -94,7 +94,7 @@ end
     return s
 end
 
-@inline function mymaskedsum(
+Base.@propagate_inbounds @inline function mymaskedsum(
         f::F, A::AbstractArray, ϕ::AbstractArray, ranges_i, ranges_j, ranges_k
     ) where {F <: Function}
     s = 0.0

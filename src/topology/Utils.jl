@@ -2,6 +2,7 @@ import ImplicitGlobalGrid:
     global_grid,
     GGNumber,
     GGArray,
+    update_halo!,
     @coordx,
     @nx,
     @nx_g,
@@ -72,4 +73,33 @@ function _z_g(idx::Integer, dxi::GGNumber, nxi::GGNumber)
         end
     end
     return xi
+end
+
+const JR_T = Union{
+    StokesArrays,
+    SymmetricTensor,
+    ThermalArrays,
+    Velocity,
+    Displacement,
+    Vorticity,
+    Residual,
+    Viscosity,
+}
+
+# convenience function to get the field halos updated
+@generated function update_halo!(x::T) where {T <: JR_T}
+    nfields = fieldcount(T)
+    exprs = Expr[]
+    for i in 1:nfields
+        push!(exprs, quote
+            field = getfield(x, $i)
+            if field !== nothing
+                ImplicitGlobalGrid.update_halo!(field)
+            end
+        end)
+    end
+    return quote
+        $(exprs...)
+        return nothing
+    end
 end

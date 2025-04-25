@@ -48,7 +48,7 @@ function save_vtk(
         data_v::NamedTuple,
         data_c::NamedTuple,
         velocity::NTuple{N, T};
-        t::Number = 0,
+        t::Number = nothing,
     ) where {N, T}
 
     # unpack data names and arrays

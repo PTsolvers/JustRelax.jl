@@ -282,13 +282,6 @@ function adjoint_2D!(
                 _di...,
                 )
 
-            
-                #print("###################\n")
-                #print(extrema(stokesAD.VA.Vx),"\n")
-                #print(extrema(stokesAD.VA.Vy),"\n")
-                #print(extrema(stokesAD.PA),"\n")
-                #print("###################\n")
-
             iter += 1
 
             if iter % nout == 0 && iter > 1

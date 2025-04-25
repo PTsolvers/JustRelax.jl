@@ -119,7 +119,7 @@ export update_stresses_center_vertex_psADSens!
 export assemble_parameter_matrices!
 
 include("adjoint_variational/Adjoint_Variational2D.jl")
-export adjoint_solve_VariationalStokes!
+export adjoint_solve_VariationalStokes!, adjoint_solve_VariationalStokesDot!
 include("adjoint_variational/Adjoint_VelocityKernelsVS.jl")
 export update_V!, compute_Res!, compute_strain_rateAD!
 include("adjoint_variational/Adjoint_StressKernelsVS.jl")

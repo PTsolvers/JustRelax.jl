@@ -167,6 +167,45 @@ function StokesArrays(::Number, ::Number, ::Number)
     throw(ArgumentError("StokesArrays dimensions must be given as integers"))
 end
 
+## StokesArraysAdjoint type
+
+struct StokesArraysAdjoint{A,B,C,D,E,F,T}
+    P::T
+    PA::T
+    P0::T
+    V::A
+    VA::A
+    ∇V::T
+    τ::B
+    dτ::B
+    ε::B
+    ε_pl::B
+    EII_pl::T
+    viscosity::D
+    τ_o::Union{B,Nothing}
+    R::C
+    U::E
+    ω::F
+    η::T
+    ρ::T
+    G::T
+    fr::T
+    C::T
+end
+
+function StokesArraysAdjoint(::Type{CPUBackend}, ni::Vararg{Integer,N}) where {N}
+    return StokesArraysAdjoint(tuple(ni...))
+end
+StokesArraysAdjoint(::Type{CPUBackend}, ni::NTuple{N,Integer}) where {N} = StokesArraysAdjoint(ni)
+StokesArraysAdjoint(ni::Vararg{Integer,N}) where {N} = StokesArraysAdjoint(tuple(ni...))
+function StokesArraysAdjoint(::Number, ::Number)
+    throw(ArgumentError("StokesArraysAdjoint dimensions must be given as integers"))
+end
+function StokesArraysAdjoint(::Number, ::Number, ::Number)
+    throw(ArgumentError("StokesArraysAdjoint dimensions must be given as integers"))
+end
+
+
 ## PTStokesCoeffs type
 
 struct PTStokesCoeffs{T}

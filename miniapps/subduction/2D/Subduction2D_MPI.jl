@@ -450,29 +450,4 @@ figdir = "Subduction2D_$(nx_g())x$(ny_g())"
 
 li_GMG, origin_GMG, phases_GMG, T_GMG = GMG_subduction_2D(model_depth, grid_global.xvi, nx + 1, ny + 1)
 
-
-function generate_extents(nx, ny, num_processes)
-    extents = Array{NTuple{2, UnitRange{Int}}}(undef, num_processes)
-    for i in 1:num_processes
-        x_start = (i - 1) * div(nx, num_processes[1]) + 1
-        x_end = i * div(nx, num_processes)
-        y_start = (i - 1) * div(ny, num_processes[2]) + 1
-        y_end = ny
-        extents[i] = (x_start:x_end, y_start:y_end)
-    end
-    return extents
-end
-
-
-ni = nx, ny           # number of cells
-di = @. li_GMG / (nx_g(), ny_g())       # grid steps
-grid = Geometry(ni, li; origin = origin_GMG)
-(; xci, xvi) = grid
-
-# extents = generate_extents(nx(), ny(), igg.dims)
-# push!(extents, xci...)
-# println("extents: ",extents)
-println("nx()", @nx())
-println("ny()", @ny())
-
-#  main(x_global, z_global,li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+ main(x_global, z_global,li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

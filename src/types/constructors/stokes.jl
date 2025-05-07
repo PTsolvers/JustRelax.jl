@@ -5,7 +5,7 @@ function Velocity(nx::Integer, ny::Integer)
     nVy = (nx + 2, ny + 1)
 
     Vx, Vy = @zeros(nVx...), @zeros(nVy)
-    return JustRelax.Velocity(Vx, Vy, nothing)
+    return JustRelax.Velocity(Vx, Vy, typeof(Vx)([0e0 0e0; 0e0 0e0]))
 end
 
 function Velocity(nx::Integer, ny::Integer, nz::Integer)
@@ -24,7 +24,7 @@ function Displacement(nx::Integer, ny::Integer)
     nUy = (nx + 2, ny + 1)
 
     Ux, Uy = @zeros(nUx...), @zeros(nUy)
-    return JustRelax.Displacement(Ux, Uy, nothing)
+    return JustRelax.Displacement(Ux, Uy, typeof(Ux)([0e0 0e0; 0e0 0e0]))
 end
 
 function Displacement(nx::Integer, ny::Integer, nz::Integer)
@@ -41,7 +41,7 @@ end
 function Vorticity(nx::Integer, ny::Integer)
     xy = @zeros(nx + 1, ny + 1)
 
-    return JustRelax.Vorticity(nothing, nothing, xy)
+    return JustRelax.Vorticity(typeof(xy)([0e0 0e0; 0e0 0e0]), typeof(xy)([0e0 0e0; 0e0 0e0]), xy)
 end
 
 function Vorticity(nx::Integer, ny::Integer, nz::Integer)

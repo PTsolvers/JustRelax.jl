@@ -3,12 +3,12 @@
 struct Velocity{T}
     Vx::T
     Vy::T
-    Vz::Union{T, Nothing}
+    Vz::T
 
-    Velocity(Vx::T, Vy::T, Vz::Union{T, Nothing}) where {T} = new{T}(Vx, Vy, Vz)
+    Velocity(Vx::T, Vy::T, Vz::T) where {T} = new{T}(Vx, Vy, Vz)
 end
 
-Velocity(Vx::T, Vy::T) where {T} = Velocity(Vx, Vy, nothing)
+Velocity(Vx::T, Vy::T) where {T} = Velocity(Vx, Vy, T([0e0 0e0; 0e0 0e0]))
 
 Velocity(ni::NTuple{N, Number}) where {N} = Velocity(ni...)
 function Velocity(::Number, ::Number)
@@ -23,12 +23,12 @@ end
 struct Displacement{T}
     Ux::T
     Uy::T
-    Uz::Union{T, Nothing}
+    Uz::T
 
-    Displacement(Ux::T, Uy::T, Uz::Union{T, Nothing}) where {T} = new{T}(Ux, Uy, Uz)
+    Displacement(Ux::T, Uy::T, Uz::T) where {T} = new{T}(Ux, Uy, Uz)
 end
 
-Displacement(Ux::T, Uy::T) where {T} = Displacement(Ux, Uy, nothing)
+Displacement(Ux::T, Uy::T) where {T} = Displacement(Ux, Uy, T([0e0 0e0; 0e0 0e0]))
 
 Displacement(ni::NTuple{N, Number}) where {N} = Displacement(ni...)
 function Displacement(::Number, ::Number)
@@ -40,11 +40,11 @@ end
 
 ## Vorticity type
 struct Vorticity{T}
-    yz::Union{T, Nothing}
-    xz::Union{T, Nothing}
+    yz::T
+    xz::T
     xy::T
 
-    function Vorticity(yz::Union{T, Nothing}, xz::Union{T, Nothing}, xy::T) where {T}
+    function Vorticity(yz::T, xz::T, xy::T) where {T}
         return new{T}(yz, xz, xy)
     end
 end
@@ -77,25 +77,25 @@ end
 struct SymmetricTensor{T}
     xx::T
     yy::T
-    zz::Union{T, Nothing}
+    zz::T
     xy::T
-    yz::Union{T, Nothing}
-    xz::Union{T, Nothing}
+    yz::T
+    xz::T
     xy_c::T
-    yz_c::Union{T, Nothing}
-    xz_c::Union{T, Nothing}
+    yz_c::T
+    xz_c::T
     II::T
 
     function SymmetricTensor(
             xx::T,
             yy::T,
-            zz::Union{T, Nothing},
+            zz::T,
             xy::T,
-            yz::Union{T, Nothing},
-            xz::Union{T, Nothing},
+            yz::T,
+            xz::T,
             xy_c::T,
-            yz_c::Union{T, Nothing},
-            xz_c::Union{T, Nothing},
+            yz_c::T,
+            xz_c::T,
             II::T,
         ) where {T}
         return new{T}(xx, yy, zz, xy, yz, xz, xy_c, yz_c, xz_c, II)
@@ -104,7 +104,7 @@ end
 
 function SymmetricTensor(xx::T, yy::T, xy::T, xy_c::T, II::T) where {T}
     return SymmetricTensor(
-        xx, yy, nothing, xy, nothing, nothing, xy_c, nothing, nothing, II
+        xx, yy, T([0e0 0e0; 0e0 0e0]), xy, T([0e0 0e0; 0e0 0e0]), T([0e0 0e0; 0e0 0e0]), xy_c, T([0e0 0e0; 0e0 0e0]), T([0e0 0e0; 0e0 0e0]), II
     )
 end
 
@@ -122,12 +122,12 @@ struct Residual{T}
     RP::T
     Rx::T
     Ry::T
-    Rz::Union{T, Nothing}
+    Rz::T
 
-    Residual(RP::T, Rx::T, Ry::T, Rz::Union{T, Nothing}) where {T} = new{T}(RP, Rx, Ry, Rz)
+    Residual(RP::T, Rx::T, Ry::T, Rz::T) where {T} = new{T}(RP, Rx, Ry, Rz)
 end
 
-Residual(RP::T, Rx::T, Ry::T) where {T} = Residual(RP, Rx, Ry, nothing)
+Residual(RP::T, Rx::T, Ry::T) where {T} = Residual(RP, Rx, Ry, T([0e0 0e0; 0e0 0e0]))
 Residual(ni::NTuple{N, Number}) where {N} = Residual(ni...)
 function Residual(::Number, ::Number)
     throw(ArgumentError("Residual dimensions must be given as integers"))
@@ -149,7 +149,7 @@ struct StokesArrays{A, B, C, D, E, F, T}
     ε_pl::B
     EII_pl::T
     viscosity::D
-    τ_o::Union{B, Nothing}
+    τ_o::B
     R::C
     U::E
     ω::F

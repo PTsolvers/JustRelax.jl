@@ -53,7 +53,7 @@ end
         τ_yy = @inbounds @index yy[ip, I...]
         τ_xy = @inbounds @index xy[ip, I...]
 
-        τ_rotated = rotate_elastic_stress2D(ω_xy, (τ_xx, τ_yy, τ_xy), dt)
+        τ_rotated = GeoParams.rotate_elastic_stress2D(ω_xy, (τ_xx, τ_yy, τ_xy), dt)
 
         @inbounds @index xx[ip, I...] = τ_rotated[1]
         @inbounds @index yy[ip, I...] = τ_rotated[2]

@@ -6,7 +6,7 @@ end
 
 @parallel_indices (I...) function compute_melt_fraction_kernel!(ϕ, rheology, args)
     args_ijk = ntuple_idx(args, I...)
-    ϕ[I...] = compute_meltfraction(rheology, args_ijk)
+    @inbounds ϕ[I...] = compute_meltfraction(rheology, args_ijk)
     return nothing
 end
 
@@ -21,6 +21,6 @@ end
         ϕ, phase_ratios, rheology, args
     )
     args_ijk = ntuple_idx(args, I...)
-    ϕ[I...] = fn_ratio(compute_meltfraction, rheology, @cell(phase_ratios[I...]), args_ijk)
+    @inbounds ϕ[I...] = fn_ratio(compute_meltfraction, rheology, @cell(phase_ratios[I...]), args_ijk)
     return nothing
 end

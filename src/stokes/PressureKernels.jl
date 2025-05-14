@@ -2,13 +2,13 @@
 
 ## Incompressible
 @parallel_indices (I...) function compute_P!(P, RP, ∇V, Q, η, dt, r, θ_dτ)
-    RP[I...], P[I...] = _compute_P!(P[I...], ∇V[I...], Q[I...], η[I...], dt, r, θ_dτ)
+    @inbounds RP[I...], P[I...] = _compute_P!(P[I...], ∇V[I...], Q[I...], η[I...], dt, r, θ_dτ)
     return nothing
 end
 
 ## Compressible
 @parallel_indices (I...) function compute_P!(P, P0, RP, ∇V, Q, η, K, dt, r, θ_dτ)
-    RP[I...], P[I...] = _compute_P!(
+    @inbounds RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K[I...], dt, r, θ_dτ
     )
     return nothing
@@ -20,7 +20,7 @@ end
         P, P0, RP, ∇V, Q, η, rheology::NTuple{N, MaterialParams}, phase, dt, r, θ_dτ, args
     ) where {N}
     K = get_bulk_modulus(rheology, phase[I...])
-    RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
+    @inbounds RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
 
@@ -95,7 +95,7 @@ end
         ::Nothing,
     ) where {N, C <: JustRelax.CellArray}
     K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
-    RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
+    @inbounds RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
 
@@ -115,7 +115,7 @@ end
         melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
     K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
-    RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
+    @inbounds RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
 
@@ -134,10 +134,10 @@ end
         ΔTc,
         ::Nothing,
     ) where {N, C <: JustRelax.CellArray}
-    phase_ratio_I = phase_ratio[I...]
-    K = fn_ratio(get_bulk_modulus, rheology, phase_ratio_I)
-    α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
-    RP[I...], P[I...] = _compute_P!(
+    @inbounds phase_ratio_I = phase_ratio[I...]
+    @inbounds K = fn_ratio(get_bulk_modulus, rheology, phase_ratio_I)
+    @inbounds α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
+    @inbounds RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
     )
     return nothing
@@ -158,9 +158,9 @@ end
         ΔTc,
         melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
-    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
-    α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
-    RP[I...], P[I...] = _compute_P!(
+    @inbounds K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
+    @inbounds α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
+    @inbounds RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
     )
     return nothing
@@ -177,20 +177,19 @@ end
 function _compute_P!(P, P0, ∇V, Q, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
     _dt = inv(dt)
-    RP = fma(-(P - P0), _Kdt, (-∇V + (Q * _dt)))
+    RP = muladd(-(P - P0), _Kdt, (-∇V + (Q * _dt)))
     ψ = inv(inv(r / θ_dτ * η) + _Kdt)
-    P = ((fma(P0, _Kdt, (-∇V + (Q * _dt)))) * ψ + P) / (1 + _Kdt * ψ)
-    # P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
+    P = ((muladd(P0, _Kdt, (-∇V + (Q * _dt)))) * ψ + P) / (1 + _Kdt * ψ)
+
     return RP, P
 end
 
 function _compute_P!(P, P0, ∇V, Q, ΔTc, α, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
     _dt = inv(dt)
-    RP = fma(-(P - P0), _Kdt, (-∇V + (α * (ΔTc * _dt)) + (Q * _dt)))
+    RP = muladd(-(P - P0), _Kdt, (-∇V + (α * (ΔTc * _dt)) + (Q * _dt)))
     ψ = inv(inv(r / θ_dτ * η) + _Kdt)
-    P = ((fma(P0, _Kdt, (-∇V + (α * (ΔTc * _dt)) + (Q * _dt)))) * ψ + P) / (1 + _Kdt * ψ)
-    # P += RP / (1.0 / (r / θ_dτ * η) + 1.0 * _Kdt)
+    P = ((muladd(P0, _Kdt, (-∇V + (α * (ΔTc * _dt)) + (Q * _dt)))) * ψ + P) / (1 + _Kdt * ψ)
 
     return RP, P
 end

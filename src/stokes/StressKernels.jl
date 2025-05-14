@@ -866,14 +866,14 @@ end
     Ic = clamped_indices(ni, I...)
 
     # interpolate to ith vertex
-    Pv_ij       = @inbounds av_clamped(Pr, Ic...)
-    εxxv_ij     = @inbounds av_clamped(ε[1], Ic...)
-    εyyv_ij     = @inbounds av_clamped(ε[2], Ic...)
-    τxxv_ij     = @inbounds av_clamped(τ[1], Ic...)
-    τyyv_ij     = @inbounds av_clamped(τ[2], Ic...)
+    Pv_ij = @inbounds av_clamped(Pr, Ic...)
+    εxxv_ij = @inbounds av_clamped(ε[1], Ic...)
+    εyyv_ij = @inbounds av_clamped(ε[2], Ic...)
+    τxxv_ij = @inbounds av_clamped(τ[1], Ic...)
+    τyyv_ij = @inbounds av_clamped(τ[2], Ic...)
     τxxv_old_ij = @inbounds av_clamped(τ_o[1], Ic...)
     τyyv_old_ij = @inbounds av_clamped(τ_o[2], Ic...)
-    EIIv_ij     = @inbounds av_clamped(EII, Ic...)
+    EIIv_ij = @inbounds av_clamped(EII, Ic...)
 
     ## vertex
     phase = @inbounds phase_vertex[I...]
@@ -942,13 +942,13 @@ end
             τij = dτij .+ τij
 
             Base.@nexprs 3 i -> begin
-                @inbounds τ[i][I...] =  τij[i]
-                @inbounds ε_pl[i][I...] =  εij_pl[i]
+                @inbounds τ[i][I...] = τij[i]
+                @inbounds ε_pl[i][I...] = εij_pl[i]
             end
             τII_ij = second_invariant(τij)
         else
             # stress correction @ center
-            Base.@nexprs 3 i -> @inbounds τ[i][I...] =  dτij[i] .+ τij[i]
+            Base.@nexprs 3 i -> @inbounds τ[i][I...] = dτij[i] .+ τij[i]
             τII_ij
         end
         @inbounds τII[I...] = τII_ij

@@ -102,10 +102,10 @@ end
         τ_yy = @inbounds @index yy[ip, I...]
         τ_xy = @inbounds @index xy[ip, I...]
 
-        tmp = τ_xy * ω_xy * 2.0
-        @inbounds @index xx[ip, I...] = fma(dt, cte, τ_xx)
-        @inbounds @index yy[ip, I...] = fma(dt, cte, τ_yy)
-        @inbounds @index xy[ip, I...] = fma(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
+        tmp = τ_xy * ω_xy * 2
+        @inbounds @index xx[ip, I...] = muladd(dt, cte, τ_xx)
+        @inbounds @index yy[ip, I...] = muladd(dt, cte, τ_yy)
+        @inbounds @index xy[ip, I...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
     end
 
     return nothing

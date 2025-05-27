@@ -36,11 +36,11 @@ jobs:
           - os: macOS-latest
             arch: aarch64
             version: '1.10'
-            allow_failure: [false]
+            allow_failure: false
           - os: macOS-latest
             arch: aarch64
             version: '1.11'
-            allow_failure: [false]
+            allow_failure: false
           - os: macOS-latest
             arch: aarch64
             version: 'pre'

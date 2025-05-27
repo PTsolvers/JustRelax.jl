@@ -29,6 +29,7 @@ function _adjoint_solve_VS!(
         grid,
         origin,
         li,
+        ana,
         igg::IGG;
         air_phase::Integer = 0,
         viscosity_cutoff = (-Inf, Inf),
@@ -262,6 +263,10 @@ function _adjoint_solve_VS!(
     print("## Adjoint Solve ##\n")
     print("###################\n")
 
+    exx = @zeros(size(stokesAD.ε.xx))
+    eyy = @zeros(size(stokesAD.ε.yy))
+    exy = @zeros(size(stokesAD.ε.xy))
+
     while (iter ≤ iterMax && err > ϵ)
 
         # reset derivatives to zero
@@ -348,18 +353,88 @@ function _adjoint_solve_VS!(
                     Const(nothing),
                     Const(nothing)
                     )
-=#
+    =#
             # apply free slip or no slip boundary conditions for adjoint solve
             if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
             if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
             if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
             if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
+            
 
+            
+            if ana
+
+            #if iter % nout == 0 && iter > 1
+            #print("###########Vorher##########\n")
+            #print(stokesAD.τ.xx[8,10],"\n")
+            #print(extrema(stokesAD.τ.yy),"\n")
+            #print(extrema(stokesAD.τ.xy),"\n")
+            #print("###########################\n")
+            ##end
+
+            @parallel (@idx ni .+ 1) dτdV_viscoelastic(
+                @strain(stokesAD),
+                @tensor_center(stokes.ε_pl),
+                stokes.EII_pl,
+                @tensor_center(stokesAD.τ),
+                (stokesAD.τ.xy,),
+                @tensor_center(stokes.τ_o),
+                (stokes.τ_o.xy,),
+                θ,
+                stokesAD.P0,
+                stokes.viscosity.η,
+                λtemp,
+                λvtemp,
+                stokes.τ.II,
+                stokes.viscosity.η_vep,
+                relλ,
+                dt,
+                θ_dτ,
+                rheology,
+                phase_ratios.center,
+                phase_ratios.vertex,
+                ϕ,
+                iter
+            )
+
+            ##if iter % nout == 0 && iter > 1
+            #print("###########Nachher########\n")
+            #print(stokesAD.τ.xx[8,10],"\n")
+            #print(extrema(stokesAD.τ.yy),"\n")
+            #print(extrema(stokesAD.τ.xy),"\n")
+            #print("###########################\n")
+            ###end
+
+            ##if iter % nout == 0 && iter > 1
+            #print("###########################\n")
+            #print(stokesAD.ε.xx[8,10],"\n")
+            #print(extrema(stokesAD.ε.yy),"\n")
+            #print(extrema(stokesAD.ε.xy),"\n")
+            #print("###########################\n")
+            ##end
+       
+            
+            else
+
+            ##if iter % nout == 0 && iter > 1
+            #print("###########Vorher##########\n")
+            #print(stokesAD.τ.xx[8,10],"\n")
+            #print(extrema(stokesAD.τ.yy),"\n")
+            #print(extrema(stokesAD.τ.xy),"\n")
+            #print("###########################\n")
+            ##end
+            
+    
             # stress calculation
             stokesAD.dτ.xx   .= stokes.τ.xx
             stokesAD.dτ.yy   .= stokes.τ.yy
             stokesAD.dτ.xy_c .= stokes.τ.xy_c
             stokesAD.dτ.xy   .= stokes.τ.xy
+
+            #stokesAD.τ.xx   .= 1.0
+            #stokesAD.τ.yy   .= 1.0
+            #stokesAD.τ.xy   .= 1.0
+
             stokesAD.P0      .= stokes.P
             λtemp            .= λ
             λvtemp           .= λv
@@ -412,6 +487,27 @@ function _adjoint_solve_VS!(
                     Const(ϕ)
                 )
 
+            #=
+            #if iter % nout == 0 && iter > 1
+            print("###########Nachher########\n")
+            print(stokesAD.τ.xx[8,10],"\n")
+            print(extrema(stokesAD.τ.yy),"\n")
+            print(extrema(stokesAD.τ.xy),"\n")
+            print("###########################\n")
+            #end
+
+                        
+            #if iter % nout == 0 && iter > 1
+            print("####### Vorher ε ########\n")
+            print(stokesAD.ε.xx[8,10],"\n")
+            print(extrema(stokesAD.ε.yy),"\n")
+            print(extrema(stokesAD.ε.xy),"\n")
+            print("###########################\n")
+            #end
+            =#
+
+            end
+        
             @parallel (@idx ni) update_PAD!(
                 stokesAD.PA,
                 stokesAD.P,
@@ -424,6 +520,11 @@ function _adjoint_solve_VS!(
                 r,
                 θ_dτ,
                 args)
+
+
+            #exx .= stokesAD.ε.xx
+            #eyy .= stokesAD.ε.yy
+            #exy .= stokesAD.ε.xy
 
             @parallel (@idx ni .+ 1) configcall=compute_strain_rateAD!(
                 @strain(stokes)...,
@@ -445,6 +546,11 @@ function _adjoint_solve_VS!(
                     Const(_di[1]),
                     Const(_di[2])
             )
+
+            #stokesAD.ε.xx .= exx
+            #stokesAD.ε.yy .= eyy
+            #stokesAD.ε.xy .= exy
+
 
             # multiplier λP for ∂RP/∂V 
             stokesAD.∇V .= -stokesAD.PA
@@ -518,8 +624,6 @@ function _adjoint_solve_VS!(
     print("## Calculate Sensitivities ##\n")
     print("#############################\n")
 
-    iter = iter - 1
-
     if  isdefined(Main,:CUDA)
         mode = Enzyme.Reverse
     else
@@ -583,16 +687,7 @@ function _adjoint_solve_VS!(
             Const(dt * free_surface)
         )
 
-
-    # copy stokes stress, if not stokes.τ is changed during the Enzyme call
-    stokesAD.dτ.xx   .= stokes.τ.xx
-    stokesAD.dτ.yy   .= stokes.τ.yy
-    stokesAD.dτ.xy_c .= stokes.τ.xy_c
-    stokesAD.dτ.xy   .= stokes.τ.xy
-    stokesAD.P0      .= stokes.P0
-    λtemp             = deepcopy(λ)
-    λvtemp            = deepcopy(λv)
-
+#=
     @parallel (@idx ni.+1) assemble_parameter_matrices!(
         stokes.EII_pl,
         G,
@@ -605,17 +700,68 @@ function _adjoint_solve_VS!(
         phase_ratios.center,
         phase_ratios.vertex
     )
-
+=#
     print("###########################\n")
     print(extrema(G),"\n")
     print("###########################\n")
-    Sens  = (G, fr, C, Gv, frv, Cv)
-    SensA = (stokesAD.G, stokesAD.fr, stokesAD.C, Gvb, frvb, Cvb)
+    Sens  = (1.0)
+    SensA = (1.0)
 
-    #Sens  = (G, fr, C)
-    #SensA = (stokesAD.G, stokesAD.fr, stokesAD.C)
+    Sens  = (G, fr, C)
+    SensA = (stokesAD.G, stokesAD.fr, stokesAD.C)
 
-    for i=1:iter
+    if ana
+    θ_dτ = 0.0
+
+    #    # stress calculation
+    #    stokesAD.dτ.xx   .= stokes.τ.xx
+    #    stokesAD.dτ.yy   .= stokes.τ.yy
+    #    stokesAD.dτ.xy_c .= stokes.τ.xy_c
+    #    stokesAD.dτ.xy   .= stokes.τ.xy
+#
+    #    #stokesAD.τ.xx   .= 1.0
+    #    #stokesAD.τ.yy   .= 1.0
+    #    #stokesAD.τ.xy   .= 1.0
+#
+    #    stokesAD.P0      .= stokes.P
+    #    λtemp            .= λ
+    #    λvtemp           .= λv
+    @parallel (@idx ni.+1) dτdη_viscoelastic(        
+        @strain(stokes),
+        @tensor_center(stokes.ε_pl),
+        stokes.EII_pl,
+        @tensor_center(stokesAD.τ),
+        (stokesAD.τ.xy,),
+        @tensor_center(stokes.τ_o),
+        (stokes.τ_o.xy,),
+        θ,
+        stokesAD.P0,
+        stokes.viscosity.η,
+        λtemp,
+        λvtemp,
+        stokes.τ.II,
+        stokes.viscosity.η_vep,
+        relλ,
+        dt,
+        θ_dτ,
+        rheology,
+        phase_ratios.center,
+        phase_ratios.vertex,
+        ϕ,
+        @tensor_center(stokesAD.τ),
+        (stokesAD.τ.xy,)
+    )
+        #stokesAD.dτ.xx .= 0.0
+        vertex2center!(stokesAD.dτ.xx, stokesAD.τ.xy)
+        stokesAD.η .+= stokesAD.τ.xx .+ stokesAD.τ.yy .+ stokesAD.τ.xy_c .+ stokesAD.dτ.xx
+  
+    else
+
+    θ_dτ = 0.0
+    stokesAD.dτ.xx   .= 0.0
+    stokesAD.dτ.yy   .= 0.0
+    stokesAD.dτ.xy_c .= 0.0
+    stokesAD.dτ.xy   .= 0.0
     @parallel (@idx ni.+1) configcall=update_stresses_center_vertexADSens!(
         @strain(stokes),
         @tensor_center(stokes.ε_pl),
@@ -629,7 +775,7 @@ function _adjoint_solve_VS!(
         stokes.viscosity.η,
         λtemp,
         λvtemp,
-        stokes.τ.II',
+        stokes.τ.II,
         stokes.viscosity.η_vep,
         relλ,
         dt,
@@ -666,11 +812,9 @@ function _adjoint_solve_VS!(
             Const(ϕ),
             DuplicatedNoNeed(Sens,SensA)
             )
-
-            vertex2center!(G,Gvb)
-            stokesAD.G .+= G
-    end
+    end          
 end
+
 
     return (
         iter = iter,
@@ -681,6 +825,40 @@ end
         norm_∇V = norm_∇V,
     )
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## 2D VISCO-ELASTIC STOKES SOLVER
@@ -719,6 +897,7 @@ function _adjoint_solve_VSDot!(
         visc,
         dens,
         Gdot,
+        frdot,
         igg::IGG;
         air_phase::Integer = 0,
         viscosity_cutoff = (-Inf, Inf),
@@ -849,6 +1028,7 @@ function _adjoint_solve_VSDot!(
                     dM,
                     dp,
                     Gdot,
+                    frdot
                 )
                 update_halo!(stokes.τ.xy)
     

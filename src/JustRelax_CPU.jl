@@ -123,6 +123,6 @@ export adjoint_solve_VariationalStokes!, adjoint_solve_VariationalStokesDot!
 include("adjoint_variational/Adjoint_VelocityKernelsVS.jl")
 export update_V!, compute_Res!, compute_strain_rateAD!
 include("adjoint_variational/Adjoint_StressKernelsVS.jl")
-export update_stresses_center_vertexAD!, update_stresses_center_vertexADSens!
+export update_stresses_center_vertexAD!, update_stresses_center_vertexADSens!, dτdV_viscoelastic, dτdη_viscoelastic
 
 end

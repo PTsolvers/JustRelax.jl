@@ -258,6 +258,8 @@ function _adjoint_solve_VS!(
     nout    = 1e3
     λtemp   = deepcopy(λ)
     λvtemp  = deepcopy(λv)
+    λtemp  .= 0.0  
+    λvtemp .= 0.0 
 
     print("###################\n")
     print("## Adjoint Solve ##\n")
@@ -355,10 +357,10 @@ function _adjoint_solve_VS!(
                     )
 
         #    # apply free slip or no slip boundary conditions for adjoint solve
-        #    if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
-        #    if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
-        #    if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
-        #    if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
+            if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
+            if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
+            if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
+            if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
 #=
             if ana
 
@@ -397,8 +399,8 @@ function _adjoint_solve_VS!(
             stokesAD.dτ.xy   .= stokes.τ.xy
 
             stokesAD.P0      .= stokes.P
-            λtemp            .= λ
-            λvtemp           .= λv
+            #λtemp            .= λ
+            #λvtemp           .= λv
             @parallel (@idx ni .+ 1) configcall=update_stresses_center_vertexAD!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -414,7 +416,7 @@ function _adjoint_solve_VS!(
                 λvtemp,
                 stokes.τ.II,
                 stokes.viscosity.η_vep,
-                relλ,
+                1.0,#relλ,
                 dt,
                 θ_dτ,
                 rheology,
@@ -439,7 +441,7 @@ function _adjoint_solve_VS!(
                     Const(λvtemp),
                     Const(stokes.τ.II),
                     Const(stokes.viscosity.η_vep),
-                    Const(relλ),
+                    Const(1.0),#Const(relλ),
                     Const(dt),
                     Const(θ_dτ),
                     Const(rheology),
@@ -463,10 +465,10 @@ function _adjoint_solve_VS!(
                 args)
 
         # apply free slip or no slip boundary conditions for adjoint solve
-        if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.ε.xy[1,:]       .= 0.0 end
-        if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.ε.xy[end,:] .= 0.0 end
-        if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.ε.xy[:,end] .= 0.0 end
-        if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.ε.xy[:,1]        .= 0.0 end
+#        if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.ε.xy[1,:]       .= 0.0 end
+#        if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.ε.xy[end,:] .= 0.0 end
+#        if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.ε.xy[:,end] .= 0.0 end
+#        if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.ε.xy[:,1]        .= 0.0 end
 
             @parallel (@idx ni .+ 1) configcall=compute_strain_rateAD!(
                 @strain(stokes)...,

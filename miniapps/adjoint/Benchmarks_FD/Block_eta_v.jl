@@ -250,7 +250,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs",f,run_param)
     phase_ratiosP = deepcopy(phase_ratios)
     stokesDot.viscosity.η .= stokesDot.viscosity.η + dp_m*dp
     # Stokes solver ----------------
-    Dot = adjoint_solveDot!(
+    Dot = adjoint_solve!(     # Change adjoint_solveDot! again!!!!
         stokesDot,
         stokesAD,
         pt_stokes,
@@ -378,8 +378,6 @@ plot_sens = stokesAD.η
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
 # dot product test
-using LinearAlgebra
-
 #  variational derivative
 dirFD  = (refcostdot-refcost)/dp
 

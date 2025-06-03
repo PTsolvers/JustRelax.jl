@@ -97,14 +97,14 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     if run_param
         sol_FD = Array(@zeros(nx,ny))
         sol_FD .= ((cost .- refcost)./dp)#./(abs(refcost)) ./ (di[1] * di[2])
-        sol_FD .*= norm .* refcost
+        #sol_FD .*= norm .* refcost
     else
         sol_FD = Array(@zeros(nx,ny))
         sol_FD .= cost
-        sol_FD .*= norm .* refcost
+        #sol_FD .*= norm .* refcost
     end
     #AD = deepcopy(stokesAD.G)
-    AD = Sens
+    AD = Sens# ./ refcost .* (di[1] * di[2]) 
     #AD_G .*= 2.0
     #AD_G[ind_block] ./= 2.0
     #AD_G[ind_block] .*= 0.5
@@ -118,7 +118,7 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     AD_norm = Array(AD .- (minimum(AD)))
     AD_norm .= AD_norm ./ maximum(AD_norm)
 
-    sol_FD_norm = Array(sol_FD .+ abs(minimum(sol_FD)))
+    sol_FD_norm  = Array(sol_FD .+ abs(minimum(sol_FD)))
     sol_FD_norm .= sol_FD_norm ./ maximum(sol_FD_norm)
 
     sumλVx = round(sum(abs.(stokesAD.VA.Vx)),digits=10)
@@ -136,8 +136,10 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     ax8   = Axis(fig[4,2], aspect = 1, title = "AD Sens. sum(abs)=$sumAD",titlesize=16)
     ax9   = Axis(fig[5,1], aspect = 1, title = "Error",titlesize=16)
     ax10  = Axis(fig[5,2], aspect = 1, title = "Relative Error",titlesize=16)
-    h1 = heatmap!(ax1, xci..., Array(Ref.τ.II) , colormap=:managua)
-    h2 = heatmap!(ax2, xci..., Array(log10.(Ref.ε.II)) , colormap=:managua)
+    #h1 = heatmap!(ax1, xci..., Array(Ref.τ.II) , colormap=:managua)
+    #h2 = heatmap!(ax2, xci..., Array(log10.(Ref.ε.II)) , colormap=:managua)
+    h1 = heatmap!(ax1, xci..., Array(ρref) , colormap=:managua)
+    h2 = heatmap!(ax2, xci..., Array(log10.(ηref)) , colormap=:managua)
     #Vx_range = maximum(abs.(Ref.V.Vx))
     #Vy_range = maximum(abs.(Ref.V.Vy))
     h3  = heatmap!(ax3, xci[1], xci[2], Array(Ref.V.Vx),colormap=:roma)#,colorrange=(-Vx_range,Vx_range))
@@ -170,9 +172,9 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     colgap!(fig.layout, 8)
     #rowgap!(fig.layout, 4.0)
     #linkaxes!(ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9)    
-    save(joinpath(figdir, "Comparison.png"), fig)
+    save(joinpath(figdir, "Comparison$nx.png"), fig)
     sol_FD_cpu = Array(sol_FD)
     jldsave(joinpath(figdir, "FD_solution.jld2"),sol_FD_cpu=sol_FD_cpu)
 
-    return sol_FD
+    return sol_FD, AD
 end

@@ -644,9 +644,15 @@ function JR2D_AD.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheolo
 end
 
 function JR2D_AD.compute_viscosity!(
-    ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
-)
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
+    )
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+end
+
+function JR2D_AD.compute_viscosity!(
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
+    )
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
 end
 
 function JR2D_AD.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
@@ -658,9 +664,9 @@ function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cuto
 end
 
 function compute_viscosity!(
-    ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
-)
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
+    )
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
 end
 
 function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)

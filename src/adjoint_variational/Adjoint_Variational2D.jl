@@ -322,7 +322,7 @@ function _adjoint_solve_VS!(
                 Const(_di[2]),
                 Const(dt * free_surface)
             )
-#=
+
             @parallel (@idx ni) configcall=compute_P_kernelAD!(
                 θ,
                 stokes.P0,
@@ -353,8 +353,13 @@ function _adjoint_solve_VS!(
                     Const(nothing),
                     Const(nothing)
                     )
-    =#
 
+        #    # apply free slip or no slip boundary conditions for adjoint solve
+        #    if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
+        #    if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
+        #    if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
+        #    if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
+#=
             if ana
 
             @parallel (@idx ni .+ 1) dτdV_viscoelastic(
@@ -384,17 +389,12 @@ function _adjoint_solve_VS!(
 
             
             else
-
-    
+=#
             # stress calculation
             stokesAD.dτ.xx   .= stokes.τ.xx
             stokesAD.dτ.yy   .= stokes.τ.yy
             stokesAD.dτ.xy_c .= stokes.τ.xy_c
             stokesAD.dτ.xy   .= stokes.τ.xy
-
-            #stokesAD.τ.xx   .= 1.0
-            #stokesAD.τ.yy   .= 1.0
-            #stokesAD.τ.xy   .= 1.0
 
             stokesAD.P0      .= stokes.P
             λtemp            .= λ
@@ -447,27 +447,7 @@ function _adjoint_solve_VS!(
                     Const(phase_ratios.vertex),
                     Const(ϕ)
                 )
-
-            #=
-            #if iter % nout == 0 && iter > 1
-            print("###########Nachher########\n")
-            print(stokesAD.τ.xx[8,10],"\n")
-            print(extrema(stokesAD.τ.yy),"\n")
-            print(extrema(stokesAD.τ.xy),"\n")
-            print("###########################\n")
-            #end
-
-                        
-            #if iter % nout == 0 && iter > 1
-            print("####### Vorher ε ########\n")
-            print(stokesAD.ε.xx[8,10],"\n")
-            print(extrema(stokesAD.ε.yy),"\n")
-            print(extrema(stokesAD.ε.xy),"\n")
-            print("###########################\n")
-            #end
-            =#
-
-            end
+#            end
         
             @parallel (@idx ni) update_PAD!(
                 stokesAD.PA,
@@ -481,6 +461,12 @@ function _adjoint_solve_VS!(
                 r,
                 θ_dτ,
                 args)
+
+        # apply free slip or no slip boundary conditions for adjoint solve
+        if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.ε.xy[1,:]       .= 0.0 end
+        if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.ε.xy[end,:] .= 0.0 end
+        if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.ε.xy[:,end] .= 0.0 end
+        if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.ε.xy[:,1]        .= 0.0 end
 
             @parallel (@idx ni .+ 1) configcall=compute_strain_rateAD!(
                 @strain(stokes)...,
@@ -662,21 +648,6 @@ function _adjoint_solve_VS!(
     SensA = (stokesAD.G, stokesAD.fr, stokesAD.C)
 
     if ana
-    θ_dτ = 0.0
-
-    #    # stress calculation
-    #    stokesAD.dτ.xx   .= stokes.τ.xx
-    #    stokesAD.dτ.yy   .= stokes.τ.yy
-    #    stokesAD.dτ.xy_c .= stokes.τ.xy_c
-    #    stokesAD.dτ.xy   .= stokes.τ.xy
-#
-    #    #stokesAD.τ.xx   .= 1.0
-    #    #stokesAD.τ.yy   .= 1.0
-    #    #stokesAD.τ.xy   .= 1.0
-#
-    #    stokesAD.P0      .= stokes.P
-    #    λtemp            .= λ
-    #    λvtemp           .= λv
     @parallel (@idx ni.+1) dτdη_viscoelastic(        
         @strain(stokes),
         @tensor_center(stokes.ε_pl),

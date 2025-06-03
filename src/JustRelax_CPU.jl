@@ -68,6 +68,9 @@ include("common.jl")
 include("stokes/Stokes3D.jl")
 export solve!
 
+include("variational_stokes/Stokes3D.jl")
+export solve_VariationalStokes!
+
 end
 
 module JustRelax2D_AD
@@ -103,6 +106,10 @@ __init__() = @init_parallel_stencil(Threads, Float64, 2)
 include("common.jl")
 include("stokes/Stokes2D.jl")
 export solve!
+
+include("variational_stokes/Stokes2D.jl")
+export solve_VariationalStokes!
+
 include("adjoint/Adjoint_Stokes2D.jl")
 export adjoint_solve!, adjoint_solveDot!
 include("adjoint/Adjoint_VelocityKernels.jl")

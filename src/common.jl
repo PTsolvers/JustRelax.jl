@@ -99,6 +99,7 @@ include("variational_stokes/PressureKernels.jl")
 include("variational_stokes/MiniKernels.jl")
 
 include("variational_stokes/StressKernels.jl")
+export update_stresses_center_vertexDot!
 
 include("variational_stokes/VelocityKernels.jl")
 

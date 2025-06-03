@@ -50,18 +50,13 @@
     #### Analytical ####
     # (2.0ηij) / (1.0 + θ_dτ + _Gdt*ηij)
     dtv     = inv(1.0 + θ_dτ + _Gvdt*ηv_ij)
-    dτdεxyv = (2.0*ηv_ij) * dtv        # (2.0ηij) / (1.0 + θ_dτ + _Gdt*ηij)
+    dτdεxyv = (2.0*ηv_ij) * dtv        # ((iter+1)/2)*
     dtvn     = inv(θ_dτ + _Gvdt*ηv_ij)
-    dτdτv   = -(_Gvdt*ηv_ij) * dtvn    #(-1.0 - _Gvdt*ηv_ij)*dtv # (-1 - _Gdt*ηij) / (1.0 + θ_dτ + _Gdt*ηij)
-    #dτdτv   = dtv*(-_Gvdt*ηv_ij)#(-1.0 - _Gvdt*ηv_ij)*dtv # (-1 - _Gdt*ηij) / (1.0 + θ_dτ + _Gdt*ηij)
-
-    ε[3][I...] = (τxyv[I...]*(dτdεxyv))
-    #τxyv[I...] = τxyv[I...] + (τxyv[I...]*-dτdεxyv)
+    #dτdτv   = -(_Gvdt*ηv_ij) * dtvn    #(-1.0 - _Gvdt*ηv_ij)*dtv # (-1 - _Gdt*ηij) / (1.0 + θ_dτ + _Gdt*ηij)
+    dτdτv = (-1.0 - _Gvdt*ηv_ij)*dtv
+    ε[3][I...] = ((τxyv[I...])*(dτdεxyv))
     τxyv[I...] = τxyv[I...] + (τxyv[I...]*dτdτv)
-    #τxyv[I...] = τxyv[I...] + ε[3][I...]
-
     ####################
-      
   end
 
     ## center
@@ -78,21 +73,17 @@
         #### Analytical ####
         # (2.0ηij) / (1.0 + θ_dτ + _Gdt*ηij)
         dtc   = inv(1.0 + θ_dτ + _Gdt*ηij)
-        dτdε = (2.0*ηij) * dtc          # (2.0ηij) / (1.0 + θ_dτ + _Gdt*ηij)
+        dτdε = (2.0*ηij) * dtc          # ((iter+1)/2)*
         dtcn = inv(θ_dτ + _Gdt*ηij)
-        dτdτ = -(_Gdt*ηij) * dtcn #(-1.0 - _Gdt*ηij) * dtc  # (-1 - _Gdt*ηij) / (1.0 + θ_dτ + _Gdt*ηij)
-        #dτdτ = dtc*(-_Gdt*ηij) #(-1.0 - _Gdt*ηij) * dtc  # (-1 - _Gdt*ηij) / (1.0 + θ_dτ + _Gdt*ηij)
-
+        #dτdτ = -(_Gdt*ηij) * dtcn #(-1.0 - _Gdt*ηij) * dtc  # (-1 - _Gdt*ηij) / (1.0 + θ_dτ + _Gdt*ηij)
+        dτdτ = (-1.0 - _Gdt*ηij) * dtc
 
         τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
-        εxx = τij[1]*(dτdε)
-        εyy = τij[2]*(dτdε)
+        εxx = (τij[1])*(dτdε)
+        εyy = (τij[2])*(dτdε)
         ε[1][I...] = εxx
         ε[2][I...] = εyy
-        #setindex!.(τ, τij .+ (τij.*-dτdε), I...)
         setindex!.(τ, τij .+ (τij.*dτdτ), I...)
-        #setindex!.(τ, τij .+ (τij.*dτdε), I...)
-
 
         ####################
     end
@@ -150,16 +141,8 @@ end
         volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
         ηv_ij = av_clamped(η, Ic...)
 
-        # (2.0ε + _Gvdt*τ_old) / ((1.0 + _Gvdt*η)^2)
-        #dτdηv = (2.0*ε[3][I...] + _Gvdt*τxyv_old[I...]) / ((1.0 + _Gvdt*ηv_ij)*(1.0 + _Gvdt*ηv_ij))
-#        dτdηv = (2.0*ε[3][I...] + _Gvdt*τxyv_old[I...] + 2.0*ε[3][I...]*θ_dτ - _Gvdt*θ_dτ*τxyv[I...] + _Gvdt*θ_dτ*τxyv_old[I...]) / ((1.0 + θ_dτ + _Gvdt*ηv_ij)^2)
-
-        # @. (2.0εij - _Gdt*τij + _Gdt*τij_o + _Gdt*τijp + 2.0εij*θ_dτ - _Gdt*θ_dτ*τij + _Gdt*θ_dτ*τij_o) / ((1.0 + θ_dτ + _Gdt*ηij)^2)
-#        dτdηv = (2.0*ε[3][I...] - _Gvdt*τxyv[I...] + _Gvdt*τxyv_old[I...] + 2.0*ε[3][I...]*θ_dτ - _Gvdt*θ_dτ*τxyv[I...] + _Gvdt*θ_dτ*τxyv_old[I...]) / ((1.0 + θ_dτ + _Gvdt*ηv_ij)^2)
-    
-    # -0.5((ε - 0.5Gdt*τ_old) / ((0.5Gdt + 0.5η)^2))
-    #           (2(ε + 0.5Gdt*τ_old)) / ((1 + Gdt*η)^2)
     dτdηv = (2.0*(ε[3][I...] + 0.5*_Gvdt*τxyv_old[I...])) / ((1.0 + _Gvdt*ηv_ij)^2.0)
+
     τxyv[I...] = τxyv[I...]*dτdηv
     end
 
@@ -178,15 +161,7 @@ end
             τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
 
             dτdη = @zeros(3)
-            # (2.0ε + _Gvdt*τ_old) / ((1.0 + _Gvdt*η)^2)
-            # (2.0εij + _Gdt*τij_o + 2.0εij*θ_dτ - _Gdt*θ_dτ*τij + _Gdt*θ_dτ*τij_o) / ((1.0 + θ_dτ + _Gdt*ηij)^2)
-            #dτdη = @. (2.0*εij + _Gdt*τij_o) / ((1.0 + _Gdt*ηij)^2.0)
- #           dτdη = @. (2.0*εij + _Gdt*τij_o + 2.0*εij*θ_dτ - _Gdt*θ_dτ*τij + _Gdt*θ_dτ*τij_o) / ((1.0 + θ_dτ + _Gdt*ηij)^2)
-
-            # @. (2.0εij - _Gdt*τij + _Gdt*τij_o + _Gdt*τijp + 2.0εij*θ_dτ - _Gdt*θ_dτ*τij + _Gdt*θ_dτ*τij_o) / ((1.0 + θ_dτ + _Gdt*ηij)^2)
-#            dτdη = @. (2.0*εij - _Gdt*τij + _Gdt*τij_o + 2.0*εij*θ_dτ - _Gdt*θ_dτ*τij + _Gdt*θ_dτ*τij_o) / ((1.0 + θ_dτ + _Gdt*ηij)^2)
             
-            #(2(ε + 0.5Gdt*τ_old)) / ((1 + Gdt*η)^2)
             dτdη = @. (2.0*(εij + 0.5*_Gdt*τij_o)) / ((1.0 + _Gdt*ηij)^2.0)
 #            τijAD, τij_o, εij = cache_tensors(τAD, τ_o, ε, I...)
             setindex!.(τ, τij .* dτdη, I...)
@@ -375,14 +350,14 @@ end
         τxxv_old_ij = av_clamped(τ_o[1], Ic...)
         τyyv_old_ij = av_clamped(τ_o[2], Ic...)
         EIIv_ij = av_clamped(EII, Ic...)
-        Gv = av_clamped(Sens[1], Ic...)
-        frv = av_clamped(Sens[1], Ic...)
+        #Gv = av_clamped(Sens[1], Ic...)
+        #frv = av_clamped(Sens[1], Ic...)
 
         ## vertex
         phase = @inbounds phase_vertex[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
-        #_Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
-        _Gvdt = inv(Gv * dt)
+        _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
+        #_Gvdt = inv(Gv * dt)
         #sinϕv = sind(frv)
         #cosϕv = cosd(frv)
 
@@ -428,10 +403,10 @@ end
         if isvalid_c(ϕ, I...)
             # Material properties
             phase = @inbounds phase_center[I...]
-            G     = Sens[1][I...]
-            fr    = Sens[2][I...]
-            #_Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
-            _Gdt = inv(G * dt)
+            #G     = Sens[1][I...]
+            #fr    = Sens[2][I...]
+            _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
+            #_Gdt = inv(G * dt)
             #sinϕ = sind(fr)
             #cosϕ = cosd(fr)
             is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)

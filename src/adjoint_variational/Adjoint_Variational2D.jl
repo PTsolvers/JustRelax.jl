@@ -640,14 +640,8 @@ function _adjoint_solve_VS!(
         phase_ratios.vertex
     )
 
-    print("###########################\n")
-    print(extrema(G),"\n")
-    print("###########################\n")
-    #Sens  = (1.0)
-    #SensA = (1.0)
-
-    Sens  = (G, fr, C)
-    SensA = (stokesAD.G, stokesAD.fr, stokesAD.C)
+    Sens  = (G, fr, C);
+    SensA = (stokesAD.G, stokesAD.fr, stokesAD.C);
 
     if ana
     @parallel (@idx ni.+1) dτdη_viscoelastic(        
@@ -675,9 +669,8 @@ function _adjoint_solve_VS!(
         @tensor_center(stokesAD.τ),
         (stokesAD.τ.xy,)
     )
-        #stokesAD.dτ.xx .= 0.0
-        vertex2center!(stokesAD.dτ.xx, stokesAD.τ.xy)
-        stokesAD.η .+= stokesAD.τ.xx .+ stokesAD.τ.yy .+ stokesAD.τ.xy_c .+ stokesAD.dτ.xx
+        vertex2center!(stokesAD.dτ.xx, stokesAD.τ.xy);
+        stokesAD.η .+= stokesAD.τ.xx .+ stokesAD.τ.yy .+ stokesAD.τ.xy_c .+ stokesAD.dτ.xx;
   
     else
 

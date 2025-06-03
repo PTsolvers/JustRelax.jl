@@ -366,8 +366,8 @@ end
         is_pl, Cv, sinϕvNot, cosϕvNot, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
         #_Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
         _Gvdt = inv(Gv * dt)
-        sinϕv = sind(frv)
-        cosϕv = cosd(frv)
+        sinϕv = isinf(frv) ? 0.0 : sind(frv)
+        cosϕv = isinf(frv) ? 0.0 : cosd(frv)
 
         Kv = fn_ratio(get_bulk_modulus, rheology, phase)
         volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
@@ -417,14 +417,14 @@ end
             fr    = Sens[2][I...]
             #_Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
             _Gdt = inv(G * dt)
-            sinϕ = sind(fr)
-            cosϕ = cosd(fr)
+            sinϕ = isinf(frv) ? 0.0 : sind(fr)
+            cosϕ = isinf(frv) ? 0.0 : cosd(fr)
+
             is_pl, C, sinϕNot, cosϕNot, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
             K = fn_ratio(get_bulk_modulus, rheology, phase)
             volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
             ηij = η[I...]
             dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
-            print((sinϕNot - sinϕ),"  ")
             # cache strain rates for center calculations
             τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
 

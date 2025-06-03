@@ -258,8 +258,8 @@ function _adjoint_solve_VS!(
     nout    = 1e3
     λtemp   = deepcopy(λ)
     λvtemp  = deepcopy(λv)
-    λtemp  .= 0.0  
-    λvtemp .= 0.0 
+    #λtemp  .= 0.0  
+    #λvtemp .= 0.0 
 
     print("###################\n")
     print("## Adjoint Solve ##\n")

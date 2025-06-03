@@ -1,4 +1,4 @@
-const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -148,13 +148,13 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     sol_FD_norm = Array(sol_FD .- (minimum(sol_FD)))
     sol_FD_norm .= sol_FD_norm ./ maximum(sol_FD_norm)
 
-    error = Array((sol_FD .- AD ./ AD))
+    error = Array((sol_FD .- AD ./ sol_FD))
     error .= log10.(abs.(error))
 
     sumλVx = round(sum(abs.(stokesAD.VA.Vx)),digits=10)
     sumλVy = round(sum(abs.(stokesAD.VA.Vy)),digits=10)
-    sumFD = round(sum(abs.(sol_FD)),digits=4)
-    sumAD = round(sum(abs.(AD)),digits=4)
+    sumFD = round(sum(abs.(sol_FD)),digits=8)
+    sumAD = round(sum(abs.(AD)),digits=8)
     fig = Figure(size = (720, 1000), title = "Compare Adjoint Sensitivities with Finite Difference Sensitivities",fontsize=16)
     ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}")
     ax2   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})")
@@ -162,10 +162,10 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     ax4   = Axis(fig[2,2], aspect = 1, title = L"Vy")
     ax5   = Axis(fig[3,1], aspect = 1, title = "λ Vx sum(abs)=$sumλVx")
     ax6   = Axis(fig[3,2], aspect = 1, title = "λ Vy sum(abs)=$sumλVy")
-    ax7   = Axis(fig[4,1], aspect = 1, title = "FD Sens. sum(abs)=$sumFD",titlesize=16)
-    ax8   = Axis(fig[4,2], aspect = 1, title = "AD Sens. sum(abs)=$sumAD",titlesize=16)
-    ax9   = Axis(fig[5,1], aspect = 1, title = "Error",titlesize=16)
-    ax10  = Axis(fig[5,2], aspect = 1, title = "Relative Error",titlesize=16)
+    ax7   = Axis(fig[4,1], aspect = 1, title = "FD sum(abs)=$sumFD",titlesize=16)
+    ax8   = Axis(fig[4,2], aspect = 1, title = "AD sum(abs)=$sumAD",titlesize=16)
+    ax9   = Axis(fig[5,1], aspect = 1, title = "Error wrt FD",titlesize=16)
+    ax10  = Axis(fig[5,2], aspect = 1, title = "Log10 Error",titlesize=16)
     #h1 = heatmap!(ax1, xci..., Array(Ref.τ.II) , colormap=:managua)
     #h2 = heatmap!(ax2, xci..., Array(log10.(Ref.ε.II)) , colormap=:managua)
     h1 = heatmap!(ax1, xci..., Array(ρref) , colormap=:managua)
@@ -183,7 +183,7 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     #h7  = heatmap!(ax7, xci[1], xci[2], Array(sol_FD_norm),colormap=:lipari)
     #h8  = heatmap!(ax8, xci[1], xci[2], Array(AD_norm),colormap=:lipari)
     h9  = heatmap!(ax9, xci[1], xci[2], Array(error),colormap=:jet)
-    h10 = heatmap!(ax10, xci[1], xci[2], Array((log10.(abs.(sol_FD ./ AD)))),colormap=:jet)
+    h10 = heatmap!(ax10, xci[1], xci[2], Array((log10.(abs.(Array(error))))),colormap=:jet)
     hidexdecorations!(ax1);hidexdecorations!(ax2);hidexdecorations!(ax3);hidexdecorations!(ax4);hidexdecorations!(ax5);hidexdecorations!(ax6);hidexdecorations!(ax7);hidexdecorations!(ax8) 
     hidexdecorations!(ax6);hideydecorations!(ax2);hideydecorations!(ax4);hideydecorations!(ax6);hideydecorations!(ax8)
 
@@ -223,7 +223,7 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
     #print("#######################################\n")
 
     #hockeystick test
-    epsilons  = collect(LinRange(-0.0, 12.0, iter))
+    epsilons  = collect(LinRange(-2.0, 12.0, iter))
     epsilons  = 10.0 .^ -epsilons
     FDs       = zeros(Float64,length(epsilons))
     run_param = false

@@ -216,7 +216,8 @@ end
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
         _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
         Kv = fn_ratio(get_bulk_modulus, rheology, phase)
-        volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
+        #volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
+        volumev = (Kv == Inf) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
         ηv_ij = av_clamped(η, Ic...)
         dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
@@ -262,7 +263,8 @@ end
             _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
             is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
             K = fn_ratio(get_bulk_modulus, rheology, phase)
-            volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
+            #volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
+            volume = (K == Inf) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
             ηij = η[I...]
             dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
 
@@ -358,19 +360,22 @@ end
         τxxv_old_ij = av_clamped(τ_o[1], Ic...)
         τyyv_old_ij = av_clamped(τ_o[2], Ic...)
         EIIv_ij = av_clamped(EII, Ic...)
-        Gv = av_clamped(Sens[1], Ic...)
-        frv = av_clamped(Sens[1], Ic...)
+        Gv  = av_clamped(Sens[1], Ic...)
+        frv = av_clamped(Sens[2], Ic...)
 
         ## vertex
         phase = @inbounds phase_vertex[I...]
-        is_pl, Cv, sinϕvNot, cosϕvNot, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
+        is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
         #_Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
         _Gvdt = inv(Gv * dt)
-        sinϕv = isinf(frv) ? 0.0 : sind(frv)
-        cosϕv = isinf(frv) ? 0.0 : cosd(frv)
+        #sinϕv = isinf(frv) ? 0.0 : sind(frv)
+        #cosϕv = isinf(frv) ? 0.0 : cosd(frv)
+        #sinϕv = (frv == Inf) ? 0.0 : sind(frv)
+        #cosϕv = (frv == Inf) ? 0.0 : cosd(frv)
 
         Kv = fn_ratio(get_bulk_modulus, rheology, phase)
-        volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
+        #volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
+        volumev = (Kv == Inf) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
         ηv_ij = av_clamped(η, Ic...)
         dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
@@ -394,9 +399,7 @@ end
             #λv[I...] =
             #    (1.0 - relλ) * λv[I...] +
             #    relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
-            λv[I...] =
-            (1.0 - relλ) * λv[I...] +
-            relλ * (Fv / (ηv_ij * dτ_rv + η_regv + volumev))
+            λv[I...] = (1.0 - relλ) * λv[I...] + relλ * (Fv / (ηv_ij * dτ_rv + η_regv + volumev))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εij_pl = λv[I...] * dQdτxy
             τxyv[I...] += dτxyv - 2.0 * ηv_ij * εij_pl * dτ_rv
@@ -413,16 +416,19 @@ end
         if isvalid_c(ϕ, I...)
             # Material properties
             phase = @inbounds phase_center[I...]
-            G     = Sens[1][I...]
-            fr    = Sens[2][I...]
+            G     = @inbounds Sens[1][I...]
+            fr    = @inbounds Sens[2][I...]
             #_Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
             _Gdt = inv(G * dt)
-            sinϕ = isinf(frv) ? 0.0 : sind(fr)
-            cosϕ = isinf(frv) ? 0.0 : cosd(fr)
+            #sinϕ = isinf(fr) ? 0.0 : sind(fr)
+            #cosϕ = isinf(fr) ? 0.0 : cosd(fr)
+            #sinϕ = (fr == Inf) ? 0.0 : sind(fr)
+            #cosϕ = (fr == Inf) ? 0.0 : cosd(fr)
 
-            is_pl, C, sinϕNot, cosϕNot, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
+            is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
             K = fn_ratio(get_bulk_modulus, rheology, phase)
-            volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
+            #volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
+            volumev = (K == Inf) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
             ηij = η[I...]
             dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
             # cache strain rates for center calculations
@@ -438,7 +444,7 @@ end
             τII_ij = τII[I...]
             # yield function @ center
             F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
-
+#=
 #            τII_ij = 
             if is_pl && !iszero(τII_ij) && F > 0
                 τII_ij = GeoParams.second_invariant(dτij .+ τij)
@@ -447,9 +453,7 @@ end
                 #λ[I...] =
                 #    (1.0 - relλ) * λ[I...] +
                 #    relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
-                λ[I...] =
-                    (1.0 - relλ) * λ[I...] +
-                    relλ * (F / (η[I...] * dτ_r + η_reg + volume))
+                λ[I...] = (1.0 - relλ) * λ[I...] + relλ * (F / (η[I...] * dτ_r + η_reg + volume))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
                 dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
@@ -458,14 +462,14 @@ end
 #                setindex!.(ε_pl, εij_pl, I...)
 #                τII_ij = GeoParams.second_invariant(τij)
             else
-                # stress correction @ center
+ =#               # stress correction @ center
                 setindex!.(τ, dτij .+ τij, I...)
 
 #              τII_ij
-            end
+#            end
 #            τII[I...] = τII_ij
 #            η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
-            Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+#            Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
         else
             Pr_c[I...] = zero(eltype(T))
             # τij, = cache_tensors(τ, τ_o, ε, I...)

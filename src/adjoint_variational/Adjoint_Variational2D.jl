@@ -278,11 +278,11 @@ function _adjoint_solve_VS!(
 
         # rhs
         if SensType == "Vx"
-            stokesAD.V.Vx[SensInd[1],SensInd[2]] .= -1.0 # ∂J/∂Vx
+            stokesAD.V.Vx[SensInd] .= -1.0 # ∂J/∂Vx
         elseif SensType == "Vy"
-            stokesAD.V.Vy[SensInd[1],SensInd[2]] .= -1.0 # ∂J/∂Vy
+            stokesAD.V.Vy[SensInd] .= -1.0 # ∂J/∂Vy
         elseif SensType == "P"
-            stokesAD.P[SensInd[1],SensInd[2]]    .= -1.0 # ∂J/∂P
+            stokesAD.P[SensInd]    .= -1.0 # ∂J/∂P
         end
 
         # initialize the residuals with the adjoint variables to act as a multiplier

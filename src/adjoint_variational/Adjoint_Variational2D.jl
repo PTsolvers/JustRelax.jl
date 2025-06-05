@@ -59,6 +59,7 @@ function _adjoint_solve_VS!(
     # end
 
     # errors
+    err_it = 1.0
     err = 2 * ϵ
     iter = 0
     err_evo1 = Float64[]
@@ -93,7 +94,7 @@ function _adjoint_solve_VS!(
     displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
-        iterMin < iter && err < ϵ && break
+        iterMin < iter && (err/err_it) < ϵ && break
 
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window = (1, 1))
@@ -200,6 +201,7 @@ function _adjoint_solve_VS!(
             err = maximum_mpi(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
+            err_it1 = maximum([norm_Rx[1],norm_Ry[1],norm_∇V[1]]) 
 
             if igg.me == 0 && verbose #((verbose && err > ϵ) || iter == iterMax)
                 @printf(
@@ -214,8 +216,8 @@ function _adjoint_solve_VS!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && err ≤ ϵ
-            println("Pseudo-transient iterations converged in $iter iterations")
+        if igg.me == 0 && ((err/err_it1) ≤ ϵ)
+            println("Pseudo-transient iterations converged in $iter iterations hey")
         end
     end
 
@@ -255,7 +257,9 @@ function _adjoint_solve_VS!(
     sizehint!(err_evo2, Int(iterMax))
     (; xvi, xci) = grid
     lx, ly       = li
-    ϵ       = ϵ*1e-2
+    
+    err_it1 = 1.0
+    ϵ       = ϵ
     err     = 2*ϵ
     iter    = 1
     iterMax = 2e4
@@ -273,7 +277,7 @@ function _adjoint_solve_VS!(
     eyy = @zeros(size(stokesAD.ε.yy))
     exy = @zeros(size(stokesAD.ε.xy))
 
-    while (iter ≤ iterMax && err > ϵ)
+    while (iter ≤ iterMax && (err/err_it1) > ϵ)
 
         # reset derivatives to zero
         stokesAD.V.Vx .= 0.0
@@ -543,6 +547,7 @@ function _adjoint_solve_VS!(
                 err = maximum_mpi(errs)
                 push!(err_evo1, err)
                 push!(err_evo2, iter)
+                err_it1 = maximum([norm_Rx[1],norm_Ry[1],norm_∇V[1]]) 
 
                 if igg.me == 0 #&& ((verbose && err > ϵ) || iter == iterMax)
                     @printf(

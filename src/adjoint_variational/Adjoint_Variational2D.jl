@@ -255,7 +255,7 @@ function _adjoint_solve_VS!(
     sizehint!(err_evo2, Int(iterMax))
     (; xvi, xci) = grid
     lx, ly       = li
-    ϵ       = ϵ
+    ϵ       = ϵ*1e-2
     err     = 2*ϵ
     iter    = 1
     iterMax = 2e4

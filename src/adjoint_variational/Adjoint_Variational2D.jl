@@ -179,6 +179,10 @@ function _adjoint_solve_VS!(
             # end
         end
 
+        if iter == iterMax
+            error("Maximum iteration reached without convergence")
+        end
+
         iter += 1
 
         if iter % nout == 0 && iter > 1

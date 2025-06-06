@@ -100,7 +100,7 @@ temperature2center!(thermal)
 Stokes arrays object
 ```julia
 stokes           = StokesArrays(backend, ni)
-pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
+pt_stokes        = PTStokesCoeffs(li, di; ϵ_rel=1e-4, Re=3π, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
 ```
 
 ## Buoyancy forces and lithostatic pressure

@@ -70,7 +70,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 5.0e-3, CFL = 0.99 / √3.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 5.0e-3, CFL = 0.99 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------

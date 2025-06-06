@@ -193,7 +193,7 @@ thermal.Told .= thermal.T
 
 ### Pseuo-transient coefficients
 ```julia
-pt_stokes   = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
+pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-4,  CFL = 1 / √2.1)
 pt_thermal  = PTThermalCoeffs(
     backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 1e-1 / √2.1
 )

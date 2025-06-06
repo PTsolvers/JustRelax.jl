@@ -123,7 +123,17 @@ The APT equations are solved by discretizing the pseudo-time derivatives, either
 
 ### Parallelization and scalability
 
+JustRelax.jl is parallelised in a hybrid shared-distributed memory manner, i.e. multithreading combined with MPI for CPUs, and GPU-aware MPI for multi-GPU architectures. Parallelisation is implemented with two Julia packages:
+
+- [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) handles the backend abstractation, allowing the user to write (shared memory) parallel kernels that seamlessly run on CPUs and GPUs (currently supported: CUDA, AMDGPU, and Mac M-series chips). It automatically generates Julia code based on Base.Threads.jl (Julia's native multi-threading library) and the third-party GPU libraries CUDA.jl (NVidia GPUs), AMDGPU.jl (AMD GPUs), and Metal.jl (Mac M-series chips) depending on the device backend of choice of the end-user.
+
+- [ImplicitGlobalGrid](https://github.com/eth-cscs/ImplicitGlobalGrid.jl) handles MPI domain decomposition and communication, distributing the computational domain across multiple (CPU/GPU) nodes. MPI communication is handled at the lowest level by MPI.jl, the Julia wrapper of the Message Passing Interface (MPI) standard.
+
+
+
 ## Advection
+
+The advection equation in a decoupled manner using a Particle-in-Cell (PiC) method to advect the temperature, compositional, and stress fields. This method is particularly well-suited for this task because it can accurately handle the advection of these fields @dominguez2024, and it is extensively used to simulate global and regional scale geodynamic processes, e.g. StaggYY [@stagyy], LaMEM [@lamem], I3ELVIS [@i3elvis], ASPECT [@aspect], amongst others.
 
 # Package summary
 
@@ -141,7 +151,7 @@ JustRelax.jl features:
 
 - **Modular architecture**: JustRelax.jl is designed with a highly modular structure that separates physics, numerics, and visualization components. This architecture allows users to extend the code with custom rheological models, boundary conditions, or numerical schemes without having to modify the core solver infrastructure, facilitating both research flexibility and code maintenance. The comprehensive test suite ensures stability when extending functionality.
 
-- **Distributed I/O support**: The package implements efficient parallel input/output operations for handling large datasets common in 3D geodynamic simulations. This includes parallel writing and reading of solution fields, checkpoint/restart capabilities, and compatibility with standard visualization formats (VTK) for scientific data analysis and post-processing.
+<!-- - **Distributed I/O support**: The package implements efficient parallel input/output operations for handling large datasets common in 3D geodynamic simulations. This includes parallel writing and reading of solution fields, checkpoint/restart capabilities, and compatibility with standard visualization formats (VTK) for scientific data analysis and post-processing. -->
 
 - **Interactive development environment**: As a Julia package, JustRelax.jl takes full advantage of the language's dynamic nature, allowing for interactive sessions, real-time debugging, and rapid prototyping of new features. This significantly reduces the development cycle compared to traditional compiled languages commonly used in geodynamic modeling, while maintaining competitive performance through just-in-time compilation and type stability.
 

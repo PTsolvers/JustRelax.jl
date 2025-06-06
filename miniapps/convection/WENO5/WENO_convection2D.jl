@@ -76,6 +76,22 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
 
     return nothing
 end
+
+function plot_particles(particles, pPhases)
+    p = particles.coords
+    # pp = [argmax(p) for p in phase_ratios.center] #if you want to plot it in a heatmap rather than scatter
+    ppx, ppy = p
+    # pxv = ustrip.(dimensionalize(ppx.data[:], km, CharDim))
+    # pyv = ustrip.(dimensionalize(ppy.data[:], km, CharDim))
+    pxv = ppx.data[:]
+    pyv = ppy.data[:]
+    clr = pPhases.data[:]
+    # clr = pϕ.data[:]
+    idxv = particles.index.data[:]
+    f,ax,h=scatter(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:roma, markersize=1)
+    Colorbar(f[1,2], h)
+    f
+end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -271,6 +287,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             Colorbar(fig[1, 2], h1)
             save(joinpath(figdir, "$(it).png"), fig)
             fig
+
+            save_particles(particles, pPhases; conversion = 1.0e3, fname = joinpath(vtk_dir, "particles_" * lpad("$it", 6, "0")))
         end
         # ------------------------------
 
@@ -283,6 +301,7 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir = "Weno2D"
+do_vtk = true # save vtk files with particles
 ar = 1 # aspect ratio
 n = 64
 nx = n * ar

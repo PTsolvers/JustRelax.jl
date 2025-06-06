@@ -171,7 +171,8 @@ end
 
 struct PTStokesCoeffs{T}
     CFL::T
-    ϵ::T # PT tolerance
+    ϵ::T # relative PT tolerance
+    ϵ_abs::T # absolute PT tolerance
     Re::T # Reynolds Number
     r::T #
     Vpdτ::T
@@ -182,6 +183,7 @@ struct PTStokesCoeffs{T}
             li::NTuple{N, T},
             di;
             ϵ::Float64 = 1.0e-8,
+            ϵ_abs::Float64 = 1.0e-15,
             Re::Float64 = 3π,
             CFL::Float64 = (N == 2 ? 0.9 / √2.1 : 0.9 / √3.1),
             r::Float64 = 0.7,
@@ -191,6 +193,6 @@ struct PTStokesCoeffs{T}
         θ_dτ = lτ * (r + 4 / 3) / (Re * Vpdτ)
         ηdτ = Vpdτ * lτ / Re
 
-        return new{Float64}(CFL, ϵ, Re, r, Vpdτ, θ_dτ, ηdτ)
+        return new{Float64}(CFL, ϵ, ϵ_abs, Re, r, Vpdτ, θ_dτ, ηdτ)
     end
 end

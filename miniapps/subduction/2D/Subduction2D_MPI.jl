@@ -138,7 +138,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     # Rheology
     args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
-    compute_viscosity!(stokes, phase_ratios, args0, rheology, 0, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
@@ -336,12 +336,12 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
         #MPI gathering
         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
         #centers
-        @views P_nohalo .= Array(stokes.P[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        @views τII_nohalo .= Array(stokes.τ.II[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:(end - 1), 2:(end - 1), 2:(end - 1)])       # Copy data to CPU removing the halo
-        @views εII_nohalo .= Array(stokes.ε.II[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        @views phases_c_nohalo .= Array(phase_center[2:(end - 1), 2:(end - 1), 2:(end - 1)])
-        @async gather!(P_nohalo, P_v)
+        @views P_nohalo .= Array(stokes.P[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views τII_nohalo .= Array(stokes.τ.II[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:(end - 1), 2:(end - 1)])       # Copy data to CPU removing the halo
+        @views εII_nohalo .= Array(stokes.ε.II[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views phases_c_nohalo .= Array(phase_center[2:(end - 1), 2:(end - 1)])
+        gather!(P_nohalo, P_v)
         gather!(τII_nohalo, τII_v)
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
@@ -351,12 +351,12 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             vertex2center!(Vx, Vx_v)
             vertex2center!(Vy, Vy_v)
-            @views Vxv_nohalo .= Array(Vx[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-            @views Vyv_nohalo .= Array(Vy[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+            @views Vxv_nohalo .= Array(Vx[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+            @views Vyv_nohalo .= Array(Vy[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
             gather!(Vxv_nohalo, Vxv_v)
             gather!(Vyv_nohalo, Vyv_v)
         end
-        @views T_nohalo .= Array(thermal.Tc[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array(thermal.Tc[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         # Data I/O and plotting ---------------------
@@ -388,6 +388,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             end
 
             # Make Makie figure
+            if it >5
             ar = 3
             fig = Figure(size = (1200, 900), title = "t = $t")
             ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
@@ -414,6 +415,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             linkaxes!(ax1, ax2, ax3, ax4)
             fig
             save(joinpath(figdir, "$(it).png"), fig)
+            end
         end
         # ------------------------------
 
@@ -432,7 +434,6 @@ igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
-extents = Array{NTuple}[]
 
 # GLOBAL Physical domain ------------------------------------
 model_depth = 660

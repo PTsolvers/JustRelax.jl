@@ -171,7 +171,7 @@ end
 
 struct PTStokesCoeffs{T}
     CFL::T
-    ϵ::T # relative PT tolerance
+    ϵ_rel::T # relative PT tolerance
     ϵ_abs::T # absolute PT tolerance
     Re::T # Reynolds Number
     r::T #

@@ -388,33 +388,33 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             end
 
             # Make Makie figure
-            if it >5
-            ar = 3
-            fig = Figure(size = (1200, 900), title = "t = $t")
-            ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
-            ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
-            ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
-            ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
-            # Plot temperature
-            h1 = heatmap!(ax1, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(T_v), colormap = :batlow)
-            # Plot particles phase
-            # h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
-            h2 = heatmap!(ax2, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(phases_c_v), colormap = :batlow)
-            # Plot 2nd invariant of strain rate
-            # h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(log10.(εII_v)) , colormap=:batlow)
-            h3 = heatmap!(ax3, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(τII_v), colormap = :batlow)
-            # Plot effective viscosity
-            h4 = heatmap!(ax4, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(log10.(η_vep_v)), colormap = :batlow)
-            hidexdecorations!(ax1)
-            hidexdecorations!(ax2)
-            hidexdecorations!(ax3)
-            Colorbar(fig[1, 2], h1)
-            Colorbar(fig[2, 2], h2)
-            Colorbar(fig[1, 4], h3)
-            Colorbar(fig[2, 4], h4)
-            linkaxes!(ax1, ax2, ax3, ax4)
-            fig
-            save(joinpath(figdir, "$(it).png"), fig)
+            if it > 5
+                ar = 3
+                fig = Figure(size = (1200, 900), title = "t = $t")
+                ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
+                ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
+                ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
+                ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
+                # Plot temperature
+                h1 = heatmap!(ax1, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(T_v), colormap = :batlow)
+                # Plot particles phase
+                # h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+                h2 = heatmap!(ax2, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(phases_c_v), colormap = :batlow)
+                # Plot 2nd invariant of strain rate
+                # h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(log10.(εII_v)) , colormap=:batlow)
+                h3 = heatmap!(ax3, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(τII_v), colormap = :batlow)
+                # Plot effective viscosity
+                h4 = heatmap!(ax4, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(log10.(η_vep_v)), colormap = :batlow)
+                hidexdecorations!(ax1)
+                hidexdecorations!(ax2)
+                hidexdecorations!(ax3)
+                Colorbar(fig[1, 2], h1)
+                Colorbar(fig[2, 2], h2)
+                Colorbar(fig[1, 4], h3)
+                Colorbar(fig[2, 4], h4)
+                linkaxes!(ax1, ax2, ax3, ax4)
+                fig
+                save(joinpath(figdir, "$(it).png"), fig)
             end
         end
         # ------------------------------
@@ -451,4 +451,4 @@ figdir = "Subduction2D_$(nx_g())x$(ny_g())"
 
 li_GMG, origin_GMG, phases_GMG, T_GMG = GMG_subduction_2D(model_depth, grid_global.xvi, nx + 1, ny + 1)
 
- main(x_global, z_global,li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(x_global, z_global, li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

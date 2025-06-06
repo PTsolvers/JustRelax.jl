@@ -59,7 +59,7 @@ function _solve!(
 
     # solver loop
     wtime0 = 0.0
-    while iter < 2 || (((err/err_it1) > ϵ && err > ϵ_abs) && iter ≤ iterMax)
+    while iter < 2 || (((err / err_it1) > ϵ && err > ϵ_abs) && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
@@ -116,10 +116,10 @@ function _solve!(
             err = maximum_mpi(norm_Rx[end], norm_Ry[end], norm_∇V[end])
             push!(err_evo1, err)
             push!(err_evo2, iter)
-            err_it1 = maximum_mpi([norm_Rx[1],norm_Ry[1],norm_∇V[1]])
+            err_it1 = maximum_mpi([norm_Rx[1], norm_Ry[1], norm_∇V[1]])
             rel_err = err / err_it1
 
-            if igg.me == 0 && ((verbose && (err/err_it1) > ϵ && err > ϵ_abs) || iter == iterMax)
+            if igg.me == 0 && ((verbose && (err / err_it1) > ϵ && err > ϵ_abs) || iter == iterMax)
                 @printf(
                     "Total steps = %d, abs_err = %1.3e , rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
@@ -133,7 +133,7 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && ((err/err_it1) ≤ ϵ || (err ≤ ϵ_abs))
+        if igg.me == 0 && ((err / err_it1) ≤ ϵ || (err ≤ ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
@@ -197,7 +197,7 @@ function _solve!(
 
     # solver loop
     wtime0 = 0.0
-    while iter < 2 || (((err/err_it1) > ϵ && err > ϵ_abs) && iter ≤ iterMax)
+    while iter < 2 || (((err / err_it1) > ϵ && err > ϵ_abs) && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
@@ -248,10 +248,10 @@ function _solve!(
             err = maximum_mpi(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
-            err_it1 = maximum_mpi([norm_Rx[1],norm_Ry[1],norm_∇V[1]])
+            err_it1 = maximum_mpi([norm_Rx[1], norm_Ry[1], norm_∇V[1]])
             rel_err = err / err_it1
 
-            if igg.me == 0 && ((verbose && (err/err_it1) > ϵ && err > ϵ_abs) || iter == iterMax)
+            if igg.me == 0 && ((verbose && (err / err_it1) > ϵ && err > ϵ_abs) || iter == iterMax)
                 @printf(
                     "Total steps = %d, abs_err = %1.3e , rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
@@ -264,7 +264,7 @@ function _solve!(
             end
         end
 
-        if igg.me == 0 && ((err/err_it1) ≤ ϵ || (err ≤ ϵ_abs))
+        if igg.me == 0 && ((err / err_it1) ≤ ϵ || (err ≤ ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
@@ -351,7 +351,7 @@ function _solve!(
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
 
-    while iter < 2 || (((err/err_it1) > ϵ && err > ϵ_abs) && iter ≤ iterMax)
+    while iter < 2 || (((err / err_it1) > ϵ && err > ϵ_abs) && iter ≤ iterMax)
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
@@ -431,10 +431,10 @@ function _solve!(
             err = maximum(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
-            err_it1 = maximum_mpi([norm_Rx[1],norm_Ry[1],norm_∇V[1]])
+            err_it1 = maximum_mpi([norm_Rx[1], norm_Ry[1], norm_∇V[1]])
             rel_err = err / err_it1
 
-            if igg.me == 0 && ((verbose && (err/err_it1) > ϵ && err > ϵ_abs) || iter == iterMax)
+            if igg.me == 0 && ((verbose && (err / err_it1) > ϵ && err > ϵ_abs) || iter == iterMax)
                 @printf(
                     "Total steps = %d, abs_err = %1.3e , rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
@@ -448,7 +448,7 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && ((err/err_it1) ≤ ϵ || (err ≤ ϵ_abs))
+        if igg.me == 0 && ((err / err_it1) ≤ ϵ || (err ≤ ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
@@ -550,7 +550,7 @@ function _solve!(
     displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
-        iterMin < iter && ((err/err_it1) < ϵ || err < ϵ_abs) && break
+        iterMin < iter && ((err / err_it1) < ϵ || err < ϵ_abs) && break
 
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window = (1, 1))
@@ -665,7 +665,7 @@ function _solve!(
             err = maximum_mpi(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
-            err_it1 = maximum_mpi([norm_Rx[1],norm_Ry[1],norm_∇V[1]])
+            err_it1 = maximum_mpi([norm_Rx[1], norm_Ry[1], norm_∇V[1]])
             rel_err = err / err_it1
 
             if igg.me == 0 #&& ((verbose && err > ϵ) || iter == iterMax)
@@ -682,7 +682,7 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && ((err/err_it1) ≤ ϵ || (err ≤ ϵ_abs))
+        if igg.me == 0 && ((err / err_it1) ≤ ϵ || (err ≤ ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end

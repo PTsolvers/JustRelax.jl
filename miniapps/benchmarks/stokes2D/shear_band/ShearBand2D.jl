@@ -148,7 +148,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             kwargs = (
                 verbose = false,
                 iterMax = 50.0e3,
-                nout = 1e3,
+                nout = 1.0e3,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )

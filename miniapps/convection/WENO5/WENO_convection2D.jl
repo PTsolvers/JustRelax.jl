@@ -88,9 +88,9 @@ function plot_particles(particles, pPhases)
     clr = pPhases.data[:]
     # clr = pϕ.data[:]
     idxv = particles.index.data[:]
-    f,ax,h=scatter(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:roma, markersize=1)
-    Colorbar(f[1,2], h)
-    f
+    f, ax, h = scatter(Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), colormap = :roma, markersize = 1)
+    Colorbar(f[1, 2], h)
+    return f
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 

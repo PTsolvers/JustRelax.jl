@@ -109,7 +109,7 @@ end
     )
 
     # convenience closure
-    @inline gather(A) = _gather(A, I...)
+    Base.@propagate_inbounds @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
         # cache
@@ -214,7 +214,7 @@ end
     )
 
     # convenience closure
-    @inline gather(A) = _gather(A, I...)
+    Base.@propagate_inbounds @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
         # cache
@@ -251,9 +251,9 @@ end
     )
 
     # convenience closures
-    @inline gather_yz(A) = _gather_yz(A, I...)
-    @inline gather_xz(A) = _gather_xz(A, I...)
-    @inline gather_xy(A) = _gather_xy(A, I...)
+    Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)
+    Base.@propagate_inbounds @inline gather_xz(A) = _gather_xz(A, I...)
+    Base.@propagate_inbounds @inline gather_xy(A) = _gather_xy(A, I...)
 
     @inbounds begin
         εij_normal = εxx[I...], εyy[I...], εzz[I...]
@@ -296,9 +296,9 @@ end
     )
 
     # convenience closures
-    @inline gather_yz(A) = _gather_yz(A, I...)
-    @inline gather_xz(A) = _gather_xz(A, I...)
-    @inline gather_xy(A) = _gather_xy(A, I...)
+    Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)
+    Base.@propagate_inbounds @inline gather_xz(A) = _gather_xz(A, I...)
+    Base.@propagate_inbounds @inline gather_xy(A) = _gather_xy(A, I...)
 
     @inbounds begin
         εij_normal = εxx[I...], εyy[I...], εzz[I...]

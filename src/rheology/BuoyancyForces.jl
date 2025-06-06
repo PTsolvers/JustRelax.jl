@@ -14,7 +14,7 @@ end
 
 @parallel_indices (I...) function compute_ρg_kernel!(ρg, rheology, args)
     args_ijk = ntuple_idx(args, I...)
-    ρg[I...] = compute_buoyancy(rheology, args_ijk)
+    @inbounds ρg[I...] = compute_buoyancy(rheology, args_ijk)
     return nothing
 end
 
@@ -62,7 +62,7 @@ end
 ## Inner buoyancy force kernels
 @generated function fill_density!(ρg::NTuple{N}, ρgᵢ::NTuple{N}, I::Vararg{Int, N}) where {N}
     return quote
-        Base.@nexprs $N i -> ρg[i][I...] = ρgᵢ[i]
+        Base.@nexprs $N i -> @inbounds ρg[i][I...] = ρgᵢ[i]
         return nothing
     end
 end

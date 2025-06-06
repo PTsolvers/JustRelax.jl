@@ -175,7 +175,7 @@ function main(igg, nx, ny)
     dt_max = 50.0e3 * (3600 * 24 * 365.25)
 
     _di = inv.(di)
-    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; ϵ_rel, r, θ_dτ, ηdτ) = pt_stokes
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
     iterMax = 15.0e3

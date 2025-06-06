@@ -338,7 +338,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     thermal.Told .= thermal.T
 
     while it < 100 #000 # run only for 5 Myrs
-        if it > 1 && iters.iter > iterMax && iters.err_evo1[end] > pt_stokes.ϵ * 5
+        if it > 1 && iters.iter > iterMax && iters.err_evo1[end] > pt_stokes.ϵ_rel * 5
             iterMax += 10.0e3
             iterMax = min(iterMax, 200.0e3)
             println("Increasing maximum pseudo timesteps to $iterMax")

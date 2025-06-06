@@ -182,8 +182,8 @@ struct PTStokesCoeffs{T}
     function PTStokesCoeffs(
             li::NTuple{N, T},
             di;
-            ϵ_rel::Float64 = 1.0e-8,
-            ϵ_abs::Float64 = 1.0e-15,
+            ϵ_rel::Float64 = 1.0e-6,
+            ϵ_abs::Float64 = 1.0e-12,
             Re::Float64 = 3π,
             CFL::Float64 = (N == 2 ? 0.9 / √2.1 : 0.9 / √3.1),
             r::Float64 = 0.7,

@@ -82,7 +82,7 @@ function solCx(
     # general stokes arrays
     stokes = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; CFL = 1 / √2.1, ϵ = 1.0e-8)
+    pt_stokes = PTStokesCoeffs(li, di; CFL = 1 / √2.1, ϵ_rel = 1.0e-8, ϵ_abs = 1.0e-13)
 
     ## Setup-specific parameters and fields
     (; η) = stokes.viscosity

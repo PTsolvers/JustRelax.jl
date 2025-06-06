@@ -286,7 +286,7 @@ function main2D(igg; nx = 32, ny = 32)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni) # initialise stokes arrays with the defined regime
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, CFL = 1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     args = (; T = thermal.Tc, P = stokes.P, dt = dt)

@@ -321,8 +321,6 @@ end
 iterations_strain_increment = strain_increment(igg; figdir = figdir, nx = nx, ny = ny);
 iterations_velocity_based = velocity_based(igg; figdir = figdir, nx = nx, ny = ny)
 
-using CairoMakie
-
 # Optional: name the x-axis as iteration number
 x = 1:length(iterations_strain_increment)
 # Create the figure and axis
@@ -343,4 +341,4 @@ axislegend(ax, position = :rb)
 
 # Save or display
 f
-#save("iterations_comparison2.png", f)
+save("iterations_comparison2.png", f)

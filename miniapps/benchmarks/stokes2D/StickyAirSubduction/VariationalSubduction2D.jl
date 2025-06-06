@@ -283,6 +283,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     end
 
     # return stokes
+    return
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------

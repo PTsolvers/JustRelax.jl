@@ -360,8 +360,8 @@ end
         τxxv_old_ij = av_clamped(τ_o[1], Ic...)
         τyyv_old_ij = av_clamped(τ_o[2], Ic...)
         EIIv_ij = av_clamped(EII, Ic...)
-        Gv  = av_clamped(Sens[1], Ic...)
-        frv = av_clamped(Sens[2], Ic...)
+        Gv = Sens[4][I...]
+        frv = av_clamped(Sens[5], Ic...)
 
         ## vertex
         phase = @inbounds phase_vertex[I...]

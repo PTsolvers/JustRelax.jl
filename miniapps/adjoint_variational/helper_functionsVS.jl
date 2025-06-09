@@ -1,5 +1,4 @@
-const isCUDA = true
-
+const isCUDA = false
 @static if isCUDA
     using CUDA
 end
@@ -214,13 +213,8 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
     #### Dot product test ####
     dirFD  = (refcostdot-refcost)/dp
     dirAD  = (sum(plot_sens .* dM)) # AD
-    #diffAD = abs((dirAD - dirFD) / dirFD)
-    #print("#######################################\n")
-    #print("Difference to Adjoint: ", diffAD, "\n")
-    FD1    = sum(FD[1] .* dM) # FD
-    #diffFD = abs((FD1 - dirFD) / dirFD)
-    #print("Difference to FD: ", diffFD, "\n")
-    #print("#######################################\n")
+    #FD1    = sum(FD[1] .* dM) # FD
+
 
     #hockeystick test
     epsilons  = collect(LinRange(-2.0, 12.0, iter))
@@ -229,29 +223,34 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
     run_param = false
     run_ref   = false
     error     = zeros(Float64,length(epsilons))
-    errorFD   = zeros(Float64,length(epsilons))
+    #errorFD   = zeros(Float64,length(epsilons))
 
     j=1
     for (j,i) in enumerate(epsilons)
         dp=i
         refcostNot, cost, dpNot, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref, dp, dM);
         FDs[j]     = (refcostdot-refcost)/dp
-        #error[j]   = abs((dirAD-FDs[j])/dirAD)
-        error[j]   = abs((FDs[j]/dirAD)-1)
-        #errorFD[j] = abs((FD1-FDs[j])/dirAD)
-        errorFD[j]   = abs((FDs[j]/FD1)-1)
+        #error[j]   = abs((dirAD-FDs[j]))
+        error[j]   = abs(((FDs[j]/dirAD)-1.0))
+        print(error[j],"##########################\n")
         print(j,"\n")
+        print(error[j],"\n")
+        print(error[j],"##########################\n")
+        #errorFD[j] = abs((FD1-FDs[j])/dirAD)
+        #errorFD[j]   = abs(((FDs[j]/FD1)-1.0))
+
     end
 
     eps = epsilons[1:round(Int,end/2)]
     fig = Figure(size = (1000, 1000));
     ax1 = Axis(fig[1,1], aspect = 1, title = "Dot Product Test", titlesize=34,xlabel = "ϵ",ylabel="error")
     l1 = lines!(ax1, log10.(epsilons), log10.(error), color = :blue, linewidth = 2, label = "Adjoint")
-    l2 = lines!(ax1, log10.(epsilons), log10.(errorFD), color = :red, linewidth = 2, label = "FD")
+    #l2 = lines!(ax1, log10.(epsilons), log10.(errorFD), color = :red, linewidth = 2, label = "FD")
     lines!(ax1,log10.(eps),log10.(eps), color = :black, linewidth = 2, linestyle = :dot, label = "convergence order")
     #l3 = lines!(ax1, log10.(epsilons), log10.(FDs), color = :green, linewidth = 2, linestyle = :dot, label = "directional deriv.")
     #l4 = lines!(ax1, log10.(epsilons), log10.(AD), color = :black, linewidth = 2, linestyle = :dot, label = "Adjoint")
     axislegend(position = :rt)
     fig
     save(joinpath(figdir, "HockeyStick.png"), fig)
+    return error, FDs
 end

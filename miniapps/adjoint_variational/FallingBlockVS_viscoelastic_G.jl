@@ -19,7 +19,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     η0      = 1.0           # viscosity
     G0      = 1.0           # shear modulus
     Gi      = 0.5           # shear modulus
-    ν0      = 0.45          # Poisson ratio
+    ν0      = 0.5          # Poisson ratio
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     ana     = false
     # viscous and elastic blocks for reference solve
@@ -29,10 +29,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     el_block   = ConstantElasticity(G=Gi, ν=ν0)
 
     # viscous and elastic blocks for parameter pertubation
-    visc_bg_p    = LinearViscous(; η=1.0)
-    visc_block_p = LinearViscous(; η=1.0)
-    el_p         = ConstantElasticity(G=G0+dp, ν=ν0)
-    el_block_p   = ConstantElasticity(G=Gi+dp, ν=ν0)
+    visc_bg_p    = LinearViscous(; η=1.0+dp)
+    visc_block_p = LinearViscous(; η=1.0+dp)
+    el_p         = ConstantElasticity(G=G0, ν=ν0)
+    el_block_p   = ConstantElasticity(G=Gi, ν=ν0)
 
     # plascticity parameters
     ϕ       = 30            # friction angle
@@ -59,8 +59,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             Density           = ConstantDensity(; ρ = 1.0),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_bg,)),
-            #CompositeRheology = CompositeRheology((visc_bg,el)),            
-            CompositeRheology = CompositeRheology((visc_bg,el,pl)),
+            CompositeRheology = CompositeRheology((visc_bg,el)),            
+            #CompositeRheology = CompositeRheology((visc_bg,el,pl)),
 
         ),
         # High density phase
@@ -69,8 +69,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             Density           = ConstantDensity(; ρ = 1.5),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_block,)),
-            #CompositeRheology = CompositeRheology((visc_block,el_block)),
-            CompositeRheology = CompositeRheology((visc_block,el_block,pl)),
+            CompositeRheology = CompositeRheology((visc_block,el_block)),
+            #CompositeRheology = CompositeRheology((visc_block,el_block,pl)),
         ),
         # Low density phase
         SetMaterialParams(;
@@ -78,8 +78,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             Density           = ConstantDensity(; ρ = 1.0),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_bg_p,)),
-            #CompositeRheology = CompositeRheology((visc_bg_p,el_p)),
-            CompositeRheology = CompositeRheology((visc_bg_p,el_p,pl_p)),
+            CompositeRheology = CompositeRheology((visc_bg_p,el_p)),
+            #CompositeRheology = CompositeRheology((visc_bg_p,el_p,pl_p)),
 
         ),
         # High density phase
@@ -88,8 +88,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             Density           = ConstantDensity(; ρ = 1.5),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_block_p,)),
-            #CompositeRheology = CompositeRheology((visc_block_p,el_block_p)),
-            CompositeRheology = CompositeRheology((visc_block_p,el_block_p,pl_p)),
+            CompositeRheology = CompositeRheology((visc_block_p,el_block_p)),
+            #CompositeRheology = CompositeRheology((visc_block_p,el_block_p,pl_p)),
         ),
     )
 
@@ -109,13 +109,15 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-12,  CFL = 0.95 / √2.1)
+    #pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-3,  CFL = 0.95 / √2.1)
+    pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-4, ϵ_abs=1e-12,  CFL = 0.95 / √2.1)
 
     # Adjoint 
     stokesAD = StokesArraysAdjoint(backend, ni)
     indx     = findall((xci[1] .>= 0.5-radius) .& (xci[1] .<= 0.5+radius)) .+ 1
     indy     = findall((xvi[2] .>= 0.5-1e-6) .& (xvi[2] .<= 0.5+1e-6))  
-    SensInd  = [indx, indy,]
+    ind      = vec([CartesianIndex(i, j) for i in indx, j in indy])
+    SensInd  = ind
     SensType = "Vy"
 
     # Buoyancy forces
@@ -163,8 +165,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     t, it      = 0.0, 0
     cost    = @zeros(length(xci[1]),length(xci[2])) # cost function
     refcost = 0.0
+    
     # while t < tmax
-    for _ in 1:6
+    for _ in 1:4
         # Stokes solver ----------------
         adjoint_solve_VariationalStokes!(
             stokes,
@@ -249,24 +252,26 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             refcost = sum(stokesRef.V.Vy[indx,indy])
             end
         else
-            #refcost = sum_kbn((stokesRef.V.Vy[indx,indy]))
-            refcost = sum(stokesRef.V.Vy[indx,indy])
+            refcost = Float64(sum_kbn((stokesRef.V.Vy[indx,indy])))
+            #refcost = sum(stokesRef.V.Vy[indx,indy])
         end
     end
     tensor_invariant!(stokes.ε)
     (; η_vep, η) = stokes.viscosity
     ηref = η
-
+    ρref     = deepcopy(ρg[2])./1.0
+#=
     #################################
     #### Dot product pertubation ####
     #################################
     stokesDot       = deepcopy(stokes)
     ρgDot           = deepcopy(ρg)
     phase_ratiosDot = deepcopy(phase_ratios)
-    visc  = false
+    visc  = true
     dens  = false
-    Gdot  = true
+    Gdot  = false
     frdot = false
+    #stokesDot.viscosity.η .= stokesDot.viscosity.η + dM*dp
     # Stokes solver ----------------
     Dot = adjoint_solve_VariationalStokesDot!(
         stokesDot,
@@ -311,6 +316,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     else
         refcostdot = Float64(sum_kbn((stokesDot.V.Vy[indx, indy])))
     end
+    =#
+    refcostdot=1.0
 
     ##########################
     #### Parameter change ####
@@ -353,6 +360,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
                     igg;
                     kwargs = (
                         grid,
+
+
                         origin,
                         li,
                         iterMax=150e3,
@@ -383,14 +392,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     else
         cost = load(joinpath(figdir, "FD_solution.jld2"),"sol_FD_cpu")
     end
-    
     return refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt
 end
 
 #### Init Run ####
 f         = 1      ; nx     = 16*f; ny     = 16*f
 dp        = 1e-6
-run_param = false
+run_param = true
 run_ref   = true
 dM        = rand(Float64,nx,ny)
 dM      ./= norm(dM)   # normalize M matrix
@@ -402,21 +410,10 @@ else
     igg
 end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM);
-cost .= rand(nx,ny)
+#cost .= rand(nx,ny)
 plot_sens = stokesAD.η  #which sensitivity to plot
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
-#### Dot product test ####
-#dirFD  = (refcostdot-refcost)/dp
-#dirAD  = (sum(plot_sens .* dM)) # AD
-#diffAD = abs((dirAD - dirFD) / dirFD)
-#dir = dirFD/dirAD
-#print("#######################################\n")
-#print("Difference to Adjoint: ", diffAD, "\n")
-#FD1    = sum(FD[1] .* dM)*dp # FD
-#diffFD = abs((FD1 - dirFD) / dirFD)
-#print("Difference to FD: ", diffFD, "\n")
-#print("#######################################\n")
 
+errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,20)   # plot convergence test # plot convergence test
 
-#hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,20)   # plot convergence test

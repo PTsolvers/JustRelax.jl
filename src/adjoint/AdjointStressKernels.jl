@@ -182,12 +182,12 @@ EIIv_ij = av_clamped(EII, Ic...)
 ## vertex
 phase = @inbounds phase_vertex[I...]
 #is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
-#_Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
-Gv_ij       = av_clamped(Sens[1],Ic...)
+_Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
+#Gv_ij       = @inbounds Sens[4][I...]
 ϕv_ij       = av_clamped(Sens[2],Ic...)
 Cv_ij       = av_clamped(Sens[3],Ic...)
 is_pl, CvNot, sinϕvNot, cosϕvNot, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
-_Gvdt = inv(Gv_ij * dt)
+#_Gvdt = inv(Gv_ij * dt)
 sinϕv = sind(ϕv_ij)
 cosϕv = cosd(ϕv_ij)
 Cv    = Cv_ij
@@ -203,8 +203,8 @@ end
 dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
 # stress increments @ vertex
-dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
-dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
+#dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, εxxv_ij, _Gvdt, dτ_rv)
+#dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, εyyv_ij, _Gvdt, dτ_rv)
 dτxyv = compute_stress_increment(
     τxyv[I...], τxyv_old[I...], ηv_ij, ε[3][I...], _Gvdt, dτ_rv
 )
@@ -229,13 +229,13 @@ end
 if all(I .≤ ni)
     # Material properties
     phase = @inbounds phase_center[I...]
-    #_Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
+    _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     #is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII#[I...], phase)
-    Gc_ij       = Sens[1][I...]
+    #Gc_ij       = Sens[1][I...]
     ϕc_ij       = Sens[2][I...]
     Cc_ij       = Sens[3][I...]
     is_pl, CNot, sinϕNot, cosϕNot, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
-    _Gdt = inv(Gc_ij * dt)
+    #_Gdt = inv(Gc_ij * dt)
     sinϕ = sind(ϕc_ij)
     cosϕ = cosd(ϕc_ij)
     C    = Cc_ij

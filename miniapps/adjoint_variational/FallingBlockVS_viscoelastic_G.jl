@@ -260,7 +260,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     (; η_vep, η) = stokes.viscosity
     ηref = η
     ρref     = deepcopy(ρg[2])./1.0
-#=
+
     #################################
     #### Dot product pertubation ####
     #################################
@@ -316,8 +316,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     else
         refcostdot = Float64(sum_kbn((stokesDot.V.Vy[indx, indy])))
     end
-    =#
-    refcostdot=1.0
+    
+    #refcostdot=1.0
 
     ##########################
     #### Parameter change ####
@@ -398,7 +398,7 @@ end
 #### Init Run ####
 f         = 1      ; nx     = 16*f; ny     = 16*f
 dp        = 1e-6
-run_param = true
+run_param = false
 run_ref   = true
 dM        = rand(Float64,nx,ny)
 dM      ./= norm(dM)   # normalize M matrix
@@ -415,5 +415,5 @@ plot_sens = stokesAD.η  #which sensitivity to plot
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
 
-errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,20)   # plot convergence test # plot convergence test
+errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,100)   # plot convergence test # plot convergence test
 

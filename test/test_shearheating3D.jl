@@ -151,7 +151,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     # Time loop
     t, it = 0.0, 0
     local iters, thermal
-    while it < 5
+    while it < 1
 
         # interpolate fields from particle to grid vertices
         particle2grid!(thermal.T, pT, xvi, particles)

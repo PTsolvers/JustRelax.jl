@@ -261,7 +261,7 @@ function _solve_VS!(
 
     _di = inv.(di)
     _dt = inv.(dt)
-    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokes
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
@@ -273,7 +273,8 @@ function _solve_VS!(
     # end
 
     # errors
-    err = 2 * ϵ
+    err_it1 = 1.0
+    err = 2 * ϵ_rel
     iter = 0
     err_evo1 = Float64[]
     err_evo2 = Float64[]
@@ -306,8 +307,7 @@ function _solve_VS!(
     displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
-        iterMin < iter && err < ϵ && break
-
+        iterMin < iter && ((err / err_it1) < ϵ_rel || err < ϵ_abs) && break
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
@@ -415,6 +415,10 @@ function _solve_VS!(
             err = maximum_mpi(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
+            err_it1 = maximum_mpi([norm_Rx[1], norm_Ry[1], norm_∇V[1]])
+            rel_err = err / err_it1
+
+
 
             if igg.me == 0 && verbose #((verbose && err > ϵ) || iter == iterMax)
                 @printf(
@@ -428,7 +432,7 @@ function _solve_VS!(
             end
             isnan(err) && error("NaN(s)")
         end
-        if igg.me == 0 && err ≤ ϵ
+        if igg.me == 0 &&((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end

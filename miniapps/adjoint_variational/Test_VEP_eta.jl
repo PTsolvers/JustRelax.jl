@@ -19,37 +19,52 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     η0      = 1.0           # viscosity
     G0      = 1.0           # shear modulus
     Gi      = 0.5           # shear modulus
-    ν0      = 0.5          # Poisson ratio
+    ν0      = 0.45          # Poisson ratio
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     ana     = false
+
+        # Physical properties using GeoParams ----------------
+        τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+        ϕ = 30            # friction angle
+        C = τ_y           # Cohesion
+        η0 = 1.0           # viscosity
+        G0 = 1.0           # elastic shear modulus
+        Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
+        εbg = 1.0           # background strain-rate
+        η_reg = 8.0e-3          # regularisation "viscosity"
+        dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
     # viscous and elastic blocks for reference solve
     visc_bg    = LinearViscous(; η=1.0)
     visc_block = LinearViscous(; η=1.0)
-    el         = ConstantElasticity(G=G0, ν=ν0)
-    el_block   = ConstantElasticity(G=Gi, ν=ν0)
+    #el         = ConstantElasticity(G=G0, ν=ν0)
+    #el_block   = ConstantElasticity(G=Gi, ν=ν0)
+    el         = ConstantElasticity(G=G0, Kb = 4.0)
+    el_block   = ConstantElasticity(G=Gi, Kb = 4.0)
 
     # viscous and elastic blocks for parameter pertubation
-    visc_bg_p    = LinearViscous(; η=1.0)
-    visc_block_p = LinearViscous(; η=1.0)
-    el_p         = ConstantElasticity(G=G0+dp, ν=ν0)
-    el_block_p   = ConstantElasticity(G=Gi+dp, ν=ν0)
+    visc_bg_p    = LinearViscous(; η=1.0+dp)
+    visc_block_p = LinearViscous(; η=1.0+dp)
+    #el_p         = ConstantElasticity(G=G0, ν=ν0)
+    #el_block_p   = ConstantElasticity(G=Gi, ν=ν0)
+    el_p         = ConstantElasticity(G=G0, Kb = 4.0)
+    el_block_p   = ConstantElasticity(G=Gi, Kb = 4.0)
 
     # plascticity parameters
-    ϕ       = 30            # friction angle
-    C       = 1.6           # Cohesion
-    η_reg   = 8e-3 #1e-2          # regularisation "viscosity"
+#    ϕ       = 30            # friction angle
+#    C       = 1.6           # Cohesion
+#    η_reg   = 8e-3 #1e-2          # regularisation "viscosity"
     pl      = DruckerPrager_regularised(;  # non-regularized plasticity
-    C    = C,
+    C    = C / cosd(ϕ),
     ϕ    = ϕ,
     η_vp = η_reg,
-    Ψ    = 0
+    Ψ    = 15
     )
 
     pl_p      = DruckerPrager_regularised(;  # non-regularized plasticity
-    C    = C,
+    C    = C / cosd(ϕ),
     ϕ    = ϕ,
     η_vp = η_reg,
-    Ψ    = 0
+    Ψ    = 15
     )
 
     rheology = (
@@ -59,8 +74,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             Density           = ConstantDensity(; ρ = 1.0),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_bg,)),
-            CompositeRheology = CompositeRheology((visc_bg,el)),            
-            #CompositeRheology = CompositeRheology((visc_bg,el,pl)),
+            #CompositeRheology = CompositeRheology((visc_bg,el)),            
+            CompositeRheology = CompositeRheology((visc_bg,el,pl)),
 
         ),
         # High density phase
@@ -69,8 +84,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             Density           = ConstantDensity(; ρ = 1.5),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_block,)),
-            CompositeRheology = CompositeRheology((visc_block,el_block)),
-            #CompositeRheology = CompositeRheology((visc_block,el_block,pl)),
+            #CompositeRheology = CompositeRheology((visc_block,el_block)),
+            CompositeRheology = CompositeRheology((visc_block,el_block,pl)),
         ),
         # Low density phase
         SetMaterialParams(;
@@ -78,8 +93,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             Density           = ConstantDensity(; ρ = 1.0),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_bg_p,)),
-            CompositeRheology = CompositeRheology((visc_bg_p,el_p)),
-            #CompositeRheology = CompositeRheology((visc_bg_p,el_p,pl_p)),
+            #CompositeRheology = CompositeRheology((visc_bg_p,el_p)),
+            CompositeRheology = CompositeRheology((visc_bg_p,el_p,pl_p)),
 
         ),
         # High density phase
@@ -88,8 +103,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             Density           = ConstantDensity(; ρ = 1.5),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_block_p,)),
-            CompositeRheology = CompositeRheology((visc_block_p,el_block_p)),
-            #CompositeRheology = CompositeRheology((visc_block_p,el_block_p,pl_p)),
+            #CompositeRheology = CompositeRheology((visc_block_p,el_block_p)),
+            CompositeRheology = CompositeRheology((visc_block_p,el_block_p,pl_p)),
         ),
     )
 
@@ -109,7 +124,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
-    #pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-3,  CFL = 0.95 / √2.1)
     pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-4, ϵ_abs=1e-12,  CFL = 0.95 / √2.1)
 
     # Adjoint 
@@ -135,12 +149,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
         no_slip   = (left = false, right = false, top = false, bot=false),
     )
 
-    #=
-        flow_bcs     = VelocityBoundaryConditions(;
-        free_slip = (left = false, right = false, top = false, bot = false),
-        no_slip   = (left = true, right = true, top = true, bot=true),
-    )
-    =#
     stokes.V.Vx .= PTArray(backend)([ x*εbg for x in xvi[1], _ in 1:ny+2])
     stokes.V.Vy .= PTArray(backend)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
 
@@ -167,7 +175,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     refcost = 0.0
     
     # while t < tmax
-    for _ in 1:4
+    for _ in 1:12
         # Stokes solver ----------------
         adjoint_solve_VariationalStokes!(
             stokes,
@@ -256,7 +264,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             #refcost = sum(stokesRef.V.Vy[indx,indy])
         end
     end
-    tensor_invariant!(stokes.ε)
+    tensor_invariant!(stokesRef.ε)
     (; η_vep, η) = stokes.viscosity
     ηref = η
     ρref     = deepcopy(ρg[2])./1.0
@@ -267,9 +275,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     stokesDot       = deepcopy(stokes)
     ρgDot           = deepcopy(ρg)
     phase_ratiosDot = deepcopy(phase_ratios)
-    visc  = false
+    visc  = true
     dens  = false
-    Gdot  = true
+    Gdot  = false
     frdot = false
     #stokesDot.viscosity.η .= stokesDot.viscosity.η + dM*dp
     # Stokes solver ----------------
@@ -396,13 +404,13 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
 end
 
 #### Init Run ####
-f         = 1      ; nx     = 16*f; ny     = 16*f
+f         = 4      ; nx     = 16*f; ny     = 16*f
 dp        = 1e-6
 run_param = true
 run_ref   = true
 dM        = rand(Float64,nx,ny)
 dM      ./= norm(dM)   # normalize M matrix
-figdir    = "miniapps/adjoint_variational/Test_VE_G/"
+figdir    = "miniapps/adjoint_variational/Test_VEP_eta/"
 #### Run ####
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
@@ -411,7 +419,7 @@ else
 end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM);
 #cost .= rand(nx,ny)
-plot_sens = stokesAD.G  #which sensitivity to plot
+plot_sens = stokesAD.η  #which sensitivity to plot
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
 

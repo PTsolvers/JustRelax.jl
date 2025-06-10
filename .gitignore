@@ -39,3 +39,8 @@ Systematics/*
 *.avi
 *.mp4
 *.pvsm
+src/adjoint_variational/test.jl
+miniapps/adjoint_variational/testSymbolics.jl
+Project.toml
+.gitignore
+Project.toml

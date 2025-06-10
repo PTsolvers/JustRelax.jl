@@ -29,10 +29,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     el_block   = ConstantElasticity(G=Gi, ν=ν0)
 
     # viscous and elastic blocks for parameter pertubation
-    visc_bg_p    = LinearViscous(; η=1.0+dp)
-    visc_block_p = LinearViscous(; η=1.0+dp)
-    el_p         = ConstantElasticity(G=G0, ν=ν0)
-    el_block_p   = ConstantElasticity(G=Gi, ν=ν0)
+    visc_bg_p    = LinearViscous(; η=1.0)
+    visc_block_p = LinearViscous(; η=1.0)
+    el_p         = ConstantElasticity(G=G0+dp, ν=ν0)
+    el_block_p   = ConstantElasticity(G=Gi+dp, ν=ν0)
 
     # plascticity parameters
     ϕ       = 30            # friction angle
@@ -267,9 +267,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     stokesDot       = deepcopy(stokes)
     ρgDot           = deepcopy(ρg)
     phase_ratiosDot = deepcopy(phase_ratios)
-    visc  = true
+    visc  = false
     dens  = false
-    Gdot  = false
+    Gdot  = true
     frdot = false
     #stokesDot.viscosity.η .= stokesDot.viscosity.η + dM*dp
     # Stokes solver ----------------
@@ -398,7 +398,7 @@ end
 #### Init Run ####
 f         = 1      ; nx     = 16*f; ny     = 16*f
 dp        = 1e-6
-run_param = false
+run_param = true
 run_ref   = true
 dM        = rand(Float64,nx,ny)
 dM      ./= norm(dM)   # normalize M matrix
@@ -411,9 +411,9 @@ else
 end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM);
 #cost .= rand(nx,ny)
-plot_sens = stokesAD.η  #which sensitivity to plot
+plot_sens = stokesAD.G  #which sensitivity to plot
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
 
-errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,100)   # plot convergence test # plot convergence test
+errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,20)   # plot convergence test # plot convergence test
 

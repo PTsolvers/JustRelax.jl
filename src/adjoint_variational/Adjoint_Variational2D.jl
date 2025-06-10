@@ -680,8 +680,6 @@ end
         Sens  = (G, fr, C, Gv, frv, Cv);
         SensA = (stokesAD.G, stokesAD.fr, stokesAD.C, Gvb, frvb, Cvb);
 
-        print(unique(G),"\n")
-        print(unique(Gv),"\n")
 
     θ_dτ = 0.0
     stokesAD.dτ.xx   .= 0.0
@@ -739,6 +737,7 @@ end
             DuplicatedNoNeed(Sens,SensA)
             )
 
+            G .= 0.0
             vertex2center!(G, Gvb);
             stokesAD.G .+= G 
     end          
@@ -756,24 +755,17 @@ end
 end
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
 
 ## 2D VISCO-ELASTIC STOKES SOLVER
 
@@ -873,7 +865,7 @@ end
 # compute buoyancy forces and viscosity
 compute_ρg!(ρg[end], phase_ratios, rheology, args)
 compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
-stokes.viscosity.η .= stokes.viscosity.η + (dM*dp)
+stokes.viscosity.η .= stokes.viscosity.η + (dM*dp*visc)
 displacement2velocity!(stokes, dt, flow_bcs)
 
 while iter ≤ iterMax
@@ -917,7 +909,7 @@ while iter ≤ iterMax
         )
         =#
 
-        @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
+        @parallel (@idx ni .+ 1) update_stresses_center_vertexDot!(
             @strain(stokes),
             @tensor_center(stokes.ε_pl),
             stokes.EII_pl,
@@ -939,6 +931,10 @@ while iter ≤ iterMax
             phase_ratios.center,
             phase_ratios.vertex,
             ϕ,
+            dM,
+            dp,
+            Gdot,
+            frdot
         )
         update_halo!(stokes.τ.xy)
 

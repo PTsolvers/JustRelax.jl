@@ -419,7 +419,6 @@ function _solve_VS!(
             rel_err = err / err_it1
 
 
-
             if igg.me == 0 && verbose #((verbose && err > ϵ) || iter == iterMax)
                 @printf(
                     "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",

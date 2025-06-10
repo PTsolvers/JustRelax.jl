@@ -782,7 +782,7 @@ function _solve!(
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
 
-    while iter <2 || (((err / err_it1) > ϵ_rel && err > ϵ_abs) && iter ≤ iterMax)
+    while iter < 2 || (((err / err_it1) > ϵ_rel && err > ϵ_abs) && iter ≤ iterMax)
 
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window = (1, 1))

@@ -41,7 +41,8 @@ function _solve!(
     ) where {T}
 
     # solver related
-    ϵ = pt_stokes.ϵ
+    ϵ_rel = pt_stokes.ϵ_rel
+    ϵ_abs = pt_stokes.ϵ_abs
     # geometry
     _di = @. 1 / di
     ni = size(stokes.P)
@@ -53,7 +54,8 @@ function _solve!(
     update_halo!(ητ)
 
     # errors
-    err = 2 * ϵ
+    err_it1 = 1.0
+    err = 2 * ϵ_rel
     iter = 0
     cont = 0
     err_evo1 = Float64[]
@@ -68,7 +70,7 @@ function _solve!(
 
     # solver loop
     wtime0 = 0.0
-    while iter < 2 || (err > ϵ && iter ≤ iterMax)
+    while iter < 2 || (((err / err_it1) > ϵ_rel && err > ϵ_abs) && iter ≤ iterMax)
         wtime0 += @elapsed begin
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
             @parallel compute_P!(
@@ -125,11 +127,15 @@ function _solve!(
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)
-            if igg.me == 0 && ((verbose && err > ϵ) || iter == iterMax)
+            err_it1 = max(norm_Rx[1], norm_Ry[1], norm_Rz[1], norm_∇V[1])
+            rel_err = err / err_it1
+
+            if igg.me == 0 && ((verbose && (err / err_it1) > ϵ_rel && err > ϵ_abs) || iter == iterMax)
                 @printf(
-                    "iter = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_Rz=%1.3e, norm_∇V=%1.3e] \n",
+                    "iter = %d, abs_err = %1.3e, rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_Rz=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
                     err,
+                    rel_err,
                     norm_Rx[cont],
                     norm_Ry[cont],
                     norm_Rz[cont],
@@ -139,7 +145,7 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && err ≤ ϵ
+        if igg.me == 0 && ((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
@@ -184,7 +190,8 @@ function _solve!(
     ) where {T}
 
     # solver related
-    ϵ = pt_stokes.ϵ
+    ϵ_rel = pt_stokes.ϵ_rel
+    ϵ_abs = pt_stokes.ϵ_abs
     # geometry
     _di = @. 1 / di
     ni = size(stokes.P)
@@ -194,7 +201,8 @@ function _solve!(
     ητ = deepcopy(η)
 
     # errors
-    err = 2 * ϵ
+    err_it1 = 1.0
+    err = 2 * ϵ_rel
     iter = 0
     cont = 0
     err_evo1 = Float64[]
@@ -219,7 +227,7 @@ function _solve!(
 
     # solver loop
     wtime0 = 0.0
-    while iter < 2 || (err > ϵ && iter ≤ iterMax)
+    while iter < 2 ||  (((err / err_it1) > ϵ_rel && err > ϵ_abs) && iter ≤ iterMax)
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
@@ -328,11 +336,15 @@ function _solve!(
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)
-            if igg.me == 0 && (verbose || iter == iterMax)
+            err_it1 = max(norm_Rx[1], norm_Ry[1], norm_Rz[1], norm_∇V[1])
+            rel_err = err / err_it1
+
+            if igg.me == 0 && ((verbose && (err / err_it1) > ϵ_rel && err > ϵ_abs) || iter == iterMax)
                 @printf(
-                    "iter = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_Rz=%1.3e, norm_∇V=%1.3e] \n",
+                    "iter = %d, abs_err = %1.3e, rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_Rz=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
                     err,
+                    rel_err,
                     norm_Rx[cont],
                     norm_Ry[cont],
                     norm_Rz[cont],
@@ -342,7 +354,7 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && err ≤ ϵ
+        if igg.me == 0 && ((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
@@ -397,13 +409,15 @@ function _solve!(
     ## UNPACK
 
     # solver related
-    ϵ = pt_stokes.ϵ
+    ϵ_rel = pt_stokes.ϵ_rel
+    ϵ_abs = pt_stokes.ϵ_abs
     # geometry
     _di = @. 1 / di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
 
     # errors
+    err_it1 = 1.0
     err = Inf
     iter = 0
     cont = 0
@@ -432,7 +446,7 @@ function _solve!(
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
 
-    while iter < 2 || (err > ϵ && iter ≤ iterMax)
+    while iter < 2 || (((err / err_it1) > ϵ_rel && err > ϵ_abs) && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
             compute_maxloc!(ητ, η)
@@ -533,11 +547,15 @@ function _solve!(
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)
-            if igg.me == 0 && (verbose || iter == iterMax)
+            err_it1 = max(norm_Rx[1], norm_Ry[1], norm_Rz[1], norm_∇V[1])
+            rel_err = err / err_it1
+
+            if igg.me == 0 && ((verbose && (err / err_it1) > ϵ_rel && err > ϵ_abs) || iter == iterMax)
                 @printf(
-                    "iter = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_Rz=%1.3e, norm_∇V=%1.3e] \n",
+                    "iter = %d, abs_err = %1.3e, rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_Rz=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
                     err,
+                    rel_err,
                     norm_Rx[cont],
                     norm_Ry[cont],
                     norm_Rz[cont],
@@ -547,7 +565,7 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && err ≤ ϵ
+        if igg.me == 0 && ((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end

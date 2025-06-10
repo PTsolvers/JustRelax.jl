@@ -65,7 +65,7 @@ function solVi(;
     # general stokes arrays
     stokes = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-9, CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-9, CFL = 0.95 / √2.1)
 
     ## Setup-specific parameters and fields
     η0 = 1.0  # matrix viscosity

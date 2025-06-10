@@ -147,7 +147,7 @@ where `(-Inf, Inf)` is the viscosity cutoff.
 
 ### Pseuo-transient coefficients
 ```julia
-pt_stokes   = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
+pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-4,  CFL = 1 / √2.1)
 ```
 
 ### Just before solving the problem...

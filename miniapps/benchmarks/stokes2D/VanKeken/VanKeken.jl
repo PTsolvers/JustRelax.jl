@@ -93,7 +93,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ = 1.0e-8, CFL = 1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ_abs = 1.0e-8, CFL = 1 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)

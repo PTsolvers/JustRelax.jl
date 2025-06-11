@@ -46,7 +46,7 @@ function elastic_buildup(;
     # general stokes arrays
     stokes = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-6, CFL = 1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 1 / √2.1)
 
     ## Setup-specific parameters and fields
     (; η) = stokes.viscosity

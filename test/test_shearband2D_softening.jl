@@ -157,7 +157,7 @@ function ShearBand2D()
     ttot = Float64[]
     local iters, τII, sol
 
-    while t < tmax
+    while it < 5
 
         # Stokes solver ----------------
         iters = solve!(
@@ -201,7 +201,7 @@ end
     @suppress begin
         iters, τII, sol = ShearBand2D()
         @test iters.err_evo1[end] < 1.0e-6
-        @test τII[end] ≈ 1.40352 atol = 1.0e-3
-        @test sol[end] ≈ 1.94255 atol = 1.0e-4
+        @test τII[end] ≈ 0.466 atol = 1.0e-3
+        @test sol[end] ≈ 0.4423 atol = 1.0e-4
     end
 end

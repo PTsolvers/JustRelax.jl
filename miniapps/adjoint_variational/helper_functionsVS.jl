@@ -213,7 +213,7 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
     #### Dot product test ####
     dirFD  = (refcostdot-refcost)/dp
     dirAD  = (sum(plot_sens .* dM)) # AD
-    #FD1    = sum(FD[1] .* dM) # FD
+    FD1    = sum(FD[1] .* dM) # FD
 
 
     #hockeystick test
@@ -223,7 +223,7 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
     run_param = false
     run_ref   = false
     error     = zeros(Float64,length(epsilons))
-    #errorFD   = zeros(Float64,length(epsilons))
+    errorFD   = zeros(Float64,length(epsilons))
 
     j=1
     for (j,i) in enumerate(epsilons)
@@ -237,7 +237,7 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
         print(error[j],"\n")
         print(error[j],"##########################\n")
         #errorFD[j] = abs((FD1-FDs[j])/dirAD)
-        #errorFD[j]   = abs(((FDs[j]/FD1)-1.0))
+        errorFD[j]   = abs(((FDs[j]/FD1)-1.0))
 
     end
 
@@ -245,7 +245,7 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
     fig = Figure(size = (1000, 1000));
     ax1 = Axis(fig[1,1], aspect = 1, title = "Dot Product Test", titlesize=34,xlabel = "ϵ",ylabel="error")
     l1 = lines!(ax1, log10.(epsilons), log10.(error), color = :blue, linewidth = 2, label = "Adjoint")
-    #l2 = lines!(ax1, log10.(epsilons), log10.(errorFD), color = :red, linewidth = 2, label = "FD")
+    l2 = lines!(ax1, log10.(epsilons), log10.(errorFD), color = :red, linewidth = 2, label = "FD")
     lines!(ax1,log10.(eps),log10.(eps), color = :black, linewidth = 2, linestyle = :dot, label = "convergence order")
     #l3 = lines!(ax1, log10.(epsilons), log10.(FDs), color = :green, linewidth = 2, linestyle = :dot, label = "directional deriv.")
     #l4 = lines!(ax1, log10.(epsilons), log10.(AD), color = :black, linewidth = 2, linestyle = :dot, label = "Adjoint")

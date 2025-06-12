@@ -57,14 +57,14 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     C    = C / cosd(ϕ),
     ϕ    = ϕ,
     η_vp = η_reg,
-    Ψ    = 15
+    Ψ    = 0
     )
 
     pl_p      = DruckerPrager_regularised(;  # non-regularized plasticity
     C    = C / cosd(ϕ),
     ϕ    = ϕ,
     η_vp = η_reg,
-    Ψ    = 15
+    Ψ    = 0
     )
 
     rheology = (
@@ -124,7 +124,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
-    pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-4, ϵ_abs=1e-12,  CFL = 0.95 / √2.1)
+    pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-10, ϵ_abs=1e-10,  CFL = 0.95 / √2.1)
 
     # Adjoint 
     stokesAD = StokesArraysAdjoint(backend, ni)
@@ -175,7 +175,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     refcost = 0.0
     
     # while t < tmax
-    for _ in 1:12
+    for _ in 1:8
         # Stokes solver ----------------
         adjoint_solve_VariationalStokes!(
             stokes,
@@ -268,7 +268,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     (; η_vep, η) = stokes.viscosity
     ηref = η
     ρref     = deepcopy(ρg[2])./1.0
-
+#=
     #################################
     #### Dot product pertubation ####
     #################################
@@ -324,8 +324,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     else
         refcostdot = Float64(sum_kbn((stokesDot.V.Vy[indx, indy])))
     end
-    
-    #refcostdot=1.0
+    =#
+    refcostdot=1.0
 
     ##########################
     #### Parameter change ####
@@ -404,9 +404,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
 end
 
 #### Init Run ####
-f         = 4      ; nx     = 16*f; ny     = 16*f
-dp        = 1e-6
-run_param = true
+f         = 1      ; nx     = 16*f; ny     = 16*f
+dp        = 1e-4
+run_param = false
 run_ref   = true
 dM        = rand(Float64,nx,ny)
 dM      ./= norm(dM)   # normalize M matrix
@@ -418,7 +418,7 @@ else
     igg
 end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM);
-#cost .= rand(nx,ny)
+#cost = rand(nx,ny)
 plot_sens = stokesAD.η  #which sensitivity to plot
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 

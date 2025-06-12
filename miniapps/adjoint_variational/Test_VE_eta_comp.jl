@@ -19,7 +19,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     η0      = 1.0           # viscosity
     G0      = 1.0           # shear modulus
     Gi      = 0.5           # shear modulus
-    ν0      = 0.5          # Poisson ratio
+    ν0      = 0.45          # Poisson ratio
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     ana     = false
     # viscous and elastic blocks for reference solve
@@ -29,10 +29,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     el_block   = ConstantElasticity(G=Gi, ν=ν0)
 
     # viscous and elastic blocks for parameter pertubation
-    visc_bg_p    = LinearViscous(; η=1.0)
-    visc_block_p = LinearViscous(; η=1.0)
-    el_p         = ConstantElasticity(G=G0+dp, ν=ν0)
-    el_block_p   = ConstantElasticity(G=Gi+dp, ν=ν0)
+    visc_bg_p    = LinearViscous(; η=1.0+dp)
+    visc_block_p = LinearViscous(; η=1.0+dp)
+    el_p         = ConstantElasticity(G=G0, ν=ν0)
+    el_block_p   = ConstantElasticity(G=Gi, ν=ν0)
 
     # plascticity parameters
     ϕ       = 30            # friction angle
@@ -267,9 +267,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     stokesDot       = deepcopy(stokes)
     ρgDot           = deepcopy(ρg)
     phase_ratiosDot = deepcopy(phase_ratios)
-    visc  = false
+    visc  = true
     dens  = false
-    Gdot  = true
+    Gdot  = false
     frdot = false
     #stokesDot.viscosity.η .= stokesDot.viscosity.η + dM*dp
     # Stokes solver ----------------
@@ -397,12 +397,12 @@ end
 
 #### Init Run ####
 f         = 1      ; nx     = 16*f; ny     = 16*f
-dp        = 1e-4
-run_param = false
+dp        = 1e-6
+run_param = true
 run_ref   = true
 dM        = rand(Float64,nx,ny)
 dM      ./= norm(dM)   # normalize M matrix
-figdir    = "miniapps/adjoint_variational/Test_VE_G/"
+figdir    = "miniapps/adjoint_variational/Test_VE_eta_comp/"
 #### Run ####
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
@@ -411,7 +411,7 @@ else
 end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM);
 #cost .= rand(nx,ny)
-plot_sens = stokesAD.G  #which sensitivity to plot
+plot_sens = stokesAD.η  #which sensitivity to plot
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
 

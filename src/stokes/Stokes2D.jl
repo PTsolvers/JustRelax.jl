@@ -489,6 +489,7 @@ function _solve!(
         args,
         dt,
         igg::IGG;
+        strain_increment = false,
         viscosity_cutoff = (-Inf, Inf),
         viscosity_relaxation = 1.0e-2,
         iterMax = 50.0e3,
@@ -503,6 +504,7 @@ function _solve!(
     # unpack
 
     _di = inv.(di)
+    _dt = inv.(dt)
     (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokes
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
@@ -558,6 +560,10 @@ function _solve!(
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
+            if strain_increment
+                @parallel (@idx ni) compute_∇V!(stokes.∇U, @displacement(stokes), _di)
+            end
+
             compute_P!(
                 θ,
                 stokes.P0,
@@ -575,14 +581,20 @@ function _solve!(
 
             update_ρg!(ρg, phase_ratios, rheology, args)
 
-            @parallel (@idx ni .+ 1) compute_strain_rate!(
-                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
-            )
+            if strain_increment
+                @parallel (@idx ni .+ 1) compute_strain_rate!(
+                    @strain_increment(stokes)..., stokes.∇U, @displacement(stokes)..., _di...
+                )
 
-            # if rem(iter, nout) == 0
-            #     @copy η0 η
-            # end
-            # if do_visc
+                @parallel (@idx ni .+ 1) compute_strain_rate_from_increment!(
+                    @strain(stokes)..., @strain_increment(stokes)..., _dt
+                )
+            else
+                @parallel (@idx ni .+ 1) compute_strain_rate!(
+                    @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+                )
+            end
+
             update_viscosity!(
                 stokes,
                 phase_ratios,
@@ -593,28 +605,58 @@ function _solve!(
             )
             # end
 
-            @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
-                @strain(stokes),
-                @tensor_center(stokes.ε_pl),
-                stokes.EII_pl,
-                @tensor_center(stokes.τ),
-                (stokes.τ.xy,),
-                @tensor_center(stokes.τ_o),
-                (stokes.τ_o.xy,),
-                θ,
-                stokes.P,
-                stokes.viscosity.η,
-                λ,
-                λv,
-                stokes.τ.II,
-                stokes.viscosity.η_vep,
-                relλ,
-                dt,
-                θ_dτ,
-                rheology,
-                phase_ratios.center,
-                phase_ratios.vertex,
-            )
+            if strain_increment
+                @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
+                    @strain(stokes),
+                    @strain_increment(stokes),
+                    @tensor_center(stokes.ε_pl),
+                    stokes.EII_pl,
+                    @tensor_center(stokes.τ),
+                    (stokes.τ.xy,),
+                    @tensor_center(stokes.τ_o),
+                    (stokes.τ_o.xy,),
+                    θ,
+                    stokes.P,
+                    stokes.viscosity.η,
+                    λ,
+                    λv,
+                    stokes.τ.II,
+                    stokes.viscosity.η_vep,
+                    relλ,
+                    dt,
+                    θ_dτ,
+                    rheology,
+                    phase_ratios.center,
+                    phase_ratios.vertex,
+                    phase_ratios.xy,
+                    phase_ratios.yz,
+                    phase_ratios.xz
+                )
+            else
+                @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
+                    @strain(stokes),
+                    @tensor_center(stokes.ε_pl),
+                    stokes.EII_pl,
+                    @tensor_center(stokes.τ),
+                    (stokes.τ.xy,),
+                    @tensor_center(stokes.τ_o),
+                    (stokes.τ_o.xy,),
+                    θ,
+                    stokes.P,
+                    stokes.viscosity.η,
+                    λ,
+                    λv,
+                    stokes.τ.II,
+                    stokes.viscosity.η_vep,
+                    relλ,
+                    dt,
+                    θ_dτ,
+                    rheology,
+                    phase_ratios.center,
+                    phase_ratios.vertex,
+                )
+            end
+
             update_halo!(stokes.τ.xy)
 
             @hide_communication b_width begin # communication/computation overlap

@@ -26,6 +26,8 @@ function parse_flags!(args, flag; default = nothing, type = typeof(default))
     return false, default
 end
 
+
+
 function runtests()
     testdir = pwd()
     istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
@@ -63,7 +65,7 @@ function runtests()
             end
         else
             try
-                run(`$(Base.julia_cmd()) -O3 --startup-file=no $(joinpath(testdir, f))`)
+                run(`$(Base.julia_cmd()) -O3 -t auto --startup-file=no $(joinpath(testdir, f))`)
             catch ex
                 nfail += 1
             end

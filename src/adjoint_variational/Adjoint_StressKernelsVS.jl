@@ -189,52 +189,52 @@ end
             dτdη = @zeros(3)
             
             dτdη = @. (2.0*(εij + 0.5*_Gdt*τij_o)) / ((1.0 + _Gdt*ηij)^2.0)
-#            τijAD, τij_o, εij = cache_tensors(τAD, τ_o, ε, I...)
+    #            τijAD, τij_o, εij = cache_tensors(τAD, τ_o, ε, I...)
 
-τII_ij = τII[I...]
-# yield function @ center
-F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
+    τII_ij = τII[I...]
+    # yield function @ center
+    F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-#τII_ij = 
-if is_pl && !iszero(τII_ij) && F > 0
-    # stress correction @ center
-    #τII_ij = second_invariant(dτij .+ τij)
-    τII_ij = √(0.5 * ((τij[1] + dτij[1])^2 + (τij[2] + dτij[2])^2) + (τij[3] + dτij[3])^2)
-    F      = τII_ij - C * cosϕ - Pr[I...] * sinϕ
-#                λ[I...] =
-#                    @muladd (1.0 - relλ) * λ[I...] +
-#                    relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
-#                dQdτij = @. 0.5 * (τij + dτij) / τII_ij
-#                εij_pl = λ[I...] .* dQdτij
-#                dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
-#                τij = dτij .+ τij
-#                Base.@nexprs 3 i -> begin
-#                    τ[i][I...] = τij[i]
-#                    ε_pl[i][I...] = εij_pl[i]
-#                end
+    #τII_ij = 
+    if is_pl && !iszero(τII_ij) && F > 0
+        # stress correction @ center
+        #τII_ij = second_invariant(dτij .+ τij)
+        τII_ij = √(0.5 * ((τij[1] + dτij[1])^2 + (τij[2] + dτij[2])^2) + (τij[3] + dτij[3])^2)
+        F      = τII_ij - C * cosϕ - Pr[I...] * sinϕ
+    #                λ[I...] =
+    #                    @muladd (1.0 - relλ) * λ[I...] +
+    #                    relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
+    #                dQdτij = @. 0.5 * (τij + dτij) / τII_ij
+    #                εij_pl = λ[I...] .* dQdτij
+    #                dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
+    #                τij = dτij .+ τij
+    #                Base.@nexprs 3 i -> begin
+    #                    τ[i][I...] = τij[i]
+    #                    ε_pl[i][I...] = εij_pl[i]
+    #                end
 
-    λ[I...] = F / (η[I...] * dτ_r + η_reg + volume)
-    dQdτij = @. 0.5 * (τij + dτij) / τII_ij
-    εij_pl = λ[I...] .* dQdτij
-    dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
-    τij = dτij .+ τij
-    τ[1][I...] = τij[1]
-    τ[2][I...] = τij[2]
-    τ[3][I...] = τij[3]
-    
-    ε_pl[1][I...] = εij_pl[1]
-    ε_pl[2][I...] = εij_pl[2]
-    ε_pl[3][I...] = εij_pl[3]
+        λ[I...] = F / (η[I...] * dτ_r + η_reg + volume)
+        dQdτij = @. 0.5 * (τij + dτij) / τII_ij
+        εij_pl = λ[I...] .* dQdτij
+        dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
+        τij = dτij .+ τij
+        τ[1][I...] = τij[1]
+        τ[2][I...] = τij[2]
+        τ[3][I...] = τij[3]
 
-    #τII_ij = second_invariant(τij)
-else
+        ε_pl[1][I...] = εij_pl[1]
+        ε_pl[2][I...] = εij_pl[2]
+        ε_pl[3][I...] = εij_pl[3]
 
-    setindex!.(τ, τij .* dτdη, I...)
-    #τII_ij
-end
+        #τII_ij = second_invariant(τij)
+    else
 
-#    setindex!.(τ, τij .* dτdη, I...)
+        setindex!.(τ, τij .* dτdη, I...)
+        #τII_ij
     end
+
+    #    setindex!.(τ, τij .* dτdη, I...)
+        end
 
     return nothing
 end
@@ -305,15 +305,16 @@ end
 
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             #τIIv_ij = second_invariant(dτijv .+ τijv)
-#            τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
-#            Fv      = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-#            # stress correction @ vertex            
-#            λv[I...] =
-#                @muladd (1.0 - relλ) * λv[I...] +
-#                relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
-#            dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-#            εij_pl = λv[I...] * dQdτxy
-            τxyv[I...] += @muladd dτxyv# - 2.0 * ηv_ij * εij_pl * dτ_rv
+            #τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+            Fv      = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+            # stress correction @ vertex            
+            λv[I...] =
+                @muladd (1.0 - relλ) * λv[I...] +
+                relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
+            dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
+            εij_pl = λv[I...] * dQdτxy
+            τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_pl * dτ_rv
+            #τxyv[I...] += dτxyv
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv
@@ -351,19 +352,18 @@ end
             if is_pl && !iszero(τII_ij) && F > 0
                 # stress correction @ center
                 #τII_ij = second_invariant(dτij .+ τij)
-                τII_ij = √(0.5 * ((τij[1] + dτij[1])^2 + (τij[2] + dτij[2])^2) + (τij[3] + dτij[3])^2)
+                #τII_ij = √(0.5 * ((τij[1] + dτij[1])^2 + (τij[2] + dτij[2])^2) + (τij[3] + dτij[3])^2)
                 F      = τII_ij - C * cosϕ - Pr[I...] * sinϕ
                 λ[I...] =
                     @muladd (1.0 - relλ) * λ[I...] +
                     relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
-                dτij = @muladd @. dτij #- 2.0 * ηij * εij_pl * dτ_r
-                τij = dτij .+ τij
+                dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 Base.@nexprs 3 i -> begin
                     τ[i][I...] = τij[i]
                     #ε_pl[i][I...] = εij_pl[i]
-               end
+                end
 
                 #τII_ij = second_invariant(τij)
             else
@@ -457,7 +457,7 @@ end
 
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             #τIIv_ij = second_invariant(dτijv .+ τijv)
-            τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
+            #τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
             Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
             # stress correction @ vertex
             λv[I...] =
@@ -465,7 +465,7 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εij_pl = λv[I...] * dQdτxy
-            τxyv[I...] += @muladd dτxyv# - 2.0 * ηv_ij * εij_pl * dτ_rv
+            τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_pl * dτ_rv
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv
@@ -504,7 +504,7 @@ end
             #τII_ij = 
             if is_pl && !iszero(τII_ij) && F > 0
                 #τII_ij = second_invariant(dτij .+ τij)
-                τII_ij = √(0.5 * ((τij[1] + dτij[1])^2 + (τij[2] + dτij[2])^2) + (τij[3] + dτij[3])^2)
+                #τII_ij = √(0.5 * ((τij[1] + dτij[1])^2 + (τij[2] + dτij[2])^2) + (τij[3] + dτij[3])^2)
                 F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
                 # stress correction @ center
                 λ[I...] =
@@ -512,7 +512,7 @@ end
                     relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
-                dτij = @muladd @. dτij# - 2.0 * ηij * εij_pl * dτ_r
+                dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 τij = dτij .+ τij
                 Base.@nexprs 3 i -> begin
                     τ[i][I...] = τij[i]

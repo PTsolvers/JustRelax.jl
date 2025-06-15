@@ -219,17 +219,6 @@ while iter ≤ iterMax
     end
 end
 
-    # compute vorticity
-    @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
-    )
-
-    # accumulate plastic strain tensor
-    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
-
-
-
-
     if rem(Glit+1, ADout) == 0
     ########################
     #### Adjoint Solver ####
@@ -266,14 +255,11 @@ end
     λvtemp  = deepcopy(λv)
     #λtemp  .= 0.0  
     #λvtemp .= 0.0 
+    relλtemp = deepcopy(relλ)
 
     print("###################\n")
     print("## Adjoint Solve ##\n")
     print("###################\n")
-
-    exx = @zeros(size(stokesAD.ε.xx))
-    eyy = @zeros(size(stokesAD.ε.yy))
-    exy = @zeros(size(stokesAD.ε.xy))
 
     while iter ≤ iterMax
         iterMin < iter && ((err / err_it1) < ϵ_rel && err < ϵ_abs) && break
@@ -407,6 +393,7 @@ end
             stokesAD.P0      .= stokes.P
             #λtemp            .= λ
             #λvtemp           .= λv
+            relλtemp         = 1.0#copy(relλ)
             @parallel (@idx ni .+ 1) configcall=update_stresses_center_vertexAD!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -422,7 +409,7 @@ end
                 λvtemp,
                 stokes.τ.II,
                 stokes.viscosity.η_vep,
-                1.0,#relλ,
+                relλtemp,
                 dt,
                 θ_dτ,
                 rheology,
@@ -447,7 +434,7 @@ end
                     Const(λvtemp),
                     Const(stokes.τ.II),
                     Const(stokes.viscosity.η_vep),
-                    Const(1.0),#Const(relλ),
+                    Const(relλtemp),
                     Const(dt),
                     Const(θ_dτ),
                     Const(rheology),
@@ -469,12 +456,6 @@ end
                 r,
                 θ_dτ,
                 args)
-
-        # apply free slip or no slip boundary conditions for adjoint solve
-#        if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.ε.xy[1,:]       .= 0.0 end
-#        if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.ε.xy[end,:] .= 0.0 end
-#        if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.ε.xy[:,end] .= 0.0 end
-#        if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.ε.xy[:,1]        .= 0.0 end
 
             @parallel (@idx ni .+ 1) configcall=compute_strain_rateAD!(
                 @strain(stokes)...,
@@ -633,6 +614,7 @@ end
             Const(dt * free_surface)
         )
 
+        
     if ana
     @parallel (@idx ni.+1) dτdη_viscoelastic(        
         @strain(stokes),
@@ -686,6 +668,12 @@ end
     stokesAD.dτ.yy   .= 0.0
     stokesAD.dτ.xy_c .= 0.0
     stokesAD.dτ.xy   .= 0.0
+
+
+    stokesAD.P0      .= stokes.P
+    #λtemp            .= λ
+    #λvtemp           .= λv
+    relλtemp         = 1.0#copy(relλ)
     @parallel (@idx ni.+1) configcall=update_stresses_center_vertexADSens!(
         @strain(stokes),
         @tensor_center(stokes.ε_pl),
@@ -701,7 +689,7 @@ end
         λvtemp,
         stokes.τ.II,
         stokes.viscosity.η_vep,
-        relλ,
+        relλtemp,
         dt,
         θ_dτ,
         rheology,
@@ -727,7 +715,7 @@ end
             Const(λvtemp),
             Const(stokes.τ.II),
             Const(stokes.viscosity.η_vep),
-            Const(relλ),
+            Const(relλtemp),
             Const(dt),
             Const(θ_dτ),
             Const(rheology),
@@ -743,6 +731,16 @@ end
     end          
 end
 
+    # compute vorticity
+    @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+    )
+
+    # accumulate plastic strain tensor
+    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
     return (
         iter = iter,

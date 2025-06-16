@@ -142,7 +142,6 @@ function strain_increment(igg; nx = 64, ny = 64, figdir = "model_figs")
     τII = Float64[]
     sol = Float64[]
     ttot = Float64[]
-    strain_increment = true
     iterations = Float64[]
     # while t < tmax
     for _ in 1:15
@@ -158,10 +157,10 @@ function strain_increment(igg; nx = 64, ny = 64, figdir = "model_figs")
             rheology,
             args,
             dt,
-            strain_increment,
             igg;
             kwargs = (
                 verbose = false,
+                strain_increment = true,
                 iterMax = 50.0e3,
                 nout = 1,
                 viscosity_cutoff = (-Inf, Inf),

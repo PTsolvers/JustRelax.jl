@@ -110,7 +110,7 @@ function strain_increment(igg; nx = 64, ny = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
     # pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
@@ -162,7 +162,7 @@ function strain_increment(igg; nx = 64, ny = 64, figdir = "model_figs")
                 verbose = false,
                 strain_increment = true,
                 iterMax = 50.0e3,
-                nout = 1,
+                nout = 1.0e3,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
@@ -246,7 +246,7 @@ function velocity_based(igg; nx = 64, ny = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
     # pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
@@ -295,7 +295,7 @@ function velocity_based(igg; nx = 64, ny = 64, figdir = "model_figs")
             kwargs = (
                 verbose = false,
                 iterMax = 50.0e3,
-                nout = 1,
+                nout = 1.0e3,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )

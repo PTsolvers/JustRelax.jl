@@ -153,6 +153,8 @@ struct StokesArrays{A, B, C, D, E, F, T}
     R::C
     U::E
     ω::F
+    Δε::B
+    ∇U::T
 end
 
 function StokesArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}

@@ -205,6 +205,26 @@ end
 end
 
 @inline function cache_tensors(
+        τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, Δε::NTuple{3, Any}, I::Vararg{Integer, 2}
+    )
+    Base.@propagate_inbounds @inline av_shear(A) = sum(_gather(A, I...)) / 4
+
+    # unpack
+    εxx, εyy, εxy = ε
+    Δεxx, Δεyy, Δεxy = Δε
+    τxx, τyy, τxy = τ
+    τxx_old, τyy_old, τxy_old = τ_old
+    # index
+    εij = @inbounds εxx[I...], εyy[I...], av_shear(εxy)
+    Δεij = @inbounds Δεxx[I...], Δεyy[I...], av_shear(Δεxy)
+    τij = @inbounds τxx[I...], τyy[I...], τxy[I...]
+    τij_o = @inbounds τxx_old[I...], τyy_old[I...], τxy_old[I...]
+
+    return τij, τij_o, εij, Δεij
+end
+
+
+@inline function cache_tensors(
         τ::NTuple{6, Any}, τ_old::NTuple{6, Any}, ε::NTuple{6, Any}, I::Vararg{Integer, 3}
     )
     Base.@propagate_inbounds @inline av_yz(A) = _av_yz(A, I...)

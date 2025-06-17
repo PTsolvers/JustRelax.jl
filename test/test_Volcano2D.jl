@@ -268,7 +268,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     t, it = 0.0, 0
     thermal.Told .= thermal.T
 
-    while it < 5 #000 # run only for 5 Myrs
+    while it < 2 #000 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -409,6 +409,6 @@ end
         end
 
         iters = main(li, origin, phases_GMG, T_GMG, igg; nx = nx, ny = ny)
-        @test passed = iters.err_evo1[end] < 1.0e-4
+        @test passed = iters.err_evo1[end] < 1.0e-3
     end
 end

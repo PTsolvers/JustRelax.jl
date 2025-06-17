@@ -17,13 +17,30 @@ authors:
   - name: Boris J.P. Kaus
     orcid: 0000-0002-0247-8660
     affiliation: 2 # (Multiple affiliations must be quoted)
-  
+  - name: Ivan Navarrete Jara
+    orcid: 
+    affiliation: 3
+  - name: Ludovid Räss
+    orcid: 
+    affiliation: 4
+  - name: Christian Schuler
+    orcid: 
+    affiliation: 2
+  - name: Lukas Fuchs
+    orcid: 
+    affiliation: 5
 
 affiliations:
  - name: ETH Zürich, Switzerland
    index: 1
  - name: Johannes Gutenberg-University Mainz, Germany
    index: 2
+ - name: Paris
+   index: 3
+- name: University of Lausanne, Switzerland
+   index: 4
+- name: Frankfurt University, Germany
+   index: 5
 
 date: 14 March 2024
 bibliography: paper.bib
@@ -123,7 +140,7 @@ The APT equations are solved by discretizing the pseudo-time derivatives, either
 
 ### Parallelization and scalability
 
-JustRelax.jl is parallelised in a hybrid shared-distributed memory manner, i.e. multithreading combined with MPI for CPUs, and GPU-aware MPI for multi-GPU architectures. Parallelisation is implemented with two Julia packages:
+JustRelax.jl is parallelised in a hybrid shared-distributed memory architecture manner, i.e. multithreading combined with MPI for CPUs, and GPU-aware MPI for multi-GPU architectures. Parallelisation is implemented with two Julia packages:
 
 - [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) handles the backend abstractation, allowing the user to write (shared memory) parallel kernels that seamlessly run on CPUs and GPUs (currently supported: CUDA, AMDGPU, and Mac M-series chips). It automatically generates Julia code based on Base.Threads.jl (Julia's native multi-threading library) and the third-party GPU libraries CUDA.jl (NVidia GPUs), AMDGPU.jl (AMD GPUs), and Metal.jl (Mac M-series chips) depending on the device backend of choice of the end-user.
 

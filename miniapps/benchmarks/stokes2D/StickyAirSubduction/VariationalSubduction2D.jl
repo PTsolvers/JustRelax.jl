@@ -33,6 +33,7 @@ end
 
 # Load script dependencies
 using GeoParams, CellArrays
+using GLMakie
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -96,16 +97,17 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
-    # RockRatios
-    air_phase = 3
-    ϕ_R = RockRatio(backend, ni)
-    compute_rock_fraction!(ϕ_R, chain, xvi, dxi)
-
     # marker chain
     nxcell, min_xcell, max_xcell = 100, 75, 125
     initial_elevation = 0.0e0
     chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
 
+    # RockRatios
+    air_phase = 3
+    ϕ_R = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ_R, chain, xvi, di)
+    update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
+    
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
@@ -157,7 +159,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     t, it = 0.0, 0
     dt = 25.0e3 * (3600 * 24 * 365.25)
     dt_max = 250.0e3 * (3600 * 24 * 365.25)
-    while it < 500 # run only for 5 Myrs
+    while it < 15 # run only for 5 Myrs
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
@@ -205,13 +207,13 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        compute_rock_fraction!(ϕ_R, chain, xvi, dxi)
+        compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         @show it += 1
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || rem(it, 1) == 0
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -296,4 +298,4 @@ else
     igg
 end
 
-main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+# main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

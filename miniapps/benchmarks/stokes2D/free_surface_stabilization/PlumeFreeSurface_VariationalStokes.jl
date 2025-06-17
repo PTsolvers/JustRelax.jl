@@ -142,7 +142,7 @@ function main(igg, nx, ny)
     # RockRatios
     air_phase = 1
     ϕ = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    compute_rock_fraction!(ϕ_R, chain, xvi, dxi)
     # ----------------------------------------------------
 
     # Initialize marker chain-------------------------------
@@ -221,7 +221,7 @@ function main(igg, nx, ny)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, air_phase)
+        compute_rock_fraction!(ϕ_R, chain, xvi, dxi)
         # ------------------------------
 
         @show it += 1

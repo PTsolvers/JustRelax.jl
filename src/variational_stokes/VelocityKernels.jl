@@ -31,7 +31,6 @@ end
     else
         εxy[i, j] = zero(T)
     end
-    # εxy[i, j] = 0.5 * ((Vx2 - Vx1) * _dy + (Vy2 - Vy1) * _dx)
 
     return nothing
 end

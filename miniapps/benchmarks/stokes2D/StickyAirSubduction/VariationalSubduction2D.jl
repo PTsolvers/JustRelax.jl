@@ -107,7 +107,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     ϕ_R = RockRatio(backend, ni)
     compute_rock_fraction!(ϕ_R, chain, xvi, di)
     update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
-    
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
@@ -298,4 +298,4 @@ else
     igg
 end
 
-# main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

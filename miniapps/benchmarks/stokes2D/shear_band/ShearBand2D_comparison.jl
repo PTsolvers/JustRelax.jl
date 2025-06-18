@@ -96,9 +96,9 @@ function strain_increment(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Initialize phase ratios -------------------------------
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    radius       = 0.1
-    origin       = 0.5, 0.5
-    circle       = GGU.Circle(origin, radius)
+    radius = 0.1
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
     init_phases!(phase_ratios, xci, xvi, circle)
 
     # STOKES ---------------------------------------------
@@ -233,16 +233,16 @@ function velocity_based(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Initialize phase ratios -------------------------------
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    radius       = 0.1
-    origin       = 0.5, 0.5
-    circle       = GGU.Circle(origin, radius)
+    radius = 0.1
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
     init_phases!(phase_ratios, xci, xvi, circle)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
-    
+
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)

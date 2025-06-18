@@ -98,10 +98,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Initialize phase ratios -------------------------------
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    radius       = 0.1
-    origin       = 0.5, 0.5
-    circle       = GGU.Circle(origin, radius)
-    init_phases!(phase_ratios, xci, xvi, circle) 
+    radius = 0.1
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
+    init_phases!(phase_ratios, xci, xvi, circle)
     air_phase = 0
     ϕ = RockRatio(backend, ni)
     update_rock_ratio!(ϕ, phase_ratios, air_phase)

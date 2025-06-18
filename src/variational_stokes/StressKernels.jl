@@ -111,8 +111,8 @@
                 dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 τij = dτij .+ τij
                 Base.@nexprs 3 i -> begin
-                    τ[i][I...] = τij[i]
-                    ε_pl[i][I...] = εij_pl[i]
+                    @inbounds τ[i][I...] = τij[i]
+                    @inbounds ε_pl[i][I...] = εij_pl[i]
                 end
                 τII_ij = second_invariant(τij)
             else
@@ -122,9 +122,9 @@
                 end
                 τII_ij
             end
-            τII[I...] = τII_ij
-            η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
-            Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+            @inbounds τII[I...] = τII_ij
+            @inbounds η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
+            @inbounds Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
 
         else
             Pr_c[I...] = zero(eltype(T))

@@ -170,8 +170,8 @@ function diffusion_3D(;
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-    update_cell_halo!(particles.coords..., particle_args)
-    update_cell_halo!(particles.index)
+    update_halo!(particles.coords..., particle_args)
+    update_halo!(particles.index)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion

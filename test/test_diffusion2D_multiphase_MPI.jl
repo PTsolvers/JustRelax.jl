@@ -166,8 +166,8 @@ function diffusion_2D(figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-    update_cell_halo!(particles.coords..., particle_args)
-    update_cell_halo!(particles.index)
+    update_halo!(particles.coords..., particle_args)
+    update_halo!(particles.index)
     # ----------------------------------------------------
 
     @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)

@@ -20,7 +20,7 @@ function init_phases!(phase_ratios, xci, xvi, circle)
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
         x, y = xc[i], yc[j]
         p = GGU.Point(x, y)
-        if inside(p, circle)
+        if GGU.inside(p, circle)
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
 

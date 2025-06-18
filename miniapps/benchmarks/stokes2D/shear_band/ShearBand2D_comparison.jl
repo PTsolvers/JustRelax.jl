@@ -6,19 +6,21 @@ using ParallelStencil
 const backend = CPUBackend
 
 using JustPIC, JustPIC._2D
+import JustPIC._2D.GridGeometryUtils as GGU
+
 const backend_JP = JustPIC.CPUBackend
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, xvi, radius)
+function init_phases!(phase_ratios, xci, xvi, circle)
     ni = size(phase_ratios.center)
-    origin = 0.5, 0.5
 
-    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
         x, y = xc[i], yc[j]
-        if ((x - o_x)^2 + (y - o_y)^2) > radius^2
+        p = GGU.Point(x, y)
+        if inside(p, circle)
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
 
@@ -29,19 +31,9 @@ function init_phases!(phase_ratios, xci, xvi, radius)
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
-    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
+    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
     return nothing
-end
-
-n = 256
-nx = n
-ny = n
-figdir = "output/ShearBands2D_StrainIncrement"
-igg = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-else
-    igg
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -103,15 +95,16 @@ function strain_increment(igg; nx = 64, ny = 64, figdir = "model_figs")
     perturbation_C = @zeros(ni...)
 
     # Initialize phase ratios -------------------------------
-    radius = 0.1
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    init_phases!(phase_ratios, xci, xvi, radius)
+    radius       = 0.1
+    origin       = 0.5, 0.5
+    circle       = GGU.Circle(origin, radius)
+    init_phases!(phase_ratios, xci, xvi, circle)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -239,16 +232,17 @@ function velocity_based(igg; nx = 64, ny = 64, figdir = "model_figs")
     perturbation_C = @zeros(ni...)
 
     # Initialize phase ratios -------------------------------
-    radius = 0.1
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    init_phases!(phase_ratios, xci, xvi, radius)
+    radius       = 0.1
+    origin       = 0.5, 0.5
+    circle       = GGU.Circle(origin, radius)
+    init_phases!(phase_ratios, xci, xvi, circle)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
-
+    
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
@@ -316,6 +310,16 @@ function velocity_based(igg; nx = 64, ny = 64, figdir = "model_figs")
     return iterations
 end
 
+
+n = 256
+nx = n
+ny = n
+figdir = "output/ShearBands2D_StrainIncrement"
+igg = if !(JustRelax.MPI.Initialized())
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
+end
 
 iterations_strain_increment = strain_increment(igg; figdir = figdir, nx = nx, ny = ny);
 iterations_velocity_based = velocity_based(igg; figdir = figdir, nx = nx, ny = ny)

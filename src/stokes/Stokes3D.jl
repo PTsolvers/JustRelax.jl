@@ -485,7 +485,7 @@ function _solve!(
                 relaxation = viscosity_relaxation,
             )
             # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
-
+            
             @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -528,7 +528,6 @@ function _solve!(
                 )
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
-                free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end

@@ -6,7 +6,7 @@ end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
-const backend = @static if isCUDA
+const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -21,10 +21,11 @@ else
 end
 
 using JustPIC, JustPIC._2D
+import JustPIC._2D.GridGeometryUtils as GGU
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend_JP = @static if isCUDA
+const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -58,8 +59,11 @@ end
 function init_phases!(phases, particles)
     ni = size(phases)
 
+    radius = 100.0e3
+    origin = 250.0e3, 250.0e3
+    circle = GGU.Circle(origin, radius)
+
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
-        r = 100.0e3
         f(x, A, λ) = A * sin(π * x / λ)
 
         @inbounds for ip in cellaxes(phases)
@@ -75,8 +79,8 @@ function init_phases!(phases, particles)
 
             else
                 @index phases[ip, i, j] = 2.0
-
-                if ((x - 250.0e3)^2 + (depth - 250.0e3)^2 ≤ r^2)
+                p = GGU.Point(x, depth)
+                if GGU.inside(p, circle)
                     @index phases[ip, i, j] = 3.0
                 end
             end

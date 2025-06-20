@@ -27,7 +27,6 @@ function parse_flags!(args, flag; default = nothing, type = typeof(default))
 end
 
 
-
 function runtests()
     testdir = pwd()
     istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")

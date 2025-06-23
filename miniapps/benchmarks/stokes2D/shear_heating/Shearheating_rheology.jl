@@ -54,20 +54,20 @@ function init_rheologies(; is_TP_Conductivity = true)
 end
 
 function init_phases!(phases, particles, Lx, d, r)
-    ni = size(phases)
+    ni = size(phases) .- 2 
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx, d)
+    @parallel_indices (I...) function init_phases!(phases, px, py, index, r, Lx, d)
         @inbounds for ip in cellaxes(phases)
             # quick escape
-            @index(index[ip, i, j]) == 0 && continue
+            @index(index[ip, I.+1...]) == 0 && continue
 
-            x = @index px[ip, i, j]
-            depth = -(@index py[ip, i, j])
-            @index phases[ip, i, j] = 1.0 # matrix
+            x = @index px[ip, I.+1...]
+            depth = -(@index py[ip, I.+1...])
+            @index phases[ip, I.+1...] = 1.0 # matrix
 
             # thermal anomaly - circular
             if ((x - Lx)^2 + (depth - d)^2 ≤ r^2)
-                @index phases[ip, i, j] = 2.0
+                @index phases[ip, I.+1...] = 2.0
             end
         end
         return nothing

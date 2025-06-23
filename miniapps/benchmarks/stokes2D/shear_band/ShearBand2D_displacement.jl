@@ -16,18 +16,20 @@ solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 # Initialize phases on the particles
 function init_phases!(phase_ratios, xci, xvi, circle)
     ni = size(phase_ratios.center)
-
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
-        x, y = xc[i], yc[j]
-        p = GGU.Point(x, y)
-        if GGU.inside(p, circle)
-            @index phases[1, i, j] = 1.0
-            @index phases[2, i, j] = 0.0
-
-        else
-            @index phases[1, i, j] = 0.0
-            @index phases[2, i, j] = 1.0
-        end
+        if i ≤ length(xc) && j ≤ length(yc)
+            I = (i, j) .+ 1
+            x, y = xc[i], yc[j]
+            p = GGU.Point(x, y)
+            if GGU.inside(p, circle)
+                @index phases[1, I...] = 0.0
+                @index phases[2, I...] = 1.0
+            else
+                
+                @index phases[1, I...] = 1.0
+                @index phases[2, I...] = 0.0
+            end
+        end 
         return nothing
     end
 

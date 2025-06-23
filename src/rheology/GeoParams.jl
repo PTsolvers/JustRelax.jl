@@ -1,17 +1,11 @@
 function get_bulk_modulus(args::Vararg{Any, N}) where {N}
     Kb = GeoParams.get_Kb(args...)
-    if isnan(Kb) || iszero(Kb)
-        return Inf
-    end
-    return Kb
+    return isnan(Kb) || iszero(Kb) ? Inf : Kb
 end
 
 function get_shear_modulus(args::Vararg{Any, N}) where {N}
     Kb = GeoParams.get_G(args...)
-    if isnan(Kb) || iszero(Kb)
-        return Inf
-    end
-    return Kb
+    isnan(Kb) || iszero(Kb) ? Inf : Kb
 end
 
 get_thermal_expansion(args::Vararg{Any, N}) where {N} = get_α(args...)

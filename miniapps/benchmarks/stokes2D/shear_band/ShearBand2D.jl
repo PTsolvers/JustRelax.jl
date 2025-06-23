@@ -16,18 +16,20 @@ solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 # Initialize phases on the particles
 function init_phases!(phase_ratios, xci, xvi, circle)
     ni = size(phase_ratios.center)
-
     @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
-        x, y = xc[i], yc[j]
-        p = GGU.Point(x, y)
-        if GGU.inside(p, circle)
-            @index phases[1, i, j] = 1.0
-            @index phases[2, i, j] = 0.0
-
-        else
-            @index phases[1, i, j] = 0.0
-            @index phases[2, i, j] = 1.0
-        end
+        if i ≤ length(xc) && j ≤ length(yc)
+            I = (i, j) .+ 1
+            x, y = xc[i], yc[j]
+            p = GGU.Point(x, y)
+            if GGU.inside(p, circle)
+                @index phases[1, I...] = 0.0
+                @index phases[2, I...] = 1.0
+            else
+                
+                @index phases[1, I...] = 1.0
+                @index phases[2, I...] = 0.0
+            end
+        end 
         return nothing
     end
 
@@ -40,35 +42,35 @@ end
 function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Physical domain ------------------------------------
-    ly = 1.0e0          # domain length in y
-    lx = ly           # domain length in x
-    ni = nx, ny       # number of cells
-    li = lx, ly       # domain length in x- and y-
-    di = @. li / ni   # grid step in x- and -y
-    origin = 0.0, 0.0     # origin coordinates
-    grid = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    dt = Inf
+    ly      = 1.0e0           # domain length in y
+    lx      = ly              # domain length in x
+    ni      = nx, ny          # number of cells
+    li      = lx, ly          # domain length in x- and y-
+    di      = @. li / ni      # grid step in x- and -y
+    origin  = 0.0, 0.0        # origin coordinates
+    grid    = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid       # nodes at the center and vertices of the cells
+    dt      = Inf
 
-    # Physical properties using GeoParams ----------------
-    τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ = 30            # friction angle
-    C = τ_y           # Cohesion
-    η0 = 1.0           # viscosity
-    G0 = 1.0           # elastic shear modulus
-    Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
-    εbg = 1.0           # background strain-rate
-    η_reg = 8.0e-3          # regularisation "viscosity"
-    dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
-    el_bg = ConstantElasticity(; G = G0, Kb = 4)
-    el_inc = ConstantElasticity(; G = Gi, Kb = 4)
-    visc = LinearViscous(; η = η0)
-    pl = DruckerPrager_regularised(;
+    # Physical properties --------------------------------
+    τ_y     = 1.6             # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ       = 30              # friction angle
+    C       = τ_y             # Cohesion
+    η0      = 1.0             # viscosity
+    G0      = 1.0             # elastic shear modulus
+    Gi      = G0 / (6.0 - 4.0)# elastic shear modulus perturbation
+    εbg     = 1.0             # background strain-rate
+    η_reg   = 8.0e-3          # regularisation "viscosity"
+    dt      = η0 / G0 / 4.0   # assumes Maxwell time of 4
+    el_bg   = ConstantElasticity(; G = G0, Kb = 4)
+    el_inc  = ConstantElasticity(; G = Gi, Kb = 4)
+    visc    = LinearViscous(; η = η0)
+    pl      = DruckerPrager_regularised(;
         # non-regularized plasticity
-        C = C / cosd(ϕ),
-        ϕ = ϕ,
+        C    = C / cosd(ϕ),
+        ϕ    = ϕ,
         η_vp = η_reg,
-        Ψ = 0
+        Ψ    = 0
     )
 
     rheology = (

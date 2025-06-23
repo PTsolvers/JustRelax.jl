@@ -30,25 +30,21 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
 end
 
 function init_phases!(phases, particles, xc, yc, r)
-    ni = size(phases)
+    ni = size(phases) .- 2
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, xc, yc, r)
-        @inbounds for ip in cellaxes(phases)
+    @parallel_indices (I...) function init_phases!(phases, px, py, index, xc, yc, r)
+        I1 = I .+ 1 # convert to 1-based indexing
+        for ip in cellaxes(phases)
             # quick escape
-            @index(index[ip, i, j]) == 0 && continue
+            @index(index[ip, I1...]) == 0 && continue
 
-            x = @index px[ip, i, j]
-            depth = -(@index py[ip, i, j])
+            x = @index px[ip, I1...]
+            depth = -(@index py[ip, I1...])
             # plume - rectangular
-            @index phases[ip, i, j] = if ((x - xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
-                2.0
-            else
-                1.0
-            end
+            @index phases[ip, I1...] = ((x - xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2) ? 2.0 : 1.0
         end
         return nothing
     end
-
     return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, xc, yc, r)
 end
 
@@ -187,4 +183,4 @@ else
     igg
 end
 
-sinking_block2D(igg; ar = ar, nx = nx, ny = ny);
+# sinking_block2D(igg; ar = ar, nx = nx, ny = ny);

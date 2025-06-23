@@ -1,5 +1,5 @@
 # const isCUDA = false
-const isCUDA = true
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -57,13 +57,14 @@ end
 end
 
 function init_phases!(phases, particles, A)
-    ni = size(phases)
+    ni = size(phases) .- 2 
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, A)
+    @parallel_indices (I...) function init_phases!(phases, px, py, index, A)
 
-        f(x, A, λ) = A * sin(π * x / λ)
-
-        @inbounds for ip in cellaxes(phases)
+        @inline f(x, A, λ) = A * sin(π * x / λ)
+        
+        i, j = I .+ 1 
+        for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
 

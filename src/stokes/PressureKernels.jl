@@ -25,7 +25,7 @@ end
 end
 
 """
-   compute_P!(P, P0, RP, ∇V, Q, ΔTc, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ)
+   compute_P!(P, P0, RP, ∇V, Q, ΔTc, η, rheology::NTuple{N,MaterialParams}, phase_ratios::C, dt, r, θ_dτ)
 
 Compute the pressure field `P` and the residual `RP` for the compressible case. This function introduces thermal stresses after the implementation of Kiss et al. (2023).
 
@@ -87,14 +87,14 @@ end
         Q, # volumetric source/sink term
         η,
         rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
+        phase_ratios::C,
         dt,
         r,
         θ_dτ,
         ::Nothing,
         ::Nothing,
     ) where {N, C <: JustRelax.CellArray}
-    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
+    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratios[I.+1...]))
     @inbounds RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
@@ -107,14 +107,14 @@ end
         Q, # volumetric source/sink term
         η,
         rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
+        phase_ratios::C,
         dt,
         r,
         θ_dτ,
         ::Nothing,
         melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
-    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
+    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratios[I.+1...]))
     @inbounds RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
@@ -127,14 +127,14 @@ end
         Q, # volumetric source/sink term
         η,
         rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
+        phase_ratios::C,
         dt,
         r,
         θ_dτ,
         ΔTc,
         ::Nothing,
     ) where {N, C <: JustRelax.CellArray}
-    @inbounds phase_ratio_I = phase_ratio[I...]
+    @inbounds phase_ratio_I = phase_ratios[I.+1...]
     @inbounds K = fn_ratio(get_bulk_modulus, rheology, phase_ratio_I)
     @inbounds α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
     @inbounds RP[I...], P[I...] = _compute_P!(
@@ -151,15 +151,15 @@ end
         Q, # volumetric source/sink term
         η,
         rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
+        phase_ratios::C,
         dt,
         r,
         θ_dτ,
         ΔTc,
         melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
-    @inbounds K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
-    @inbounds α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
+    @inbounds K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratios[I.+1...]))
+    @inbounds α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratios[I.+1...]), (; ϕ = melt_fraction[I...]))
     @inbounds RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
     )

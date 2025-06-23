@@ -45,6 +45,7 @@ end
 @parallel_indices (I...) function rotate_stress_particles_GeoParams!(
         xx, yy, xy, ω, index, dt
     )
+    I = I .+ 1
     for ip in cellaxes(index)
         @index(index[ip, I...]) || continue # no particle in this location
 
@@ -66,6 +67,7 @@ end
 @parallel_indices (I...) function rotate_stress_particles_GeoParams!(
         xx, yy, zz, yz, xz, xy, ωyz, ωxz, ωxy, index, dt
     )
+    I = I .+ 1
     for ip in cellaxes(index)
         @index(index[ip, I...]) || continue # no particle in this location
 
@@ -94,6 +96,7 @@ end
 end
 
 @parallel_indices (I) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
+    I = I .+ 1
     for ip in cellaxes(index)
         !@index(index[ip, I...]) && continue # no particle in this location
 
@@ -114,6 +117,7 @@ end
 @parallel_indices (I...) function rotate_stress_particles_rotation_matrix!(
         xx, yy, xy, ω, index, dt
     )
+    I = I .+ 1
     for ip in cellaxes(index)
         !@index(index[ip, I...]) && continue # no particle in this location
 

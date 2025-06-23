@@ -228,9 +228,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # Update buoyancy and viscosity -
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
-        compute_viscosity!(
-            stokes, phase_ratios, args, rheology, viscosity_cutoff
-        )
         # ------------------------------
 
         # Stokes solver ----------------
@@ -389,4 +386,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);

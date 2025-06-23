@@ -49,7 +49,7 @@ end
 end
 
 function init_phases!(phases, particles)
-    ni = size(phases)
+    ni = size(phases) .- 2 
 
     radius = 100.0e3
     origin = 250.0e3, 250.0e3
@@ -57,8 +57,9 @@ function init_phases!(phases, particles)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
         f(x, A, λ) = A * sin(π * x / λ)
-
-        @inbounds for ip in cellaxes(phases)
+        
+        i, j = I .+ 1 
+        for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
 

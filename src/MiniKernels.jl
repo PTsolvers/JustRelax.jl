@@ -67,9 +67,9 @@ Base.@propagate_inbounds @inline _av_xa(A::T, I::Vararg{Integer, 2}) where {T <:
 Base.@propagate_inbounds @inline _av_ya(A::T, I::Vararg{Integer, 2}) where {T <: T2} =
     (center(A, I...) + front(A, I...)) * 0.5
 Base.@propagate_inbounds @inline _av_xi(A::T, I::Vararg{Integer, 2}) where {T <: T2} =
-    (front(A, I...), next(A, I...)) * 0.5
+    (front(A, I...) + next(A, I...)) * 0.5
 Base.@propagate_inbounds @inline _av_yi(A::T, I::Vararg{Integer, 2}) where {T <: T2} =
-    (right(A, I...), next(A, I...)) * 0.5
+    (right(A, I...) + next(A, I...)) * 0.5
 # harmonic averages
 Base.@propagate_inbounds @inline function _harm(A::T, i, j) where {T <: T2}
     return eltype(A)(4) * mysum(inv, A, (i + 1):(i + 2), (j + 1):(j + 2))
@@ -170,7 +170,7 @@ end
 
 @inline function mysum(f::F, A::AbstractArray, ranges_i, ranges_j) where {F <: Function}
     s = 0.0
-    for i in ranges_i, j in ranges_j
+    for j in ranges_j, i in ranges_i
         s += f(A[i, j])
     end
     return s
@@ -180,7 +180,7 @@ end
         f::F, A::AbstractArray, ranges_i, ranges_j, ranges_k
     ) where {F <: Function}
     s = 0.0
-    for i in ranges_i, j in ranges_j, k in ranges_k
+    for k in ranges_k, j in ranges_j, i in ranges_i
         s += f(A[i, j, k])
     end
     return s

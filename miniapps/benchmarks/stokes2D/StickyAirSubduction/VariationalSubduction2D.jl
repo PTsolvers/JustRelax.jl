@@ -33,6 +33,7 @@ end
 
 # Load script dependencies
 using GeoParams, CellArrays
+using GLMakie
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -96,21 +97,22 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
-    # RockRatios
-    air_phase = 3
-    ϕ_R = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
-
     # marker chain
     nxcell, min_xcell, max_xcell = 100, 75, 125
     initial_elevation = 0.0e0
     chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
 
+    # RockRatios
+    air_phase = 3
+    ϕ_R = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ_R, chain, xvi, di)
+    update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-6, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -157,7 +159,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     t, it = 0.0, 0
     dt = 25.0e3 * (3600 * 24 * 365.25)
     dt_max = 250.0e3 * (3600 * 24 * 365.25)
-    while it < 500 # run only for 5 Myrs
+    while it < 15 # run only for 5 Myrs
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
@@ -189,7 +191,6 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         println("           Δt:      $(dt / (3600 * 24 * 365.25)) kyrs")
-        break
         # ------------------------------
 
         # Advection --------------------
@@ -206,83 +207,83 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
+        compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         @show it += 1
         t += dt
 
-        # # Data I/O and plotting ---------------------
-        # if it == 1 || rem(it, 1) == 0
-        #     (; η_vep, η) = stokes.viscosity
-        #     if do_vtk
-        #         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        #         data_v = (;
-        #             τII = Array(stokes.τ.II),
-        #             εII = Array(stokes.ε.II),
-        #         )
-        #         data_c = (;
-        #             P = Array(stokes.P),
-        #             η = Array(η_vep),
-        #         )
-        #         velocity_v = (
-        #             Array(Vx_v),
-        #             Array(Vy_v),
-        #         )
-        #         save_vtk(
-        #             joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-        #             xvi,
-        #             xci,
-        #             data_v,
-        #             data_c,
-        #             velocity_v
-        #         )
-        #     end
+        # Data I/O and plotting ---------------------
+        if it == 1 || rem(it, 1) == 0
+            (; η_vep, η) = stokes.viscosity
+            if do_vtk
+                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                data_v = (;
+                    τII = Array(stokes.τ.II),
+                    εII = Array(stokes.ε.II),
+                )
+                data_c = (;
+                    P = Array(stokes.P),
+                    η = Array(η_vep),
+                )
+                velocity_v = (
+                    Array(Vx_v),
+                    Array(Vy_v),
+                )
+                save_vtk(
+                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                    xvi,
+                    xci,
+                    data_v,
+                    data_c,
+                    velocity_v
+                )
+            end
 
-        #     # Make particles plottable
-        #     p = particles.coords
-        #     ppx, ppy = p
-        #     pxv = ppx.data[:] ./ 1.0e3
-        #     pyv = ppy.data[:] ./ 1.0e3
-        #     clr = pPhases.data[:]
-        #     # clr      = pT.data[:]
-        #     idxv = particles.index.data[:]
+            # Make particles plottable
+            p = particles.coords
+            ppx, ppy = p
+            pxv = ppx.data[:] ./ 1.0e3
+            pyv = ppy.data[:] ./ 1.0e3
+            clr = pPhases.data[:]
+            # clr      = pT.data[:]
+            idxv = particles.index.data[:]
 
-        #     chain_x = Array(chain.coords[1].data)[:] ./ 1.0e3
-        #     chain_y = Array(chain.coords[2].data)[:] ./ 1.0e3
+            chain_x = Array(chain.coords[1].data)[:] ./ 1.0e3
+            chain_y = Array(chain.coords[2].data)[:] ./ 1.0e3
 
-        #     # Make Makie figure
-        #     ar = 3
-        #     fig = Figure(size = (1200, 900), title = "t = $t")
-        #     ax1 = Axis(fig[1, 1], aspect = ar, title = "log10(εII)  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
-        #     ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
-        #     ax3 = Axis(fig[1, 3], aspect = ar, title = "τII")
-        #     ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
-        #     # Plot temperature
-        #     h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
-        #     scatter!(ax1, chain_x, chain_y, markersize = 3)
-        #     # Plot particles phase
-        #     h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
-        #     # Plot 2nd invariant of strain rate
-        #     h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
-        #     scatter!(ax3, chain_x, chain_y, markersize = 3, color = :red)
-        #     # Plot effective viscosity
-        #     h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
-        #     hidexdecorations!(ax1)
-        #     hidexdecorations!(ax2)
-        #     hidexdecorations!(ax3)
-        #     Colorbar(fig[1, 2], h1)
-        #     Colorbar(fig[2, 2], h2)
-        #     Colorbar(fig[1, 4], h3)
-        #     Colorbar(fig[2, 4], h4)
-        #     linkaxes!(ax1, ax2, ax3, ax4)
-        #     # display(fig)
-        #     save(joinpath(figdir, "$(it).png"), fig)
-        # end
-        # # ------------------------------
+            # Make Makie figure
+            ar = 3
+            fig = Figure(size = (1200, 900), title = "t = $t")
+            ax1 = Axis(fig[1, 1], aspect = ar, title = "log10(εII)  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
+            ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
+            ax3 = Axis(fig[1, 3], aspect = ar, title = "τII")
+            ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
+            # Plot temperature
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
+            scatter!(ax1, chain_x, chain_y, markersize = 3)
+            # Plot particles phase
+            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
+            # Plot 2nd invariant of strain rate
+            h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
+            scatter!(ax3, chain_x, chain_y, markersize = 3, color = :red)
+            # Plot effective viscosity
+            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax2)
+            hidexdecorations!(ax3)
+            Colorbar(fig[1, 2], h1)
+            Colorbar(fig[2, 2], h2)
+            Colorbar(fig[1, 4], h3)
+            Colorbar(fig[2, 4], h4)
+            linkaxes!(ax1, ax2, ax3, ax4)
+            # display(fig)
+            save(joinpath(figdir, "$(it).png"), fig)
+        end
+        # ------------------------------
 
     end
 
-    # return stokes
+    return
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
@@ -298,27 +299,3 @@ else
 end
 
 main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
-# main:
-# Total time:      4.5310855 s
-# Δt:      62718.454450051955 kyrs
-
-
-# ProfileCanvas.@profview solve_VariationalStokes!(
-#                 stokes,
-#                 pt_stokes,
-#                 di,
-#                 flow_bcs,
-#                 ρg,
-#                 phase_ratios,
-#                 ϕ_R,
-#                 rheology,
-#                 args,
-#                 dt,
-#                 igg;
-#                 kwargs = (;
-#                     iterMax = 5.0e3,
-#                     free_surface = true,
-#                     nout = 5.0e3,
-#                     viscosity_cutoff = viscosity_cutoff,
-#                 )
-# )

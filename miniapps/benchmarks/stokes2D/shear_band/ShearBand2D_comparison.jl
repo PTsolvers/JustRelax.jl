@@ -37,7 +37,144 @@ function init_phases!(phase_ratios, xci, xvi, circle)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx = 64, ny = 64, figdir = "model_figs")
+function strain_increment(igg; nx = 64, ny = 64, figdir = "model_figs")
+
+    # Physical domain ------------------------------------
+    ly = 1.0e0          # domain length in y
+    lx = ly           # domain length in x
+    ni = nx, ny       # number of cells
+    li = lx, ly       # domain length in x- and y-
+    di = @. li / ni   # grid step in x- and -y
+    origin = 0.0, 0.0     # origin coordinates
+    grid = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    dt = Inf
+
+    # Physical properties using GeoParams ----------------
+    τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ = 30            # friction angle
+    C = τ_y           # Cohesion
+    η0 = 1.0           # viscosity
+    G0 = 1.0           # elastic shear modulus
+    Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
+    εbg = 1.0           # background strain-rate
+    η_reg = 8.0e-3          # regularisation "viscosity"
+    dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
+    el_bg = ConstantElasticity(; G = G0, Kb = 4)
+    el_inc = ConstantElasticity(; G = Gi, Kb = 4)
+    visc = LinearViscous(; η = η0)
+    pl = DruckerPrager_regularised(;
+        # non-regularized plasticity
+        C = C / cosd(ϕ),
+        ϕ = ϕ,
+        η_vp = η_reg,
+        Ψ = 0
+    )
+
+    rheology = (
+        # Low density phase
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 0.0),
+            Gravity = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((visc, el_bg, pl)),
+            Elasticity = el_bg,
+
+        ),
+        # High density phase
+        SetMaterialParams(;
+            Phase = 2,
+            Density = ConstantDensity(; ρ = 0.0),
+            Gravity = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((visc, el_inc, pl)),
+            Elasticity = el_inc,
+        ),
+    )
+
+    # perturbation array for the cohesion
+    perturbation_C = @zeros(ni...)
+
+    # Initialize phase ratios -------------------------------
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    radius = 0.1
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
+    init_phases!(phase_ratios, xci, xvi, circle)
+
+    # STOKES ---------------------------------------------
+    # Allocate arrays needed for every Stokes problem
+    stokes = StokesArrays(backend, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
+
+    # Buoyancy forces
+    ρg = @zeros(ni...), @zeros(ni...)
+    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+
+    # Rheology
+    compute_viscosity!(
+        stokes, phase_ratios, args, rheology, (-Inf, Inf)
+    )
+    # Boundary conditions
+    flow_bcs = DisplacementBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true),
+        no_slip = (left = false, right = false, top = false, bot = false),
+    )
+    stokes.U.Ux .= PTArray(backend)([ x * εbg * dt for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.U.Uy .= PTArray(backend)([-y * εbg * dt for _ in 1:(nx + 2), y in xvi[2]])
+
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    displacement2velocity!(stokes, dt)
+    update_halo!(@velocity(stokes)...)
+
+    # IO -------------------------------------------------
+    take(figdir)
+
+    # Time loop
+    t, it = 0.0, 0
+    tmax = 5
+    τII = Float64[]
+    sol = Float64[]
+    ttot = Float64[]
+    iterations = Float64[]
+    # while t < tmax
+    for _ in 1:15
+
+        # Stokes solver ----------------
+        iters = solve!(
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs, #
+            ρg,
+            phase_ratios,
+            rheology,
+            args,
+            dt,
+            igg;
+            kwargs = (
+                verbose = false,
+                strain_increment = true,
+                iterMax = 50.0e3,
+                nout = 1.0e3,
+                viscosity_cutoff = (-Inf, Inf),
+            )
+        )
+        tensor_invariant!(stokes.ε)
+        push!(τII, maximum(stokes.τ.xx))
+        push!(iterations, iters.iter)
+        it += 1
+        t += dt
+
+        push!(sol, solution(εbg, t, G0, η0))
+        push!(ttot, t)
+
+        println("it = $it; t = $t \n")
+    end
+
+    return iterations
+end
+
+function velocity_based(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Physical domain ------------------------------------
     ly = 1.0e0          # domain length in y
@@ -133,6 +270,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     τII = Float64[]
     sol = Float64[]
     ttot = Float64[]
+    iterations = Float64[]
     # while t < tmax
     for _ in 1:15
 
@@ -157,7 +295,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         )
         tensor_invariant!(stokes.ε)
         push!(τII, maximum(stokes.τ.xx))
-
+        push!(iterations, iters.iter)
         it += 1
         t += dt
 
@@ -166,39 +304,44 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
         println("it = $it; t = $t \n")
 
-        # visualisation
-        th = 0:(pi / 50):(3 * pi)
-        xunit = @. radius * cos(th) + 0.5
-        yunit = @. radius * sin(th) + 0.5
-
-        fig = Figure(size = (1600, 1600), title = "t = $t")
-        ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
-        ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
-        ax3 = Axis(fig[1, 2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
-        ax4 = Axis(fig[2, 2], aspect = 1)
-        heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
-        # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)), colormap = :batlow)
-        heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
-        lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-        lines!(ax4, ttot, τII, color = :black)
-        lines!(ax4, ttot, sol, color = :red)
-        hidexdecorations!(ax1)
-        hidexdecorations!(ax3)
-        save(joinpath(figdir, "$(it).png"), fig)
 
     end
 
-    return nothing
+    return iterations
 end
 
-n = 128
+
+n = 256
 nx = n
 ny = n
-figdir = "ShearBands2D"
+figdir = "output/ShearBands2D_StrainIncrement"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
-main(igg; figdir = figdir, nx = nx, ny = ny);
+
+iterations_strain_increment = strain_increment(igg; figdir = figdir, nx = nx, ny = ny);
+iterations_velocity_based = velocity_based(igg; figdir = figdir, nx = nx, ny = ny)
+
+# Optional: name the x-axis as iteration number
+x = 1:length(iterations_strain_increment)
+# Create the figure and axis
+f = Figure(resolution = (800, 600))
+ax = Axis(
+    f[1, 1],
+    xlabel = "It",
+    ylabel = "PT Iterations",
+    title = "Iterations Comparison"
+)
+
+# Plot both datasets
+lines!(ax, x, iterations_strain_increment, label = "Displacement Based - Ivan", color = :blue)
+lines!(ax, x, iterations_velocity_based, label = "Velocity Based", color = :red, linestyle = :dash)
+
+# Add a legend
+axislegend(ax, position = :rb)
+
+# Save or display
+f
+save("iterations_comparison2.png", f)

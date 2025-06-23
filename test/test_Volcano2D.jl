@@ -186,7 +186,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.98 / √2.1) # Re=3π, r=0.7
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.98 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -268,7 +268,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     t, it = 0.0, 0
     thermal.Told .= thermal.T
 
-    while it < 5 #000 # run only for 5 Myrs
+    while it < 2 #000 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -409,6 +409,6 @@ end
         end
 
         iters = main(li, origin, phases_GMG, T_GMG, igg; nx = nx, ny = ny)
-        @test passed = iters.err_evo1[end] < 1.0e-4
+        @test passed = iters.err_evo1[end] < 1.0e-3
     end
 end

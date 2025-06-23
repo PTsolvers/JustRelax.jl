@@ -153,6 +153,8 @@ struct StokesArrays{A, B, C, D, E, F, T}
     R::C
     U::E
     ω::F
+    Δε::B
+    ∇U::T
 end
 
 function StokesArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}
@@ -171,7 +173,8 @@ end
 
 struct PTStokesCoeffs{T}
     CFL::T
-    ϵ::T # PT tolerance
+    ϵ_rel::T # relative PT tolerance
+    ϵ_abs::T # absolute PT tolerance
     Re::T # Reynolds Number
     r::T #
     Vpdτ::T
@@ -181,7 +184,8 @@ struct PTStokesCoeffs{T}
     function PTStokesCoeffs(
             li::NTuple{N, T},
             di;
-            ϵ::Float64 = 1.0e-8,
+            ϵ_rel::Float64 = 1.0e-6,
+            ϵ_abs::Float64 = 1.0e-12,
             Re::Float64 = 3π,
             CFL::Float64 = (N == 2 ? 0.9 / √2.1 : 0.9 / √3.1),
             r::Float64 = 0.7,
@@ -191,6 +195,6 @@ struct PTStokesCoeffs{T}
         θ_dτ = lτ * (r + 4 / 3) / (Re * Vpdτ)
         ηdτ = Vpdτ * lτ / Re
 
-        return new{Float64}(CFL, ϵ, Re, r, Vpdτ, θ_dτ, ηdτ)
+        return new{Float64}(CFL, ϵ_rel, ϵ_abs, Re, r, Vpdτ, θ_dτ, ηdτ)
     end
 end

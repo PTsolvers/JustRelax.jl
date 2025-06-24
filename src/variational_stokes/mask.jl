@@ -83,7 +83,7 @@ end
         phase_ratio::CellArray, air_phase, I::Vararg{Integer, N}
     ) where {N}
     1 ≤ air_phase ≤ numphases(phase_ratio) || return 1.0e0
-    x = 1 - @index phase_ratio[air_phase, I...]
+    x = 1 - @index phase_ratio[air_phase, I.+1...]
     x *= x > 1.0e-5
     return x
 end
@@ -92,7 +92,7 @@ end
         phase_ratio::CellArray, air_phase, I::Vararg{Integer, N}
     ) where {N}
     1 ≤ air_phase ≤ numphases(phase_ratio) || return 1.0e0
-    return @index phase_ratio[air_phase, I...]
+    return @index phase_ratio[air_phase, I.+1...]
 end
 
 @parallel_indices (I...) function update_rock_ratio_cv!(

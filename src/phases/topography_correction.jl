@@ -6,7 +6,7 @@ function update_phases_given_markerchain!(
     ) where {backend}
     (; coords, index) = particles
     dy = di[2]
-    return @parallel (1:size(index, 1)) _update_phases_given_markerchain!(
+    return @parallel (1:size(index, 1)-2) _update_phases_given_markerchain!(
         phase, coords, index, chain.coords, chain.cell_vertices, origin, dy, air_phase
     )
 end
@@ -33,25 +33,26 @@ function _update_phases_given_markerchain_kernel!(
     # iterate over cells with marker chain on them
     for j in cell_range
         # iterate over particles j-th cell
+        I = (icell, j) .+ 1
         for ip in cellaxes(index)
-            (@index index[ip, icell, j]) || continue
-            xq = @index coords[1][ip, icell, j]
-            yq = @index coords[2][ip, icell, j]
-            phaseq = @index phase[ip, icell, j]
+            (@index index[ip, I...]) || continue
+            xq     = @index coords[1][ip, I...]
+            yq     = @index coords[2][ip, I...]
+            phaseq = @index phase[ip, I...]
 
             # check if particle is above the marker chain
             above = is_above_chain(xq, yq, chain_coords, cell_vertices)
             # if the particle is above the surface and the phase is not air, set the phase to air
             if above && phaseq != air_phase
-                @index phase[ip, icell, j] = T(air_phase)
+                @index phase[ip, I...] = T(air_phase)
                 # @index coords[1][ip, icell, j] = NaN
                 # @index coords[2][ip, icell, j] = NaN
                 # @index index[ip, icell, j] = false
             end
             # if the particle is above the surface and the phase is air, set the phase to the closes rock phase
             if !above && phaseq == air_phase
-                @index phase[ip, icell, j] = closest_phase(
-                    coords, (xq, yq), index, ip, phase, air_phase, icell, j
+                @index phase[ip, I...] = closest_phase(
+                    coords, (xq, yq), index, ip, phase, air_phase, I...
                 )
                 # @index coords[1][ip, icell, j] = NaN
                 # @index coords[2][ip, icell, j] = NaN

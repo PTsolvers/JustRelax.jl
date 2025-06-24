@@ -41,7 +41,7 @@ function init_phases!(phases, particles, A)
 
         f(x, A, λ) = A * sin(π * x / λ)
 
-        i, j = I .+ 1 
+        i, j = I .+ 1
         @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue

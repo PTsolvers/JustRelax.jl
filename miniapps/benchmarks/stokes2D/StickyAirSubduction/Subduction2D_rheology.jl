@@ -27,13 +27,13 @@ function init_rheologies()
 end
 
 function init_phases!(phases, phase_grid, particles, xvi)
-    ni = size(phases).-2
+    ni = size(phases) .- 2
     return @parallel (@idx ni) _init_phases!(phases, phase_grid, particles.coords, particles.index, xvi)
 end
 
 @parallel_indices (I...) function _init_phases!(phases, phase_grid, pcoords::NTuple{N, T}, index, xvi) where {N, T}
 
-    ni = size(phases).-2
+    ni = size(phases) .- 2
     I1 = I .+ 1
     for ip in cellaxes(phases)
         # quick escape

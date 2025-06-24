@@ -16,13 +16,13 @@ function init_rheologies()
 end
 
 function init_phases!(phases, particles)
-    ni = size(phases) .- 2 
+    ni = size(phases) .- 2
 
     @parallel_indices (I...) function init_phases!(phases, index)
         @inbounds for ip in cellaxes(phases)
             # quick escape
-            @index(index[ip,  I.+1...]) == 0 && continue
-            @index phases[ip, I.+1...] = 1.0
+            @index(index[ip, I .+ 1...]) == 0 && continue
+            @index phases[ip, I .+ 1...] = 1.0
         end
         return nothing
     end

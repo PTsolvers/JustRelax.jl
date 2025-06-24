@@ -158,40 +158,40 @@ function init_rheologies(CharDim; is_plastic = true)
     )
 end
 
-function init_phases!(phases, particles, Lx, d, r, thick_air, CharDim)
-    ni = size(phases)
+function init_phases!(phases, particles, Lx, d, r, thick_air)
+    ni = size(phases) .- 2
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx, CharDim)
+    @parallel_indices (I...) function init_phases!(phases, px, py, index, r, Lx)
         @inbounds for ip in cellaxes(phases)
             # quick escape
-            @index(index[ip, i, j]) == 0 && continue
+            @index(index[ip, I .+ 1...]) == 0 && continue
 
-            x = @index px[ip, i, j]
-            depth = -(@index py[ip, i, j]) - nondimensionalize(thick_air * km, CharDim)
-            if nondimensionalize(0.0e0km, CharDim) ≤ depth ≤ nondimensionalize(21km, CharDim)
-                @index phases[ip, i, j] = 1.0
+            x = @index px[ip, I .+ 1...]
+            depth = -(@index py[ip, I .+ 1...]) - thick_air
+            if 0.0e0 ≤ depth ≤ 21.0e3
+                @index phases[ip, I .+ 1...] = 1.0
 
-            elseif nondimensionalize(35km, CharDim) ≥ depth > nondimensionalize(21km, CharDim)
-                @index phases[ip, i, j] = 2.0
+            elseif 35.0e3 ≥ depth > 21.0e3
+                @index phases[ip, I .+ 1...] = 2.0
 
-            elseif nondimensionalize(90km, CharDim) ≥ depth > nondimensionalize(35km, CharDim)
-                @index phases[ip, i, j] = 3.0
+            elseif 90.0e3 ≥ depth > 35.0e3
+                @index phases[ip, I .+ 1...] = 3.0
 
-            elseif depth > nondimensionalize(90km, CharDim)
-                @index phases[ip, i, j] = 3.0
+            elseif depth > 90.0e3
+                @index phases[ip, I .+ 1...] = 3.0
 
-            elseif depth < nondimensionalize(0.0e0km, CharDim)
-                @index phases[ip, i, j] = 5.0
+            elseif depth < 0.0e0
+                @index phases[ip, I .+ 1...] = 5.0
 
             end
 
             # plume - rectangular
-            if ((x - Lx * 0.5)^2 ≤ r^2) && (((@index py[ip, i, j]) - d - nondimensionalize(thick_air * km, CharDim))^2 ≤ r^2)
-                @index phases[ip, i, j] = 4.0
+            if ((x - Lx * 0.5)^2 ≤ r^2) && (((@index py[ip, I .+ 1...]) - d - thick_air)^2 ≤ r^2)
+                @index phases[ip, I .+ 1...] = 4.0
             end
         end
         return nothing
     end
 
-    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, CharDim)
+    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
 end

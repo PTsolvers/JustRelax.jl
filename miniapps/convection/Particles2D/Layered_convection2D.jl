@@ -376,10 +376,10 @@ end
 # (Path)/folder where output data and figures are stored
 figdir = "Plume2D"
 do_vtk = false # set to true to generate VTK files for ParaView
-ar     = 1 # aspect ratio
-n      = 128
-nx     = n * ar
-ny     = n
+ar = 1 # aspect ratio
+n = 128
+nx = n * ar
+ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

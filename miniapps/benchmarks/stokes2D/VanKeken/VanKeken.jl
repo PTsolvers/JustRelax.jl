@@ -20,21 +20,21 @@ const λ = 0.9142
 # HELPER FUNCTIONS ---------------------------------------------------------------
 # Initialize phases on the particles
 function init_phases!(phases, particles)
-    ni = size(phases).-2
+    ni = size(phases) .- 2
 
     @parallel_indices (I...) function init_phases!(phases, px, py, index)
         @inbounds for ip in cellaxes(phases)
             # quick escape
-            @index(index[ip, I.+1...]) == 0 && continue
+            @index(index[ip, I .+ 1...]) == 0 && continue
 
-            x = @index px[ip, I.+1...]
-            y = @index py[ip, I.+1...]
+            x = @index px[ip, I .+ 1...]
+            y = @index py[ip, I .+ 1...]
 
             # plume - rectangular
             if y > 0.2 + 0.02 * cos(π * x / λ)
-                @index phases[ip, I.+1...] = 2.0
+                @index phases[ip, I .+ 1...] = 2.0
             else
-                @index phases[ip, I.+1...] = 1.0
+                @index phases[ip, I .+ 1...] = 1.0
             end
         end
         return nothing

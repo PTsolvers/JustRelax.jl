@@ -117,38 +117,38 @@ function init_rheologies(; is_plastic = true)
 end
 
 function init_phases!(phases, particles, Lx, Ly; d = 650.0e3, r = 50.0e3)
-    ni = size(phases)
+    ni = size(phases) .- 2
 
     @parallel_indices (I...) function init_phases!(phases, px, py, pz, index, r, Lx, Ly)
 
         @inbounds for ip in cellaxes(phases)
             # quick escape
-            @index(index[ip, I...]) == 0 && continue
+            @index(index[ip, I .+ 1...]) == 0 && continue
 
-            x = @index px[ip, I...]
-            y = @index py[ip, I...]
-            depth = -(@index pz[ip, I...])
+            x = @index px[ip, I .+ 1...]
+            y = @index py[ip, I .+ 1...]
+            depth = -(@index pz[ip, I .+ 1...])
 
             if 0.0e0 ≤ depth ≤ 21.0e3
-                @index phases[ip, I...] = 1.0
+                @index phases[ip, I .+ 1...] = 1.0
 
             elseif 35.0e3 ≥ depth > 21.0e3
-                @index phases[ip, I...] = 2.0
+                @index phases[ip, I .+ 1...] = 2.0
 
             elseif 90.0e3 ≥ depth > 35.0e3
-                @index phases[ip, I...] = 3.0
+                @index phases[ip, I .+ 1...] = 3.0
 
             elseif depth > 90.0e3
-                @index phases[ip, I...] = 3.0
+                @index phases[ip, I .+ 1...] = 3.0
 
             elseif 0.0e0 > depth
-                @index phases[ip, I...] = 5.0
+                @index phases[ip, I .+ 1...] = 5.0
 
             end
 
             # plume - rectangular
             if ((x - Lx * 0.5)^2 ≤ r^2) && ((y - Ly * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
-                @index phases[ip, I...] = 4.0
+                @index phases[ip, I .+ 1...] = 4.0
             end
         end
         return nothing

@@ -14,7 +14,7 @@ function init_phases!(phase_ratios)
     ni = size(phase_ratios.center) .- 2
 
     @parallel_indices (I...) function init_phases!(phases)
-        @index phases[1, I.+1...] = 1.0
+        @index phases[1, I .+ 1...] = 1.0
 
         return nothing
     end

@@ -48,29 +48,29 @@ end
 end
 
 function init_phases!(phases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, sticky_air, top, bottom)
-    ni = size(phases)
+    ni = size(phases) .- 2
 
     @parallel_indices (I...) function init_phases!(
             phases, px, py, pz, index, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, sticky_air, top, bottom
         )
         @inbounds for ip in cellaxes(phases)
             # quick escape
-            @index(index[ip, I...]) == 0 && continue
+            @index(index[ip, I .+ 1...]) == 0 && continue
 
-            x = @index px[ip, I...]
-            y = @index py[ip, I...]
-            z = -(@index pz[ip, I...]) - sticky_air
+            x = @index px[ip, I .+ 1...]
+            y = @index py[ip, I .+ 1...]
+            z = -(@index pz[ip, I .+ 1...]) - sticky_air
             if top ≤ z ≤ bottom
-                @index phases[ip, I...] = 1.0 # crust
+                @index phases[ip, I .+ 1...] = 1.0 # crust
             end
 
             # thermal anomaly - circular
             if ((x - xc_anomaly)^2 + (y - yc_anomaly)^2 + (z + zc_anomaly)^2 ≤ r_anomaly^2)
-                @index phases[ip, I...] = 2.0
+                @index phases[ip, I .+ 1...] = 2.0
             end
 
             if z < top
-                @index phases[ip, I...] = 3.0
+                @index phases[ip, I .+ 1...] = 3.0
             end
         end
         return nothing

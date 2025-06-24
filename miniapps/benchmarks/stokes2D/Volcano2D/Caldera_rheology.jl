@@ -104,7 +104,7 @@ function init_rheologies(; linear = false, incompressible = true, isplastic = tr
 end
 
 function init_phases!(phases, phase_grid, particles, xvi)
-    ni = size(phases).-2
+    ni = size(phases) .- 2
     return @parallel (@idx ni) _init_phases!(phases, phase_grid, particles.coords, particles.index, xvi)
 end
 

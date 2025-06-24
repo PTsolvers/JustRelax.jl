@@ -122,7 +122,7 @@ function init_rheologies(; is_plastic = true)
 end
 
 function init_phases!(phases, particles, Lx; d = 650.0e3, r = 50.0e3)
-    ni = size(phases)
+    ni = size(phases) .- 2
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
         @inbounds for ip in cellaxes(phases)

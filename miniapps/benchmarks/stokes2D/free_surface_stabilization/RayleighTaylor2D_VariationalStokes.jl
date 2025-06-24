@@ -57,21 +57,21 @@ end
 end
 
 function init_phases!(phases, particles, A)
-    ni = size(phases) .- 2 
+    ni = size(phases) .- 2
 
     @parallel_indices (I...) function init_phases!(phases, px, py, index, A)
 
         @inline f(x, A, λ) = A * sin(π * x / λ)
-        
-        i, j = I .+ 1 
+
+        i, j = I .+ 1
         # i==j==102 && @show i,j
-        
+
         for ip in cellaxes(phases)
             # quick escape
             @index phases[ip, i, j] = 0.0
             @index(index[ip, i, j]) == 0 && continue
-            
-            x     = @index px[ip, i, j]
+
+            x = @index px[ip, i, j]
             depth = -(@index py[ip, i, j])
             @index phases[ip, i, j] = 2.0
 

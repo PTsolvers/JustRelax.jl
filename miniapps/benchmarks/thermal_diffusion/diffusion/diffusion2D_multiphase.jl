@@ -35,23 +35,23 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 end
 
 function init_phases!(phases, particles, xc, yc, r)
-    ni = size(phases)
+    ni = size(phases) .- 2
     center = xc, yc
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, center, r)
+        I = (i, j) .+ 1
         @inbounds for ip in cellaxes(phases)
             # quick escape
-            @index(index[ip, i, j]) == 0 && continue
+            @index(index[ip, I...]) == 0 && continue
 
-            x = @index px[ip, i, j]
-            y = @index py[ip, i, j]
+            x = @index px[ip, I...]
+            y = @index py[ip, I...]
 
             # plume - rectangular
             if (((x - center[1]))^2 + ((y - center[2]))^2) ≤ r^2
-                @index phases[ip, i, j] = 2.0
-
+                @index phases[ip, I...] = 2.0
             else
-                @index phases[ip, i, j] = 1.0
+                @index phases[ip, I...] = 1.0
             end
         end
         return nothing

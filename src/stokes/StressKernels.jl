@@ -332,7 +332,7 @@ end
     )
     # numerics
     ηij = @inbounds η[I...]
-    phase = @inbounds phase_center[I.+1...]
+    phase = @inbounds phase_center[I .+ 1...]
     _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
@@ -641,7 +641,7 @@ end
         τxyv_old_ij = av_clamped_yz_z(τxyv_old, Ic...)
 
         # vertex parameters
-        phase = @inbounds phase_yz[I.+1...]
+        phase = @inbounds phase_yz[I .+ 1...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -704,7 +704,7 @@ end
         τxyv_old_ij = av_clamped_xz_z(τxyv_old, Ic...)
 
         # vertex parameters
-        phase = @inbounds phase_xz[I.+1...]
+        phase = @inbounds phase_xz[I .+ 1...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -769,7 +769,7 @@ end
         τxyv_old_ij = τxyv_old[I...]
 
         # vertex parameters
-        phase = @inbounds phase_xy[I.+1...]
+        phase = @inbounds phase_xy[I .+ 1...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -808,7 +808,7 @@ end
     ## center
     if all(I .≤ ni)
         # Material properties
-        phase = @inbounds phase_center[I.+1...]
+        phase = @inbounds phase_center[I .+ 1...]
         _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
         is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
         K = fn_ratio(get_bulk_modulus, rheology, phase)
@@ -892,7 +892,7 @@ end
     EIIv_ij = @inbounds av_clamped(EII, Ic...)
 
     ## vertex
-    phase = @inbounds phase_vertex[I.+1...]
+    phase = @inbounds phase_vertex[I .+ 1...]
     is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
     _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     Kv = fn_ratio(get_bulk_modulus, rheology, phase)
@@ -927,7 +927,7 @@ end
     ## center
     if all(I .≤ ni)
         # Material properties
-        phase = @inbounds phase_center[I.+1...]
+        phase = @inbounds phase_center[I .+ 1...]
         _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
         is_pl, C, sinϕ, cosϕ, sinψ, η_reg = @inbounds plastic_params_phase(rheology, EII[I...], phase)
         K = fn_ratio(get_bulk_modulus, rheology, phase)
@@ -1055,7 +1055,7 @@ end
     ## center
     if all(I .≤ ni)
         # Material properties
-        phase = @inbounds phase_center[I.+1...]
+        phase = @inbounds phase_center[I .+ 1...]
         _G = inv(fn_ratio(get_shear_modulus, rheology, phase))
         _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
         is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)

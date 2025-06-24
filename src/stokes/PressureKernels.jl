@@ -94,7 +94,7 @@ end
         ::Nothing,
         ::Nothing,
     ) where {N, C <: JustRelax.CellArray}
-    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratios[I.+1...]))
+    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratios[I .+ 1...]))
     @inbounds RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
@@ -114,7 +114,7 @@ end
         ::Nothing,
         melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
-    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratios[I.+1...]))
+    K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratios[I .+ 1...]))
     @inbounds RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
     return nothing
 end
@@ -134,7 +134,7 @@ end
         ΔTc,
         ::Nothing,
     ) where {N, C <: JustRelax.CellArray}
-    @inbounds phase_ratio_I = phase_ratios[I.+1...]
+    @inbounds phase_ratio_I = phase_ratios[I .+ 1...]
     @inbounds K = fn_ratio(get_bulk_modulus, rheology, phase_ratio_I)
     @inbounds α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
     @inbounds RP[I...], P[I...] = _compute_P!(
@@ -158,8 +158,8 @@ end
         ΔTc,
         melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
-    @inbounds K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratios[I.+1...]))
-    @inbounds α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratios[I.+1...]), (; ϕ = melt_fraction[I...]))
+    @inbounds K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratios[I .+ 1...]))
+    @inbounds α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratios[I .+ 1...]), (; ϕ = melt_fraction[I...]))
     @inbounds RP[I...], P[I...] = _compute_P!(
         P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
     )

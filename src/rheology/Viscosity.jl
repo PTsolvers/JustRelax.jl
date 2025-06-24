@@ -227,7 +227,7 @@ end
         args_ij = local_viscosity_args(args, I...)
 
         # local phase ratio
-        ratio_ij = @cell ratios_center[I.+1...]
+        ratio_ij = @cell ratios_center[I .+ 1...]
         # remove phase ratio of the air if necessary & normalize ratios
         ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
 
@@ -310,7 +310,7 @@ end
         args_ijk = local_viscosity_args(args, I...)
 
         # local phase ratio
-        ratio_ijk = @cell ratios_center[I.+1...]
+        ratio_ijk = @cell ratios_center[I .+ 1...]
         # remove phase ratio of the air if necessary & normalize ratios
         ratio_ijk = correct_phase_ratio(air_phase, ratio_ijk)
 

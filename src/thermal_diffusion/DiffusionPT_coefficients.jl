@@ -96,7 +96,7 @@ function _compute_pt_thermal_arrays!(
         θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, I::Vararg{Int, N}
     ) where {N}
     args_ij = (; T = args.T[I...], P = args.P[I...])
-    phase_ij = phase[I.+1...]
+    phase_ij = phase[I .+ 1...]
     ρCp = compute_ρCp(rheology, phase_ij, args_ij)
     _K = inv(fn_ratio(compute_conductivity, rheology, phase_ij, args_ij))
 

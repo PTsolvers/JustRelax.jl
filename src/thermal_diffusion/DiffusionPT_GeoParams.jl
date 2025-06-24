@@ -8,7 +8,7 @@
 function update_pt_thermal_arrays!(
         pt_thermal, phase_ratios::JustPIC.PhaseRatios, rheology, args, _dt
     )
-    ni = size(phase_ratios.center) .- 2 
+    ni = size(phase_ratios.center) .- 2
 
     @parallel (@idx ni) compute_pt_thermal_arrays!(
         pt_thermal.θr_dτ,

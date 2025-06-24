@@ -6,7 +6,7 @@ function update_phases_given_markerchain!(
     ) where {backend}
     (; coords, index) = particles
     dy = di[2]
-    return @parallel (1:size(index, 1)-2) _update_phases_given_markerchain!(
+    return @parallel (1:(size(index, 1) - 2)) _update_phases_given_markerchain!(
         phase, coords, index, chain.coords, chain.cell_vertices, origin, dy, air_phase
     )
 end
@@ -36,8 +36,8 @@ function _update_phases_given_markerchain_kernel!(
         I = (icell, j) .+ 1
         for ip in cellaxes(index)
             (@index index[ip, I...]) || continue
-            xq     = @index coords[1][ip, I...]
-            yq     = @index coords[2][ip, I...]
+            xq = @index coords[1][ip, I...]
+            yq = @index coords[2][ip, I...]
             phaseq = @index phase[ip, I...]
 
             # check if particle is above the marker chain

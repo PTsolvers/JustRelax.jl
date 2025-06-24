@@ -63,10 +63,10 @@ end
         args_ijk = (; T = T_ijk, P = av_yz(args.P))
         K =
             (
-            get_K(getindex_phase(phase, (i, j + 1, k).+1...), args_ijk) +
-                get_K(getindex_phase(phase, (i, j, k + 1).+1...), args_ijk) +
-                get_K(getindex_phase(phase, (i, j + 1, k + 1).+1...), args_ijk) +
-                get_K(getindex_phase(phase, (i, j, k).+1...), args_ijk)
+            get_K(getindex_phase(phase, (i, j + 1, k) .+ 1...), args_ijk) +
+                get_K(getindex_phase(phase, (i, j, k + 1) .+ 1...), args_ijk) +
+                get_K(getindex_phase(phase, (i, j + 1, k + 1) .+ 1...), args_ijk) +
+                get_K(getindex_phase(phase, (i, j, k) .+ 1...), args_ijk)
         ) * 0.25
 
         qx = qTx2[I...] = -K * d_xi(T)
@@ -78,10 +78,10 @@ end
         args_ijk = (; T = T_ijk, P = av_xz(args.P))
         K =
             (
-            get_K(getindex_phase(phase, (i + 1, j, k).+1...), args_ijk) +
-                get_K(getindex_phase(phase, (i, j, k + 1).+1...), args_ijk) +
-                get_K(getindex_phase(phase, (i + 1, j, k + 1).+1...), args_ijk) +
-                get_K(getindex_phase(phase, (i, j, k).+1...), args_ijk)
+            get_K(getindex_phase(phase, (i + 1, j, k) .+ 1...), args_ijk) +
+                get_K(getindex_phase(phase, (i, j, k + 1) .+ 1...), args_ijk) +
+                get_K(getindex_phase(phase, (i + 1, j, k + 1) .+ 1...), args_ijk) +
+                get_K(getindex_phase(phase, (i, j, k) .+ 1...), args_ijk)
         ) * 0.25
 
         qy = qTy2[I...] = -K * d_yi(T)
@@ -93,10 +93,10 @@ end
         args_ijk = (; T = T_ijk, P = av_xy(args.P))
         K =
             (
-            get_K(getindex_phase(phase, (i + 1, j + 1, k).+1...), args_ijk) +
-                get_K(getindex_phase(phase, (i, j + 1, k).+1...), args_ijk) +
-                get_K(getindex_phase(phase, (i + 1, j, k).+1...), args_ijk) +
-                get_K(getindex_phase(phase, (i, j, k).+1...), args_ijk)
+            get_K(getindex_phase(phase, (i + 1, j + 1, k) .+ 1...), args_ijk) +
+                get_K(getindex_phase(phase, (i, j + 1, k) .+ 1...), args_ijk) +
+                get_K(getindex_phase(phase, (i + 1, j, k) .+ 1...), args_ijk) +
+                get_K(getindex_phase(phase, (i, j, k) .+ 1...), args_ijk)
         ) * 0.25
 
         qz = qTz2[I...] = -K * d_zi(T)
@@ -299,12 +299,12 @@ end
 
     if all((i, j) .≤ size(qTx))
         ii, jj = clamp(i - 1, 1, nx), j + 1
-        phase_ij = getindex_phase(phase, (ii, jj).+1...)
+        phase_ij = getindex_phase(phase, (ii, jj) .+ 1...)
         args_ij = ntuple_idx(args, ii, jj)
         K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
         ii, jj = clamp(i - 1, 1, nx), j
-        phase_ij = getindex_phase(phase, (ii, jj).+1...)
+        phase_ij = getindex_phase(phase, (ii, jj) .+ 1...)
         args_ij = ntuple_idx(args, ii, jj)
         K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
         K = (K1 + K2) * 0.5
@@ -315,12 +315,12 @@ end
 
     if all((i, j) .≤ size(qTy))
         ii, jj = min(i, nx), j
-        phase_ij = getindex_phase(phase, (ii, jj).+1...)
+        phase_ij = getindex_phase(phase, (ii, jj) .+ 1...)
         args_ij = ntuple_idx(args, ii, jj)
         K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
         ii, jj = max(i - 1, 1), j
-        phase_ij = getindex_phase(phase, (ii, jj).+1...)
+        phase_ij = getindex_phase(phase, (ii, jj) .+ 1...)
         args_ij = ntuple_idx(args, ii, jj)
         K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
         K = (K1 + K2) * 0.5
@@ -355,12 +355,12 @@ end
 
     @inbounds if all((i, j) .≤ size(qTx))
         ii, jj = clamp(i - 1, 1, nx), j + 1
-        phase_ij = getindex_phase(phase_ratios, (ii, jj).+1...)
+        phase_ij = getindex_phase(phase_ratios, (ii, jj) .+ 1...)
         args_ij = ntuple_idx(args, ii, jj)
         K1 = compute_K(phase_ij, args_ij)
 
         ii, jj = clamp(i - 1, 1, nx), j
-        phase_ij = getindex_phase(phase_ratios, (ii, jj).+1...)
+        phase_ij = getindex_phase(phase_ratios, (ii, jj) .+ 1...)
         K2 = compute_K(phase_ij, args_ij)
         K = (K1 + K2) * 0.5
 
@@ -370,12 +370,12 @@ end
 
     @inbounds if all((i, j) .≤ size(qTy))
         ii, jj = min(i, nx), j
-        phase_ij = getindex_phase(phase_ratios, (ii, jj).+1...)
+        phase_ij = getindex_phase(phase_ratios, (ii, jj) .+ 1...)
         args_ij = ntuple_idx(args, ii, jj)
         K1 = compute_K(phase_ij, args_ij)
 
         ii, jj = clamp(i - 1, 1, nx), j
-        phase_ij = getindex_phase(phase_ratios, (ii, jj).+1...)
+        phase_ij = getindex_phase(phase_ratios, (ii, jj) .+ 1...)
         args_ij = ntuple_idx(args, ii, jj)
         K2 = compute_K(phase_ij, args_ij)
         K = (K1 + K2) * 0.5
@@ -466,9 +466,9 @@ end
     ρCp =
         (
         compute_ρCp(rheology, getindex_phase(phase, (i0, j0) .+ 1...), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, (i0, j1) .+ 1...), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, (i1, j0) .+ 1...), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, (i1, j1) .+ 1...), args_ij)
+            compute_ρCp(rheology, getindex_phase(phase, (i0, j1) .+ 1...), args_ij) +
+            compute_ρCp(rheology, getindex_phase(phase, (i1, j0) .+ 1...), args_ij) +
+            compute_ρCp(rheology, getindex_phase(phase, (i1, j1) .+ 1...), args_ij)
     ) * 0.25
 
     I1 = i + 1, j + 1
@@ -563,9 +563,9 @@ end
     ρCp =
         (
         compute_ρCp(rheology, getindex_phase(phase, (i0, j0) .+ 1...), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, (i0, j1) .+ 1...), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, (i1, j0) .+ 1...), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, (i1, j1) .+ 1...), args_ij)
+            compute_ρCp(rheology, getindex_phase(phase, (i0, j1) .+ 1...), args_ij) +
+            compute_ρCp(rheology, getindex_phase(phase, (i1, j0) .+ 1...), args_ij) +
+            compute_ρCp(rheology, getindex_phase(phase, (i1, j1) .+ 1...), args_ij)
     ) * 0.25
 
     I1 = i + 1, j + 1
@@ -630,13 +630,13 @@ end
         α =
             (
             compute_α(rheology, getindex_phase(phases, I1...)) +
-                compute_α(rheology, getindex_phase(phases, (i, j1, k  ).+1...)) +
-                compute_α(rheology, getindex_phase(phases, (i1, j, k  ).+1...)) +
-                compute_α(rheology, getindex_phase(phases, (i1, j1, k ).+1...)) +
-                compute_α(rheology, getindex_phase(phases, (i, j1, k1 ).+1...)) +
-                compute_α(rheology, getindex_phase(phases, (i1, j, k1 ).+1...)) +
-                compute_α(rheology, getindex_phase(phases, (i1, j1, k1).+1...)) +
-                compute_α(rheology, getindex_phase(phases, I1.+1...))
+                compute_α(rheology, getindex_phase(phases, (i, j1, k) .+ 1...)) +
+                compute_α(rheology, getindex_phase(phases, (i1, j, k) .+ 1...)) +
+                compute_α(rheology, getindex_phase(phases, (i1, j1, k) .+ 1...)) +
+                compute_α(rheology, getindex_phase(phases, (i, j1, k1) .+ 1...)) +
+                compute_α(rheology, getindex_phase(phases, (i1, j, k1) .+ 1...)) +
+                compute_α(rheology, getindex_phase(phases, (i1, j1, k1) .+ 1...)) +
+                compute_α(rheology, getindex_phase(phases, I1 .+ 1...))
         ) * 0.125
         # cache P around T node
         P111 = P[I...]
@@ -683,9 +683,9 @@ end
         α =
             (
             compute_α(rheology, getindex_phase(phases, I1...)) +
-                compute_α(rheology, getindex_phase(phases, (i, j1).+1...)) +
-                compute_α(rheology, getindex_phase(phases, (i1, j).+1...)) +
-                compute_α(rheology, getindex_phase(phases, I1.+1...))
+                compute_α(rheology, getindex_phase(phases, (i, j1) .+ 1...)) +
+                compute_α(rheology, getindex_phase(phases, (i1, j) .+ 1...)) +
+                compute_α(rheology, getindex_phase(phases, I1 .+ 1...))
         ) * 0.25
         # cache P around T node
         P11 = P[I...]

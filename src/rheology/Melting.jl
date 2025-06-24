@@ -21,6 +21,6 @@ end
         ϕ, phase_ratios, rheology, args
     )
     args_ijk = ntuple_idx(args, I...)
-    @inbounds ϕ[I...] = fn_ratio(compute_meltfraction, rheology, @cell(phase_ratios[I.+1...]), args_ijk)
+    @inbounds ϕ[I...] = fn_ratio(compute_meltfraction, rheology, @cell(phase_ratios[I .+ 1...]), args_ijk)
     return nothing
 end

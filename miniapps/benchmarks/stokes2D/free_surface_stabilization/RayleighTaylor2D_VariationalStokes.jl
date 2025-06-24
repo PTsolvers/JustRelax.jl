@@ -1,4 +1,4 @@
-# const isCUDA = false
+const isCUDA = false
 # const isCUDA = true
 
 @static if isCUDA
@@ -64,11 +64,14 @@ function init_phases!(phases, particles, A)
         @inline f(x, A, λ) = A * sin(π * x / λ)
         
         i, j = I .+ 1 
+        # i==j==102 && @show i,j
+        
         for ip in cellaxes(phases)
             # quick escape
+            @index phases[ip, i, j] = 0.0
             @index(index[ip, i, j]) == 0 && continue
-
-            x = @index px[ip, i, j]
+            
+            x     = @index px[ip, i, j]
             depth = -(@index py[ip, i, j])
             @index phases[ip, i, j] = 2.0
 
@@ -80,13 +83,22 @@ function init_phases!(phases, particles, A)
 
             end
 
+            # i==j==102 && @show @index phases[ip, i, j]
+
         end
         return nothing
     end
 
     return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, A)
 end
-## END OF HELPER FUNCTION ------------------------------------------------------------
+# init_phases!(pPhases, particles, A)
+# ppx, ppy = particles.coords;
+# ppx = ppx.data[:];
+# ppy = ppy.data[:];
+# ind = particles.index.data[:];
+# scatter(ppx[ind], ppy[ind], markersize = 5)
+
+# ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
 n = 101
@@ -232,7 +244,8 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        # advection_MQS!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles

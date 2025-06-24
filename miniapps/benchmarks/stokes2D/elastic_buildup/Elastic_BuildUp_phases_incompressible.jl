@@ -11,10 +11,10 @@ solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
 function init_phases!(phase_ratios)
-    ni = size(phase_ratios.center)
+    ni = size(phase_ratios.center) .- 2
 
-    @parallel_indices (i, j) function init_phases!(phases)
-        @index phases[1, i, j] = 1.0
+    @parallel_indices (I...) function init_phases!(phases)
+        @index phases[1, I.+1...] = 1.0
 
         return nothing
     end

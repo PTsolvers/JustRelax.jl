@@ -55,7 +55,7 @@ function init_phases!(phases, particles)
     origin = 250.0e3, 250.0e3
     circle = GGU.Circle(origin, radius)
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index)
+    @parallel_indices (I...) function init_phases!(phases, px, py, index)
         f(x, A, λ) = A * sin(π * x / λ)
         
         i, j = I .+ 1 
@@ -214,7 +214,7 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles

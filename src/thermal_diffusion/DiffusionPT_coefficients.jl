@@ -93,31 +93,31 @@ end
 end
 
 function _compute_pt_thermal_arrays!(
-        θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int, N}
+        θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, I::Vararg{Int, N}
     ) where {N}
-    args_ij = (; T = args.T[Idx...], P = args.P[Idx...])
-    phase_ij = phase[Idx...]
+    args_ij = (; T = args.T[I...], P = args.P[I...])
+    phase_ij = phase[I.+1...]
     ρCp = compute_ρCp(rheology, phase_ij, args_ij)
     _K = inv(fn_ratio(compute_conductivity, rheology, phase_ij, args_ij))
 
     _Re = inv(π + √(π * π + ρCp * max_lxyz^2 * _K * _dt)) # Numerical Reynolds number
-    θr_dτ[Idx...] = max_lxyz / Vpdτ * _Re
-    dτ_ρ[Idx...] = Vpdτ * max_lxyz * _K * _Re
+    θr_dτ[I...] = max_lxyz / Vpdτ * _Re
+    dτ_ρ[I...] = Vpdτ * max_lxyz * _K * _Re
 
     return nothing
 end
 
 function _compute_pt_thermal_arrays!(
-        θr_dτ, dτ_ρ, rheology, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int, N}
+        θr_dτ, dτ_ρ, rheology, args, max_lxyz, Vpdτ, _dt, I::Vararg{Int, N}
     ) where {N}
-    args_ij = (; T = args.T[Idx...], P = args.P[Idx...])
+    args_ij = (; T = args.T[I...], P = args.P[I...])
 
     ρCp = compute_ρCp(rheology, args_ij)
     _K = inv(compute_conductivity(rheology, args_ij))
 
     _Re = inv(π + √(π * π + ρCp * max_lxyz^2 * _K * _dt)) # Numerical Reynolds number
-    θr_dτ[Idx...] = max_lxyz / Vpdτ * _Re
-    dτ_ρ[Idx...] = Vpdτ * max_lxyz * _K * _Re
+    θr_dτ[I...] = max_lxyz / Vpdτ * _Re
+    dτ_ρ[I...] = Vpdτ * max_lxyz * _K * _Re
 
     return nothing
 end

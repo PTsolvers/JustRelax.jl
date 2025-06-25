@@ -41,24 +41,10 @@ $\begin{align}
 \end{align}$
 
 where $A$ material specific parameter, $n$ is the stress powerlaw exponent, $p$ is the negative defined grain size exponent, $f$ is the water fugacity, $r$ is the water fugacity exponent, $E$ is the activation energy, $PV$ is the activation volume, and $R$ is the universal gas constant.
+
 ## Elastic stress
 
-### Method (1): Jaumann derivative
-$\begin{align}
-\frac{D\boldsymbol{\tau}}{Dt} =
-\boldsymbol{v}\frac{\partial\boldsymbol{\tau}}{\partial t} +
-\boldsymbol{\omega}\boldsymbol{\tau} -
-\boldsymbol{\tau}\boldsymbol{\omega}^T
-\end{align}$
-
-where $\boldsymbol{\omega}$ is the vorticity tensor
-
-$\begin{align}
-\boldsymbol{\omega} =
-\frac{1}{2} \left(\nabla\boldsymbol{v} - \nabla^T \boldsymbol{v} \right)
-\end{align}$
-
-### Method (2): Euler-Rodrigues rotation
+The elastic stress is rotated on the particles level, and it is done using Euler-Rodrigues rotation method, with the following steps:
 
 1. Compute unit rotation axis
 $\begin{align}

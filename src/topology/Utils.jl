@@ -87,7 +87,7 @@ const JR_T = Union{
 }
 
 # convenience function to get the field halos updated
-@generated function update_halo!(x::T) where {T <: JR_T}
+function update_halo!(x::T) where {T <: JR_T}
     nfields = fieldcount(T)
     exprs = Expr[]
     for i in 1:nfields

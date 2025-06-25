@@ -123,6 +123,86 @@ function save_vtk(fname::String, xi, data::NamedTuple)
     return nothing
 end
 
+# function save_vtk(fname::String, global_xci::NTuple{2, LinRange{T, Int64}}, data_c::NamedTuple, velocity::NTuple{N, T}; t::Number = nothing, igg::IGG=igg) where {N, T}
+function save_vtk(fname::String, igg::IGG, global_xci::NTuple{2, LinRange{T, Int64}}, data_c::NamedTuple; t::Number = nothing) where {T}
+
+    dims, nprocs = igg.dims, igg.nprocs
+
+    # update_halo!(data_c)
+
+    # Unpack data names and arrays
+    data_names_c = string.(keys(data_c))
+    data_arrays_c = values(data_c)
+
+    # Compute extents for each process
+    extents = ImplicitGlobalGrid.metagrid(Tuple(dims), extents_g, 1)
+
+    # Save pvtk files for each part
+    for part = 1:nprocs
+        is, js, ks = extents[part]  # Local indices
+        xs, ys = global_xci[1][is], global_xci[2][js]  # Local grid
+
+        # # Initialize velocity_field for the local part
+        # velocity_field = rand(N, length(is), length(js))
+        # for (i, v) in enumerate(velocity)
+        #     velocity_field[i, :, :] = v[is, js]
+        # end
+
+        pvtk_grid(
+            fname, xs, ys, ks;  # Use user-defined filename/path
+            part = part, extents = extents,
+        ) do pvtk
+            # Add data to the pvtk file
+            for (name_i, array_i) in zip(data_names_c, data_arrays_c)
+                pvtk[name_i] = array_i[is, js]
+            end
+            # pvtk["Velocity"] = velocity_field
+            isnothing(t) || (pvtk["TimeValue"] = t)
+        end
+    end
+
+    return nothing
+end
+
+# function save_vtk(fname::String, global_xci::NTuple{3, LinRange{T, Int64}}, data_c::NamedTuple, velocity::NTuple{N, T}; t::Number = nothing, igg::IGG) where {N, T}
+
+#     dims, nprocs = igg.dims, igg.nprocs
+#     update_halo!(data_c)
+
+#     # Unpack data names and arrays
+#     data_names_c = string.(keys(data_c))
+#     data_arrays_c = values(data_c)
+
+#     # Compute extents for each process
+#     extents = metagrid(Tuple(dims), extents_g, 1)
+
+#     # Save pvtk files for each part
+#     for part = 1:nprocs
+#         is, js, ks = extents[part]  # Local indices
+#         xs, ys, zs = global_xci[1][is], global_xci[2][js], global_xci[3][ks]  # Local grid
+
+#         # Initialize velocity_field for the local part
+#         velocity_field = rand(N, length(is), length(js), length(ks))
+#         for (i, v) in enumerate(velocity)
+#             velocity_field[i, :, :, :] = v[is, js, ks]
+#         end
+
+#         pvtk_grid(
+#             fname, xs, ys, zs;  # Use user-defined filename/path
+#             part = part, extents = extents,
+#         ) do pvtk
+#             # Add data to the pvtk file
+#             for (name_i, array_i) in zip(data_names_c, data_arrays_c)
+#                 pvtk[name_i] = array_i[is, js, ks]
+#             end
+#             pvtk["Velocity"] = velocity_field
+#             isnothing(t) || (pvtk["TimeValue"] = t)
+#         end
+#     end
+
+#     return nothing
+# end
+
 """
     save_marker_chain(fname::String, chain::MarkerChain)
 

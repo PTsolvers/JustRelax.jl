@@ -5,6 +5,7 @@ using HDF5
 using JLD2
 using MPI
 using StaticArrays
+using ImplicitGlobalGrid
 
 import ..JustRelax: Geometry
 import ..JustRelax: IGG

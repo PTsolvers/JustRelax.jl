@@ -1,39 +1,25 @@
-# 2D subduction
+# 3D Plume 
 
-Model setups taken from [Hummel et al 2024](https://doi.org/10.5194/se-15-567-2024).
 
 # Initialize packages
 
 Load JustRelax necessary modules and define backend.
 ```julia
 using CUDA # comment this out if you are not using CUDA; or load AMDGPU.jl if you are using an AMD GPU
-using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 const backend_JR = CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBackend
 ```
 
 For this benchmark we will use particles to track the advection of the material phases and their information. For this, we will use [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl)
 ```julia
-using JustPIC, JustPIC._2D
+using JustPIC, JustPIC._3D
 const backend = CUDABackend # Options: JustPIC.CPUBackend, CUDABackend, JustPIC.AMDGPUBackend
 ```
 
 We will also use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil
-@init_parallel_stencil(CUDA, Float64, 2)
-```
-### Helper function
-We first define a helper function that will be useful later on
-
-```julia
-function copyinn_x!(A, B)
-    @parallel function f_x(A, B)
-        @all(A) = @inn_x(B)
-        return nothing
-    end
-
-    @parallel f_x(A, B)
-end
+@init_parallel_stencil(CUDA, Float64, 3)
 ```
 
 # Model setup
@@ -42,8 +28,8 @@ We will use [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/G
 
 ## Model domain
 ```julia
-nx, ny        = 256, 128         # number of cells in x and y directions
-ni            = nx, ny
+nx, ny, nz    = 64, 64, 64       # number of cells in x and y directions
+ni            = nx, ny, nz
 di            = @. li / ni       # grid steps
 grid          = Geometry(ni, li; origin = origin)
 (; xci, xvi)  = grid # nodes at the center and vertices of the cells
@@ -54,9 +40,9 @@ For the rheology we will use the `rheology` object we created in the previous se
 
 ## Initialize particles fields
 ```julia
-nxcell          = 40 # initial number of particles per cell
-max_xcell       = 60 # maximum number of particles per cell
-min_xcell       = 20 # minimum number of particles per cell
+nxcell          = 24 # initial number of particles per cell
+max_xcell       = 40 # maximum number of particles per cell
+min_xcell       = 8  # minimum number of particles per cell
 particles       = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
 subgrid_arrays  = SubgridDiffusionCellArrays(particles)
 # velocity staggered grids
@@ -70,7 +56,49 @@ particle_args    = (pT, pPhases)
 ```
 
 ## Assign particles phases
-Now we assign the material phases from the arrays we computed with help of [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl)
+```julia
+function init_phases!(phases, particles, Lx, Ly; d = 650.0e3, r = 25.0e3)
+    ni = size(phases)
+
+    @parallel_indices (I...) function init_phases!(phases, px, py, pz, index, r, Lx, Ly)
+
+        @inbounds for ip in cellaxes(phases)
+            # quick escape, no particle in this memory location
+            @index(index[ip, I...]) == 0 && continue
+
+            x = @index px[ip, I...]
+            y = @index py[ip, I...]
+            depth = -(@index pz[ip, I...])
+
+            if 0.0e0 ≤ depth ≤ 21.0e3
+                @index phases[ip, I...] = 1.0
+
+            elseif 35.0e3 ≥ depth > 21.0e3
+                @index phases[ip, I...] = 2.0
+
+            elseif 90.0e3 ≥ depth > 35.0e3
+                @index phases[ip, I...] = 3.0
+
+            elseif depth > 90.0e3
+                @index phases[ip, I...] = 3.0
+
+            elseif 0.0e0 > depth
+                @index phases[ip, I...] = 5.0
+
+            end
+
+            # plume - rectangular
+            if ((x - Lx * 0.5)^2 ≤ r^2) && ((y - Ly * 0.5)^2 ≤ r^2) && ((depth - d)^2 ≤ r^2)
+                @index phases[ip, I...] = 4.0
+            end
+        end
+        return nothing
+    end
+
+    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, Ly)
+end
+```
+
 ```julia
 phases_device    = PTArray(backend)(phases_GMG)
 phase_ratios     = PhaseRatios(backend, length(rheology), ni);
@@ -79,18 +107,64 @@ update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 ```
 
 ## Define temperature profile
-We need to copy the thermal field from the [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl) object to `thermal`, which contains the arrays related to the thermal field.
 ```julia
-Ttop             = 20 + 273
-Tbot             = maximum(T_GMG)
-thermal          = ThermalArrays(backend, ni)
-@views thermal.T[2:end-1, :] .= PTArray(backend)(T_GMG)
-thermal_bc       = TemperatureBoundaryConditions(;
-    no_flux      = (left = true, right = true, top = false, bot = false),
+thermal     = ThermalArrays(backend, ni)
+thermal_bc  = TemperatureBoundaryConditions(;
+    no_flux = (left = true, right = true, top = false, bot = false, front = true, back = true),
 )
 thermal_bcs!(thermal, thermal_bc)
-@views thermal.T[:, end] .= Ttop
-@views thermal.T[:, 1]   .= Tbot
+```
+
+```julia
+@parallel_indices (I...) function init_T!(T, z)
+    depth = -z[I[end]]
+
+    if depth < 0.0
+        T[I...] = 273.0
+
+    elseif 0.0 ≤ (depth) < 35e3
+        dTdZ = (923 - 273) / 35e3
+        offset = 273
+        T[I...] = (depth) * dTdZ + offset
+
+    elseif 110e3 > (depth) ≥ 35e3
+        dTdZ = (1492 - 923) / 75e3
+        offset = 923
+        T[I...] = (depth - 35e3) * dTdZ + offset
+
+    elseif (depth) ≥ 110e3
+        dTdZ = (1837 - 1492) / 590e3
+        offset = 1492
+        T[I...] = (depth - 110e3) * dTdZ + offset
+
+    end
+
+    return nothing
+end
+```
+
+```julia
+# Thermal rectangular perturbation
+function rectangular_perturbation!(T, xc, yc, zc, r, xvi)
+
+    @parallel_indices (i, j, k) function _rectangular_perturbation!(T, xc, yc, zc, r, x, y, z)
+        @inbounds if (abs(x[i] - xc) ≤ r) && (abs(y[j] - yc) ≤ r) && (abs(z[k] - zc) ≤ r)
+            depth = abs(z[k])
+            dTdZ = (2047 - 2017) / 50.0e3
+            offset = 2017
+            T[i, j, k] = (depth - 585.0e3) * dTdZ + offset
+        end
+        return nothing
+    end
+
+    return @parallel _rectangular_perturbation!(T, xc, yc, zc, r, xvi...)
+end
+```
+
+```julia
+@parallel init_T!(thermal.T, xvi[3])
+rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, xvi)
+thermal_bcs!(thermal, thermal_bc)
 temperature2center!(thermal) # interpolate temperature from vertices to centers
 ```
 
@@ -103,19 +177,20 @@ pt_stokes        = PTStokesCoeffs(li, di; ϵ_rel=1e-4, Re=3π, r=1e0, CFL = 0.98
 
 ## Initialize buoyancy forces and lithostatic pressure
 ```julia
-ρg        = ntuple(_ -> @zeros(ni...), Val(2))
-compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
-stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
+ρg        = ntuple(_ -> @zeros(ni...), Val(3))
+compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=2), dims=2), dims=2))
 ```
 
 ## Define boundary conditions
 We we will use free slip boundary conditions on all sides
 ```julia
 # Boundary conditions
-flow_bcs         = VelocityBoundaryConditions(;
-    free_slip    = (left = true , right = true , top = true , bot = true ),
-    no_slip      = (left = false, right = false, top = false, bot = false),
-)
+flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true, front = true, back = true),
+        no_slip = (left = false, right = false, top = false, bot = false, front = false, back = false),
+    )
+flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 ```
 
 ## Pseuo-transient coefficients
@@ -214,7 +289,7 @@ subgrid_diffusion!(
 5. Particles advection
 ```julia
 # advect particles in space
-advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
 # advect particles in memory
 move_particles!(particles, xvi, particle_args)
 # check if we need to inject particles

@@ -91,12 +91,14 @@ function update_halo!(x::T) where {T <: JR_T}
     nfields = fieldcount(T)
     exprs = Expr[]
     for i in 1:nfields
-        push!(exprs, quote
-            field = getfield(x, $i)
-            if field !== nothing
-                ImplicitGlobalGrid.update_halo!(field)
+        push!(
+            exprs, quote
+                field = getfield(x, $i)
+                if field !== nothing
+                    ImplicitGlobalGrid.update_halo!(field)
+                end
             end
-        end)
+        )
     end
     return quote
         $(exprs...)

@@ -1,4 +1,7 @@
-const isCUDA = false
+# Load script dependencies
+using GeoParams, GLMakie
+
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -29,9 +32,6 @@ const backend_JP = @static if isCUDA
 else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
-
-# Load script dependencies
-using GeoParams, CellArrays, GLMakie
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -104,7 +104,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 1.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -210,6 +210,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             )
         end
 
+        error()
+
         # print some stuff
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
@@ -304,39 +306,58 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 )
             end
 
+            # # Make particles plottable
+            # p = particles.coords
+            # ppx, ppy = p
+            # pxv = ppx.data[:] ./ 1.0e3
+            # pyv = ppy.data[:] ./ 1.0e3
+            # clr = pPhases.data[:]
+            # # clr      = pT.data[:]
+            # idxv = particles.index.data[:]
+
+            # # Make Makie figure
+            # ar = 3
+            # fig = Figure(size = (1200, 900), title = "t = $t")
+            # ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
+            # ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
+            # ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
+            # ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
+            # # Plot temperature
+            # h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :batlow)
+            # # Plot particles phase
+            # h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
+            # # Plot 2nd invariant of strain rate
+            # # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            # h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
+            # # Plot effective viscosity
+            # h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
+            # hidexdecorations!(ax1)
+            # hidexdecorations!(ax2)
+            # hidexdecorations!(ax3)
+            # Colorbar(fig[1, 2], h1)
+            # Colorbar(fig[2, 2], h2)
+            # Colorbar(fig[1, 4], h3)
+            # Colorbar(fig[2, 4], h4)
+            # linkaxes!(ax1, ax2, ax3, ax4)
+            # fig
+            # save(joinpath(figdir, "$(it).png"), fig)
+
             # Make particles plottable
-            p = particles.coords
-            ppx, ppy = p
-            pxv = ppx.data[:] ./ 1.0e3
-            pyv = ppy.data[:] ./ 1.0e3
-            clr = pPhases.data[:]
-            # clr      = pT.data[:]
-            idxv = particles.index.data[:]
+            t_Myr = round((t / (1.0e6 * 3600 * 24 * 365.25)), digits = 2)
 
             # Make Makie figure
-            ar = 3
-            fig = Figure(size = (1200, 900), title = "t = $t")
-            ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
-            ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
-            ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
-            ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
+            ar  = 3e3 / (660+15)
+            fig = Figure(size = (1300, 900))
+            ax1 = Axis(fig[1, 1], yticklabelsize = 18, xticklabelsize = 18, xlabel = L"x [km]", ylabel = L"z [km]", aspect = ar, title = L"t = %$(t_Myr) Myrs", titlesize = 24)
+            ax2 = Axis(fig[2, 1], yticklabelsize = 18, xticklabelsize = 18, xlabel = L"x [km]", ylabel = L"z [km]", aspect = ar )
             # Plot temperature
             h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :batlow)
-            # Plot particles phase
-            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
-            # Plot 2nd invariant of strain rate
-            # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
-            h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
-            # Plot effective viscosity
-            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
+            h2 = heatmap!(ax2, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.viscosity.η_vep)), colormap = :batlow)
             hidexdecorations!(ax1)
-            hidexdecorations!(ax2)
-            hidexdecorations!(ax3)
-            Colorbar(fig[1, 2], h1)
-            Colorbar(fig[2, 2], h2)
-            Colorbar(fig[1, 4], h3)
-            Colorbar(fig[2, 4], h4)
-            linkaxes!(ax1, ax2, ax3, ax4)
+            # hidexdecorations!(ax2)
+            Colorbar(fig[1, 2], h1, height = 225, label = L"T [K]")
+            Colorbar(fig[2, 2], h2, height = 225, label = L"\log_{10}(\eta)")
+            linkaxes!(ax1, ax2)
             fig
             save(joinpath(figdir, "$(it).png"), fig)
         end
@@ -360,3 +381,5 @@ else
 end
 
 main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+
+

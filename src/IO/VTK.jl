@@ -123,85 +123,110 @@ function save_vtk(fname::String, xi, data::NamedTuple)
     return nothing
 end
 
-# function save_vtk(fname::String, global_xci::NTuple{2, LinRange{T, Int64}}, data_c::NamedTuple, velocity::NTuple{N, T}; t::Number = nothing, igg::IGG=igg) where {N, T}
-function save_vtk(fname::String, igg::IGG, global_xci::NTuple{2, LinRange{T, Int64}}, data_c::NamedTuple; t::Number = nothing) where {T}
 
-    dims, nprocs = igg.dims, igg.nprocs
+"""
+    save_pvtk(fname, igg, xci, xvi, data_c, data_v; t = nothing)
 
-    # update_halo!(data_c)
+Saves data in the Parallel VTK (PVTK) file format.
+
+# Arguments
+    - `fname::String` : The name of the output PVTK file. Data stores on the cell centers will be saved in `fname_center.pvtk` and data on the cell vertices in `fname_vertex.pvtk`.
+    - `igg::IGG` : The implicit global grid object.
+    - `xci::NTuple{N, AbstractVector{Int64}}` : The coordinates of the cell centers.
+    - `xvi::NTuple{N, AbstractVector{Int64}}` : The coordinates of the cell vertices.
+    - `data_c::NamedTuple` : The data to be saved at the cell centers.
+    - `data_v::NamedTuple` : The data to be saved at the cell vertices.
+    - `t::Union{Nothing, Number} = nothing` : The time value to be saved (if any).
+"""
+function save_pvtk(
+        fname::String,
+        igg::IGG,
+        xci::NTuple{N, AbstractVector{Int64}},
+        xvi::NTuple{N, AbstractVector{Int64}},
+        data_c::NamedTuple,
+        data_v::NamedTuple;
+        t::Union{Nothing, Number} = nothing
+    ) where {N}
+
+    _save_pvtk(fname * "_center", igg, xci, data_c, :center, t)
+    _save_pvtk(fname * "_vertex", igg, xvi, data_v, :vertex, t)
+    
+    return nothing
+end
+
+"""
+    save_pvtk_center(fname, igg, xci, data_c; t = nothing)
+
+Saves data in the Parallel VTK (PVTK) file format.
+
+# Arguments
+    - `fname::String` : The name of the output PVTK file. Data stores on the cell centers will be saved in `fname_center.pvtk`.
+    - `igg::IGG` : The implicit global grid object.
+    - `xci::NTuple{N, AbstractVector{Int64}}` : The coordinates of the cell centers.
+    - `data_c::NamedTuple` : The data to be saved at the cell centers.
+    - `t::Union{Nothing, Number} = nothing` : The time value to be saved (if any).
+"""
+function save_pvtk_center(
+        fname::String,
+        igg::IGG,
+        xi::NTuple{N, AbstractVector{Int64}},
+        data::NamedTuple;
+        t::Union{Nothing, Number} = nothing
+    ) where {N}
+
+    return _save_pvtk(fname, igg, xi, data, :center, t)
+end
+
+"""
+    save_pvtk_vertex(fname, igg, xvi, data_v; t = nothing)
+
+Saves data in the Parallel VTK (PVTK) file format.
+
+# Arguments
+    - `fname::String` : The name of the output PVTK file. Data stores on the cell vertex will be saved in `fname_vertex.pvtk`.
+    - `igg::IGG` : The implicit global grid object.
+    - `xvi::NTuple{N, AbstractVector{Int64}}` : The coordinates of the cell vertices.
+    - `data_v::NamedTuple` : The data to be saved at the cell vertices.
+    - `t::Union{Nothing, Number} = nothing` : The time value to be saved (if any).
+"""
+function save_pvtk_vertex(
+        fname::String,
+        igg::IGG,
+        xi::NTuple{N, AbstractVector{Int64}},
+        data::NamedTuple;
+        t::Union{Nothing, Number} = nothing
+    ) where {N}
+
+    return _save_pvtk(fname, igg, xi, data, :vertex, t)
+end
+
+function _save_pvtk(fname::String, igg::IGG, xi::NTuple{N, AbstractVector{Int64}}, data::NamedTuple, location, t::Union{Nothing, Number}) where {N}
+
+    (; me, dims) = igg
 
     # Unpack data names and arrays
-    data_names_c = string.(keys(data_c))
-    data_arrays_c = values(data_c)
+    data_names = string.(keys(data))
+    data_arrays = values(data)
 
     # Compute extents for each process
-    extents = ImplicitGlobalGrid.metagrid(Tuple(dims), extents_g, 1)
+    extents = ImplicitGlobalGrid.metagrid(Tuple(dims), extents_g, 2 + (location == :vertex))
+    part = me + 1
 
-    # Save pvtk files for each part
-    for part = 1:nprocs
-        is, js, ks = extents[part]  # Local indices
-        xs, ys = global_xci[1][is], global_xci[2][js]  # Local grid
-
-        # # Initialize velocity_field for the local part
-        # velocity_field = rand(N, length(is), length(js))
-        # for (i, v) in enumerate(velocity)
-        #     velocity_field[i, :, :] = v[is, js]
-        # end
-
-        pvtk_grid(
-            fname, xs, ys, ks;  # Use user-defined filename/path
-            part = part, extents = extents,
-        ) do pvtk
-            # Add data to the pvtk file
-            for (name_i, array_i) in zip(data_names_c, data_arrays_c)
-                pvtk[name_i] = array_i[is, js]
-            end
-            # pvtk["Velocity"] = velocity_field
-            isnothing(t) || (pvtk["TimeValue"] = t)
+    xs, ys = xi[1], xi[2]  # Local grid coordinates
+    ks = N == 3 ? xi[3] : 1:1
+    pvtk_grid(
+        fname, xs, ys, ks;  # Use user-defined filename/path
+        part = part, extents = extents, ghost_level = 1
+    ) do pvtk
+        # Add data to the pvtk file
+        for (name_i, array_i) in zip(data_names, data_arrays)
+            pvtk[name_i] = array_i
         end
+        isnothing(t) || (pvtk["TimeValue"] = t)
     end
 
     return nothing
 end
-
-# function save_vtk(fname::String, global_xci::NTuple{3, LinRange{T, Int64}}, data_c::NamedTuple, velocity::NTuple{N, T}; t::Number = nothing, igg::IGG) where {N, T}
-
-#     dims, nprocs = igg.dims, igg.nprocs
-#     update_halo!(data_c)
-
-#     # Unpack data names and arrays
-#     data_names_c = string.(keys(data_c))
-#     data_arrays_c = values(data_c)
-
-#     # Compute extents for each process
-#     extents = metagrid(Tuple(dims), extents_g, 1)
-
-#     # Save pvtk files for each part
-#     for part = 1:nprocs
-#         is, js, ks = extents[part]  # Local indices
-#         xs, ys, zs = global_xci[1][is], global_xci[2][js], global_xci[3][ks]  # Local grid
-
-#         # Initialize velocity_field for the local part
-#         velocity_field = rand(N, length(is), length(js), length(ks))
-#         for (i, v) in enumerate(velocity)
-#             velocity_field[i, :, :, :] = v[is, js, ks]
-#         end
-
-#         pvtk_grid(
-#             fname, xs, ys, zs;  # Use user-defined filename/path
-#             part = part, extents = extents,
-#         ) do pvtk
-#             # Add data to the pvtk file
-#             for (name_i, array_i) in zip(data_names_c, data_arrays_c)
-#                 pvtk[name_i] = array_i[is, js, ks]
-#             end
-#             pvtk["Velocity"] = velocity_field
-#             isnothing(t) || (pvtk["TimeValue"] = t)
-#         end
-#     end
-
-#     return nothing
-# end
 
 """
     save_marker_chain(fname::String, chain::MarkerChain)

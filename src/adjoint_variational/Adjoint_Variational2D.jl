@@ -182,7 +182,7 @@ while iter ≤ iterMax
 
     iter += 1
 
-    if iter % nout == 0 && iter > 1
+    if (iter % nout == 0 && iter > 1)  || (iter == 2)
         errs = (
             norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
                 length(stokes.R.Rx),
@@ -228,8 +228,10 @@ end
 
     if  isdefined(Main,:CUDA)
         mode = Enzyme.Reverse
+        #mode = Enzyme.Forward
     else
         mode = Enzyme.set_runtime_activity(Enzyme.Reverse,true)
+        #mode = Enzyme.set_runtime_activity(Enzyme.Forward,true)
     end
 
     err_evo1 = Float64[]
@@ -253,8 +255,10 @@ end
     nout    = 1e3
     λtemp   = deepcopy(λ)
     λvtemp  = deepcopy(λv)
-    #λtemp  .= 0.0  
-    #λvtemp .= 0.0 
+    λtemp  .= 0.0  
+    λvtemp .= 0.0 
+         λ .= 0.0
+        λv .= 0.0
     relλtemp = deepcopy(relλ)
 
     print("###################\n")
@@ -349,12 +353,13 @@ end
                     Const(nothing)
                     )
 
+
         #    # apply free slip or no slip boundary conditions for adjoint solve
             if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
             if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
             if ((flow_bcs.free_slip[3]) && (xvi[2][end] == origin[2] + ly)) stokesAD.τ.xy[:,end] .= 0.0 end
             if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
-#=
+
             if ana
 
             @parallel (@idx ni .+ 1) dτdV_viscoelastic(
@@ -383,7 +388,7 @@ end
             )
 
             else
-=#
+
             # stress calculation
             stokesAD.dτ.xx   .= stokes.τ.xx
             stokesAD.dτ.yy   .= stokes.τ.yy
@@ -393,7 +398,16 @@ end
             stokesAD.P0      .= stokes.P
             #λtemp            .= λ
             #λvtemp           .= λv
-            relλtemp         = 1.0#copy(relλ)
+            #print("λ = ", extrema(λ), " ")
+            #print("λv = ", extrema(λv), " ")
+            #relλtemp         = copy(relλ) #1.0
+
+            #θ_dτ = 0.0
+            #stokesAD.dτ.xx   .= 0.0
+            #stokesAD.dτ.yy   .= 0.0
+            #stokesAD.dτ.xy_c .= 0.0
+            #stokesAD.dτ.xy   .= 0.0
+            stokesAD.P0      .= stokes.P
             @parallel (@idx ni .+ 1) configcall=update_stresses_center_vertexAD!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -430,8 +444,8 @@ end
                     Const(θ),
                     Const(stokesAD.P0),
                     Const(stokes.viscosity.η),
-                    Const(λtemp),
-                    Const(λvtemp),
+                    DuplicatedNoNeed(λ,λtemp),#Const(λtemp),
+                    DuplicatedNoNeed(λv,λvtemp),#Const(λvtemp),
                     Const(stokes.τ.II),
                     Const(stokes.viscosity.η_vep),
                     Const(relλtemp),
@@ -442,8 +456,8 @@ end
                     Const(phase_ratios.vertex),
                     Const(ϕ)
                 )
-#            end
-        
+            end
+
             @parallel (@idx ni) update_PAD!(
                 stokesAD.PA,
                 stokesAD.P,
@@ -508,7 +522,7 @@ end
 
             iter += 1
 
-            if iter % nout == 0 && iter > 1
+            if (iter % nout == 0 && iter > 1) || (iter == 2)
 
                 errs = (
                     norm_mpi(@views @velocity(stokesAD)[1][2:(end - 1), 2:(end - 1)]) /
@@ -518,7 +532,9 @@ end
                     norm_mpi(stokesAD.P) / length(stokesAD.P),
                 )
                 #global normVx,normVy,normP,it
-                push!(norm_Rx,sqrt(sum((abs.(@velocity(stokesAD)[1]).^2)))); push!(norm_Ry,sqrt(sum((abs.(@velocity(stokesAD)[2]).^2)))); push!(norm_∇V,sum((abs.(stokesAD.P))))
+                #push!(norm_Rx,sqrt(sum((abs.(@velocity(stokesAD)[1]).^2)))); 
+                #push!(norm_Ry,sqrt(sum((abs.(@velocity(stokesAD)[2]).^2))));
+                #push!(norm_∇V,sum((abs.(stokesAD.P))))
 
                 push!(norm_Rx, errs[1])
                 push!(norm_Ry, errs[2])
@@ -526,22 +542,37 @@ end
                 err = maximum_mpi(errs)
                 push!(err_evo1, err)
                 push!(err_evo2, iter)
-                err_it1 = maximum([norm_Rx[1],norm_Ry[1],norm_∇V[1]]) 
+                err_it1 = maximum_mpi([norm_Rx[1],norm_Ry[1],norm_∇V[1]]) 
+                rel_err = err / err_it1
 
-                if igg.me == 0 && ((err/err_it1) ≤ ϵ_rel || err ≤ ϵ_abs)
+                errs = (
+                    norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                        length(stokes.R.Rx),
+                    norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                        length(stokes.R.Ry),
+                    norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) /
+                        length(@views stokes.R.RP[ϕ.center .> 0]),
+                )
+
+                if igg.me == 0 #&& ((verbose && err > ϵ_rel) || iter == iterMax)
                     @printf(
-                        "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
+                        "Total steps = %d, abs_err = %1.3e , rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                         iter,
-                        err/err_it1,
+                        err,
+                        rel_err,
                         norm_Rx[end],
                         norm_Ry[end],
                         norm_∇V[end]
                     )
                 end
                 isnan(err) && error("NaN(s)")
-            end
 
+        
+            if igg.me == 0 &&((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
+                println("Pseudo-transient iterations converged in $iter iterations")
+            end
         end
+    end
 
     ########################
     ########################
@@ -550,12 +581,6 @@ end
     print("#############################\n")
     print("## Calculate Sensitivities ##\n")
     print("#############################\n")
-
-    if  isdefined(Main,:CUDA)
-        mode = Enzyme.Reverse
-    else
-        mode = Enzyme.set_runtime_activity(Enzyme.Reverse,true)
-    end
 
     stokesAD.τ.xx   .= 0.0
     stokesAD.τ.yy   .= 0.0
@@ -569,13 +594,34 @@ end
     G  = @zeros(size(stokesAD.G))
     fr = @zeros(size(stokesAD.fr))
     C  = @zeros(size(stokesAD.C))
+    K  = @zeros(size(stokesAD.C))
     Gv = @zeros(size(stokesAD.G).+1)
     frv= @zeros(size(stokesAD.fr).+1)
     Cv = @zeros(size(stokesAD.C).+1)
+    Kv = @zeros(size(stokesAD.C).+1)
 
     Gvb  = @zeros(size(stokesAD.G).+1)
     frvb = @zeros(size(stokesAD.fr).+1)
     Cvb  = @zeros(size(stokesAD.C).+1)
+    Kvb  = @zeros(size(stokesAD.C).+1)
+
+    @parallel (@idx ni.+1) assemble_parameter_matrices!(
+        stokes.EII_pl,
+        G,
+        fr,
+        C,
+        K,
+        Gv,
+        frv,
+        Cv,
+        Kv,
+        rheology,
+        phase_ratios.center,
+        phase_ratios.vertex
+    )
+    
+    Sens  = (G, stokesAD.fr, C, K, Gv, frv, Cv, Kv);
+    SensA = (stokesAD.G, fr, stokesAD.C, stokesAD.K, Gvb, frvb, Cvb, Kvb);
 
     @views stokesAD.R.Rx .= -stokesAD.VA.Vx[2:end-1,2:end-1]
     @views stokesAD.R.Ry .= -stokesAD.VA.Vy[2:end-1,2:end-1]
@@ -614,6 +660,41 @@ end
             Const(dt * free_surface)
         )
 
+        @views stokesAD.R.RP .= -stokesAD.PA
+
+        @parallel (@idx ni) configcall=compute_P_kernelADSens!(
+            θ,
+            stokes.P0,
+            stokes.R.RP,
+            stokes.∇V,
+            ητ,
+            rheology,
+            phase_ratios.center,
+            dt,
+            r,
+            θ_dτ,
+            Sens,
+            nothing,
+            nothing
+            ) AD.autodiff_deferred!(
+                mode,
+                Const(compute_P_kernelADSens!),
+                Const{Nothing},
+                DuplicatedNoNeed(θ,stokesAD.P),
+                Const(stokes.P0),
+                DuplicatedNoNeed(stokes.R.RP,stokesAD.R.RP),
+                Const(stokes.∇V),
+                Const(ητ),
+                Const(rheology),
+                Const(phase_ratios.center),
+                Const(dt),
+                Const(r),
+                Const(θ_dτ),
+                DuplicatedNoNeed(Sens,SensA),
+                Const(nothing),
+                Const(nothing)
+                )
+
         
     if ana
     @parallel (@idx ni.+1) dτdη_viscoelastic(        
@@ -646,30 +727,11 @@ end
   
     else
 
-    @parallel (@idx ni.+1) assemble_parameter_matrices!(
-        stokes.EII_pl,
-        G,
-        fr,
-        C,
-        Gv,
-        frv,
-        Cv,
-        rheology,
-        phase_ratios.center,
-        phase_ratios.vertex
-    )
-    
-        Sens  = (G, fr, C, Gv, frv, Cv);
-        SensA = (stokesAD.G, stokesAD.fr, stokesAD.C, Gvb, frvb, Cvb);
-
-
     θ_dτ = 0.0
     stokesAD.dτ.xx   .= 0.0
     stokesAD.dτ.yy   .= 0.0
     stokesAD.dτ.xy_c .= 0.0
     stokesAD.dτ.xy   .= 0.0
-
-
     stokesAD.P0      .= stokes.P
     #λtemp            .= λ
     #λvtemp           .= λv
@@ -802,6 +864,7 @@ function _adjoint_solve_VSDot!(
         dens,
         Gdot,
         frdot,
+        Kdot,
         igg::IGG;
         air_phase::Integer = 0,
         viscosity_cutoff = (-Inf, Inf),
@@ -862,6 +925,7 @@ end
 
 # compute buoyancy forces and viscosity
 compute_ρg!(ρg[end], phase_ratios, rheology, args)
+ρg[end] .= ρg[end] + (dM*dp*dens)
 compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
 stokes.viscosity.η .= stokes.viscosity.η + (dM*dp*visc)
 displacement2velocity!(stokes, dt, flow_bcs)
@@ -875,7 +939,7 @@ while iter ≤ iterMax
 
         @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
 
-        compute_P!(
+        compute_PDot!(
             θ,
             stokes.P0,
             stokes.R.RP,
@@ -887,6 +951,9 @@ while iter ≤ iterMax
             dt,
             r,
             θ_dτ,
+            Kdot,
+            dM,
+            dp,
             args,
         )
 
@@ -932,7 +999,8 @@ while iter ≤ iterMax
             dM,
             dp,
             Gdot,
-            frdot
+            frdot,
+            Kdot
         )
         update_halo!(stokes.τ.xy)
 

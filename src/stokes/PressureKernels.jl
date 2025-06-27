@@ -39,6 +39,79 @@ Compute the pressure field `P` and the residual `RP` for the compressible case. 
 - `rheology`: material parameters
 - `phase_ratio`: phase field
 """
+
+function compute_PDot!(
+    P,
+    P0,
+    RP,
+    ∇V,
+    Q, # volumetric source/sink term
+    η,
+    rheology::NTuple{N, MaterialParams},
+    phase_ratio,
+    dt,
+    r,
+    θ_dτ,
+    Kdot,
+    dM,
+    dp,
+    kwargs::NamedTuple,
+) where {N}
+return compute_PDot!(P, P0, RP, ∇V, Q, η, rheology, phase_ratio, dt, r, θ_dτ,Kdot,dM,dp; kwargs...)
+end
+
+function compute_PDot!(
+    P,
+    P0,
+    RP,
+    ∇V,
+    Q, # volumetric source/sink term
+    η,
+    rheology::NTuple{N, MaterialParams},
+    phase_ratio,
+    dt,
+    r,
+    θ_dτ,
+    Kdot,
+    dM,
+    dp;
+    ΔTc = nothing,
+    melt_fraction = nothing,
+    kwargs...,
+) where {N}
+ni = size(P)
+@parallel (@idx ni) compute_P_kernelDot!(
+    P, P0, RP, ∇V, Q, η, rheology, phase_ratio.center, dt, r, θ_dτ, Kdot,      dM, dp, ΔTc, melt_fraction
+)
+return nothing
+end
+
+
+@parallel_indices (I...) function compute_P_kernelDot!(
+    P,
+    P0,
+    RP,
+    ∇V,
+    Q, # volumetric source/sink term
+    η,
+    rheology::NTuple{N, MaterialParams},
+    phase_ratio::C,
+    dt,
+    r,
+    θ_dτ,
+    Kdot,
+    dM,
+    dp,
+    ::Nothing,
+    ::Nothing,
+) where {N, C <: JustRelax.CellArray}
+dMij  = dM[I...]
+K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...])) + (dMij*dp*Kdot)
+RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
+return nothing
+end
+
+
 function compute_P!(
         P,
         P0,

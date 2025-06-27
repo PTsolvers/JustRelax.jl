@@ -14,23 +14,23 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Physical properties using GeoParams ----------------
-    εbg     = 1.0           # background strain-rate
-    gr      = 0.0
+    εbg     = 0.0           # background strain-rate
+    gr      = 1.0
     η0      = 1.0           # viscosity
     G0      = 1.0           # shear modulus
     Gi      = 0.5           # shear modulus
-    ν0      = 0.5          # Poisson ratio
+    ν0      = 0.45          # Poisson ratio
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     ana     = false
     # viscous and elastic blocks for reference solve
     visc_bg    = LinearViscous(; η=1.0)
-    visc_block = LinearViscous(; η=1.0)
+    visc_block = LinearViscous(; η=10.0)
     el         = ConstantElasticity(G=G0, ν=ν0)
     el_block   = ConstantElasticity(G=Gi, ν=ν0)
 
     # viscous and elastic blocks for parameter pertubation
-    visc_bg_p    = LinearViscous(; η=1.0+dp)
-    visc_block_p = LinearViscous(; η=1.0+dp)
+    visc_bg_p    = LinearViscous(; η=1.0)
+    visc_block_p = LinearViscous(; η=10.0)
     el_p         = ConstantElasticity(G=G0, ν=ν0)
     el_block_p   = ConstantElasticity(G=Gi, ν=ν0)
 
@@ -66,7 +66,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
         # High density phase
         SetMaterialParams(;
             Phase             = 2,
-            Density           = ConstantDensity(; ρ = 1.5),
+            Density           = ConstantDensity(; ρ = 10.0),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_block,)),
             CompositeRheology = CompositeRheology((visc_block,el_block)),
@@ -75,7 +75,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
         # Low density phase
         SetMaterialParams(;
             Phase             = 3,
-            Density           = ConstantDensity(; ρ = 1.0),
+            Density           = ConstantDensity(; ρ = 1.0+dp),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_bg_p,)),
             CompositeRheology = CompositeRheology((visc_bg_p,el_p)),
@@ -85,7 +85,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
         # High density phase
         SetMaterialParams(;
             Phase             = 4,
-            Density           = ConstantDensity(; ρ = 1.5),
+            Density           = ConstantDensity(; ρ = 10.0+dp),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_block_p,)),
             CompositeRheology = CompositeRheology((visc_block_p,el_block_p)),
@@ -110,7 +110,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
     #pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-3,  CFL = 0.95 / √2.1)
-    pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-4, ϵ_abs=1e-12,  CFL = 0.95 / √2.1)
+    pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-12, ϵ_abs=1e-12,  CFL = 0.95 / √2.1)
 
     # Adjoint 
     stokesAD = StokesArraysAdjoint(backend, ni)
@@ -267,10 +267,11 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     stokesDot       = deepcopy(stokes)
     ρgDot           = deepcopy(ρg)
     phase_ratiosDot = deepcopy(phase_ratios)
-    visc  = true
-    dens  = false
+    visc  = false
+    dens  = true
     Gdot  = false
     frdot = false
+    Kdot  = false
     #stokesDot.viscosity.η .= stokesDot.viscosity.η + dM*dp
     # Stokes solver ----------------
     Dot = adjoint_solve_VariationalStokesDot!(
@@ -297,6 +298,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
         dens,
         Gdot,
         frdot,
+        Kdot,
         igg;
         kwargs = (
             grid,
@@ -398,7 +400,7 @@ end
 #### Init Run ####
 f         = 1      ; nx     = 16*f; ny     = 16*f
 dp        = 1e-6
-run_param = true
+run_param = false
 run_ref   = true
 dM        = rand(Float64,nx,ny)
 dM      ./= norm(dM)   # normalize M matrix
@@ -411,9 +413,11 @@ else
 end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM);
 #cost .= rand(nx,ny)
-plot_sens = stokesAD.η  #which sensitivity to plot
+plot_sens = stokesAD.ρ  #which sensitivity to plot
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
+mach_ϵ = eps()
 
-errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,20)   # plot convergence test # plot convergence test
+errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,20,mach_ϵ
+)   # plot convergence test # plot convergence test
 

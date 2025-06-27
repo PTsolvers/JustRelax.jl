@@ -299,9 +299,11 @@ end
     Gc,
     ϕc,
     Cc,
+    Kc,
     Gv,
     ϕv,
     Cv,
+    Kv,
     rheology, 
     phase_center,
     phase_vertex,
@@ -314,6 +316,7 @@ end
     EIIv_ij  = av_clamped(EII, Ic...)
     phase    = @inbounds phase_vertex[I...]
     Gv[I...] = fn_ratio(get_shear_modulus, rheology, phase)
+    Kv[I...] = fn_ratio(get_bulk_modulus, rheology, phase)
 
     is_pl, Cvi, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
     #ϕv[I...] = sinϕv #asind(sinϕv)
@@ -322,6 +325,7 @@ end
     if all(I .≤ ni)
         phase = @inbounds phase_center[I...]
         Gc[I...] = fn_ratio(get_shear_modulus, rheology, phase)
+        Kc[I...] = fn_ratio(get_bulk_modulus, rheology, phase)
 
         is_pl, Cci, sinϕc, cosϕc, sinψc, η_regc = plastic_params_phase(rheology, EII[I...], phase)
         ϕc[I...] = asind(sinϕc) # sinϕc

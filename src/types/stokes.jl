@@ -191,6 +191,7 @@ struct StokesArraysAdjoint{A,B,C,D,E,F,T}
     G::T
     fr::T
     C::T
+    K::T
 end
 
 function StokesArraysAdjoint(::Type{CPUBackend}, ni::Vararg{Integer,N}) where {N}

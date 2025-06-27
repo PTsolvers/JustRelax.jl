@@ -119,7 +119,7 @@ export adjoint_2D!
 include("adjoint/AdjointSensitivities.jl")
 export calc_sensitivity_2D!
 include("adjoint/Adjoint_PressureKernel.jl")
-export compute_P_kernelAD!, update_PAD!, ana_P!
+export compute_P_kernelAD!, compute_P_kernelADSens!, update_PAD!, ana_P!
 include("adjoint/AdjointStressKernels.jl")
 export update_stresses_center_vertex_psAD! 
 export update_stresses_center_vertex_psADSens! 

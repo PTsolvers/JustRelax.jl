@@ -208,7 +208,7 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     return sol_FD, AD
 end
 
-function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
+function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter,mach_ϵ)
 
     #### Dot product test ####
     dirFD  = (refcostdot-refcost)/dp
@@ -217,7 +217,7 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
 
 
     #hockeystick test
-    epsilons  = collect(LinRange(-2.0, 12.0, iter))
+    epsilons  = collect(LinRange(-4.0, 12.0, iter))
     epsilons  = 10.0 .^ -epsilons
     FDs       = zeros(Float64,length(epsilons))
     run_param = false
@@ -227,11 +227,15 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
 
     j=1
     for (j,i) in enumerate(epsilons)
+        print(error[j],"##########################\n")
+        print(error[j],"######## α = $i ########\n")
+        print(error[j],"##########################\n")
         dp=i
         refcostNot, cost, dpNot, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref, dp, dM);
         FDs[j]     = (refcostdot-refcost)/dp
-        #error[j]   = abs((dirAD-FDs[j]))
-        error[j]   = abs(((FDs[j]/dirAD)-1.0))
+
+        #error[j]   = abs(((FDs[j]/dirAD)-1.0))   # wie im ice paper
+        error[j]   = abs(refcostdot-refcost-(dp*dirAD))  # wie im coltice paper
         print(error[j],"##########################\n")
         print(j,"\n")
         print(error[j],"\n")
@@ -241,15 +245,21 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter)
 
     end
 
-    eps = epsilons[1:round(Int,end/2)]
-    fig = Figure(size = (1000, 1000));
-    ax1 = Axis(fig[1,1], aspect = 1, title = "Dot Product Test", titlesize=34,xlabel = "ϵ",ylabel="error")
-    l1 = lines!(ax1, log10.(epsilons), log10.(error), color = :blue, linewidth = 2, label = "Adjoint")
-    l2 = lines!(ax1, log10.(epsilons), log10.(errorFD), color = :red, linewidth = 2, label = "FD")
-    lines!(ax1,log10.(eps),log10.(eps), color = :black, linewidth = 2, linestyle = :dot, label = "convergence order")
+
+    eps = epsilons[1:round(Int,end/2)+round(Int,end/8)]
+    machs = zeros(size(epsilons))
+    machs .= mach_ϵ
+    fig = Figure(size = (1000, 1000),fontsize=28);
+    ax1 = Axis(fig[1,1], aspect = 1, title = "Gradient Test", titlesize=34,xlabel = "α",ylabel="error")
+    l1 = lines!(ax1, log10.(epsilons), log10.(error), color = :blue, linewidth = 2, label = "Adjoint Sensitivities")
+    #l2 = lines!(ax1, log10.(epsilons), log10.(errorFD), color = :red, linewidth = 2, label = "FD")
+    lines!(ax1,log10.(epsilons),log10.(epsilons.^2).-6, color = :black, linewidth = 4, linestyle = :dot, label = "convergence order")
+    #lines!(ax1,log10.(epsilons),log10.(machs), color = :orange, linewidth = 4, #linestyle = :dot, label = "machine precision")
     #l3 = lines!(ax1, log10.(epsilons), log10.(FDs), color = :green, linewidth = 2, linestyle = :dot, label = "directional deriv.")
     #l4 = lines!(ax1, log10.(epsilons), log10.(AD), color = :black, linewidth = 2, linestyle = :dot, label = "Adjoint")
-    axislegend(position = :rt)
+    axislegend(position = :lt)
+    ylims!(ax1, -17.1, -10.0)
+
     fig
     save(joinpath(figdir, "HockeyStick.png"), fig)
     return error, FDs

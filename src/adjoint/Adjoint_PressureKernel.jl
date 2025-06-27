@@ -47,6 +47,27 @@ end
     return nothing
 end
 
+@parallel_indices (I...) function compute_P_kernelADSens!(
+    P,
+    P0,
+    RP,
+    ∇V,
+    η,
+    rheology::NTuple{N,MaterialParams},
+    phase_ratio::C,
+    dt,
+    r,
+    θ_dτ,
+    Sens,
+    ::Nothing,
+    ::Nothing,
+) where {N,C<:JustRelax.CellArray}
+    #K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
+    K = Sens[4][I...]
+    RP[I...], P[I...] = _compute_PAD!(P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ)
+    return nothing
+end
+
 
 function _compute_PAD!(P, P0, ∇V, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)

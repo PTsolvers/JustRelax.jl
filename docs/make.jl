@@ -104,8 +104,6 @@ makedocs(;
             "Subduction 2D" => Any[
                 "Model setup" => "man/subduction2D/setup.md",
                 "Rheology" => "man/subduction2D/rheology.md",
-                "Model setup" => "man/subduction2D/setup.md",
-                "Rheology" => "man/subduction2D/rheology.md",
                 "Setting up the model" => "man/subduction2D/subduction2D.md",
             ],
         ],

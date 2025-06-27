@@ -184,7 +184,7 @@ function _solve!(
 
     # errors
     err_it1 = 1.0
-    1.0
+    err = 1.0
     iter = 0
     err_evo1 = Float64[]
     err_evo2 = Float64[]
@@ -321,7 +321,7 @@ function _solve!(
 
     # errors
     err_it1 = 1.0
-    1.0
+    err = 1.0
     iter = 0
     err_evo1 = Float64[]
     err_evo2 = Float64[]
@@ -518,7 +518,7 @@ function _solve!(
 
     # errors
     err_it1 = 1.0
-    1.0
+    err = 1.0
     iter = 0
     err_evo1 = Float64[]
     err_evo2 = Float64[]

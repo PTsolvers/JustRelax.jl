@@ -346,10 +346,10 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             t_Myr = round((t / (1.0e6 * 3600 * 24 * 365.25)), digits = 2)
 
             # Make Makie figure
-            ar  = 3e3 / (660+15)
+            ar = 3.0e3 / (660 + 15)
             fig = Figure(size = (1300, 900))
             ax1 = Axis(fig[1, 1], yticklabelsize = 18, xticklabelsize = 18, xlabel = L"x [km]", ylabel = L"z [km]", aspect = ar, title = L"t = %$(t_Myr) Myrs", titlesize = 24)
-            ax2 = Axis(fig[2, 1], yticklabelsize = 18, xticklabelsize = 18, xlabel = L"x [km]", ylabel = L"z [km]", aspect = ar )
+            ax2 = Axis(fig[2, 1], yticklabelsize = 18, xticklabelsize = 18, xlabel = L"x [km]", ylabel = L"z [km]", aspect = ar)
             # Plot temperature
             h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :batlow)
             h2 = heatmap!(ax2, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.viscosity.η_vep)), colormap = :batlow)
@@ -381,5 +381,3 @@ else
 end
 
 main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
-
-

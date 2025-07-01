@@ -181,7 +181,8 @@ temperature2center!(thermal)
 ```
 
 ## Instantiate Stokes arrays
-Stokes arrays object
+Instantiate the Stokes object with the `PTStokesCoeffs` defining the necessary pseudo transient variables including the relative  $\epsilon_{rel}$ and the absolute tolerance $\epsilon_{abs}$  
+
 ```julia
 stokes    = StokesArrays(backend, ni)
 pt_stokes = PTStokesCoeffs(li, di; ϵ_rel=1e-4, Re=3π, r=1e0, CFL = 0.98 / √3)

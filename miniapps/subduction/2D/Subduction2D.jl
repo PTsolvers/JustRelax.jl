@@ -210,8 +210,6 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             )
         end
 
-        error()
-
         # print some stuff
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")

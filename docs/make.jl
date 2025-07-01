@@ -104,9 +104,11 @@ makedocs(;
             "Subduction 2D" => Any[
                 "Model setup" => "man/subduction2D/setup.md",
                 "Rheology" => "man/subduction2D/rheology.md",
-                "Model setup" => "man/subduction2D/setup.md",
-                "Rheology" => "man/subduction2D/rheology.md",
                 "Setting up the model" => "man/subduction2D/subduction2D.md",
+            ],
+            "Plume 3D" => Any[
+                "Rheology" => "man/plume3D/rheology.md",
+                "Setting up the model" => "man/plume3D/plume3D.md",
             ],
         ],
         "List of functions" => "man/listfunctions.md",

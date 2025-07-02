@@ -149,9 +149,9 @@ The APT equations are solved by discretizing the pseudo-time derivatives, either
 
 ### Advection
 
-The advection equation in a decoupled manner using a Particle-in-Cell (PiC) method to advect the temperature, composition, or any other information carried by the particles. This method is particularly well-suited for this task because it can accurately handle the advection of these fields @dominguez2024, and it is extensively used to simulate global and regional scale geodynamic processes, e.g. StaggYY [@stagyy], LaMEM [@lamem], I3ELVIS [@i3elvis], ASPECT [@aspect], amongst others. This is implemented in the publically available [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) package, where different time integrators (Euler, and 2 and 4 steps Runge-Kutta) and velocity interpolation schemes (bi/tri-linear, modified quadratic spline, and LinP) are available.
+The advection equation in a decoupled manner using a Particle-in-Cell (PiC) method to advect the temperature, composition, or any other information carried by the particles. This method is particularly well-suited for this task because it can accurately handle the advection of these fields @dominguez2024, and it is extensively used to simulate global and regional scale geodynamic processes, e.g. StaggYY [@stagyy], LaMEM [@lamem], I3ELVIS [@i3elvis], ASPECT [@aspect], amongst others. This is implemented in the publically available [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) package, where different time integrators and velocity interpolation schemes are available.
 
-### Parallelization and scalability
+### Parallelization
 
 The APT method JustRelax.jl is parallelised in a hybrid shared-distributed memory architecture manner, i.e. multithreading combined with MPI for CPUs, and GPU-aware MPI for multi-GPU architectures. Parallelisation is implemented with two Julia packages:
 
@@ -165,7 +165,37 @@ JustRelax.jl features:
 
 - **High-performance matrix-free solver**: The package implements a matrix-free Accelerated Pseudo-Transient (APT) method for Stokes and heat diffusion problems that achieves excellent convergence rates even for complex non-linear problems. The APT method eliminates the need for computationally expensive linear algebra operations and direct solvers, significantly improving computational efficiency for large-scale simulations. The embarrassingly parallel nature of the APT method makes it an excellent solver to exploit hardware accelerators such as GPUs.
 
+<figure>
+    <img src="figs/weak_scaling_JR.png"
+         alt="weak scaling">
+    <figcaption>GPU weak scaling performance of JustRelax.jl in the two- and three-dimensional backends</figcaption>
+</figure>
+
+
+<!-- ![](figs/weak_scaling_JR.png) -->
+
+*Figure 1: Weak scaling performance of JustRelax.jl on different hardware architectures, demonstrating efficient parallelization and scalability for large-scale geodynamic simulations.*
+
 - **Portability**: JustRelax.jl is designed to run efficiently on multiple hardware architectures (multi-XPU), including CPUs, GPUs (CUDA and AMD), and on multi-node clusters.  This portability is achieved through Julia's advanced meta-programming capabilities, which generate the code for the specific target hardware during compile or parse time, allowing the same code to run across different computing platforms without modifications. This abstraction of the hardware backend is implemented in the ParallelStencil.jl package.
+
+```julia
+const isCUDA = true # or `false` to use the CPU backend
+# conditional loading of CUDA.jl
+@static if isCUDA
+    using CUDA
+end
+# load JustRelax.jl and its 2D backend
+using JustRelax, JustRelax.JustRelax2D
+# define the `backend` variable that is passed to instantiate JustRelax.jl 
+# objects on the correct hardware backend.
+# Options:
+#     CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if isCUDA 
+    CUDABackend       
+else
+    JustRelax.CPUBackend
+end
+```
 
 - **Advanced non-linear rheology**: The package supports a comprehensive suite of geologically relevant rheological models, including visco-elastic, visco-elasto-plastic, and non-Newtonian temperature- and pressure-dependent constitutive laws. This allows for realistic simulation of complex Earth materials that are essential for accurately modeling geological processes at a wide range of scales. All the materaial physics calculation that are local to a single grid point are computed in the external package [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl).
 
@@ -175,13 +205,21 @@ JustRelax.jl features:
 
 - **Modular architecture**: JustRelax.jl is designed with a highly modular structure that separates physics, numerics, and visualization components. This architecture allows users to extend the code with custom rheological models, boundary conditions, or numerical schemes without having to modify the core solver infrastructure, facilitating both research flexibility and code maintenance. The comprehensive test suite ensures stability when extending functionality.
 
+<!-- ![](figs/dependencies.png) -->
+
+<figure>
+    <img src="figs/dependencies.png"
+         alt="dependencies">
+    <figcaption> Main Julia dependencies of JustRelax.jl. </figcaption>
+</figure>
+
 <!-- - **Distributed I/O support**: The package implements efficient parallel input/output operations for handling large datasets common in 3D geodynamic simulations. This includes parallel writing and reading of solution fields, checkpoint/restart capabilities, and compatibility with standard visualization formats (VTK) for scientific data analysis and post-processing. -->
 
 - **Interactive development environment**: As a Julia package, JustRelax.jl takes full advantage of the language's dynamic nature, allowing for interactive sessions, real-time debugging, and rapid prototyping of new features. This significantly reduces the development cycle compared to traditional compiled languages commonly used in geodynamic modeling, while maintaining competitive performance through just-in-time compilation and type stability.
 
 # Examples 
 
-And extensive set of benchmarks and model examples are stored in the repositoty of JustRelax.jl. More complex examples such as [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/subduction2D)  or the raise of a 3D plume are described in the package documentation.
+And extensive set of benchmarks and model examples are stored in the repositoty of JustRelax.jl. More complex examples such as [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/subduction2D)  or the raise of a [3D plume](https://ptsolvers.github.io/JustRelax.jl/dev/man/plume3D/plume3D) are described in the package documentation.
 
 
 # Acknowledgments

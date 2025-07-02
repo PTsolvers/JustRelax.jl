@@ -145,7 +145,7 @@ $$
 \end{align}
 $$
 
-The APT equations are solved by discretizing the pseudo-time derivatives, either explicitly or implicitly, and iterating until the residual form of the equations is below a given tolerance. This means that the wave component of the equation has completely damped out and the pseudo-time derivative is (approximately) zero. We chose to discretize the APT equations implicitly, as this yields better convergence rates. 
+The APT equations are solved by discretizing the pseudo-time derivatives, either explicitly or implicitly, and iterating until the residual form of the equations is below a given tolerance. This means that the wave component of the equation has completely damped out and the pseudo-time derivative is (approximately) zero. In JustRelax.jl, the APT equations are discretized implicitly, as this yields better convergence rates.
 
 ### Advection
 
@@ -157,7 +157,7 @@ The APT method JustRelax.jl is parallelised in a hybrid shared-distributed memor
 
 - [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) handles the backend abstractation, allowing the user to write (shared memory) parallel kernels that seamlessly run on CPUs and GPUs (currently supported: CUDA, AMDGPU, and Mac M-series chips). It automatically generates Julia code based on Base.Threads.jl (Julia's native multi-threading library) and the third-party GPU libraries CUDA.jl (NVidia GPUs), AMDGPU.jl (AMD GPUs), and Metal.jl (Mac M-series chips) depending on the device backend of choice of the end-user.
 
-- [ImplicitGlobalGrid](https://github.com/eth-cscs/ImplicitGlobalGrid.jl) handles MPI domain decomposition and communication, distributing the computational domain across multiple (CPU/GPU) nodes. MPI communication is handled at the lowest level by MPI.jl, the Julia wrapper of the Message Passing Interface (MPI) standard.
+- [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl) handles MPI domain decomposition and communication, distributing the computational domain across multiple (CPU/GPU) nodes. MPI communication is handled at the lowest level by MPI.jl, the Julia wrapper of the Message Passing Interface (MPI) standard.
 
 # Package summary
 

@@ -827,6 +827,7 @@ end
         else
             # stress correction @ center
             setindex!.(τ, dτij .+ τij, I...)
+            setindex!.(ε_pl, zeros(length(ε_pl)), I...)
             τII[I...] = τII_ij
         end
         η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
@@ -948,7 +949,11 @@ end
             τII_ij = second_invariant(τij)
         else
             # stress correction @ center
-            Base.@nexprs 3 i -> @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+
+            Base.@nexprs 3 i -> begin
+                @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+                @inbounds ε_pl[i][I...] = 0.0
+            end
             τII_ij
         end
         @inbounds τII[I...] = τII_ij

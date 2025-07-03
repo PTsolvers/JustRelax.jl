@@ -55,7 +55,7 @@ function _solve!(
 
     # errors
     err_it1 = 1.0
-    err = 2 * ϵ_rel
+    err = 1.0
     iter = 0
     cont = 0
     err_evo1 = Float64[]
@@ -145,7 +145,7 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && ((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
+        if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
@@ -202,7 +202,7 @@ function _solve!(
 
     # errors
     err_it1 = 1.0
-    err = 2 * ϵ_rel
+    1.0
     iter = 0
     cont = 0
     err_evo1 = Float64[]
@@ -354,7 +354,7 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && ((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
+        if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
@@ -528,7 +528,6 @@ function _solve!(
                 )
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
-                free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end
@@ -565,7 +564,7 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && ((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
+        if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end

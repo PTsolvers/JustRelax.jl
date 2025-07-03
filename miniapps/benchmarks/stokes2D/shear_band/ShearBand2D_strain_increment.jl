@@ -1,9 +1,9 @@
-using GeoParams
-using JustRelax, JustRelax.JustRelax2D, GLMakie
+using GeoParams, GLMakie, CellArrays
+using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
-const backend_JR = CPUBackend
+const backend = CPUBackend
 
 using JustPIC, JustPIC._2D
 import JustPIC._2D.GridGeometryUtils as GGU
@@ -35,6 +35,7 @@ function init_phases!(phase_ratios, xci, xvi, circle)
     @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
     return nothing
 end
+
 # MAIN SCRIPT --------------------------------------------------------------------
 function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
@@ -43,7 +44,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     lx = ly           # domain length in x
     ni = nx, ny       # number of cells
     li = lx, ly       # domain length in x- and y-
-    di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    di = @. li / ni   # grid step in x- and -y
     origin = 0.0, 0.0     # origin coordinates
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -67,7 +68,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         C = C / cosd(ϕ),
         ϕ = ϕ,
         η_vp = η_reg,
-        Ψ = 0,
+        Ψ = 0
     )
 
     rheology = (
@@ -90,6 +91,9 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ),
     )
 
+    # perturbation array for the cohesion
+    perturbation_C = @zeros(ni...)
+
     # Initialize phase ratios -------------------------------
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     radius = 0.1
@@ -99,63 +103,44 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.75 / √2.1)
+    stokes = StokesArrays(backend, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
     # Rheology
     compute_viscosity!(
         stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
-
     # Boundary conditions
-    flow_bcs = VelocityBoundaryConditions(;
+    flow_bcs = DisplacementBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    stokes.V.Vx .= PTArray(backend_JR)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend_JR)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.U.Ux .= PTArray(backend)([ x * εbg * dt for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.U.Uy .= PTArray(backend)([-y * εbg * dt for _ in 1:(nx + 2), y in xvi[2]])
+
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    displacement2velocity!(stokes, dt)
     update_halo!(@velocity(stokes)...)
 
-    # IO ------------------------------------------------
-    # if it does not exist, make folder where figures are stored
+    # IO -------------------------------------------------
     take(figdir)
-    # ----------------------------------------------------
-
-    # global array
-    nx_v = (nx - 2) * igg.dims[1]
-    ny_v = (ny - 2) * igg.dims[2]
-    τII_v = zeros(nx_v, ny_v)
-    η_vep_v = zeros(nx_v, ny_v)
-    εII_v = zeros(nx_v, ny_v)
-    τII_nohalo = zeros(nx - 2, ny - 2)
-    η_vep_nohalo = zeros(nx - 2, ny - 2)
-    εII_nohalo = zeros(nx - 2, ny - 2)
-    Vxv_v = zeros(nx_v, ny_v)
-    Vyv_v = zeros(nx_v, ny_v)
-    Vx_nohalo = zeros(nx - 2, ny - 2)
-    Vy_nohalo = zeros(nx - 2, ny - 2)
-    xci_v = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v)
-
-    local Vx, Vy
-    Vx = @zeros(ni...)
-    Vy = @zeros(ni...)
 
     # Time loop
     t, it = 0.0, 0
-    tmax = 3.5
+    tmax = 5
     τII = Float64[]
     sol = Float64[]
     ttot = Float64[]
 
-    while t < tmax
+    # while t < tmax
+    for _ in 1:15
 
         # Stokes solver ----------------
-        solve!(
+        iters = solve!(
             stokes,
             pt_stokes,
             di,
@@ -168,13 +153,13 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             igg;
             kwargs = (
                 verbose = false,
+                strain_increment = true,
                 iterMax = 50.0e3,
-                nout = 1.0e3,
+                nout = 1,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
         tensor_invariant!(stokes.ε)
-        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -183,57 +168,40 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
 
-        igg.me == 0 && println("it = $it; t = $t \n")
+        println("it = $it; t = $t \n")
 
         # visualisation
         th = 0:(pi / 50):(3 * pi)
         xunit = @. radius * cos(th) + 0.5
         yunit = @. radius * sin(th) + 0.5
 
-        # Gather MPI arrays
-        velocity2center!(Vx, Vy, @velocity(stokes)...)
-        @views Vx_nohalo .= Array(Vx[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        @views Vy_nohalo .= Array(Vy[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        gather!(Vx_nohalo, Vxv_v)
-        gather!(Vy_nohalo, Vyv_v)
+        fig = Figure(size = (1600, 1600), title = "t = $t")
+        ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
+        ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
+        ax3 = Axis(fig[1, 2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
+        ax4 = Axis(fig[2, 2], aspect = 1)
+        heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
+        # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
+        heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)), colormap = :batlow)
+        heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
+        lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
+        lines!(ax4, ttot, τII, color = :black)
+        lines!(ax4, ttot, sol, color = :red)
+        hidexdecorations!(ax1)
+        hidexdecorations!(ax3)
+        save(joinpath(figdir, "$(it).png"), fig)
 
-        @views τII_nohalo .= Array(stokes.τ.II[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        @views εII_nohalo .= Array(stokes.ε.II[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        gather!(τII_nohalo, τII_v)
-        gather!(η_vep_nohalo, η_vep_v)
-        gather!(εII_nohalo, εII_v)
-
-        if igg.me == 0
-            fig = Figure(size = (1600, 1600), title = "t = $t")
-            ax1 = Axis(fig[1, 1], aspect = 1, title = "τII")
-            ax2 = Axis(fig[2, 1], aspect = 1, title = "η_vep")
-            ax3 = Axis(fig[1, 3], aspect = 1, title = "log10(εII)")
-            ax4 = Axis(fig[2, 3], aspect = 1)
-            heatmap!(ax1, xci_v..., Array(τII_v), colormap = :batlow)
-            heatmap!(ax2, xci_v..., Array(log10.(η_vep_v)), colormap = :batlow)
-            heatmap!(ax3, xci_v..., Array(log10.(εII_v)), colormap = :batlow)
-            lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-            lines!(ax4, ttot, τII, color = :black)
-            lines!(ax4, ttot, sol, color = :red)
-            hidexdecorations!(ax1)
-            hidexdecorations!(ax3)
-            save(joinpath(figdir, "MPI_$(it).png"), fig)
-
-        end
     end
 
     return nothing
-
 end
 
-N = 30
-n = N
-nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-ny = n * 2
-figdir = "ShearBands2D_MPI"
+n = 256
+nx = n
+ny = n
+figdir = "output/ShearBands2D_StrainIncrement"
 igg = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device = false)...)
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end

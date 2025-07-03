@@ -31,6 +31,19 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function compute_strain_rate_from_increment!(
+        εxx::AbstractArray{T, 2}, εyy, εxy, Δεxx, Δεyy, Δεxy, _dt
+    ) where {T}
+
+    if all((i, j) .≤ size(εxx))
+        εxx[i, j] = Δεxx[i, j] * _dt
+        εyy[i, j] = Δεyy[i, j] * _dt
+    end
+    εxy[i, j] = Δεxy[i, j] * _dt
+
+    return nothing
+end
+
 @parallel_indices (i, j, k) function compute_strain_rate!(
         ∇V::AbstractArray{T, 3}, εxx, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, _dx, _dy, _dz
     ) where {T}
@@ -178,7 +191,7 @@ end
     Base.@propagate_inbounds @inline d_za(A) = _d_za(A, _dz, i, j, k)
 
     @inbounds begin
-        if all((i, j, k) .< size(Vx) .- 1)
+        if all((i, j, k) .≤ size(Rx))
             Rx_ijk =
                 Rx[i, j, k] =
                 d_xa(τxx) +
@@ -186,7 +199,7 @@ end
                 _dz * (τxz[i + 1, j, k + 1] - τxz[i + 1, j, k]) - d_xa(P) - av_x(fx)
             Vx[i + 1, j + 1, k + 1] += Rx_ijk * ηdτ / av_x(ητ)
         end
-        if all((i, j, k) .< size(Vy) .- 1)
+        if all((i, j, k) .≤ size(Ry))
             Ry_ijk =
                 Ry[i, j, k] =
                 _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
@@ -194,7 +207,7 @@ end
                 _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) - d_ya(P) - av_y(fy)
             Vy[i + 1, j + 1, k + 1] += Ry_ijk * ηdτ / av_y(ητ)
         end
-        if all((i, j, k) .< size(Vz) .- 1)
+        if all((i, j, k) .≤ size(Rz))
             Rz_ijk =
                 Rz[i, j, k] =
                 _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +

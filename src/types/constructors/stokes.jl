@@ -129,6 +129,8 @@ Create the Stokes arrays object in 2D or 3D.
 - `EII_pl`: Second invariant of the accumulated plastic strain
 - `viscosity`: Viscosity fields
 - `R`: Residual fields
+- `Δε`: Strain increment tensor
+- `∇U`: Displacement gradient
 
 """
 function StokesArrays(ni::NTuple{N, Integer}) where {N}
@@ -146,6 +148,7 @@ function StokesArrays(ni::NTuple{N, Integer}) where {N}
     EII_pl = @zeros(ni...)
     viscosity = Viscosity(ni)
     R = Residual(ni...)
-
-    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω)
+    Δε = SymmetricTensor(ni...)
+    ∇U = @zeros(ni...)
+    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, Δε, ∇U)
 end

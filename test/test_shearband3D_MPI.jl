@@ -184,7 +184,7 @@ function main(igg; nx = 64, ny = 64, nz = 64)
     sol = Float64[]
     ttot = Float64[]
 
-    while t < tmax
+    while it < 3
         # Stokes solver ----------------
         solve!(
             stokes,

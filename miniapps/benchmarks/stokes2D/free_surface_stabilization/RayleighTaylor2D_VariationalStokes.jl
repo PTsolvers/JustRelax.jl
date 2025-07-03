@@ -156,21 +156,21 @@ function main(igg, nx, ny)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
-    # RockRatios
-    air_phase = 1
-    ϕ = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, air_phase)
-
     # Initialize marker chain-------------------------------
     nxcell, max_xcell, min_xcell = 100, 150, 75
     initial_elevation = -100.0e3
     chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
     # ----------------------------------------------------
 
+    # RockRatios
+    air_phase = 1
+    ϕ = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ, chain, xvi, di)
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -243,7 +243,7 @@ function main(igg, nx, ny)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, air_phase)
+        compute_rock_fraction!(ϕ, chain, xvi, di)
 
         @show it += 1
         t += dt

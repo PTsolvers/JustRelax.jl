@@ -168,7 +168,7 @@ function main(igg; nx = 64, ny = 64)
     sol = Float64[]
     ttot = Float64[]
 
-    while t < tmax
+    while it < 5
 
         # Stokes solver ----------------
         solve!(

@@ -1,5 +1,5 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -22,6 +22,7 @@ else
 end
 
 using JustPIC, JustPIC._2D
+import JustPIC._2D.GridGeometryUtils as GGU
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
@@ -50,8 +51,11 @@ end
 function init_phases!(phases, particles)
     ni = size(phases)
 
+    radius = 100.0e3
+    origin = 250.0e3, 250.0e3
+    circle = GGU.Circle(origin, radius)
+
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
-        r = 100.0e3
         f(x, A, λ) = A * sin(π * x / λ)
 
         @inbounds for ip in cellaxes(phases)
@@ -67,8 +71,8 @@ function init_phases!(phases, particles)
 
             else
                 @index phases[ip, i, j] = 2.0
-
-                if ((x - 250.0e3)^2 + (depth - 250.0e3)^2 ≤ r^2)
+                p = GGU.Point(x, depth)
+                if GGU.inside(p, circle)
                     @index phases[ip, i, j] = 3.0
                 end
             end
@@ -138,23 +142,23 @@ function main(igg, nx, ny)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
-    # rock ratios for variational stokes
-    # RockRatios
-    air_phase = 1
-    ϕ = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, air_phase)
-    # ----------------------------------------------------
-
     # Initialize marker chain-------------------------------
     nxcell, max_xcell, min_xcell = 100, 150, 75
     initial_elevation = -100.0e3
     chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
     # ----------------------------------------------------
 
+    # rock ratios for variational stokes
+    # RockRatios
+    air_phase = 1
+    ϕ = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ, chain, xvi, di)
+    # ----------------------------------------------------
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -221,7 +225,7 @@ function main(igg, nx, ny)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, air_phase)
+        compute_rock_fraction!(ϕ, chain, xvi, di)
         # ------------------------------
 
         @show it += 1

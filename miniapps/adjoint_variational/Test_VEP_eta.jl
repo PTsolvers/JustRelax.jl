@@ -222,6 +222,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     phase_ratiosP = deepcopy(phase_ratios)
     stokesRef.V.Vx .= PTArray(backend)([ x*εbg for x in xvi[1], _ in 1:ny+2])
     stokesRef.V.Vy .= PTArray(backend)([-y*εbg for _ in 1:nx+2, y in xvi[2]])
+    stokesAD.C .= 0.0
     if run_ref 
         # Stokes solver ----------------
         Adjoint = adjoint_solve_VariationalStokes!(
@@ -255,6 +256,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
                 ADout=plottingInt
             )
         );
+        tensor_invariant!(stokesRef.ε_pl)
         if isCUDA
             CUDA.allowscalar() do
             refcost = sum(stokesRef.V.Vy[indx,indy])
@@ -268,7 +270,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     (; η_vep, η) = stokes.viscosity
     ηref = η
     ρref     = deepcopy(ρg[2])./1.0
-#=
+
     #################################
     #### Dot product pertubation ####
     #################################
@@ -279,6 +281,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     dens  = false
     Gdot  = false
     frdot = false
+    Kdot  = false
     #stokesDot.viscosity.η .= stokesDot.viscosity.η + dM*dp
     # Stokes solver ----------------
     Dot = adjoint_solve_VariationalStokesDot!(
@@ -305,6 +308,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
         dens,
         Gdot,
         frdot,
+        Kdot,
         igg;
         kwargs = (
             grid,
@@ -324,8 +328,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     else
         refcostdot = Float64(sum_kbn((stokesDot.V.Vy[indx, indy])))
     end
-    =#
-    refcostdot=1.0
+
+   #refcostdot=1.0
 
     ##########################
     #### Parameter change ####
@@ -404,7 +408,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
 end
 
 #### Init Run ####
-f         = 1      ; nx     = 16*f; ny     = 16*f
+f         = 2      ; nx     = 16*f; ny     = 16*f
 dp        = 1e-4
 run_param = false
 run_ref   = true
@@ -418,10 +422,14 @@ else
     igg
 end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM);
-#cost = rand(nx,ny)
+cost = rand(nx,ny)
 plot_sens = stokesAD.η  #which sensitivity to plot
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
+mach_ϵ = eps()
 
-errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,20)   # plot convergence test # plot convergence test
+errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,10,mach_ϵ
+)   # plot convergence test # plot convergence test
+
+
 

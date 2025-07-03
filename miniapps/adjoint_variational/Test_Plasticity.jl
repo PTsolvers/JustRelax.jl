@@ -1,5 +1,5 @@
 using GeoParams, CairoMakie, CellArrays
-using JustRelax, JustRelax.JustRelax2D
+using JustRelax, JustRelax.JustRelax2D_AD
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
@@ -137,7 +137,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # while t < tmax
     for _ in 1:15
-
+#=
         # Stokes solver ----------------
         iters = solve_VariationalStokes!(
             stokes,
@@ -157,6 +157,46 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
+        =#
+        ana = false
+            # Adjoint 
+    stokesAD = StokesArraysAdjoint(backend, ni)
+    indx     = findall((xci[1] .>= 0.5-radius) .& (xci[1] .<= 0.5+radius)) .+ 1
+    indy     = findall((xvi[2] .>= 0.5-1e-6) .& (xvi[2] .<= 0.5+1e-6))  
+    ind      = vec([CartesianIndex(i, j) for i in indx, j in indy])
+    SensInd  = ind
+    SensType = "Vy"
+        adjoint_solve_VariationalStokes!(
+            stokes,
+            stokesAD,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            phase_ratios,
+            ϕ,
+            rheology,
+            args,
+            dt,
+            it, #Glit
+            SensInd,
+            SensType,
+            grid,
+            origin,
+            li,
+            ana,
+            igg;
+            kwargs = (
+                grid,
+                origin,
+                li,
+                iterMax=150e3,
+                nout=1e3,
+                viscosity_cutoff = (-Inf, Inf),
+                verbose = false,
+                ADout=1e8
+            )
+        );
         tensor_invariant!(stokes.ε)
         push!(τII, maximum(stokes.τ.xx))
 
@@ -196,7 +236,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 128
+n = 16
 nx = n
 ny = n
 figdir = "Variational_ShearBands2D"

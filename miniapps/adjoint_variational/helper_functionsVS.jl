@@ -157,7 +157,7 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     fig = Figure(size = (720, 1000), title = "Compare Adjoint Sensitivities with Finite Difference Sensitivities",fontsize=16)
     ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}")
     ax2   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})")
-    ax3   = Axis(fig[2,1], aspect = 1, title = L"Vx")
+    ax3   = Axis(fig[2,1], aspect = 1, title = L"EII pl")
     ax4   = Axis(fig[2,2], aspect = 1, title = L"Vy")
     ax5   = Axis(fig[3,1], aspect = 1, title = "λ Vx sum(abs)=$sumλVx")
     ax6   = Axis(fig[3,2], aspect = 1, title = "λ Vy sum(abs)=$sumλVy")
@@ -171,7 +171,8 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     #h2 = heatmap!(ax2, xci..., Array(log10.(ηref)) , colormap=:managua)
     #Vx_range = maximum(abs.(Ref.V.Vx))
     #Vy_range = maximum(abs.(Ref.V.Vy))
-    h3  = heatmap!(ax3, xci[1], xci[2], Array(Ref.V.Vx),colormap=:roma)#,colorrange=(-Vx_range,Vx_range))
+    h3 = heatmap!(ax3, xci..., Array((Ref.ε_pl.II)) , colormap=:managua)
+    #h3  = heatmap!(ax3, xci[1], xci[2], Array(Ref.V.Vx),colormap=:roma)#,colorrange=(-Vx_range,Vx_range))
     h4  = heatmap!(ax4, xci[1], xci[2], Array(Ref.V.Vy),colormap=:roma)#,colorrange=(-Vy_range,Vy_range))
     #λVx_range = maximum(abs.(stokesAD.VA.Vx))
     #λVy_range = maximum(abs.(stokesAD.VA.Vy))
@@ -202,6 +203,7 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     #rowgap!(fig.layout, 4.0)
     #linkaxes!(ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9)    
     save(joinpath(figdir, "Comparison$nx.png"), fig)
+    #save(joinpath(figdir, "ComparisonSVG.svg"), fig)
     sol_FD_cpu = Array(sol_FD)
     jldsave(joinpath(figdir, "FD_solution.jld2"),sol_FD_cpu=sol_FD_cpu)
 
@@ -217,7 +219,7 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter,mach_ϵ)
 
 
     #hockeystick test
-    epsilons  = collect(LinRange(-4.0, 12.0, iter))
+    epsilons  = collect(LinRange(-0.0, 12.0, iter))
     epsilons  = 10.0 .^ -epsilons
     FDs       = zeros(Float64,length(epsilons))
     run_param = false
@@ -234,8 +236,8 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter,mach_ϵ)
         refcostNot, cost, dpNot, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref, dp, dM);
         FDs[j]     = (refcostdot-refcost)/dp
 
-        #error[j]   = abs(((FDs[j]/dirAD)-1.0))   # wie im ice paper
-        error[j]   = abs(refcostdot-refcost-(dp*dirAD))  # wie im coltice paper
+        error[j]   = abs(((FDs[j]/dirAD)-1.0))   # wie im ice paper
+        #error[j]   = abs(refcostdot-refcost-(dp*dirAD))  # wie im coltice paper
         print(error[j],"##########################\n")
         print(j,"\n")
         print(error[j],"\n")
@@ -253,12 +255,12 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter,mach_ϵ)
     ax1 = Axis(fig[1,1], aspect = 1, title = "Gradient Test", titlesize=34,xlabel = "α",ylabel="error")
     l1 = lines!(ax1, log10.(epsilons), log10.(error), color = :blue, linewidth = 2, label = "Adjoint Sensitivities")
     #l2 = lines!(ax1, log10.(epsilons), log10.(errorFD), color = :red, linewidth = 2, label = "FD")
-    lines!(ax1,log10.(epsilons),log10.(epsilons.^2).-6, color = :black, linewidth = 4, linestyle = :dot, label = "convergence order")
+    #lines!(ax1,log10.(epsilons),log10.(epsilons.^2).-6, color = :black, #linewidth = 4, linestyle = :dot, label = "convergence order")
     #lines!(ax1,log10.(epsilons),log10.(machs), color = :orange, linewidth = 4, #linestyle = :dot, label = "machine precision")
     #l3 = lines!(ax1, log10.(epsilons), log10.(FDs), color = :green, linewidth = 2, linestyle = :dot, label = "directional deriv.")
     #l4 = lines!(ax1, log10.(epsilons), log10.(AD), color = :black, linewidth = 2, linestyle = :dot, label = "Adjoint")
     axislegend(position = :lt)
-    ylims!(ax1, -17.1, -10.0)
+    #ylims!(ax1, -17.1, -10.0)
 
     fig
     save(joinpath(figdir, "HockeyStick.png"), fig)

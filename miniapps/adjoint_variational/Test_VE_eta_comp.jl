@@ -398,7 +398,7 @@ end
 #### Init Run ####
 f         = 1      ; nx     = 16*f; ny     = 16*f
 dp        = 1e-6
-run_param = true
+run_param = false
 run_ref   = true
 dM        = rand(Float64,nx,ny)
 dM      ./= norm(dM)   # normalize M matrix

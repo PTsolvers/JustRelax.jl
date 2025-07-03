@@ -228,10 +228,8 @@ end
 
     if  isdefined(Main,:CUDA)
         mode = Enzyme.Reverse
-        #mode = Enzyme.Forward
     else
         mode = Enzyme.set_runtime_activity(Enzyme.Reverse,true)
-        #mode = Enzyme.set_runtime_activity(Enzyme.Forward,true)
     end
 
     err_evo1 = Float64[]
@@ -257,8 +255,8 @@ end
     λvtemp  = deepcopy(λv)
     λtemp  .= 0.0  
     λvtemp .= 0.0 
-         λ .= 0.0
-        λv .= 0.0
+    #     λ .= 0.0
+    #    λv .= 0.0
     relλtemp = deepcopy(relλ)
 
     print("###################\n")
@@ -408,6 +406,8 @@ end
             #stokesAD.dτ.xy_c .= 0.0
             #stokesAD.dτ.xy   .= 0.0
             stokesAD.P0      .= stokes.P
+
+            relλtemp = 1.0#0.05
             @parallel (@idx ni .+ 1) configcall=update_stresses_center_vertexAD!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
@@ -419,8 +419,8 @@ end
                 θ,
                 stokesAD.P0,
                 stokes.viscosity.η,
-                λtemp,
-                λvtemp,
+                λ,#λtemp,
+                λv,#λvtemp,
                 stokes.τ.II,
                 stokes.viscosity.η_vep,
                 relλtemp,
@@ -444,8 +444,8 @@ end
                     Const(θ),
                     Const(stokesAD.P0),
                     Const(stokes.viscosity.η),
-                    DuplicatedNoNeed(λ,λtemp),#Const(λtemp),
-                    DuplicatedNoNeed(λv,λvtemp),#Const(λvtemp),
+                    Const(λ),#Duplicated(λ,λtemp),
+                    Const(λv),#Duplicated(λv, λvtemp),
                     Const(stokes.τ.II),
                     Const(stokes.viscosity.η_vep),
                     Const(relλtemp),

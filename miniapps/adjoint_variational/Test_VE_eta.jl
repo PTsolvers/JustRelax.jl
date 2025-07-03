@@ -14,8 +14,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Physical properties using GeoParams ----------------
-    εbg     = 0.0           # background strain-rate
-    gr      = 1.0
+    εbg     = 1.0           # background strain-rate
+    gr      = 0.0
     η0      = 1.0           # viscosity
     G0      = 1.0           # shear modulus
     Gi      = 0.5           # shear modulus
@@ -267,8 +267,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     stokesDot       = deepcopy(stokes)
     ρgDot           = deepcopy(ρg)
     phase_ratiosDot = deepcopy(phase_ratios)
-    visc  = false
-    dens  = true
+    visc  = true
+    dens  = false
     Gdot  = false
     frdot = false
     Kdot  = false
@@ -413,11 +413,12 @@ else
 end
 refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM);
 #cost .= rand(nx,ny)
-plot_sens = stokesAD.ρ  #which sensitivity to plot
+plot_sens = stokesAD.η  #which sensitivity to plot
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
 mach_ϵ = eps()
 
 errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,20,mach_ϵ
 )   # plot convergence test # plot convergence test
+
 

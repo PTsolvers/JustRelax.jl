@@ -41,6 +41,39 @@ function append!(data_series, data::NamedTuple, time_step, seconds)
     return nothing
 end
 
+"""
+    save_vtk(fname::String, xvi, xci, data_v::NamedTuple, data_c::NamedTuple, velocity; t=0, pvd=nothing)
+
+Save VTK data with multiblock format containing both vertex and cell data.
+
+## Arguments
+- `fname::String`: The filename for the VTK file (without extension)
+- `xvi`: Vertex coordinates (tuple of coordinate arrays)
+- `xci`: Cell center coordinates (tuple of coordinate arrays)
+- `data_v::NamedTuple`: Data defined at vertices
+- `data_c::NamedTuple`: Data defined at cell centers
+- `velocity::NTuple{N, T}`: Velocity field as a tuple of N-dimensional arrays
+- `t::Number`: Time value (default: 0)
+- `pvd::Union{Nothing, String}`: Optional ParaView collection filename. If provided, the VTK file will be added to a time series collection. WriteVTK.jl automatically handles creating new collections or appending to existing ones.
+
+## Examples
+```julia
+# Basic usage (backward compatible)
+save_vtk("output", xvi, xci, data_v, data_c, velocity; t=1.0)
+
+# With ParaView collection for time series
+save_vtk("timestep_001", xvi, xci, data_v, data_c, velocity; t=1.0, pvd="simulation")
+save_vtk("timestep_002", xvi, xci, data_v, data_c, velocity; t=2.0, pvd="simulation")
+# This creates simulation.pvd containing the time series
+
+# Time series example
+times = 0:0.1:10
+for (i, t) in enumerate(times)
+    fname = "timestep_\$(lpad(i, 3, '0'))"
+    save_vtk(fname, xvi, xci, data_v, data_c, velocity; t=t, pvd="full_simulation")
+end
+```
+"""
 function save_vtk(
         fname::String,
         xvi,
@@ -49,6 +82,7 @@ function save_vtk(
         data_c::NamedTuple,
         velocity::NTuple{N, T};
         t::Number = 0,
+        pvd::Union{Nothing, String} = nothing,
     ) where {N, T}
 
     # unpack data names and arrays
@@ -79,13 +113,47 @@ function save_vtk(
             vtk["Velocity"] = velocity_field
             isnothing(t) || (vtk["TimeValue"] = t)
         end
+
+        # If pvd collection name is provided, add this file to the collection
+        if !isnothing(pvd)
+            paraview_collection(pvd; append = true) do pvd_collection
+                collection_add_timestep(pvd_collection, vtm, t)
+            end
+        end
     end
 
     return nothing
 end
 
+"""
+    save_vtk(fname::String, xci, data_c::NamedTuple, velocity; t=nothing, pvd=nothing)
+
+Save VTK data with cell-centered data and velocity field.
+
+## Arguments
+- `fname::String`: The filename for the VTK file (without extension)
+- `xci`: Cell center coordinates (tuple of coordinate arrays)
+- `data_c::NamedTuple`: Data defined at cell centers
+- `velocity::NTuple{N, T}`: Velocity field as a tuple of N-dimensional arrays
+- `t::Number`: Time value (default: nothing)
+- `pvd::Union{Nothing, String}`: Optional ParaView collection filename. If provided, the VTK file will be added to a time series collection. WriteVTK.jl automatically handles creating new collections or appending to existing ones.
+
+## Examples
+```julia
+# Basic usage
+save_vtk("output", xci, data_c, velocity; t=1.0)
+
+# With ParaView collection
+save_vtk("timestep_001", xci, data_c, velocity; t=1.0, pvd="simulation")
+```
+"""
 function save_vtk(
-        fname::String, xci, data_c::NamedTuple, velocity::NTuple{N, T}; t::Number = nothing
+        fname::String,
+        xci,
+        data_c::NamedTuple,
+        velocity::NTuple{N, T};
+        t::Number = nothing,
+        pvd::Union{Nothing, String} = nothing
     ) where {N, T}
 
     # unpack data names and arrays
@@ -97,26 +165,42 @@ function save_vtk(
         velocity_field[i, :, :, :] = v
     end
 
-    # Variables stores in cell centers
+    # Create the VTK file
     vtk_grid(fname, xci...) do vtk
         for (name_i, array_i) in zip(data_names_c, data_arrays_c)
             vtk[name_i] = Array(array_i)
         end
         vtk["Velocity"] = velocity_field
         isnothing(t) || (vtk["TimeValue"] = t)
+
+        # If pvd collection name is provided, add this file to the collection
+        if !isnothing(pvd)
+            time_value = isnothing(t) ? 0.0 : t
+            paraview_collection(pvd; append = true) do pvd_collection
+                collection_add_timestep(pvd_collection, vtk, time_value)
+            end
+        end
     end
 
     return nothing
 end
 
-function save_vtk(fname::String, xi, data::NamedTuple)
+function save_vtk(fname::String, xi, data::NamedTuple; pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     # unpack data names and arrays
     data_names = string.(keys(data))
     data_arrays = values(data)
-    # make and save VTK file
+
+    # Create the VTK file
     vtk_grid(fname, xi...) do vtk
         for (name_i, array_i) in zip(data_names, data_arrays)
             vtk[name_i] = Array(array_i)
+        end
+
+        # If pvd collection name is provided, add this file to the collection
+        if !isnothing(pvd)
+            paraview_collection(pvd; append = true) do pvd_collection
+                collection_add_timestep(pvd_collection, vtk, t)
+            end
         end
     end
 

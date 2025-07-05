@@ -226,3 +226,178 @@ end
         two_thirds * dt * rᵢ
     return nothing
 end
+
+## WENO5-HYBRID advection as described in the paper:
+#`Hybrid scheme for complex flows on staggered grids and application to multiphase flows`
+# https://doi.org/10.1016/j.jcp.2018.12.041
+"""
+    muscl_interpolate(uL, uC, uR)
+
+MUSCL TVD interpolation from cell centers to face.
+"""
+function muscl_interpolate(uL, uC, uR)
+    ΔL = uC - uL
+    ΔR = uR - uC
+    slope = sign(ΔL + ΔR) * max(0.0, min(abs(ΔL), abs(ΔR)))
+    return uC + 0.5 * slope
+end
+
+"""
+    central_flux(uL, uR)
+
+Simple second-order central flux.
+"""
+central_flux(uL, uR) = 0.5 * (uL + uR)
+
+"""
+    shock_sensor(uL, uC, uR, threshold)
+
+Simple gradient-based shock detector.
+"""
+shock_sensor(uL, uC, uR, threshold) = abs(uR - uL) > threshold
+
+
+"""
+    staggered_hybrid_flux_x(u, nx, weno, i, j, threshold)
+
+Compute hybrid staggered flux in x-direction.
+"""
+function staggered_hybrid_flux_x(u, nx, weno, i, j, threshold)
+    jw, jww = clamp(j - 1, 1, nx), clamp(j - 2, 1, nx)
+    je, jee = clamp(j + 1, 1, nx), clamp(j + 2, 1, nx)
+
+    @inbounds begin
+        u1 = u[i, jww]
+        u2 = u[i, jw]
+        u3 = u[i, j]
+        u4 = u[i, je]
+        u5 = u[i, jee]
+    end
+
+    # WENO flux
+    flux_weno = WENO_u_upwind(u1, u2, u3, u4, u5, weno)
+
+    # Central flux: simple average between j and j+1
+    flux_central = central_flux(u[i, j], u[i, je])
+
+    # Shock detection
+    is_shock = shock_sensor(u2, u3, u4, threshold)
+
+    # Hybrid weight
+    w = is_shock ? 1.0 : 0.0
+
+    # Blend
+    return (1 - w)*flux_central + w*flux_weno
+end
+
+# -----------------------------
+# Staggered hybrid flux in y-direction
+# -----------------------------
+"""
+    staggered_hybrid_flux_y(u, ny, weno, i, j, threshold)
+
+Compute hybrid staggered flux in y-direction.
+"""
+function staggered_hybrid_flux_y(u, ny, weno, i, j, threshold)
+    iw, iww = clamp(i - 1, 1, ny), clamp(i - 2, 1, ny)
+    ie, iee = clamp(i + 1, 1, ny), clamp(i + 2, 1, ny)
+
+    @inbounds begin
+        u1 = u[iww, j]
+        u2 = u[iw, j]
+        u3 = u[i, j]
+        u4 = u[ie, j]
+        u5 = u[iee, j]
+    end
+
+    # WENO flux
+    flux_weno = WENO_u_upwind(u1, u2, u3, u4, u5, weno)
+
+    # Central flux: average between i and i+1
+    flux_central = central_flux(u[i, j], u[ie, j])
+
+    # Shock detection
+    is_shock = shock_sensor(u2, u3, u4, threshold)
+
+    # Hybrid weight
+    w = is_shock ? 1.0 : 0.0
+
+    # Blend
+    return (1 - w)*flux_central + w*flux_weno
+end
+
+# -----------------------------
+# Compute hybrid staggered fluxes in all directions
+# -----------------------------
+"""
+    staggered_weno_f!(u, weno, nx, ny, threshold)
+
+Compute hybrid staggered fluxes in all directions.
+"""
+@parallel_indices inbounds = true (i, j) function staggered_weno_f!(u, weno, nx, ny, threshold)
+    weno.fL[i, j] = staggered_hybrid_flux_x(u, ny, weno, i, j, threshold)
+    weno.fR[i, j] = staggered_hybrid_flux_x(u, ny, weno, i, j+1, threshold)
+    weno.fB[i, j] = staggered_hybrid_flux_y(u, nx, weno, i, j, threshold)
+    weno.fT[i, j] = staggered_hybrid_flux_y(u, nx, weno, i+1, j, threshold)
+    return nothing
+end
+
+# -----------------------------
+# New main advection function
+# -----------------------------
+"""
+    WENO_advection_staggered!(u, Vxi, weno, di, dt)
+
+Perform staggered grid hybrid WENO-central advection.
+"""
+function WENO_advection_staggered!(u, Vxi, weno, di, dt)
+    _di = inv.(di)
+    ni = nx, ny = size(u)
+    one_third = inv(3)
+    two_thirds = 2 * one_third
+    threshold = 1e-3  # You can adjust this threshold
+
+    @parallel (1:nx, 1:ny) staggered_weno_f!(u, weno, nx, ny, threshold)
+    @parallel (1:nx, 1:ny) weno_step1!(weno, u, Vxi, _di, ni, dt)
+
+    @parallel (1:nx, 1:ny) staggered_weno_f!(weno.ut, weno, nx, ny, threshold)
+    @parallel (1:nx, 1:ny) weno_step2!(weno, u, Vxi, _di, ni, dt)
+
+    @parallel (1:nx, 1:ny) staggered_weno_f!(weno.ut, weno, nx, ny, threshold)
+    return @parallel (1:nx, 1:ny) weno_step3!(u, weno, Vxi, _di, ni, dt, one_third, two_thirds)
+end
+
+const JR_T = Union{
+    StokesArrays,
+    SymmetricTensor,
+    ThermalArrays,
+    Velocity,
+    Displacement,
+    Vorticity,
+    Residual,
+    Viscosity,
+}
+
+"""
+    WENO_advection_staggered!(u::T, Vxi, weno, di, dt)
+
+Apply staggered WENO advection to all fields of `u`.
+"""
+@generated function WENO_advection_staggered!(
+    u::T, Vxi, weno, di, dt
+) where {T <: JR_T}
+    nfields = fieldcount(T)
+    exprs = Expr[]
+    for i in 1:nfields
+        push!(exprs, quote
+            field = getfield(u, $i)
+            if field !== nothing
+                WENO_advection_staggered!(field, Vxi, weno, di, dt)
+            end
+        end)
+    end
+    return quote
+        $(exprs...)
+        return nothing
+    end
+end

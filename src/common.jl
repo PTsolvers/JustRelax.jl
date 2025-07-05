@@ -69,7 +69,7 @@ export vertex2center!,
     center2vertex!, temperature2center!, velocity2vertex!, velocity2center!
 
 include("advection/weno5.jl")
-export WENO_advection!
+export WENO_advection!, WENO_advection_staggered!
 
 include("phases/topography_correction.jl")
 export update_phases_given_markerchain!

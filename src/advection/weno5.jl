@@ -155,16 +155,16 @@ end
     iS, iN = clamp(i - 1, 1, nx), clamp(i + 1, 1, nx)
     jW, jE = clamp(j - 1, 1, ny), clamp(j + 1, 1, ny)
 
-    return @inbounds begin
+    return begin
         if conservative == true
             # if staggered grid, we already have velocity on the cell sides, so we can use them directly
             r = @muladd (
-                max(vx[i + 1, j], 0) * weno.fB[i, j] + min(vx[i + 1, j], 0) * weno.fT[iN, j] -
-                    max(vx[i, j], 0) * weno.fB[iS, j] - min(vx[i, j], 0) * weno.fT[i, j]
+                max(vx[iN, j + 1], 0) * weno.fB[i, j] + min(vx[iN, j + 1], 0) * weno.fT[iN, j] -
+                    max(vx[i, j + 1], 0) * weno.fB[iS, j] - min(vx[i, j + 1], 0) * weno.fT[i, j]
             ) * _dx +
                 (
-                max(vy[i, j + 1], 0) * weno.fL[i, j] + min(vy[i, j + 1], 0) * weno.fR[i, jE] -
-                    max(vy[i, j], 0) * weno.fL[i, jW] - min(vy[i, j], 0) * weno.fR[i, j]
+                max(vy[i + 1, jE], 0) * weno.fL[i, j] + min(vy[i + 1, jE], 0) * weno.fR[i, jE] -
+                    max(vy[i + 1, j], 0) * weno.fL[i, jW] - min(vy[i + 1, j], 0) * weno.fR[i, j]
             ) * _dy
         else
             vx_ij = vx[i, j]
@@ -199,12 +199,12 @@ Perform the advection step of the Weighted Essentially Non-Oscillatory (WENO) sc
 - `di`: grid spacing.
 - `ni`: number of grid points.
 - `dt`: time step.
-- `conservative`: if `true`, the scheme is using the conservative form of the advection equation, non-conservative otherwise (default: `true`). `Vxi` must be defined on the sides with `conservative=true` and on the center with `conservative=false`.
+- `conservative`: if `true`, the scheme is using the conservative form of the advection equation, non-conservative otherwise (default: `false`). `Vxi` must be defined on the sides with `conservative=true` and on the center of the stencil with `conservative=false`.
 
 # Description
-The function approximates the advected fluxes using the WENO scheme and use a stronge-stability preserving (SSP) Runge-Kutta method of order 4 for the time integration.
+The function approximates the advected fluxes using the WENO scheme and uses a stronge-stability preserving (SSP) Runge-Kutta method of order 4 for the time integration.
 """
-function WENO_advection!(u, Vxi, weno, di, dt; conservative = true)
+function WENO_advection!(u, Vxi, weno, di, dt; conservative = false)
     _di = inv.(di)
     ni = nx, ny = size(u)
     one_third = inv(3)

@@ -292,11 +292,11 @@ end
         end
 
         # test non-conservative approach
-        iters = thermal_convection2D(igg; ar = 8, ny = ny, nx = nx, thermal_perturbation = :circular, conservative=false)
+        iters = thermal_convection2D(igg; ar = 8, ny = ny, nx = nx, thermal_perturbation = :circular, conservative = false)
         @test passed = iters.err_evo1[end] < 1.0e-4
 
         # test conservative approach
-        iters = thermal_convection2D(igg; ar = 8, ny = ny, nx = nx, thermal_perturbation = :circular, conservative=true)
+        iters = thermal_convection2D(igg; ar = 8, ny = ny, nx = nx, thermal_perturbation = :circular, conservative = true)
         @test passed = iters.err_evo1[end] < 1.0e-4
 
     end

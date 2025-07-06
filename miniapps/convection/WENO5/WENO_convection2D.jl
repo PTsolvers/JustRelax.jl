@@ -95,7 +95,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = false)
+function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = false, conservative = true)
 
     # Physical domain ------------------------------------
     ly = 700.0e3            # domain length in y
@@ -261,8 +261,14 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             ),
         )
         T_WENO .= thermal.T[2:(end - 1), :]
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
+
+        if conservative ==true
+            WENO_advection!(T_WENO, (stokes.V.Vx, stokes.V.Vy), weno, di, dt; conservative = conservative)
+        else
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt; conservative = conservative)
+        end
+
         thermal.T[2:(end - 1), :] .= T_WENO
         # ------------------------------
 
@@ -288,7 +294,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             save(joinpath(figdir, "$(it).png"), fig)
             fig
 
-            # save_particles(particles, pPhases; conversion = 1.0e3, fname = joinpath(vtk_dir, "particles_" * lpad("$it", 6, "0")))
+            save_particles(particles, pPhases; conversion = 1.0e3, fname = joinpath(vtk_dir, "particles_" * lpad("$it", 6, "0")))
         end
         # ------------------------------
 
@@ -313,4 +319,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny);
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, conservative=true);

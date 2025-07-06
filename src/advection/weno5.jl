@@ -160,9 +160,9 @@ end
         vy_ij = vy[i, j]
 
         r = @muladd max(vx_ij, 0) * (weno.fB[i, j] - weno.fB[iS, j]) * _dx +
-        min(vx_ij, 0) * (weno.fT[iN, j] - weno.fT[i, j]) * _dx +
-        max(vy_ij, 0) * (weno.fL[i, j] - weno.fL[i, jW]) * _dy +
-        min(vy_ij, 0) * (weno.fR[i, jE] - weno.fR[i, j]) * _dy
+            min(vx_ij, 0) * (weno.fT[iN, j] - weno.fT[i, j]) * _dx +
+            max(vy_ij, 0) * (weno.fL[i, j] - weno.fL[i, jW]) * _dy +
+            min(vy_ij, 0) * (weno.fR[i, jE] - weno.fR[i, j]) * _dy
     end
 end
 
@@ -220,7 +220,8 @@ end
 end
 
 @parallel_indices (i, j) function weno_step3!(
-        u, weno, Vxi, _di, ni, dt, one_third, two_thirds)
+        u, weno, Vxi, _di, ni, dt, one_third, two_thirds
+    )
     rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j)
     @inbounds u[i, j] = @muladd one_third * u[i, j] + two_thirds * weno.ut[i, j] -
         two_thirds * dt * rᵢ

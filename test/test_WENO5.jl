@@ -264,8 +264,14 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
 
         # Weno advection
         T_WENO .= @views thermal.T[2:(end - 1), :]
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
+
+        if conservative == true
+            WENO_advection!(T_WENO, (stokes.V.Vx, stokes.V.Vy), weno, di, dt; conservative = conservative)
+        else
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt; conservative = conservative)
+        end
+
         @views thermal.T[2:(end - 1), :] .= T_WENO
         # ------------------------------
 

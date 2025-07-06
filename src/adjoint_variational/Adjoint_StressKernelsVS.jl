@@ -174,6 +174,7 @@ end
 @parallel_indices (I...) function update_stresses_center_vertexAD!(
         ε::NTuple{3, T},      # normal components @ centers; shear components @ vertices
         ε_pl::NTuple{3},      # whole Voigt tensor @ centers
+        ε_pl_xx,
         EII,                  # accumulated plastic strain rate @ centers
         τ::NTuple{3},         # whole Voigt tensor @ centers
         τshear_v::NTuple{1},  # shear tensor components @ vertices
@@ -230,25 +231,21 @@ end
         dτijv = dτxxv, dτyyv, dτxyv
 
         τIIv_ij = second_invariant(dτijv .+ τijv)
-        #τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
-        #τIIv_ij = av_clamped(τII, Ic...)
+        #τIIv_ijAD = av_clamped(τII, Ic...)
 
         # yield function @ center
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
 
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        #if is_pl && !iszero(τIIv_ij) && Fv > 0
+        #if λv[I...] > 0
+        if Fv > 0
             # stress correction @ vertex
             #λv[I...] =
             #    @muladd (1.0 - relλ) * λv[I...] +
             #    relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
-            #λvtemp = (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
-
-            Dv = (ηv_ij * dτ_rv + η_regv + volumev)
-            λvtemp = (τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv) / (1+(ηv_ij/Dv))
-
+            λvtemp = Fv / (ηv_ij * dτ_rv + η_regv + volumev)
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-            #εij_pl = λv[I...] * dQdτxy
             εij_pl = λvtemp * dQdτxy
             τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_pl * dτ_rv
         else
@@ -280,27 +277,25 @@ end
             # stress increments @ center
             dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
 
+            #τII_ij = second_invariant(τij)
             τII_ij = second_invariant(dτij .+ τij)
-            #τII_ij = √(0.5 * ((τij[1] + dτij[1])^2 + (τij[2] + dτij[2])^2) + (τij[3] + dτij[3])^2)
-            #τII_ij = @inbounds τII[I...]
+            #τII_ijAD = @inbounds τII[I...]
             # yield function @ center
 
             F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
             #τII_ij = 
-            if is_pl && !iszero(τII_ij) && F > 0
+            #if is_pl && !iszero(τII_ij) && F > 0
+            #if λ[I...] > 0
+            if F > 0
                 # stress correction @ center
                 #λ[I...] =
                 #    @muladd (1.0 - relλ) * λ[I...] +
                 #    relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
 
-                #λtemp = (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
 
-                D = (η[I...] * dτ_r + η_reg + volume)
-                λtemp = (τII_ij - C * cosϕ - Pr[I...] * sinϕ) / (1+(η[I...]/D))
-
+                λtemp = F / (η[I...] * dτ_r + η_reg + volume)
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
-                #εij_pl = λ[I...] .* dQdτij
                 εij_pl = λtemp .* dQdτij
 
                 dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
@@ -337,6 +332,7 @@ end
 @parallel_indices (I...) function update_stresses_center_vertexADSens!(
         ε::NTuple{3, T},      # normal components @ centers; shear components @ vertices
         ε_pl::NTuple{3},      # whole Voigt tensor @ centers
+        ε_pl_xx,
         EII,                  # accumulated plastic strain rate @ centers
         τ::NTuple{3},         # whole Voigt tensor @ centers
         τshear_v::NTuple{1},  # shear tensor components @ vertices
@@ -394,22 +390,22 @@ end
         )
         τijv = τxxv_ij, τyyv_ij, τxyv[I...]
         dτijv = dτxxv, dτyyv, dτxyv
+
         τIIv_ij = second_invariant(dτijv .+ τijv)
-        #τIIv_ij = av_clamped(τII, Ic...)
+        #τIIv_ijAD = av_clamped(τII, Ic...)
 
         # yield function @ center
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
 
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        #if is_pl && !iszero(τIIv_ij) && Fv > 0
+        #if  λv[I...] > 0.0
+        if Fv > 0
             # stress correction @ vertex
             #λv[I...] =
             #    @muladd (1.0 - relλ) * λv[I...] +
             #    relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
-            #λvtemp = (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
-
-            Dv = (ηv_ij * dτ_rv + η_regv + volumev)
-            λvtemp = (τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv) / (1+(ηv_ij/Dv))
+            λvtemp = Fv / (ηv_ij * dτ_rv + η_regv + volumev)
 
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             #εij_pl = λv[I...] * dQdτxy
@@ -446,26 +442,27 @@ end
 #            εII_ve = second_invariant(εij_ve)
             # stress increments @ center
             dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
+
             τII_ij = second_invariant(dτij .+ τij)
-            #τII_ij = τII[I...]
+            #τII_ijAD = τII[I...]
             # yield function @ center
             F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
             #τII_ij = 
-            if is_pl && !iszero(τII_ij) && F > 0
+#            if is_pl && !iszero(τII_ij) && F > 0
+            #if λ[I...] > 0
+            if F > 0
                 # stress correction @ center
                 #λ[I...] =
                 #    @muladd (1.0 - relλ) * λ[I...] +
                 #    relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
 
-                #λtemp = (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
-
-                D = (η[I...] * dτ_r + η_reg + volume)
-                λtemp = (τII_ij - C * cosϕ - Pr[I...] * sinϕ) / (1+(η[I...]/D))
-
+                λtemp = F / (η[I...] * dτ_r + η_reg + volume)
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 #εij_pl = λ[I...] .* dQdτij
                 εij_pl = λtemp .* dQdτij
+
+                #ε_pl_xx[I...] = λtemp
 
                 dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 τij = dτij .+ τij
@@ -493,6 +490,7 @@ end
 
         end
     end
+
 
     return nothing
 end

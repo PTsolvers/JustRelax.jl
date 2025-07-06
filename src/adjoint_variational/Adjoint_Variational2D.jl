@@ -259,6 +259,11 @@ end
     #    λv .= 0.0
     relλtemp = deepcopy(relλ)
 
+    dtauxx   = copy(stokesAD.τ.xx)
+    dtauyy   = copy(stokesAD.τ.yy)
+    dtauxy_c = copy(stokesAD.τ.xy_c)
+    dtauxy   = copy(stokesAD.τ.xy)
+
     print("###################\n")
     print("## Adjoint Solve ##\n")
     print("###################\n")
@@ -407,10 +412,16 @@ end
             #stokesAD.dτ.xy   .= 0.0
             stokesAD.P0      .= stokes.P
 
+            dtauxx   .= stokesAD.τ.xx
+            dtauyy   .= stokesAD.τ.yy
+            dtauxy_c .= stokesAD.τ.xy_c
+            dtauxy   .= stokesAD.τ.xy
+
             relλtemp = 1.0#0.05
             @parallel (@idx ni .+ 1) configcall=update_stresses_center_vertexAD!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
+                stokes.ε_pl.xx,
                 stokes.EII_pl,
                 @tensor_center(stokesAD.dτ),
                 (stokesAD.dτ.xy,),
@@ -436,6 +447,7 @@ end
                     Const{Nothing},
                     DuplicatedNoNeed(@strain(stokes),@strain(stokesAD)),
                     Const(@tensor_center(stokes.ε_pl)),
+                    Const(stokes.ε_pl.xx),
                     Const(stokes.EII_pl),
                     DuplicatedNoNeed(@tensor_center(stokesAD.dτ),@tensor_center(stokesAD.τ)),
                     DuplicatedNoNeed((stokesAD.dτ.xy,),(stokesAD.τ.xy,)),
@@ -457,6 +469,12 @@ end
                     Const(ϕ)
                 )
             end
+
+            #relλ = 0.2
+            #stokesAD.τ.xx   .= (1.0 - relλ) * dtauxx + relλ * stokesAD.τ.xx
+            #stokesAD.τ.yy   .= (1.0 - relλ) * dtauyy + relλ * stokesAD.τ.yy
+            #stokesAD.τ.xy_c .= (1.0 - relλ) * dtauxy_c + relλ * stokesAD.τ.xy_c
+            #stokesAD.τ.xy   .= (1.0 - relλ) * dtauxy + relλ * stokesAD.τ.xy
 
             @parallel (@idx ni) update_PAD!(
                 stokesAD.PA,
@@ -727,18 +745,20 @@ end
   
     else
 
-    θ_dτ = 0.0
-    stokesAD.dτ.xx   .= 0.0
-    stokesAD.dτ.yy   .= 0.0
-    stokesAD.dτ.xy_c .= 0.0
-    stokesAD.dτ.xy   .= 0.0
-    stokesAD.P0      .= stokes.P
-    #λtemp            .= λ
-    #λvtemp           .= λv
-    relλtemp         = 1.0#copy(relλ)
+        #iterBefore = iter-1
+        θ_dτ = 0.0
+        stokesAD.dτ.xx   .= 0.0
+        stokesAD.dτ.yy   .= 0.0
+        stokesAD.dτ.xy_c .= 0.0
+        stokesAD.dτ.xy   .= 0.0
+        stokesAD.P0      .= stokes.P
+        relλtemp         = 1.0#copy(relλ)
+        #for i = 1:iterBefore
+
     @parallel (@idx ni.+1) configcall=update_stresses_center_vertexADSens!(
         @strain(stokes),
         @tensor_center(stokes.ε_pl),
+        stokes.ε_pl.xx,
         stokes.EII_pl,
         @tensor_center(stokesAD.dτ),
         (stokesAD.dτ.xy,),
@@ -765,6 +785,7 @@ end
             Const{Nothing},
             Const(@strain(stokes)),
             Const(@tensor_center(stokes.ε_pl)),
+            Const(stokes.ε_pl.xx),
             Const(stokes.EII_pl),
             DuplicatedNoNeed(@tensor_center(stokesAD.dτ),@tensor_center(stokesAD.τ)),
             DuplicatedNoNeed((stokesAD.dτ.xy,),(stokesAD.τ.xy,)),
@@ -786,7 +807,7 @@ end
             Const(ϕ),
             DuplicatedNoNeed(Sens,SensA)
             )
-
+        #end
             G .= 0.0
             vertex2center!(G, Gvb);
             stokesAD.G .+= G 
@@ -811,6 +832,9 @@ end
         norm_Rx = norm_Rx,
         norm_Ry = norm_Ry,
         norm_∇V = norm_∇V,
+        λ = λ,
+        λv = λv,
+        λtemp = stokes.ε_pl.xx,
     )
 end
 
@@ -1072,6 +1096,8 @@ end
             norm_Rx = norm_Rx,
             norm_Ry = norm_Ry,
             norm_∇V = norm_∇V,
+            λ = λ,
+            λv = λv,
         )
     end
 

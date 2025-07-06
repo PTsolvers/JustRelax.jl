@@ -119,6 +119,7 @@
                 # stress correction @ center
                 Base.@nexprs 3 i -> begin
                     τ[i][I...] = dτij[i] + τij[i]
+                    ε_pl[i][I...] = 0.0
                 end
                 τII_ij
             end

@@ -151,18 +151,30 @@ end
 end
 
 
-@inline function weno_rhs(vx, vy, weno, _dx, _dy, nx, ny, i, j)
+@inline function weno_rhs(vx, vy, weno, _dx, _dy, nx, ny, i, j, conservative)
     iS, iN = clamp(i - 1, 1, nx), clamp(i + 1, 1, nx)
     jW, jE = clamp(j - 1, 1, ny), clamp(j + 1, 1, ny)
 
     return @inbounds begin
-        vx_ij = vx[i, j]
-        vy_ij = vy[i, j]
+        if conservative == true
+            # if staggered grid, we already have velocity on the cell sides, so we can use them directly
+            r = @muladd (
+                max(vx[i + 1, j], 0) * weno.fB[i, j] + min(vx[i + 1, j], 0) * weno.fT[iN, j] -
+                    max(vx[i, j], 0) * weno.fB[iS, j] - min(vx[i, j], 0) * weno.fT[i, j]
+            ) * _dx +
+                (
+                max(vy[i, j + 1], 0) * weno.fL[i, j] + min(vy[i, j + 1], 0) * weno.fR[i, jE] -
+                    max(vy[i, j], 0) * weno.fL[i, jW] - min(vy[i, j], 0) * weno.fR[i, j]
+            ) * _dy
+        else
+            vx_ij = vx[i, j]
+            vy_ij = vy[i, j]
 
-        r = @muladd max(vx_ij, 0) * (weno.fB[i, j] - weno.fB[iS, j]) * _dx +
-            min(vx_ij, 0) * (weno.fT[iN, j] - weno.fT[i, j]) * _dx +
-            max(vy_ij, 0) * (weno.fL[i, j] - weno.fL[i, jW]) * _dy +
-            min(vy_ij, 0) * (weno.fR[i, jE] - weno.fR[i, j]) * _dy
+            r = @muladd max(vx_ij, 0) * (weno.fB[i, j] - weno.fB[iS, j]) * _dx +
+                min(vx_ij, 0) * (weno.fT[iN, j] - weno.fT[i, j]) * _dx +
+                max(vy_ij, 0) * (weno.fL[i, j] - weno.fL[i, jW]) * _dy +
+                min(vy_ij, 0) * (weno.fR[i, jE] - weno.fR[i, j]) * _dy
+        end
     end
 end
 
@@ -176,7 +188,7 @@ end
 
 ## WENO-5 ADVECTION
 """
-    WENO_advection!(u, Vxi, weno, di, ni, dt)
+    WENO_advection!(u, Vxi, weno, di, ni, dt; conservative=true)
 
 Perform the advection step of the Weighted Essentially Non-Oscillatory (WENO) scheme for the solution of hyperbolic partial differential equations.
 
@@ -187,42 +199,43 @@ Perform the advection step of the Weighted Essentially Non-Oscillatory (WENO) sc
 - `di`: grid spacing.
 - `ni`: number of grid points.
 - `dt`: time step.
+- `conservative`: if `true`, the scheme is using the conservative form of the advection equation, non-conservative otherwise (default: `true`). `Vxi` must be defined on the sides with `conservative=true` and on the center with `conservative=false`.
 
 # Description
-The function approximates the advected fluxes using the WENO scheme and use a strong-stability preserving (SSP) Runge-Kutta method of order 3 for the time integration.
+The function approximates the advected fluxes using the WENO scheme and use a stronge-stability preserving (SSP) Runge-Kutta method of order 4 for the time integration.
 """
-function WENO_advection!(u, Vxi, weno, di, dt)
+function WENO_advection!(u, Vxi, weno, di, dt; conservative = true)
     _di = inv.(di)
     ni = nx, ny = size(u)
     one_third = inv(3)
     two_thirds = 2 * one_third
 
     @parallel (1:nx, 1:ny) weno_f!(u, weno, nx, ny)
-    @parallel (1:nx, 1:ny) weno_step1!(weno, u, Vxi, _di, ni, dt)
+    @parallel (1:nx, 1:ny) weno_step1!(weno, u, Vxi, _di, ni, dt, conservative)
 
     @parallel (1:nx, 1:ny) weno_f!(weno.ut, weno, nx, ny)
-    @parallel (1:nx, 1:ny) weno_step2!(weno, u, Vxi, _di, ni, dt)
+    @parallel (1:nx, 1:ny) weno_step2!(weno, u, Vxi, _di, ni, dt, conservative)
 
     @parallel (1:nx, 1:ny) weno_f!(weno.ut, weno, nx, ny)
-    return @parallel (1:nx, 1:ny) weno_step3!(u, weno, Vxi, _di, ni, dt, one_third, two_thirds)
+    return @parallel (1:nx, 1:ny) weno_step3!(u, weno, Vxi, _di, ni, dt, one_third, two_thirds, conservative)
 end
 
-@parallel_indices (i, j) function weno_step1!(weno, u, Vxi, _di, ni, dt)
-    rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j)
+@parallel_indices (i, j) function weno_step1!(weno, u, Vxi, _di, ni, dt, conservative)
+    rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j, conservative)
     @inbounds weno.ut[i, j] = muladd(-dt, rᵢ, u[i, j])
     return nothing
 end
 
-@parallel_indices (i, j) function weno_step2!(weno, u, Vxi, _di, ni, dt)
-    rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j)
+@parallel_indices (i, j) function weno_step2!(weno, u, Vxi, _di, ni, dt, conservative)
+    rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j, conservative)
     @inbounds weno.ut[i, j] = @muladd 0.75 * u[i, j] + 0.25 * weno.ut[i, j] - 0.25 * dt * rᵢ
     return nothing
 end
 
 @parallel_indices (i, j) function weno_step3!(
-        u, weno, Vxi, _di, ni, dt, one_third, two_thirds
+        u, weno, Vxi, _di, ni, dt, one_third, two_thirds, conservative
     )
-    rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j)
+    rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j, conservative)
     @inbounds u[i, j] = @muladd one_third * u[i, j] + two_thirds * weno.ut[i, j] -
         two_thirds * dt * rᵢ
     return nothing

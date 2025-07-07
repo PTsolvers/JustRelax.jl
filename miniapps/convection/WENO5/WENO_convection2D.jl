@@ -95,7 +95,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = false, conservative = true)
+function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = "vtk2D", do_vtk = false, conservative = true)
 
     # Physical domain ------------------------------------
     ly = 700.0e3            # domain length in y
@@ -262,7 +262,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         )
         T_WENO .= thermal.T[2:(end - 1), :]
 
-        if conservative == true
+        if conservative
             WENO_advection!(T_WENO, (stokes.V.Vx, stokes.V.Vy), weno, di, dt; conservative = conservative)
         else
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -307,6 +307,7 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir = "Weno2D"
+vtk_dir = "Weno2D"
 do_vtk = true # save vtk files with particles
 ar = 1 # aspect ratio
 n = 64
@@ -319,4 +320,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, conservative = true);
+main2D(igg; figdir = figdir, vtk_dir = vtk_dir, ar = ar, nx = nx, ny = ny, conservative = true);

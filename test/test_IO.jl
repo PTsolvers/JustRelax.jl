@@ -125,10 +125,12 @@ using WriteVTK
             data_c,
             velocity_v,
             t = time,
+            pvd = joinpath(dst, "pvd_test"),
         )
         @test isfile(joinpath(dst, "vtk_000001_1.vti"))
         @test isfile(joinpath(dst, "vtk_000001_2.vti"))
         @test isfile(joinpath(dst, "vtk_000001.vtm"))
+        @test isfile(joinpath(dst, "pvd_test.pvd"))
 
 
         save_vtk(
@@ -137,16 +139,21 @@ using WriteVTK
             data_c,
             velocity_v,
             t = time,
+            pvd = joinpath(dst, "pvd_test1"),
         )
 
         @test isfile(joinpath(dst, "vtk_000001.vti"))
+        @test isfile(joinpath(dst, "pvd_test1.pvd"))
 
         save_vtk(
             joinpath(dst, "vtk_" * lpad("2", 6, "0")),
             xci,
-            (P = stokes.P, η = stokes.viscosity.η),
+            (P = stokes.P, η = stokes.viscosity.η);
+            t = time,
+            pvd = joinpath(dst, "pvd_test2"),
         )
         @test isfile(joinpath(dst, "vtk_000002.vti"))
+        @test isfile(joinpath(dst, "pvd_test2.pvd"))
 
         # VTK data series
         vtk = VTKDataSeries(joinpath(dst, "vtk_series"), xci)

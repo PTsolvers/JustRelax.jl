@@ -27,7 +27,7 @@ function init_phases!(phase_ratios, xci, xvi, circle)
         else
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
-            
+
         end
         return nothing
     end

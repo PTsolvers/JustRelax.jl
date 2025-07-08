@@ -10,10 +10,6 @@ Supported boundary conditions:
 
     $u_i = 0$ at the boundary $\Gamma$
 
-3. Free surface
-
-    $\sigma_z = 0 \rightarrow \tau_z = P$ at the top boundary
-
 ## Defining the boundary conditions
 We have two ways of defining the boundary condition formulations:
     - `VelocityBoundaryConditions`, and
@@ -26,12 +22,10 @@ For example, if we want to have free free-slip in every single boundary in a 2D 
 bcs = VelocityBoundaryConditions(;
     no_slip      = (left=false, right=false, top=false, bot=false),
     free_slip    = (left=true, right=true, top=true, bot=true),
-    free_surface = false
 )
 bcs = DisplacementBoundaryConditions(;
     no_slip      = (left=false, right=false, top=false, bot=false),
     free_slip    = (left=true, right=true, top=true, bot=true),
-    free_surface = false
 )
 ```
 
@@ -40,12 +34,10 @@ The equivalent for the 3D case would be:
 bcs = VelocityBoundaryConditions(;
     no_slip      = (left=false, right=false, top=false, bot=false, front=false, back=false),
     free_slip    = (left=true, right=true, top=true, bot=true, front=true, back=true),
-    free_surface = false
 )
 bcs = DisplacementBoundaryConditions(;
     no_slip      = (left=false, right=false, top=false, bot=false, front=false, back=false),
     free_slip    = (left=true, right=true, top=true, bot=true, front=true, back=true),
-    free_surface = false
 )
 ```
 ## Prescribing the velocity/displacement boundary conditions
@@ -76,3 +68,27 @@ Also for the displacement formulation it is important that the displacement is c
 displacement2velocity!(stokes, dt) # convert displacement to velocity
 update_halo!(@velocity(stokes)...)
 ```
+
+# Thermal boundary conditions
+
+Supported boundary conditions:
+
+1. No flux
+
+    $\frac{\partial T}{\partial x_i} = 0$ at the boundary $\Gamma$
+
+2. Dirichlet
+
+    $T = f(x_i) $ at a given point of the domain $\Omega$
+
+## Defining the boundary conditions
+Thermal boundary conditions can be defined using the `ThermalBoundaryConditions` struct. As with the flow boundary conditions, they can be switched on and off by setting them as `true` or `false` at the appropriate boundaries. `.
+
+For example, if we want to have a zero-flux boundary condition 
+at the left and right boundaries, and a Dirichlet boundary condition at the top and bottom boundaries in a 2D simulation, we need to instantiate `ThermalBoundaryConditions` as:
+```julia
+bcs = ThermalBoundaryConditions(;
+    no_flux = (left=true, right=true, top=false, bot=false),
+)
+```
+Unspecified boundaries will be set to a Dirichlet boundary condition by default.

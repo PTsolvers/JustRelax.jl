@@ -79,18 +79,18 @@ end
 function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vtk = false)
 
     # Physical domain ------------------------------------
-    lz = 700.0e3                # domain length in z
-    lx = ly = lz * ar              # domain length in x and y
+    lz = 700.0e3              # domain length in z
+    lx = ly = lz * ar         # domain length in x and y
     ni = nx, ny, nz           # number of cells
     li = lx, ly, lz           # domain length
     di = @. li / ni           # grid steps
-    origin = 0.0, 0.0, -lz        # origin coordinates (15km of sticky air layer)
+    origin = 0.0, 0.0, -lz    # origin coordinates (15km of sticky air layer)
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology = init_rheologies(; is_plastic = true)
+    rheology = init_rheologies()
     κ = (10 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = 0.5 * min(di...)^3 / κ / 3.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
@@ -193,6 +193,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
         Vy_v = @zeros(ni .+ 1...)
         Vz_v = @zeros(ni .+ 1...)
     end
+
     # Time loop
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
@@ -200,13 +201,6 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
         # interpolate fields from particle to grid vertices
         particle2grid!(thermal.T, pT, xvi, particles)
         temperature2center!(thermal)
-
-        # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-        compute_ρg!(ρg[end], phase_ratios, rheology, args)
-        compute_viscosity!(
-            stokes, phase_ratios, args, rheology, viscosity_cutoff
-        )
         # ------------------------------
 
         # Stokes solver ----------------
@@ -280,9 +274,6 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
                     T = Array(thermal.T),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
-                    Vx = Array(Vx_v),
-                    Vy = Array(Vy_v),
-                    Vz = Array(Vz_v),
                 )
                 data_c = (;
                     Tc = Array(thermal.Tc),

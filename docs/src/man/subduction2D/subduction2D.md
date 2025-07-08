@@ -2,10 +2,6 @@
 
 Model setups taken from [Hummel et al 2024](https://doi.org/10.5194/se-15-567-2024).
 
-# Model setup
-We will use [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl) to generate the initial geometry, material phases, and thermal field of our models.
-
-
 # Initialize packages
 
 Load JustRelax necessary modules and define backend.
@@ -40,7 +36,9 @@ function copyinn_x!(A, B)
 end
 ```
 
-# Script
+# Model setup
+We will use [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl) to generate the initial geometry, material phases, and thermal field of our models.
+
 
 ## Model domain
 ```julia
@@ -54,7 +52,7 @@ grid          = Geometry(ni, li; origin = origin)
 ## Physical properties using GeoParams
 For the rheology we will use the `rheology` object we created in the previous section.
 
-## Initialize particles
+## Initialize particles fields
 ```julia
 nxcell          = 40 # initial number of particles per cell
 max_xcell       = 60 # maximum number of particles per cell
@@ -65,13 +63,13 @@ subgrid_arrays  = SubgridDiffusionCellArrays(particles)
 grid_vxi        = velocity_grids(xci, xvi, di)
 ```
 
-We will like to advect two fields, the temperature `pT` and the material phases of each particle `pPhases`. We will initialize these fields as `CellArray` objects:
+We would like to advect two fields stored at the particles, the temperature `pT`, and the material phases of each particle `pPhases`, which we initialize as `CellArray` objects:
 ```julia
 pPhases, pT      = init_cell_arrays(particles, Val(2))
 particle_args    = (pT, pPhases)
 ```
 
-# Assign particles phases anomaly
+## Assign particles phases
 Now we assign the material phases from the arrays we computed with help of [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl)
 ```julia
 phases_device    = PTArray(backend)(phases_GMG)
@@ -80,8 +78,8 @@ init_phases!(pPhases, phases_device, particles, xvi)
 update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 ```
 
-## Temperature profile
-We need to copy the thermal field from the [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl) object to the `thermal` that contains all the arrays related to the thermal field.
+## Define temperature profile
+We need to copy the thermal field from the [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl) object to `thermal`, which contains the arrays related to the thermal field.
 ```julia
 Ttop             = 20 + 273
 Tbot             = maximum(T_GMG)
@@ -93,48 +91,42 @@ thermal_bc       = TemperatureBoundaryConditions(;
 thermal_bcs!(thermal, thermal_bc)
 @views thermal.T[:, end] .= Ttop
 @views thermal.T[:, 1]   .= Tbot
-temperature2center!(thermal)
+temperature2center!(thermal) # interpolate temperature from vertices to centers
 ```
 
-## Stokes arrays
+## Instantiate Stokes arrays
 Stokes arrays object
 ```julia
 stokes           = StokesArrays(backend, ni)
-pt_stokes        = PTStokesCoeffs(li, di; ϵ_rel=1e-4, Re=3π, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
+pt_stokes        = PTStokesCoeffs(li, di; ϵ_rel=1e-4, Re=3π, r=1e0, CFL = 0.98 / √2)
 ```
 
-## Buoyancy forces and lithostatic pressure
+## Initialize buoyancy forces and lithostatic pressure
 ```julia
 ρg        = ntuple(_ -> @zeros(ni...), Val(2))
-compute_ρg!(ρg[2], phase_ratios, rheology_augmented, (T=thermal.Tc, P=stokes.P))
+compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
 stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
 ```
 
-## Viscosity
-```julia
-args0            = (T=thermal.Tc, P=stokes.P, dt = Inf)
-viscosity_cutoff = (1e17, 1e24)
-compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
-```
-
-## Boundary conditions
+## Define boundary conditions
 We we will use free slip boundary conditions on all sides
 ```julia
 # Boundary conditions
 flow_bcs         = VelocityBoundaryConditions(;
-    free_slip    = (left = true , right = true , top = true , bot = true),
+    free_slip    = (left = true , right = true , top = true , bot = true ),
+    no_slip      = (left = false, right = false, top = false, bot = false),
 )
 ```
 
 ## Pseuo-transient coefficients
 ```julia
 pt_thermal = PTThermalCoeffs(
-    backend, rheology_augmented, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=1e-3 / √3
+    backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=0.98 / √3
 )
 ```
 
 ## Just before solving the problem...
-Because we have ghost nodes on the thermal field `thermal.T`, we need to copy the thermal field to a buffer array without those ghost nodes, and interpolate the temperature to the particles. This is because [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) does not support ghost nodes yet.
+Because we have ghost nodes on the thermal field `thermal.T`, we need to copy the thermal field to a buffer array without those ghost nodes, and interpolate the temperature to the particles. This is because [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) does not support ghost nodes in its current version.
 ```julia
 T_buffer    = @zeros(ni.+1)
 Told_buffer = similar(T_buffer)
@@ -144,6 +136,9 @@ for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
 end
 grid2particle!(pT, xvi, T_buffer, particles)
 ```
+
+# Solving the problem
+We will now advance the model in time, solving the Stokes and thermal equations, and advecting the particles.
 
 ## Advancing one time step
 
@@ -206,6 +201,7 @@ heatdiffusion_PT!(
         verbose = true,
     )
 )
+# Subgrid diffusion
 subgrid_characteristic_time!(
     subgrid_arrays, particles, dt₀, phase_ratios, rheology_augmented, thermal, stokes, xci, di
 )
@@ -218,7 +214,7 @@ subgrid_diffusion!(
 5. Particles advection
 ```julia
 # advect particles in space
-advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
 # advect particles in memory
 move_particles!(particles, xvi, particle_args)
 # check if we need to inject particles

@@ -196,7 +196,7 @@ function _solve_VS!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && ((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
+        if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end

@@ -21,12 +21,13 @@ function init_phases!(phase_ratios, xci, xvi, circle)
         x, y = xc[i], yc[j]
         p = GGU.Point(x, y)
         if GGU.inside(p, circle)
-            @index phases[1, i, j] = 1.0
-            @index phases[2, i, j] = 0.0
-
-        else
             @index phases[1, i, j] = 0.0
             @index phases[2, i, j] = 1.0
+
+        else
+            @index phases[1, i, j] = 1.0
+            @index phases[2, i, j] = 0.0
+            
         end
         return nothing
     end

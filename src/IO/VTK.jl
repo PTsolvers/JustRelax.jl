@@ -208,18 +208,22 @@ function save_vtk(fname::String, xi, data::NamedTuple; pvd::Union{Nothing, Strin
 end
 
 """
-    save_marker_chain(fname::String, chain::MarkerChain)
+    save_marker_chain(fname::String, chain::MarkerChain; conversion=1.0e3, pvd=nothing, t=0.0)
 
 Save a vector of points as a line in a VTK file.
 
 ## Arguments
 - `fname::String`: The name of the VTK file to save. The extension `.vtk` will be appended to the name.
 - `chain::MarkerChain`: Marker chain object from JustPIC.jl.
+- `conversion`: Conversion factor for coordinates (default: 1.0e3)
+- `pvd::Union{Nothing, String}`: Optional ParaView collection filename for time series
+- `t::Number`: Time value (default: 0.0)
 """
-save_marker_chain(fname::String, chain; conversion = 1.0e3) = save_marker_chain(fname, chain.cell_vertices ./ conversion, chain.h_vertices ./ conversion)
+save_marker_chain(fname::String, chain; conversion = 1.0e3, pvd::Union{Nothing, String} = nothing, t::Number = 0.0) = save_marker_chain(fname, chain.cell_vertices ./ conversion, chain.h_vertices ./ conversion; pvd=pvd, t=t)
 
 function save_marker_chain(
-        fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64}
+        fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64};
+        pvd::Union{Nothing, String} = nothing, t::Number = 0.0
     )
     cell_vertices_vec = collect(cell_vertices)  # Convert LinRange to Vector
     n_points = length(cell_vertices_vec)
@@ -230,12 +234,19 @@ function save_marker_chain(
 
     vtk_grid(fname, points, lines) do vtk
         vtk["Points"] = points
+
+        # If pvd collection name is provided, add this file to the collection
+        if !isnothing(pvd)
+            paraview_collection(pvd; append = true) do pvd_collection
+                collection_add_timestep(pvd_collection, vtk, t)
+            end
+        end
     end
     return nothing
 end
 
 """
-    save_particles(particles::Particles{B, 2}, pPhases; conversion = 1e3, fname::String = "./particles") where B
+    save_particles(particles::Particles{B, 2}, pPhases; conversion = 1e3, fname::String = "./particles", pvd=nothing, t=0.0) where B
 
 Save particle data and their material phase to a VTK file.
 
@@ -244,19 +255,21 @@ Save particle data and their material phase to a VTK file.
 - `pPhases`: The phases of the particles.
 - `conversion`: A conversion factor for the particle coordinates (default is 1e3).
 - `fname::String`: The name of the VTK file to save (default is "./particles").
+- `pvd::Union{Nothing, String}`: Optional ParaView collection filename for time series
+- `t::Number`: Time value (default: 0.0)
 """
-function save_particles(particles, pPhases; conversion = 1.0e3, fname::String = "./particles")
+function save_particles(particles, pPhases; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     N = length(size(particles.index))
     return if N == 2
-        save_particles2D(particles, pPhases; conversion = conversion, fname = fname)
+        save_particles2D(particles, pPhases; conversion = conversion, fname = fname, pvd = pvd, t = t)
     elseif N == 3
-        save_particles3D(particles, pPhases; conversion = conversion, fname = fname)
+        save_particles3D(particles, pPhases; conversion = conversion, fname = fname, pvd = pvd, t = t)
     else
         error("The dimension of the model is $N. It must be 2 or 3!")
     end
 end
 
-function save_particles2D(particles, pPhases; conversion = 1.0e3, fname::String = "./particles")
+function save_particles2D(particles, pPhases; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     p = particles.coords
     ppx, ppy = p
     pxv = Array(ppx.data)[:] ./ conversion
@@ -273,10 +286,17 @@ function save_particles2D(particles, pPhases; conversion = 1.0e3, fname::String 
 
     return vtk_grid(fname, x, y, z, cells) do vtk
         vtk["phase", VTKPointData()] = phase
+
+        # If pvd collection name is provided, add this file to the collection
+        if !isnothing(pvd)
+            paraview_collection(pvd; append = true) do pvd_collection
+                collection_add_timestep(pvd_collection, vtk, t)
+            end
+        end
     end
 end
 
-function save_particles3D(particles, pPhases; conversion = 1.0e3, fname::String = "./particles")
+function save_particles3D(particles, pPhases; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     p = particles.coords
     ppx, ppy = p
     pxv = Array(ppx.data)[:] ./ conversion
@@ -293,32 +313,40 @@ function save_particles3D(particles, pPhases; conversion = 1.0e3, fname::String 
     cells = [MeshCell(VTKCellTypes.VTK_VERTEX, (i,)) for i in 1:npoints]
     return vtk_grid(fname, x, y, z, cells) do vtk
         vtk["phase", VTKPointData()] = phase
+
+        # If pvd collection name is provided, add this file to the collection
+        if !isnothing(pvd)
+            paraview_collection(pvd; append = true) do pvd_collection
+                collection_add_timestep(pvd_collection, vtk, t)
+            end
+        end
     end
 end
 
 """
-    save_particles(particles::Particles{B, 2}; conversion = 1e3, fname::String = "./particles") where B
+    save_particles(particles::Particles{B, 2}; conversion = 1e3, fname::String = "./particles", pvd=nothing, t=0.0) where B
 
 Save particle data to a VTK file.
 
 ## Arguments
 - `particles::Particles{B, 2}`: The particle data, where `B` is the type of the particle coordinates.
-- `pPhases`: The phases of the particles.
 - `conversion`: A conversion factor for the particle coordinates (default is 1e3).
 - `fname::String`: The name of the VTK file to save (default is "./particles").
+- `pvd::Union{Nothing, String}`: Optional ParaView collection filename for time series
+- `t::Number`: Time value (default: 0.0)
 """
-function save_particles(particles; conversion = 1.0e3, fname::String = "./particles")
+function save_particles(particles; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     N = length(size(particles.index))
     return if N == 2
-        save_particles2D(particles; conversion = conversion, fname = fname)
+        save_particles2D(particles; conversion = conversion, fname = fname, pvd = pvd, t = t)
     elseif N == 3
-        save_particles3D(particles; conversion = conversion, fname = fname)
+        save_particles3D(particles; conversion = conversion, fname = fname, pvd = pvd, t = t)
     else
         error("The dimension of the model is $N. It must be 2 or 3!")
     end
 end
 
-function save_particles2D(particles; conversion = 1.0e3, fname::String = "./particles")
+function save_particles2D(particles; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     p = particles.coords
     ppx, ppy = p
     pxv = Array(ppx.data)[:] ./ conversion
@@ -333,10 +361,17 @@ function save_particles2D(particles; conversion = 1.0e3, fname::String = "./part
 
     return vtk_grid(fname, x, y, z, cells) do vtk
         vtk["phase", VTKPointData()] = 1
+
+        # If pvd collection name is provided, add this file to the collection
+        if !isnothing(pvd)
+            paraview_collection(pvd; append = true) do pvd_collection
+                collection_add_timestep(pvd_collection, vtk, t)
+            end
+        end
     end
 end
 
-function save_particles3D(particles; conversion = 1.0e3, fname::String = "./particles")
+function save_particles3D(particles; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     p = particles.coords
     ppx, ppy = p
     pxv = Array(ppx.data)[:] ./ conversion
@@ -351,5 +386,12 @@ function save_particles3D(particles; conversion = 1.0e3, fname::String = "./part
     cells = [MeshCell(VTKCellTypes.VTK_VERTEX, (i,)) for i in 1:npoints]
     return vtk_grid(fname, x, y, z, cells) do vtk
         vtk["phase", VTKPointData()] = 1
+
+        # If pvd collection name is provided, add this file to the collection
+        if !isnothing(pvd)
+            paraview_collection(pvd; append = true) do pvd_collection
+                collection_add_timestep(pvd_collection, vtk, t)
+            end
+        end
     end
 end

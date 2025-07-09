@@ -539,8 +539,10 @@ end
                 τII_ij = GeoParams.second_invariant(τij)
             else
                 # stress correction @ center
-                setindex!.(τ, dτij .+ τij, I...)
-                setindex!.(ε_pl, zeros(length(ε_pl)), I...)
+Base.@nexprs 3 i -> begin
+    @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+    @inbounds ε_pl[i][I...] = 0.0
+end
                 τII_ij
             end
             τII[I...] = τII_ij

@@ -9,25 +9,25 @@ tags:
   - computational geosciences
 authors:
   - name: Albert de Montserrat
-    orcid: 0000-0003-1694-3735 
+    orcid: 0000-0003-1694-3735
     affiliation: 1
   - name: Pascal Aellig
     orcid: 0009-0008-9039-5646
-    affiliation: 2  
+    affiliation: 2
   - name: Boris J.P. Kaus
     orcid: 0000-0002-0247-8660
     affiliation: 2 # (Multiple affiliations must be quoted)
   - name: Ivan Navarrete Jara
-    orcid: 
+    orcid:
     affiliation: 3
   - name: Ludovid Räss
-    orcid: 
+    orcid:
     affiliation: 4
   - name: Christian Schuler
-    orcid: 
+    orcid:
     affiliation: 2
   - name: Lukas Fuchs
-    orcid: 
+    orcid:
     affiliation: 5
 
 affiliations:
@@ -37,9 +37,9 @@ affiliations:
    index: 2
  - name: Paris
    index: 3
-- name: University of Lausanne, Switzerland
+ - name: University of Lausanne, Switzerland
    index: 4
-- name: Frankfurt University, Germany
+ - name: Frankfurt University, Germany
    index: 5
 
 date: 14 March 2024
@@ -56,17 +56,17 @@ The package implements a wide range of geological features essential for geodyna
 
 # Statement of Need
 
-Computational geodynamics has become indispensable for investigating Earth's complex multi-scale, multi-physics processes. The field requires numerical methods that can efficiently solve the governing equations of momentum, mass, and energy conservation while handling large and extremely sharp material property contrasts, non-linear rheologies, and multi-phase interactions. Over the past decades, the geodynamics community has developed sophisticated modeling software tools that have substantially advanced our understanding of Earth's dynamics. 
+Computational geodynamics has become indispensable for investigating Earth's complex multi-scale, multi-physics processes. The field requires numerical methods that can efficiently solve the governing equations of momentum, mass, and energy conservation while handling large and extremely sharp material property contrasts, non-linear rheologies, and multi-phase interactions. Over the past decades, the geodynamics community has developed sophisticated modeling software tools that have substantially advanced our understanding of Earth's dynamics.
 
-These codes have mainly based on staggered grid finite difference methods (e.g. **I3VIS** [@i3vis], **StagYY** [@stagyy], **LaMEM** [@lamem]) or finite element methods (e.g. **CITCOM-S** [@citcom], **ASPECT** [@aspect], **pTatin3D** [@ptatin], **Underworld** [@underworld]). Despite their significant contributions, these existing geodynamic modeling frameworks face several critical challenges:
+These codes have mainly based on staggered grid finite difference methods (e.g. **I3ELVIS** [@gerya2015plate], **StagYY** [@stagyy], **LaMEM** [@lamem]) or finite element methods (e.g. **CITCOM-S** [@citcom], **ASPECT** [@aspect], **pTatin3D** [@ptatin], **Underworld** [@underworld]). Despite their significant contributions, these existing geodynamic modeling frameworks face several critical challenges:
 
-1) Most codes are optimized for CPUs and distributed memory architectures (classic CPU-based HPC clusters) and would require from substantial modifications to full rewrites to be able to even run on hardware accelerators such as Graphical Process Units (GPUs). This CPU-only design creates barriers to adopting the latest high-performance computing resources, which are increasingly heterogeneous and evolving rapidly. Many existing solvers rely on direct or iterative matrix-based methods that encounter significant memory and performance bottlenecks when scaled to high-resolution 3D problems, particularly on memory-limited computing architectures like GPUs. 
+1) Most codes are optimized for CPUs and distributed memory architectures (classic CPU-based HPC clusters) and would require substantial modifications to full rewrites to be able to even run on hardware accelerators such as Graphical Process Units (GPUs). This CPU-only design creates barriers to adopting the latest high-performance computing resources, which are increasingly heterogeneous and evolving rapidly. Many existing solvers rely on direct or iterative matrix-based methods that encounter significant memory and performance bottlenecks when scaled to high-resolution 3D problems, particularly on memory-limited computing architectures like GPUs.
 
 2) Traditional geodynamic codes are predominantly written (or at least their critical bits) in statically compiled languages like C/C++ or Fortran, with complex codebases that have evolved over decades. This complexity creates steep learning curves for new developers and makes implementing new physical models or numerical methods challenging without specialized knowledge of the entire codebase and a minimal level of programming skills. The static nature of these languages also limits the flexibility of code development workflows, which often involve rapid prototyping and interactive development in interpreted languages such as MATLAB or Python, instead of prototyping directly in the code base.
 
 3) Often these codes heavily depend on external libraries to realise tasks such as linear algebra operations, parallelisationm, or I/O, for example. This reliance on external libraries can lead to compatibility issues, version conflicts, and difficulties in maintaining the codebase as dependencies evolve. Additionally, this often also results in not-so-straighforward installation experience, in particular for users without a lot of experience in software engineering.
 
-JustRelax.jl intends to address these fundamental limitations through several innovative approaches. By leveraging Julia's metaprogramming capabilities, JustRelax.jl generates hardware-specific code at compile time. This allows the same high-level code to run efficiently across different architectures (CPUs, GPUs, and specialized accelerators) with minimal changes to the script to be run. The Accelerated Pseudo-Transient (APT) method implemented in JustRelax.jl is particularly well-suited for modern computing architectures, as it avoids the memory bottlenecks associated with traditional matrix-based solvers. This approach is inherently scalable and efficiently handles non-linearities without requiring solver modifications. Julia's rich ecosystem provides seamless access to tools for visualization, statistical analysis, machine learning, and automatic differentiation. This enables new scientific workflows such as adjoint-based inversions, uncertainty quantification, and parameter exploration that are challenging to implement with traditional geodynamic codes. The interactive nature of Julia allows researchers to rapidly prototype models, analyze results, and make adjustments within the same environment, significantly accelerating the research cycle in computational geodynamics while maintaining high performance through compiled code. Julia's accessibility and modern syntax lower the barrier for new contributors, while the modular architecture of JustRelax.jl enables domain scientists to extend functionality without having to learn and understand the entire codebase. 
+JustRelax.jl intends to address these fundamental limitations through several innovative approaches. By leveraging Julia's metaprogramming capabilities, JustRelax.jl generates hardware-specific code at compile time. This allows the same high-level code to run efficiently across different architectures (CPUs, GPUs, and specialized accelerators) with minimal changes to the script to be run. The Accelerated Pseudo-Transient (APT) method [@Raess2022] implemented in JustRelax.jl is particularly well-suited for modern computing architectures, as it avoids the memory bottlenecks associated with traditional matrix-based solvers. This approach is inherently scalable and efficiently handles non-linearities without requiring solver modifications. Julia's rich ecosystem provides seamless access to tools for visualization, statistical analysis, machine learning, and automatic differentiation. This enables new scientific workflows such as adjoint-based inversions, uncertainty quantification, and parameter exploration that are challenging to implement with traditional geodynamic codes. The interactive nature of Julia allows researchers to rapidly prototype models, analyze results, and make adjustments within the same environment, significantly accelerating the research cycle in computational geodynamics while maintaining high performance through compiled code. Julia's accessibility and modern syntax lower the barrier for new contributors, while the modular architecture of JustRelax.jl enables domain scientists to extend functionality without having to learn and understand the entire codebase.
 
 # Methods
 
@@ -82,7 +82,7 @@ $$
 \end{align}
 $$
 
-where $\nabla$ is the nabla operator, $\mathbf{\tau}$ is the deviatoric stress tensor, $p$ is the pressure, $\mathbf{f}$ are the body forces, usually being the buoyancy forces $\mathbf{f} = \rho \mathbf{g}$ where $\rho$ is density and $\mathbf{g} = (0, -g_y)$ is the gravitational force vector, $\mathbf{v}$ is the velocity field, $\beta$ is the inverse of the bulk modulus, and $\alpha$ is the thermal expansivity coefficient. The previous system of equations is closed with the constitutive equation that relates the deviatoric strain tensor $\dot{\mathbf{\varepsilon}}$ with $\mathbf{\tau}$. In the simple case of a linear isotropic rheology, the constitutive equation is 
+where $\nabla$ is the nabla operator, $\mathbf{\tau}$ is the deviatoric stress tensor, $p$ is the pressure, $\mathbf{f}$ are the body forces, usually being the buoyancy forces $\mathbf{f} = \rho \mathbf{g}$ where $\rho$ is density and $\mathbf{g} = (0, -g_y)$ is the gravitational force vector, $\mathbf{v}$ is the velocity field, $\beta$ is the inverse of the bulk modulus, and $\alpha$ is the thermal expansivity coefficient. The previous system of equations is closed with the constitutive equation that relates the deviatoric strain tensor $\dot{\mathbf{\varepsilon}}$ with $\mathbf{\tau}$. In the simple case of a linear isotropic rheology, the constitutive equation is
 
 $$
 \begin{align}
@@ -103,7 +103,7 @@ where $C_p$ is the heat capacity, $\kappa$ is the heat conductivity, $\mathbf{\t
 
 ### Pseudo-Transient formulation
 
-The equations of conservation of momentum, conservation of mass, and conservation of energy are solved using the accelerated pseudo-transient (APT) iterative approach. This method consists of transforming the elliptic PDEs into damped wave equations by augmenting them with a damped pseudo-time derivative. Upon convergence, the pseudo-time derivative term should vanish (to machine precision), hence recovering the original PDE. We employ the APT method because it is embarrassingly parallel (because it is matrix-free, requiring only explicit updates), can deal with non-linearities without modifying the solver, and its numerical implementation is much simpler than other solution methods typically used to solve the Stokes equations. The APT formulation of the compressible Stokes equations and continuity equation is then:
+The equations of conservation of momentum, conservation of mass, and conservation of energy are solved using the accelerated pseudo-transient (APT) iterative approach. This method consists of transforming the elliptic PDEs into damped wave equations by augmenting them with a damped pseudo-time derivative. Upon convergence, the pseudo-time derivative term should vanish (to machine precision), hence recovering the original PDE. We employ the APT method because it is embarrassingly parallel as it is matrix-free and requiring only explicit updates. Therefore it can deal with non-linearities without modifying the solver, and its numerical implementation is much simpler than other solution methods typically used to solve the Stokes equations. The APT formulation of the compressible Stokes equations and continuity equation is then:
 $$
 \begin{align}
     \widetilde{\rho}\frac{\partial \mathbf{v}}{\partial \psi} + \nabla\cdot\mathbf{\tau} - \nabla p = \mathbf{f}  \\
@@ -136,7 +136,7 @@ $$
 \end{align}
 $$
 
-where 
+where
 $$
 \begin{align}
   \widetilde{\rho} = R_e \frac{\kappa}{\widetilde{V} L}, \qquad
@@ -153,9 +153,9 @@ The advection equation in a decoupled manner using a Particle-in-Cell (PiC) meth
 
 ### Parallelization
 
-The APT method JustRelax.jl is parallelised in a hybrid shared-distributed memory architecture manner, i.e. multithreading combined with MPI for CPUs, and GPU-aware MPI for multi-GPU architectures. Parallelisation is implemented with two Julia packages:
+The APT method in JustRelax.jl is parallelised in a hybrid shared-distributed memory architecture manner, i.e. multithreading combined with MPI for CPUs, and GPU-aware MPI for multi-GPU architectures. Parallelisation is implemented with two Julia packages:
 
-- [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) handles the backend abstractation, allowing the user to write (shared memory) parallel kernels that seamlessly run on CPUs and GPUs (currently supported: CUDA, AMDGPU, and Mac M-series chips). It automatically generates Julia code based on Base.Threads.jl (Julia's native multi-threading library) and the third-party GPU libraries CUDA.jl (NVidia GPUs), AMDGPU.jl (AMD GPUs), and Metal.jl (Mac M-series chips) depending on the device backend of choice of the end-user.
+- [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) handles the backend abstractation, allowing the user to write (shared memory) parallel kernels that seamlessly run on CPUs and GPUs (currently supported: CUDA, AMDGPU, and Mac M-series chips). It automatically generates Julia code based on Base.Threads.jl (Julia's native multi-threading library) and the third-party GPU libraries CUDA.jl (Nvidia GPUs), AMDGPU.jl (AMD GPUs), and Metal.jl (Mac M-series chips) depending on the device backend of choice of the end-user.
 
 - [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl) handles MPI domain decomposition and communication, distributing the computational domain across multiple (CPU/GPU) nodes. MPI communication is handled at the lowest level by MPI.jl, the Julia wrapper of the Message Passing Interface (MPI) standard.
 
@@ -168,13 +168,13 @@ JustRelax.jl features:
 <figure>
     <img src="figs/weak_scaling_JR.png"
          alt="weak scaling">
-    <figcaption>GPU weak scaling performance of JustRelax.jl in the two- and three-dimensional backends</figcaption>
+    <figcaption>Figure 1: GPU weak scaling performance of JustRelax.jl in the two- and three-dimensional backends, demonstrating efficient parallelization and scalability for large-scale geodynamic simulations</figcaption>
 </figure>
 
 
 <!-- ![](figs/weak_scaling_JR.png) -->
 
-*Figure 1: Weak scaling performance of JustRelax.jl on different hardware architectures, demonstrating efficient parallelization and scalability for large-scale geodynamic simulations.*
+<!-- *Figure 1: Weak scaling performance of JustRelax.jl on different hardware architectures, demonstrating efficient parallelization and scalability for large-scale geodynamic simulations.* -->
 
 - **Portability**: JustRelax.jl is designed to run efficiently on multiple hardware architectures (multi-XPU), including CPUs, GPUs (CUDA and AMD), and on multi-node clusters.  This portability is achieved through Julia's advanced meta-programming capabilities, which generate the code for the specific target hardware during compile or parse time, allowing the same code to run across different computing platforms without modifications. This abstraction of the hardware backend is implemented in the ParallelStencil.jl package.
 
@@ -186,12 +186,12 @@ const isCUDA = true # or `false` to use the CPU backend
 end
 # load JustRelax.jl and its 2D backend
 using JustRelax, JustRelax.JustRelax2D
-# define the `backend` variable that is passed to instantiate JustRelax.jl 
+# define the `backend` variable that is passed to instantiate JustRelax.jl
 # objects on the correct hardware backend.
 # Options:
 #     CPUBackend, CUDABackend, AMDGPUBackend
-const backend = @static if isCUDA 
-    CUDABackend       
+const backend = @static if isCUDA
+    CUDABackend
 else
     JustRelax.CPUBackend
 end
@@ -217,7 +217,7 @@ end
 
 - **Interactive development environment**: As a Julia package, JustRelax.jl takes full advantage of the language's dynamic nature, allowing for interactive sessions, real-time debugging, and rapid prototyping of new features. This significantly reduces the development cycle compared to traditional compiled languages commonly used in geodynamic modeling, while maintaining competitive performance through just-in-time compilation and type stability.
 
-# Examples 
+# Examples
 
 And extensive set of benchmarks and model examples are stored in the repositoty of JustRelax.jl. More complex examples such as [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/subduction2D)  or the raise of a [3D plume](https://ptsolvers.github.io/JustRelax.jl/dev/man/plume3D/plume3D) are described in the package documentation.
 

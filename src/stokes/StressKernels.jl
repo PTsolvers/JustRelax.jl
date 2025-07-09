@@ -1097,6 +1097,7 @@ end
             τII_ij = GeoParams.second_invariant(τij)
         else
             setindex!.(τ, dτij .+ τij, I...)
+            setindex!.(ε_pl, zeros(length(ε_pl)), I...)
             τII_ij
         end
 

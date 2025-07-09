@@ -538,6 +538,7 @@ end
             else
                 # stress correction @ center
                 setindex!.(τ, dτij .+ τij, I...)
+                setindex!.(ε_pl, zeros(length(ε_pl)), I...)
                 τII_ij
             end
             τII[I...] = τII_ij

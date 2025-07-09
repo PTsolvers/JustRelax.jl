@@ -29,6 +29,9 @@ authors:
   - name: Lukas Fuchs
     orcid: 0000-0002-9165-6384
     affiliation: 5
+  - name: Hugo Dominguez
+    orcid: 0009-0001-8425-0503
+    affiliation: 2
 
 affiliations:
  - name: ETH Zürich, Switzerland

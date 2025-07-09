@@ -18,16 +18,16 @@ authors:
     orcid: 0000-0002-0247-8660
     affiliation: 2 # (Multiple affiliations must be quoted)
   - name: Ivan Navarrete Jara
-    orcid:
+    orcid: 0009-0004-9272-511X
     affiliation: 3
   - name: Ludovid Räss
-    orcid:
+    orcid: 0000-0002-1136-899X
     affiliation: 4
   - name: Christian Schuler
-    orcid:
+    orcid: 0009-0004-9873-9774
     affiliation: 2
   - name: Lukas Fuchs
-    orcid:
+    orcid: 0000-0002-9165-6384
     affiliation: 5
 
 affiliations:
@@ -35,7 +35,7 @@ affiliations:
    index: 1
  - name: Johannes Gutenberg-University Mainz, Germany
    index: 2
- - name: Paris
+ - name: École Normale Supérieure - PSL University, France
    index: 3
  - name: University of Lausanne, Switzerland
    index: 4

@@ -843,8 +843,8 @@ end
         else
             # stress correction @ center
             Base.@nexprs 6 i -> begin
-                @inbounds τ[i][I...] = τij[i]
-                @inbounds ε_pl[i][I...] = εij_pl[i]
+                @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+                @inbounds ε_pl[i][I...] = 0.0
             end
             τII[I...] = τII_ij
         end

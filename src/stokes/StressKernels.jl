@@ -1096,10 +1096,10 @@ end
             setindex!.(ε_pl, εij_pl, I...)
             τII_ij = GeoParams.second_invariant(τij)
         else
-Base.@nexprs 3 i -> begin
-    @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-    @inbounds ε_pl[i][I...] = 0.0
-end
+            Base.@nexprs 3 i -> begin
+                @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+                @inbounds ε_pl[i][I...] = 0.0
+            end
             τII_ij
         end
 

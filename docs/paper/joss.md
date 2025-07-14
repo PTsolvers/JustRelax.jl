@@ -75,7 +75,7 @@ limits the capability of these codes to take advantage of the latest high-perfor
 
 3) Often, these codes depend on external libraries for performing linear algebra operations, or I/O, for example. This often leads to the so-called _dependencies hell_, where installation is not so trivial, in particular for newcomers, as compatibility issues, version conflicts, and other difficulties may occur. 
 
-With JustRelax.jl, we intend to address these fundamental limitations by introducing the first HPC-ready geodynamic software writen in Julia:
+With JustRelax.jl, we intend to address these fundamental limitations by introducing the first HPC-ready geodynamic software written in Julia:
 
 - We leverage Julia's metaprogramming capabilities to generate hardware-specific code. With this, any script written by the user runs efficiently across different architectures and hardware with minimal changes.
 
@@ -83,7 +83,7 @@ With JustRelax.jl, we intend to address these fundamental limitations by introdu
 
 - Julia's built-in package manager makes the installation of JustRelax.jl trivial, as it automatically downloads and installs all the required dependencies for any compatible operative system (Windows, MacOs, and most of the mainstream Linux distros).
 
-- Julia is a higher-level language, with a syntax that may be familiat to Python and MATLAB users. This signficantly lowers the entry bar to new users, while still offering a performance comparable to static languages.
+- Julia is a higher-level language, with a syntax that may be familiat to Python and MATLAB users. This significantly lowers the entry bar to new users, while still offering a performance comparable to static languages.
 
 # Methods
 
@@ -166,7 +166,7 @@ The APT equations are solved by discretizing the pseudo-time derivatives, either
 
 ### Advection
 
-The advection equation in a decoupled manner using a Particle-in-Cell (PiC) method to advect the temperature, composition, or any other information carried by the particles. This method is particularly well-suited for this task because it can accurately handle the advection of these fields @dominguez2024, and it is extensively used to simulate global and regional scale geodynamic processes, e.g. StaggYY [@stagyy], LaMEM [@lamem], I3ELVIS [@i3elvis], ASPECT [@aspect], amongst others. This is implemented in the publically available [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) package, where different time integrators and velocity interpolation schemes are available.
+The advection equation in a decoupled manner using a Particle-in-Cell (PiC) method to advect the temperature, composition, or any other information carried by the particles. This method is particularly well-suited for this task because it can accurately handle the advection of these fields @dominguez2024, and it is extensively used to simulate global and regional scale geodynamic processes, e.g. StaggYY [@stagyy], LaMEM [@lamem], I3ELVIS [@i3elvis], ASPECT [@aspect], amongst others. This is implemented in the publicly available [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) package, where different time integrators and velocity interpolation schemes are available.
 
 ### Parallelization
 

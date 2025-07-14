@@ -225,6 +225,12 @@ end
 And extensive set of benchmarks and model examples are stored in the repositoty of JustRelax.jl. More complex examples such as [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/subduction2D)  or the raise of a [3D plume](https://ptsolvers.github.io/JustRelax.jl/dev/man/plume3D/plume3D) are described in the package documentation.
 
 
+<figure>
+    <img src="figs/models_JOSS.png"
+         alt="models">
+    <figcaption> Figure 3: Model examples from the documentation: a) 2D subduction, and b) raising of a hot plume in 3D. </figcaption>
+</figure>
+
 # Acknowledgments
 
 

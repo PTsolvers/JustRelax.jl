@@ -51,10 +51,10 @@ bibliography: joss.bib
 
 # Summary
 
-JustRelax.jl is a highly portable and high-performance Julia package designed for geodynamic modeling. 
+JustRelax.jl is a open source, highly portable, and high-performance Julia package designed for geodynamic modeling. 
 It employs the Accelerated Pseudo-Transient (APT) method to solve the compressible Stokes and heat diffusion equations to simulate complex geodynamic processes. The APT is a matrix-free and embarrassingly parallel iterative method, making it especially well-suited to exploit Graphical Processing Unit (GPU) hardware accelerators available in distributed systems of modern HPC centers.
 
-JustRelax.jl incorporates a wide range of features critical to computational geodynamics. These include highly non-linear rheologies, free surface and a particles-in-cell method to track and advect material phases and properties. Several of these features that JustRelax.jl is built upon are outsourced to smaller specialized packages. This highly modular design considerably reduces the size of the core code base and enhances the maintenance of the whole package infrastructure. This also improves code reusability, as the external packages can be re-used either as stand-alone packages or as building blocks for some other package.
+JustRelax.jl incorporates a wide range of features critical to computational geodynamics. These include highly non-linear rheologies, free surface and a particles-in-cell method to track and advect material phases and properties. Several of these features that JustRelax.jl is built upon are outsourced to smaller specialized packages. This modular design considerably reduces the size of the core code base and enhances the maintenance of the whole package infrastructure. This also improves code reusability, as the external packages can be re-used either as stand-alone packages or as building blocks for some other package.
 
 At last, JustRelax.jl, and most of its core dependencies, are fully written in the [Julia programming language](https://julialang.org/), which lowers the entry bar for users without extensive experience in programming, compared to other compiled languages common in HPC-focused software (C/C++/Fortran). The interactive environment of Julia also, similar to Python and MATLAB, lets the users prototype and implement new code in the same language, improving the quality of life of the whole developing experience.
 

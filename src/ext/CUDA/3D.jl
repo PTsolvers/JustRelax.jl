@@ -454,4 +454,25 @@ function JR3D.rotate_stress!(
     return nothing
 end
 
+# Phase ratios with arrays
+
+function JR3D.update_phase_ratios!(
+        phase_ratios::JustPIC.PhaseRatios{CUDABackend, T}, phase_arrays, xci, xvi, phases
+    ) where {T <: AbstractArray}
+
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays, xci)
+    phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
+
+    # velocity nodes
+    phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
+    phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, xci, :y)
+    phase_ratios_face_from_arrays!(phase_ratios.Vz, phase_arrays, xci, :z)
+
+    # shear stress nodes
+    phase_ratios_midpoint_from_centers!(phase_ratios.xy, phase_arrays, xci, :xy)
+    phase_ratios_midpoint_from_centers!(phase_ratios.yz, phase_arrays, xci, :yz)
+    phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, xci, :xz)
+    return nothing
+end
+
 end

@@ -463,4 +463,17 @@ function JR2D.update_phases_given_markerchain!(
     return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
 end
 
+# Phase ratios with arrays
+function JR2D.update_phase_ratios!(
+        phase_ratios::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend, T}, phase_arrays, xci, xvi
+    ) where {T <: AbstractMatrix}
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays, xci)
+    phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
+    # velocity nodes
+    phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
+    phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, xci, :y)
+    return nothing
+end
+
+
 end

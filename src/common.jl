@@ -52,6 +52,9 @@ include("MiniKernels.jl")
 include("phases/phases.jl")
 export fn_ratio
 
+include("phases/PhaseRatios.jl")
+export update_phase_ratios!
+
 include("rheology/BuoyancyForces.jl")
 export compute_ρg!
 

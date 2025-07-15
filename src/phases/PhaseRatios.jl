@@ -87,8 +87,8 @@ function phase_ratios_center_from_arrays!(phase_ratios::JustPIC.PhaseRatios, pha
 end
 
 @parallel_indices (I...) function phase_ratios_center_from_arrays_kernel!(
-        ratio_centers, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, di::NTuple{ND}
-    ) where {N, ND}
+        ratio_centers, phase_arrays::NTuple{N, AbstractArray}
+    ) where {N}
 
     values = ntuple(i -> phase_arrays[i][I...], Val(N))
     total = sum(values)
@@ -96,6 +96,15 @@ end
     # Normalize (handle case where total might be zero)
     if total > eps(typeof(total))
         normalized_values = clamp.(values ./ total, 0.0, 1.0)
+        # Clean up very small values (round to zero if < 1e-5)
+        cleaned_values = ntuple(i -> normalized_values[i] < 1e-5 ? zero(eltype(normalized_values)) : normalized_values[i], Val(N))
+        # Renormalize to ensure sum = 1
+        final_total = sum(cleaned_values)
+        if final_total > eps(typeof(final_total))
+            normalized_values = cleaned_values ./ final_total
+        else
+            normalized_values = ntuple(_ -> one(eltype(values)) / N, Val(N))
+        end
     else
         # If all values are zero, distribute equally
         normalized_values = ntuple(_ -> one(eltype(values)) / N, Val(N))
@@ -157,6 +166,8 @@ end
             w = ntuple(_ -> one(T) / N, Val(N))
         end
         w = clamp.(w, zero(T), one(T))
+        # Clean up very small values
+        w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
         total_phases = sum(w)
         if total_phases > eps(T)
             w = w ./ total_phases
@@ -193,6 +204,8 @@ end
             w = ntuple(_ -> one(T) / N, Val(N))
         end
         w = clamp.(w, zero(T), one(T))
+        # Clean up very small values
+        w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
         total_phases = sum(w)
         if total_phases > eps(T)
             w = w ./ total_phases
@@ -267,18 +280,20 @@ end
     if total_weight > eps(T)
         w = w ./ total_weight
     else
-        w = ntuple(_ -> zero(T), Val(N))
+        w = ntuple(_ -> one(T) / N, Val(N))
     end
     w = clamp.(w, zero(T), one(T))
+    # Clean up very small values (round to zero if < 1e-5)
+    w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
     total_phases = sum(w)
     if total_phases > eps(T)
         w = w ./ total_phases
     else
-        w = ntuple(_ -> zero(T), Val(N))
+        w = ntuple(_ -> one(T) / N, Val(N))
     end
-    # Write to face grid - use cellaxes like the original implementation
+
     for ip in cellaxes(ratio_faces)
-        @index ratio_faces[ip, I...] = w[ip]
+        @index ratio_faces[ip, (I .+ offsets)...] = w[ip]
     end
 
     return nothing
@@ -366,6 +381,8 @@ end
         w = ntuple(_ -> one(T) / N, Val(N))
     end
     w = clamp.(w, zero(T), one(T))
+    # Clean up very small values (round to zero if < 1e-5)
+    w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
     total_phases = sum(w)
     if total_phases > eps(T)
         w = w ./ total_phases
@@ -374,37 +391,8 @@ end
     end
     # Write to midpoint grid - use cellaxes like the original implementation
     for ip in cellaxes(ratio_midpoints)
-        @index ratio_midpoints[ip, I...] = w[ip]
+        @index ratio_midpoints[ip, (I .+ offsets)...] = w[ip]
     end
 
     return nothing
-end
-
-
-#JP functions
-@inline compute_dx(::Tuple{}) = ()
-@inline compute_dx(grid::AbstractArray) = grid[3] - grid[2]
-@inline compute_dx(grid::Tuple) = compute_dx(first(grid)), compute_dx(Base.tail(grid))...
-
-
-@inline function face_offset(::Val{2}, dimension::Symbol)
-    return offsets = if dimension === :x
-        (1, 0)
-    elseif dimension === :y
-        (0, 1)
-    else
-        throw("Unknown dimensions. Valid dimensions are :x, :y")
-    end
-end
-
-@inline function face_offset(::Val{3}, dimension::Symbol)
-    return offsets = if dimension === :x
-        (1, 0, 0)
-    elseif dimension === :y
-        (0, 1, 0)
-    elseif dimension === :z
-        (0, 0, 1)
-    else
-        throw("Unknown dimensions. Valid dimensions are :x, :y, :z, :xy, :yz, :xz")
-    end
 end

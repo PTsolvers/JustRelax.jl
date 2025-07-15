@@ -69,10 +69,10 @@ function update_phase_ratios!(
     phase_ratios_face_from_arrays!(phase_ratios.Vz, phase_arrays, xci, :z)
 
     # shear stress nodes
-    phase_ratios_midpoint_from_centers!(phase_ratios.xy, phase_arrays, xci, :xy)
-    phase_ratios_midpoint_from_centers!(phase_ratios.yz, phase_arrays, xci, :yz)
-    phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, xci, :xz)
-
+    phase_ratios_midpoint_from_arrays!(phase_ratios.xy, phase_arrays, xci, :xy)
+    phase_ratios_midpoint_from_arrays!(phase_ratios.yz, phase_arrays, xci, :yz)
+    phase_ratios_midpoint_from_arrays!(phase_ratios.xz, phase_arrays, xci, :xz)
+    end
     return nothing
 end
 

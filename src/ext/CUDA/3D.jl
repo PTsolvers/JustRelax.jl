@@ -460,7 +460,7 @@ function JR3D.update_phase_ratios!(
         phase_ratios::JustPIC.PhaseRatios{CUDABackend, T}, phase_arrays, xci, xvi, phases
     ) where {T <: AbstractArray}
 
-    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays, xci)
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
 
     # velocity nodes

@@ -1,12 +1,34 @@
+const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
-const backend_JR = CPUBackend
+
+const backend_JR = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2)
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 
 using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 using GeoParams, GLMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -230,10 +252,10 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 
 
     # Plotting ---------------------
-    f, _, h = heatmap(velocity, colormap = :vikO)
+    f, _, h = heatmap(Array(velocity), colormap = :vikO)
     Colorbar(f[1, 2], h)
     pp = [argmax(p) for p in Array(phase_ratios.center)]
-    f3, ax3, h3 = heatmap(xvi..., pp; colormap = :roma)
+    f3, ax3, h3 = heatmap(xvi..., Array(pp); colormap = :roma)
     Colorbar(f3[1, 2], h3)
 
     display(f3)
@@ -245,7 +267,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 end
 
 ar = 1 # aspect ratio
-n = 256
+n = 96
 nx = n * ar - 2
 ny = n - 2
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

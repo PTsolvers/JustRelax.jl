@@ -25,7 +25,7 @@ function update_phase_ratios!(
     ) where {B, T <: AbstractMatrix, N}
 
 
-    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays, xci)
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
     # velocity nodes
     phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
@@ -60,7 +60,7 @@ function update_phase_ratios!(
         phase_ratios::JustPIC.PhaseRatios{B, T}, phase_arrays::NTuple{N, AbstractArray}, xci, xvi
     ) where {B, T <: AbstractArray, N}
 
-    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays, xci)
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
 
     # velocity nodes
@@ -72,16 +72,14 @@ function update_phase_ratios!(
     phase_ratios_midpoint_from_arrays!(phase_ratios.xy, phase_arrays, xci, :xy)
     phase_ratios_midpoint_from_arrays!(phase_ratios.yz, phase_arrays, xci, :yz)
     phase_ratios_midpoint_from_arrays!(phase_ratios.xz, phase_arrays, xci, :xz)
-    end
     return nothing
 end
 
-function phase_ratios_center_from_arrays!(phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractArray}, xci) where {N}
+function phase_ratios_center_from_arrays!(phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractArray}) where {N}
     ni = size(first(phase_arrays))
-    di = compute_dx(xci)
 
     @parallel (@idx ni) phase_ratios_center_from_arrays_kernel!(
-        phase_ratios.center, phase_arrays, xci, di
+        phase_ratios.center, phase_arrays
     )
     return nothing
 end

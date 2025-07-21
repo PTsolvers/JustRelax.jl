@@ -44,3 +44,5 @@ miniapps/adjoint_variational/testSymbolics.jl
 Project.toml
 .gitignore
 Project.toml
+*.pvd
+

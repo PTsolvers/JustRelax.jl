@@ -1,4 +1,5 @@
 const isCUDA = false
+#const isCUDA = true
 @static if isCUDA
     using CUDA
 end
@@ -22,7 +23,7 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-using Enzyme, KahanSummation, LinearAlgebra
+using Enzyme, LinearAlgebra
 
 function meshgrid(x, y)
     X = [i for i in x, j in 1:length(y)]
@@ -58,6 +59,53 @@ function init_phasesFD!(phase_ratios, xci, xvi, radius, FDxmin, FDxmax, FDymin, 
             @index phases[2, i, j] = 0.0
             @index phases[3, i, j] = 0.0
             @index phases[4, i, j] = 0.0
+        end
+        return nothing
+    end
+
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius, FDxmin, FDxmax, FDymin, FDymax,di)
+    @parallel (@idx ni.+1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius, FDxmin, FDxmax, FDymin, FDymax,di)
+    return nothing
+end
+
+function init_phasesFD_StickyAir!(phase_ratios, xci, xvi, radius, FDxmin, FDxmax, FDymin, FDymax,di)
+    ni      = size(phase_ratios.center)
+    origin  = 0.5, 0.5
+
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius, FDxmin, FDxmax, FDymin, FDymax,di)
+        x, y = xc[i], yc[j]
+
+            
+        if (x <= FDxmax) && (x >= FDxmin) && (y <= FDymax) && (y >= FDymin) && ((x-o_x)^2 ≤ radius^2) && ((y-o_y)^2 ≤ radius^2)
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 0.0
+            @index phases[3, i, j] = 0.0
+            @index phases[4, i, j] = 1.0
+            @index phases[5, i, j] = 0.0 
+        elseif (x <= FDxmax) && (x >= FDxmin) && (y <= FDymax) && (y >= FDymin) 
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 0.0
+            @index phases[3, i, j] = 1.0
+            @index phases[4, i, j] = 0.0
+            @index phases[5, i, j] = 0.0    
+        elseif ((x-o_x)^2 ≤ radius^2) && ((y-o_y)^2 ≤ radius^2) #((x-o_x)^2 + (y-o_y)^2) ≤ radius^2
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0    # inclusion
+            @index phases[3, i, j] = 0.0
+            @index phases[4, i, j] = 0.0
+            @index phases[5, i, j] = 0.0  
+        elseif (y >= 0.8)
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 0.0    # inclusion
+            @index phases[3, i, j] = 0.0
+            @index phases[4, i, j] = 0.0
+            @index phases[5, i, j] = 1.0  
+        else
+            @index phases[1, i, j] = 1.0
+            @index phases[2, i, j] = 0.0
+            @index phases[3, i, j] = 0.0
+            @index phases[4, i, j] = 0.0
+            @index phases[5, i, j] = 0.0 
         end
         return nothing
     end
@@ -205,21 +253,21 @@ function plot_FD_vs_AD(refcost,cost,dp,Sens,nx,ny,ηref,ρref,stokesAD,figdir,f,
     save(joinpath(figdir, "Comparison$nx.png"), fig)
     #save(joinpath(figdir, "ComparisonSVG.svg"), fig)
     sol_FD_cpu = Array(sol_FD)
-    jldsave(joinpath(figdir, "FD_solution.jld2"),sol_FD_cpu=sol_FD_cpu)
+    #jldsave(joinpath(figdir, "FD_solution.jld2"),sol_FD_cpu=sol_FD_cpu)
 
     return sol_FD, AD
 end
 
-function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter,mach_ϵ)
+function hockeystick(refcost,plot_sens,dp,dM,iter,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot,figdir)
 
     #### Dot product test ####
-    dirFD  = (refcostdot-refcost)/dp
+    #dirFD  = (refcostdot-refcost)/dp
     dirAD  = (sum(plot_sens .* dM)) # AD
-    FD1    = sum(FD[1] .* dM) # FD
+    #FD1    = sum(FD[1] .* dM) # FD
 
 
     #hockeystick test
-    epsilons  = collect(LinRange(-0.0, 12.0, iter))
+    epsilons  = collect(LinRange(0.0, 8.0, iter))
     epsilons  = 10.0 .^ -epsilons
     FDs       = zeros(Float64,length(epsilons))
     run_param = false
@@ -227,14 +275,30 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter,mach_ϵ)
     error     = zeros(Float64,length(epsilons))
     errorFD   = zeros(Float64,length(epsilons))
 
+    viscp  = visc
+    densp  = dens
+    Gdotp  = Gdot
+    frdotp = frdot 
+    Kdotp  = Kdot
+
+    viscm  = viscp*-1.0
+    densm  = densp*-1.0
+    Gdotm  = Gdotp*-1.0
+    frdotm = frdotp*-1.0
+    Kdotm  = Kdotp*-1.0
+
     j=1
     for (j,i) in enumerate(epsilons)
         print(error[j],"##########################\n")
         print(error[j],"######## α = $i ########\n")
         print(error[j],"##########################\n")
         dp=i
-        refcostNot, cost, dpNot, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref, dp, dM);
-        FDs[j]     = (refcostdot-refcost)/dp
+        refcostNot, cost, dpNot, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdotplus = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref, dp, dM,accλ,visc=viscp, dens=densp, Gdot=Gdotp, frdot=frdotp, Kdot=Kdotp);
+
+        refcostNot, cost, dpNot, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdotminus = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref, dp, dM,accλ,visc=viscm, dens=densm, Gdot=Gdotm, frdot=frdotm, Kdot=Kdotm);
+
+        #FDs[j]     = (refcostdotplus-refcost)/dp
+        FDs[j]     = (refcostdotplus-refcostdotminus)/(2*dp)
 
         error[j]   = abs(((FDs[j]/dirAD)-1.0))   # wie im ice paper
         #error[j]   = abs(refcostdot-refcost-(dp*dirAD))  # wie im coltice paper
@@ -243,26 +307,101 @@ function hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,iter,mach_ϵ)
         print(error[j],"\n")
         print(error[j],"##########################\n")
         #errorFD[j] = abs((FD1-FDs[j])/dirAD)
-        errorFD[j]   = abs(((FDs[j]/FD1)-1.0))
+        #errorFD[j]   = abs(((FDs[j]/FD1)-1.0))
 
     end
 
 
-    eps = epsilons[1:round(Int,end/2)+round(Int,end/8)]
+    eps = epsilons#epsilons[1:round(Int,end/2)+round(Int,end/8)]
     machs = zeros(size(epsilons))
     machs .= mach_ϵ
     fig = Figure(size = (1000, 1000),fontsize=28);
     ax1 = Axis(fig[1,1], aspect = 1, title = "Gradient Test", titlesize=34,xlabel = "α",ylabel="error")
-    l1 = lines!(ax1, log10.(epsilons), log10.(error), color = :blue, linewidth = 2, label = "Adjoint Sensitivities")
+    #l1 = lines!(ax1, log10.(epsilons), log10.(error), color = :blue, linewidth #= 2, label = "Adjoint Sensitivities")
+    l1 = scatter!(ax1, log10.(epsilons), log10.(error), color = :blue,markersize = 8 , label = "Adjoint Sensitivities")
     #l2 = lines!(ax1, log10.(epsilons), log10.(errorFD), color = :red, linewidth = 2, label = "FD")
-    #lines!(ax1,log10.(epsilons),log10.(epsilons.^2).-6, color = :black, #linewidth = 4, linestyle = :dot, label = "convergence order")
+    lines!(ax1,log10.(epsilons),log10.(epsilons.^2).-6, color = :black, linewidth = 4, alpha=0.4, label = "convergence order")
     #lines!(ax1,log10.(epsilons),log10.(machs), color = :orange, linewidth = 4, #linestyle = :dot, label = "machine precision")
     #l3 = lines!(ax1, log10.(epsilons), log10.(FDs), color = :green, linewidth = 2, linestyle = :dot, label = "directional deriv.")
     #l4 = lines!(ax1, log10.(epsilons), log10.(AD), color = :black, linewidth = 2, linestyle = :dot, label = "Adjoint")
     axislegend(position = :lt)
-    #ylims!(ax1, -17.1, -10.0)
+    ylims!(ax1, -18.1, -2.0)
 
     fig
     save(joinpath(figdir, "HockeyStick.png"), fig)
-    return error, FDs
+    return epsilons, error
 end
+
+
+
+function hockeystickTol(refcost,plot_sens,dp,dM,iter,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot,figdir)
+
+    #### Dot product test ####
+    dirAD  = (sum_kbn(plot_sens .* dM)) # AD
+
+    #hockeystick test
+    epsilons  = collect(LinRange(0.0, 8.0, iter))
+    epsilons  = 10.0 .^ -epsilons
+    FDs       = zeros(Float64,length(epsilons))
+    run_param = false
+    run_ref   = false
+    error     = zeros(Float64,length(epsilons))
+    errorFD   = zeros(Float64,length(epsilons))
+
+    viscp  = visc
+    densp  = dens
+    Gdotp  = Gdot
+    frdotp = frdot 
+    Kdotp  = Kdot
+
+    viscm  = viscp*-1.0
+    densm  = densp*-1.0
+    Gdotm  = Gdotp*-1.0
+    frdotm = frdotp*-1.0
+    Kdotm  = Kdotp*-1.0
+
+    j=1
+    for (j,i) in enumerate(epsilons)
+        print(error[j],"##########################\n")
+        print(error[j],"######## α = $i ########\n")
+        print(error[j],"##########################\n")
+        dp=i
+        refcostNot, cost, dpNot, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdotplus = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref, dp, dM,accλ,visc=viscp, dens=densp, Gdot=Gdotp, frdot=frdotp, Kdot=Kdotp);
+
+        refcostNot, cost, dpNot, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdotminus = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref, dp, dM,accλ,visc=viscm, dens=densm, Gdot=Gdotm, frdot=frdotm, Kdot=Kdotm);
+
+        #FDs[j]     = (refcostdotplus-refcost)/dp
+        FDs[j]     = (refcostdotplus-refcostdotminus)/(2*dp)
+
+        error[j]   = abs(((FDs[j]/dirAD)-1.0))   # wie im ice paper
+        #error[j]   = abs(refcostdot-refcost-(dp*dirAD))  # wie im coltice paper
+        print(error[j],"##########################\n")
+        print(j,"\n")
+        print(error[j],"\n")
+        print(error[j],"##########################\n")
+        #errorFD[j] = abs((FD1-FDs[j])/dirAD)
+        #errorFD[j]   = abs(((FDs[j]/FD1)-1.0))
+
+    end
+
+
+    eps = epsilons#epsilons[1:round(Int,end/2)+round(Int,end/8)]
+    machs = zeros(size(epsilons))
+    machs .= mach_ϵ
+    fig = Figure(size = (1000, 1000),fontsize=28);
+    ax1 = Axis(fig[1,1], aspect = 1, title = "Gradient Test", titlesize=34,xlabel = "α",ylabel="error")
+    #l1 = lines!(ax1, log10.(epsilons), log10.(error), color = :blue, linewidth #= 2, label = "Adjoint Sensitivities")
+    l1 = scatter!(ax1, log10.(epsilons), log10.(error), color = :blue,markersize = 8 , label = "Adjoint Sensitivities")
+    #l2 = lines!(ax1, log10.(epsilons), log10.(errorFD), color = :red, linewidth = 2, label = "FD")
+    lines!(ax1,log10.(epsilons),log10.(epsilons.^2).-6, color = :black, linewidth = 4, alpha=0.4, label = "convergence order")
+    #lines!(ax1,log10.(epsilons),log10.(machs), color = :orange, linewidth = 4, #linestyle = :dot, label = "machine precision")
+    #l3 = lines!(ax1, log10.(epsilons), log10.(FDs), color = :green, linewidth = 2, linestyle = :dot, label = "directional deriv.")
+    #l4 = lines!(ax1, log10.(epsilons), log10.(AD), color = :black, linewidth = 2, linestyle = :dot, label = "Adjoint")
+    axislegend(position = :lt)
+    ylims!(ax1, -18.1, -2.0)
+
+    fig
+    save(joinpath(figdir, "HockeyStick.png"), fig)
+    return epsilons, error, FDs
+end
+

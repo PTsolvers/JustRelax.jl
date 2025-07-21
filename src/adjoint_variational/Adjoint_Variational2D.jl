@@ -41,6 +41,9 @@ function _adjoint_solve_VS!(
     b_width = (4, 4, 0),
     verbose = true,
     free_surface = false,
+    accλ = false,
+    pt_stokesAD = pt_stokes,
+    ϕa = ϕ,
     kwargs...,
 ) where {T}
 
@@ -60,7 +63,7 @@ update_halo!(ητ)
 
 # errors
 err_it1 = 1.0
-err = 2 * ϵ_rel
+err = 1e3
 iter = 0
 err_evo1 = Float64[]
 err_evo2 = Float64[]
@@ -219,6 +222,9 @@ while iter ≤ iterMax
     end
 end
 
+    # accumulate plastic strain tensor
+    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+
     if rem(Glit+1, ADout) == 0
     ########################
     #### Adjoint Solver ####
@@ -232,6 +238,7 @@ end
         mode = Enzyme.set_runtime_activity(Enzyme.Reverse,true)
     end
 
+    (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokesAD
     err_evo1 = Float64[]
     err_evo2 = Float64[]
     norm_Rx  = Float64[]
@@ -247,29 +254,20 @@ end
     
     err_it1 = 1.0
     #ϵ       = ϵ
-    err     = 2*ϵ_rel
+    err     = 1e8
     iter    = 1
-    iterMax = 2e4
+    iterMax = 1e6
     nout    = 1e3
     λtemp   = deepcopy(λ)
     λvtemp  = deepcopy(λv)
-    λtemp  .= 0.0  
-    λvtemp .= 0.0 
-    #     λ .= 0.0
-    #    λv .= 0.0
     relλtemp = deepcopy(relλ)
-
-    dtauxx   = copy(stokesAD.τ.xx)
-    dtauyy   = copy(stokesAD.τ.yy)
-    dtauxy_c = copy(stokesAD.τ.xy_c)
-    dtauxy   = copy(stokesAD.τ.xy)
 
     print("###################\n")
     print("## Adjoint Solve ##\n")
     print("###################\n")
 
     while iter ≤ iterMax
-        iterMin < iter && ((err / err_it1) < ϵ_rel && err < ϵ_abs) && break
+        iterMin < iter && ((err / err_it1) < ϵ_rel || err < ϵ_abs) && break
 
         # reset derivatives to zero
         stokesAD.V.Vx .= 0.0
@@ -300,7 +298,7 @@ end
             ηdτ,
             ρg...,
             ητ,
-            ϕ,
+            ϕa,
             _di...,
             dt * free_surface,
             ) AD.autodiff_deferred!(
@@ -319,7 +317,7 @@ end
                 Const(ρg[1]),
                 Const(ρg[2]),
                 Const(ητ),
-                Const(ϕ),
+                Const(ϕa),
                 Const(_di[1]),
                 Const(_di[2]),
                 Const(dt * free_surface)
@@ -356,7 +354,6 @@ end
                     Const(nothing)
                     )
 
-
         #    # apply free slip or no slip boundary conditions for adjoint solve
             if ((flow_bcs.free_slip[1]) && (xvi[1][1]   == origin[1]) ) stokesAD.τ.xy[1,:]       .= 0.0 end
             if ((flow_bcs.free_slip[2]) && (xvi[1][end] == origin[1] + lx)) stokesAD.τ.xy[end,:] .= 0.0 end
@@ -364,7 +361,6 @@ end
             if ((flow_bcs.free_slip[4]) && (xvi[2][1]   == origin[2])) stokesAD.τ.xy[:,1]        .= 0.0 end
 
             if ana
-
             @parallel (@idx ni .+ 1) dτdV_viscoelastic(
                 @strain(stokesAD),
                 @tensor_center(stokes.ε_pl),
@@ -386,10 +382,9 @@ end
                 rheology,
                 phase_ratios.center,
                 phase_ratios.vertex,
-                ϕ,
+                ϕa,
                 iter
             )
-
             else
 
             # stress calculation
@@ -397,31 +392,11 @@ end
             stokesAD.dτ.yy   .= stokes.τ.yy
             stokesAD.dτ.xy_c .= stokes.τ.xy_c
             stokesAD.dτ.xy   .= stokes.τ.xy
-
-            stokesAD.P0      .= stokes.P
-            #λtemp            .= λ
-            #λvtemp           .= λv
-            #print("λ = ", extrema(λ), " ")
-            #print("λv = ", extrema(λv), " ")
-            #relλtemp         = copy(relλ) #1.0
-
-            #θ_dτ = 0.0
-            #stokesAD.dτ.xx   .= 0.0
-            #stokesAD.dτ.yy   .= 0.0
-            #stokesAD.dτ.xy_c .= 0.0
-            #stokesAD.dτ.xy   .= 0.0
             stokesAD.P0      .= stokes.P
 
-            dtauxx   .= stokesAD.τ.xx
-            dtauyy   .= stokesAD.τ.yy
-            dtauxy_c .= stokesAD.τ.xy_c
-            dtauxy   .= stokesAD.τ.xy
-
-            relλtemp = 1.0#0.05
             @parallel (@idx ni .+ 1) configcall=update_stresses_center_vertexAD!(
                 @strain(stokes),
                 @tensor_center(stokes.ε_pl),
-                stokes.ε_pl.xx,
                 stokes.EII_pl,
                 @tensor_center(stokesAD.dτ),
                 (stokesAD.dτ.xy,),
@@ -440,14 +415,15 @@ end
                 rheology,
                 phase_ratios.center,
                 phase_ratios.vertex,
-                ϕ,
+                ϕa,
+                accλ,
+                iter,
             ) AD.autodiff_deferred!(
                     mode, 
                     Const(update_stresses_center_vertexAD!), 
                     Const{Nothing},
                     DuplicatedNoNeed(@strain(stokes),@strain(stokesAD)),
                     Const(@tensor_center(stokes.ε_pl)),
-                    Const(stokes.ε_pl.xx),
                     Const(stokes.EII_pl),
                     DuplicatedNoNeed(@tensor_center(stokesAD.dτ),@tensor_center(stokesAD.τ)),
                     DuplicatedNoNeed((stokesAD.dτ.xy,),(stokesAD.τ.xy,)),
@@ -466,15 +442,11 @@ end
                     Const(rheology),
                     Const(phase_ratios.center),
                     Const(phase_ratios.vertex),
-                    Const(ϕ)
+                    Const(ϕa),
+                    Const(accλ),
+                    Const(iter)
                 )
             end
-
-            #relλ = 0.2
-            #stokesAD.τ.xx   .= (1.0 - relλ) * dtauxx + relλ * stokesAD.τ.xx
-            #stokesAD.τ.yy   .= (1.0 - relλ) * dtauyy + relλ * stokesAD.τ.yy
-            #stokesAD.τ.xy_c .= (1.0 - relλ) * dtauxy_c + relλ * stokesAD.τ.xy_c
-            #stokesAD.τ.xy   .= (1.0 - relλ) * dtauxy + relλ * stokesAD.τ.xy
 
             @parallel (@idx ni) update_PAD!(
                 stokesAD.PA,
@@ -489,11 +461,13 @@ end
                 θ_dτ,
                 args)
 
+            #stokesAD.PA .*= ϕa.center
+
             @parallel (@idx ni .+ 1) configcall=compute_strain_rateAD!(
                 @strain(stokes)...,
                 stokes.∇V,
                 @velocity(stokes)...,
-                ϕ,
+                ϕa,
                 _di...
             ) AD.autodiff_deferred!(
                     mode, 
@@ -505,7 +479,7 @@ end
                     Const(stokes.∇V),
                     DuplicatedNoNeed(stokes.V.Vx,stokesAD.V.Vx),
                     DuplicatedNoNeed(stokes.V.Vy,stokesAD.V.Vy),
-                    Const(ϕ),
+                    Const(ϕa),
                     Const(_di[1]),
                     Const(_di[2])
             )
@@ -515,7 +489,7 @@ end
             @parallel (@idx ni) configcall=compute_∇V!(
                 stokes.∇V,
                 @velocity(stokes),
-                ϕ,
+                ϕa,
                 _di
                 ) AD.autodiff_deferred!(
                     mode, 
@@ -523,7 +497,7 @@ end
                     Const{Nothing},
                     DuplicatedNoNeed(stokes.∇V,stokesAD.∇V),
                     DuplicatedNoNeed(@velocity(stokes),@velocity(stokesAD)),
-                    Const(ϕ),
+                    Const(ϕa),
                     Const(_di)
             )
 
@@ -535,8 +509,11 @@ end
                 stokesAD.V.Vy,
                 ηdτ,
                 ητ,
-                ϕ
+                ϕa
             )
+
+            #stokesAD.VA.Vx .*= ϕa.Vx
+            #stokesAD.VA.Vy .*= ϕa.Vy
 
             iter += 1
 
@@ -549,10 +526,6 @@ end
                     length(@velocity(stokesAD)[2]),
                     norm_mpi(stokesAD.P) / length(stokesAD.P),
                 )
-                #global normVx,normVy,normP,it
-                #push!(norm_Rx,sqrt(sum((abs.(@velocity(stokesAD)[1]).^2)))); 
-                #push!(norm_Ry,sqrt(sum((abs.(@velocity(stokesAD)[2]).^2))));
-                #push!(norm_∇V,sum((abs.(stokesAD.P))))
 
                 push!(norm_Rx, errs[1])
                 push!(norm_Ry, errs[2])
@@ -585,16 +558,11 @@ end
                 end
                 isnan(err) && error("NaN(s)")
 
-        
-            if igg.me == 0 &&((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
+            if igg.me == 0 && (((err / err_it1) < ϵ_rel) || (err < ϵ_abs))
                 println("Pseudo-transient iterations converged in $iter iterations")
             end
         end
     end
-
-    ########################
-    ########################
-    ########################
 
     print("#############################\n")
     print("## Calculate Sensitivities ##\n")
@@ -653,7 +621,7 @@ end
         ηdτ,
         ρg...,
         ητ,
-        ϕ,
+        ϕa,
         _di...,
         dt * free_surface,
         ) AD.autodiff_deferred!(
@@ -672,7 +640,7 @@ end
             Const(ρg[1]),
             DuplicatedNoNeed(ρg[2],stokesAD.ρ),
             Const(ητ),
-            Const(ϕ),
+            Const(ϕa),
             Const(_di[1]),
             Const(_di[2]),
             Const(dt * free_surface)
@@ -736,7 +704,7 @@ end
         rheology,
         phase_ratios.center,
         phase_ratios.vertex,
-        ϕ,
+        ϕa,
         @tensor_center(stokesAD.τ),
         (stokesAD.τ.xy,)
     )
@@ -758,7 +726,6 @@ end
     @parallel (@idx ni.+1) configcall=update_stresses_center_vertexADSens!(
         @strain(stokes),
         @tensor_center(stokes.ε_pl),
-        stokes.ε_pl.xx,
         stokes.EII_pl,
         @tensor_center(stokesAD.dτ),
         (stokesAD.dτ.xy,),
@@ -767,8 +734,8 @@ end
         θ,
         stokesAD.P0,
         stokes.viscosity.η,
-        λtemp,
-        λvtemp,
+        λ,
+        λv,
         stokes.τ.II,
         stokes.viscosity.η_vep,
         relλtemp,
@@ -777,15 +744,15 @@ end
         rheology,
         phase_ratios.center,
         phase_ratios.vertex,
-        ϕ,
-        Sens
+        ϕa,
+        Sens,
+        accλ,
         ) AD.autodiff_deferred!(
             mode,
             Const(update_stresses_center_vertexADSens!),
             Const{Nothing},
             Const(@strain(stokes)),
             Const(@tensor_center(stokes.ε_pl)),
-            Const(stokes.ε_pl.xx),
             Const(stokes.EII_pl),
             DuplicatedNoNeed(@tensor_center(stokesAD.dτ),@tensor_center(stokesAD.τ)),
             DuplicatedNoNeed((stokesAD.dτ.xy,),(stokesAD.τ.xy,)),
@@ -794,8 +761,8 @@ end
             Const(θ),
             Const(stokesAD.P0),
             DuplicatedNoNeed(stokes.viscosity.η,stokesAD.η),
-            Const(λtemp),
-            Const(λvtemp),
+            Const(λ),
+            Const(λv),
             Const(stokes.τ.II),
             Const(stokes.viscosity.η_vep),
             Const(relλtemp),
@@ -804,13 +771,17 @@ end
             Const(rheology),
             Const(phase_ratios.center),
             Const(phase_ratios.vertex),
-            Const(ϕ),
-            DuplicatedNoNeed(Sens,SensA)
+            Const(ϕa),
+            DuplicatedNoNeed(Sens,SensA),
+            Const(accλ)
             )
         #end
             G .= 0.0
             vertex2center!(G, Gvb);
             stokesAD.G .+= G 
+            K .= 0.0
+            vertex2center!(K, Kvb);
+            stokesAD.K .+= K 
     end          
 end
 
@@ -957,6 +928,7 @@ displacement2velocity!(stokes, dt, flow_bcs)
 while iter ≤ iterMax
     iterMin < iter && ((err / err_it1) < ϵ_rel || err < ϵ_abs) && break
 
+
     wtime0 += @elapsed begin
         compute_maxloc!(ητ, η; window = (1, 1))
         update_halo!(ητ)
@@ -1084,9 +1056,10 @@ while iter ≤ iterMax
         isnan(err) && error("NaN(s)")
     end
 
-    if igg.me == 0 &&((err / err_it1) ≤ ϵ_rel || (err ≤ ϵ_abs))
+    if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
         println("Pseudo-transient iterations converged in $iter iterations")
     end
+
 end
     
         return (

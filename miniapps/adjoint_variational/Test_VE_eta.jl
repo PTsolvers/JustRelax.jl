@@ -1,7 +1,7 @@
 include("/home/chris/Documents/2024_projects/JustRelax.jl/miniapps/adjoint_variational/helper_functionsVS.jl")
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp, dM)
+function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp, dM,accλ,visc, dens, Gdot, frdot, Kdot)
 
     # Physical domain ------------------------------------
     ly           = 1e0          # domain length in y
@@ -14,12 +14,12 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Physical properties using GeoParams ----------------
-    εbg     = 1.0           # background strain-rate
-    gr      = 0.0
+    εbg     = 0.0           # background strain-rate
+    gr      = 1.0
     η0      = 1.0           # viscosity
     G0      = 1.0           # shear modulus
-    Gi      = 0.5           # shear modulus
-    ν0      = 0.45          # Poisson ratio
+    Gi      = 1.0           # shear modulus
+    ν0      = 0.5          # Poisson ratio
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
     ana     = false
     # viscous and elastic blocks for reference solve
@@ -29,10 +29,15 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     el_block   = ConstantElasticity(G=Gi, ν=ν0)
 
     # viscous and elastic blocks for parameter pertubation
-    visc_bg_p    = LinearViscous(; η=1.0)
-    visc_block_p = LinearViscous(; η=10.0)
+    visc_bg_p    = LinearViscous(; η=1.0+dp)
+    visc_block_p = LinearViscous(; η=10.0+dp)
     el_p         = ConstantElasticity(G=G0, ν=ν0)
     el_block_p   = ConstantElasticity(G=Gi, ν=ν0)
+
+    #Sticky Air
+    el_air   = ConstantElasticity(G=Gi, ν=ν0)
+    visc_air = LinearViscous(; η=0.1)
+
 
     # plascticity parameters
     ϕ       = 30            # friction angle
@@ -66,7 +71,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
         # High density phase
         SetMaterialParams(;
             Phase             = 2,
-            Density           = ConstantDensity(; ρ = 10.0),
+            Density           = ConstantDensity(; ρ = 1.5),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_block,)),
             CompositeRheology = CompositeRheology((visc_block,el_block)),
@@ -75,7 +80,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
         # Low density phase
         SetMaterialParams(;
             Phase             = 3,
-            Density           = ConstantDensity(; ρ = 1.0+dp),
+            Density           = ConstantDensity(; ρ = 1.0),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_bg_p,)),
             CompositeRheology = CompositeRheology((visc_bg_p,el_p)),
@@ -85,10 +90,19 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
         # High density phase
         SetMaterialParams(;
             Phase             = 4,
-            Density           = ConstantDensity(; ρ = 10.0+dp),
+            Density           = ConstantDensity(; ρ = 1.5),
             Gravity           = ConstantGravity(; g = gr),
             #CompositeRheology = CompositeRheology((visc_block_p,)),
             CompositeRheology = CompositeRheology((visc_block_p,el_block_p)),
+            #CompositeRheology = CompositeRheology((visc_block_p,el_block_p,pl_p)),
+        ),
+        # Sticky Air
+        SetMaterialParams(;
+            Phase             = 4,
+            Density           = ConstantDensity(; ρ = 0.1),
+            Gravity           = ConstantGravity(; g = gr),
+            #CompositeRheology = CompositeRheology((visc_block_p,)),
+            CompositeRheology = CompositeRheology((visc_air,el_air)),
             #CompositeRheology = CompositeRheology((visc_block_p,el_block_p,pl_p)),
         ),
     )
@@ -97,7 +111,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     perturbation_C = @zeros(ni...)
 
     # Initialize phase ratios -------------------------------
-    radius       = 1*di[1]*f
+    radius       = di[1]*f
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phasesFD!(phase_ratios, xci, xvi, radius, 100.0, 100.0, 100.0, 100.0,di)
 
@@ -110,12 +124,15 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     # Allocate arrays needed for every Stokes problem
     stokes    = StokesArrays(backend, ni)
     #pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-3,  CFL = 0.95 / √2.1)
-    pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-12, ϵ_abs=1e-12,  CFL = 0.95 / √2.1)
+    mach_ϵ = eps()
+    pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-20, ϵ_abs=1e-12,  CFL = 0.95 / √2.1)
 
     # Adjoint 
     stokesAD = StokesArraysAdjoint(backend, ni)
     indx     = findall((xci[1] .>= 0.5-radius) .& (xci[1] .<= 0.5+radius)) .+ 1
     indy     = findall((xvi[2] .>= 0.5-1e-6) .& (xvi[2] .<= 0.5+1e-6))  
+    #indx     = findall((xci[1] .>= 0.5-2*radius) .& (xci[1] .<= 0.5+2*radius)) .+ 1
+    #indy     = findall((xvi[2] .>= 0.70) .& (xvi[2] .<= 0.80)) 
     ind      = vec([CartesianIndex(i, j) for i in indx, j in indy])
     SensInd  = ind
     SensType = "Vy"
@@ -256,7 +273,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             #refcost = sum(stokesRef.V.Vy[indx,indy])
         end
     end
-    tensor_invariant!(stokes.ε)
+    tensor_invariant!(stokesRef.ε)
     (; η_vep, η) = stokes.viscosity
     ηref = η
     ρref     = deepcopy(ρg[2])./1.0
@@ -267,11 +284,11 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     stokesDot       = deepcopy(stokes)
     ρgDot           = deepcopy(ρg)
     phase_ratiosDot = deepcopy(phase_ratios)
-    visc  = true
-    dens  = false
-    Gdot  = false
-    frdot = false
-    Kdot  = false
+    #visc  = true
+    #dens  = false
+    #Gdot  = false
+    #frdot = false
+    #Kdot  = false
     #stokesDot.viscosity.η .= stokesDot.viscosity.η + dM*dp
     # Stokes solver ----------------
     Dot = adjoint_solve_VariationalStokesDot!(
@@ -399,9 +416,15 @@ end
 
 #### Init Run ####
 f         = 1      ; nx     = 16*f; ny     = 16*f
-dp        = 1e-6
+dp        = 1e-2
 run_param = false
 run_ref   = true
+accλ      = true
+visc  = true
+dens  = false
+Gdot  = false
+frdot = false
+Kdot  = false
 dM        = rand(Float64,nx,ny)
 dM      ./= norm(dM)   # normalize M matrix
 figdir    = "miniapps/adjoint_variational/Test_VE_eta/"
@@ -411,14 +434,47 @@ igg  = if !(JustRelax.MPI.Initialized())
 else
     igg
 end
-refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM);
-#cost .= rand(nx,ny)
-plot_sens = stokesAD.η  #which sensitivity to plot
-FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
+refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM,accλ,visc, dens, Gdot, frdot, Kdot);
+
+a=1
+
+#cost = rand(nx,ny)
+#plot_sens = stokesAD.η  #which sensitivity to plot
+#FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
 mach_ϵ = eps()
 
-errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,20,mach_ϵ
-)   # plot convergence test # plot convergence test
+visc  = true
+dens  = false
+Gdot  = false
+frdot = false
+Kdot  = false
+epsilon, error_η = hockeystick(refcost,stokesAD.η,dp,dM,10,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot,figdir)
+#error_ρ = copy(error_η)
+#error_G = copy(error_η)
 
 
+visc  = false
+dens  = true
+Gdot  = false
+frdot = false
+Kdot  = false
+epsilon, error_ρ = hockeystick(refcost,stokesAD.ρ,dp,dM,10,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot,figdir)
+visc  = false
+dens  = false
+Gdot  = true
+frdot = false
+Kdot  = false
+epsilon, error_G = hockeystick(refcost,stokesAD.G,dp,dM,10,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot,figdir)
+
+
+
+include("/home/chris/Documents/2024_projects/JustRelax.jl/miniapps/adjoint_variational/PlottingPaper.jl")
+
+
+make_final_plot(refcost,cost,dp,nx,ny,stokesAD,figdir,stokesRef,epsilon,error_η,error_ρ,error_G,mach_ϵ)
+
+
+
+
+ 

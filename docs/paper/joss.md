@@ -90,24 +90,33 @@ With JustRelax.jl, we intend to address these fundamental limitations by introdu
 As previously stated, JustRelax.jl employs the APT method to solve the compressible Stokes and heat diffusion equations @rass2022. Within each APT iteration, the pressure-dependent equation of state, non-Newtonian viscosity, plastic stress corrections, and conservation of mass and momentum are solved simultaneously in a fully coupled manner. In the sections below, we briefly summarize the governing equations and their respective APT implementation, and discuss the parallelization strategy and the advection schemes used to track material properties and deformation history.
 
 ## Thermo-mechanical modeling
-The Stokes equations for compressible viscous flow are:
-
+The compressible Stokes equations  are given by the conservation of momentum and mass equations, respectively:
 $$
 \begin{align}
     \nabla\cdot\mathbf{\tau} - \nabla p = \mathbf{f} \\
-    \nabla\cdot\mathbf{v} + \beta \frac{\partial p}{\partial t} + \alpha \frac{\partial T}{\partial t} = 0
+    \nabla\cdot\mathbf{v} = -\beta \frac{\partial p}{\partial t} + \alpha \frac{\partial T}{\partial t}
 \end{align}
 $$
 
-where $\nabla$ is the nabla operator, $\mathbf{\tau}$ is the deviatoric stress tensor, $p$ is the total pressure, $\mathbf{f}$ are the body forces, usually being the buoyancy forces $\mathbf{f} = \rho \mathbf{g}$ where $\rho$ is density and $\mathbf{g} = (0, -g_y)$ is the gravitational force vector, $\mathbf{v}$ is the velocity field, $\beta$ is the inverse of the bulk modulus, and $\alpha$ is the thermal expansivity coefficient. The previous system of equations is closed with the constitutive equation that relates the deviatoric strain tensor $\dot{\mathbf{\varepsilon}}$ with $\mathbf{\tau}$. In the simple case of a linear isotropic rheology, the constitutive equation is
+where $\nabla$ is the nabla operator, $\mathbf{\tau}$ is the deviatoric stress tensor, $p$ is the total pressure, $\mathbf{f}$ are the body forces, usually being the buoyancy forces $\mathbf{f} = \rho \mathbf{g}$ where $\rho$ is density and $\mathbf{g} = (0, -g_y)$ is the gravitational force vector, $\mathbf{v}$ is the velocity field, $\beta$ is the inverse of the bulk modulus, and $\alpha$ is the thermal expansivity coefficient. In the incompressible limit, the right-hand-side of the conservation of mass equation vanishes to zero. The previous system of equations is closed with the constitutive equation that relates the deviatoric strain tensor $\dot{\mathbf{\varepsilon}}$ with $\mathbf{\tau}$. In computational geodynamics, we commonly consider composite non-linear visco-elasto-plastic rheologies, which can be expressed by the following constitutive equation:
+
+$$
+\begin{align}
+  % \mathbf{\tau} = 2\eta\dot{\mathbf{\varepsilon}}
+  \dot{\mathbf{\varepsilon}} = \frac{\mathbf{\tau}}{2\eta} + \frac{1}{2G} \frac{D\mathbf{\tau}}{Dt} + \dot\lambda\frac{\partial Q}{\partial \mathbf{\tau}}
+\end{align}
+$$
+
+
+<!-- In the simple case of a linear isotropic rheology, the constitutive equation is
 
 $$
 \begin{align}
     \mathbf{\tau} = 2\eta\dot{\mathbf{\varepsilon}}
 \end{align}
-$$
+$$ -->
 
-where $\eta$ is the viscosity. Since the evolution of the temperature $T$ field is highly relevant in geodynamics, and most of the material properties such as density and rheology laws are also temperature dependent, we also solve the energy conservation equation:
+where $\eta$ is the viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ is the plastic multiplier, and $Q$ is the plastic flow potential. Since the evolution of the temperature $T$ field is highly relevant in geodynamics, and most of the material properties such as density and rheology laws are also temperature dependent, we also solve the energy conservation equation:
 
 $$
 \begin{align}

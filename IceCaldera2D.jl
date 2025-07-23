@@ -207,7 +207,8 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-1, Re = 3π, r = 0.7, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-1, Re = 7π, r = 0.7, CFL = 0.95 / √2.1)
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-1, Re = 3π, r = 0.7, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -346,7 +347,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             kwargs = (
                 iterMax = 100e3,
                 iterMin = 2e3,
-                viscosity_relaxation = 5.0e-3,
+                viscosity_relaxation = 1.0e-4,
                 free_surface = true,
                 strain_increment = false,
                 nout = 2.0e3,
@@ -358,7 +359,6 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
         dt = compute_dt(stokes, di, dt_max)
         @show dt / year
         # ------------------------------
-
         # Thermal solver ---------------
         heatdiffusion_PT!(
             thermal,
@@ -528,7 +528,7 @@ li, origin, phases_GMG, T_GMG = setup2D(
     nx + 1, ny + 1;
     sticky_air      = 6,
     water_thickness = 2,
-    dimensions      = (130.0e0, 60.0e0),
+    dimensions      = (180.0e0, 90.0e0),
 )
 
 # f,ax, h =heatmap(xvi./1e3..., phases_GMG)

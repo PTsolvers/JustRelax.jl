@@ -87,7 +87,7 @@ function _solve_VS!(
     displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
-        iterMin < iter && ((err / err_it1) < ϵ_rel || err < ϵ_abs) && break
+        iterMin < iter && ((err / err_it1) < ϵ_rel && err < ϵ_abs) && break
 
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window = (1, 1))
@@ -237,7 +237,7 @@ function _solve_VS!(
 
             if igg.me == 0 #&& ((verbose && err > ϵ_rel) || iter == iterMax)
                 @printf(
-                    "Total steps = %d,\t abs_err = %1.3e, rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
+                    "Total steps = %d, abs_err = %1.3e , rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
                     err,
                     rel_err,
@@ -248,8 +248,8 @@ function _solve_VS!(
             end
             isnan(err) && error("NaN(s)")
         end
-
-        if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
+ 
+        if igg.me == 0 && (iterMin < iter && ((err / err_it1) < ϵ_rel && err < ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end

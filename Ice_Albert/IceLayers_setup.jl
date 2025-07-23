@@ -23,7 +23,7 @@ function setup2D(
     Grid = CartData(xyz_grid(x, y, z))
 
     # Allocate Phase and Temp arrays
-    Phases = fill(4, nx, 2, nz)
+    Phases = fill(6, nx, 2, nz)
     Temp = fill(0.0, nx, 2, nz)
 
     add_box!(
@@ -31,7 +31,7 @@ function setup2D(
         xlim = (minimum(Grid.x.val), maximum(Grid.x.val)),
         ylim = (minimum(Grid.y.val), maximum(Grid.y.val)),
         zlim = (minimum(Grid.z.val), water_thickness),
-        phase = LithosphericPhases(Layers = [chamber_depth], Phases = [4, 1]),
+        phase = LithosphericPhases(Layers = [chamber_depth], Phases = [5, 1]),
         T = HalfspaceCoolingTemp(Age = 20)
     )
 
@@ -40,7 +40,7 @@ function setup2D(
         xlim = (minimum(Grid.x.val), maximum(Grid.x.val)),
         ylim = (minimum(Grid.y.val), maximum(Grid.y.val)),
         zlim = (minimum(Grid.z.val), 0),
-        phase = LithosphericPhases(Layers = [chamber_depth, 40], Phases = [1, 2, 3]),
+        phase = LithosphericPhases(Layers = [20, 20], Phases = [1, 2, 3]),
         T = HalfspaceCoolingTemp(Age = 20)
     )
 
@@ -60,7 +60,7 @@ function setup2D(
 
     add_ellipsoid!(
         Phases, Temp, Grid;
-        cen = (mean(Grid.x.val), 0, -chamber_depth-2water_thickness),
+        cen = (mean(Grid.x.val), 0, -chamber_depth),
         axes = (chamber_radius * aspect_x, 2.5, chamber_radius),
         phase = ConstantPhase(4),
         T = ConstantTemp(T = chamber_T - 100.0e0)
@@ -98,24 +98,24 @@ function setup2D(
 
     surf = Grid.z.val .> water_thickness
     Temp[surf]    .= 0.0
-    Phases[surf]  .= 5
+    # Phases[surf]  .= 6
 
-    water = Phases .== 4
+    water = Phases .== 5
     Temp[water]    .= 0.0
 
     ph = Phases[:, 1, :]
     T = Temp[:, 1, :] .+ 273
 
-    V_total = 4 / 3 * π * (chamber_radius * aspect_x) * chamber_radius * (chamber_radius * aspect_x)
-    V_erupt = 4 / 3 * π * (chamber_radius / 1.25) * aspect_x * (chamber_radius / 2) * ((chamber_radius / 1.25) * aspect_x)
-    R = ((chamber_depth - chamber_radius)) / (chamber_radius * aspect_x)
-    chamber_diameter = 2 * (chamber_radius * aspect_x)
-    chamber_erupt = 2 * ((chamber_radius / 1.25) * aspect_x)
-    printstyled("Magma volume of the initial chamber: $(round(V_total; digits = 3)) km³ \n"; bold = true, color = :red, blink = true)
-    printstyled("Eruptible magma volume: $(round(V_erupt; digits = 3)) km³ \n"; bold = true, color = :red, blink = true)
-    printstyled("Roof ratio (Depth/half-axis width): $R \n"; bold = true, color = :cyan)
-    printstyled("Chamber diameter: $chamber_diameter km \n"; bold = true, color = :light_yellow)
-    printstyled("Eruptible chamber diameter: $chamber_erupt km \n"; bold = true, color = :light_yellow)
+    # V_total = 4 / 3 * π * (chamber_radius * aspect_x) * chamber_radius * (chamber_radius * aspect_x)
+    # V_erupt = 4 / 3 * π * (chamber_radius / 1.25) * aspect_x * (chamber_radius / 2) * ((chamber_radius / 1.25) * aspect_x)
+    # R = ((chamber_depth - chamber_radius)) / (chamber_radius * aspect_x)
+    # chamber_diameter = 2 * (chamber_radius * aspect_x)
+    # chamber_erupt = 2 * ((chamber_radius / 1.25) * aspect_x)
+    # printstyled("Magma volume of the initial chamber: $(round(V_total; digits = 3)) km³ \n"; bold = true, color = :red, blink = true)
+    # printstyled("Eruptible magma volume: $(round(V_erupt; digits = 3)) km³ \n"; bold = true, color = :red, blink = true)
+    # printstyled("Roof ratio (Depth/half-axis width): $R \n"; bold = true, color = :cyan)
+    # printstyled("Chamber diameter: $chamber_diameter km \n"; bold = true, color = :light_yellow)
+    # printstyled("Eruptible chamber diameter: $chamber_erupt km \n"; bold = true, color = :light_yellow)
     # write_paraview(Grid, "Volcano2D")
     return li, origin, ph, T, Grid
 end

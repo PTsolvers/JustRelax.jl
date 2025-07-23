@@ -80,17 +80,18 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     # Physical properties using GeoParams ----------------
     # rheology = init_rheologies()
     Cp = 1200
-    el = ConstantElasticity(; G = 25.0e9, ν = 0.3) #: ConstantElasticity(; G = G0, ν = 0.25)
+    el = ConstantElasticity(; G = 35.0e9, ν = 0.4) #: ConstantElasticity(; G = G0, ν = 0.25)
     # el = ConstantElasticity(; G = 25.0e9, ν = 0.45) #: ConstantElasticity(; G = G0, ν = 0.25)
     β = inv(get_Kb(el))
-    η_reg = 1.0e15
-    C = 10.0e6
+    η_reg = 1.0e17
+    C = 30.0e6
     ϕ = 15
     Ψ = 0.0
     soft_C = NonLinearSoftening(; ξ₀ = C, Δ = C / 1.0e5)       # nonlinear softening law
     pl = DruckerPrager_regularised(; C = C, ϕ = ϕ, η_vp = η_reg, Ψ = Ψ)
   
-    disl_crust  = SetDislocationCreep(GeoParams.Dislocation.dry_anorthite_Rybacki_2000)
+    disl_upper_crust  = SetDislocationCreep(GeoParams.Dislocation.strong_diabase_Mackwell_1998)
+    disl_lower_crust  = SetDislocationCreep(GeoParams.Dislocation.wet_quartzite_Hirth_2001)
     # disl_crust  = SetDislocationCreep(GeoParams.Dislocation.wet_quartzite_Hirth_2001)
     disl_litho  = SetDislocationCreep(GeoParams.Dislocation.dry_olivine_Karato_2003)
     # diffusion laws
@@ -108,6 +109,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 2.5),
             CompositeRheology = CompositeRheology((disl_crust, el, pl)),
+            # CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e22), el, pl)),
             Gravity = ConstantGravity(; g = 9.81),
         ),
         # Name              = "Lower Crust",
@@ -117,6 +119,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             # Density = T_Density(; ρ0 = 2.70e3, T0 = 273.15),
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 2.5),
+            # CompositeRheology = CompositeRheology((LinearViscous(; η = 5e21), el, pl)),
             CompositeRheology = CompositeRheology((disl_crust, el, pl)),
             Gravity = ConstantGravity(; g = 9.81),
         ),
@@ -126,22 +129,33 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             Density = PT_Density(; ρ0 = 3.3e3, β = β, T0 = 273, α = 3e-5),
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 2.5),
-            CompositeRheology = CompositeRheology((disl_litho, diff_litho,el, pl)),
+            # CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e20), el, pl)),
+            CompositeRheology = CompositeRheology((disl_litho, diff_litho, el, pl)),
+            Gravity = ConstantGravity(; g = 9.81),
+        ),
+        # Name              = "Chamber",
+        SetMaterialParams(;
+            Phase = 4,
+            # Density = PT_Density(; ρ0 = 2.7e3, β = β, T0 = 273, α = 3e-5),
+            Density = ConstantDensity(; ρ = 2.5e3),
+            HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
+            Conductivity = ConstantConductivity(; k = 2.5),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e18), )),
             Gravity = ConstantGravity(; g = 9.81),
         ),
         # Name              = "ice",
         SetMaterialParams(;
-            Phase = 4,
+            Phase = 5,
             Density = ConstantMutableDensity(ρ_ice),
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 1.5),
             # CompositeRheology = CompositeRheology((disl_crust, el, pl)),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e23), el)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e18), el)),
             Gravity = ConstantGravity(; g = 9.81),
         ),
         # Name              = "air",
         SetMaterialParams(;
-            Phase = 5,
+            Phase = 6,
             Density = ConstantDensity(; ρ = 0),
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 2.5),
@@ -167,7 +181,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
 
     # Elliptical temperature anomaly
     phases_device = PTArray(backend)(phases_GMG)
-    phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, phases_device, particles, xvi)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     
@@ -175,8 +189,9 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     nxcell, max_xcell, min_xcell = 10, 15, 7
     initial_elevation = 0e0
     chain  = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
-    topo_y = extract_topo(xvi..., phases_GMG, 5)
-    air_phase = 5
+    chain_crust = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
+    air_phase = 6
+    topo_y = extract_topo(xvi..., phases_GMG, air_phase)
 
     # for _ in 1:3
         # topo_y .= Smoothing.binomial(topo_y, 1)
@@ -192,7 +207,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-1, Re = 3π, r = 0.7, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-2, Re = 3π, r = 0.7, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -220,7 +235,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     ρg = @zeros(ni...), @zeros(ni...)
     args0 = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args0)
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
+    # stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
     viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff; air_phase = air_phase)
 
@@ -260,10 +275,39 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     t, it  = 0.0, 0
     year   = 3600 * 24 * 365.25
     dt     = 1e3 * year
-    dt_max = 50.0e3 * year
+    dt_max = 5e3 * year
     justdoit = true
     
-    while it < 1000
+    while it < 500
+
+        if justdoit && t / year > 100e3
+            stokes.τ.xx .= 0e0
+            stokes.τ.yy .= 0e0
+            stokes.τ.xy .= 0e0
+            stokes.τ.II .= 0e0
+            stokes.ε.xx .= 0e0
+            stokes.ε.yy .= 0e0
+            stokes.ε.xy .= 0e0
+            stokes.ε.II .= 0e0
+            stokes.viscosity.η_vep .= 0e0
+            ice_phase, air_phase = 5.0, 6.0
+            
+            chain = chain_crust
+
+            # remove_ice!(chain, particles, pPhases, ice_phase, air_phase)
+            force_air_above_chain!(chain, particles, pPhases, air_phase)
+            chain.h_vertices0 .= chain.h_vertices
+            fill_chain_from_vertices!(chain, PTArray(backend)(chain.h_vertices))
+
+            update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+            compute_rock_fraction!(ϕ, chain, xvi, di)
+            dt_max = 1e3 * year
+            justdoit = false
+        end
+
+        # if t / year > 500e3
+        #     dt_max = 10e3 * year
+        # end
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -291,9 +335,10 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             igg;
             kwargs = (
                 iterMax = 100e3,
-                iterMin = 5e3,
+                iterMin = 2e3,
                 viscosity_relaxation = 1.0e-2,
                 free_surface = true,
+                strain_increment = true,
                 nout = 2.0e3,
                 viscosity_cutoff = viscosity_cutoff,
             )
@@ -340,7 +385,11 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
        
         # advect marker chain
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), xvi, dt)
+        fill_chain_from_vertices!(chain, PTArray(backend)(chain.h_vertices))
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        semilagrangian_advection_markerchain!(chain_crust, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), xvi, dt)
+        fill_chain_from_vertices!(chain_crust, PTArray(backend)(chain_crust.h_vertices))
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
@@ -361,32 +410,6 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
         #     ")
         #     rheology[4].Density[1].ρ[] = ρ_ice_new
         # end
-
-        if justdoit && t / year > 300e3
-            ice_phase, air_phase = 4.0, 5.0
-            remove_ice!(chain, particles, pPhases, ice_phase, air_phase)
-            force_air_above_chain!(chain, particles, pPhases, air_phase)
-
-            stokes.τ.xx .= 0e0
-            stokes.τ.yy .= 0e0
-            stokes.τ.xy .= 0e0
-            stokes.τ.II .= 0e0
-            stokes.ε.xx .= 0e0
-            stokes.ε.yy .= 0e0
-            stokes.ε.xy .= 0e0
-            stokes.ε.II .= 0e0
-            stokes.viscosity.η_vep .= 0e0
-
-            update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-            compute_rock_fraction!(ϕ, chain, xvi, di)
-
-            dt_max = 1e3 * year
-            justdoit = false
-        end
-
-        if t / year > 500e3
-            dt_max = 10e3 * year
-        end
 
         t / year > 1.5e6 && break
 
@@ -488,22 +511,35 @@ end
 do_vtk = true # set to true to generate VTK files for ParaView
 figdir = "IceLayers2D"
 n = 128
-nx, ny = n, n
+nx, ny = 2*n, n
 
 li, origin, phases_GMG, T_GMG = setup2D(
     nx + 1, ny + 1;
     sticky_air      = 8,
     water_thickness = 2,
-    dimensions      = (90.0e0, 90.0e0),
+    dimensions      = (130.0e0, 60.0e0),
 )
 
-f,ax, h =heatmap(xvi./1e3..., phases_GMG)
-Colorbar(f[1, 2], h)
+# f,ax, h =heatmap(xvi./1e3..., phases_GMG)
+# Colorbar(f[1, 2], h)
+# f
 
-# igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-#     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-# else
-#     igg
-# end
+igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
+end
 
-# main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = do_vtk)
+main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = do_vtk)
+
+
+p        = particles.coords
+ppx, ppy = p
+pxv      = ppx.data[:] ./ 1.0e3
+pyv      = ppy.data[:] ./ 1.0e3
+clr      = pPhases.data[:]
+# clr    = pT.data[:]
+idxv     = particles.index.data[:]
+f,ax,=scatter(Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
+lines!(ax, xvi[1] .* 1e-3, Array(chain.h_vertices) .* 1.0e-3, color = :red, linewidth = 3)
+f

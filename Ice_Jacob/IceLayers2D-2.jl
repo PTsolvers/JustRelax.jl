@@ -191,7 +191,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 1.5),
             # CompositeRheology = CompositeRheology((disl_crust, el, pl)),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e23),)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e24),)),
             Gravity = ConstantGravity(; g = 9.81),
         ),
         # Name              = "StickyAir",
@@ -200,7 +200,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             Density = ConstantDensity(; ρ = 0.0e0),
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 2.5),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e22), el, pl)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e22),)),
             Gravity = ConstantGravity(; g = 9.81),
         ),
     )
@@ -315,8 +315,8 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     # Time loop
     t, it  = 0.0, 0
     year   = 3600 * 24 * 365.25
-    dt     = 5e2 * year
-    dt_max = 1e3 * year
+    dt     = 1e3 * year
+    dt_max = 5e3 * year
     justdoit = true
 
     while it < 1000
@@ -396,6 +396,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
        
         # advect marker chain
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), xvi, dt)
+        fill_chain_from_vertices!(chain, topo_y)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
@@ -435,6 +436,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             ice_phase, air_phase = 4.0, 5.0
             remove_ice!(chain, particles, pPhases, ice_phase, air_phase)
             force_air_above_chain!(chain, particles, pPhases, air_phase)
+            fill_chain_from_vertices!(chain, topo_y)
 
             stokes.τ.xx .= 0e0
             stokes.τ.yy .= 0e0
@@ -449,7 +451,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
             compute_rock_fraction!(ϕ, chain, xvi, di)
 
-            dt_max = 1e3 * year
+            dt_max = 5e2 * year
             justdoit = false
         end
 

@@ -396,7 +396,7 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
        
         # advect marker chain
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), xvi, dt)
-        fill_chain_from_vertices!(chain, topo_y)
+        fill_chain_from_vertices!(chain, (chain.h_vertices))
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
@@ -436,7 +436,11 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             ice_phase, air_phase = 4.0, 5.0
             remove_ice!(chain, particles, pPhases, ice_phase, air_phase)
             force_air_above_chain!(chain, particles, pPhases, air_phase)
-            fill_chain_from_vertices!(chain, topo_y)
+            chain.h_vertices0 .= chain.h_vertices
+
+            update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+            compute_rock_fraction!(ϕ, chain, xvi, di)
+            fill_chain_from_vertices!(chain, (chain.h_vertices))
 
             stokes.τ.xx .= 0e0
             stokes.τ.yy .= 0e0

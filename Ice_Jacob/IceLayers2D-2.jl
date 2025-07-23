@@ -83,11 +83,12 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     el = ConstantElasticity(; G = 25.0e9, ν = 0.45) #: ConstantElasticity(; G = G0, ν = 0.25)
     β = inv(get_Kb(el))
     η_reg = 1.0e15
-    C = 10.0e6
+    C = 20.0e6
     ϕ = 15
     Ψ = 0.0
     soft_C = NonLinearSoftening(; ξ₀ = C, Δ = C / 1.0e5)       # nonlinear softening law
     pl = DruckerPrager_regularised(; C = C, ϕ = ϕ, η_vp = η_reg, Ψ = Ψ)
+    # el_magma = ConstantElasticity(; G = G_magma, ν = 0.45)
   
     disl_crust  = SetDislocationCreep(GeoParams.Dislocation.dry_anorthite_Rybacki_2000)
     # disl_crust  = SetDislocationCreep(GeoParams.Dislocation.wet_quartzite_Hirth_2001)
@@ -99,33 +100,88 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     else
         Ref(0.917e3)
     end
-    rheology = rheology = (
-        # Name              = "Upper Crust",
+    # rheology = rheology = (
+    #     # Name              = "Upper Crust",
+    #     SetMaterialParams(;
+    #         Phase = 1,
+    #         Density = PT_Density(; ρ0 = 2.7e3, β = β, T0 = 273, α = 3.5e-5),
+    #         HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
+    #         Conductivity = ConstantConductivity(; k = 2.5),
+    #         CompositeRheology = CompositeRheology((disl_crust, el, pl)),
+    #         Gravity = ConstantGravity(; g = 9.81),
+    #     ),
+    #     # Name              = "Lower Crust",
+    #     SetMaterialParams(;
+    #         Phase = 2,
+    #         Density = PT_Density(; ρ0 = 2.75e3, β = β, T0 = 273, α = 3.5e-5),
+    #         # Density = T_Density(; ρ0 = 2.70e3, T0 = 273.15),
+    #         HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
+    #         Conductivity = ConstantConductivity(; k = 2.5),
+    #         CompositeRheology = CompositeRheology((disl_crust, el, pl)),
+    #         Gravity = ConstantGravity(; g = 9.81),
+    #     ),
+    #     # Name              = "Lithosphere Mantle",
+    #     SetMaterialParams(;
+    #         Phase = 3,
+    #         Density = PT_Density(; ρ0 = 3.3e3, β = β, T0 = 273, α = 3e-5),
+    #         HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
+    #         Conductivity = ConstantConductivity(; k = 2.5),
+    #         CompositeRheology = CompositeRheology((disl_litho, diff_litho,el,pl)),
+    #         Gravity = ConstantGravity(; g = 9.81),
+    #     ),
+    #     # Name              = "ice",
+    #     SetMaterialParams(;
+    #         Phase = 4,
+    #         Density = ConstantMutableDensity(ρ_ice),
+    #         HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
+    #         Conductivity = ConstantConductivity(; k = 1.5),
+    #         # CompositeRheology = CompositeRheology((disl_crust, el, pl)),
+    #         CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e23), el)),
+    #         Gravity = ConstantGravity(; g = 9.81),
+    #     ),
+    #     # Name              = "air",
+    #     SetMaterialParams(;
+    #         Phase = 5,
+    #         Density = ConstantDensity(; ρ = 0),
+    #         HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
+    #         Conductivity = ConstantConductivity(; k = 2.5),
+    #         CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e19),)),
+    #         Gravity = ConstantGravity(; g = 9.81),
+    #     ),
+    # )
+
+    rheology = (
+        # Name = "Upper crust",
         SetMaterialParams(;
             Phase = 1,
-            Density = PT_Density(; ρ0 = 2.7e3, β = β, T0 = 273, α = 3.5e-5),
+            # Density = PT_Density(; ρ0 = 2.7e3, T0 = 273.15, β = β),
+            Density = ConstantDensity(; ρ = 2.7e3),
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 2.5),
-            CompositeRheology = CompositeRheology((disl_crust, el, pl)),
+            # CompositeRheology = CompositeRheology((disl_top, el, pl)),
+            CompositeRheology = CompositeRheology( (LinearViscous(; η=1e22), el, pl)),
+            # Melting = MeltingParam_Smooth3rdOrder(a = 517.9, b = -1619.0, c = 1699.0, d = -597.4), #mafic melting curve
             Gravity = ConstantGravity(; g = 9.81),
         ),
-        # Name              = "Lower Crust",
+        # Name = "Lower crust",
         SetMaterialParams(;
             Phase = 2,
-            Density = PT_Density(; ρ0 = 2.75e3, β = β, T0 = 273, α = 3.5e-5),
-            # Density = T_Density(; ρ0 = 2.70e3, T0 = 273.15),
+            # Density = PT_Density(; ρ0 = 2.75e3, T0 = 273.15, β = β),
+            Density = ConstantDensity(; ρ = 2.7e3),
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 2.5),
-            CompositeRheology = CompositeRheology((disl_crust, el, pl)),
+            # CompositeRheology = CompositeRheology((disl_bot, el, pl)),
+            CompositeRheology = CompositeRheology( (LinearViscous(; η=1e23), el, pl)),
+            # Melting = MeltingParam_Smooth3rdOrder(a = 517.9, b = -1619.0, c = 1699.0, d = -597.4), #mafic melting curve
             Gravity = ConstantGravity(; g = 9.81),
         ),
-        # Name              = "Lithosphere Mantle",
+         # Name              = "Lithosphere Mantle",
         SetMaterialParams(;
             Phase = 3,
             Density = PT_Density(; ρ0 = 3.3e3, β = β, T0 = 273, α = 3e-5),
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 2.5),
-            CompositeRheology = CompositeRheology((disl_litho, diff_litho,el,pl)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η=5e20),el,pl)),
             Gravity = ConstantGravity(; g = 9.81),
         ),
         # Name              = "ice",
@@ -135,19 +191,20 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 1.5),
             # CompositeRheology = CompositeRheology((disl_crust, el, pl)),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e23), el)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e23),)),
             Gravity = ConstantGravity(; g = 9.81),
         ),
-        # Name              = "air",
+        # Name              = "StickyAir",
         SetMaterialParams(;
             Phase = 5,
-            Density = ConstantDensity(; ρ = 0),
+            Density = ConstantDensity(; ρ = 0.0e0),
             HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
             Conductivity = ConstantConductivity(; k = 2.5),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e19),)),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e22), el, pl)),
             Gravity = ConstantGravity(; g = 9.81),
         ),
     )
+
     # ----------------------------------------------------
     dt = 1e0 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
@@ -258,8 +315,9 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     # Time loop
     t, it  = 0.0, 0
     year   = 3600 * 24 * 365.25
-    dt     = 1e3 * year
-    dt_max = 50.0e3 * year
+    dt     = 5e2 * year
+    dt_max = 1e3 * year
+    justdoit = true
 
     while it < 1000
 
@@ -373,14 +431,30 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
         #     force_air_above_chain!(chain, particles, pPhases, air_phase)
         # end
 
-        if t / year > 300e3
+        if justdoit && t / year > 15e3
             ice_phase, air_phase = 4.0, 5.0
             remove_ice!(chain, particles, pPhases, ice_phase, air_phase)
             force_air_above_chain!(chain, particles, pPhases, air_phase)
+
+            stokes.τ.xx .= 0e0
+            stokes.τ.yy .= 0e0
+            stokes.τ.xy .= 0e0
+            stokes.τ.II .= 0e0
+            stokes.ε.xx .= 0e0
+            stokes.ε.yy .= 0e0
+            stokes.ε.xy .= 0e0
+            stokes.ε.II .= 0e0
+            stokes.viscosity.η_vep .= 0e0
+
             update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
             compute_rock_fraction!(ϕ, chain, xvi, di)
 
             dt_max = 1e3 * year
+            justdoit = false
+        end
+
+        if t / year > 500e3
+            dt_max = 5e3 * year
         end
 
         t / year > 1.5e6 && break

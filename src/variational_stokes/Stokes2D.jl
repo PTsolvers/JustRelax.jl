@@ -131,7 +131,7 @@ function _solve_VS!(
                 )
             end
 
-            if ϵ_abs < ϵ_nonlinear
+            if err < ϵ_nonlinear
                 update_viscosity!(
                     stokes,
                     phase_ratios,
@@ -191,7 +191,7 @@ function _solve_VS!(
                     phase_ratios.center,
                     phase_ratios.vertex,
                     ϕ,
-                    ϵ_abs < ϵ_nonlinear
+                    err < ϵ_nonlinear
                 )
             end
 

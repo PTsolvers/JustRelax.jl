@@ -144,9 +144,9 @@ function JR2D.update_thermal_coeffs!(
 end
 
 function JR2D.PrincipalStress(::Type{CUDABackend}, ni::NTuple{2})
-    σ1 = fill(SVector(0.0, 0.0), ni...)
-    σ2 = fill(SVector(0.0, 0.0), ni...)
-    σ3 = fill(SVector(0.0, 0.0), 1, 1)
+    σ1 = CUDA.fill(SVector(0.0, 0.0), ni...)
+    σ2 = CUDA.fill(SVector(0.0, 0.0), ni...)
+    σ3 = CUDA.fill(SVector(0.0, 0.0), 1, 1)
     return JustRelax.PrincipalStress{typeof(σ1)}(σ1, σ2, σ3)
 end
 

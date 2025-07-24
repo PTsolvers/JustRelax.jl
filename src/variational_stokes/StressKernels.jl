@@ -21,6 +21,7 @@
         phase_center,
         phase_vertex,
         ϕ::JustRelax.RockRatio,
+        do_plasticity,
     ) where {T}
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
@@ -61,7 +62,7 @@
         # yield function @ center
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
 
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        if do_plasticity && is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[I...] =
                 @muladd (1.0 - relλ) * λv[I...] +
@@ -101,7 +102,7 @@
             # yield function @ center
             F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-            τII_ij = if is_pl && !iszero(τII_ij) && F > 0
+            τII_ij = if do_plasticity && is_pl && !iszero(τII_ij) && F > 0
                 # stress correction @ center
                 λ[I...] =
                     @muladd (1.0 - relλ) * λ[I...] +

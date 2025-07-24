@@ -23,6 +23,7 @@ function _solve_VS!(
         args,
         dt,
         igg::IGG;
+        ϵ_nonlinear = 1e-1,
         strain_increment = false,
         air_phase::Integer = 0,
         viscosity_cutoff = (-Inf, Inf),
@@ -130,15 +131,17 @@ function _solve_VS!(
                 )
             end
 
-            update_viscosity!(
-                stokes,
-                phase_ratios,
-                args,
-                rheology,
-                viscosity_cutoff;
-                air_phase = air_phase,
-                relaxation = viscosity_relaxation,
-            )
+            if ϵ_abs < ϵ_nonlinear
+                update_viscosity!(
+                    stokes,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff;
+                    air_phase = air_phase,
+                    relaxation = viscosity_relaxation,
+                )
+            end
 
             if strain_increment
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
@@ -188,6 +191,7 @@ function _solve_VS!(
                     phase_ratios.center,
                     phase_ratios.vertex,
                     ϕ,
+                    ϵ_abs < ϵ_nonlinear
                 )
             end
 

@@ -1,11 +1,11 @@
-function PrincipalStress(::B, ni::NTuple{2}) where B
+function PrincipalStress(::B, ni::NTuple{2}) where {B}
     σ1 = fill(SVector(0.0, 0.0), ni...)
     σ2 = fill(SVector(0.0, 0.0), ni...)
     σ3 = fill(SVector(0.0, 0.0), 1, 1)
     return JustRelax.PrincipalStress{typeof(σ1)}(σ1, σ2, σ3)
 end
 
-function PrincipalStress(::B, ni::NTuple{3}) where B
+function PrincipalStress(::B, ni::NTuple{3}) where {B}
     σ1 = fill(SVector(0.0, 0.0, 0.0), ni...)
     σ2 = fill(SVector(0.0, 0.0, 0.0), ni...)
     σ3 = fill(SVector(0.0, 0.0, 0.0), ni...)
@@ -33,7 +33,7 @@ end
         τ_xx[I...] τ_12
         τ_12 τ_yy[I...]
     ]
-            
+
     # Compute the eigenvalues (principal stresses)
     vals, vecs = eigen(τ)
     # Compute the principal directions (eigenvectors)
@@ -55,7 +55,7 @@ end
         τ_12 τ_yy[I...] τ_23
         τ_13 τ_23 τ_zz[I...]
     ]
-            
+
     # Compute the eigenvalues (principal stresses)
     vals, vecs = eigen(τ)
     # Compute the principal directions (eigenvectors)

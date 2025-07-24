@@ -169,6 +169,14 @@ function StokesArrays(::Number, ::Number, ::Number)
     throw(ArgumentError("StokesArrays dimensions must be given as integers"))
 end
 
+struct PrincipalStress{T}
+    σ1::T
+    σ2::T
+    σ3::T
+end
+
+Adapt.@adapt_structure PrincipalStress
+
 ## PTStokesCoeffs type
 
 struct PTStokesCoeffs{T}

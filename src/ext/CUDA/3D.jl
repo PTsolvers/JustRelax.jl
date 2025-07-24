@@ -155,6 +155,23 @@ function JR3D.update_thermal_coeffs!(
     return nothing
 end
 
+function JR3D.PrincipalStress(::Type{CUDABackend}, ni::NTuple{3})
+    σ1 = fill(SVector(0.0, 0.0, 0.0), ni...)
+    σ2 = fill(SVector(0.0, 0.0, 0.0), ni...)
+    σ3 = fill(SVector(0.0, 0.0, 0.0), ni...)
+    return JustRelax.PrincipalStress{typeof(σ1)}(σ1, σ2, σ3)
+end
+
+function JR3D.compute_principal_stresses(backend::Type{CUDABackend}, stokes::JustRelax.StokesArrays)
+    compute_principal_stresses(backend, stokes)
+    return nothing
+end
+
+function JR3D.compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress{CuArray})
+    compute_principal_stresses!(stokes, σ)
+    return nothing
+end
+
 # Boundary conditions
 function JR3D.flow_bcs!(
         ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions

@@ -136,6 +136,17 @@ function Residual(::Number, ::Number, ::Number)
     throw(ArgumentError("Residual dimensions must be given as integers"))
 end
 
+## PrincipalStress type
+struct PrincipalStress{T}
+    σ1::T
+    σ2::T
+    σ3::T
+
+    PrincipalStress(σ1::T, σ2::T, σ3::T) where {T <: AbstractArray} = new{T}(σ1, σ2, σ3)
+end
+
+Adapt.@adapt_structure PrincipalStress
+
 ## StokesArrays type
 
 struct StokesArrays{A, B, C, D, E, F, T}

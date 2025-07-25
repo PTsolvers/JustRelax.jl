@@ -288,6 +288,8 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
     # displacement2velocity!(stokes, dt)
     update_halo!(@velocity(stokes)...)
 
+    σ = PrincipalStress(backend, ni)
+
     while it < 500
 
         if justdoit && t / year > 50e3
@@ -347,13 +349,16 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
             kwargs = (
                 iterMax = 100e3,
                 iterMin = 2e3,
-                viscosity_relaxation = 1.0e-4,
+            ϵ_nonlinear = 1e-1,
+                viscosity_relaxation = 1.0e-2,
                 free_surface = true,
                 strain_increment = false,
                 nout = 2.0e3,
                 viscosity_cutoff = viscosity_cutoff,
             )
         )
+        compute_principal_stresses!(stokes, σ)
+
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
         dt = compute_dt(stokes, di, dt_max)
@@ -445,6 +450,8 @@ function main(igg, nx, ny, li, origin, phases_GMG, T_GMG, figdir; do_vtk = true)
                     strain_rate_II         = Array(stokes.ε.II),
                     plastic_strain_rate_II = Array(stokes.ε_pl.II),
                     density                = Array(ρg[2] ./ 9.81),
+                    sigma1_x               = Array(σ.σ1[1, :, :]),
+                    sigma1_y               = Array(σ.σ1[2, :, :]),
                 )
                 velocity_v = (
                     Array(Vx_v),
@@ -528,7 +535,8 @@ li, origin, phases_GMG, T_GMG = setup2D(
     nx + 1, ny + 1;
     sticky_air      = 6,
     water_thickness = 2,
-    dimensions      = (180.0e0, 90.0e0),
+    dimensions      = (90.0e0, 45.0e0),
+    # dimensions      = (180.0e0, 90.0e0),
 )
 
 # f,ax, h =heatmap(xvi./1e3..., phases_GMG)

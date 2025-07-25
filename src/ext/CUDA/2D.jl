@@ -143,6 +143,23 @@ function JR2D.update_thermal_coeffs!(
     return nothing
 end
 
+function JR2D.PrincipalStress(backend::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
+    return PrincipalStress(ni)
+end
+
+function JR2D.compute_principal_stresses(backend::Type{CUDABackend}, stokes::JustRelax.StokesArrays)
+    ni = size(stokes.P)
+    σ = JR2D.PrincipalStress(backend, ni)
+    compute_principal_stresses!(stokes, σ)
+    return σ
+end
+
+function JR2D.compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress{<:CuArray})
+    ni = size(stokes.P)
+    @parallel (@idx ni) principal_stresses_eigen!(σ, @stress_center(stokes)...)
+    return nothing
+end
+
 # Boundary conditions
 function JR2D.flow_bcs!(
         ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions

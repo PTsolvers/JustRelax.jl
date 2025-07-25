@@ -14,9 +14,9 @@ end
 @parallel_indices (I...) function principal_stresses_eigen!(σ::JustRelax.PrincipalStress, τ_xx, τ_yy, τ_xy)
 
     # Construct the stress tensor
-    τ_11 = τ_xx[I...]
-    τ_22 = τ_yy[I...]
-    τ_12 = τ_xy[I...]
+    τ_11 = @inbounds τ_xx[I...]
+    τ_22 = @inbounds τ_yy[I...]
+    τ_12 = @inbounds τ_xy[I...]
 
     a = (τ_11 + τ_22) / 2
     b = √((τ_11 - τ_22)^2 / 2 + τ_12^2)
@@ -31,10 +31,9 @@ end
     e2 = SA[-sinθ, cosθ]
 
     Base.@nexprs 2 i -> begin
-        σ.σ1[i, I...] = σ1 * e1[i]
-        σ.σ2[i, I...] = σ2 * e2[i]
+        @inbounds σ.σ1[i, I...] = σ1 * e1[i]
+        @inbounds σ.σ2[i, I...] = σ2 * e2[i]
     end
-
 
     return nothing
 end
@@ -42,9 +41,9 @@ end
 @parallel_indices (I...) function principal_stresses_eigen!(σ::JustRelax.PrincipalStress, τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy)
 
     # Construct the stress tensor
-    τ_12 = τ_xy[I...]
-    τ_13 = τ_xz[I...]
-    τ_23 = τ_yz[I...]
+    τ_12 = @inbounds τ_xy[I...]
+    τ_13 = @inbounds τ_xz[I...]
+    τ_23 = @inbounds τ_yz[I...]
     τ = @SMatrix [
         τ_xx[I...] τ_12 τ_13
         τ_12 τ_yy[I...] τ_23
@@ -54,9 +53,9 @@ end
     σ1, σ2, σ3 = hessenberg_eigen_3x3(A)
 
     Base.@nexprs 3 i -> begin
-        σ.σ1[i, I...] = σ1[i]
-        σ.σ2[i, I...] = σ2[i]
-        σ.σ3[i, I...] = σ3[i]
+        @inbounds σ.σ1[i, I...] = σ1[i]
+        @inbounds σ.σ2[i, I...] = σ2[i]
+        @inbounds σ.σ3[i, I...] = σ3[i]
     end
 
     return nothing

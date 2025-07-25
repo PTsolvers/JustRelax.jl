@@ -14,23 +14,27 @@ end
 @parallel_indices (I...) function principal_stresses_eigen!(σ::JustRelax.PrincipalStress, τ_xx, τ_yy, τ_xy)
 
     # Construct the stress tensor
+    τ_11 = τ_xx[I...]
+    τ_22 = τ_yy[I...]
     τ_12 = τ_xy[I...]
-    τ = @SMatrix [
-        τ_xx[I...] τ_12
-        τ_12 τ_yy[I...]
-    ]
 
-    # Compute the eigenvalues (principal stresses)
-    vals, vecs = eigen(τ)
-    # Compute the principal directions (eigenvectors)
-    i2, i1 = sortperm(vals)
-    σ1 = SA[vals[i1] * vecs[1, i1], vals[i1] * vecs[2, i1]]
-    σ2 = SA[vals[i2] * vecs[1, i2], vals[i2] * vecs[2, i2]]
+    a = (τ_11 + τ_22) / 2
+    b = √((τ_11 - τ_22)^2 / 2 + τ_12^2)
+    # eigenvalues
+    σ1 = a + b
+    σ2 = a - b
+    # angle of principal stress
+    θ = atan(2 * τ_12 / (τ_11 - τ_22)) / 2
+    # eigenvectors
+    sinθ, cosθ = sin(θ), cos(θ)
+    e1 = SA[cosθ, sinθ]
+    e2 = SA[-sinθ, cosθ]
 
     Base.@nexprs 2 i -> begin
-        σ.σ1[i, I...] = σ1[i]
-        σ.σ2[i, I...] = σ2[i]
+        σ.σ1[i, I...] = σ1 * e1[i]
+        σ.σ2[i, I...] = σ2 * e2[i]
     end
+
 
     return nothing
 end
@@ -58,18 +62,18 @@ end
     return nothing
 end
 
-# Hessenberg method with spectral shift for 3x3 matrices 
+# Hessenberg method with spectral shift for 3x3 matrices
 
-function hessenberg_eigen_3x3(A; tol = 1e-10, max_iter = 50)
+function hessenberg_eigen_3x3(A; tol = 1.0e-10, max_iter = 50)
     H, Q_hess = hessenberg_3x3(A)
-    I_SA = SA[1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0] 
+    I_SA = SA[1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]
     V = I_SA
     for _ in 1:max_iter
         λ = H[end, end] * I_SA
         Q, R = qr(H - λ)
         H = R * Q + λ
         V = V * Q
-        check_eigen_convergence(H; tol=tol) && break
+        check_eigen_convergence(H; tol = tol) && break
     end
     # eigenvectors
     eᵢ = Q_hess * V
@@ -82,13 +86,13 @@ function hessenberg_eigen_3x3(A; tol = 1e-10, max_iter = 50)
         permⱼ = perms[j]
         x = Base.@ntuple 3 i -> begin
             σ[j] * eᵢ[i, permⱼ]
-        end 
+        end
         SVector(x...)
     end
     return σ_1, σ_2, σ_3
 end
 
-function check_eigen_convergence(H; tol = 1e-10)
+function check_eigen_convergence(H; tol = 1.0e-10)
     # If not converged, check if all off-diagonal elements are small enough
     converged = false
     for i in 1:3, j in 1:3
@@ -129,10 +133,10 @@ function hessenberg_3x3(A)
         1.0 0.0 0.0
         0.0 Q_sub[1, 1] Q_sub[1, 2]
         0.0 Q_sub[2, 1] Q_sub[2, 2]
-    ]  
+    ]
 
     # Compute Hessenberg form
     H = (Q' * A) * Q
-    
+
     return H, Q
 end

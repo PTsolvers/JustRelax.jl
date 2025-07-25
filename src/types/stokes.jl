@@ -142,7 +142,7 @@ struct PrincipalStress{T}
     σ2::T
     σ3::T
 
-    PrincipalStress(σ1::T, σ2::T, σ3::T) where {T<:AbstractArray} = new{T}(σ1, σ2, σ3)
+    PrincipalStress(σ1::T, σ2::T, σ3::T) where {T <: AbstractArray} = new{T}(σ1, σ2, σ3)
 end
 
 Adapt.@adapt_structure PrincipalStress

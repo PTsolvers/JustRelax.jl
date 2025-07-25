@@ -155,20 +155,20 @@ function JR3D.update_thermal_coeffs!(
     return nothing
 end
 
-function JR3D.PrincipalStress(::Type{CUDABackend}, ni::NTuple{3})
-    σ1 = CUDA.fill(SVector(0.0, 0.0, 0.0), ni...)
-    σ2 = CUDA.fill(SVector(0.0, 0.0, 0.0), ni...)
-    σ3 = CUDA.fill(SVector(0.0, 0.0, 0.0), ni...)
-    return JustRelax.PrincipalStress{typeof(σ1)}(σ1, σ2, σ3)
+function JR3D.PrincipalStress(backend::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
+    return PrincipalStress(ni)
 end
 
 function JR3D.compute_principal_stresses(backend::Type{CUDABackend}, stokes::JustRelax.StokesArrays)
-    compute_principal_stresses(backend, stokes)
-    return nothing
+    ni = size(stokes.P)
+    σ = JR3D.PrincipalStress(backend, ni)
+    compute_principal_stresses!(stokes, σ)
+    return σ
 end
 
-function JR3D.compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress{CuArray})
-    compute_principal_stresses!(stokes, σ)
+function JR3D.compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress{<:CuArray})
+    ni = size(stokes.P)
+    @parallel (@idx ni) principal_stresses_eigen!(σ, @stress_center(stokes)...)
     return nothing
 end
 

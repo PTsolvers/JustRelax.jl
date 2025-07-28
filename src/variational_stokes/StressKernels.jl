@@ -21,6 +21,7 @@
         phase_center,
         phase_vertex,
         ϕ::JustRelax.RockRatio,
+        doplasticity
     ) where {T}
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
@@ -61,7 +62,7 @@
         # yield function @ center
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
 
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        if doplasticity && is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[I...] =
                 @muladd (1.0 - relλ) * λv[I...] +
@@ -101,7 +102,7 @@
             # yield function @ center
             F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-            τII_ij = if is_pl && !iszero(τII_ij) && F > 0
+            τII_ij = if doplasticity && is_pl && !iszero(τII_ij) && F > 0
                 # stress correction @ center
                 λ[I...] =
                     @muladd (1.0 - relλ) * λ[I...] +
@@ -165,6 +166,7 @@ end
         phase_yz,
         phase_xz,
         ϕ::JustRelax.RockRatio,
+        doplasticity
     )
     τyzv, τxzv, τxyv = τshear_v
     τyzv_old, τxzv_old, τxyv_old = τshear_ov
@@ -223,7 +225,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        if doplasticity && is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
                 (1.0 - relλ) * λv[1][I...] +
@@ -286,7 +288,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        if doplasticity && is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
                 (1.0 - relλ) * λv[2][I...] +
@@ -350,7 +352,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        if doplasticity && is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
                 (1.0 - relλ) * λv[3][I...] +
@@ -387,7 +389,7 @@ end
         # yield function @ center
         F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij) && F > 0
+        if doplasticity && is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
@@ -440,6 +442,7 @@ end
         phase_center,
         phase_vertex,
         ϕ::JustRelax.RockRatio,
+        doplasticity
     ) where {T}
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
@@ -482,7 +485,7 @@ end
 
         # yield function @ center
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        if doplasticity && is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[I...] =
                 (1.0 - relλ) * λv[I...] +
@@ -525,7 +528,7 @@ end
             # yield function @ center
             F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-            τII_ij = if is_pl && !iszero(τII_ij) && F > 0
+            τII_ij = if doplasticity && is_pl && !iszero(τII_ij) && F > 0
                 # stress correction @ center
                 λ[I...] =
                     (1.0 - relλ) * λ[I...] +

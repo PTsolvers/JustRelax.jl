@@ -129,6 +129,7 @@
 
         else
             Pr_c[I...] = zero(eltype(T))
+            η_vep[I...] = zero(eltype(T))
             Base.@nexprs 3 i -> begin
                 τ[i][I...] = zero(eltype(T))
             end
@@ -235,6 +236,8 @@ end
             # stress correction @ vertex
             τyzv[I...] += dτyzv
         end
+    else
+        τyzv[I...] = zero(eltype(T))
     end
 
     ## xz
@@ -298,6 +301,8 @@ end
             # stress correction @ vertex
             τxzv[I...] += dτxzv
         end
+    else
+        τxzv[I...] = zero(eltype(T))
     end
 
     ## xy
@@ -362,6 +367,8 @@ end
             # stress correction @ vertex
             τxyv[I...] += dτxyv
         end
+    else
+        τxyv[I...] = zero(eltype(T))
     end
 
     ## center
@@ -401,7 +408,7 @@ end
             τII[I...] = τII_ij = second_invariant(τij)
         else
             # stress correction @ center
-            Base.@nexprs 3 i -> begin
+            Base.@nexprs 6 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
                 @inbounds ε_pl[i][I...] = 0.0
             end
@@ -411,6 +418,14 @@ end
         η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
 
         Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+
+    else
+        Pr_c[I...] = zero(eltype(T))
+        η_vep[I...] = zero(eltype(T))
+        Base.@nexprs 6 i -> begin
+            τ[i][I...] = zero(eltype(T))
+            ε_pl[i][I...] = zero(eltype(T))
+        end
     end
 
     return nothing

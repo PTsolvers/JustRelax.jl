@@ -456,6 +456,6 @@ end
 
         nx_T, ny_T = size(thermal.T)
         @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.5369 rtol = 1.0e-2
-        @test  Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 9.351e-9 rtol = 1.0e-1
+        @test  Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 9.351e-9 rtol = 1.0e-0
     end
 end

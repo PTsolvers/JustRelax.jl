@@ -130,6 +130,7 @@
 
         else
             Pr_c[I...] = zero(eltype(T))
+            η_vep[I...] = zero(eltype(T))
             Base.@nexprs 3 i -> begin
                 τ[i][I...] = zero(eltype(T))
             end
@@ -237,6 +238,8 @@ end
             # stress correction @ vertex
             τyzv[I...] += dτyzv
         end
+    else
+        τyzv[I...] = zero(eltype(T))
     end
 
     ## xz
@@ -300,6 +303,8 @@ end
             # stress correction @ vertex
             τxzv[I...] += dτxzv
         end
+    else
+        τxzv[I...] = zero(eltype(T))
     end
 
     ## xy
@@ -364,6 +369,8 @@ end
             # stress correction @ vertex
             τxyv[I...] += dτxyv
         end
+    else
+        τxyv[I...] = zero(eltype(T))
     end
 
     ## center
@@ -403,7 +410,7 @@ end
             τII[I...] = τII_ij = second_invariant(τij)
         else
             # stress correction @ center
-            Base.@nexprs 3 i -> begin
+            Base.@nexprs 6 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
                 @inbounds ε_pl[i][I...] = 0.0
             end
@@ -413,6 +420,14 @@ end
         η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
 
         Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+
+    else
+        Pr_c[I...] = zero(eltype(T))
+        η_vep[I...] = zero(eltype(T))
+        Base.@nexprs 6 i -> begin
+            τ[i][I...] = zero(eltype(T))
+            ε_pl[i][I...] = zero(eltype(T))
+        end
     end
 
     return nothing
@@ -479,9 +494,9 @@ end
         dτxyv = compute_stress_increment(
             τxyv[I...], τxyv_old[I...], ηv_ij, Δε[3][I...], _Gv, dτ_rv, dt
         )
-        τIIv_ij = √(
-            0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2
-        )
+        τijv = τxxv_ij, τyyv_ij, τxyv[I...]
+        dτijv = dτxxv, dτyyv, dτxyv
+        τIIv_ij = second_invariant(dτijv .+ τijv)
 
         # yield function @ center
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
@@ -521,25 +536,27 @@ end
 
             # visco-elastic strain rates @ center
             εij_ve = @. εij + 0.5 * τij_o * _Gdt
-            εII_ve = GeoParams.second_invariant(εij_ve)
+            εII_ve = second_invariant(εij_ve)
             # stress increments @ center
             dτij = compute_stress_increment(τij, τij_o, ηij, Δεij, _G, dτ_r, dt)
-            τII_ij = GeoParams.second_invariant(dτij .+ τij)
+            τII_ij = second_invariant(dτij .+ τij)
             # yield function @ center
             F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
             τII_ij = if doplasticity && is_pl && !iszero(τII_ij) && F > 0
                 # stress correction @ center
                 λ[I...] =
-                    (1.0 - relλ) * λ[I...] +
+                    @muladd (1.0 - relλ) * λ[I...] +
                     relλ .* (max(F, 0.0) / (η[I...] * dτ_r * dt + η_reg + volume))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
-                dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
+                dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
                 τij = dτij .+ τij
-                setindex!.(τ, τij, I...)
-                setindex!.(ε_pl, εij_pl, I...)
-                τII_ij = GeoParams.second_invariant(τij)
+                Base.@nexprs 3 i -> begin
+                    @inbounds τ[i][I...] = τij[i]
+                    @inbounds ε_pl[i][I...] = εij_pl[i]
+                end
+                τII_ij = second_invariant(τij)
             else
                 # stress correction @ center
                 Base.@nexprs 3 i -> begin
@@ -548,15 +565,15 @@ end
                 end
                 τII_ij
             end
-            τII[I...] = τII_ij
-            η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
-            Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+            @inbounds τII[I...] = τII_ij
+            @inbounds η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
+            @inbounds Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
         else
             Pr_c[I...] = zero(eltype(T))
-            # τij, = cache_tensors(τ, τ_o, ε, I...)
-            dτij = zero(eltype(T)), zero(eltype(T)), zero(eltype(T))
-            # setindex!.(τ, dτij .+ τij, I...)
-            setindex!.(τ, dτij, I...)
+            η_vep[I...] = zero(eltype(T))
+            Base.@nexprs 3 i -> begin
+                τ[i][I...] = zero(eltype(T))
+            end
         end
     end
 

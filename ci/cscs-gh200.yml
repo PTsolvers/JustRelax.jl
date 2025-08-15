@@ -5,17 +5,17 @@ unit_test:
   extends: .uenv-runner-daint-gh200
   image: julia/25.5:v1
   script:
-  - export MPICH_GPU_SUPPORT_ENABLED=1
-  - export IGG_CUDAAWARE_MPI=1 # IGG
-  - export JULIA_CUDA_USE_COMPAT=false # IGG
-  - export LD_PRELOAD=/capstor/scratch/cscs/paellig/.julia/gh200/juliaup/depot/artifacts/e313763c2521efed920ca04560b24511b37d35ea/lib/libcrypto.so.3
-  - julia -e 'println(ENV["IGG_CUDAAWARE_MPI"])'
-  - julia -e 'println("Instantiating project");
-              using Pkg;
-              Pkg.develop(; path=pwd())'
-  - julia -e 'println("Running tests");
-              using Pkg;
-              Pkg.test("JustRelax"; test_args=["--backend=CUDA"])'
+    - export MPICH_GPU_SUPPORT_ENABLED=1
+    - export IGG_CUDAAWARE_MPI=1 # IGG
+    - export JULIA_CUDA_USE_COMPAT=false # IGG
+    - export LD_PRELOAD=/capstor/scratch/cscs/paellig/.julia/gh200/juliaup/depot/artifacts/e313763c2521efed920ca04560b24511b37d35ea/lib/libcrypto.so.3
+    - julia -e 'println("Instantiating project");
+                using Pkg;
+                Pkg.activate(pwd());'
+    - julia -e 'println("Running tests");
+                using Pkg;
+                Pkg.activate(pwd());
+                Pkg.test("JustRelax"; test_args=["--backend=CUDA"])'
   variables:
     WITH_UENV_VIEW: 'juliaup'
     SLURM_JOB_NUM_NODES: 1
@@ -27,10 +27,13 @@ ref_test:
   extends: .baremetal-runner-daint-gh200
   script:
     - echo "Preparing the test environment (single rank)"
-    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.instantiate()'
-    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.add("CUDA")'
+    - export MPICH_GPU_SUPPORT_ENABLED=1
+    - export IGG_CUDAAWARE_MPI=1 # IGG
+    - export JULIA_CUDA_USE_COMPAT=false # IGG
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.instantiate()'
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add("CUDA")'
     - echo "Running the reference test (multiple ranks)"
-    - srun --uenv julia/25.5:v1 --view=juliaup julia --project -e 'println("run a Julia GPU MPI code here")'
+    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'println("run a Julia GPU MPI code here")'
   variables:
     SLURM_JOB_NUM_NODES: 2
     SLURM_NTASKS_PER_NODE: 4

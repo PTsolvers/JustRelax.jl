@@ -76,7 +76,7 @@ Beyond offloading parts of the computational routines onto GPUs, existing codes 
 
 3) Moreover, existing codes depend on external libraries for performing performance critical operations such as linear algebra operations, or I/O, for example. This often leads to the so-called _dependencies hell_, where installation is not so trivial, in particular for newcomers, as compatibility issues, version conflicts, and other difficulties may occur. 
 
-With JustRelax.jl, we intend to address these fundamental limitations by introducing the first HPC-ready geodynamic software written in Julia:
+With JustRelax.jl, we intend to address these fundamental limitations by introducing the first HPC-ready geodynamic software fully written in Julia:
 
 - We leverage Julia's metaprogramming capabilities to generate hardware-specific code. With this, any script written by the user runs efficiently across different architectures and hardware with minimal changes.
 

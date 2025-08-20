@@ -117,7 +117,7 @@ $$
 \end{align}
 $$ -->
 
-where $\eta$ is the viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ is the plastic multiplier, and $Q$ is the plastic flow potential. Since the evolution of the temperature $T$ field is highly relevant in geodynamics, and most of the material properties such as density and rheology laws are also temperature dependent, we also solve the energy conservation equation:
+where $\eta$ is the viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ is the plastic multiplier, and $Q$ is the plastic flow potential. Since the evolution of the temperature $T$ field is highly relevant in geodynamics, and most of the material properties such as density and flow laws are also temperature dependent, we also solve the energy conservation equation:
 
 $$
 \begin{align}

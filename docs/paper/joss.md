@@ -84,7 +84,7 @@ With JustRelax.jl, we intend to address these fundamental limitations by introdu
 
 - Julia's built-in package manager makes the installation of JustRelax.jl trivial, as it automatically downloads and installs all the required dependencies for any compatible operating system (Windows, macOs, and most of the mainstream Linux distributions).
 
-- Julia is a higher-level language, with a syntax that may be familiar to Python and MATLAB users. This significantly facilitates contributions from users, while still offering a performance comparable to static languages.
+- Julia is a higher-level language, with a syntax that may be familiar to Python and MATLAB users. This significantly facilitates contributions from users, while still offering a performance comparable to statically compiled languages.
 
 # Methods
 

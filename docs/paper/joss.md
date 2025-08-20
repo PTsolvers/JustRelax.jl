@@ -82,7 +82,7 @@ With JustRelax.jl, we intend to address these fundamental limitations by introdu
 
 - We use a solution method which is particularly well-suited for GPU accelerators. 
 
-- Julia's built-in package manager makes the installation of JustRelax.jl trivial, as it automatically downloads and installs all the required dependencies for any compatible operating system (Windows, macOs, and most of the mainstream Linux distros).
+- Julia's built-in package manager makes the installation of JustRelax.jl trivial, as it automatically downloads and installs all the required dependencies for any compatible operating system (Windows, macOs, and most of the mainstream Linux distributions).
 
 - Julia is a higher-level language, with a syntax that may be familiar to Python and MATLAB users. This significantly lowers the entry bar to new users, while still offering a performance comparable to static languages.
 

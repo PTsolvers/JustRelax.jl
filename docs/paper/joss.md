@@ -74,7 +74,7 @@ Beyond offloading parts of the computational routines onto GPUs, existing codes 
 
 2) Traditionally, geodynamic codes are written (or at least their critical bits) in statically compiled languages (to our knowledge, only C/C++ or Fortran), with complex codebases that have evolved over several years or decades. This leads to highly complex codebases with a steep learning curve for new users and developers, in particular for students and those without significant experience in software engineering or even basic programming skills. The latter being the most common user in the geodynamics community. The static nature of these languages also limits the flexibility of code development workflows, which often involve rapid prototyping and interactive development in interpreted languages such as MATLAB or Python, instead of prototyping directly in the code base.
 
-3) Often, these codes depend on external libraries for performing linear algebra operations, or I/O, for example. This often leads to the so-called _dependencies hell_, where installation is not so trivial, in particular for newcomers, as compatibility issues, version conflicts, and other difficulties may occur. 
+3) Moreover, existing codes depend on external libraries for performing performance critical operations such as linear algebra operations, or I/O, for example. This often leads to the so-called _dependencies hell_, where installation is not so trivial, in particular for newcomers, as compatibility issues, version conflicts, and other difficulties may occur. 
 
 With JustRelax.jl, we intend to address these fundamental limitations by introducing the first HPC-ready geodynamic software written in Julia:
 

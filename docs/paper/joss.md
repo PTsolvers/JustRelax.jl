@@ -180,7 +180,7 @@ The advection equation is solved in a decoupled manner using a Particle-in-Cell 
 
 ### Parallelization
 
-The APT method in JustRelax.jl is parallelised in a hybrid shared-distributed memory architecture manner, i.e. multithreading combined with MPI for CPUs, and GPU-aware MPI for multi-GPU architectures. Parallelisation is implemented with two Julia packages:
+The APT method in JustRelax.jl is parallelised using a hybrid shared-distributed memory architecture fashion, i.e. multithreading combined with MPI for CPUs, and GPU-aware MPI for multi-GPU architectures. Parallelization is implemented with two Julia packages:
 
 - [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) [Omlin2024] handles the backend abstraction, allowing the user to write (shared memory) parallel kernels that seamlessly run on CPUs and GPUs (currently supported: CUDA, AMDGPU, and Mac M-series chips). It automatically generates Julia code based on Base.Threads.jl (Julia's native multi-threading library) and the third-party GPU libraries CUDA.jl (Nvidia GPUs) [@CUDA.jl], AMDGPU.jl (AMD GPUs), and Metal.jl (Mac M-series chips) depending on the device backend of choice of the end-user.
 

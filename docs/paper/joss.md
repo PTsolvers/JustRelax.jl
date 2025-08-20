@@ -51,26 +51,17 @@ bibliography: joss.bib
 
 # Summary
 
-JustRelax.jl is an open source, highly portable, and high-performance Julia package designed for geodynamic modeling.
-It employs the Accelerated Pseudo-Transient (APT) method to solve the compressible Stokes and heat diffusion equations to simulate complex geodynamic processes. The APT is a matrix-free and embarrassingly parallel iterative method, making it especially well-suited to exploit Graphics Processing Unit (GPU) hardware accelerators available in distributed systems of most HPC centers.
+JustRelax.jl is an open source, highly portable, and high-performance Julia package designed for geodynamic modeling. It employs the Accelerated Pseudo-Transient (APT) method to solve the compressible Stokes and heat diffusion equations to simulate complex geodynamic processes. The APT is a matrix-free and embarrassingly parallel iterative method, making it especially well-suited to exploit Graphics Processing Unit (GPU) hardware accelerators available in distributed systems of most HPC centers.
 
 JustRelax.jl incorporates a wide range of features critical to computational geodynamics. These include complex and highly non-linear rheologies, free surface and a particle-in-cell method to track and advect material phases and properties. Several of the features JustRelax.jl is built upon are outsourced to specialized packages. This modular design considerably reduces the size of the core code base, making the entire package infrastructure easier to maintain. This also improves code reusability, as the external packages can be re-used either as stand-alone packages or as building blocks for some other package.
 
-Most of JustRelax.jl's core dependencies are fully written in the [Julia programming language](https://julialang.org/), which facilitates contributions from users without extensive experience in programming, compared to other compiled languages common in HPC-focused software (C/C++/Fortran). The interactive environment of Julia allows users to prototype and implement new code in a single high-level language, improving the overall development experience in similar fashion to Python and MATLAB.
-
-<!-- JustRelax.jl is a high-performance Julia package for geodynamic modeling that implements matrix-free solvers based on the Accelerated Pseudo-Transient (APT) method. The package provides efficient and scalable solutions for simulating complex geophysical processes across multiple spatial and temporal scales, from crustal deformation to mantle dynamics. JustRelax.jl solves the coupled system of Stokes equations for compressible flow and heat diffusion equations with non-linear rheologies, enabling realistic simulations of Earth's lithosphere and mantle.
-
-A key feature of JustRelax.jl is portability, being able to run on diverse operative systems (Windows, MacOS, and any Linux distro supported by the Julia programming language) computing architectures, including workstation-level CPUs, GPUs from multiple vendors, and High Performance Computing (HPC) clusters, without requiring code modifications and with a seamless installation. This portability is achieved through Julia's metaprogramming capabilities, which can automatically generate hardware-specific code at parse time. The matrix-free nature of the APT approach eliminates the need for expensive and not-so-scalable linear algebra operations, making it particularly suitable for large-scale simulations that are typically memory-bound on modern computing architectures.
-
-The package implements a wide range of geological features essential for geodynamic modeling, including a complex and highly non-linear rheologies, a free-surface, and an efficient and scalable marker-in-cell methods for tracking and advecting material properties. JustRelax.jl is designed with a modular architecture that allows researchers to easily customize parts of the code such as rheological models, material models, or model setup generation without modifying the core package infrastructure, as these features are outsourced to other specialized packages. This flexibility, combined with Julia's interactive development environment, enables rapid prototyping and testing of new physical models while maintaining computational efficiency. -->
+Most of JustRelax.jl's core dependencies are fully written in the [Julia programming language](https://julialang.org/) [@bezanson2017julia], which facilitates contributions from users without extensive experience in programming, compared to other compiled languages common in HPC-focused software (C/C++/Fortran). The interactive environment of Julia allows users to prototype and implement new code in a single high-level language, improving the overall development experience in similar fashion to Python and MATLAB.
 
 # Statement of Need
 
 Computational geodynamics is an important tool for simulating and investigating Earth's complex multi-physics processes across different temporal and spatial scales. Running these simulations is computationally expensive which requires numerical methods that can efficiently solve the governing equations and resolving large and sharp contrasts in physical properties, and highly non-linear rheologies. In the past decades, the computational geodynamics community has developed an extensive set of software tools that have undoubtedly improved our understanding of Earth's dynamics. Most of these codes employ different implementations of either staggered grid finite difference methods (e.g. **I3ELVIS** [@gerya2015plate], **StagYY** [@stagyy], **LaMEM** [@lamem]) or finite element methods (e.g. **CITCOM-S** [@citcom], **ASPECT** [@aspect], **pTatin3D** [@ptatin], **Underworld** [@underworld]) to solve the Stokes equations. Nonetheless, these existing geodynamic modeling tools face several critical challenges:
 
-1) Most codes are optimized for CPUs and distributed (or hybrid shared-distributed) memory architectures (as in classic CPU-based HPC clusters) and would require substantial modifications to full rewrites to be able to execute on hardware accelerators such as GPUs and exploit the extra computational power. This CPU-only design 
-limits the capability of these codes to take advantage of the latest high-performance computing resources, which are evolving rapidly towards multi-GPU systems.
-Beyond offloading parts of the computational routines onto GPUs, existing codes mostly build upon matrix-based solvers which may scale poorly on GPUs. It is likely that different solution strategies may need to be implemented in order to deliver better scaling on GPUs and accelerators.
+1) Most codes are optimized for CPUs and distributed (or hybrid shared-distributed) memory architectures (as in classic CPU-based HPC clusters) and would require substantial modifications to full rewrites to be able to execute on hardware accelerators such as GPUs and exploit the extra computational power. This CPU-only design limits the capability of these codes to take advantage of the latest high-performance computing resources, which are evolving rapidly towards multi-GPU systems. Beyond offloading parts of the computational routines onto GPUs, existing codes mostly build upon matrix-based solvers which may scale poorly on GPUs. It is likely that different solution strategies may need to be implemented in order to deliver better scaling on GPUs and accelerators.
 
 2) Traditionally, geodynamic codes are written (or at least their critical bits) in statically compiled languages (to our knowledge, only C/C++ or Fortran), with complex codebases that have evolved over several years or decades. This leads to highly complex and very large codebases with a steep learning curve for new users and developers, in particular for students and those without significant experience in software engineering or even basic programming skills. The latter being the most common user in the geodynamics community. The static nature of these languages also limits the flexibility of code development workflows, which often involve rapid prototyping and interactive development in interpreted languages such as MATLAB or Python, instead of prototyping directly in the code base.
 
@@ -107,15 +98,6 @@ $$
   \dot{\mathbf{\varepsilon}} = \frac{\mathbf{\tau}}{2\eta} + \frac{1}{2G} \frac{D\mathbf{\tau}}{Dt} + \dot\lambda\frac{\partial Q}{\partial \mathbf{\tau}}
 \end{align}
 $$
-
-
-<!-- In the simple case of a linear isotropic rheology, the constitutive equation is
-
-$$
-\begin{align}
-    \mathbf{\tau} = 2\eta\dot{\mathbf{\varepsilon}}
-\end{align}
-$$ -->
 
 where $\eta$ is the viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ is the plastic multiplier, and $Q$ is the plastic flow potential. Since the evolution of the temperature $T$ field is highly relevant in geodynamics, and most of the material properties such as density and flow laws are temperature dependent, we solve the energy conservation equation:
 
@@ -176,7 +158,7 @@ The APT equations are solved by discretizing the pseudo-time derivatives, either
 
 ### Advection
 
-The advection equation is solved in a decoupled manner using a Particle-in-Cell (PiC) method to advect the temperature, composition, or any other information carried by the particles. The PiC method is particularly well-suited for this task because it can accurately handle the advection of these fields @dominguez2024, and it is extensively used to simulate global and regional scale geodynamic processes, e.g. StaggYY [@stagyy], LaMEM [@lamem], I3ELVIS [@i3elvis], ASPECT [@aspect], amongst others. PiC advection is implemented in the publicly available [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) package, where different time integrators and velocity interpolation schemes are available.
+The advection equation is solved in a decoupled manner using a Particle-in-Cell (PiC) [@Harlow1965] method to advect the temperature, composition, or any other information carried by the particles. The PiC method is particularly well-suited for this task because it can accurately handle the advection of these fields @dominguez2024, and it is extensively used to simulate global and regional scale geodynamic processes, e.g. StaggYY [@stagyy], LaMEM [@lamem], I3ELVIS [@i3elvis], ASPECT [@aspect], amongst others. PiC advection is implemented in the publicly available [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) package, where different time integrators and velocity interpolation schemes are available.
 
 ### Parallelization
 
@@ -190,7 +172,7 @@ The APT method in JustRelax.jl is parallelised using a hybrid shared-distributed
 
 JustRelax.jl features:
 
-- **High-performance matrix-free solver**: The package implements a matrix-free APT method for Stokes and heat diffusion problems to circumvent the need for computationally expensive linear algebra operations and direct solvers, significantly improving computational efficiency for large-scale simulations. The embarrassingly parallel nature of the APT method makes it an excellent solver to exploit hardware accelerators such as GPUs. 
+- **High-performance matrix-free solver**: The package implements a matrix-free APT method for (in)compressible Stokes and diffusion problems to circumvent the need for computationally expensive linear algebra operations and direct solvers, significantly improving computational efficiency for large-scale simulations. The embarrassingly parallel nature of the APT method makes it an excellent solver to exploit hardware accelerators such as GPUs. 
 
 <!-- The weak scaling curve of the 3D Stokes solver is shown in Fig. \ref{fig:scaling}. -->
 

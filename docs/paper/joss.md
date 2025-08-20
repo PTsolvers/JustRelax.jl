@@ -172,7 +172,7 @@ $$
 \end{align}
 $$
 
-The APT equations are solved by discretizing the pseudo-time derivatives, either explicitly or implicitly, and iterating until the residual form of the equations is below a given tolerance. This means that the wave component of the equation has completely damped out and the pseudo-time derivative is approximately zero. In JustRelax.jl, the APT equations are discretized implicitly, as this yields better convergence rates.
+The APT equations are solved by discretizing the pseudo-time derivatives, either explicitly or implicitly, and iterating until the residuals of the equations reach a defined tolerance. This means that the numerically introduced inertial terms have completely damped making the pseudo-time derivative to vanish. In JustRelax.jl, the APT equations are discretized implicitly, as this yields better convergence rates and improves numerical stability.
 
 ### Advection
 

@@ -121,7 +121,7 @@ where $\eta$ is the viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ i
 
 $$
 \begin{align}
-    \rho C_p \frac{\partial T}{\partial t} = - \nabla q + \mathbf{\tau}:\mathbf{\dot\varepsilon} + \alpha T (\mathbf{v} \cdot \nabla P) + Q \\
+    \rho C_p \frac{\partial T}{\partial t} = - \nabla q + \mathbf{\tau}:(\mathbf{\dot\varepsilon} - \mathbf{\dot\varepsilon}^{mathrm{el}}) + \alpha T (\mathbf{v} \cdot \nabla P) + Q \\
     q = - k \nabla T
 \end{align}
 $$

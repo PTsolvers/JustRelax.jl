@@ -99,7 +99,7 @@ $$
 \end{align}
 $$
 
-where $\nabla$ is the nabla operator, $\mathbf{\tau}$ is the deviatoric stress tensor, $p$ is the total pressure, $\mathbf{f}$ are the body forces, usually being the buoyancy forces $\mathbf{f} = \rho \mathbf{g}$ where $\rho$ is density and $\mathbf{g} = (0, -g_y)$ is the gravitational force vector, $\mathbf{v}$ is the velocity field, $\beta$ is the inverse of the bulk modulus, and $\alpha$ is the thermal expansivity coefficient. In the incompressible limit, the right-hand-side of the conservation of mass equation vanishes to zero. The previous system of equations is closed with the constitutive equation that relates the deviatoric strain tensor $\dot{\mathbf{\varepsilon}}$ with $\mathbf{\tau}$. In computational geodynamics, we commonly consider composite non-linear visco-elasto-plastic rheologies, which can be expressed by the following constitutive equation:
+where $\nabla$ is the nabla operator, $\mathbf{\tau}$ is the deviatoric stress tensor, $p$ is the total pressure, $\mathbf{f}$ are the body forces, usually being the buoyancy forces $\mathbf{f} = \rho \mathbf{g}$ where $\rho$ is density and $\mathbf{g}$ is the gravitational force vector, $\mathbf{v}$ is the velocity field, $\beta$ is the inverse of the bulk modulus, and $\alpha$ is the thermal expansivity coefficient. In the incompressible limit, the right-hand-side of the conservation of mass equation vanishes to zero. The previous system of equations is closed with the constitutive equation that relates the deviatoric strain tensor $\dot{\mathbf{\varepsilon}}$ with $\mathbf{\tau}$. In computational geodynamics, we commonly consider composite non-linear visco-elasto-plastic rheologies, which can be expressed by the following constitutive equation:
 
 $$
 \begin{align}

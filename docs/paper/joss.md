@@ -112,7 +112,7 @@ where $C_p$ is the heat capacity, $k$ is the heat conductivity, $\mathbf{\tau}:(
 
 ### Pseudo-Transient formulation
 
-The APT method consists of transforming the elliptic PDEs into damped wave equations by augmenting them with a damped pseudo-time derivative. Upon convergence, the pseudo-time derivative term should vanish up to machine precision, hence recovering the original PDE. We employ the APT method because it is embarrassingly parallel as it is matrix-free and requires only explicit updates. This results in a much simpler numerical implementation than other solution methods typically used to solve the Stokes equations (Multigrid, Conjugate Gradients, GMRES...). The APT formulation of the compressible Stokes equations and continuity equation is then:
+The APT method consists of transforming the elliptic PDEs into damped wave equations by augmenting them with a second order pseudo-time derivative including a damping term. Upon convergence, all pseudo-time derivative vanish (up to machine precision), hence recovering the original PDE. We employ the APT method to take advantage of its locality and its matrix-free nature which one requires explicit updates which is ideal for embarrassingly parallel execution. This results in a much simpler numerical implementation than other solution methods typically used to solve the Stokes equations (Multigrid, Conjugate Gradients, GMRES...). The APT formulation of the compressible Stokes equations and continuity equation read:
 $$
 \begin{align}
     \widetilde{\rho}\frac{\partial \mathbf{v}}{\partial \psi} + \nabla\cdot\mathbf{\tau} - \nabla p = \mathbf{f}  \\

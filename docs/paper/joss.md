@@ -174,7 +174,7 @@ JustRelax.jl features:
 
 - **High-performance and scalable matrix-free solver**: The package implements a matrix-free APT method for (in)compressible Stokes and diffusion problems to circumvent the need for computationally expensive linear algebra operations and direct solvers, significantly improving computational efficiency for large-scale simulations. The embarrassingly parallel nature of the APT method makes it an excellent solver to exploit hardware accelerators such as GPUs. The weak scaling curve of the 3D Stokes solver is shown in Fig. \ref{fig:scaling}, where the parallel efficiency is the wall-time of any simulation normalized against the wall-time of a simulation with a single process.
 
-![GPU weak scaling performance of JustRelax.jl of the three-dimensional backend, demonstrating efficient parallelization and scalability of the Stokes solver. \label{fig:scaling}](figs/efficiency_Stokes3D.png)
+![GPU weak scaling performance of JustRelax.jl of the three-dimensional backend, demonstrating efficient parallelization and scalability of the Stokes solver. \label{fig:scaling}](figs/efficiency_Stokes3D.png){width=50%}
 
 - **Portability**: JustRelax.jl is designed to run efficiently on multiple hardware architectures, including CPUs, GPUs (CUDA and AMD), and on multi-node clusters. This portability is achieved through Julia's advanced meta-programming capabilities, which generate the code for the specific target hardware during compile or parse time. This abstraction of the hardware backend is implemented in the ParallelStencil.jl package. In the code snippet below we show how one can switch the backend to be used by simply switching on or off the `isCUDA` flag, defined at the top-level or any given script:
 
@@ -211,7 +211,7 @@ end
     <figcaption> Figure 2: Main Julia dependencies of JustRelax.jl. </figcaption>
 </figure> -->
 
-![Main Julia dependencies of JustRelax.jl. \label{fig:dependencies}](figs/dependencies.png)
+![Main Julia dependencies of JustRelax.jl. \label{fig:dependencies}](figs/dependencies.png){width=60%}
 
 <!-- - **Distributed I/O support**: The package implements efficient parallel input/output operations for handling large datasets common in 3D geodynamic simulations. This includes parallel writing and reading of solution fields, checkpoint/restart capabilities, and compatibility with standard visualization formats (VTK) for scientific data analysis and post-processing. -->
 
@@ -221,9 +221,9 @@ end
 
 # Examples
 
-An extensive set of benchmarks and model examples are available in the GitHub repository of [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl). More complex examples such as [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/subduction2D) or the rise of a [3D plume](https://ptsolvers.github.io/JustRelax.jl/dev/man/plume3D/plume3D) are described in the [documentation](https://ptsolvers.github.io/JustRelax.jl/dev/). Here we limit ourselves to show some snapshots of the results of these examples in Fig. \ref{fig:examples}.
+An extensive set of benchmarks and model examples are available in the GitHub repository of [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl). Some examples such as [shear band localization](https://ptsolvers.github.io/JustRelax.jl/dev/man/ShearBands), [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/subduction2D) or the rise of a [3D plume](https://ptsolvers.github.io/JustRelax.jl/dev/man/plume3D/plume3D) are described in the [documentation](https://ptsolvers.github.io/JustRelax.jl/dev/). Here we limit ourselves to show some snapshots of the results of these examples in Fig. \ref{fig:examples}.
 
-![Model examples from the documentation: a) 2D subduction, and b) raising of a hot plume in 3D. \label{fig:examples}](figs/models_JOSS.png)
+![Model examples from the documentation: a) 2D shear band localization of a viscoelasto-viscoelastic body ($10240 \times 10240$ cells), b) 2D subduction ($512 \times 512$ cells), and c) raising of a hot plume in 3D $128 \times 128 \times 128$. All models were run in one  NVIDIA GH200 Grace Hopper GPU. \label{fig:examples}](figs/models_JOSS.png)
 
 
 <!-- <figure>

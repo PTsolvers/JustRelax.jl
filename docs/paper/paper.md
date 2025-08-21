@@ -11,7 +11,7 @@ authors:
   - name: Albert de Montserrat
     orcid: 0000-0003-1694-3735
     affiliation: 1
-  - name: Pascal Aellig
+  - name: Pascal S. Aellig
     orcid: 0009-0008-9039-5646
     affiliation: 2
   - name: Christian Schuler

@@ -45,8 +45,8 @@ affiliations:
  - name: Frankfurt University, Germany
    index: 5
 
-date: 14 March 2024
-bibliography: joss.bib
+date: 21 August 2025
+bibliography: paper.bib
 ---
 
 # Summary
@@ -65,13 +65,13 @@ Computational geodynamics is an important tool for simulating and investigating 
 
 2) Traditionally, geodynamic codes are written (or at least their critical bits) in statically compiled languages (to our knowledge, only C/C++ or Fortran), with complex codebases that have evolved over several years or decades. This leads to highly complex and very large codebases with a steep learning curve for new users and developers, in particular for students and those without significant experience in software engineering or even basic programming skills. The latter being the most common user in the geodynamics community. The static nature of these languages also limits the flexibility of code development workflows, which often involve rapid prototyping and interactive development in interpreted languages such as MATLAB or Python, instead of prototyping directly in the code base.
 
-3) Moreover, existing codes depend on external libraries for performing performance critical operations such as linear algebra operations, or I/O, for example. This often leads to the so-called _dependencies hell_, where installation is not so trivial, in particular for newcomers, as compatibility issues, version conflicts, and other difficulties may occur. 
+3) Moreover, existing codes depend on external libraries for performing performance critical operations such as linear algebra operations, or I/O, for example. This often leads to the so-called _dependencies hell_, where installation is not so trivial, in particular for newcomers, as compatibility issues, version conflicts, and other difficulties may occur.
 
 With JustRelax.jl, we intend to address these fundamental limitations by introducing the first HPC-ready geodynamic software fully written in Julia:
 
 - We leverage Julia's metaprogramming capabilities to generate hardware-specific code. With this, any script written by the user runs efficiently across different architectures and hardware with minimal changes.
 
-- We use a solution method which is particularly well-suited for GPU accelerators. 
+- We use a solution method which is particularly well-suited for GPU accelerators.
 
 - Julia's built-in package manager makes the installation of JustRelax.jl trivial, as it automatically downloads and installs all the required dependencies for any compatible operating system (Windows, macOs, and most of the mainstream Linux distributions).
 
@@ -217,7 +217,7 @@ end
 
 - **Interactive development environment**: As a Julia package, JustRelax.jl takes full advantage of the language's dynamic nature, allowing for interactive sessions, real-time debugging, and rapid prototyping. This significantly enhances the quality of life of the users and developers compared to traditional compiled languages, while maintaining high performance thanks to Julia's JIT/JAOT compilation.
 
-- **Continous integration (CI) and testing**: [TODO] The package is continuously tested and validated against a suite of benchmarks and model examples to ensure correctness and performance. This includes unit tests, regression tests, and performance benchmarks on various hardware configurations. The CI/CD pipeline is implemented using GitHub Actions, which automatically runs tests on every commit and pull request.
+- **Continous integration (CI) and testing**: The package is continuously tested and validated against a suite of benchmarks and model examples to ensure correctness and performance. This includes unit tests, regression tests, and performance benchmarks on various hardware configurations. The CI/CD pipeline is implemented using GitHub Actions, which automatically runs tests on every commit and pull request. Additionally, we test the package on its GPU compatibility using Buildkite and the Swiss National Supercomputing Centre (CSCS) GPU cluster Alps.Daint. This ensures that the package remains robust and reliable across different hardware architectures and Julia versions.
 
 # Examples
 

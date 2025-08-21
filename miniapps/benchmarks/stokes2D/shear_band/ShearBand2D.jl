@@ -21,12 +21,13 @@ function init_phases!(phase_ratios, xci, xvi, circle)
         x, y = xc[i], yc[j]
         p = GGU.Point(x, y)
         if GGU.inside(p, circle)
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
+
+        else
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
 
-        else
-            @index phases[1, i, j] = 0.0
-            @index phases[2, i, j] = 1.0
         end
         return nothing
     end
@@ -35,6 +36,7 @@ function init_phases!(phase_ratios, xci, xvi, circle)
     @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
     return nothing
 end
+
 
 # MAIN SCRIPT --------------------------------------------------------------------
 function main(igg; nx = 64, ny = 64, figdir = "model_figs")
@@ -156,6 +158,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             )
         )
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -170,7 +173,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         th = 0:(pi / 50):(3 * pi)
         xunit = @. radius * cos(th) + 0.5
         yunit = @. radius * sin(th) + 0.5
-
         fig = Figure(size = (1600, 1600), title = "t = $t")
         ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
@@ -178,7 +180,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ax4 = Axis(fig[2, 2], aspect = 1)
         heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)), colormap = :batlow)
+        heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
@@ -186,7 +188,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)
-
     end
 
     return nothing

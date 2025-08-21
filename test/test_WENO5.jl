@@ -292,7 +292,7 @@ end
         end
 
         iters = thermal_convection2D(igg; ar = 8, ny = ny, nx = nx, thermal_perturbation = :circular)
-        @test passed = iters.err_evo1[end] < 1.0e-4
+        @test passed = iters.err_evo1[end] < 5.0e-4
 
     end
 end

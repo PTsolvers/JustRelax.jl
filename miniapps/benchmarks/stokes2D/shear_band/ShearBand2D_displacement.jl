@@ -1,4 +1,4 @@
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, GLMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -21,12 +21,13 @@ function init_phases!(phase_ratios, xci, xvi, circle)
         x, y = xc[i], yc[j]
         p = GGU.Point(x, y)
         if GGU.inside(p, circle)
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
+
+        else
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
 
-        else
-            @index phases[1, i, j] = 0.0
-            @index phases[2, i, j] = 1.0
         end
         return nothing
     end
@@ -150,6 +151,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (
+                strain_increment = true,
                 verbose = false,
                 iterMax = 50.0e3,
                 nout = 1.0e2,
@@ -157,6 +159,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             )
         )
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -174,13 +177,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
         fig = Figure(size = (1600, 1600), title = "t = $t")
         ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
-        # ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
         ax3 = Axis(fig[1, 2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
         ax4 = Axis(fig[2, 2], aspect = 1)
         heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        # heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
+        heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)

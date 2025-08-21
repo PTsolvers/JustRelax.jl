@@ -83,6 +83,9 @@ include("rheology/StressUpdate.jl")
 include("stokes/StressKernels.jl")
 export tensor_invariant!
 
+include("stokes/PrincipalStresses.jl")
+export compute_principal_stresses, compute_principal_stresses!, PrincipalStress
+
 include("stokes/PressureKernels.jl")
 export rotate_stress_particles!
 

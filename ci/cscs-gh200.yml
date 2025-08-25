@@ -5,13 +5,14 @@ unit_test:
   extends: .uenv-runner-daint-gh200
   image: julia/25.5:v1
   script:
-    - cp /user-environment/juhpc_setup/julia_preferences/LocalPreferences.toml .
     - export MPICH_GPU_SUPPORT_ENABLED=1
     - export IGG_CUDAAWARE_MPI=1 # IGG
     - export JULIA_CUDA_USE_COMPAT=false # IGG
     - julia -e 'println("Instantiating project");
                 using Pkg;
-                Pkg.activate(pwd());'
+                Pkg.activate(pwd());
+                Pkg.add("CUDA");
+                CUDA.set_runtime_version!(v"12.8"; local_toolkit=true)'
     - julia -e 'println("Running tests");
                 using Pkg;
                 Pkg.activate(pwd());

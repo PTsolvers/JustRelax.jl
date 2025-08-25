@@ -16,6 +16,7 @@ unit_test:
     - julia -e 'println("Running tests");
                 using Pkg;
                 Pkg.activate(pwd());
+                using CUDA; CUDA.versioninfo();
                 Pkg.test("JustRelax"; test_args=["--backend=CUDA"])'
   variables:
     WITH_UENV_VIEW: 'juliaup'

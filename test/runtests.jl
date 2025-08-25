@@ -79,14 +79,13 @@ _, backend_name = parse_flags!(ARGS, "--backend"; default = "CPU", type = String
 @static if backend_name == "AMDGPU"
     Pkg.add("AMDGPU")
     ENV["JULIA_JUSTRELAX_BACKEND"] = "AMDGPU"
+    using AMDGPU; AMDGPU.versioninfo()
 elseif backend_name == "CUDA"
     Pkg.add("CUDA")
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CUDA"
+    using CUDA; CUDA.versioninfo()
 elseif backend_name == "CPU"
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CPU"
 end
-
-using CUDA
-CUDA.versioninfo()
 
 exit(runtests())

@@ -1,6 +1,6 @@
 # Pkg
 Manifest.toml
-LocalPreferences.toml
+# LocalPreferences.toml
 
 # documentation
 docs/build/

@@ -1,29 +1,29 @@
 include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
 
-unit_test:
-  extends: .uenv-runner-daint-gh200
-  image: julia/25.5:v1
-  script:
-    - export MPICH_GPU_SUPPORT_ENABLED=1
-    - export IGG_CUDAAWARE_MPI=1 # IGG
-    - export JULIA_CUDA_USE_COMPAT=false # IGG
-    - julia -e 'println("Instantiating project");
-                using Pkg;
-                Pkg.activate(pwd());
-                Pkg.add(name="CUDA", version="5.8.2");
-                using CUDA; CUDA.set_runtime_version!(v"12.8"; local_toolkit=true)'
-    - julia -e 'println("Running tests");
-                using Pkg;
-                Pkg.activate(pwd());
-                using CUDA; CUDA.versioninfo();
-                Pkg.test("JustRelax"; test_args=["--backend=CUDA"])'
-  variables:
-    WITH_UENV_VIEW: 'juliaup'
-    SLURM_JOB_NUM_NODES: 1
-    SLURM_NTASKS_PER_NODE: 1
-    SLURM_GPUS_PER_TASK: 1
-    SLURM_TIMELIMIT: "00:30:00"
+# unit_test:
+#   extends: .uenv-runner-daint-gh200
+#   image: julia/25.5:v1
+#   script:
+#     - export MPICH_GPU_SUPPORT_ENABLED=1
+#     - export IGG_CUDAAWARE_MPI=1 # IGG
+#     - export JULIA_CUDA_USE_COMPAT=false # IGG
+#     - julia -e 'println("Instantiating project");
+#                 using Pkg;
+#                 Pkg.activate(pwd());
+#                 Pkg.add(name="CUDA", version="5.8.2");
+#                 using CUDA; CUDA.set_runtime_version!(v"12.8"; local_toolkit=true)'
+#     - julia -e 'println("Running tests");
+#                 using Pkg;
+#                 Pkg.activate(pwd());
+#                 using CUDA; CUDA.versioninfo();
+#                 Pkg.test("JustRelax"; test_args=["--backend=CUDA"])'
+#   variables:
+#     WITH_UENV_VIEW: 'juliaup'
+#     SLURM_JOB_NUM_NODES: 1
+#     SLURM_NTASKS_PER_NODE: 1
+#     SLURM_GPUS_PER_TASK: 1
+#     SLURM_TIMELIMIT: "00:30:00"
 
 ref_test:
   extends: .baremetal-runner-daint-gh200
@@ -32,10 +32,14 @@ ref_test:
     - export MPICH_GPU_SUPPORT_ENABLED=1
     - export IGG_CUDAAWARE_MPI=1 # IGG
     - export JULIA_CUDA_USE_COMPAT=false # IGG
-    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.instantiate()'
-    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="CUDA", version="5.8.2")'
+    - export JULIA_JUSTRELAX_BACKEND=CUDA
+    - export JULIA_CSCS_CI=true
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.instantiate();'
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="OpenSSL_jll", version="3.0.16");'
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="CUDA", version="5.8.2");'
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'uding Pkg; Pkd.status(); using CUDA; CUDA.versioninfo();'
     - echo "Running the reference test (multiple ranks)"
-    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'println("run a Julia GPU MPI code here")'
+    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. test/test_shearband3D_MPI.jl
   variables:
     SLURM_JOB_NUM_NODES: 2
     SLURM_NTASKS_PER_NODE: 4

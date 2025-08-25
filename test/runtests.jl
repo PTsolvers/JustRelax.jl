@@ -86,4 +86,7 @@ elseif backend_name == "CPU"
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CPU"
 end
 
+using CUDA
+CUDA.versioninfo()
+
 exit(runtests())

@@ -5,10 +5,10 @@ unit_test:
   extends: .uenv-runner-daint-gh200
   image: julia/25.5:v1
   script:
+    - cp /user-environment/juhpc_setup/julia_preferences/LocalPreferences.toml .
     - export MPICH_GPU_SUPPORT_ENABLED=1
     - export IGG_CUDAAWARE_MPI=1 # IGG
     - export JULIA_CUDA_USE_COMPAT=false # IGG
-    - export LD_PRELOAD=/capstor/scratch/cscs/paellig/.julia/gh200/juliaup/depot/artifacts/e313763c2521efed920ca04560b24511b37d35ea/lib/libcrypto.so.3
     - julia -e 'println("Instantiating project");
                 using Pkg;
                 Pkg.activate(pwd());'

@@ -72,4 +72,4 @@ Available miniapps can be found in the [miniapps folder](miniapps) and will be u
 Current (Blankenback2D, Stokes 2D-3D, thermal diffusion, thermal stress) and future benchmarks can be found in the [Benchmarks](miniapps/benchmarks).
 
 ## Funding
-The development of this package is supported by the [GPU4GEO](https://ptsolvers.github.io/GPU4GEO/) [PASC](https://www.pasc-ch.org) project.
+The development of this package is supported by the [GPU4GEO & $\partial$GPU4GEO](https://gpu4geo.org/) [PASC](https://www.pasc-ch.org) project, and the European Research Council through the MAGMA project, ERC Consolidator Grant #771143.

@@ -11,7 +11,7 @@ unit_test:
     - julia -e 'println("Instantiating project");
                 using Pkg;
                 Pkg.activate(pwd());
-                Pkg.add("CUDA");
+                Pkg.add(name="CUDA", version="5.8.2")
                 using CUDA; CUDA.set_runtime_version!(v"12.8"; local_toolkit=true)'
     - julia -e 'println("Running tests");
                 using Pkg;
@@ -33,7 +33,7 @@ ref_test:
     - export IGG_CUDAAWARE_MPI=1 # IGG
     - export JULIA_CUDA_USE_COMPAT=false # IGG
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.instantiate()'
-    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add("CUDA")'
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="CUDA", version="5.8.2")'
     - echo "Running the reference test (multiple ranks)"
     - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'println("run a Julia GPU MPI code here")'
   variables:

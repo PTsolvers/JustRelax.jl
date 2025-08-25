@@ -12,7 +12,7 @@ unit_test:
                 using Pkg;
                 Pkg.activate(pwd());
                 Pkg.add("CUDA");
-                CUDA.set_runtime_version!(v"12.8"; local_toolkit=true)'
+                using CUDA; CUDA.set_runtime_version!(v"12.8"; local_toolkit=true)'
     - julia -e 'println("Running tests");
                 using Pkg;
                 Pkg.activate(pwd());

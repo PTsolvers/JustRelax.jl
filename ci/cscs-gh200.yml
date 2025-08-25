@@ -35,6 +35,7 @@ ref_test:
     - export JULIA_JUSTRELAX_BACKEND=CUDA
     - export JULIA_CSCS_CI=true
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.instantiate();'
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(["Suppressor", "Test"]);'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="OpenSSL_jll", version="3.0.16");'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="CUDA", version="5.8.2");'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.status(); using CUDA; CUDA.versioninfo();'

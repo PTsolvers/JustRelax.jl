@@ -223,8 +223,8 @@ function compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
 end
 
 ## Stress
-function JR2D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
-    return _tensor_invariant!(A)
+function JR2D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor, Kb)
+    return _tensor_invariant!(A, Kb)
 end
 
 ## Buoyancy forces

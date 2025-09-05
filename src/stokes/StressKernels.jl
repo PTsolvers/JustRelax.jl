@@ -377,34 +377,36 @@ Compute the tensor invariant of the given symmetric tensor `A`.
 # Arguments
 - `A::JustRelax.SymmetricTensor`: The input symmetric tensor.
 """
-function tensor_invariant!(A::JustRelax.SymmetricTensor)
-    tensor_invariant!(backend(A), A)
+function tensor_invariant!(A::JustRelax.SymmetricTensor; Kb = Inf)
+    tensor_invariant!(backend(A), A, Kb)
     return nothing
 end
 
-function tensor_invariant!(::CPUBackendTrait, A::JustRelax.SymmetricTensor)
-    return _tensor_invariant!(A)
+function tensor_invariant!(::CPUBackendTrait, A::JustRelax.SymmetricTensor, Kb)
+    return _tensor_invariant!(A, Kb)
 end
 
-function _tensor_invariant!(A::JustRelax.SymmetricTensor)
+function _tensor_invariant!(A::JustRelax.SymmetricTensor, Kb)
     ni = size(A.II)
-    @parallel (@idx ni) tensor_invariant_kernel!(A.II, @tensor(A)...)
+
+    @parallel (@idx ni) tensor_invariant_kernel!(A.II, @tensor(A)..., Kb)
     return nothing
 end
 
-@parallel_indices (I...) function tensor_invariant_kernel!(II, xx, yy, xy)
+@parallel_indices (I...) function tensor_invariant_kernel!(II, xx, yy, xy, Kb)
     # convenience closure
     @inline gather(A) = _gather(A, I...)
 
+    zz = -(xx[I...] + yy[I...])  # Trace of deviatoric stress tensor is zero
     @inbounds begin
-        τ = xx[I...], yy[I...], gather(xy)
+        τ = !isinf(Kb) ? (xx[I...], yy[I...], zz, gather(xy), (0.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0)) : (xx[I...], yy[I...], gather(xy))
         II[I...] = second_invariant_staggered(τ...)
     end
 
     return nothing
 end
 
-@parallel_indices (I...) function tensor_invariant_kernel!(II, xx, yy, zz, yz, xz, xy)
+@parallel_indices (I...) function tensor_invariant_kernel!(II, xx, yy, zz, yz, xz, xy, Kb)
 
     # convenience closures
     @inline gather_yz(A) = _gather_yz(A, I...)

@@ -122,7 +122,7 @@ end
         args_ij = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        εij = εII_0 + ε[1], -εII_0 + ε[1], gather(εxyv)
+        εij = εII_0 + ε[1], -εII_0 + ε[2], gather(εxyv)
         εII = second_invariant(εij...)
 
         # compute and update stress viscosity
@@ -232,7 +232,7 @@ end
         ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
 
         # compute second invariant of strain rate tensor
-        εij = εII_0 + ε[1], -εII_0 + ε[1], gather(εxyv)
+        εij = εII_0 + ε[1], -εII_0 + ε[2], gather(εxyv)
         εII = second_invariant(εij...)
 
         # compute and update stress viscosity
@@ -343,39 +343,39 @@ end
     return local_args
 end
 
-@generated function compute_phase_viscosity_εII(
-        rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio, εII, args
-    ) where {N}
-    return quote
-        Base.@_inline_meta
-        η = 0.0
-        Base.@nexprs $N i -> (
-            η += if iszero(ratio[i])
-                0.0
-            else
-                inv(compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args)) * ratio[i]
-            end
-        )
-        inv(η)
-    end
-end
-
 # @generated function compute_phase_viscosity_εII(
-#     rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio, εII, args
-# ) where {N}
-#     quote
+#         rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio, εII, args
+#     ) where {N}
+#     return quote
 #         Base.@_inline_meta
 #         η = 0.0
 #         Base.@nexprs $N i -> (
 #             η += if iszero(ratio[i])
 #                 0.0
 #             else
-#                 compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args) * ratio[i]
+#                 inv(compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args)) * ratio[i]
 #             end
 #         )
-#         η
+#         inv(η)
 #     end
 # end
+
+@generated function compute_phase_viscosity_εII(
+    rheology::NTuple{N,AbstractMaterialParamsStruct}, ratio, εII::T, args
+) where {N,T}
+    quote
+        Base.@_inline_meta
+        η = zero(T)
+        Base.@nexprs $N i -> (
+            η += if iszero(ratio[i])
+                zero(T)
+            else
+                compute_viscosity_εII(rheology[i].CompositeRheology[1], εII, args) * ratio[i]
+            end
+        )
+        return η
+    end
+end
 
 function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
     if iszero(air_phase)

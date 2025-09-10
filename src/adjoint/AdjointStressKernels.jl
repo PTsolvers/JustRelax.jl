@@ -294,6 +294,17 @@ end
 return nothing
 end
 
+@inline elementsStress(v::Union{CompositeRheology, Parallel}) = v.elements
+
+@inline @generated function tuple_getindex(t::T, i::Integer) where {T<:Tuple}
+    N = fieldcount(T)
+    ex = :(throw(BoundsError()))
+    for k in N:-1:1
+        ex = :(i == $k ? Base.getfield(t, $k) : $ex)
+    end
+    ex
+end
+
 @parallel_indices (I...) function assemble_parameter_matrices!(
     EII,
     Gc,
@@ -344,14 +355,17 @@ end
         #### discloation/diffusiun creep parameters ####
         # loop through composite rheology elemnts to check if it is a dislocation or diffusion element
         for j = 1:length(rheology)
-            print("first\n")
+            #print("first\n")
             #for i in eachindex(phase)
-                print("second\n")
+                #print("second\n")
                 #for (ind, k) in enumerate(rheology[j].CompositeRheology[1].elements)
                     for m = 1:length(rheology[j].CompositeRheology[1].elements)
-                        k = rheology[j].CompositeRheology[1].elements[m]
+                        #k = rheology[j].CompositeRheology[1].elements[m]
+                        e = elementsStress(rheology[j].CompositeRheology[1])
+                        k = tuple_getindex(e, m::Int) 
+                
                         if k isa DislocationCreep
-                            print("third\n")
+                            #print("third\n")
                             Adis[I...] += k.A*phase[j]
                             ndis[I...] += k.n*phase[j]
                             rdis[I...] += k.r*phase[j]

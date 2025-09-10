@@ -1,9 +1,11 @@
 include("/home/chris/Documents/2024_projects/JustRelax.jl/miniapps/adjoint_variational/helper_functionsVS.jl")
+include("/home/chris/Documents/2024_projects/JustRelax.jl/miniapps/adjoint_variational/helperfunctionDis.jl")
+
 
 sigmoid(x, k::Real) = 1 / (1 + exp(-k * x))
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp, dM,accλ,visc, dens, Gdot, frdot, Kdot)
+function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp, dM,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot,Pdot,Tdot)
 
     # Physical domain ------------------------------------
     ly           = 1.0          # domain length in y
@@ -16,58 +18,28 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Physical properties using GeoParams ----------------
-    εbg     = 2.0           # background strain-rate
+    εbg     = 1.0           # background strain-rate
     gr      = 0.0
     η0      = 1.0           # viscosity
     G0      = 1.0           # shear modulus
     Gi      = 0.5*G0           # shear modulus
     dt      = η0/G0/4.0     # assumes Maxwell time of 4
-    Kbm = 0.25
-    Kbb = 0.125
+    Kb      = 3.0
+    Kbb = 1.5
 
-        # Physical properties using GeoParams ----------------
-        τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-        ϕ = 30            # friction angle
-        C = τ_y           # Cohesion
-        η0 = 1.0           # viscosity
-        #G0 = 1.0           # elastic shear modulus
-        #Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
-        #εbg = 1.0           # background strain-rate
-        #η_reg = 5.0e-2#8.0e-3          # regularisation "viscosity"
-        #dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
-    # viscous and elastic blocks for reference solve
     visc_bg    = LinearViscous(; η=η0)
     visc_block = LinearViscous(; η=η0)
-    #el         = ConstantElasticity(G=G0, ν=ν0)
-    #el_block   = ConstantElasticity(G=Gi, ν=ν0)
-    el         = ConstantElasticity(G=G0, Kb = Kbm)
+    el         = ConstantElasticity(G=G0, Kb = Kb)
     el_block   = ConstantElasticity(G=Gi, Kb = Kbb)
 
     # viscous and elastic blocks for parameter pertubation
     visc_bg_p    = LinearViscous(; η=η0)
     visc_block_p = LinearViscous(; η=η0)
-    #el_p         = ConstantElasticity(G=G0, ν=ν0)
-    #el_block_p   = ConstantElasticity(G=Gi, ν=ν0)
-    el_p         = ConstantElasticity(G=G0, Kb = Kbm)
-    el_block_p   = ConstantElasticity(G=Gi, Kb = Kbb)
+    el_p         = ConstantElasticity(G=G0+dp, ν = 0.5)
+    el_block_p   = ConstantElasticity(G=Gi+dp, ν = 0.5)
 
-    # plascticity parameters
-#    ϕ       = 30            # friction angle
-#    C       = 1.6           # Cohesion
-    η_reg   = 8e-3 #1e-2          # regularisation "viscosity"
-    pl      = DruckerPrager_regularised(;  # non-regularized plasticity
-    C    = C / cosd(ϕ),
-    ϕ    = ϕ,
-    η_vp = η_reg,
-    Ψ    = 0
-    )
-
-    pl_p      = DruckerPrager_regularised(;  # non-regularized plasticity
-    C    = C / cosd(ϕ),
-    ϕ    = ϕ,
-    η_vp = η_reg,
-    Ψ    = 0
-    )
+    MatrixM = DislocationCreep(A = 1e-2, n = 3.0, E = 1.0, V = 1e-2, r = 1.0, R = 1.0)
+    BlockM  = DislocationCreep(A = 1e-1, n = 3.0, E = 1.0, V = 1e-2, r = 1.0, R = 1.0)
 
     rheology = (
         # Low density phase
@@ -75,8 +47,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             Phase             = 1,
             Density           = ConstantDensity(; ρ = 1.0),
             Gravity           = ConstantGravity(; g = gr),
-            #CompositeRheology = CompositeRheology((visc_bg,)),
-            CompositeRheology = CompositeRheology((visc_bg,el)),            
+            #CompositeRheology = CompositeRheology((visc_bg,el)),
+            CompositeRheology = CompositeRheology((MatrixM,el)),            
             #CompositeRheology = CompositeRheology((visc_bg,el,pl)),
 
         ),
@@ -85,8 +57,8 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             Phase             = 2,
             Density           = ConstantDensity(; ρ = 1.5),
             Gravity           = ConstantGravity(; g = gr),
-            #CompositeRheology = CompositeRheology((visc_block,)),
-            CompositeRheology = CompositeRheology((visc_block,el_block)),
+            #CompositeRheology = CompositeRheology((visc_block,el)),
+            CompositeRheology = CompositeRheology((BlockM,el_block)),
             #CompositeRheology = CompositeRheology((visc_block,el_block,pl)),
         ),
         # Low density phase
@@ -118,6 +90,9 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phasesFD!(phase_ratios, xci, xvi, radius, 100.0, 100.0, 100.0, 100.0,di)
 
+
+
+
     # RockRatios
     air_phase = 20
     ϕ = RockRatio(backend, ni)
@@ -130,10 +105,10 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     #pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-8, ϵ_abs=1e-8,  CFL = 0.95 / #√2.1)
     #pt_stokesAD = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-8, ϵ_rel = 1.0e-8, Re = 4.0π, r = 0.7, CFL = 0.98 / √2.1/1.0)
 
-    pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel = 1e-15, ϵ_abs=1e-15,  CFL = 0.95 / √2.1)
+    pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel = 1e-13, ϵ_abs=1e-14, Re = 4π, CFL = 0.95 / √2.1)
     #pt_stokesAD = PTStokesCoeffs(li, di; ϵ_rel = 1e-15, ϵ_abs=1e-15, Re = 1.0, r = 0.7, CFL = 0.95 / √2.1)
     #pt_stokesAD = PTStokesCoeffs(li, di; ϵ_rel = 1e-15, ϵ_abs=1e-15, Re = 2π, r = 0.7, CFL =  0.51 / √2.1)
-    pt_stokesAD = PTStokesCoeffs(li, di; ϵ_rel = 1e-15, ϵ_abs=1e-15, Re = 4π, r = 0.7, CFL =  0.95 / √2.1)
+    pt_stokesAD = PTStokesCoeffs(li, di; ϵ_rel = 1e-11, ϵ_abs=1e-14, Re = 4π, r = 0.7, CFL =  0.95 / √2.1)
 
     # Adjoint 
     stokesAD = StokesArraysAdjoint(backend, ni)
@@ -147,7 +122,7 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
 
     # Buoyancy forces
     ρg        = @zeros(ni...), @zeros(ni...)
-    args      = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+    args      = (; T = @ones(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
     # Rheology
     η_cutoff = -Inf, Inf
@@ -269,14 +244,16 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
                 grid,
                 origin,
                 li,
-                iterMax=8,#150e3,
+                iterMax=150e3,
                 nout=nout,
                 viscosity_cutoff = η_cutoff,
                 verbose = false,
                 ADout=plottingInt,
                 accλ = accλ,
-                Vsc  = 1.0/2.0/0.8,
-                Ptsc = 1.0/4.0/2.0,
+                Vsc  = 1.0/2.0/1.0,
+                Ptsc = 1.0/4.0/8.0,
+                incom=true,
+                βn = 0.0,
                 pt_stokesAD = pt_stokesAD
             )
         );
@@ -338,9 +315,18 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
             viscosity_cutoff = η_cutoff,
             verbose = false,
             ADout=1e20,
-            accλ = accλ
+            accλ = accλ,
+            pt_stokesAD = pt_stokesAD,
+            AdisDot,
+            ndisDot,
+            rdisDot,
+            EdisDot,
+            VdisDot,
+            Pdot,
+            Tdot   
         )
     );
+    
     if isCUDA
         CUDA.allowscalar() do
         refcostdot = Float64(sum_kbn(stokesDot.V.Vy[indx,indy]))
@@ -392,8 +378,6 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
                     igg;
                     kwargs = (
                         grid,
-
-
                         origin,
                         li,
                         iterMax=150e3,
@@ -427,66 +411,180 @@ function main(igg; nx=64, ny=64, figdir="model_figs", f, run_param, run_ref, dp,
     return refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt, stokes
 end
 
+
 #### Init Run ####
 f         = 1    ; nx     = 16*f; ny     = 16*f
-dp        = 1e-7
+dp        = 1e-4
 run_param = false
 run_ref   = true
 accλ      = true
-visc  = true
-dens  = false
-Gdot  = false
-frdot = false
-Kdot  = false
+visc    = true
+dens    = false
+Gdot    = false
+frdot   = false
+Kdot    = false
+AdisDot = false
+ndisDot = false
+rdisDot = false
+EdisDot = false
+VdisDot = false
+Pdot    = false
+Tdot    = false
 dM        = rand(Float64,nx,ny)
 dM      ./= norm(dM)   # normalize M matrix
-figdir    = "miniapps/adjoint_variational/Benchmark_PS_VE_eta/"
+figdir    = "miniapps/adjoint_variational/Benchmark_Disl_Visc/"
 #### Run ####
 igg  = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
-refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt, stokes = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM,accλ,visc, dens, Gdot, frdot, Kdot); nothing
+refcost, cost, dp, Adjoint, ηref, ρref, stokesAD, stokesRef, ρg, refcostdot,dt, stokes = main(igg; figdir = figdir, nx = nx, ny = ny,f,run_param, run_ref,dp, dM,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot,Pdot,Tdot); nothing
 cost = rand(nx,ny)
-plot_sens = stokesAD.η  #which sensitivity to plot
+plot_sens = stokesAD.G  #which sensitivity to plot
 FD = plot_FD_vs_AD(refcost,cost,dp,plot_sens,nx,ny,ηref,ρref,stokesAD,figdir,f,Adjoint,stokesRef,run_param)
 
-#=
+
 mach_ϵ = eps()
 
+visc    = 0.0
+dens    = 0.0
+Gdot    = 0.0
+frdot   = 0.0
+Kdot    = 1.0
+AdisDot = 0.0
+ndisDot = 0.0
+rdisDot = 0.0
+EdisDot = 0.0
+VdisDot = 0.0
+Pdot    = 0.0
+Tdot    = 0.0
+epsilon, error_K = hockeystickDis(refcost,stokesAD.K,dp,dM,16,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot, Pdot, Tdot, figdir)
 
-visc  = 1.0
-dens  = 0.0
-Gdot  = 0.0
-frdot = 0.0
-Kdot  = 0.0
-epsilon, error_η = hockeystick(refcost,stokesAD.η,dp,dM,12,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot,figdir)
-
-#=
-visc  = 0.0
-dens  = 0.0
-Gdot  = 1.0
-frdot = 0.0
-Kdot  = 0.0
-epsilon, error_G = hockeystick(refcost,stokesAD.G,dp,dM,21,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot,figdir)
-
-visc  = 0.0
-dens  = 0.0
-Gdot  = 0.0
-frdot = 0.0
-Kdot  = 1.0
-epsilon, error_K = hockeystick(refcost,stokesAD.K,dp,dM,21,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot,figdir)
-=#
+visc    = 0.0
+dens    = 0.0
+Gdot    = 1.0
+frdot   = 0.0
+Kdot    = 0.0
+AdisDot = 0.0
+ndisDot = 0.0
+rdisDot = 0.0
+EdisDot = 0.0
+VdisDot = 0.0
+Pdot    = 0.0
+Tdot    = 0.0
+epsilon, error_G = hockeystickDis(refcost,stokesAD.G,dp,dM,16,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot, Pdot, Tdot, figdir)
 
 
-#errorAD, FDs = hockeystick(refcost,refcostdot,plot_sens,dp,dM,FD,10,mach_ϵ,accλ
-#)   # plot convergence test # plot convergence test
+visc    = 0.0
+dens    = 0.0
+Gdot    = 0.0
+frdot   = 0.0
+Kdot    = 0.0
+AdisDot = 0.0
+ndisDot = 1.0
+rdisDot = 0.0
+EdisDot = 0.0
+VdisDot = 0.0
+Pdot    = 0.0
+Tdot    = 0.0
+epsilon, error_ndis = hockeystickDis(refcost,stokesAD.ndis,dp,dM,16,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot, Pdot, Tdot, figdir)
 
 
+visc    = 0.0
+dens    = 0.0
+Gdot    = 0.0
+frdot   = 0.0
+Kdot    = 0.0
+AdisDot = 1.0
+ndisDot = 0.0
+rdisDot = 0.0
+EdisDot = 0.0
+VdisDot = 0.0
+Pdot    = 0.0
+Tdot    = 0.0
+epsilon, error_Adis = hockeystickDis(refcost,stokesAD.Adis,dp,dM,16,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot, Pdot, Tdot, figdir)
+
+visc    = 0.0
+dens    = 0.0
+Gdot    = 0.0
+frdot   = 0.0
+Kdot    = 0.0
+AdisDot = 0.0
+ndisDot = 0.0
+rdisDot = 1.0
+EdisDot = 0.0
+VdisDot = 0.0
+Pdot    = 0.0
+Tdot    = 0.0
+epsilon, error_rdis = hockeystickDis(refcost,stokesAD.rdis,dp,dM,16,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot, Pdot, Tdot, figdir)
+
+visc    = 0.0
+dens    = 0.0
+Gdot    = 0.0
+frdot   = 0.0
+Kdot    = 0.0
+AdisDot = 0.0
+ndisDot = 0.0
+rdisDot = 0.0
+EdisDot = 1.0
+VdisDot = 0.0
+Pdot    = 0.0
+Tdot    = 0.0
+epsilon, error_Edis = hockeystickDis(refcost,stokesAD.Edis,dp,dM,16,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot, Pdot, Tdot, figdir)
+
+visc    = 0.0
+dens    = 0.0
+Gdot    = 0.0
+frdot   = 0.0
+Kdot    = 0.0
+AdisDot = 0.0
+ndisDot = 0.0
+rdisDot = 0.0
+EdisDot = 0.0
+VdisDot = 1.0
+Pdot    = 0.0
+Tdot    = 0.0
+epsilon, error_Vdis = hockeystickDis(refcost,stokesAD.Vdis,dp,dM,16,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot, Pdot, Tdot, figdir)
 include("/home/chris/Documents/2024_projects/JustRelax.jl/miniapps/adjoint_variational/PlottingPaper.jl")
-error_K = error_η
-error_G = error_η
 
-make_final_plot(refcost,cost,dp,nx,ny,stokesAD,figdir,stokesRef,epsilon,error_η,error_K,error_G,mach_ϵ)
-=#
+visc    = 0.0
+dens    = 0.0
+Gdot    = 0.0
+frdot   = 0.0
+Kdot    = 0.0
+AdisDot = 0.0
+ndisDot = 0.0
+rdisDot = 0.0
+EdisDot = 0.0
+VdisDot = 0.0
+Pdot    = 1.0
+Tdot    = 0.0
+epsilon, error_Pdis = hockeystickDis(refcost,stokesAD.Pcreep,dp,dM,16,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot, Pdot, Tdot, figdir)
+
+
+visc    = 0.0
+dens    = 0.0
+Gdot    = 0.0
+frdot   = 0.0
+Kdot    = 0.0
+AdisDot = 0.0
+ndisDot = 0.0
+rdisDot = 0.0
+EdisDot = 0.0
+VdisDot = 0.0
+Pdot    = 0.0
+Tdot    = 1.0
+epsilon, error_Tcreep = hockeystickDis(refcost,stokesAD.Tcreep,dp,dM,16,mach_ϵ,accλ,visc, dens, Gdot, frdot, Kdot, AdisDot, ndisDot, rdisDot, EdisDot, VdisDot, Pdot, Tdot, figdir)
+
+#error_K = error_G
+#error_G = error_η
+#error_η = error_G
+
+
+stokesAD.η .= rand(1)
+error_η = error_G
+make_final_plotDis(refcost,cost,dp,nx,ny,stokesAD,figdir,stokesRef)
+
+
+plot_hockey(epsilon,error_G,error_K,error_Adis,error_Vdis,error_ndis,error_rdis, error_Edis,error_Pdis,error_Tcreep,figdir) 

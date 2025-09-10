@@ -304,6 +304,16 @@ end
     ϕv,
     Cv,
     Kv,
+    Adis,
+    ndis,
+    rdis,
+    Edis,
+    Vdis,
+    Adif,
+    pdif,
+    rdif,
+    Edif,
+    Vdif,
     rheology, 
     phase_center,
     phase_vertex,
@@ -330,6 +340,34 @@ end
         is_pl, Cci, sinϕc, cosϕc, sinψc, η_regc = plastic_params_phase(rheology, EII[I...], phase)
         ϕc[I...] = asind(sinϕc) # sinϕc
         Cc[I...] = Cci
+
+        #### discloation/diffusiun creep parameters ####
+        # loop through composite rheology elemnts to check if it is a dislocation or diffusion element
+        for j = 1:length(rheology)
+            print("first\n")
+            #for i in eachindex(phase)
+                print("second\n")
+                #for (ind, k) in enumerate(rheology[j].CompositeRheology[1].elements)
+                    for m = 1:length(rheology[j].CompositeRheology[1].elements)
+                        k = rheology[j].CompositeRheology[1].elements[m]
+                        if k isa DislocationCreep
+                            print("third\n")
+                            Adis[I...] += k.A*phase[j]
+                            ndis[I...] += k.n*phase[j]
+                            rdis[I...] += k.r*phase[j]
+                            Edis[I...] += k.E*phase[j]
+                            Vdis[I...] += k.V*phase[j]
+
+                        elseif k isa DiffusionCreep
+                            Adif[I...] += k.A*phase[j]
+                            pdif[I...] += k.p*phase[j]
+                            rdif[I...] += k.r*phase[j]
+                            Edif[I...] += k.E*phase[j]
+                            Vdif[I...] += k.V*phase[j]
+                        end
+                #end
+            end
+        end
     end
 
 return nothing

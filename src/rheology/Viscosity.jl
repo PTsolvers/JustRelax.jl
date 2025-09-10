@@ -122,7 +122,7 @@ end
         args_ij = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        εij = εII_0 + ε[1], -εII_0 + ε[1], gather(εxyv)
+        εij = εII_0 + ε[1], -εII_0 + ε[2], gather(εxyv)
         εII = second_invariant(εij...)
 
         # compute and update stress viscosity
@@ -232,7 +232,7 @@ end
         ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
 
         # compute second invariant of strain rate tensor
-        εij = εII_0 + ε[1], -εII_0 + ε[1], gather(εxyv)
+        εij = εII_0 + ε[1], -εII_0 + ε[2], gather(εxyv)
         εII = second_invariant(εij...)
 
         # compute and update stress viscosity

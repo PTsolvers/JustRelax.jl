@@ -489,6 +489,7 @@ include("../../adjoint/AdjointStressKernels.jl")
 include("../../adjoint_variational/Adjoint_StressKernelsVS.jl")
 include("../../adjoint_variational/Adjoint_Variational2D.jl")
 include("../../adjoint_variational/Adjoint_VelocityKernelsVS.jl")
+include("../../adjoint_variational/Adjoint_ViscosityVS.jl")
 
 # Types
 function JR2D_AD.StokesArrays(::Type{CUDABackend}, ni::NTuple{N,Integer}) where {N}

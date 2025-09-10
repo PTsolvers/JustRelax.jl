@@ -57,11 +57,7 @@ end
 
     if all((i, j) .< size(Vx) .- 1)
         if isvalid_vx(ϕ, i + 1, j)
-            Rx[i, j] =
-                R_Vx = (
-                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
-                    av_xa(ρgx, ϕ.center)
-            )
+            Rx[i, j] = -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - av_xa(ρgx, ϕ.center)
             #Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
         else
             Rx[i, j] = zero(T)
@@ -82,10 +78,7 @@ end
             ∂ρg∂y = (ρg_N - ρg_S) * _dy
             # correction term
             ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
-        =#    Ry[i, j] =
-                R_Vy =
-                -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
-                av_ya(ρgy, ϕ.center)# + ρg_correction
+        =#    Ry[i, j] = -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - av_ya(ρgy, ϕ.center)# + ρg_correction
             #Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
         else
             Ry[i, j] = zero(T)
@@ -103,6 +96,12 @@ end
         Ry,
         ηdτ,
         ητ,
+        dVxdτ,
+        dVydτ,
+        dτVx,
+        dτVy,
+        dampX,
+        dampY,
         ϕ::JustRelax.RockRatio,
     ) where {T}
 
@@ -115,7 +114,10 @@ end
 
     if all((i, j) .< size(Vx) .- 1)
         if isvalid_vx(ϕ, i + 1, j)
-            Vx[i + 1, j + 1] += Rx[i + 1, j + 1] * ηdτ / av_xa(ητ)
+            #Vx[i + 1, j + 1] += Rx[i + 1, j + 1] * ηdτ / av_xa(ητ)
+            #Vx[i + 1, j + 1] += Rx[i, j] * ηdτ / av_xa(ητ)
+            dVxdτ[i, j] = dampX * dVxdτ[i, j] + Rx[i, j]
+            Vx[i + 1, j + 1] = Vx[i + 1, j + 1] + dτVx[i, j] * dVxdτ[i, j]
         else
             Rx[i, j] = zero(T)
             Vx[i + 1, j + 1] = zero(T)
@@ -124,7 +126,9 @@ end
 
     if all((i, j) .< size(Vy) .- 1)
         if isvalid_vy(ϕ, i, j + 1)
-            Vy[i + 1, j + 1] += Ry[i + 1, j + 1] * ηdτ / av_ya(ητ)
+            #Vy[i + 1, j + 1] += Ry[i, j] * ηdτ / av_ya(ητ)
+            dVydτ[i, j] = dampY * dVydτ[i, j] + Ry[i, j]
+            Vy[i + 1, j + 1] = Vy[i + 1, j + 1] + dτVy[i, j] * dVydτ[i, j]
         else
             Ry[i, j] = zero(T)
             Vy[i + 1, j + 1] = zero(T)

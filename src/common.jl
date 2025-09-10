@@ -57,6 +57,7 @@ export compute_ρg!
 
 include("rheology/Viscosity.jl")
 export compute_viscosity!
+export compute_viscosity_kernel!
 
 include("rheology/Melting.jl")
 export compute_melt_fraction!

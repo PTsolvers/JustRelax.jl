@@ -157,6 +157,7 @@ end
 
 function StokesArraysAdjoint(ni::NTuple{N,Integer}) where {N}
     P = @zeros(ni...)
+    θ = @zeros(ni...)
     PA = @zeros(ni...)
     P0 = @zeros(ni...)
     ∇V = @zeros(ni...)
@@ -178,5 +179,17 @@ function StokesArraysAdjoint(ni::NTuple{N,Integer}) where {N}
     fr = @zeros(ni...)
     C = @zeros(ni...)
     K = @zeros(ni...)
-    return JustRelax.StokesArraysAdjoint(P, PA, P0, V, VA, ∇V, τ, dτ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, η, ρ, G, fr, C,K)
+    Adis = @zeros(ni...)
+    ndis = @zeros(ni...)
+    rdis = @zeros(ni...)
+    Edis = @zeros(ni...)
+    Vdis = @zeros(ni...)
+    Pcreep = @zeros(ni...)
+    Tcreep = @zeros(ni...)
+    Adif = @zeros(ni...)
+    pdif = @zeros(ni...)
+    rdif = @zeros(ni...)
+    Edif = @zeros(ni...)
+    Vdif = @zeros(ni...)    
+    return JustRelax.StokesArraysAdjoint(P, θ, PA, P0, V, VA, ∇V, τ, dτ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, η, ρ, G, fr, C,K,Adis,ndis,rdis,Edis,Vdis,Pcreep,Tcreep,Adif,pdif,rdif,Edif,Vdif)
 end

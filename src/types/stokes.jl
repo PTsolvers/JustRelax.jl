@@ -171,6 +171,7 @@ end
 
 struct StokesArraysAdjoint{A,B,C,D,E,F,T}
     P::T
+    θ::T
     PA::T
     P0::T
     V::A
@@ -192,7 +193,20 @@ struct StokesArraysAdjoint{A,B,C,D,E,F,T}
     fr::T
     C::T
     K::T
+    Adis::T
+    ndis::T
+    rdis::T
+    Edis::T
+    Vdis::T
+    Pcreep::T
+    Tcreep::T
+    Adif::T
+    pdif::T
+    rdif::T
+    Edif::T
+    Vdif::T
 end
+ 
 
 function StokesArraysAdjoint(::Type{CPUBackend}, ni::Vararg{Integer,N}) where {N}
     return StokesArraysAdjoint(tuple(ni...))

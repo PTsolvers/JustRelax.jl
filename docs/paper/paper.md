@@ -79,7 +79,7 @@ With JustRelax.jl, we intend to address these fundamental limitations by introdu
 
 # Methods
 
-JustRelax.jl employs the APT method to solve the compressible Stokes and heat diffusion equations @raess2022. Within each APT iteration, the pressure-dependent equation of state, non-Newtonian viscosity, plastic stress corrections, and conservation of mass and momentum are solved simultaneously in a fully coupled manner. In the sections hereafter, we briefly summarize the governing equations and their respective APT implementation, and discuss the parallelization strategy and the advection schemes used to track material properties and deformation history.
+JustRelax.jl employs the APT method to solve the compressible Stokes and heat diffusion equations [@Raess2022]. Within each APT iteration, the pressure-dependent equation of state, non-Newtonian viscosity, plastic stress corrections, and conservation of mass and momentum are solved simultaneously in a fully coupled manner. In the sections hereafter, we briefly summarize the governing equations and their respective APT implementation, and discuss the parallelization strategy and the advection schemes used to track material properties and deformation history.
 
 ## Thermo-mechanical modeling
 The compressible Stokes equations are given by the conservation of momentum and mass equations, respectively:
@@ -137,7 +137,7 @@ The APT method consists of transforming the elliptic PDEs into damped wave equat
 \end{eqnarray}
 
 
-where the wide tilde denotes the effective damping coefficients and $\psi$ is the pseudo-time step. These are defined as in [@Raess2022]:
+where the wide tilde denotes the effective damping coefficients and $\psi$ is the pseudo-time step. These are defined as in @Raess2022:
 
 \begin{eqnarray}
     \widetilde{\rho} = Re\frac{\eta}{\widetilde{V}L}, \qquad

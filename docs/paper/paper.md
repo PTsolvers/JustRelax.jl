@@ -1,12 +1,12 @@
 ---
 title: 'JustRelax.jl: A Julia package for geodynamic modeling with matrix-free solvers'
 tags:
-  - julia
-  - geosciences
-  - geodynamics
-  - tectonics
-  - geophysics
-  - computational geosciences
+  - Julia
+  - Geosciences
+  - Geodynamics
+  - Tectonics
+  - Geophysics
+  - Computational geosciences
 authors:
   - name: Albert de Montserrat
     orcid: 0000-0003-1694-3735
@@ -180,16 +180,15 @@ JustRelax.jl features:
 
 ```julia
 const isCUDA = true # or `false` to use the CPU backend
-# conditional loading of CUDA.jl
+# Conditional loading of CUDA.jl
 @static if isCUDA
     using CUDA
 end
-# load JustRelax.jl and its 2D backend
+# Load JustRelax.jl and its 2D backend
 using JustRelax, JustRelax.JustRelax2D
-# define the `backend` variable that is passed to instantiate JustRelax.jl
-# objects on the correct hardware backend.
-# Options:
-#     CPUBackend, CUDABackend, AMDGPUBackend
+# Define the `backend` variable that is passed to instantiate JustRelax.jl
+# objects on the correct hardware backend. Options:
+#     (1) CPUBackend; (2) CUDABackend; (3) AMDGPUBackend
 const backend = @static if isCUDA
     CUDABackend
 else
@@ -211,7 +210,7 @@ end
     <figcaption> Figure 2: Main Julia dependencies of JustRelax.jl. </figcaption>
 </figure> -->
 
-![Main Julia dependencies of JustRelax.jl. \label{fig:dependencies}](figs/dependencies.png){width=60%}
+![Main Julia dependencies of JustRelax.jl. \label{fig:dependencies}](figs/dependencies.png){width=75%}
 
 <!-- - **Distributed I/O support**: The package implements efficient parallel input/output operations for handling large datasets common in 3D geodynamic simulations. This includes parallel writing and reading of solution fields, checkpoint/restart capabilities, and compatibility with standard visualization formats (VTK) for scientific data analysis and post-processing. -->
 
@@ -224,13 +223,6 @@ end
 An extensive set of benchmarks and model examples are available in the GitHub repository of [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl). Some examples such as [shear band localization](https://ptsolvers.github.io/JustRelax.jl/dev/man/ShearBands), [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/subduction2D) or the rise of a [3D plume](https://ptsolvers.github.io/JustRelax.jl/dev/man/plume3D/plume3D) are described in the [documentation](https://ptsolvers.github.io/JustRelax.jl/dev/). Here we limit ourselves to show some snapshots of the results of these examples in Fig. \ref{fig:examples}.
 
 ![Model examples from the documentation: a) 2D shear band localization of a viscoelasto-viscoelastic body ($10240 \times 10240$ cells), b) 2D subduction ($512 \times 512$ cells), and c) raising of a hot plume in 3D $128 \times 128 \times 128$. All models were run in one  NVIDIA GH200 Grace Hopper GPU. \label{fig:examples}](figs/models_JOSS.png)
-
-
-<!-- <figure>
-    <img src="figs/models_JOSS.png"
-         alt="models">
-    <figcaption> Figure 3: Model examples from the documentation: a) 2D subduction, and b) raising of a hot plume in 3D. </figcaption>
-</figure> -->
 
 
 # Acknowledgments

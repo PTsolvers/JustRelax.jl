@@ -6,6 +6,8 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
+const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"] ) : false
+
 using Test, Suppressor, GeoParams
 using JustRelax, JustRelax.JustRelax3D
 using JustRelax

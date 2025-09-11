@@ -86,7 +86,7 @@ The compressible Stokes equations are given by the conservation of momentum and 
 $$
 \begin{align}
     \nabla\cdot\mathbf{\tau} - \nabla p = \mathbf{f} \\
-    \nabla\cdot\mathbf{v} = -\beta \frac{\partial p}{\partial t} + \alpha \frac{\partial T}{\partial t}
+    \nabla\cdot\mathbf{v} = -\beta \frac{D p}{D t} + \alpha \frac{D T}{D t}
 \end{align}
 $$
 
@@ -103,7 +103,7 @@ where $\eta$ is the viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ i
 
 $$
 \begin{align}
-    \rho C_p \frac{\partial T}{\partial t} = - \nabla q + \mathbf{\tau}:(\mathbf{\dot\varepsilon} - \mathbf{\dot\varepsilon}^{\mathrm{el}}) + \alpha T (\mathbf{v} \cdot \nabla P) + Q \\
+    \rho C_p \frac{D T}{D t} = - \nabla q + \mathbf{\tau}:(\mathbf{\dot\varepsilon} - \mathbf{\dot\varepsilon}^{\mathrm{el}}) + \alpha T (\mathbf{v} \cdot \nabla P) + Q \\
     q = - k \nabla T
 \end{align}
 $$
@@ -116,7 +116,7 @@ The APT method consists of transforming the elliptic PDEs into damped wave equat
 $$
 \begin{align}
     \widetilde{\rho}\frac{\partial \mathbf{v}}{\partial \psi} + \nabla\cdot\mathbf{\tau} - \nabla p = \mathbf{f}  \\
-    \frac{1}{\widetilde{K}}\frac{\partial p}{\partial \psi} + \nabla\cdot\mathbf{v} = -\beta \frac{\partial p}{\partial t} + \alpha \frac{\partial T}{\partial t} \\
+    \frac{1}{\widetilde{K}}\frac{\partial p}{\partial \psi} + \nabla\cdot\mathbf{v} = -\beta \frac{D p}{D t} + \alpha \frac{D T}{D t} \\
     \frac{1}{2\widetilde{G}} \frac{\partial\mathbf{\tau}}{\partial\psi} + \frac{\mathbf{\tau}}{2\eta} = \dot{\mathbf{\varepsilon}} \\
 \end{align}
 $$

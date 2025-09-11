@@ -79,61 +79,61 @@ With JustRelax.jl, we intend to address these fundamental limitations by introdu
 
 # Methods
 
-JustRelax.jl employs the APT method to solve the compressible Stokes and heat diffusion equations @rass2022. Within each APT iteration, the pressure-dependent equation of state, non-Newtonian viscosity, plastic stress corrections, and conservation of mass and momentum are solved simultaneously in a fully coupled manner. In the sections hereafter, we briefly summarize the governing equations and their respective APT implementation, and discuss the parallelization strategy and the advection schemes used to track material properties and deformation history.
+JustRelax.jl employs the APT method to solve the compressible Stokes and heat diffusion equations @raess2022. Within each APT iteration, the pressure-dependent equation of state, non-Newtonian viscosity, plastic stress corrections, and conservation of mass and momentum are solved simultaneously in a fully coupled manner. In the sections hereafter, we briefly summarize the governing equations and their respective APT implementation, and discuss the parallelization strategy and the advection schemes used to track material properties and deformation history.
 
 ## Thermo-mechanical modeling
 The compressible Stokes equations are given by the conservation of momentum and mass equations, respectively:
 <!-- $$
 \begin{align}
-    \nabla\cdot\mathbf{\tau} - \nabla p = \mathbf{f} \\
+    \nabla\cdot\boldsymbol{\tau} - \nabla p = \mathbf{f} \\
     \nabla\cdot\mathbf{v} = -\beta \frac{D p}{D t} + \alpha \frac{D T}{D t}
 \end{align}
 $$ -->
 
 
 \begin{eqnarray}
-    \nabla\cdot\mathbf{\tau} - \nabla p = \mathbf{f} \\
+    \nabla\cdot\boldsymbol{\tau} - \nabla p = \mathbf{f} \\
     \nabla\cdot\mathbf{v} = -\beta \frac{D p}{D t} + \alpha \frac{D T}{D t}
 \end{eqnarray}
 
-where $\nabla$ is the nabla operator, $\mathbf{\tau}$ is the deviatoric stress tensor, $p$ is the total pressure, $\mathbf{f}$ are the body forces, usually being the buoyancy forces $\mathbf{f} = \rho \mathbf{g}$ where $\rho$ is density and $\mathbf{g}$ is the gravitational force vector, $\mathbf{v}$ is the velocity field, $\beta$ is the inverse of the bulk modulus, and $\alpha$ is the thermal expansivity coefficient. In the incompressible limit, the right-hand-side of the conservation of mass equation vanishes to zero ($\alpha=\beta=0$). The previous system of equations is closed with the constitutive equation that relates the deviatoric strain rate tensor $\dot{\mathbf{\varepsilon}}$ with $\mathbf{\tau}$. In computational geodynamics, we commonly consider composite non-linear visco-elasto-plastic rheologies, which can be expressed by the following constitutive equation:
+where $\nabla$ is the nabla operator, $\boldsymbol{\tau}$ is the deviatoric stress tensor, $p$ is the total pressure, $\mathbf{f}$ are the body forces, usually being the buoyancy forces $\mathbf{f} = \rho \mathbf{g}$ where $\rho$ is density and $\mathbf{g}$ is the gravitational force vector, $\mathbf{v}$ is the velocity field, $\beta$ is the inverse of the bulk modulus, and $\alpha$ is the thermal expansivity coefficient. In the incompressible limit, the right-hand-side of the conservation of mass equation vanishes to zero ($\alpha=\beta=0$). The previous system of equations is closed with the constitutive equation that relates the deviatoric strain rate tensor $\dot{\boldsymbol{\varepsilon}}$ with $\boldsymbol{\tau}$. In computational geodynamics, we commonly consider composite non-linear visco-elasto-plastic rheologies, which can be expressed by the following constitutive equation:
 <!-- 
 $$
 \begin{align}
-  % \mathbf{\tau} = 2\eta\dot{\mathbf{\varepsilon}}
-  \dot{\mathbf{\varepsilon}} = \frac{\mathbf{\tau}}{2\eta} + \frac{1}{2G} \frac{D\mathbf{\tau}}{Dt} + \dot\lambda\frac{\partial Q}{\partial \mathbf{\tau}}
+  % \boldsymbol{\tau} = 2\eta\dot{\boldsymbol{\varepsilon}}
+  \dot{\boldsymbol{\varepsilon}} = \frac{\boldsymbol{\tau}}{2\eta} + \frac{1}{2G} \frac{D\boldsymbol{\tau}}{Dt} + \dot\lambda\frac{\partial Q}{\partial \boldsymbol{\tau}}
 \end{align}
 $$ -->
 
 \begin{eqnarray}
-  % \mathbf{\tau} = 2\eta\dot{\mathbf{\varepsilon}}
-  \dot{\mathbf{\varepsilon}} = \frac{\mathbf{\tau}}{2\eta} + \frac{1}{2G} \frac{D\mathbf{\tau}}{Dt} + \dot\lambda\frac{\partial Q}{\partial \mathbf{\tau}}
+  % \boldsymbol{\tau} = 2\eta\dot{\boldsymbol{\varepsilon}}
+  \dot{\boldsymbol{\varepsilon}} = \frac{\boldsymbol{\tau}}{2\eta} + \frac{1}{2G} \frac{D\boldsymbol{\tau}}{Dt} + \dot\lambda\frac{\partial Q}{\partial \boldsymbol{\tau}}
 \end{eqnarray}
 
 where $\eta$ is the viscosity, $G$ is the elastic shear modulus, $\dot\lambda$ is the plastic multiplier, and $Q$ is the plastic flow potential. Since the evolution of the temperature $T$ field is highly relevant in geodynamics, and most of the material properties such as density and flow laws are temperature dependent, we solve the energy conservation equation:
 
 <!-- $$
 \begin{align}
-    \rho C_p \frac{D T}{D t} = - \nabla q + \mathbf{\tau}:(\mathbf{\dot\varepsilon} - \mathbf{\dot\varepsilon}^{\mathrm{el}}) + \alpha T (\mathbf{v} \cdot \nabla P) + Q \\
+    \rho C_p \frac{D T}{D t} = - \nabla q + \boldsymbol{\tau}:(\mathbf{\dot\varepsilon} - \mathbf{\dot\varepsilon}^{\mathrm{el}}) + \alpha T (\mathbf{v} \cdot \nabla P) + Q \\
     q = - k \nabla T
 \end{align}
 $$ -->
 
 \begin{eqnarray}
-    \rho C_p \frac{D T}{D t} = - \nabla q + \mathbf{\tau}:(\mathbf{\dot\varepsilon} - \mathbf{\dot\varepsilon}^{\mathrm{el}}) + \alpha T (\mathbf{v} \cdot \nabla P) + Q \\
+    \rho C_p \frac{D T}{D t} = - \nabla q + \boldsymbol{\tau}:(\mathbf{\dot\varepsilon} - \mathbf{\dot\varepsilon}^{\mathrm{el}}) + \alpha T (\mathbf{v} \cdot \nabla P) + Q \\
     q = - k \nabla T
 \end{eqnarray}
 
-where $C_p$ is the heat capacity, $k$ is the heat conductivity, $\mathbf{\tau}:(\mathbf{\dot\varepsilon} - \mathbf{\dot\varepsilon}^{\mathrm{el}})$ is the shear heating (heating generated by viscous dissipation), $\mathbf{\dot\varepsilon}^{\mathrm{el}}$ is the elastic strain rate tensor, $\alpha T (\mathbf{v} \cdot \nabla P)$ is the adiabatic heating, and $Q$ is the sum of any other source terms.
+where $C_p$ is the heat capacity, $k$ is the heat conductivity, $\boldsymbol{\tau}:(\mathbf{\dot\varepsilon} - \mathbf{\dot\varepsilon}^{\mathrm{el}})$ is the shear heating (heating generated by viscous dissipation), $\mathbf{\dot\varepsilon}^{\mathrm{el}}$ is the elastic strain rate tensor, $\alpha T (\mathbf{v} \cdot \nabla P)$ is the adiabatic heating, and $Q$ is the sum of any other source terms.
 
 ### Pseudo-Transient formulation
 
 The APT method consists of transforming the elliptic PDEs into damped wave equations by augmenting them with a second order pseudo-time derivative including a damping term. Upon convergence, all pseudo-time derivative vanish (up to machine precision), hence recovering the original PDE. We employ the APT method to take advantage of its good spatial locality (compared to e.g. matrix-matrix or matrix-vector multiplication), and its matrix-free nature that requires of explicit updates, which is ideal for embarrassingly parallel execution. This results in a much simpler numerical implementation than other solution methods typically used to solve the Stokes equations (Multigrid, Conjugate Gradients, GMRES...). The APT formulation of the compressible Stokes equations and continuity equation read:
 
 \begin{eqnarray}
-    \widetilde{\rho}\frac{\partial \mathbf{v}}{\partial \psi} + \nabla\cdot\mathbf{\tau} - \nabla p = \mathbf{f}  \\
+    \widetilde{\rho}\frac{\partial \mathbf{v}}{\partial \psi} + \nabla\cdot\boldsymbol{\tau} - \nabla p = \mathbf{f}  \\
     \frac{1}{\widetilde{K}}\frac{\partial p}{\partial \psi} + \nabla\cdot\mathbf{v} = -\beta \frac{D p}{D t} + \alpha \frac{D T}{D t} \\
-    \frac{1}{2\widetilde{G}} \frac{\partial\mathbf{\tau}}{\partial\psi} + \frac{\mathbf{\tau}}{2\eta} = \dot{\mathbf{\varepsilon}} \\
+    \frac{1}{2\widetilde{G}} \frac{\partial\boldsymbol{\tau}}{\partial\psi} + \frac{\boldsymbol{\tau}}{2\eta} = \dot{\boldsymbol{\varepsilon}} \\
 \end{eqnarray}
 
 

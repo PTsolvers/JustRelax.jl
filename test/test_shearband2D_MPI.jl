@@ -225,19 +225,32 @@ function main(igg; nx = 64, ny = 64)
 
 end
 
-@suppress begin
-    if backend_JR == CPUBackend
-        N = 30
-        n = N
-        nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-        ny = n * 2
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+if CSCS_CI != true
+    @suppress begin
+        if backend_JR == CPUBackend
+            N = 30
+            n = N
+            nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+            ny = n * 2
+            igg = if !(JustRelax.MPI.Initialized())
+                IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+            else
+                igg
+            end
+            main(igg; nx = nx, ny = ny)
         else
-            igg
+            println("This test is only for CPU CI yet")
         end
-        main(igg; nx = nx, ny = ny)
-    else
-        println("This test is only for CPU CI yet")
     end
+else
+    N = 30
+    n = N
+    nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+    ny = n * 2
+    igg = if !(JustRelax.MPI.Initialized())
+        IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
+    else
+        igg
+    end
+    main(igg; nx = nx, ny = ny)
 end

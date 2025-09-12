@@ -18,7 +18,7 @@
     @inbounds begin
 
         # cache dislocation parameters
-        dis = (Sens[9][I...], Sens[10][I...], Sens[11][I...], Sens[12][I...], Sens[13][I...], Sens[19][I...], Sens[20][I...])
+        dis = (Sens[9][I...], Sens[10][I...], Sens[11][I...], Sens[12][I...], Sens[13][I...], Sens[19][I...], Sens[20][I...],Sens[14][I...],Sens[15][I...],Sens[16][I...],Sens[17][I...],Sens[18][I...])
 
         # cache
         ε = εxx[I...], εyy[I...]
@@ -212,7 +212,6 @@ else
 end
 
 FT, FE = a.FT, a.FE
-_n = inv(n)
 
 A  = dis[1]
 n  = dis[2]
@@ -222,21 +221,32 @@ V  = dis[5]
 Pc = dis[6]
 Tc = dis[7]
 
+_n = inv(n)
+
 return @powAD A^-_n * (EpsII * FE)^_n * f^(-r * _n) * exp((E + Pc * V) / (n * R * Tc)) / FT
 end
 
 
 @inline function compute_τIIAD(
     a::DiffusionCreep,
-    EpsII;
+    EpsII,
+    dis;
     T = one(precisionAD(a)),
     P = zero(precisionAD(a)),
     f = one(precisionAD(a)),
     d = one(precisionAD(a)),
-    kwargs...,
+    #kwargs...,
 )
 @unpack_val n, r, p, A, E, V, R = a
 FT, FE = a.FT, a.FE
+
+A  = dis[8]
+p  = dis[9]
+r  = dis[10]
+E  = dis[11]
+V  = dis[12]
+Pc = dis[6]
+Tc = dis[7]
 
 n_inv = inv(n)
 
@@ -244,7 +254,7 @@ n_inv = inv(n)
     (EpsII * FE)^n_inv *
     f^(-r * n_inv) *
     d^(-p * n_inv) *
-    exp((E + P * V) / (n * R * T)) / FT
+    exp((E + Pc * V) / (n * R * Tc)) / FT
 
 return τ
 end

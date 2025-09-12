@@ -294,16 +294,182 @@ end
 return nothing
 end
 
-@inline elementsStress(v::Union{CompositeRheology, Parallel}) = v.elements
+#####################################################
+######## get Material Parameters Dislocation ########
+#####################################################
 
-@inline @generated function tuple_getindex(t::T, i::Integer) where {T<:Tuple}
-    N = fieldcount(T)
-    ex = :(throw(BoundsError()))
-    for k in N:-1:1
-        ex = :(i == $k ? Base.getfield(t, $k) : $ex)
+
+abstract type RheologyTrait end
+struct DislocationTrait <: RheologyTrait end
+struct NonDislocationTrait <: RheologyTrait end
+
+@inline isdislocation(::DislocationCreep)   = DislocationTrait()
+@inline isdislocation(::AbstractConstitutiveLaw) = NonDislocationTrait()
+@inline isdislocation(c::CompositeRheology) = isdislocation(c.elements)
+
+# compares two rheologies and return linear trait only and if only both are linear
+@inline isdislocation(::RheologyTrait, ::DislocationTrait) = DislocationTrait()
+@inline isdislocation(::DislocationTrait, ::RheologyTrait) = DislocationTrait()
+@inline isdislocation(::DislocationTrait, ::DislocationTrait) = DislocationTrait()
+@inline isdislocation(::RheologyTrait, ::RheologyTrait) = NonDislocationTrait()
+
+# compares three rheologies and return linear trait only and if only both are linear
+@inline isdislocation(::RheologyTrait, ::RheologyTrait, ::DislocationTrait) = DislocationTrait()
+@inline isdislocation(::DislocationTrait, ::RheologyTrait, ::RheologyTrait) = DislocationTrait()
+@inline isdislocation(::RheologyTrait, ::DislocationTrait, ::RheologyTrait) = DislocationTrait()
+@inline isdislocation(::DislocationTrait, ::DislocationTrait, ::RheologyTrait) = DislocationTrait()
+@inline isdislocation(::DislocationTrait, ::RheologyTrait, ::DislocationTrait) = DislocationTrait()
+@inline isdislocation(::RheologyTrait, ::DislocationTrait, ::DislocationTrait) = DislocationTrait()
+@inline isdislocation(::RheologyTrait, ::RheologyTrait, ::RheologyTrait) = NonDislocationTrait()
+#@inline isdislocation(v1::Union{AbstractConstitutiveLaw, AbstractPlasticity}, v2::Union{AbstractConstitutiveLaw, AbstractPlasticity}) = isdislocation(isdislocation(v1), isdislocation(v2))
+
+# traits for MaterialParams
+@inline isdislocation(r::MaterialParams) = isdislocation(r.CompositeRheology...)
+
+# recursively (pairwise, right-to-left) compare rheology traits of a composite or tuple of material params
+@inline isdislocation(r::NTuple{N, Union{AbstractConstitutiveLaw, AbstractPlasticity, MaterialParams}}) where {N} = isdislocation(isdislocation(first(r)), isdislocation(Base.tail(r)))
+@inline isdislocation(v::NTuple{1, Union{AbstractConstitutiveLaw, AbstractPlasticity, MaterialParams}}) = isdislocation(v...)
+
+function get_Adis(args::Vararg{Any, N}) where {N}
+    Param = getdis_A(args...)
+    if isnan(Param) || iszero(Param)
+        return Inf
     end
-    ex
+    return Param
 end
+
+function get_Edis(args::Vararg{Any, N}) where {N}
+    Param = getdis_E(args...)
+    if isnan(Param) || iszero(Param)
+        return Inf
+    end
+    return Param
+end
+
+function get_rdis(args::Vararg{Any, N}) where {N}
+    Param = getdis_r(args...)
+    if isnan(Param) || iszero(Param)
+        return Inf
+    end
+    return Param
+end
+
+function get_ndis(args::Vararg{Any, N}) where {N}
+    Param = getdis_n(args...)
+    if isnan(Param) || iszero(Param)
+        return Inf
+    end
+    return Param
+end
+
+function get_Vdis(args::Vararg{Any, N}) where {N}
+    Param = getdis_V(args...)
+    if isnan(Param) || iszero(Param)
+        return Inf
+    end
+    return Param
+end
+
+for modulus in (:A, :E, :r, :n, :V)
+    fun = Symbol("getdis_$(string(modulus))")
+    @eval begin
+        @inline $(fun)(a::DislocationCreep) = a.$(modulus).val
+        @inline $(fun)(c::CompositeRheology) = $(fun)(isdislocation(c), c)
+        @inline $(fun)(::DislocationTrait, c::CompositeRheology) = mapreduce(x -> $(fun)(x), +, c.elements)
+        @inline $(fun)(r::AbstractMaterialParamsStruct) = $(fun)(r.CompositeRheology[1])
+        @inline $(fun)(a::NTuple{N, AbstractMaterialParamsStruct}, phase) where {N} = nphase($(fun), phase, a)
+        @inline $(fun)(::NonDislocationTrait, c::CompositeRheology) = 0
+        @inline $(fun)(::Union{NonDislocationTrait, AbstractPlasticity, AbstractElasticity, DiffusionCreep}) = 0
+    end
+end
+
+#####################################################
+######## get Material Parameters Diffusion ##########
+#####################################################
+
+struct DiffusionTrait <: RheologyTrait end
+struct NonDiffusionTrait <: RheologyTrait end
+
+@inline isdiffusion(::DiffusionCreep)   = DiffusionTrait()
+@inline isdiffusion(::AbstractConstitutiveLaw) = NonDiffusionTrait()
+@inline isdiffusion(c::CompositeRheology) = isdiffusion(c.elements)
+
+# compares two rheologies and return linear trait only and if only both are linear
+@inline isdiffusion(::RheologyTrait, ::DiffusionTrait) = DiffusionTrait()
+@inline isdiffusion(::DiffusionTrait, ::RheologyTrait) = DiffusionTrait()
+@inline isdiffusion(::DiffusionTrait, ::DiffusionTrait) = DiffusionTrait()
+@inline isdiffusion(::RheologyTrait, ::RheologyTrait) = NonDiffusionTrait()
+
+# compares three rheologies and return linear trait only and if only both are linear
+@inline isdiffusion(::RheologyTrait, ::RheologyTrait, ::DiffusionTrait) = DiffusionTrait()
+@inline isdiffusion(::DiffusionTrait, ::RheologyTrait, ::RheologyTrait) = DiffusionTrait()
+@inline isdiffusion(::RheologyTrait, ::DiffusionTrait, ::RheologyTrait) = DiffusionTrait()
+@inline isdiffusion(::DiffusionTrait, ::DiffusionTrait, ::RheologyTrait) = DiffusionTrait()
+@inline isdiffusion(::DiffusionTrait, ::RheologyTrait, ::DiffusionTrait) = DiffusionTrait()
+@inline isdiffusion(::RheologyTrait, ::DiffusionTrait, ::DiffusionTrait) = DiffusionTrait()
+@inline isdiffusion(::RheologyTrait, ::RheologyTrait, ::RheologyTrait) = NonDiffusionTrait()
+#@inline isdiffusion(v1::Union{AbstractConstitutiveLaw, AbstractPlasticity}, v2::Union{AbstractConstitutiveLaw, AbstractPlasticity}) = isdiffusion(isdiffusion(v1), isdiffusion(v2))
+
+# traits for MaterialParams
+@inline isdiffusion(r::MaterialParams) = isdiffusion(r.CompositeRheology...)
+
+# recursively (pairwise, right-to-left) compare rheology traits of a composite or tuple of material params
+@inline isdiffusion(r::NTuple{N, Union{AbstractConstitutiveLaw, AbstractPlasticity, MaterialParams}}) where {N} = isdiffusion(isdiffusion(first(r)), isdiffusion(Base.tail(r)))
+@inline isdiffusion(v::NTuple{1, Union{AbstractConstitutiveLaw, AbstractPlasticity, MaterialParams}}) = isdiffusion(v...)
+
+function get_Adif(args::Vararg{Any, N}) where {N}
+    Param = getdif_A(args...)
+    if isnan(Param) || iszero(Param)
+        return Inf
+    end
+    return Param
+end
+
+function get_Edif(args::Vararg{Any, N}) where {N}
+    Param = getdif_E(args...)
+    if isnan(Param) || iszero(Param)
+        return Inf
+    end
+    return Param
+end
+
+function get_rdif(args::Vararg{Any, N}) where {N}
+    Param = getdif_r(args...)
+    if isnan(Param) || iszero(Param)
+        return Inf
+    end
+    return Param
+end
+
+function get_pdif(args::Vararg{Any, N}) where {N}
+    Param = getdif_p(args...)
+    if isnan(Param) || iszero(Param)
+        return Inf
+    end
+    return Param
+end
+
+function get_Vdif(args::Vararg{Any, N}) where {N}
+    Param = getdif_V(args...)
+    if isnan(Param) || iszero(Param)
+        return Inf
+    end
+    return Param
+end
+
+for modulus in (:A, :E, :r, :p, :V)
+    fun = Symbol("getdif_$(string(modulus))")
+    @eval begin
+        @inline $(fun)(a::DiffusionCreep) = a.$(modulus).val
+        @inline $(fun)(c::CompositeRheology) = $(fun)(isdiffusion(c), c)
+        @inline $(fun)(::DiffusionTrait, c::CompositeRheology) = mapreduce(x -> $(fun)(x), +, c.elements)
+        @inline $(fun)(r::AbstractMaterialParamsStruct) = $(fun)(r.CompositeRheology[1])
+        @inline $(fun)(a::NTuple{N, AbstractMaterialParamsStruct}, phase) where {N} = nphase($(fun), phase, a)
+        @inline $(fun)(::NonDiffusionTrait, c::CompositeRheology) = 0
+        @inline $(fun)(::Union{NonDiffusionTrait, AbstractPlasticity, AbstractElasticity, DislocationCreep}) = 0
+    end
+end
+
 
 @parallel_indices (I...) function assemble_parameter_matrices!(
     EII,
@@ -352,41 +518,40 @@ end
         ϕc[I...] = asind(sinϕc) # sinϕc
         Cc[I...] = Cci
 
-        #### discloation/diffusiun creep parameters ####
-        # loop through composite rheology elemnts to check if it is a dislocation or diffusion element
-        for j = 1:length(rheology)
-            #print("first\n")
-            #for i in eachindex(phase)
-                #print("second\n")
-                #for (ind, k) in enumerate(rheology[j].CompositeRheology[1].elements)
-                    for m = 1:length(rheology[j].CompositeRheology[1].elements)
-                        #k = rheology[j].CompositeRheology[1].elements[m]
-                        e = elementsStress(rheology[j].CompositeRheology[1])
-                        k = tuple_getindex(e, m::Int) 
-                
-                        if k isa DislocationCreep
-                            #print("third\n")
-                            Adis[I...] += k.A*phase[j]
-                            ndis[I...] += k.n*phase[j]
-                            rdis[I...] += k.r*phase[j]
-                            Edis[I...] += k.E*phase[j]
-                            Vdis[I...] += k.V*phase[j]
+        # get dislocation and diffusion parameters
+        Adis[I...] = fn_ratio(get_Adis, rheology, phase)
+        Edis[I...] = fn_ratio(get_Edis, rheology, phase)
+        rdis[I...] = fn_ratio(get_rdis, rheology, phase)
+        ndis[I...] = fn_ratio(get_ndis, rheology, phase)
+        Vdis[I...] = fn_ratio(get_Vdis, rheology, phase)
 
-                        elseif k isa DiffusionCreep
-                            Adif[I...] += k.A*phase[j]
-                            pdif[I...] += k.p*phase[j]
-                            rdif[I...] += k.r*phase[j]
-                            Edif[I...] += k.E*phase[j]
-                            Vdif[I...] += k.V*phase[j]
-                        end
-                #end
-            end
-        end
+        Adif[I...] = fn_ratio(get_Adif, rheology, phase)
+        Edif[I...] = fn_ratio(get_Edif, rheology, phase)
+        rdif[I...] = fn_ratio(get_rdif, rheology, phase)
+        pdif[I...] = fn_ratio(get_pdif, rheology, phase)
+        Vdif[I...] = fn_ratio(get_Vdif, rheology, phase)
+
     end
 
 return nothing
 
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #### OLD ####
 #=
 @parallel_indices (I...)  function update_stresses_center_vertex_psAD!(

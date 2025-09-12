@@ -743,7 +743,7 @@ end
         Vdif,
         rheology,
         phase_ratios.center,
-        phase_ratios.vertex
+        phase_ratios.vertex,
     )
     
     Sens  = (G, stokesAD.fr, C, K, Gv, frv, Cv, Kv, Adis, ndis, rdis, Edis, Vdis, Adif, pdif, rdif, Edif, Vdif, Pcreep, Tcreep);
@@ -752,6 +752,8 @@ end
     print("#############################\n")
     print(extrema(Adis),"\n")
     print(extrema(ndis),"\n")
+    print(extrema(Adif),"\n")
+    print(extrema(rdis),"\n")
     print("#############################\n")
 
 
@@ -956,6 +958,7 @@ end
             K .= 0.0
             vertex2center!(K, Kvb);
             stokesAD.K .+= K 
+            #stokesAD.Adis .= Adis
     #end
        
 end

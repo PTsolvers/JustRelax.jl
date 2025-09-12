@@ -205,6 +205,7 @@ struct StokesArraysAdjoint{A,B,C,D,E,F,T}
     rdif::T
     Edif::T
     Vdif::T
+    ddif::T
 end
  
 

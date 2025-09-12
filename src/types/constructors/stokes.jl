@@ -190,6 +190,7 @@ function StokesArraysAdjoint(ni::NTuple{N,Integer}) where {N}
     pdif = @zeros(ni...)
     rdif = @zeros(ni...)
     Edif = @zeros(ni...)
-    Vdif = @zeros(ni...)    
-    return JustRelax.StokesArraysAdjoint(P, θ, PA, P0, V, VA, ∇V, τ, dτ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, η, ρ, G, fr, C,K,Adis,ndis,rdis,Edis,Vdis,Pcreep,Tcreep,Adif,pdif,rdif,Edif,Vdif)
+    Vdif = @zeros(ni...)
+    ddif = @zeros(ni...)    
+    return JustRelax.StokesArraysAdjoint(P, θ, PA, P0, V, VA, ∇V, τ, dτ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, η, ρ, G, fr, C,K,Adis,ndis,rdis,Edis,Vdis,Pcreep,Tcreep,Adif,pdif,rdif,Edif,Vdif,ddif)
 end

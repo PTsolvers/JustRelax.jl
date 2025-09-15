@@ -15,15 +15,15 @@ unit_tests:
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="OpenSSL_jll", version="3.0.16");'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="CUDA", version="5.8.2");'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.status(); using CUDA; CUDA.versioninfo();'
-    - echo "Running all MPI tests"
+    - echo "Running MPI tests (multiple ranks)"
     - echo "Running MPI test - test_diffusion2D_multiphase_MPI.jl"
-    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. -O3 --startup-file=no test/test_diffusion2D_multiphase_MPI.jl
+    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. --startup-file=no test/test_diffusion2D_multiphase_MPI.jl
     - echo "Running MPI test - test_diffusion3D_multiphase_MPI.jl"
-    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. -O3 --startup-file=no test/test_diffusion3D_multiphase_MPI.jl
+    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. --startup-file=no test/test_diffusion3D_multiphase_MPI.jl
     - echo "Running MPI test - test_shearband2D_MPI.jl"
-    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. -O3 --startup-file=no test/test_shearband2D_MPI.jl
+    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. --startup-file=no test/test_shearband2D_MPI.jl
     - echo "Running MPI test - test_shearband3D_MPI.jl"
-    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. -O3 --startup-file=no test/test_shearband3D_MPI.jl
+    - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. --startup-file=no test/test_shearband3D_MPI.jl
     - echo "All MPI tests completed"
   variables:
     SLURM_JOB_NUM_NODES: 2

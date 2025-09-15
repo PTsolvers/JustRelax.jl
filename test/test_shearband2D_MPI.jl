@@ -231,9 +231,8 @@ if CSCS_CI != true
     @suppress begin
         if backend_JR == CPUBackend
             N = 30
-            n = N
-            nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-            ny = n * 2
+            nx = N * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+            ny = N * 2
             igg = if !(JustRelax.MPI.Initialized())
                 IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
             else
@@ -246,11 +245,10 @@ if CSCS_CI != true
     end
 else
     N = 30
-    n = N
-    nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-    ny = n * 2
+    nx = N * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+    ny = N * 2
     igg = if !(JustRelax.MPI.Initialized())
-        IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
+        IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device = false)...)
     else
         igg
     end

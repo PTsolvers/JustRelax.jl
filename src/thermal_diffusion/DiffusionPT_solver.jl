@@ -45,8 +45,10 @@ function _heatdiffusion_PT!(
     wtime0 = 0.0e0
     err = 2 * ϵ
 
-    println("\n ====================================\n")
-    println("Starting thermal diffusion solver...\n")
+    if isnothing(igg) || igg.me == 0
+        println("\n====================================\n")
+        println("Starting thermal diffusion solver...\n")
+    end
 
     while err > ϵ && iter < iterMax
         wtime0 += @elapsed begin
@@ -97,8 +99,10 @@ function _heatdiffusion_PT!(
         end
     end
 
-    println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
-    println("====================================\n")
+    if isnothing(igg) || igg.me == 0
+        println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
+        println("====================================\n")
+    end
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
     temperature2center!(thermal)
@@ -153,8 +157,10 @@ function _heatdiffusion_PT!(
     wtime0 = 0.0e0
     err = 2 * ϵ
 
-    println("\n ====================================\n")
-    println("Starting thermal diffusion solver...\n")
+    if isnothing(igg) || igg.me == 0
+        println("\n====================================\n")
+        println("Starting thermal diffusion solver...\n")
+    end
 
     while err > ϵ && iter < iterMax
         wtime0 += @elapsed begin
@@ -221,8 +227,10 @@ function _heatdiffusion_PT!(
         end
     end
 
-    println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
-    println("====================================\n")
+    if isnothing(igg) || igg.me == 0
+        println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
+        println("====================================\n")
+    end
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
     temperature2center!(thermal)

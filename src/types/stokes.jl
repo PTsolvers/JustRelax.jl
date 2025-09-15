@@ -188,6 +188,7 @@ struct PTStokesCoeffs{T}
     ϵ_abs::T # absolute PT tolerance
     Re::T # Reynolds Number
     r::T #
+    lτ::T
     Vpdτ::T
     θ_dτ::T
     ηdτ::T
@@ -206,6 +207,6 @@ struct PTStokesCoeffs{T}
         θ_dτ = lτ * (r + 4 / 3) / (Re * Vpdτ)
         ηdτ = Vpdτ * lτ / Re
 
-        return new{Float64}(CFL, ϵ_rel, ϵ_abs, Re, r, Vpdτ, θ_dτ, ηdτ)
+        return new{Float64}(CFL, ϵ_rel, ϵ_abs, Re, r,lτ, Vpdτ, θ_dτ, ηdτ)
     end
 end

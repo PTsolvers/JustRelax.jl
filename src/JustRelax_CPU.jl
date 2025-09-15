@@ -32,7 +32,7 @@ module JustRelax2D
     export solve!
 
     include("variational_stokes/Stokes2D.jl")
-    export solve_VariationalStokes!
+    export solve_VariationalStokes!, solve_VariationalStokes_displacement!
 
 end
 

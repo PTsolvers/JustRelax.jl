@@ -6,6 +6,8 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
+const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"] ) : false
+
 using Test, Suppressor
 using GeoParams, CellArrays
 using JustRelax, JustRelax.JustRelax2D
@@ -225,19 +227,30 @@ function main(igg; nx = 64, ny = 64)
 
 end
 
-@suppress begin
-    if backend_JR == CPUBackend
-        N = 30
-        n = N
-        nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-        ny = n * 2
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+if CSCS_CI != true
+    @suppress begin
+        if backend_JR == CPUBackend
+            N = 30
+            nx = N * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+            ny = N * 2
+            igg = if !(JustRelax.MPI.Initialized())
+                IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+            else
+                igg
+            end
+            main(igg; nx = nx, ny = ny)
         else
-            igg
+            println("This test is only for CPU CI yet")
         end
-        main(igg; nx = nx, ny = ny)
-    else
-        println("This test is only for CPU CI yet")
     end
+else
+    N = 30
+    nx = N * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+    ny = N * 2
+    igg = if !(JustRelax.MPI.Initialized())
+        IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device = false)...)
+    else
+        igg
+    end
+    main(igg; nx = nx, ny = ny)
 end

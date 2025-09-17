@@ -205,22 +205,43 @@ end
 end
 
 @inline function cache_tensors(
-        τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, Δε::NTuple{3, Any}, I::Vararg{Integer, 2}
+        τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, ε_pl::NTuple{3, Any}, I::Vararg{Integer, 2}
     )
     Base.@propagate_inbounds @inline av_shear(A) = sum(_gather(A, I...)) / 4
 
     # unpack
     εxx, εyy, εxy = ε
+    εxx_pl, εyy_pl, εxy_pl = ε_pl
+    τxx, τyy, τxy = τ
+    τxx_old, τyy_old, τxy_old = τ_old
+    # index
+    εij = @inbounds εxx[I...], εyy[I...], av_shear(εxy)
+    εij_pl = @inbounds εxx_pl[I...], εyy_pl[I...], av_shear(εxy_pl)
+    τij = @inbounds τxx[I...], τyy[I...], τxy[I...]
+    τij_o = @inbounds τxx_old[I...], τyy_old[I...], τxy_old[I...]
+
+    return τij, τij_o, εij, εij_pl
+end
+
+@inline function cache_tensors(
+        τ::NTuple{3, Any}, τ_old::NTuple{3, Any}, ε::NTuple{3, Any}, ε_pl::NTuple{3, Any}, Δε::NTuple{3, Any}, I::Vararg{Integer, 2}
+    )
+    Base.@propagate_inbounds @inline av_shear(A) = sum(_gather(A, I...)) / 4
+
+    # unpack
+    εxx, εyy, εxy = ε
+    εxx_pl, εyy_pl, εxy_pl = ε_pl
     Δεxx, Δεyy, Δεxy = Δε
     τxx, τyy, τxy = τ
     τxx_old, τyy_old, τxy_old = τ_old
     # index
     εij = @inbounds εxx[I...], εyy[I...], av_shear(εxy)
+    εij_pl = @inbounds εxx_pl[I...], εyy_pl[I...], av_shear(εxy_pl)
     Δεij = @inbounds Δεxx[I...], Δεyy[I...], av_shear(Δεxy)
     τij = @inbounds τxx[I...], τyy[I...], τxy[I...]
     τij_o = @inbounds τxx_old[I...], τyy_old[I...], τxy_old[I...]
 
-    return τij, τij_o, εij, Δεij
+    return τij, τij_o, εij, εij_pl, Δεij
 end
 
 
@@ -246,6 +267,37 @@ end
     τij_o = @inbounds τxx_old[I...], τyy_old[I...], τzz_old[I...], τyz_old[I...], τxz_old[I...], τxy_old[I...]
 
     return τij, τij_o, εij
+end
+
+@inline function cache_tensors(
+        τ::NTuple{6, Any}, τ_old::NTuple{6, Any}, ε::NTuple{6, Any}, ε_pl::NTuple{6, Any}, I::Vararg{Integer, 3}
+    )
+    Base.@propagate_inbounds @inline av_yz(A) = _av_yz(A, I...)
+    Base.@propagate_inbounds @inline av_xz(A) = _av_xz(A, I...)
+    Base.@propagate_inbounds @inline av_xy(A) = _av_xy(A, I...)
+
+    # unpack
+    εxx, εyy, εzz, εyz, εxz, εxy = ε
+    εxx_pl, εyy_pl, εzz_pl, εyz_pl, εxz_pl, εxy_pl = ε_pl
+    τxx, τyy, τzz, τyz, τxz, τxy = τ
+    τxx_old, τyy_old, τzz_old, τyz_old, τxz_old, τxy_old = τ_old
+
+    # normal components of the strain rate and old-stress tensors
+    ε_normal = @inbounds εxx[I...], εyy[I...], εzz[I...]
+    # shear components of the strain rate and old-stress tensors
+    ε_shear = @inbounds av_yz(εyz), av_xz(εxz), av_xy(εxy)
+
+    # normal components of the plastic strain rate
+    ε_pl_normal = @inbounds εxx_pl[I...], εyy_pl[I...], εzz_pl[I...]
+    # shear components of the plastic strain rate
+    ε_pl_shear = @inbounds av_yz(εyz_pl), av_xz(εxz_pl), av_xy(εxy_pl)
+    # cache ij-th components of the tensors into a tuple in Voigt notation
+    εij = (ε_normal..., ε_shear...)
+    εij_pl = (ε_pl_normal..., ε_pl_shear...)
+    τij = @inbounds τxx[I...], τyy[I...], τzz[I...], τyz[I...], τxz[I...], τxy[I...]
+    τij_o = @inbounds τxx_old[I...], τyy_old[I...], τzz_old[I...], τyz_old[I...], τxz_old[I...], τxy_old[I...]
+
+    return τij, τij_o, εij, εij_pl
 end
 
 ## softening kernels

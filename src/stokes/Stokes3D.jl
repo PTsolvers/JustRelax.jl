@@ -266,7 +266,7 @@ function _solve!(
                 stokes.τ.II,
                 @tensor(stokes.τ_o),
                 @strain(stokes),
-                @tensor_center(stokes.ε_pl),
+                @plastic_strain(stokes),
                 stokes.EII_pl,
                 stokes.P,
                 θ,
@@ -488,7 +488,7 @@ function _solve!(
 
             @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
                 @strain(stokes),
-                @tensor_center(stokes.ε_pl),
+                @plastic_strain(stokes),
                 stokes.EII_pl,
                 @tensor_center(stokes.τ),
                 (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy),

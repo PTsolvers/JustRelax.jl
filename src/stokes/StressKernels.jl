@@ -508,7 +508,7 @@ function update_stress!(
         stokes.τ.II,
         @tensor_center(stokes.τ_o),
         @strain(stokes),
-        @tensor_center(stokes.ε_pl),
+        @plastic_strain(stokes),
         stokes.EII_pl,
         stokes.P,
         θ,
@@ -817,7 +817,7 @@ end
         dτ_r = inv(θ_dτ + ηij * _Gdt + 1.0)
 
         # cache strain rates for center calculations
-        τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
+        τij, τij_o, εij, εij_pl = cache_tensors(τ, τ_o, ε, ε_pl, I...)
 
         # visco-elastic strain rates @ center
         εij_ve = @. εij + 0.5 * τij_o * _Gdt
@@ -828,7 +828,7 @@ end
         # yield function @ center
         F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij) && F > 0
+        τII_ij = if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
@@ -941,7 +941,7 @@ end
         dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
 
         # cache strain rates for center calculations
-        τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
+        τij, τij_o, εij, εij_pl = cache_tensors(τ, τ_o, ε, ε_pl, I...)
 
         # visco-elastic strain rates @ center
         εij_ve = @. εij + 0.5 * τij_o * _Gdt
@@ -1076,7 +1076,7 @@ end
         dτ_r = 1.0 / (θ_dτ * dt + ηij * _G + dt)
         dτ_r2 = inv(θ_dτ + ηij * _Gdt + 1.0)
         # cache strain rates for center calculations
-        τij, τij_o, εij, Δεij = cache_tensors(τ, τ_o, ε, Δε, I...)
+        τij, τij_o, εij, εij_pl, Δεij = cache_tensors(τ, τ_o, ε, ε_pl, Δε, I...)
 
         # visco-elastic strain rates @ center
         εij_ve = @. εij + 0.5 * τij_o * _Gdt

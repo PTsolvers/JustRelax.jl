@@ -144,7 +144,7 @@ function _solve_VS!(
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
                     @strain(stokes),
                     @strain_increment(stokes),
-                    @tensor_center(stokes.ε_pl),
+                    @plastic_strain(stokes),
                     stokes.EII_pl,
                     @tensor_center(stokes.τ),
                     (stokes.τ.xy,),
@@ -168,7 +168,7 @@ function _solve_VS!(
             else
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
                     @strain(stokes),
-                    @tensor_center(stokes.ε_pl),
+                    @plastic_strain(stokes),
                     stokes.EII_pl,
                     @tensor_center(stokes.τ),
                     (stokes.τ.xy,),

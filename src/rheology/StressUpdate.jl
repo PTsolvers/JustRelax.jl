@@ -16,7 +16,7 @@ function _compute_τ_nonlinear!(
     ) where {N1, N2, T}
 
     # cache tensors
-    τij, τij_o, εij = cache_tensors(τ, τ_old, ε, I...)
+    τij, τij_o, εij, εij_pl = cache_tensors(τ, τ_old, ε, ε_pl, I...)
 
     # Stress increment and trial stress
     dτij, τII_trial = compute_stress_increment_and_trial(τij, τij_o, ηij, εij, _Gdt, dτ_r)

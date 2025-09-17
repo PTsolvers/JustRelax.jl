@@ -227,6 +227,10 @@ function JR2D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTens
     return _tensor_invariant!(A)
 end
 
+function JR2D.accumulate_tensor!(::AMDGPUBackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
 ## Buoyancy forces
 function JR2D.compute_ρg!(ρg::Union{ROCArray, NTuple{N, ROCArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)

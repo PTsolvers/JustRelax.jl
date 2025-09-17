@@ -354,10 +354,50 @@ end
 end
 
 ## Accumulate tensor
-@parallel_indices (I...) function accumulate_tensor!(
-        II, tensor::NTuple{N, T}, dt
+function accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
+    accumulate_tensor!(backend(A), II, A, dt)
+end
+
+function accumulate_tensor!(::CPUBackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    _accumulate_tensor!(II, A, dt)
+    return nothing
+end
+
+function _accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
+    ni = size(II)
+    @parallel (@idx ni) accumulate_tensor_kernel!(II, @tensor(A)..., dt)
+    return nothing
+end
+
+@parallel_indices (I...) function accumulate_tensor_kernel!(
+        II, tensor::NTuple{3, T}, dt
     ) where {N, T}
-    @inbounds II[I...] += second_invariant(getindex.(tensor, I...)...) * dt
+
+    # convenience closures
+    @inline gather(A) = _gather(A, I...)
+
+    @inbounds begin
+        ε_pl = tensor[1][I...], tensor[2][I...], gather(tensor[3])
+        II[I...] += second_invariant_staggered(ε_pl...) * dt
+    end
+
+    return nothing
+end
+
+@parallel_indices (I...) function accumulate_tensor_kernel!(
+        II, tensor::NTuple{6, T}, dt
+    ) where {N, T}
+    # convenience closures
+    @inline gather_yz(A) = _gather_yz(A, I...)
+    @inline gather_xz(A) = _gather_xz(A, I...)
+    @inline gather_xy(A) = _gather_xy(A, I...)
+
+    @inbounds begin
+        ε_pl = tensor[1][I...], tensor[2][I...], tensor[3][I...],
+            gather_yz(tensor[4]), gather_xz(tensor[5]), gather_xy(tensor[6])
+        II[I...] += second_invariant_staggered(ε_pl...) * dt
+    end
+
     return nothing
 end
 
@@ -508,7 +548,7 @@ function update_stress!(
         stokes.τ.II,
         @tensor_center(stokes.τ_o),
         @strain(stokes),
-        @plastic_strain(stokes),
+        @plastic_strain(stokes.ε_pl),
         stokes.EII_pl,
         stokes.P,
         θ,

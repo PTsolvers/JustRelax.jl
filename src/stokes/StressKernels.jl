@@ -355,7 +355,7 @@ end
 
 ## Accumulate tensor
 function accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
-    accumulate_tensor!(backend(A), II, A, dt)
+    return accumulate_tensor!(backend(A), II, A, dt)
 end
 
 function accumulate_tensor!(::CPUBackendTrait, II, A::JustRelax.SymmetricTensor, dt)

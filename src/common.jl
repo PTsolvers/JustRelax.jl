@@ -81,7 +81,7 @@ include("rheology/GeoParams.jl")
 include("rheology/StressUpdate.jl")
 
 include("stokes/StressKernels.jl")
-export tensor_invariant!
+export tensor_invariant!, accumulate_tensor!
 
 include("stokes/PrincipalStresses.jl")
 export compute_principal_stresses, compute_principal_stresses!, PrincipalStress

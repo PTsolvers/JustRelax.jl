@@ -284,7 +284,7 @@ end
 end
 
 function shear2center!(A::JustRelax.SymmetricTensor)
-    shear2center!(backend(A), A)
+    return shear2center!(backend(A), A)
 end
 
 function shear2center!(::CPUBackendTrait, A::JustRelax.SymmetricTensor)
@@ -298,24 +298,16 @@ function _shear2center!(A::JustRelax.SymmetricTensor)
 end
 
 # 2D
-@parallel_indices (i, j) function shear2center_kernel!(xy_c::T, xy::T
+@parallel_indices (i, j) function shear2center_kernel!(
+        xy_c::T, xy::T
     ) where {T <: AbstractArray{_T, 2} where {_T <: Real}}
-    xy_c[i,j] = 0.25 * (xy[i, j] + xy[i + 1, j] + xy[i, j + 1] + xy[i + 1, j + 1])
+    xy_c[i, j] = 0.25 * (xy[i, j] + xy[i + 1, j] + xy[i, j + 1] + xy[i + 1, j + 1])
     return nothing
 end
 
-# 3D
-# @parallel_indices (i, j, k) function shear2center_kernel!(
-#     yz_c::T, xz_c::T, xy_c::T, yz::T, xz::T, xy::T
-# ) where {T <: AbstractArray{_T, 3} where {_T <: Real}}
-#     yz_c[i, j, k] = 0.25 * (yz[i, j, k] + yz[i, j + 1, k] + yz[i, j, k + 1] + yz[i, j + 1, k + 1])
-#     xz_c[i, j, k] = 0.25 * (xz[i, j, k] + xz[i + 1, j, k] + xz[i, j, k + 1] + xz[i + 1, j, k + 1])
-#     xy_c[i, j, k] = 0.25 * (xy[i, j, k] + xy[i + 1, j, k] + xy[i, j + 1, k] + xy[i + 1, j + 1, k])
-#     return nothing
-# end
 @parallel_indices (i, j, k) function shear2center_kernel!(
-    center::NTuple{3, T}, shear::NTuple{3, T}
-) where {T <: AbstractArray{_T, 3} where {_T <: Real}}
+        center::NTuple{3, T}, shear::NTuple{3, T}
+    ) where {T <: AbstractArray{_T, 3} where {_T <: Real}}
     yz_c, xz_c, xy_c = center
     yz, xz, xy = shear
     yz_c[i, j, k] = 0.25 * (yz[i, j, k] + yz[i, j + 1, k] + yz[i, j, k + 1] + yz[i, j + 1, k + 1])

@@ -239,6 +239,10 @@ function JR2D.accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricT
     return _accumulate_tensor!(II, A, dt)
 end
 
+function accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
 ## Buoyancy forces
 function JR2D.compute_ρg!(ρg::Union{CuArray, NTuple{N, CuArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)

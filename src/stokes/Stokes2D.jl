@@ -460,6 +460,10 @@ function _solve!(
         stokes.ω.xy, @velocity(stokes)..., inv.(di)...
     )
 
+    # Interpolate shear components to cell center arrays
+    shear2center!(stokes.ε)
+    shear2center!(stokes.ε_pl)
+    shear2center!(stokes.Δε)
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
 
@@ -733,6 +737,11 @@ function _solve!(
     @parallel (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.xy, @velocity(stokes)..., inv.(di)...
     )
+
+    # Interpolate shear components to cell center arrays
+    shear2center!(stokes.ε)
+    shear2center!(stokes.ε_pl)
+    shear2center!(stokes.Δε)
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)

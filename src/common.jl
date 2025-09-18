@@ -25,6 +25,7 @@ export @allocate,
     @stress_center,
     @strain_center,
     @tensor_center,
+    @shear_center,
     @qT,
     @qT2,
     @residuals,
@@ -66,7 +67,7 @@ export subgrid_characteristic_time!
 
 include("Interpolations.jl")
 export vertex2center!,
-    center2vertex!, temperature2center!, velocity2vertex!, velocity2center!
+    center2vertex!, temperature2center!, velocity2vertex!, velocity2center!, shear2center!
 
 include("advection/weno5.jl")
 export WENO_advection!

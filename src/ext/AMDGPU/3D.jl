@@ -270,6 +270,16 @@ function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArr
     return _temperature2center!(thermal)
 end
 
+function JR3D.shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
+end
+
+function shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
+end
+
 function JR3D.vertex2center!(center::T, vertex::T) where {T <: ROCArray}
     return vertex2center!(center, vertex)
 end

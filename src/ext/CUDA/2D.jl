@@ -235,6 +235,14 @@ function JR2D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor
     return _tensor_invariant!(A)
 end
 
+function JR2D.accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
+function accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
 ## Buoyancy forces
 function JR2D.compute_ρg!(ρg::Union{CuArray, NTuple{N, CuArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
@@ -264,6 +272,16 @@ end
 
 function temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)
+end
+
+function JR2D.shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
+end
+
+function shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
 end
 
 function JR2D.vertex2center!(center::T, vertex::T) where {T <: CuArray}

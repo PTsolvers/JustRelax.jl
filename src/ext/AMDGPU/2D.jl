@@ -227,6 +227,14 @@ function JR2D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTens
     return _tensor_invariant!(A)
 end
 
+function JR2D.accumulate_tensor!(::AMDGPUBackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
+function accumulate_tensor!(::AMDGPUBackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
 ## Buoyancy forces
 function JR2D.compute_ρg!(ρg::Union{ROCArray, NTuple{N, ROCArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
@@ -258,6 +266,16 @@ end
 
 function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)
+end
+
+function JR2D.shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
+end
+
+function shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
 end
 
 function JR2D.vertex2center!(center::T, vertex::T) where {T <: ROCArray}

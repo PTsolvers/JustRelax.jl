@@ -354,10 +354,49 @@ end
 end
 
 ## Accumulate tensor
-@parallel_indices (I...) function accumulate_tensor!(
-        II, tensor::NTuple{N, T}, dt
-    ) where {N, T}
-    @inbounds II[I...] += second_invariant(getindex.(tensor, I...)...) * dt
+function accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
+    return accumulate_tensor!(backend(A), II, A, dt)
+end
+
+function accumulate_tensor!(::CPUBackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    _accumulate_tensor!(II, A, dt)
+    return nothing
+end
+
+function _accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
+    ni = size(II)
+    @parallel (@idx ni) accumulate_tensor_kernel!(II, @tensor(A)..., dt)
+    return nothing
+end
+
+@parallel_indices (I...) function accumulate_tensor_kernel!(
+        II, xx, yy, xy, dt
+    )
+
+    # convenience closures
+    @inline gather(A) = _gather(A, I...)
+
+    @inbounds begin
+        ε_pl = xx[I...], yy[I...], gather(xy)
+        II[I...] += second_invariant_staggered(ε_pl...) * dt
+    end
+
+    return nothing
+end
+
+@parallel_indices (I...) function accumulate_tensor_kernel!(
+        II, xx, yy, zz, yz, xz, xy, dt
+    )
+    # convenience closures
+    @inline gather_yz(A) = _gather_yz(A, I...)
+    @inline gather_xz(A) = _gather_xz(A, I...)
+    @inline gather_xy(A) = _gather_xy(A, I...)
+
+    @inbounds begin
+        ε_pl = xx[I...], yy[I...], zz[I...], gather_yz(yz), gather_xz(xz), gather_xy(xy)
+        II[I...] += second_invariant_staggered(ε_pl...) * dt
+    end
+
     return nothing
 end
 
@@ -508,7 +547,7 @@ function update_stress!(
         stokes.τ.II,
         @tensor_center(stokes.τ_o),
         @strain(stokes),
-        @tensor_center(stokes.ε_pl),
+        @plastic_strain(stokes.ε_pl),
         stokes.EII_pl,
         stokes.P,
         θ,
@@ -817,7 +856,7 @@ end
         dτ_r = inv(θ_dτ + ηij * _Gdt + 1.0)
 
         # cache strain rates for center calculations
-        τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
+        τij, τij_o, εij, εij_pl = cache_tensors(τ, τ_o, ε, ε_pl, I...)
 
         # visco-elastic strain rates @ center
         εij_ve = @. εij + 0.5 * τij_o * _Gdt
@@ -828,7 +867,7 @@ end
         # yield function @ center
         F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij) && F > 0
+        τII_ij = if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
@@ -941,7 +980,7 @@ end
         dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
 
         # cache strain rates for center calculations
-        τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
+        τij, τij_o, εij, εij_pl = cache_tensors(τ, τ_o, ε, ε_pl, I...)
 
         # visco-elastic strain rates @ center
         εij_ve = @. εij + 0.5 * τij_o * _Gdt
@@ -1076,7 +1115,7 @@ end
         dτ_r = 1.0 / (θ_dτ * dt + ηij * _G + dt)
         dτ_r2 = inv(θ_dτ + ηij * _Gdt + 1.0)
         # cache strain rates for center calculations
-        τij, τij_o, εij, Δεij = cache_tensors(τ, τ_o, ε, Δε, I...)
+        τij, τij_o, εij, εij_pl, Δεij = cache_tensors(τ, τ_o, ε, ε_pl, Δε, I...)
 
         # visco-elastic strain rates @ center
         εij_ve = @. εij + 0.5 * τij_o * _Gdt

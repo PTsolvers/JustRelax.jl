@@ -247,6 +247,29 @@ end
 end
 
 """
+    @shear_center(A)
+
+Unpacks the shear components of the symmetric tensor `A`, where its components are defined in the center of the grid cells.
+Shear components are unpack following Voigt's notation.
+"""
+macro shear_center(A)
+    return quote
+        unpack_shear_center(($(esc(A))))
+    end
+end
+
+@inline function unpack_shear_center(
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 2}}
+    ) where {T}
+    return A.xy_c
+end
+@inline function unpack_shear_center(
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}
+    ) where {T}
+    return A.yz_c, A.xz_c, A.xy_c
+end
+
+"""
     @normal(A)
 
 Unpacks the normal components of the symmetric tensor `A`, where its components are defined in the staggered grid.

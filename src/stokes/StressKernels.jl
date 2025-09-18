@@ -371,7 +371,7 @@ end
 
 @parallel_indices (I...) function accumulate_tensor_kernel!(
         II, tensor::NTuple{3, T}, dt
-    ) where {N, T}
+    ) where {T}
 
     # convenience closures
     @inline gather(A) = _gather(A, I...)
@@ -386,7 +386,7 @@ end
 
 @parallel_indices (I...) function accumulate_tensor_kernel!(
         II, tensor::NTuple{6, T}, dt
-    ) where {N, T}
+    ) where {T}
     # convenience closures
     @inline gather_yz(A) = _gather_yz(A, I...)
     @inline gather_xz(A) = _gather_xz(A, I...)

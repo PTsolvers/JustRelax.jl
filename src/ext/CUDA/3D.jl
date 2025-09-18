@@ -246,7 +246,7 @@ function JR3D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor
     return _tensor_invariant!(A)
 end
 
-function JR#D.accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+function JR3D.accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
     return _accumulate_tensor!(II, A, dt)
 end
 

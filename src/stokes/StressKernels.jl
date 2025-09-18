@@ -370,14 +370,14 @@ function _accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
 end
 
 @parallel_indices (I...) function accumulate_tensor_kernel!(
-        II, tensor::NTuple{3, T}, dt
-    ) where {T}
+        II, xx, yy, xy, dt
+    )
 
     # convenience closures
     @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
-        ε_pl = tensor[1][I...], tensor[2][I...], gather(tensor[3])
+        ε_pl = xx[I...], yy[I...], gather(xy)
         II[I...] += second_invariant_staggered(ε_pl...) * dt
     end
 
@@ -385,16 +385,15 @@ end
 end
 
 @parallel_indices (I...) function accumulate_tensor_kernel!(
-        II, tensor::NTuple{6, T}, dt
-    ) where {T}
+        II, xx, yy, zz, yz, xz, xy, dt
+    )
     # convenience closures
     @inline gather_yz(A) = _gather_yz(A, I...)
     @inline gather_xz(A) = _gather_xz(A, I...)
     @inline gather_xy(A) = _gather_xy(A, I...)
 
     @inbounds begin
-        ε_pl = tensor[1][I...], tensor[2][I...], tensor[3][I...],
-            gather_yz(tensor[4]), gather_xz(tensor[5]), gather_xy(tensor[6])
+        ε_pl = xx[I...], yy[I...], zz[I...], gather_yz(yz), gather_xz(xz), gather_xy(xy)
         II[I...] += second_invariant_staggered(ε_pl...) * dt
     end
 

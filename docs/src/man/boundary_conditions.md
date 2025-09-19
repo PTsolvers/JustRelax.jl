@@ -82,7 +82,7 @@ Supported boundary conditions:
     $T = f(x_i) $ at a given point of the domain $\Omega$
 
 ## Defining the boundary conditions
-Thermal boundary conditions can be defined using the `ThermalBoundaryConditions` struct. As with the flow boundary conditions, they can be switched on and off by setting them as `true` or `false` at the appropriate boundaries. `.
+Thermal boundary conditions can be defined using the `ThermalBoundaryConditions` struct. As with the flow boundary conditions, they can be switched on and off by setting them as `true` or `false` at the appropriate boundaries.
 
 For example, if we want to have a zero-flux boundary condition 
 at the left and right boundaries, and a Dirichlet boundary condition at the top and bottom boundaries in a 2D simulation, we need to instantiate `ThermalBoundaryConditions` as:

@@ -10,7 +10,7 @@ by providing a dollar sign and the rank number.
 # Arguments
 - `dst`: The destination directory where the checkpoint file will be saved.
 - `stokes`: The stokes flow variables to be saved.
-- `thermal`: The thermal variables to be saved.
+- `thermal`: The thermal variables to be saved. (Optional)
 - `time`: The current simulation time.
 - `timestep`: The current timestep.
 - `igg`: (Optional) The IGG struct for parallel runs.
@@ -49,6 +49,18 @@ function checkpointing_jld2(dst, stokes, thermal, time, timestep, igg::IGG; kwar
     return nothing
 end
 
+function checkpointing_jld2(dst, stokes, time, timestep; kwargs...)
+    fname = checkpoint_name(dst)
+    checkpointing_jld2(dst, stokes, nothing, time, timestep, fname; kwargs...)
+    return nothing
+end
+
+function checkpointing_jld2(dst, stokes, time, timestep, igg::IGG; kwargs...)
+    fname = checkpoint_name(dst, igg)
+    checkpointing_jld2(dst, stokes, nothing, time, timestep, fname; kwargs...)
+    return nothing
+end
+
 function checkpointing_jld2(dst, stokes, thermal, time, timestep, fname::String; kwargs...)
     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
 
@@ -60,10 +72,14 @@ function checkpointing_jld2(dst, stokes, thermal, time, timestep, fname::String;
         # Build args dict dynamically
         args = Dict(
             :stokes => Array(stokes),
-            :thermal => Array(thermal),
             :time => time,
             :timestep => timestep,
         )
+
+        # Only add thermal if it's not nothing
+        if !isnothing(thermal)
+            args[:thermal] = Array(thermal)
+        end
 
         # Add any additional kwargs dynamically using their names as keys
         for (key, value) in pairs(kwargs)
@@ -89,14 +105,23 @@ Load the state of the simulation from a .jld2 file.
 
 # Returns
 - `stokes`: The loaded state of the stokes variable.
-- `thermal`: The loaded state of the thermal variable.
+- `thermal`: The loaded state of the thermal variable. Can be `nothing` if not present in the file.
 - `time`: The loaded simulation time.
 - `timestep`: The loaded time step.
+
+## Example
+```julia
+stokes, thermal, time, timestep = load_checkpoint_jld2("path/to/checkpoint.jld2")
+```
+or without thermal
+```julia
+stokes, _, time, timestep = load_checkpoint_jld2("path/to/checkpoint.jld2")
+```
 """
 function load_checkpoint_jld2(file_path)
     restart = load(file_path)  # Load the file
     stokes = restart["stokes"]  # Read the stokes variable
-    thermal = restart["thermal"]  # Read the thermal variable
+    thermal = haskey(restart, "thermal") ? restart["thermal"] : nothing  # Read thermal if present
     time = restart["time"]  # Read the time variable
     timestep = restart["timestep"]  # Read the timestep variable
     return stokes, thermal, time, timestep

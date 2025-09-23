@@ -1,11 +1,22 @@
 """
-    checkpointing_jld2(dst, stokes, thermal, time, timestep, igg)
+    checkpointing_jld2(dst, stokes, thermal, time, timestep, igg; kwargs...)
 
 Save necessary data in `dst` as a jld2 file to restart the model from the state at `time`.
 If run in parallel, the file will be named after the corresponidng rank e.g. `checkpoint0000.jld2`
 and thus can be loaded by the processor while restarting the simulation.
 If you want to restart your simulation from the checkpoint you can use load() and specify the MPI rank
 by providing a dollar sign and the rank number.
+
+# Arguments
+- `dst`: The destination directory where the checkpoint file will be saved.
+- `stokes`: The stokes flow variables to be saved.
+- `thermal`: The thermal variables to be saved.
+- `time`: The current simulation time.
+- `timestep`: The current timestep.
+- `igg`: (Optional) The IGG struct for parallel runs.
+
+## Keyword Arguments
+- `kwargs...`: Additional variables to be saved in the checkpoint file. These will be added to the base checkpoint data.
 
    # Example
     ```julia
@@ -14,7 +25,11 @@ by providing a dollar sign and the rank number.
         stokes,
         thermal,
         t,
-        igg,
+        dt,
+        igg;
+        it = 500,
+        example_vec = example_vector,
+        additional_data = some_data,
     )
 
     ```
@@ -22,32 +37,42 @@ by providing a dollar sign and the rank number.
 checkpoint_name(dst) = "$dst/checkpoint.jld2"
 checkpoint_name(dst, igg::IGG) = "$dst/checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2"
 
-function checkpointing_jld2(dst, stokes, thermal, time, timestep)
+function checkpointing_jld2(dst, stokes, thermal, time, timestep; kwargs...)
     fname = checkpoint_name(dst)
-    checkpointing_jld2(dst, stokes, thermal, time, timestep, fname)
+    checkpointing_jld2(dst, stokes, thermal, time, timestep, fname; kwargs...)
     return nothing
 end
 
-function checkpointing_jld2(dst, stokes, thermal, time, timestep, igg::IGG)
+function checkpointing_jld2(dst, stokes, thermal, time, timestep, igg::IGG; kwargs...)
     fname = checkpoint_name(dst, igg)
-    checkpointing_jld2(dst, stokes, thermal, time, timestep, fname)
+    checkpointing_jld2(dst, stokes, thermal, time, timestep, fname; kwargs...)
     return nothing
 end
 
-function checkpointing_jld2(dst, stokes, thermal, time, timestep, fname::String)
+function checkpointing_jld2(dst, stokes, thermal, time, timestep, fname::String; kwargs...)
     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
 
     # Create a temporary directory
     mktempdir() do tmpdir
         # Save the checkpoint file in the temporary directory
         tmpfname = joinpath(tmpdir, basename(fname))
-        jldsave(
-            tmpfname;
-            stokes = Array(stokes),
-            thermal = Array(thermal),
-            time = time,
-            timestep = timestep,
+
+        # Build args dict dynamically
+        args = Dict(
+            :stokes => Array(stokes),
+            :thermal => Array(thermal),
+            :time => time,
+            :timestep => timestep,
         )
+
+        # Add any additional kwargs dynamically using their names as keys
+        for (key, value) in pairs(kwargs)
+            args[key] = isnothing(value) ? nothing :
+                isa(value, AbstractArray) ? Array(value) :
+                isa(value, Tuple) ? Array.(value) : value
+        end
+
+        jldsave(tmpfname; args...)
         # Move the checkpoint file from the temporary directory to the destination directory
         return mv(tmpfname, fname; force = true)
     end

@@ -61,6 +61,27 @@ function Viscosity(ni::NTuple{N, Integer}) where {N}
     return JustRelax.Viscosity(η, η_vep, ητ)
 end
 
+
+# Principal stress
+
+function PrincipalStress(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return PrincipalStress(ni)
+end
+
+function PrincipalStress(ni::NTuple{2, Integer})
+    σ1 = @zeros(2, ni...)
+    σ2 = @zeros(2, ni...)
+    σ3 = @zeros(2, 1, 1)
+    return JustRelax.PrincipalStress(σ1, σ2, σ3)
+end
+
+function PrincipalStress(ni::NTuple{3, Integer})
+    σ1 = @zeros(3, ni...)
+    σ2 = @zeros(3, ni...)
+    σ3 = @zeros(3, ni...)
+    return JustRelax.PrincipalStress(σ1, σ2, σ3)
+end
+
 ## SymmetricTensor type
 
 function SymmetricTensor(nx::Integer, ny::Integer)

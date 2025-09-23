@@ -3,3 +3,8 @@ Ths = "Ths"
 oly = "oly"
 iy = "iy"
 pn = "pn"
+
+[default]
+extend-ignore-words-re = [
+    "(?i)normale\\s+supérieure"
+]

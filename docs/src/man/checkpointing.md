@@ -55,7 +55,7 @@ checkpointing_jld2(dst, stokes, thermal, time, dt, igg)
 
 ```julia [Additional fields]
 dst = "Your_checkpointing_directory"
-checkpointing_jld2(checkpoint, stokes, thermal, t, dt, igg; it = it, costum_field_1 = some_data, costum_field_2 = example_vector)
+checkpointing_jld2(checkpoint, stokes, thermal, t, dt, igg; it = it, custom_field_1 = some_data, custom_field_2 = example_vector)
 ```
 :::
 
@@ -88,7 +88,7 @@ stokes = data["stokes"]
 thermal = data["thermal"]
 t = data["time"]
 dt = data["dt"]
-costum_field_1 = data["costum_field_1"]
-costum_field_2 = data["costum_field_2"]
+custom_field_1 = data["custom_field_1"]
+custom_field_2 = data["custom_field_2"]
 # and so on...
 ```

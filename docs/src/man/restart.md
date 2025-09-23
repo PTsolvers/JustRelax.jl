@@ -2,7 +2,7 @@
 
 To restart a simulation from a previously saved checkpoint file, you can make use of the checkpointing functions described in the [Checkpointing documentation](./checkpointing.md). Depending on the file format you used to save your checkpoint (HDF5 or JLD2), you can load the saved state of your simulation using the corresponding loading function.
 
-In this example, we will demonstrate how to set up a script to restart a simulation from a JLD2 checkpoint file as we can save the entire structurs of the `StokesArrays` and `ThermalArrays` which makes it easier to restart the simulation. We will assume that you have already saved a checkpoint file using the `checkpointing_jld2` function for the example of a 2D subduction model.
+In this example, we will demonstrate how to set up a script to restart a simulation from a JLD2 checkpoint file as we can save the entire structures of the `StokesArrays` and `ThermalArrays` which makes it easier to restart the simulation. We will assume that you have already saved a checkpoint file using the `checkpointing_jld2` function for the example of a 2D subduction model.
 Ideally, one does not need to change much in the initial script used to start the simulation from scratch. The main difference is that instead of initializing the `StokesArrays` and `ThermalArrays` from scratch, we will load them from the checkpoint file.
 For a detailed description of the 2D subduction model setup, please refer to the [2D subduction documentation](./subduction2D/subduction2D.md). The following example can be found [here](https://github.com/PTsolvers/JustRelax.jl/blob/d63ca8f08860859700913b575c9befc33d5c4f2a/miniapps/subduction/2D/Subduction2D_restart).
 

@@ -10,7 +10,7 @@ by providing a dollar sign and the rank number.
 # Arguments
 - `dst`: The destination directory where the checkpoint file will be saved.
 - `stokes`: The stokes flow variables to be saved.
-- `thermal`: The thermal variables to be saved. (Optional)
+- `thermal`: (Optional) The thermal variables to be saved.
 - `time`: The current simulation time.
 - `timestep`: The current timestep.
 - `igg`: (Optional) The IGG struct for parallel runs.
@@ -108,10 +108,11 @@ Load the state of the simulation from a .jld2 file.
 - `thermal`: The loaded state of the thermal variable. Can be `nothing` if not present in the file.
 - `time`: The loaded simulation time.
 - `timestep`: The loaded time step.
+- `igg`: The IGG struct if needed for parallel runs.
 
 ## Example
 ```julia
-stokes, thermal, time, timestep = load_checkpoint_jld2("path/to/checkpoint.jld2")
+stokes, thermal, time, timestep = load_checkpoint_jld2("path/to/checkpoint.jld2", igg)
 ```
 or without thermal
 ```julia
@@ -119,7 +120,18 @@ stokes, _, time, timestep = load_checkpoint_jld2("path/to/checkpoint.jld2")
 ```
 """
 function load_checkpoint_jld2(file_path)
-    restart = load(file_path)  # Load the file
+    fname = checkpoint_name(file_path)
+    restart = load(fname)  # Load the file
+    stokes = restart["stokes"]  # Read the stokes variable
+    thermal = haskey(restart, "thermal") ? restart["thermal"] : nothing  # Read thermal if present
+    time = restart["time"]  # Read the time variable
+    timestep = restart["timestep"]  # Read the timestep variable
+    return stokes, thermal, time, timestep
+end
+
+function load_checkpoint_jld2(file_path, igg::IGG)
+    fname = checkpoint_name(file_path, igg)
+    restart = load(fname)  # Load the file
     stokes = restart["stokes"]  # Read the stokes variable
     thermal = haskey(restart, "thermal") ? restart["thermal"] : nothing  # Read thermal if present
     time = restart["time"]  # Read the time variable

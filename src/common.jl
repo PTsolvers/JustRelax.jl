@@ -54,7 +54,7 @@ include("phases/phases.jl")
 export fn_ratio
 
 include("phases/PhaseRatios.jl")
-export update_phase_ratios!
+export update_phase_ratios_2D!, update_phase_ratios_3D!
 
 include("rheology/BuoyancyForces.jl")
 export compute_ρg!

@@ -491,9 +491,13 @@ end
 
 # Phase ratios with arrays
 function JR3D.update_phase_ratios!(
-        phase_ratios::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend, T}, phase_arrays, xci, xvi, phases
-    ) where {T <: AbstractArray}
-    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays, xci)
+        phase_ratios::JustPIC.PhaseRatios{AMDGPUBackend, T},
+        phase_arrays::NTuple{N, ROCArray{U, 3}},
+        xci,
+        xvi
+    ) where {T <: AbstractMatrix, N, U}
+
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
 
     # velocity nodes
@@ -507,87 +511,5 @@ function JR3D.update_phase_ratios!(
     phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, xci, :xz)
     return nothing
 end
-
-# function JR3D.update_phase_ratios!(
-#         phase_ratios::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend, T}, phase_arrays, xci, xvi
-#     ) where {T <: AbstractArray}
-#     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays, xci)
-#     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
-
-#     # velocity nodes
-#     phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
-#     phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, xci, :y)
-#     phase_ratios_face_from_arrays!(phase_ratios.Vz, phase_arrays, xci, :z)
-
-#     # shear stress nodes
-#     phase_ratios_midpoint_from_centers!(phase_ratios.xy, phase_arrays, xci, :xy)
-#     phase_ratios_midpoint_from_centers!(phase_ratios.yz, phase_arrays, xci, :yz)
-#     phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, xci, :xz)
-#     return nothing
-# end
-
-
-# function JR3D.phase_ratios_center_from_arrays!(phase_ratios::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend}, phase_arrays::NTuple{N, AbstractArray}, xci) where {N}
-#     ni = size(first(phase_arrays))
-#     di = compute_dx(xci)
-
-#     @parallel (@idx ni) phase_ratios_center_from_arrays_kernel!(
-#         phase_ratios.center, phase_arrays, xci, di
-#     )
-#     return nothing
-# end
-
-# function JR3D.phase_ratios_vertex_from_arrays!(
-#         phase_ratios::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend}, phase_arrays::NTuple{N, AbstractArray}, xvi::NTuple{ND}, xci::NTuple{ND}
-#     ) where {N, ND}
-
-#     ni = size(first(phase_arrays)) .+1
-#     di = compute_dx(xvi)
-
-#     @parallel (@idx ni) phase_ratios_vertex_from_arrays_kernel!(
-#         phase_ratios.vertex, phase_arrays, xci, xvi, di
-#     )
-#     return nothing
-# end
-
-# function JR3D.phase_ratios_face_from_arrays!(
-#         phase_face::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend}, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, dimension::Symbol
-#     ) where {N, ND}
-#     ni = size(first(phase_arrays))  # Cell grid size
-#     face_size = size(phase_face)  # Face grid size (including phase dimension)
-#     # ni_face = face_size[2:end]  # Face grid size excluding phase dimension
-#     di = compute_dx(xci)
-#     offsets = face_offset(Val(ND), dimension)
-
-#     @parallel (@idx ni) phase_ratios_face_from_arrays_kernel!(
-#         phase_face, phase_arrays, xci, di, offsets, ni
-#     )
-#     return nothing
-# end
-
-# function JR3D.phase_ratios_midpoint_from_arrays!(
-#         phase_midpoints::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend}, phase_arrays::NTuple{N, AbstractArray}, xci, dimension
-#     ) where {N}
-#     ni = size(first(phase_arrays))  # Cell grid size
-#     midpoint_size = size(phase_midpoints)  # Midpoint grid size (including phase dimension)
-#     ni_midpoint = midpoint_size[2:end]  # Midpoint grid size excluding phase dimension
-#     di = compute_dx(xci)
-
-#     # Define staggered offsets for midpoint grids
-#     offsets = if dimension === :xy
-#         (1, 1, 0)  # Staggered in x and y
-#     elseif dimension === :yz
-#         (0, 1, 1)  # Staggered in y and z
-#     elseif dimension === :xz
-#         (1, 0, 1)  # Staggered in x and z
-#     else
-#         throw("Unknown dimension: $(dimension). Valid dimensions are :xy, :yz, :xz")
-#     end
-
-#     @parallel (@idx ni_midpoint) phase_ratios_midpoint_from_arrays_kernel!(
-#         phase_midpoints, phase_arrays, xci, di, offsets, ni
-#     )
-#     return nothing
-# end
 
 end

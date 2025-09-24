@@ -482,65 +482,17 @@ function JR2D.update_phases_given_markerchain!(
 end
 
 # Phase ratios with arrays
-function JR2D.update_phase_ratios!(
-        phase_ratios::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend, T}, phase_arrays, xci, xvi
-    ) where {T <: AbstractMatrix}
-    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays, xci)
+function JR2D.update_phase_ratios_2D!(
+        phase_ratios::JustPIC.PhaseRatios{AMDGPUBackend, T},
+        phase_arrays::NTuple{N, ROCArray{U, 2}},
+        xci,
+        xvi
+    ) where {T <: AbstractMatrix, N, U}
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
     # velocity nodes
     phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
     phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, xci, :y)
     return nothing
 end
-
-# function JR2D.update_phase_ratios!(
-#         phase_ratios::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend, T}, phase_arrays, xci, xvi
-#     ) where {T <: AbstractMatrix}
-#     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays, xci)
-#     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
-#     # velocity nodes
-#     phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
-#     phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, xci, :y)
-#     return nothing
-# end
-
-
-# function JR2D.phase_ratios_center_from_arrays!(phase_ratios::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend}, phase_arrays, xci) where {N}
-#     ni = size(first(phase_arrays))
-#     di = compute_dx(xci)
-
-#     @parallel (@idx ni) phase_ratios_center_from_arrays_kernel!(
-#         phase_ratios.center, phase_arrays, xci, di
-#     )
-#     return nothing
-# end
-
-# function JR2D.phase_ratios_vertex_from_arrays!(
-#         phase_ratios::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend}, phase_arrays::NTuple{N, AbstractMatrix}, xvi::NTuple{ND}, xci::NTuple{ND}
-#     ) where {N, ND}
-
-#     ni = size(first(phase_arrays)) .+1
-#     di = compute_dx(xvi)
-
-#     @parallel (@idx ni) phase_ratios_vertex_from_arrays_kernel!(
-#         phase_ratios.vertex, phase_arrays, xci, xvi, di
-#     )
-#     return nothing
-# end
-
-# function JR2D.phase_ratios_face_from_arrays!(
-#         phase_face::JustPIC.PhaseRatios{JustPIC.AMDGPUBackend}, phase_arrays::NTuple{N, AbstractMatrix}, xci::NTuple{ND}, dimension::Symbol
-#     ) where {N, ND}
-#     ni = size(first(phase_arrays))  # Cell grid size
-#     face_size = size(phase_face)  # Face grid size (including phase dimension)
-#     # ni_face = face_size[2:end]  # Face grid size excluding phase dimension
-#     di = compute_dx(xci)
-#     offsets = face_offset(Val(ND), dimension)
-
-#     @parallel (@idx ni) phase_ratios_face_from_arrays_kernel!(
-#         phase_face, phase_arrays, xci, di, offsets, ni
-#     )
-#     return nothing
-# end
-
 end

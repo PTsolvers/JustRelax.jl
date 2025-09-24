@@ -29,7 +29,7 @@ const backend = @static if isCUDA
 else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -182,7 +182,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     clamp!(phases, 1.0, 2.0) # clamp phases to 1.0 and 2.0
     clamp!(phases_blob, 0.0, 1.0) # clamp
     clamp!(phases_bg, 0.0, 1.0) # clamp phases_bg to 0.0 and 1.0
-    update_phase_ratios!(phase_ratios, (phases_bg, phases_blob), xci, xvi)
+    update_phase_ratios_2D!(phase_ratios, (phases_bg, phases_blob), xci, xvi)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
@@ -248,17 +248,46 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     clamp!(phases_bg, 0.0, 1.0) # clamp phases_bg to 0.0 and 1
 
     # update phase ratios
-    update_phase_ratios!(phase_ratios, (phases_bg, phases_blob), xci, xvi)
+    update_phase_ratios_2D!(phase_ratios, (phases_bg, phases_blob), xci, xvi)
 
-
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni...), P = stokes.P))
     # Plotting ---------------------
-    f, _, h = heatmap(Array(velocity), colormap = :vikO)
-    Colorbar(f[1, 2], h)
-    pp = [argmax(p) for p in Array(phase_ratios.center)]
-    f3, ax3, h3 = heatmap(xvi..., Array(pp); colormap = :roma)
-    Colorbar(f3[1, 2], h3)
+    fig = Figure(size = (1200, 1200))
+    ax1 = Axis(fig[1, 1]; aspect = DataAspect(), title = "Velocity")
+    ax2 = Axis(fig[1, 3]; aspect = DataAspect(), title = "Phase ratio center")
+    ax3 = Axis(fig[2, 1]; aspect = DataAspect(), title = "Phase ratio vertex")
+    ax4 = Axis(fig[2, 3]; aspect = DataAspect(), title = "Phase ratio Vx")
+    ax5 = Axis(fig[3, 1]; aspect = DataAspect(), title = "Phase ratio Vy")
+    ax6 = Axis(fig[3, 3]; aspect = DataAspect(), title = "Density")
 
-    display(f3)
+    pp_c = [argmax(p) for p in Array(phase_ratios.center)]
+    pp_v = [argmax(p) for p in Array(phase_ratios.vertex)]
+    pp_Vx = [argmax(p) for p in Array(phase_ratios.Vx)]
+    pp_Vy = [argmax(p) for p in Array(phase_ratios.Vy)]
+
+    h1 = heatmap!(ax1, (xvi./1e3)..., Array(velocity), colormap = :vikO)
+    Colorbar(fig[1, 2], h1)
+
+    h2 = heatmap!(ax2, (xci./1e3)..., Array(pp_c); colormap = :roma)
+    Colorbar(fig[1, 4], h2)
+
+    h3 = heatmap!(ax3, (xvi./1e3)..., Array(pp_v); colormap = :roma)
+    Colorbar(fig[2, 4], h3)
+
+    h4 = heatmap!(ax4, (xvi./1e3)..., Array(pp_Vx); colormap = :roma)
+    Colorbar(fig[2, 2], h4)
+
+    h5 = heatmap!(ax5, (xvi./1e3)..., Array(pp_Vy); colormap = :roma)
+    Colorbar(fig[3, 2], h5)
+
+    h6 = heatmap!(ax6, (xci./1e3)..., Array(ρg[2]./9.81); colormap = :lapaz)
+    Colorbar(fig[3, 4], h6)
+
+    linkaxes!(ax1, ax2, ax3, ax4, ax5)
+    # f3, ax3, h3 = heatmap(xvi..., Array(pp_c); colormap = :roma)
+    # Colorbar(f3[1, 2], h3)
+
+    display(fig)
     it += 1
     @show it
     # ------------------------------

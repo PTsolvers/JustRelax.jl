@@ -492,8 +492,11 @@ end
 # Phase ratios with arrays
 
 function JR3D.update_phase_ratios!(
-        phase_ratios::JustPIC.PhaseRatios{CUDABackend, T}, phase_arrays, xci, xvi, phases
-    ) where {T <: AbstractArray}
+        phase_ratios::JustPIC.PhaseRatios{CUDABackend, T},
+        phase_arrays::NTuple{N, CuArray{U, 3}},
+        xci,
+        xvi
+    ) where {T <: AbstractMatrix, N, U}
 
     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)

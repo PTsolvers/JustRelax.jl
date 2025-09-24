@@ -20,7 +20,7 @@ phase_arrays = (phase_1, phase_2)
 update_phase_ratios!(phase_ratios, phase_arrays, xci, xvi)
 ```
 """
-function update_phase_ratios!(
+function update_phase_ratios_2D!(
         phase_ratios::JustPIC.PhaseRatios{B, T}, phase_arrays::NTuple{N, AbstractMatrix}, xci, xvi
     ) where {B, T <: AbstractMatrix, N}
 
@@ -56,8 +56,8 @@ phase_arrays = (phase_1, phase_2)
 update_phase_ratios!(phase_ratios, phase_arrays, xci, xvi)
 ```
 """
-function update_phase_ratios!(
-        phase_ratios::JustPIC.PhaseRatios{B, T}, phase_arrays::NTuple{N, AbstractArray}, xci, xvi
+function update_phase_ratios_3D!(
+        phase_ratios::JustPIC.PhaseRatios{B, T}, phase_arrays::NTuple{N, AbstractMatrix}, xci, xvi
     ) where {B, T <: AbstractArray, N}
 
     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
@@ -89,24 +89,25 @@ end
     ) where {N}
 
     values = ntuple(i -> phase_arrays[i][I...], Val(N))
-    total = sum(values)
 
-    # Normalize (handle case where total might be zero)
-    if total > eps(typeof(total))
-        normalized_values = clamp.(values ./ total, 0.0, 1.0)
-        # Clean up very small values (round to zero if < 1e-5)
-        cleaned_values = ntuple(i -> normalized_values[i] < 1e-5 ? zero(eltype(normalized_values)) : normalized_values[i], Val(N))
-        # Renormalize to ensure sum = 1
-        final_total = sum(cleaned_values)
-        if final_total > eps(typeof(final_total))
-            normalized_values = cleaned_values ./ final_total
-        else
-            normalized_values = ntuple(_ -> one(eltype(values)) / N, Val(N))
-        end
-    else
-        # If all values are zero, distribute equally
-        normalized_values = ntuple(_ -> one(eltype(values)) / N, Val(N))
+    total = zero(eltype(values[1]))
+    for i in 1:N
+        total += values[i]
     end
+
+    # Normalize
+    normalized_values = ntuple(i -> values[i] / total, Val(N))
+    # Manual clamping
+    normalized_values = ntuple(i -> min(max(normalized_values[i], 0.0), 1.0), Val(N))
+    # Clean up very small values (round to zero if < 1e-5)
+    cleaned_values = ntuple(i -> normalized_values[i] < 1.0e-5 ? zero(eltype(normalized_values)) : normalized_values[i], Val(N))
+    # Renormalize to ensure sum = 1
+    final_total = zero(eltype(values[1]))  # Fixed: was 'value[1]'
+    for i in 1:N
+        final_total += cleaned_values[i]
+    end
+
+    normalized_values = ntuple(i -> cleaned_values[i] / final_total, Val(N))
 
     # Update phase ratios array
     for k in 1:N
@@ -116,6 +117,9 @@ end
     return nothing
 end
 
+## ============================================================================
+## VERTEX VALUES
+## ============================================================================
 
 function phase_ratios_vertex_from_arrays!(
         phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractArray}, xvi::NTuple{ND}, xci::NTuple{ND}
@@ -141,6 +145,7 @@ end
         total_weight = zero(T)
         w_vals = ntuple(_ -> zero(T), Val(N))
         x_v, y_v = cell_vertex
+
         for offset₁ in -1:0, offset₂ in -1:0
             i_cell = I[1] + offset₁
             j_cell = I[2] + offset₂
@@ -151,6 +156,7 @@ end
                 wy = 1.0 - abs(y_v - y_c) / di[2]
                 weight = wx * wy
                 total_weight += weight
+
                 for k in 1:N
                     phase_val = phase_arrays[k][i_cell, j_cell]
                     w_vals = Base.setindex(w_vals, w_vals[k] + weight * phase_val, k)
@@ -158,20 +164,17 @@ end
             end
         end
         # Normalize and clamp only once at the end
-        if total_weight > eps(T)
-            w = w_vals ./ total_weight
-        else
-            w = ntuple(_ -> one(T) / N, Val(N))
-        end
-        w = clamp.(w, zero(T), one(T))
+        w = ntuple(i -> w_vals[i] / total_weight, Val(N))
+        w = ntuple(i -> min(max(w[i], zero(T)), one(T)), Val(N))
         # Clean up very small values
         w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
-        total_phases = sum(w)
-        if total_phases > eps(T)
-            w = w ./ total_phases
-        else
-            w = ntuple(_ -> one(T) / N, Val(N))
+        total_phases = zero(T)
+        for i in 1:N
+            total_phases += w[i]
         end
+
+        w = ntuple(i -> w[i] / total_phases, Val(N))
+
     elseif ND == 3
         ni = size(first(phase_arrays))
         w_vals = ntuple(_ -> zero(T), Val(N))
@@ -195,21 +198,18 @@ end
             end
             end
         end
+
         # Normalize and clamp only once at the end
-        if total_weight > eps(T)
-            w = w_vals ./ total_weight
-        else
-            w = ntuple(_ -> one(T) / N, Val(N))
-        end
-        w = clamp.(w, zero(T), one(T))
+        w = ntuple(i -> w_vals[i] / total_weight, Val(N))
+        w = ntuple(i -> min(max(w[i], zero(T)), one(T)), Val(N))
         # Clean up very small values
         w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
-        total_phases = sum(w)
-        if total_phases > eps(T)
-            w = w ./ total_phases
-        else
-            w = ntuple(_ -> one(T) / N, Val(N))
+        total_phases = zero(T)
+        for i in 1:N
+            total_phases += w[i]
         end
+
+        w = ntuple(i -> w[i] / total_phases, Val(N))
     end
     # Write to vertex grid
     for ip in cellaxes(ratio_vertices)
@@ -218,6 +218,9 @@ end
     return nothing
 end
 
+## ============================================================================
+## FACE VALUES
+## ============================================================================
 
 function phase_ratios_face_from_arrays!(
         phase_face, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, dimension::Symbol
@@ -275,21 +278,20 @@ end
     end
 
     # Normalize and clamp only once at the end
-    if total_weight > eps(T)
-        w = w ./ total_weight
-    else
-        w = ntuple(_ -> one(T) / N, Val(N))
-    end
-    w = clamp.(w, zero(T), one(T))
-    # Clean up very small values (round to zero if < 1e-5)
+    w = ntuple(i -> w[i] / total_weight, Val(N))
+
+    w = ntuple(i -> min(max(w[i], zero(T)), one(T)), Val(N))
+
+    # Clean up very small values
     w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
-    total_phases = sum(w)
-    if total_phases > eps(T)
-        w = w ./ total_phases
-    else
-        w = ntuple(_ -> one(T) / N, Val(N))
+
+    total_phases = zero(T)
+    for i in 1:N
+        total_phases += w[i]
     end
 
+    w = ntuple(i -> w[i] / total_phases, Val(N))
+    # Write to face grid
     for ip in cellaxes(ratio_faces)
         @index ratio_faces[ip, (I .+ offsets)...] = w[ip]
     end
@@ -298,7 +300,7 @@ end
 end
 
 ## ============================================================================
-## MIDPOINT VALUES - Analogous to phase_ratios_midpoint! (shear stress nodes)
+## MIDPOINT VALUES
 ## ============================================================================
 
 function phase_ratios_midpoint_from_arrays!(
@@ -373,20 +375,19 @@ end
     end
 
     # Normalize weights to ensure they sum to 1
-    if total_weight > eps(T)
-        w = w ./ total_weight
-    else
-        w = ntuple(_ -> one(T) / N, Val(N))
-    end
-    w = clamp.(w, zero(T), one(T))
-    # Clean up very small values (round to zero if < 1e-5)
+    w = ntuple(i -> w_vals[i] / total_weight, Val(N))
+    # Clamp it
+    w = ntuple(i -> min(max(w[i], zero(T)), one(T)), Val(N))
+    # Clean up very small values
     w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
-    total_phases = sum(w)
-    if total_phases > eps(T)
-        w = w ./ total_phases
-    else
-        w = ntuple(_ -> one(T) / N, Val(N))
+
+    total_phases = zero(T)
+    for i in 1:N
+        total_phases += w[i]
     end
+
+    w = ntuple(i -> w[i] / total_phases, Val(N))
+
     # Write to midpoint grid - use cellaxes like the original implementation
     for ip in cellaxes(ratio_midpoints)
         @index ratio_midpoints[ip, (I .+ offsets)...] = w[ip]

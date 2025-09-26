@@ -44,6 +44,10 @@ function _solve_VS!(
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
+    nRx = length(@views stokes.R.Rx[ϕ.Vx[2:end-1,:] .> 0])
+    nRy = length(@views stokes.R.Ry[ϕ.Vy[:, 2:end-1] .> 0])
+    nRP = length(@views stokes.R.RP[ϕ.center .> 0])
+
     # ~preconditioner
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
@@ -218,14 +222,20 @@ function _solve_VS!(
         iter += 1
 
         if iter % nout == 0 && iter > 1
-            errs = (
-                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
-                    length(stokes.R.Rx),
-                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
-                    length(stokes.R.Ry),
-                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) /
-                    length(@views stokes.R.RP[ϕ.center .> 0]),
+            # errs = (
+            #     norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:end-1,:] .> 0]) /
+            #         √length(stokes.R.Rx[ϕ.Vx[2:end-1,:] .> 0]),
+            #     norm_mpi(@views stokes.R.Ry[ϕ.Vy[:,2:end-1] .> 0]) /
+            #         √length(stokes.R.Ry[ϕ.Vy[:, 2:end-1] .> 0]),
+            #     norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) /
+            #         √length(@views stokes.R.RP[ϕ.center .> 0]),
+            # )
+             errs = (
+                norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:end-1,:] .> 0]) / nRx,
+                norm_mpi(@views stokes.R.Ry[ϕ.Vy[:,2:end-1] .> 0]) / nRy,
+                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) / nRP,
             )
+
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])

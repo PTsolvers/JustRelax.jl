@@ -54,24 +54,24 @@ end
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vtk = false)
-    thickness = 660e3 * m
-    η0        = 1.0e20 * Pa * s
-    CharDim   = GEO_units(;
+    thickness = 660.0e3 * m
+    η0 = 1.0e20 * Pa * s
+    CharDim = GEO_units(;
         length = thickness, viscosity = η0, temperature = 1000 * K
     )
-    li_nd     = nondimensionalize(li .* m, CharDim)
+    li_nd = nondimensionalize(li .* m, CharDim)
     origin_nd = nondimensionalize(origin .* m, CharDim)
-   
+
     # LOCAL Physical domain ------------------------------------
     ni = nx, ny, nz           # number of cells
     di = @. li_nd / (nx_g(), ny_g(), nz_g())           # grid steps
-    grid         = Geometry(ni, li_nd; origin = origin_nd)
+    grid = Geometry(ni, li_nd; origin = origin_nd)
     (; xci, xvi) = grid              # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology  = init_rheologies(CharDim)
-    dt        = nondimensionalize(10.0e3 * yr, CharDim) # diffusive CFL timestep limiter
+    rheology = init_rheologies(CharDim)
+    dt = nondimensionalize(10.0e3 * yr, CharDim) # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -95,15 +95,15 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes     = StokesArrays(backend_JR, ni)
-    pt_stokes  = PTStokesCoeffs(li_nd, di; ϵ_abs = 5.0e-3, ϵ_rel = 5.0e-3, CFL = 0.99 / √3.1)
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li_nd, di; ϵ_abs = 5.0e-3, ϵ_rel = 5.0e-3, CFL = 0.99 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend_JR, ni)
     temperature2center!(thermal)
     # ----------------------------------------------------
-    
+
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
@@ -111,7 +111,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
     # stokes.P        .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
     # Rheology
     args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    viscosity_cutoff  = nondimensionalize((1.0e18, 1.0e24) .* (Pa * s), CharDim)
+    viscosity_cutoff = nondimensionalize((1.0e18, 1.0e24) .* (Pa * s), CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # Boundary conditions
@@ -142,45 +142,48 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
 
 
     # global array
-    nx_v           = (nx - 2) * igg.dims[1]
-    ny_v           = (ny - 2) * igg.dims[2]
-    nz_v           = (nz - 2) * igg.dims[3]
+    nx_v = (nx - 2) * igg.dims[1]
+    ny_v = (ny - 2) * igg.dims[2]
+    nz_v = (nz - 2) * igg.dims[3]
     # center
-    P_v            = zeros(nx_v, ny_v, nz_v)
-    τII_v          = zeros(nx_v, ny_v, nz_v)
-    η_vep_v        = zeros(nx_v, ny_v, nz_v)
-    εII_v          = zeros(nx_v, ny_v, nz_v)
-    phases_c_v     = zeros(nx_v, ny_v, nz_v)
+    P_v = zeros(nx_v, ny_v, nz_v)
+    τII_v = zeros(nx_v, ny_v, nz_v)
+    η_vep_v = zeros(nx_v, ny_v, nz_v)
+    εII_v = zeros(nx_v, ny_v, nz_v)
+    phases_c_v = zeros(nx_v, ny_v, nz_v)
     # center nohalo
-    P_nohalo       = zeros(nx - 2, ny - 2, nz - 2)
-    τII_nohalo     = zeros(nx - 2, ny - 2, nz - 2)
-    η_vep_nohalo   = zeros(nx - 2, ny - 2, nz - 2)
-    εII_nohalo     = zeros(nx - 2, ny - 2, nz - 2)
-    phases_c_nohalo= zeros(nx - 2, ny - 2, nz - 2)
+    P_nohalo = zeros(nx - 2, ny - 2, nz - 2)
+    τII_nohalo = zeros(nx - 2, ny - 2, nz - 2)
+    η_vep_nohalo = zeros(nx - 2, ny - 2, nz - 2)
+    εII_nohalo = zeros(nx - 2, ny - 2, nz - 2)
+    phases_c_nohalo = zeros(nx - 2, ny - 2, nz - 2)
     # vertex
-    Vxv_v          = zeros(nx_v, ny_v, nz_v)
-    Vyv_v          = zeros(nx_v, ny_v, nz_v)
-    Vzv_v          = zeros(nx_v, ny_v, nz_v)
-    T_v            = zeros(nx_v, ny_v, nz_v)
+    Vxv_v = zeros(nx_v, ny_v, nz_v)
+    Vyv_v = zeros(nx_v, ny_v, nz_v)
+    Vzv_v = zeros(nx_v, ny_v, nz_v)
+    T_v = zeros(nx_v, ny_v, nz_v)
     # vertex nohalo
-    Vxv_nohalo     = zeros(nx - 2, ny - 2, nz - 2)
-    Vyv_nohalo     = zeros(nx - 2, ny - 2, nz - 2)
-    Vzv_nohalo     = zeros(nx - 2, ny - 2, nz - 2)
-    T_nohalo       = zeros(nx - 2, ny - 2, nz - 2)
+    Vxv_nohalo = zeros(nx - 2, ny - 2, nz - 2)
+    Vyv_nohalo = zeros(nx - 2, ny - 2, nz - 2)
+    Vzv_nohalo = zeros(nx - 2, ny - 2, nz - 2)
+    T_nohalo = zeros(nx - 2, ny - 2, nz - 2)
 
     xci_v = (
         LinRange(
-            dimensionalize_and_strip(minimum(x_global), km, CharDim), dimensionalize_and_strip(maximum(x_global), km, CharDim), nx_v),
+            dimensionalize_and_strip(minimum(x_global), km, CharDim), dimensionalize_and_strip(maximum(x_global), km, CharDim), nx_v
+        ),
         LinRange(
-            dimensionalize_and_strip(minimum(y_global), km, CharDim), dimensionalize_and_strip(maximum(y_global), km, CharDim), ny_v),
+            dimensionalize_and_strip(minimum(y_global), km, CharDim), dimensionalize_and_strip(maximum(y_global), km, CharDim), ny_v
+        ),
         LinRange(
-            dimensionalize_and_strip(minimum(z_global), km, CharDim), dimensionalize_and_strip(maximum(z_global), km, CharDim), nz_v),
+            dimensionalize_and_strip(minimum(z_global), km, CharDim), dimensionalize_and_strip(maximum(z_global), km, CharDim), nz_v
+        ),
     )
 
     # Time loop
     t, it = 0.0, 0
 
-    t_max = nondimensionalize(10 * Myr, CharDim) 
+    t_max = nondimensionalize(10 * Myr, CharDim)
     while t < t_max
 
         # Stokes solver ----------------
@@ -233,12 +236,12 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
         #MPI gathering
         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
         #centers
-        @views P_nohalo         .= Array(stokes.P[2:(end - 1), 2:(end - 1), 2:(end - 1)])                   # Copy data to CPU removing the halo
-        @views τII_nohalo       .= Array(stokes.τ.II[2:(end - 1), 2:(end - 1), 2:(end - 1)])               # Copy data to CPU removing the halo
-        @views η_vep_nohalo     .= Array(stokes.viscosity.η_vep[2:(end - 1), 2:(end - 1), 2:(end - 1)])   # Copy data to CPU removing the halo
-        @views εII_nohalo       .= Array(stokes.ε.II[2:(end - 1), 2:(end - 1), 2:(end - 1)])              # Copy data to CPU removing the halo
-        @views phases_c_nohalo  .= Array(phase_center[2:(end - 1), 2:(end - 1), 2:(end - 1)])
-        gather!(P_nohalo,         P_v)
+        @views P_nohalo .= Array(stokes.P[2:(end - 1), 2:(end - 1), 2:(end - 1)])                   # Copy data to CPU removing the halo
+        @views τII_nohalo .= Array(stokes.τ.II[2:(end - 1), 2:(end - 1), 2:(end - 1)])               # Copy data to CPU removing the halo
+        @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:(end - 1), 2:(end - 1), 2:(end - 1)])   # Copy data to CPU removing the halo
+        @views εII_nohalo .= Array(stokes.ε.II[2:(end - 1), 2:(end - 1), 2:(end - 1)])              # Copy data to CPU removing the halo
+        @views phases_c_nohalo .= Array(phase_center[2:(end - 1), 2:(end - 1), 2:(end - 1)])
+        gather!(P_nohalo, P_v)
         gather!(τII_nohalo, τII_v)
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
@@ -265,17 +268,17 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
             if do_vtk
 
                 data_c = (;
-                    T      = dimensionalize_and_strip(T_v, C,CharDim),
-                    P      = dimensionalize_and_strip(P_v, Pa, CharDim),
-                    τII    = dimensionalize_and_strip(τII_v, Pa, CharDim),
-                    εII    = dimensionalize_and_strip(εII_v, s^-1, CharDim),
-                    η      = dimensionalize_and_strip(η_vep_v, Pa*s, CharDim),
+                    T = dimensionalize_and_strip(T_v, C, CharDim),
+                    P = dimensionalize_and_strip(P_v, Pa, CharDim),
+                    τII = dimensionalize_and_strip(τII_v, Pa, CharDim),
+                    εII = dimensionalize_and_strip(εII_v, s^-1, CharDim),
+                    η = dimensionalize_and_strip(η_vep_v, Pa * s, CharDim),
                     phases = phases_c_v,
                 )
                 velocity_v = (
-                    dimensionalize_and_strip(Array(Vx_v), cm/yr, CharDim),
-                    dimensionalize_and_strip(Array(Vy_v), cm/yr, CharDim),
-                    dimensionalize_and_strip(Array(Vz_v), cm/yr, CharDim),
+                    dimensionalize_and_strip(Array(Vx_v), cm / yr, CharDim),
+                    dimensionalize_and_strip(Array(Vy_v), cm / yr, CharDim),
+                    dimensionalize_and_strip(Array(Vz_v), cm / yr, CharDim),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$(it)_$(igg.me)", 6, "0")),
@@ -304,10 +307,10 @@ let
     end
 
     # GLOBAL Physical domain ------------------------------------
-    x_global = range(-3960, 500, nx_g());
-    y_global = range(0, 2640, ny_g());
+    x_global = range(-3960, 500, nx_g())
+    y_global = range(0, 2640, ny_g())
     air_thickness = 0.0
-    z_global = range(-660, air_thickness, nz_g());
+    z_global = range(-660, air_thickness, nz_g())
     origin = (x_global[1], y_global[1], z_global[1])
     li = (abs(last(x_global) - first(x_global)), abs(last(y_global) - first(y_global)), abs(last(z_global) - first(z_global)))
 
@@ -319,5 +322,5 @@ let
     # (Path)/folder where output data and figures are stored
     figdir = "Subduction3D_$(nx_g())x$(ny_g())x$(nz_g())"
 
-    main3D(x_global, y_global, z_global, li_GMG, origin_GMG, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+    main3D(x_global, y_global, z_global, li_GMG, origin_GMG, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk)
 end

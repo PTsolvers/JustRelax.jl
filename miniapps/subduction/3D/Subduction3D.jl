@@ -54,29 +54,29 @@ end
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vtk = false)
 
-    thickness = 660e3 * m
-    η0        = 1.0e20 * Pa * s
-    CharDim   = GEO_units(;
+    thickness = 660.0e3 * m
+    η0 = 1.0e20 * Pa * s
+    CharDim = GEO_units(;
         length = thickness, viscosity = η0, temperature = 1000 * K
     )
-    li_nd     = nondimensionalize(li .* m, CharDim)
+    li_nd = nondimensionalize(li .* m, CharDim)
     origin_nd = nondimensionalize(origin .* m, CharDim)
-   
+
     # Physical domain ------------------------------------
-    ni           = nx, ny, nz        # number of cells
-    di           = @. li_nd / ni        # grid steps
-    grid         = Geometry(ni, li_nd; origin = origin_nd)
+    ni = nx, ny, nz        # number of cells
+    di = @. li_nd / ni        # grid steps
+    grid = Geometry(ni, li_nd; origin = origin_nd)
     (; xci, xvi) = grid              # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology  = init_rheologies(CharDim)
-    dt        = nondimensionalize(10.0e3 * yr, CharDim) # diffusive CFL timestep limiter
+    rheology = init_rheologies(CharDim)
+    dt = nondimensionalize(10.0e3 * yr, CharDim) # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 150, 175, 125
-    particles      = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
@@ -85,36 +85,36 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 
     # Assign particles phases anomaly
     phases_device = PTArray(backend_JR)(phases_GMG)
-    phase_ratios  = PhaseRatios(backend_JP, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, phases_device, particles, xvi)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes     = StokesArrays(backend_JR, ni)
-    pt_stokes  = PTStokesCoeffs(li_nd, di; ϵ_abs = 5.0e-3, ϵ_rel = 5.0e-3, CFL = 0.99 / √3.1)
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li_nd, di; ϵ_abs = 5.0e-3, ϵ_rel = 5.0e-3, CFL = 0.99 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal    = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend_JR, ni)
     temperature2center!(thermal)
     # ----------------------------------------------------
-    
+
     # Buoyancy forces
-    ρg         = ntuple(_ -> @zeros(ni...), Val(3))
+    ρg = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
     @parallel (@idx ni) init_P!(stokes.P, ρg[3], xci[3])
     # stokes.P        .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
     # Rheology
-    args              = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    viscosity_cutoff  = nondimensionalize((1.0e18, 1.0e24) .* (Pa * s), CharDim)
+    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    viscosity_cutoff = nondimensionalize((1.0e18, 1.0e24) .* (Pa * s), CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = false, front = true, back = true),
-        no_slip   = (left = false, right = false, top = false, bot = true, front = false, back = false),
+        no_slip = (left = false, right = false, top = false, bot = true, front = false, back = false),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 
@@ -136,7 +136,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 
     # Time loop
     t, it = 0.0, 0
-    t_max = nondimensionalize(10 * Myr, CharDim) 
+    t_max = nondimensionalize(10 * Myr, CharDim)
     while t < t_max
 
         # # interpolate fields from particle to grid vertices
@@ -145,7 +145,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, xvi, xci, particles)
-      
+
         # Stokes solver ----------------
         t_stokes = @elapsed begin
             out = solve!(
@@ -221,16 +221,16 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
                     phase_vertex = [argmax(p) for p in Array(phase_ratios.center)],
                 )
                 data_c = (;
-                    P   = dimensionalize_and_strip(Array(stokes.P), Pa, CharDim),
+                    P = dimensionalize_and_strip(Array(stokes.P), Pa, CharDim),
                     τII = dimensionalize_and_strip(Array(stokes.τ.II), Pa, CharDim),
                     εII = dimensionalize_and_strip(Array(stokes.ε.II), s^-1, CharDim),
-                    η   = dimensionalize_and_strip(Array(stokes.viscosity.η), Pa*s, CharDim),
+                    η = dimensionalize_and_strip(Array(stokes.viscosity.η), Pa * s, CharDim),
                     phase_center = [argmax(p) for p in Array(phase_ratios.center)],
                 )
                 velocity_v = (
-                    dimensionalize_and_strip(Array(Vx_v), cm/yr, CharDim),
-                    dimensionalize_and_strip(Array(Vy_v), cm/yr, CharDim),
-                    dimensionalize_and_strip(Array(Vz_v), cm/yr, CharDim),
+                    dimensionalize_and_strip(Array(Vx_v), cm / yr, CharDim),
+                    dimensionalize_and_strip(Array(Vy_v), cm / yr, CharDim),
+                    dimensionalize_and_strip(Array(Vz_v), cm / yr, CharDim),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -264,5 +264,5 @@ let
 
     # (Path)/folder where output data and figures are stored
     figdir = "Subduction3D"
-    main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+    main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk)
 end

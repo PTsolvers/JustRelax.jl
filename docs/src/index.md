@@ -4,7 +4,7 @@
 layout: home
 
 hero:
-  name: JustRelax.jl Docs
+  name: JustRelax.jl
   text: Solving multi-physical geodynamic problems
   tagline: A collection of iterative accelerated pseudo-transient solvers using MPI for distributed computing on GPUs or CPUs.
   actions:

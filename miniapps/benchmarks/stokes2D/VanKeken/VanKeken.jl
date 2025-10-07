@@ -189,13 +189,14 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
             )
             h=heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :lapaz)
             Colorbar(fig[1:2, 2], h; height = Relative(1.0), label = "Density", labelsize = 20, ticklabelsize = 12)
-            ax2 = Axis(fig[3, 1], aspect = 2.25, title = L"V_{RMS}", xlabel = L"Time", ylabel = L"Velocity",
+            ax2 = Axis(fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel =  L"V_{RMS}",
                 titlesize = 20,
                 yticklabelsize = 12,
                 xticklabelsize = 12,
                 xlabelsize = 12,
                 ylabelsize = 12
             )
+            ylims!(ax2, 0, 0.005)
             lines!(ax2, trms, Urms, color = :black)
 
             save(joinpath(figdir, "$(it).png"), fig)
@@ -204,8 +205,8 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
 
     end
 
-    # df = DataFrame(t=trms, Urms=Urms)
-    # CSV.write(joinpath(figdir, "Urms.csv"), df)
+    df = DataFrame(t=trms, Urms=Urms)
+    CSV.write(joinpath(figdir, "Urms_$(nx)x$(ny).csv"), df)
 
     return nothing
 end

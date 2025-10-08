@@ -4,26 +4,31 @@ using StaticArrays
 function update_phases_given_markerchain!(
         phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase
     ) where {backend}
+    update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, ())
+end
+
+function update_phases_given_markerchain!(
+        phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase, args::NTuple{N, Any}
+    ) where {backend, N}
     (; coords, index) = particles
     dy = di[2]
     return @parallel (1:size(index, 1)) _update_phases_given_markerchain!(
-        phase, coords, index, chain.coords, chain.cell_vertices, origin, dy, air_phase
+        phase, coords, index, chain.coords, chain.cell_vertices, origin, dy, air_phase, args
     )
 end
 
 @parallel_indices (icell) function _update_phases_given_markerchain!(
-        phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase
-    )
+        phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, args::NTuple{N, Any}
+    ) where N
     _update_phases_given_markerchain_kernel!(
-        phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell
+        phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell, args
     )
     return nothing
 end
 
 function _update_phases_given_markerchain_kernel!(
-        phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell
-    )
-    T = eltype(eltype(phase))
+        phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell, args::NTuple{N, Any}
+    ) where {N}
     chain_yi = @cell chain_coords[2][icell]
     min_cell_j, max_cell_j = find_minmax_cell_indices(chain_yi, origin[2], dy)
     min_cell_j = max(1, min_cell_j - 10)
@@ -43,19 +48,28 @@ function _update_phases_given_markerchain_kernel!(
             above = is_above_chain(xq, yq, chain_coords, cell_vertices)
             # if the particle is above the surface and the phase is not air, set the phase to air
             if above && phaseq != air_phase
-                @index phase[ip, icell, j] = T(air_phase)
-                # @index coords[1][ip, icell, j] = NaN
-                # @index coords[2][ip, icell, j] = NaN
-                # @index index[ip, icell, j] = false
+                # @index phase[ip, icell, j] = T(air_phase)
+                @index coords[1][ip, icell, j] = NaN
+                @index coords[2][ip, icell, j] = NaN
+                @index index[ip, icell, j] = false
+
+                for argᵢ in args
+                    @index argᵢ[ip, icell, j] = NaN
+                end
+
             end
             # if the particle is above the surface and the phase is air, set the phase to the closes rock phase
             if !above && phaseq == air_phase
-                @index phase[ip, icell, j] = closest_phase(
-                    coords, (xq, yq), index, ip, phase, air_phase, icell, j
-                )
-                # @index coords[1][ip, icell, j] = NaN
-                # @index coords[2][ip, icell, j] = NaN
-                # @index index[ip, icell, j] = false
+                # @index phase[ip, icell, j] = closest_phase(
+                #     coords, (xq, yq), index, ip, phase, air_phase, icell, j
+                # )
+                @index coords[1][ip, icell, j] = NaN
+                @index coords[2][ip, icell, j] = NaN
+                @index index[ip, icell, j] = false
+
+                for argᵢ in args
+                    @index argᵢ[ip, icell, j] = NaN
+                end
             end
         end
     end

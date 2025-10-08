@@ -4,7 +4,7 @@ using StaticArrays
 function update_phases_given_markerchain!(
         phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase
     ) where {backend}
-    update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, ())
+    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, ())
 end
 
 function update_phases_given_markerchain!(
@@ -19,7 +19,7 @@ end
 
 @parallel_indices (icell) function _update_phases_given_markerchain!(
         phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, args::NTuple{N, Any}
-    ) where N
+    ) where {N}
     _update_phases_given_markerchain_kernel!(
         phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell, args
     )

@@ -449,7 +449,7 @@ function JR2D.update_phases_given_markerchain!(
         origin,
         di,
         air_phase,
-    ) where N
+    ) where {N}
     return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, ())
 end
 
@@ -461,7 +461,7 @@ function JR2D.update_phases_given_markerchain!(
         di,
         air_phase,
         args::NTuple{N, Any},
-    ) where N
+    ) where {N}
     return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, args)
 end
 

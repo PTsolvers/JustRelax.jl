@@ -27,7 +27,7 @@ function _compute_τ_nonlinear!(
     # get plastic parameters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
 
-    # yield stess (GeoParams could be used here...)
+    # yield stress (GeoParams could be used here...)
     τy = @inbounds max(C * cosϕ + P[I...] * sinϕ, 0)
 
     # check if yielding; if so, compute plastic strain rate (λdQdτ),

@@ -223,7 +223,18 @@ inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
 update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 ```
 
-6. **Optional:** Save data as VTK to visualize it later with [ParaView](https://www.paraview.org/)
+6. **Optional:** Save checkpoint every 10 time steps
+Saving the particles will generate a lot of data so you might want to do this less frequently depending on your model size.
+```julia
+if rem(it, 10) == 0
+    checkpoint = joinpath(figdir, "checkpoint")
+    take(checkpoint)
+    checkpointing_jld2(checkpoint, stokes, thermal, t, dt, igg; it = it)
+    checkpointing_particles(checkpoint, particles, igg.me; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, t = t, dt = dt, it = it)
+end
+```
+
+7. **Optional:** Save data as VTK to visualize it later with [ParaView](https://www.paraview.org/)
 ```julia
 Vx_v = @zeros(ni.+1...)
 Vy_v = @zeros(ni.+1...)

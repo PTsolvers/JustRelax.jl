@@ -23,7 +23,7 @@ module JustRelax2D
 
     import JustRelax: normal_stress, shear_stress, shear_vorticity
 
-    import JustPIC._2D: numphases, nphases
+    import JustPIC._2D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
 
     __init__() = @init_parallel_stencil(Threads, Float64, 2)
 
@@ -60,7 +60,7 @@ module JustRelax3D
         apply_dirichlet!
     import JustRelax: normal_stress, shear_stress, shear_vorticity
 
-    import JustPIC._3D: numphases, nphases
+    import JustPIC._3D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
 
     __init__() = @init_parallel_stencil(Threads, Float64, 3)
 

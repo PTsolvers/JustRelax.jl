@@ -442,7 +442,6 @@ function JR2D.rotate_stress!(
 end
 
 # marker chain
-
 function JR2D.update_phases_given_markerchain!(
         phase,
         chain::MarkerChain{CUDABackend},
@@ -451,7 +450,19 @@ function JR2D.update_phases_given_markerchain!(
         di,
         air_phase,
     )
-    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
+    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, ())
+end
+
+function JR2D.update_phases_given_markerchain!(
+        phase,
+        chain::MarkerChain{CUDABackend},
+        particles::Particles{CUDABackend},
+        origin,
+        di,
+        air_phase,
+        args::NTuple{N, Any},
+    ) where {N}
+    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, args)
 end
 
 end

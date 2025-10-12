@@ -8,3 +8,4 @@ pn = "pn"
 extend-ignore-words-re = [
     "(?i)normale\\s+supérieure"
 ]
+nd = "nd"

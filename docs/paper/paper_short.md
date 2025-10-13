@@ -59,29 +59,17 @@ Most of JustRelax.jl's core dependencies are fully written in the [Julia program
 
 # Statement of Need
 
-Computational geodynamics is an important tool for simulating and investigating Earth's complex multi-physics processes across different temporal and spatial scales. Running these simulations is computationally expensive which requires numerical methods that can efficiently solve the governing equations and resolving large and sharp contrasts in physical properties, and highly non-linear rheologies. In the past decades, the computational geodynamics community has developed an extensive set of software tools that have undoubtedly improved our understanding of Earth's dynamics. Most of these codes employ different implementations of either staggered grid finite difference methods (e.g. I3ELVIS [@gerya2015plate], StagYY [@stagyy], [LaMEM](https://github.com/UniMainzGeo/LaMEM/) [@lamem]) or finite element methods (e.g. [CITCOM-S](https://github.com/geodynamics/citcoms) [@citcom], [ASPECT](https://github.com/geodynamics/aspect) [@aspect], [pTatin3D](https://bitbucket.org/ptatin/ptatin3d/src/master/) [@ptatin], [Underworld](https://github.com/underworldcode/underworld2) [@underworld]) to solve the Stokes equations. Nonetheless, these existing geodynamic modeling tools face several critical challenges:
+Simulating Earth's thermo-mechanical evolution requires solving coupled, nonlinear Stokes and heat‑diffusion problems across large domains with sharp material contrasts, complex rheologies and long time scales. These calculations are computationally demanding and traditionally rely on monolithic, CPU‑oriented codes built around matrix‑based linear solvers. Such designs are hard to port efficiently to modern heterogeneous HPC systems (e.g. multi‑GPU nodes).
 
-- Most codes are optimized for CPUs and distributed memory architectures, and would require from substantial-modifications to full-rewrites to be able to execute on hardware accelerators such as GPUs. This CPU-only design limits the capability of these codes to take advantage of the latest high-performance computing resources, which are evolving rapidly towards multi-GPU systems. Beyond offloading parts of the computational routines onto GPUs, existing codes mostly build upon matrix-based solvers which may scale poorly on GPUs. It is likely that different solution strategies may need to be implemented in order to deliver better scaling on GPUs and accelerators.
+JustRelax.jl addresses this gap by providing a compact, modular, GPU‑ready toolkit implemented in Julia. It implements a matrix‑free Accelerated Pseudo‑Transient (APT) solver that reduces global linear‑algebra bottlenecks and ports efficiently to accelerators, while outsorcing local material physics and advection (particle‑in‑cell) to specialized external packages. This keeps the core solver as contained as possible, makes the software more flexible. Julia’s high‑level syntax and package manager simplify installation, scripting and extension, lowering the barrier for students and researchers to prototype and test new physics.
 
-- Traditionally, geodynamic codes are written (or at least their critical bits) in statically compiled languages (to our knowledge, only C/C++ or Fortran), with very large and complex codebases that have evolved over several years or decades, which poses a steep learning curve for new users and developers. In particular for students and those without significant experience in software engineering or even basic programming skills. The static nature of these languages also limits the flexibility of code development workflows, which often involve rapid prototyping and interactive development in other interpreted languages.
-
-With JustRelax.jl, we intend to address these fundamental limitations by introducing the first HPC-ready geodynamic software fully written in Julia:
-
-- We leverage Julia's metaprogramming capabilities to generate hardware-specific code. With this, any script written by the user runs efficiently across different architectures and hardware with minimal changes.
-
-- We use a solution method which is particularly well-suited for GPU accelerators.
-
-- Compared to some legacy codes written in C/C++/Fortran, Julia's built-in package manager makes the installation of JustRelax.jl trivial, as it automatically downloads and installs all the required dependencies for any compatible operating system.
-
-- Julia is a higher-level language, with a syntax that may be familiar to Python and MATLAB users. This significantly facilitates contributions from users, while offering a performance comparable to statically compiled languages.
+In short, JustRelax.jl delivers a high‑performance, portable alternative to legacy geodynamics codes: it (i) exploits modern GPUs without extensive rewrites; (ii) avoids costly matrix assembly via matrix‑free algorithms; and (iii) promotes modularity, reproducibility and rapid development. Together with CI, scalable I/O and checkpointing, these features make JustRelax.jl practical for both exploratory studies and production‑scale simulations on modern HPC platforms.
 
 # Methods
 
 JustRelax.jl solves the compressible Stokes equations, given by the conservation of momentum and mass equations, as well as the conservation of energy equation, (e.g. [@lamem], [@aspect]). These system of equations is solved using the APT method [@Raess2022], which transforms the elliptic PDEs into damped wave equations by augmenting them with a second order pseudo-time derivative including a damping term. These pseudo-time derivative should vanish upon convergence, thus recovering the original form of the PDE. For an in-depth description of this method, we refer the reader to @Raess2022.
 
-Advection of material fields is solved in a decoupled manner using a Particle-in-Cell (PiC) [@Harlow1965] method to advect information carried by a set of Lagrangian particles, which is implemented in the [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) package. PiC is particularly well-suited for this task because it can accurately handle the advection of these fields, and it is extensively used to simulate global and regional scale geodynamic processes, e.g. StaggYY [@stagyy], LaMEM [@lamem], I3ELVIS [@i3elvis], ASPECT [@aspect], amongst others.
-
-### Parallelization
+## Parallelization
 
 The APT method in JustRelax.jl is parallelised using a hybrid shared-distributed memory architecture fashion, mainly leveraging two Julia packages:
 
@@ -99,7 +87,7 @@ JustRelax.jl features:
 
 - **Portability**: JustRelax.jl is designed to run efficiently on multiple hardware architectures, including CPUs, GPUs (CUDA and AMD), and on multi-node clusters. This portability is achieved through Julia's advanced meta-programming capabilities, which generate the code for the specific target hardware during compile or parse time. This abstraction of the hardware backend is implemented in the ParallelStencil.jl package. In the code snippet below we show how one can switch the backend to be used by simply switching on or off the `isCUDA` flag, defined at the top-level or any given script:
 
-<!-- ```julia
+```julia
 const isCUDA = true # or `false` to use the CPU backend
 # Conditional loading of CUDA.jl
 @static if isCUDA
@@ -115,11 +103,11 @@ const backend = @static if isCUDA
 else
     JustRelax.CPUBackend
 end
-``` -->
+```
 
 - **Advanced non-linear rheology**: The package supports a comprehensive suite of geologically relevant rheological models, including visco-elastic, visco-elasto-plastic, and non-Newtonian temperature- and pressure-dependent constitutive laws. This allows for simulations with complex Earth-like materials that are essential for modeling geological processes at a wide range of scales. All the material physics calculations that are local to a single grid point are computed in the external package [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl).
 
-- **Particle-in-cell method**: The package employs an efficient particle-in-cell approach for tracking material properties and deformation history. This method prevents numerical diffusion of compositional boundaries and allows for accurate representation of complex geological structures, rheological interfaces, and strain localization features. This is implemented in [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl).
+- **Particle-in-cell method**: The package employs an efficient particle-in-cell (as in StaggYY [@stagyy], LaMEM [@lamem], I3ELVIS [@i3elvis], ASPECT [@aspect], amongst others) approach for tracking material properties and deformation history. This method prevents numerical diffusion of compositional boundaries and allows for accurate representation of complex geological structures, rheological interfaces, and strain localization features. This is implemented in [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl).
 
 - **Modular architecture**: JustRelax.jl is designed with a highly modular design that separates physics, numerics, and I/O components. This architecture allows users to extend the code with, for example, custom rheological models, advection schemes, or I/O tools without having to modify the core solver infrastructure, facilitating both research flexibility and code maintenance. The core dependencies of JustRelax.jl are shown in Fig. \ref{fig:dependencies}.
 
@@ -133,7 +121,7 @@ end
 
 An extensive set of benchmarks and model examples are available in the GitHub repository of [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl). Some examples such as [shear band localization](https://ptsolvers.github.io/JustRelax.jl/dev/man/ShearBands), [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/subduction2D) or the rise of a [3D plume](https://ptsolvers.github.io/JustRelax.jl/dev/man/plume3D/plume3D) are described in the [documentation](https://ptsolvers.github.io/JustRelax.jl/dev/). Here we limit ourselves to show some snapshots of the results of these examples in Fig. \ref{fig:examples}.
 
-![Model examples from the documentation: a) 2D shear band localization of a visco-elasto-viscoplastic body ($10240 \times 10240$ cells), b) 2D subduction ($512 \times 512$ cells), and c) raising of a hot plume in 3D ($128 \times 128 \times 128$ cells). All models were run in one  NVIDIA GH200 Grace Hopper GPU. \label{fig:examples}](figs/models_JOSS.png)
+![Model examples from the documentation: a) 2D shear band localization of a visco-elasto-viscoplastic body ($10240 \times 10240$ cells), b) 2D subduction ($512 \times 512$ cells), and c) raising of a hot plume in 3D ($128 \times 128 \times 128$ cells). All models were run on one NVIDIA GH200 Grace Hopper GPU. \label{fig:examples}](figs/models_JOSS.png)
 
 
 # Acknowledgments

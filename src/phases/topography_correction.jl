@@ -48,28 +48,28 @@ function _update_phases_given_markerchain_kernel!(
             above = is_above_chain(xq, yq, chain_coords, cell_vertices)
             # if the particle is above the surface and the phase is not air, set the phase to air
             if above && phaseq != air_phase
-                # @index phase[ip, icell, j] = T(air_phase)
+                for argᵢ in args
+                    @index argᵢ[ip, icell, j] = NaN
+                end
+                @index phase[ip, icell, j] = T(air_phase)
                 @index coords[1][ip, icell, j] = NaN
                 @index coords[2][ip, icell, j] = NaN
                 @index index[ip, icell, j] = false
 
-                for argᵢ in args
-                    @index argᵢ[ip, icell, j] = NaN
-                end
 
             end
             # if the particle is above the surface and the phase is air, set the phase to the closes rock phase
             if !above && phaseq == air_phase
-                # @index phase[ip, icell, j] = closest_phase(
-                #     coords, (xq, yq), index, ip, phase, air_phase, icell, j
-                # )
+                for argᵢ in args
+                    @index argᵢ[ip, icell, j] = NaN
+                end
+                @index phase[ip, icell, j] = closest_phase(
+                    coords, (xq, yq), index, ip, phase, air_phase, icell, j
+                )
                 @index coords[1][ip, icell, j] = NaN
                 @index coords[2][ip, icell, j] = NaN
                 @index index[ip, icell, j] = false
 
-                for argᵢ in args
-                    @index argᵢ[ip, icell, j] = NaN
-                end
             end
         end
     end

@@ -36,6 +36,7 @@ function _update_phases_given_markerchain_kernel!(
     cell_range = min_cell_j:max_cell_j
 
     # iterate over cells with marker chain on them
+    T = eltype(eltype(phase))
     for j in cell_range
         # iterate over particles j-th cell
         for ip in cellaxes(index)

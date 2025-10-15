@@ -220,7 +220,7 @@ function _solve!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_viscosity_τII!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
@@ -252,7 +252,7 @@ function _solve!(
             # Update buoyancy
             update_ρg!(ρg, rheology, args)
 
-            update_viscosity!(
+            update_viscosity_τII!(
                 stokes,
                 phase_ratios,
                 args,
@@ -441,7 +441,7 @@ function _solve!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_viscosity_τII!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
@@ -476,7 +476,7 @@ function _solve!(
             update_ρg!(ρg, phase_ratios, rheology, args)
 
             # Update viscosity
-            update_viscosity!(
+            update_viscosity_τII!(
                 stokes,
                 phase_ratios,
                 args,

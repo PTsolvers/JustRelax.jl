@@ -346,7 +346,7 @@ function _solve!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], rheology, args)
-    compute_viscosity!(stokes, args, rheology, viscosity_cutoff)
+    compute_viscosity_τII!(stokes, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
@@ -367,7 +367,7 @@ function _solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            update_viscosity!(
+            update_viscosity_τII!(
                 stokes, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation
             )
             compute_maxloc!(ητ, η; window = (1, 1))
@@ -548,7 +548,7 @@ function _solve!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_viscosity_τII!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
@@ -595,7 +595,7 @@ function _solve!(
                 )
             end
 
-            update_viscosity!(
+            update_viscosity_τII!(
                 stokes,
                 phase_ratios,
                 args,

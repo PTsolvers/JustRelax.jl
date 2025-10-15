@@ -87,7 +87,7 @@ function _solve_VS!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
+    compute_viscosity_τII!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
     displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
@@ -134,7 +134,7 @@ function _solve_VS!(
                 )
             end
 
-            update_viscosity!(
+            update_viscosity_τII!(
                 stokes,
                 phase_ratios,
                 args,

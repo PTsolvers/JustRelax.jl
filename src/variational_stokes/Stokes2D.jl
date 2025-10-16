@@ -44,9 +44,9 @@ function _solve_VS!(
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
-    nRx = length(@views stokes.R.Rx[ϕ.Vx[2:(end - 1), :] .> 0])
-    nRy = length(@views stokes.R.Ry[ϕ.Vy[:, 2:(end - 1)] .> 0])
-    nRP = length(@views stokes.R.RP[ϕ.center .> 0])
+    nRx = (nx_g() - 2) * (ny_g() - 1)
+    nRy = (nx_g() - 1) * (ny_g() - 2)
+    nRP = nx_g() * ny_g()
 
     # ~preconditioner
     ητ = deepcopy(η)
@@ -222,14 +222,7 @@ function _solve_VS!(
         iter += 1
 
         if iter % nout == 0 && iter > 1
-            # errs = (
-            #     norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:end-1,:] .> 0]) /
-            #         √length(stokes.R.Rx[ϕ.Vx[2:end-1,:] .> 0]),
-            #     norm_mpi(@views stokes.R.Ry[ϕ.Vy[:,2:end-1] .> 0]) /
-            #         √length(stokes.R.Ry[ϕ.Vy[:, 2:end-1] .> 0]),
-            #     norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) /
-            #         √length(@views stokes.R.RP[ϕ.center .> 0]),
-            # )
+
             errs = (
                 norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:(end - 1), :] .> 0]) / nRx,
                 norm_mpi(@views stokes.R.Ry[ϕ.Vy[:, 2:(end - 1)] .> 0]) / nRy,

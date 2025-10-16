@@ -19,7 +19,7 @@ end
     return nothing
 end
 
-@inline update_viscosity!(::LinearRheologyTrait, args::Vararg{Any, N}; relaxation = 1.0e0) where N = nothing
+@inline update_viscosity!(::LinearRheologyTrait, args::Vararg{Any, N}; relaxation = 1.0e0) where {N} = nothing
 
 @inline function update_viscosity!(
         ::NonLinearRheologyTrait,
@@ -29,12 +29,12 @@ end
         cutoff,
         fn_viscosity::F;
         relaxation = 1.0e0,
-    ) where F
+    ) where {F}
 
     fn = get_viscosity_fn(fn_viscosity)
 
     fn(stokes, args, rheology, cutoff, fn_viscosity; relaxation = relaxation)
-    
+
     return nothing
 end
 
@@ -99,7 +99,7 @@ end
         cutoff,
         fn_viscosity::F;
         relaxation = 1.0e0,
-    ) where F
+    ) where {F}
 
     fn = get_viscosity_fn(fn_viscosity)
 
@@ -131,11 +131,11 @@ function compute_viscosity!(
     return nothing
 end
 
-function compute_viscosity!(::CPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where F
+function compute_viscosity!(::CPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
     return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
 end
 
-function _compute_viscosity!(stokes::JustRelax.StokesArrays, ν, args, rheology, cutoff, fn_viscosity::F) where F
+function _compute_viscosity!(stokes::JustRelax.StokesArrays, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(
         stokes.viscosity.η, ν, @strain(stokes)..., args, rheology, cutoff, fn_viscosity
@@ -145,7 +145,7 @@ end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
         η, ν, Axx, Ayy, Axyv, args, rheology, cutoff, fn_viscosity::F
-    ) where F
+    ) where {F}
 
     # convenience closure
     Base.@propagate_inbounds @inline gather(A) = _gather(A, I...)
@@ -187,7 +187,7 @@ end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
         η, ν, AII, args, rheology, cutoff, fn_viscosity::F
-    ) where F
+    ) where {F}
     @inbounds begin
         # argument fields at local index
         args_ij = local_viscosity_args(args, I...)
@@ -260,7 +260,7 @@ function compute_viscosity!(
         air_phase,
         cutoff,
         fn_viscosity::F
-    ) where F
+    ) where {F}
     _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
 
     return nothing
@@ -275,9 +275,9 @@ function _compute_viscosity!(
         air_phase,
         cutoff,
         fn_viscosity::F
-    ) where F
+    ) where {F}
     ni = size(stokes.viscosity.η)
-    
+
     @parallel (@idx ni) compute_viscosity_kernel!(
         stokes.viscosity.η,
         ν,
@@ -334,7 +334,7 @@ end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
         η, ν, Axx, Ayy, Azz, Ayzv, Axzv, Axyv, args, rheology, cutoff, fn_viscosity::F
-    ) where F
+    ) where {F}
 
     # convenience closures
     Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)
@@ -380,7 +380,7 @@ end
         air_phase::Integer,
         cutoff,
         fn_viscosity::F
-    ) where F
+    ) where {F}
 
     # convenience closures
     Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)

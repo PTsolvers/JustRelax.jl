@@ -24,6 +24,7 @@ function _solve_VS!(
         args,
         dt,
         igg::IGG;
+        ϵ_nonlinear = Inf,
         air_phase::Integer = 0,
         iterMax = 10.0e3,
         nout = 500,
@@ -104,16 +105,17 @@ function _solve_VS!(
             update_ρg!(ρg, phase_ratios, rheology, args)
 
             # Update viscosity
-            update_viscosity!(
-                stokes,
-                phase_ratios,
-                args,
-                rheology,
-                viscosity_cutoff;
-                air_phase = air_phase,
-                relaxation = viscosity_relaxation,
-            )
-            # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
+            if err ≤ ϵ_nonlinear
+                update_viscosity!(
+                    stokes,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff;
+                    air_phase = air_phase,
+                    relaxation = viscosity_relaxation,
+                )
+            end
 
             @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
                 @strain(stokes),
@@ -140,6 +142,7 @@ function _solve_VS!(
                 phase_ratios.yz,
                 phase_ratios.xz,
                 ϕ,
+                err ≤ ϵ_nonlinear
             )
             update_halo!(stokes.τ.yz)
             update_halo!(stokes.τ.xz)

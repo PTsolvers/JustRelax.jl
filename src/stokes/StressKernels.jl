@@ -606,6 +606,7 @@ end
         phase_xy,
         phase_yz,
         phase_xz,
+        do_plasticity,
     )
     τyzv, τxzv, τxyv = τshear_v
     τyzv_old, τxzv_old, τxyv_old = τshear_ov
@@ -664,7 +665,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        if do_plasticity && is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
                 (1.0 - relλ) * λv[1][I...] +
@@ -727,7 +728,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        if do_plasticity && is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
                 (1.0 - relλ) * λv[2][I...] +
@@ -791,7 +792,7 @@ end
 
         # yield function @ vertex
         Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
+        if do_plasticity && is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
                 (1.0 - relλ) * λv[3][I...] +
@@ -828,7 +829,7 @@ end
         # yield function @ center
         F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij) && F > 0
+        if do_plasticity && is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
@@ -877,6 +878,7 @@ end
         rheology,
         phase_center,
         phase_vertex,
+        do_plasticity
     )
 
     τxyv = τshear_v[1]
@@ -916,7 +918,7 @@ end
     # yield function @ center
     Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
 
-    @inbounds if is_pl && !iszero(τIIv_ij)  && Fv > 0
+    @inbounds if do_plasticity && is_pl && !iszero(τIIv_ij)  && Fv > 0
         # stress correction @ vertex
         λv[I...] =
             @muladd (1.0 - relλ) * λv[I...] +
@@ -950,9 +952,14 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        F = @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
+        F = @inbounds  τII_ij - C * cosϕ - Pr[I...] * sinϕ
+        # if F > 0
+        #     @show do_plasticity
+        #     println("POTATO")
+        #     error()
+        # end
+        τII_ij = @inbounds if do_plasticity && is_pl && !iszero(τII_ij) && F > 0
 
-        τII_ij = @inbounds if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 @muladd (1.0 - relλ) * λ[I...] +
@@ -1010,6 +1017,7 @@ end
         phase_xy,
         phase_yz,
         phase_xz,
+        do_plasticity
     )
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
@@ -1051,7 +1059,9 @@ end
 
     # yield function @ center
     Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-    @inbounds if is_pl && !iszero(τIIv_ij) && Fv > 0
+
+    if do_plasticity && is_pl && !iszero(τIIv_ij) && Fv > 0
+
         # stress correction @ vertex
         λv[I...] =
             @muladd (1.0 - relλ) * λv[I...] +
@@ -1088,7 +1098,8 @@ end
         # yield function @ center
         F = @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-        τII_ij = @inbounds if is_pl && !iszero(τII_ij) && F > 0
+        τII_ij = if do_plasticity && is_pl && !iszero(τII_ij) && F > 0
+
             # stress correction @ center
             λ[I...] =
                 @muladd (1.0 - relλ) * λ[I...] +
@@ -1119,7 +1130,6 @@ end
 
     return nothing
 end
-
 
 Base.@propagate_inbounds @inline function clamped_indices(ni::NTuple{2, Integer}, i, j)
     nx, ny = ni

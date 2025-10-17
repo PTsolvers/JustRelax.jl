@@ -495,6 +495,7 @@ function _solve!(
         args,
         dt,
         igg::IGG;
+        ϵ_nonlinear = Inf,
         strain_increment = false,
         viscosity_cutoff = (-Inf, Inf),
         viscosity_relaxation = 1.0e-2,
@@ -551,14 +552,13 @@ function _solve!(
         Aij .= 0.0
     end
 
-
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
-        iterMin < iter && ((err / err_it1) < ϵ_rel || err < ϵ_abs) && break
+        # iterMin < iter && ((err / err_it1) < ϵ_rel && err < ϵ_abs) && break
 
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window = (1, 1))
@@ -601,15 +601,16 @@ function _solve!(
                 )
             end
 
-            update_viscosity!(
-                stokes,
-                phase_ratios,
-                args,
-                rheology,
-                viscosity_cutoff;
-                relaxation = viscosity_relaxation,
-            )
-            # end
+            if err ≤ ϵ_nonlinear
+                update_viscosity!(
+                    stokes,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff;
+                    relaxation = viscosity_relaxation,
+                )
+            end
 
             if strain_increment
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
@@ -636,7 +637,8 @@ function _solve!(
                     phase_ratios.vertex,
                     phase_ratios.xy,
                     phase_ratios.yz,
-                    phase_ratios.xz
+                    phase_ratios.xz,
+                    err ≤ ϵ_nonlinear,
                 )
             else
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
@@ -660,9 +662,9 @@ function _solve!(
                     rheology,
                     phase_ratios.center,
                     phase_ratios.vertex,
+                    err ≤ ϵ_nonlinear,
                 )
             end
-
             update_halo!(stokes.τ.xy)
 
             @hide_communication b_width begin # communication/computation overlap
@@ -715,7 +717,6 @@ function _solve!(
             push!(err_evo2, iter)
             err_it1 = maximum_mpi([norm_Rx[1], norm_Ry[1], norm_∇V[1]])
             rel_err = err / err_it1
-
             if igg.me == 0 #&& ((verbose && err > ϵ_rel) || iter == iterMax)
                 @printf(
                     "Total steps = %d, abs_err = %1.3e , rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
@@ -730,8 +731,9 @@ function _solve!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
+        if igg.me == 0 && iterMin < iter && ((err / err_it1) < ϵ_rel && err < ϵ_abs)
             println("Pseudo-transient iterations converged in $iter iterations")
+            break
         end
     end
 

@@ -424,7 +424,13 @@ function _solve!(
                 dt * free_surface,
             )
 
-            errs = maximum.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+            errs = (
+                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                    ((nx_g() - 2) * (ny_g() - 1)),
+                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                    ((nx_g() - 1) * (ny_g() - 2)),
+                norm_mpi(stokes.R.RP) / (nx_g() * ny_g()),
+            )
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
@@ -697,13 +703,13 @@ function _solve!(
                 _di...,
                 dt * free_surface,
             )
-            # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+
             errs = (
                 norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
-                    length(stokes.R.Rx),
+                    ((nx_g() - 2) * (ny_g() - 1)),
                 norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
-                    length(stokes.R.Ry),
-                norm_mpi(stokes.R.RP) / length(stokes.R.RP),
+                    ((nx_g() - 1) * (ny_g() - 2)),
+                norm_mpi(stokes.R.RP) / (nx_g() * ny_g()),
             )
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])

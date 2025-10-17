@@ -467,7 +467,7 @@ function JR2D.update_phases_given_markerchain!(
         origin,
         di,
         air_phase,
-    ) where {N}
+    )
     return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, ())
 end
 

@@ -516,7 +516,7 @@ function _solve!(
         strain_increment = false,
         viscosity_cutoff = (-Inf, Inf),
         viscosity_relaxation = 1.0e-2,
-        λ_relaxation = 1.0e0,
+        λ_relaxation = 0.2,
         iterMax = 50.0e3,
         iterMin = 1.0e2,
         free_surface = false,
@@ -724,6 +724,7 @@ function _solve!(
                 norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) * √(Acell),
                 norm_mpi(stokes.R.RP) * √(Acell),
             )
+
             # errs = (
             #     norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
             #         √((nx_g() - 2) * (ny_g() - 1)),

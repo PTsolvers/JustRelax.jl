@@ -27,7 +27,7 @@ function _solve_VS!(
         air_phase::Integer = 0,
         viscosity_cutoff = (-Inf, Inf),
         viscosity_relaxation = 1.0e-2,
-        λ_relaxation = 1.0e0,
+        λ_relaxation = 0.2,
         iterMax = 50.0e3,
         iterMin = 1.0e2,
         nout = 500,

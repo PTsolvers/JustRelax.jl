@@ -415,7 +415,7 @@ function _solve!(
         b_width = (4, 4, 4),
         verbose = true,
         viscosity_relaxation = 1.0e-2,
-        λ_relaxation = 1.0e0,
+        λ_relaxation = 0.2,
         viscosity_cutoff = (-Inf, Inf),
         kwargs...,
     ) where {T, N}

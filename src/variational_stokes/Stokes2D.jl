@@ -45,9 +45,9 @@ function _solve_VS!(
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
-    nRx = (nx_g() - 2) * (ny_g() - 1)
-    nRy = (nx_g() - 1) * (ny_g() - 2)
-    nRP = nx_g() * ny_g()
+    nRx = √((nx_g() - 2) * (ny_g() - 1))
+    nRy = √((nx_g() - 1) * (ny_g() - 2))
+    nRP = √(nx_g() * ny_g())
 
     # ~preconditioner
     ητ = deepcopy(η)

@@ -219,6 +219,19 @@ function compute_viscosity_τII!(
     return nothing
 end
 
+function compute_viscosity_τII!(
+        stokes::JustRelax.StokesArrays,
+        args,
+        rheology,
+        cutoff;
+        relaxation = 1.0e0,
+    )
+    compute_viscosity!(
+        backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_τII
+    )
+    return nothing
+end
+
 function compute_viscosity_εII!(
         stokes::JustRelax.StokesArrays,
         phase_ratios,
@@ -235,6 +248,7 @@ function compute_viscosity_εII!(
 end
 
 # fallback
+
 function compute_viscosity!(
         stokes::JustRelax.StokesArrays,
         phase_ratios,
@@ -247,6 +261,22 @@ function compute_viscosity!(
     compute_viscosity!(
         backend(stokes), stokes, relaxation, phase_ratios, args, rheology, air_phase, cutoff, compute_viscosity_εII
     )
+    return nothing
+end
+
+
+function compute_viscosity!(
+        ::CPUBackendTrait,
+        stokes::JustRelax.StokesArrays,
+        ν,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        fn_viscosity::F
+    ) where {F}
+    _compute_viscosity!(stokes, ν, args, rheology, air_phase, cutoff, fn_viscosity)
+
     return nothing
 end
 
@@ -291,6 +321,31 @@ function _compute_viscosity!(
     )
     return nothing
 end
+
+function _compute_viscosity!(
+        stokes::JustRelax.StokesArrays,
+        ν,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        fn_viscosity::F
+    ) where {F}
+    ni = size(stokes.viscosity.η)
+
+    @parallel (@idx ni) compute_viscosity_kernel!(
+        stokes.viscosity.η,
+        ν,
+        select_tensor(stokes, fn_viscosity)...,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        fn_viscosity
+    )
+    return nothing
+end
+
 
 @inline select_tensor(stokes, ::typeof(compute_viscosity_εII)) = @strain(stokes)
 @inline select_tensor(stokes, ::typeof(compute_viscosity_τII)) = @stress(stokes)

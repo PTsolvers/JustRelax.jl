@@ -367,9 +367,10 @@ function _solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            update_viscosity_τII!(
+            compute_viscosity_τII!(
                 stokes, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation
             )
+            
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 

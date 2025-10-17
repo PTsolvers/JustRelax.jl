@@ -3,6 +3,7 @@ using ParallelStencil
 
 using Printf, LinearAlgebra, GeoParams, CellArrays
 using JustRelax, JustRelax.JustRelax2D
+using MPI: MPI
 
 const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
@@ -45,7 +46,7 @@ end
 # END OF HELPER FUNCTIONS --------------------------------------------------------
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
+function VanKeken2D(igg; ny = 64, nx = 64, figdir = "model_figs", finalize_MPI = false)
 
     # Physical domain ------------------------------------
     ly = 1            # domain length in y
@@ -199,7 +200,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
             ylims!(ax2, 0, 0.005)
             lines!(ax2, trms, Urms, color = :black)
 
-            save(joinpath(figdir, "$(it).png"), fig)
+            save(joinpath(figdir, "$(nx)x$(ny)_$(it).png"), fig)
             fig
         end
 
@@ -208,16 +209,75 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     # df = DataFrame(t=trms, Urms=Urms)
     # CSV.write(joinpath(figdir, "Urms_$(nx)x$(ny).csv"), df)
 
-    return nothing
+    finalize_global_grid(; finalize_MPI = finalize_MPI)
+
+    return Urms, trms, ρg[2], xci
 end
 
-figdir = "VanKeken"
-n = 64
-nx = n
-ny = n
-igg = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-else
-    igg
+# Specify benchmark type and run type (:single or :multiple)
+runtype = :multiple
+
+if runtype == :single
+    figdir = "VanKeken"
+    n = 64
+    nx = n
+    ny = n
+    igg = if !(JustRelax.MPI.Initialized())
+        IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+    else
+        igg
+    end
+    VanKeken2D(igg; figdir = figdir, nx = nx, ny = ny, finalize_MPI = true)
+
+elseif runtype == :multiple
+    nrange = 5:8
+    all_results = Dict()
+
+    for i in nrange
+        init_MPI = MPI.Initialized() ? false : true
+        local n = 2^i
+        local nx = n
+        local ny = n
+        local igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...)
+
+        figdir = joinpath("VanKenken", "$(nx)x$(ny)")
+
+        Urms, trms, ρg, xci = VanKeken2D(igg; figdir = figdir, nx = nx, ny = ny, finalize_MPI = false)
+
+        # Store results for each resolution
+        all_results[n] = (Urms = Urms, trms = trms, ρg = ρg, xci = xci)
+
+        println("Completed run for $(nx)x$(ny), max Urms: $(maximum(Urms))")
+        sleep(2) # to avoid file writing conflicts
+    end
+
+    # plot all results together
+    fig = Figure(size = (1000, 1000), font = "TeX Gyre Heros Makie")
+    ax1 = Axis(fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
+        titlesize = 20,
+        yticklabelsize = 12,
+        xticklabelsize = 12,
+        xlabelsize = 12,
+        ylabelsize = 12
+    )
+
+    ρg = all_results[2^last(nrange)].ρg
+    xci = all_results[2^last(nrange)].xci
+    h=heatmap!(ax1, xci[1], xci[2], Array(ρg), colormap = :lapaz)
+    Colorbar(fig[1:2, 2], h; height = Relative(1.0), label = "Density", labelsize = 20, ticklabelsize = 12)
+    ax2 = Axis(fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel =  L"V_{RMS}",
+        titlesize = 20,
+        yticklabelsize = 12,
+        xticklabelsize = 12,
+        xlabelsize = 12,
+        ylabelsize = 12
+    )
+    ylims!(ax2, 0, 0.005)
+    for (n, data) in all_results
+        lines!(ax2, data.trms, data.Urms, label = "$(n)x$(n)")
+    end
+
+    axislegend(ax2, position = :rt)
+    save(joinpath(figdir, "VanKeken_convergence.png"), fig)
+    fig
 end
-main2D(igg; figdir = figdir, nx = nx, ny = ny);

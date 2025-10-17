@@ -208,7 +208,8 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    while it ≤ nit
+    # while it ≤ nit
+    while t ≤ (4.3e6 * 3600 * 24 * 365.25) # 4.3 million years in seconds
         @show it
 
         # Update buoyancy and viscosity -
@@ -379,6 +380,36 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             l1 = lines!(ax21, trms ./ (1.0e6 * (365.25 * 24 * 60 * 60)), Urms)
             l2 = lines!(ax22, trms ./ (1.0e6 * (365.25 * 24 * 60 * 60)), Nu_top)
             save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
+
+            fig3 = Figure(size = (1800, 1200), font = "TeX Gyre Heros Makie")
+            ax31 = Axis(fig3[1:2,1:2], aspect = DataAspect(), title = "t=$(round(t / (1.0e6 * 3600 * 24 * 365.25); digits = 2)) Myrs",
+                titlesize = 20,
+                yticklabelsize = 12,
+                xticklabelsize = 12,
+                xlabelsize = 12,
+                ylabelsize = 12)
+            ax32 = Axis(fig3[1, 4:5], aspect = 3, title = L"V_{RMS}",
+                titlesize = 20,
+                yticklabelsize = 12,
+                xticklabelsize = 12,
+                xlabelsize = 12,
+                ylabelsize = 12
+            )
+            ax33 = Axis(fig3[2, 4:5], aspect = 3, title = L"Nu_{top}",
+                titlesize = 20,
+                yticklabelsize = 12,
+                xticklabelsize = 12,
+                xlabelsize = 12,
+                ylabelsize = 12
+            )
+            hm = heatmap!(ax31, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :lipari, colorrange = (273, 1273))
+            contour!(ax31, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), levels = 4, color = :white, linewidth = 1)
+            Colorbar(fig3[1:2,3], hm; height = Relative(0.75), label = "T [K]", labelsize = 14, ticklabelsize = 12)
+            l1 = lines!(ax32, trms ./ (1.0e6 * (365.25 * 24 * 60 * 60)), Urms, color = :black)
+            l2 = lines!(ax33, trms ./ (1.0e6 * (365.25 * 24 * 60 * 60)), Nu_top, color = :black)
+            fig3
+            save(joinpath(figdir, "GMD_$(it).png"), fig3)
+            # save(joinpath(figdir, "GMD_$(it).svg"), fig3)
         end
         it += 1
         t += dt
@@ -417,19 +448,88 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
-# (Path)/folder where output data and figures are stored
-figdir = "Blankenbach_subgrid"
-do_vtk = false # set to true to generate VTK files for ParaView
-ar = 1 # aspect ratio
-n = 128
-nx = n
-ny = n
-nit = 6.0e3
-igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-else
-    igg
-end
+# Define if you want to run a single benchmark or a series of benchmarks
+# (single benchmark runs at a fixed resolution, multiple benchmarks run at increasing resolutions)
+runtype = :single
 
-# run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, do_vtk = do_vtk);
+if runtype == :single
+    # (Path)/folder where output data and figures are stored
+    figdir = "Blankenbach_subgrid"
+    do_vtk = false # set to true to generate VTK files for ParaView
+    ar = 1 # aspect ratio
+    n = 128
+    nx = n
+    ny = n
+    nit = 10.0e3
+    igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+        IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+    else
+        igg
+    end
+    # run main script
+    main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, do_vtk = do_vtk, finalize_MPI = true);
+
+elseif runtype == :multiple
+     nrange = 5:8
+    all_results = Dict()
+
+    for i in nrange
+        init_MPI = MPI.Initialized() ? false : true
+        local n = 2^i
+        local nx = n
+        local ny = n
+        local igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...)
+
+        figdir = joinpath("Blankenbach_subgrid", "$(nx)x$(ny)")
+
+        Urms, Nu_top, trms, thermal.T, xvi = main2D(igg; figdir = figdir, ar = 1, nx = nx, ny = ny, nit = 10.0e3, do_vtk = false, finalize_MPI = false)
+
+        # Store results for each resolution
+        all_results[n] = (Urms = Urms, Nu_top = Nu_top, trms = trms, T = thermal.T, xvi = xvi)
+
+        println("Completed run for $(nx)x$(ny), max Urms: $(maximum(Urms))")
+        sleep(2) # to avoid file writing conflicts
+    end
+
+    # plot all results together
+    fig3 = Figure(size = (1800, 1200), font = "TeX Gyre Heros Makie")
+        ax31 = Axis(fig3[1:2,1:2], aspect = DataAspect(), title = "t=$(round(t / (1.0e6 * 3600 * 24 * 365.25); digits = 2)) Myrs",
+            titlesize = 20,
+            yticklabelsize = 12,
+            xticklabelsize = 12,
+            xlabelsize = 12,
+            ylabelsize = 12)
+        ax32 = Axis(fig3[1, 4:5], aspect = 3, title = L"V_{RMS}",
+            titlesize = 20,
+            yticklabelsize = 12,
+            xticklabelsize = 12,
+            xlabelsize = 12,
+            ylabelsize = 12
+        )
+        ax33 = Axis(fig3[2, 4:5], aspect = 3, title = L"Nu_{top}",
+            titlesize = 20,
+            yticklabelsize = 12,
+            xticklabelsize = 12,
+            xlabelsize = 12,
+            ylabelsize = 12
+        )
+
+    T = all_results[2^last(nrange)].T
+    xvi = all_results[2^last(nrange)].xvi
+    hm = heatmap!(ax31, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(T[2:(end - 1), :]), colormap = :lipari, colorrange = (273, 1273))
+    contour!(ax31, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), levels = 4, color = :white, linewidth = 1)
+    Colorbar(fig3[1:2,3], hm; height = Relative(0.75), label = "T [K]", labelsize = 14, ticklabelsize = 12)
+
+    for (n, data) in all_results
+        trms = data.trms
+        Urms = data.Urms
+        Nu_top = data.Nu_top
+        l1 = lines!(ax32, trms ./ (1.0e6 * (365.25 * 24 * 60 * 60)), Urms, label = "$(n)x$(n)")
+        l2 = lines!(ax33, trms ./ (1.0e6 * (365.25 * 24 * 60 * 60)), Nu_top, label = "$(n)x$(n)")
+    end
+    axislegend(ax32; position = :rt, fontsize = 10)
+    axislegend(ax33; position = :rt, fontsize = 10)
+    save(joinpath("Blankenbach_subgrid", "GMD_all_resolutions.png"), fig3)
+    save(joinpath("Blankenbach_subgrid", "GMD_all_resolutions.svg"), fig3)
+    fig3
+end

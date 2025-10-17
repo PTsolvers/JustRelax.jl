@@ -1,4 +1,5 @@
 import Base: Array, copy
+import JustRelax: PTArray, backend
 
 const JR_T = Union{
     StokesArrays,
@@ -43,3 +44,20 @@ function copy(x::T) where {T <: JR_T}
     T_clean = remove_parameters(x)
     return T_clean(fields...)
 end
+
+# Convert structures to GPU/CPU backends for e.g. restart/checkpointing
+function PTArray(backend, x::T) where {T <: JR_T}
+    nfields = fieldcount(T)
+    gpu_fields = ntuple(Val(nfields)) do i
+        Base.@_inline_meta
+        field = getfield(x, i)
+        return _convert_to_backend(backend, field)
+    end
+    T_clean = remove_parameters(x)
+    return T_clean(gpu_fields...)
+end
+
+# Helper function to handle the conversion logic
+@inline _convert_to_backend(backend, field::T) where {T <: JR_T} = PTArray(backend, field)
+@inline _convert_to_backend(backend, field) = PTArray(backend)(field)
+@inline _convert_to_backend(backend, ::Nothing) = nothing

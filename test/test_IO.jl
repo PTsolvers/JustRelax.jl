@@ -15,7 +15,7 @@ const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBac
 
 # Load script dependencies
 using GeoParams
-using WriteVTK
+using WriteVTK, JLD2
 
 @testset "Test IO" begin
     @suppress begin
@@ -62,15 +62,18 @@ using WriteVTK
         @test isfile(joinpath(dst, "Project.toml"))
 
         # Call the function
-        checkpointing_jld2(dst, stokes, thermal, time, dt, igg)
         checkpointing_jld2(dst, stokes, thermal, time, dt)
+        # Check that the file was created
+        fname = joinpath(dst, "checkpoint.jld2")
+        @test isfile(fname)
 
+        checkpointing_jld2(dst, stokes, thermal, time, dt, igg)
         # Check that the file was created
         fname = joinpath(dst, "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2")
         @test isfile(fname)
 
         # Load the data from the file
-        stokes1, thermal1, t, dt1 = load_checkpoint_jld2(fname)
+        stokes1, thermal1, t, dt1 = load_checkpoint_jld2(dst, igg)
 
         @test stokes1.viscosity.η[1] == 1.0
         @test stokes1.V.Vy[1] == 10
@@ -194,20 +197,45 @@ using WriteVTK
 
 
         # Call the function
-        checkpointing_jld2(dst, stokes, thermal, time, dt, igg)
         checkpointing_jld2(dst, stokes, thermal, time, dt)
+        # Check that the file was created
+        fname = joinpath(dst, "checkpoint.jld2")
+        @test isfile(fname)
+
+        checkpointing_jld2(dst, stokes, thermal, time, dt, igg)
 
         # Check that the file was created
         fname = joinpath(dst, "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2")
         @test isfile(fname)
 
         # Load the data from the file
-        load_checkpoint_jld2(fname)
+        stokes, thermal, time, dt = load_checkpoint_jld2(dst, igg)
 
         @test stokes.viscosity.η[1] == 1.0
         @test stokes.V.Vy[1] == 10
         @test thermal.T[1] == 100
         @test !isnothing(stokes.V.Vz)
+
+        checkpointing_jld2(dst, stokes, time, dt)
+
+        # Check that the file was created
+        fname = joinpath(dst, "checkpoint.jld2")
+        @test isfile(fname)
+
+        checkpointing_jld2(dst, stokes, time, dt, igg)
+
+        # Check that the file was created
+        fname = joinpath(dst, "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2")
+        @test isfile(fname)
+        # Load the data from the file
+        stokes, _, time, dt = load_checkpoint_jld2(dst, igg)
+
+        @test stokes.viscosity.η[1] == 1.0
+        @test stokes.V.Vy[1] == 10
+        @test !isnothing(stokes.V.Vz)
+
+        restart_data = load(fname)
+        @test !haskey(restart_data, "thermal")
 
 
         # check the if the hdf5 function also works

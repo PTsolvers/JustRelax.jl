@@ -242,7 +242,7 @@ function _solve!(
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
             )
-            
+
             Acell = prod(di)
             errs = (
                 norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) * √(Acell),
@@ -379,7 +379,7 @@ function _solve!(
             compute_viscosity_τII!(
                 stokes, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation
             )
-            
+
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
@@ -516,7 +516,7 @@ function _solve!(
         strain_increment = false,
         viscosity_cutoff = (-Inf, Inf),
         viscosity_relaxation = 1.0e-2,
-        λ_relaxation = 1e0,
+        λ_relaxation = 1.0e0,
         iterMax = 50.0e3,
         iterMin = 1.0e2,
         free_surface = false,

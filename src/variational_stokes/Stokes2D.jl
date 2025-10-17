@@ -27,6 +27,7 @@ function _solve_VS!(
         air_phase::Integer = 0,
         viscosity_cutoff = (-Inf, Inf),
         viscosity_relaxation = 1.0e-2,
+        λ_relaxation = 1e0,
         iterMax = 50.0e3,
         iterMin = 1.0e2,
         nout = 500,
@@ -73,7 +74,7 @@ function _solve_VS!(
     # solver loop
     @copy stokes.P0 stokes.P
     wtime0 = 0.0
-    relλ = 0.2
+    relλ = λ_relaxation
     θ = deepcopy(stokes.P)
     λ = @zeros(ni...)
     λv = @zeros(ni .+ 1...)

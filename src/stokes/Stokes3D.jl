@@ -415,6 +415,7 @@ function _solve!(
         b_width = (4, 4, 4),
         verbose = true,
         viscosity_relaxation = 1.0e-2,
+        λ_relaxation = 1e0,
         viscosity_cutoff = (-Inf, Inf),
         kwargs...,
     ) where {T, N}
@@ -514,7 +515,7 @@ function _solve!(
                 (λv_yz, λv_xz, λv_xy),
                 stokes.τ.II,
                 stokes.viscosity.η_vep,
-                0.2,
+                λ_relaxation,
                 dt,
                 pt_stokes.θ_dτ,
                 rheology,

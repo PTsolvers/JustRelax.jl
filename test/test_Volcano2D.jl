@@ -186,7 +186,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.98 / √2.1) # Re=3π, r=0.7
+    pt_stokes = PTStokesCoeffs(li, di;  ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-8, Re = 3.0e0, r = 0.7, CFL = 0.98 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------

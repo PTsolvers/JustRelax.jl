@@ -219,19 +219,6 @@ function compute_viscosity_τII!(
     return nothing
 end
 
-function compute_viscosity_τII!(
-        stokes::JustRelax.StokesArrays,
-        args,
-        rheology,
-        cutoff;
-        relaxation = 1.0e0,
-    )
-    compute_viscosity!(
-        backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_τII
-    )
-    return nothing
-end
-
 function compute_viscosity_εII!(
         stokes::JustRelax.StokesArrays,
         phase_ratios,

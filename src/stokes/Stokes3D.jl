@@ -550,12 +550,16 @@ function _solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
+            Acell = prod(di)
+
             for (norm_Ri, Ri) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R))
                 push!(
                     norm_Ri,
-                    norm_mpi(Ri[2:(end - 1), 2:(end - 1), 2:(end - 1)]) / ((nx_g() - 1) * (ny_g() - 1) * (nz_g() - 1)),
+                    norm_mpi(Ri[2:(end - 1), 2:(end - 1), 2:(end - 1)]) * √(Acell),
+                    # norm_mpi(Ri[2:(end - 1), 2:(end - 1), 2:(end - 1)]) / ((nx_g() - 1) * (ny_g() - 1) * (nz_g() - 1)),
                 )
             end
+
             push!(norm_∇V, norm_mpi(stokes.R.RP) / length(stokes.R.RP))
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)

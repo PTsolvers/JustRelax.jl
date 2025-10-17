@@ -224,10 +224,11 @@ function _solve_VS!(
 
         if iter % nout == 0 && iter > 1
 
+            Acell = prod(di)
             errs = (
-                norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:(end - 1), :] .> 0]) / nRx,
-                norm_mpi(@views stokes.R.Ry[ϕ.Vy[:, 2:(end - 1)] .> 0]) / nRy,
-                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) / nRP,
+                norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:(end - 1), :] .> 0]) * √(Acell),
+                norm_mpi(@views stokes.R.Ry[ϕ.Vy[:, 2:(end - 1)] .> 0]) * √(Acell),
+                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) * √(Acell),
             )
 
             push!(norm_Rx, errs[1])

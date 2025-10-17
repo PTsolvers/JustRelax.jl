@@ -229,13 +229,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         @views thermal.T[:, 1] .= Tbot
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
-
-        # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
-        compute_viscosity!(
-            stokes, phase_ratios, args, rheology, viscosity_cutoff
-        )
         # ------------------------------
 
         # Stokes solver ----------------
@@ -291,7 +284,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), (grid_vx, grid_vy), dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles

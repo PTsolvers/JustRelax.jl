@@ -196,34 +196,35 @@ end
 # Rheology
 
 ## viscosity
-function JR2D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff)
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
+
+function JR2D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
 end
 
 function JR2D.compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
-    )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity)
 end
 
 function JR2D.compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
-    )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
 end
 
 function JR2D.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
-function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff)
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
+function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
 end
 
 function compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
-    )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
 end
 
 function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)

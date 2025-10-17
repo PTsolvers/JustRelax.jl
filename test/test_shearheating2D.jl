@@ -105,7 +105,7 @@ function Shearheating2D(igg; nx = 32, ny = 32)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, CFL = 0.9 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-5, ϵ_rel = 1.0e-5, CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -199,8 +199,8 @@ function Shearheating2D(igg; nx = 32, ny = 32)
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,
-                iterMax = 10.0e3,
-                nout = 1.0e2,
+                iterMax = 50.0e3,
+                nout = 1.0e3,
                 verbose = true,
             )
         )
@@ -250,19 +250,6 @@ end
 
         # Initialize iters and thermal to ensure they are defined
         iters, thermal = Shearheating2D(igg; nx = nx, ny = ny)
-        # iters = nothing
-        # thermal = nothing
-
-        # try
-        #     iters, thermal = Shearheating2D(igg; nx=nx, ny=ny)
-        # catch e
-        #     @warn e
-        #     try
-        #         iters, thermal = Shearheating2D(igg; nx=nx, ny=ny)
-        #     catch e2
-        #         @warn e2
-        #     end
-        # end
 
         # Ensure iters is defined before running the test
         @test iters != nothing && iters.err_evo1[end] < 1.0e-4

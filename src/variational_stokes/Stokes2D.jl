@@ -27,6 +27,7 @@ function _solve_VS!(
         air_phase::Integer = 0,
         viscosity_cutoff = (-Inf, Inf),
         viscosity_relaxation = 1.0e-2,
+        λ_relaxation = 0.2,
         iterMax = 50.0e3,
         iterMin = 1.0e2,
         nout = 500,
@@ -44,9 +45,9 @@ function _solve_VS!(
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
-    nRx = (nx_g() - 2) * (ny_g() - 1)
-    nRy = (nx_g() - 1) * (ny_g() - 2)
-    nRP = nx_g() * ny_g()
+    nRx = √((nx_g() - 2) * (ny_g() - 1))
+    nRy = √((nx_g() - 1) * (ny_g() - 2))
+    nRP = √(nx_g() * ny_g())
 
     # ~preconditioner
     ητ = deepcopy(η)
@@ -73,7 +74,7 @@ function _solve_VS!(
     # solver loop
     @copy stokes.P0 stokes.P
     wtime0 = 0.0
-    relλ = 0.2
+    relλ = λ_relaxation
     θ = deepcopy(stokes.P)
     λ = @zeros(ni...)
     λv = @zeros(ni .+ 1...)
@@ -134,7 +135,7 @@ function _solve_VS!(
                 )
             end
 
-            update_viscosity!(
+            update_viscosity_τII!(
                 stokes,
                 phase_ratios,
                 args,
@@ -223,10 +224,11 @@ function _solve_VS!(
 
         if iter % nout == 0 && iter > 1
 
+            Acell = prod(di)
             errs = (
-                norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:(end - 1), :] .> 0]) / nRx,
-                norm_mpi(@views stokes.R.Ry[ϕ.Vy[:, 2:(end - 1)] .> 0]) / nRy,
-                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) / nRP,
+                norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:(end - 1), :] .> 0]) * nRx,
+                norm_mpi(@views stokes.R.Ry[ϕ.Vy[:, 2:(end - 1)] .> 0]) * nRy,
+                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) * nRP,
             )
 
             push!(norm_Rx, errs[1])

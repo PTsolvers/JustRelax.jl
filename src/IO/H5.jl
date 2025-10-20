@@ -12,7 +12,7 @@ macro namevar(x)
     end
 end
 
-macro namevar(x, T::Type)
+macro namevar(x, T)
     name = split(string(x), ".")[end]
     return quote
         tmp = $(esc(x))

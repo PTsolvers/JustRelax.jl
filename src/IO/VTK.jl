@@ -187,7 +187,7 @@ function save_vtk(
     return nothing
 end
 
-function save_vtk(fname::String, xi, data::NamedTuple; precission = Float32, pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
+function save_vtk(fname::String, xi, data::NamedTuple; precision = Float32, pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     # unpack data names and arrays
     data_names = string.(keys(data))
     data_arrays = values(data)

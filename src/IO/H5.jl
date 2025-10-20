@@ -4,7 +4,7 @@ macro namevar(x)
     name = split(string(x), ".")[end]
     return quote
         tmp = $(esc(x))
-        if tmp <: Number
+        if tmp isa Number
             $(esc(name)), tmp
         else
             $(esc(name)), Array(tmp)
@@ -16,10 +16,11 @@ macro namevar(x, T)
     name = split(string(x), ".")[end]
     return quote
         tmp = $(esc(x))
-        if tmp <: Number
-            $(esc(name)), T(tmp)
+        type = $(esc(T))
+        if tmp isa Number
+            $(esc(name)), type(tmp)
         else
-            $(esc(name)), T.(Array(tmp))
+            $(esc(name)), type.(Array(tmp))
         end
     end
 end
@@ -33,13 +34,15 @@ function checkpointing_hdf5(dst, stokes, T, time, timestep; precision = Float32)
     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
     fname = joinpath(dst, "checkpoint")
 
+    # @namevar(time)
+
     # Create a temporary directory
     mktempdir() do tmpdir
         # Save the checkpoint file in the temporary directory
         tmpfname = joinpath(tmpdir, basename(fname))
         h5open("$(tmpfname).h5", "w") do file
-            write(file, @namevar(time, precision)...)
-            write(file, @namevar(timestep, precision)...)
+            write(file, @namevar(time)...)
+            write(file, @namevar(timestep)...)
             write(file, @namevar(stokes.V.Vx, precision)...)
             write(file, @namevar(stokes.V.Vy, precision)...)
             if !isnothing(stokes.V.Vz)

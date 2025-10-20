@@ -145,7 +145,7 @@ end
 
 @inline save_data(file, data, precision) = write(file, @namevar(data, precision)...)
 
-function save_data(file, data::Geometry{N}, ::Any) where {N}
+function save_data(file, data::Geometry{N}) where {N}
     xci = center_coordinates(data)
     xvi = vertex_coordinates(data)
 

@@ -56,7 +56,7 @@ include("rheology/BuoyancyForces.jl")
 export compute_ρg!
 
 include("rheology/Viscosity.jl")
-export compute_viscosity!
+export compute_viscosity!, compute_viscosity_εII!, compute_viscosity_τII!
 
 include("rheology/Melting.jl")
 export compute_melt_fraction!

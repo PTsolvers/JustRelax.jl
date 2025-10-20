@@ -265,7 +265,7 @@ function _solve!(
             # Update buoyancy
             update_ρg!(ρg, rheology, args)
 
-            update_viscosity!(
+            update_viscosity_τII!(
                 stokes,
                 phase_ratios,
                 args,
@@ -415,6 +415,7 @@ function _solve!(
         b_width = (4, 4, 4),
         verbose = true,
         viscosity_relaxation = 1.0e-2,
+        λ_relaxation = 0.2,
         viscosity_cutoff = (-Inf, Inf),
         kwargs...,
     ) where {T, N}
@@ -489,7 +490,7 @@ function _solve!(
             update_ρg!(ρg, phase_ratios, rheology, args)
 
             # Update viscosity
-            update_viscosity!(
+            update_viscosity_τII!(
                 stokes,
                 phase_ratios,
                 args,
@@ -514,7 +515,7 @@ function _solve!(
                 (λv_yz, λv_xz, λv_xy),
                 stokes.τ.II,
                 stokes.viscosity.η_vep,
-                0.2,
+                λ_relaxation,
                 dt,
                 pt_stokes.θ_dτ,
                 rheology,
@@ -549,12 +550,14 @@ function _solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
+
             for (norm_Ri, Ri) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R))
                 push!(
                     norm_Ri,
                     norm_mpi(Ri[2:(end - 1), 2:(end - 1), 2:(end - 1)]) / ((nx_g() - 1) * (ny_g() - 1) * (nz_g() - 1)),
                 )
             end
+
             push!(norm_∇V, norm_mpi(stokes.R.RP) / length(stokes.R.RP))
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)

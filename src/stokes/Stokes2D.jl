@@ -434,19 +434,12 @@ function _solve!(
                 dt * free_surface,
             )
 
-            # errs = (
-            #     norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
-            #         √((nx_g() - 2) * (ny_g() - 1)),
-            #     norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
-            #         √((nx_g() - 1) * (ny_g() - 2)),
-            #     norm_mpi(stokes.R.RP) / √(nx_g() * ny_g()),
-            # )
-
-            Acell = prod(di)
             errs = (
-                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) * √(Acell),
-                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) * √(Acell),
-                norm_mpi(stokes.R.RP) * √(Acell),
+                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                    √((nx_g() - 2) * (ny_g() - 1)),
+                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                    √((nx_g() - 1) * (ny_g() - 2)),
+                norm_mpi(stokes.R.RP) / √(nx_g() * ny_g()),
             )
 
             push!(norm_Rx, errs[1])
@@ -718,20 +711,13 @@ function _solve!(
                 dt * free_surface,
             )
 
-            Acell = prod(di)
             errs = (
-                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) * √(Acell),
-                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) * √(Acell),
-                norm_mpi(stokes.R.RP) * √(Acell),
+                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                    √((nx_g() - 2) * (ny_g() - 1)),
+                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                    √((nx_g() - 1) * (ny_g() - 2)),
+                norm_mpi(stokes.R.RP) / √(nx_g() * ny_g()),
             )
-
-            # errs = (
-            #     norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
-            #         √((nx_g() - 2) * (ny_g() - 1)),
-            #     norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
-            #         √((nx_g() - 1) * (ny_g() - 2)),
-            #     norm_mpi(stokes.R.RP) / √(nx_g() * ny_g()),
-            # )
 
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])

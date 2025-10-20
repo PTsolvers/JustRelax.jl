@@ -29,7 +29,8 @@ function _heatdiffusion_PT!(
     # Compute some constant stuff
     _dt = inv(dt)
     _di = inv.(di)
-    _sq_len_RT = inv(sqrt(length(thermal.ResT)))
+
+    _sq_len_RT = inv(sqrt((nx_g() + 1) * (ny_g() + 1) * (nz_g() + (nz_g() > 1))))
     ϵ = pt_thermal.ϵ
     ni = size(thermal.Tc)
     @copy thermal.Told thermal.T
@@ -137,7 +138,7 @@ function _heatdiffusion_PT!(
     # Compute some constant stuff
     _dt = inv(dt)
     _di = inv.(di)
-    _sq_len_RT = inv(sqrt(length(thermal.ResT)))
+    _sq_len_RT = inv(sqrt((nx_g() + 1) * (ny_g() + 1) * (nz_g() + (nz_g() > 1))))
     ϵ = pt_thermal.ϵ
     ni = size(thermal.Tc)
     @copy thermal.Told thermal.T

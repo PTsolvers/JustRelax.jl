@@ -40,8 +40,8 @@ function checkpointing_hdf5(dst, stokes, T, time, timestep; precision = Float32)
         h5open("$(tmpfname).h5", "w") do file
             write(file, @namevar(time, precision)...)
             write(file, @namevar(timestep, precision)...)
-            write(file, @namevar(stokes.V.Vx,precision)...)
-            write(file, @namevar(stokes.V.Vy,precision)...)
+            write(file, @namevar(stokes.V.Vx, precision)...)
+            write(file, @namevar(stokes.V.Vy, precision)...)
             if !isnothing(stokes.V.Vz)
                 write(file, @namevar(stokes.V.Vz, precision)...)
             end
@@ -132,7 +132,7 @@ end
 
 Save `data` as the `fname.h5` HDF5 file
 """
-function save_hdf5(fname, data::Vararg{Any, N}; precision=Float32) where {N}
+function save_hdf5(fname, data::Vararg{Any, N}; precision = Float32) where {N}
     return h5open("$(fname).h5", "w") do file
         for data_i in data
             save_data(file, data_i, precision)

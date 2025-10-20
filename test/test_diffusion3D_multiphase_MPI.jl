@@ -6,7 +6,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"] ) : false
+const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"]) : false
 
 using Test, Suppressor, GeoParams
 using JustRelax, JustRelax.JustRelax3D
@@ -231,5 +231,5 @@ if CSCS_CI != true
         end
     end
 else
-    diffusion_3D(;select_device = false)
+    diffusion_3D(; select_device = false)
 end

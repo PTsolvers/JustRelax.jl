@@ -113,6 +113,7 @@ function _solve!(
             push!(
                 norm_∇V, norm_mpi(stokes.∇V) / (Vmax - Vmin) * lx / sqrt(length(stokes.∇V))
             )
+
             err = maximum_mpi(norm_Rx[end], norm_Ry[end], norm_∇V[end])
             push!(err_evo1, err)
             push!(err_evo2, iter)
@@ -241,7 +242,15 @@ function _solve!(
             @parallel (@idx ni) compute_Res!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
             )
-            errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
+
+            Acell = prod(di)
+            errs = (
+                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) * √(Acell),
+                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) * √(Acell),
+                norm_mpi(stokes.R.RP) * √(Acell),
+            )
+
+            # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
@@ -367,9 +376,10 @@ function _solve!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            update_viscosity!(
+            compute_viscosity_τII!(
                 stokes, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation
             )
+
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
@@ -426,11 +436,12 @@ function _solve!(
 
             errs = (
                 norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
-                    ((nx_g() - 2) * (ny_g() - 1)),
+                    √((nx_g() - 2) * (ny_g() - 1)),
                 norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
-                    ((nx_g() - 1) * (ny_g() - 2)),
-                norm_mpi(stokes.R.RP) / (nx_g() * ny_g()),
+                    √((nx_g() - 1) * (ny_g() - 2)),
+                norm_mpi(stokes.R.RP) / √(nx_g() * ny_g()),
             )
+
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
@@ -502,6 +513,7 @@ function _solve!(
         strain_increment = false,
         viscosity_cutoff = (-Inf, Inf),
         viscosity_relaxation = 1.0e-2,
+        λ_relaxation = 0.2,
         iterMax = 50.0e3,
         iterMin = 1.0e2,
         free_surface = false,
@@ -544,7 +556,7 @@ function _solve!(
     # solver loop
     @copy stokes.P0 stokes.P
     wtime0 = 0.0
-    relλ = 0.2
+    relλ = λ_relaxation
     θ = deepcopy(stokes.P)
     λ = @zeros(ni...)
     λv = @zeros(ni .+ 1...)
@@ -554,7 +566,6 @@ function _solve!(
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
     end
-
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
@@ -605,7 +616,7 @@ function _solve!(
                 )
             end
 
-            update_viscosity!(
+            update_viscosity_τII!(
                 stokes,
                 phase_ratios,
                 args,
@@ -706,11 +717,12 @@ function _solve!(
 
             errs = (
                 norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
-                    ((nx_g() - 2) * (ny_g() - 1)),
+                    √((nx_g() - 2) * (ny_g() - 1)),
                 norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
-                    ((nx_g() - 1) * (ny_g() - 2)),
-                norm_mpi(stokes.R.RP) / (nx_g() * ny_g()),
+                    √((nx_g() - 1) * (ny_g() - 2)),
+                norm_mpi(stokes.R.RP) / √(nx_g() * ny_g()),
             )
+
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])

@@ -81,6 +81,7 @@ function save_vtk(
         data_v::NamedTuple,
         data_c::NamedTuple,
         velocity::NTuple{N, T};
+        precision = Float32,
         t::Number = 0,
         pvd::Union{Nothing, String} = nothing,
     ) where {N, T}
@@ -93,7 +94,7 @@ function save_vtk(
 
     velocity_field = rand(N, size(first(velocity))...)
     for (i, v) in enumerate(velocity)
-        velocity_field[i, :, :, :] = v
+        velocity_field[i, :, :, :] = precision.(Array(v))
     end
 
     vtk_multiblock(fname) do vtm
@@ -101,14 +102,14 @@ function save_vtk(
         # Variables stores in cell centers
         vtk_grid(vtm, xci...) do vtk
             for (name_i, array_i) in zip(data_names_c, data_arrays_c)
-                vtk[name_i] = Array(array_i)
+                vtk[name_i] = precision.(Array(array_i))
             end
         end
         # Second block.
         # Variables stores in cell vertices
         vtk_grid(vtm, xvi...) do vtk
             for (name_i, array_i) in zip(data_names_v, data_arrays_v)
-                vtk[name_i] = Array(array_i)
+                vtk[name_i] = precision.(Array(array_i))
             end
             vtk["Velocity"] = velocity_field
             isnothing(t) || (vtk["TimeValue"] = t)
@@ -152,6 +153,7 @@ function save_vtk(
         xci,
         data_c::NamedTuple,
         velocity::NTuple{N, T};
+        precision = Float32,
         t::Number = nothing,
         pvd::Union{Nothing, String} = nothing
     ) where {N, T}
@@ -162,13 +164,13 @@ function save_vtk(
 
     velocity_field = rand(N, size(first(velocity))...)
     for (i, v) in enumerate(velocity)
-        velocity_field[i, :, :, :] = v
+        velocity_field[i, :, :, :] = precision.(Array(v))
     end
 
     # Create the VTK file
     vtk_grid(fname, xci...) do vtk
         for (name_i, array_i) in zip(data_names_c, data_arrays_c)
-            vtk[name_i] = Array(array_i)
+            vtk[name_i] = precision.(Array(array_i))
         end
         vtk["Velocity"] = velocity_field
         isnothing(t) || (vtk["TimeValue"] = t)
@@ -185,7 +187,7 @@ function save_vtk(
     return nothing
 end
 
-function save_vtk(fname::String, xi, data::NamedTuple; pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
+function save_vtk(fname::String, xi, data::NamedTuple; precission = Float32, pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     # unpack data names and arrays
     data_names = string.(keys(data))
     data_arrays = values(data)
@@ -193,7 +195,7 @@ function save_vtk(fname::String, xi, data::NamedTuple; pvd::Union{Nothing, Strin
     # Create the VTK file
     vtk_grid(fname, xi...) do vtk
         for (name_i, array_i) in zip(data_names, data_arrays)
-            vtk[name_i] = Array(array_i)
+            vtk[name_i] = precision.(Array(array_i))
         end
 
         # If pvd collection name is provided, add this file to the collection
@@ -258,23 +260,23 @@ Save particle data and their material phase to a VTK file.
 - `pvd::Union{Nothing, String}`: Optional ParaView collection filename for time series
 - `t::Number`: Time value (default: 0.0)
 """
-function save_particles(particles, pPhases; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
+function save_particles(particles, pPhases; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0, precision = Float32)
     N = length(size(particles.index))
     return if N == 2
-        save_particles2D(particles, pPhases; conversion = conversion, fname = fname, pvd = pvd, t = t)
+        save_particles2D(particles, pPhases, precision; conversion = conversion, fname = fname, pvd = pvd, t = t)
     elseif N == 3
-        save_particles3D(particles, pPhases; conversion = conversion, fname = fname, pvd = pvd, t = t)
+        save_particles3D(particles, pPhases, precision; conversion = conversion, fname = fname, pvd = pvd, t = t)
     else
         error("The dimension of the model is $N. It must be 2 or 3!")
     end
 end
 
-function save_particles2D(particles, pPhases; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
+function save_particles2D(particles, pPhases, precision; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     p = particles.coords
     ppx, ppy = p
-    pxv = Array(ppx.data)[:] ./ conversion
-    pyv = Array(ppy.data)[:] ./ conversion
-    clr = Array(pPhases.data)[:]
+    pxv  = precision.(Array(ppx.data)[:] ./ conversion)
+    pyv  = precision.(Array(ppy.data)[:] ./ conversion)
+    clr  = precision.(Array(pPhases.data)[:])
     idxv = Array(particles.index.data[:])
 
     x = pxv[idxv]
@@ -296,13 +298,13 @@ function save_particles2D(particles, pPhases; conversion = 1.0e3, fname::String 
     end
 end
 
-function save_particles3D(particles, pPhases; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
+function save_particles3D(particles, pPhases, precision; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     p = particles.coords
     ppx, ppy = p
-    pxv = Array(ppx.data)[:] ./ conversion
-    pyv = Array(ppy.data)[:] ./ conversion
-    pzv = Array(ppz.data)[:] ./ conversion
-    clr = Array(pPhases.data)[:]
+    pxv  = precision.(Array(ppx.data)[:] ./ conversion)
+    pyv  = precision.(Array(ppy.data)[:] ./ conversion)
+    pzv  = precision.(Array(ppz.data)[:] ./ conversion)
+    clr  = precision.(Array(pPhases.data)[:])
     idxv = Array(particles.index.data[:])
 
     x = pxv[idxv]
@@ -335,22 +337,22 @@ Save particle data to a VTK file.
 - `pvd::Union{Nothing, String}`: Optional ParaView collection filename for time series
 - `t::Number`: Time value (default: 0.0)
 """
-function save_particles(particles; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
+function save_particles(particles; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0, precision = Float32)
     N = length(size(particles.index))
     return if N == 2
-        save_particles2D(particles; conversion = conversion, fname = fname, pvd = pvd, t = t)
+        save_particles2D(particles, precision; conversion = conversion, fname = fname, pvd = pvd, t = t)
     elseif N == 3
-        save_particles3D(particles; conversion = conversion, fname = fname, pvd = pvd, t = t)
+        save_particles3D(particles, precision; conversion = conversion, fname = fname, pvd = pvd, t = t)
     else
         error("The dimension of the model is $N. It must be 2 or 3!")
     end
 end
 
-function save_particles2D(particles; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
+function save_particles2D(particles, precision; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     p = particles.coords
     ppx, ppy = p
-    pxv = Array(ppx.data)[:] ./ conversion
-    pyv = Array(ppy.data)[:] ./ conversion
+    pxv = precision.(Array(ppx.data)[:] ./ conversion)
+    pyv = precision.(Array(ppy.data)[:] ./ conversion)
     idxv = Array(particles.index.data[:])
 
     x = pxv[idxv]
@@ -371,12 +373,12 @@ function save_particles2D(particles; conversion = 1.0e3, fname::String = "./part
     end
 end
 
-function save_particles3D(particles; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
+function save_particles3D(particles, precision; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     p = particles.coords
     ppx, ppy = p
-    pxv = Array(ppx.data)[:] ./ conversion
-    pyv = Array(ppy.data)[:] ./ conversion
-    pzv = Array(ppz.data)[:] ./ conversion
+    pxv = precision.(Array(ppx.data)[:] ./ conversion)
+    pyv = precision.(Array(ppy.data)[:] ./ conversion)
+    pzv = precision.(Array(ppz.data)[:] ./ conversion)
     idxv = Array(particles.index.data[:])
 
     x = pxv[idxv]

@@ -4,10 +4,22 @@ macro namevar(x)
     name = split(string(x), ".")[end]
     return quote
         tmp = $(esc(x))
-        if tmp isa Float64
+        if tmp <: Number
             $(esc(name)), tmp
         else
             $(esc(name)), Array(tmp)
+        end
+    end
+end
+
+macro namevar(x, T::Type)
+    name = split(string(x), ".")[end]
+    return quote
+        tmp = $(esc(x))
+        if tmp <: Number
+            $(esc(name)), T(tmp)
+        else
+            $(esc(name)), T.(Array(tmp))
         end
     end
 end
@@ -17,7 +29,7 @@ end
 
 Save necessary data in `dst` as and HDF5 file to restart the model from the state at `time`
 """
-function checkpointing_hdf5(dst, stokes, T, time, timestep)
+function checkpointing_hdf5(dst, stokes, T, time, timestep; precision = Float32)
     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
     fname = joinpath(dst, "checkpoint")
 
@@ -26,16 +38,16 @@ function checkpointing_hdf5(dst, stokes, T, time, timestep)
         # Save the checkpoint file in the temporary directory
         tmpfname = joinpath(tmpdir, basename(fname))
         h5open("$(tmpfname).h5", "w") do file
-            write(file, @namevar(time)...)
-            write(file, @namevar(timestep)...)
-            write(file, @namevar(stokes.V.Vx)...)
-            write(file, @namevar(stokes.V.Vy)...)
+            write(file, @namevar(time, precision)...)
+            write(file, @namevar(timestep, precision)...)
+            write(file, @namevar(stokes.V.Vx,precision)...)
+            write(file, @namevar(stokes.V.Vy,precision)...)
             if !isnothing(stokes.V.Vz)
-                write(file, @namevar(stokes.V.Vz)...)
+                write(file, @namevar(stokes.V.Vz, precision)...)
             end
-            write(file, @namevar(stokes.P)...)
-            write(file, @namevar(stokes.viscosity.η)...)
-            return write(file, @namevar(T)...)
+            write(file, @namevar(stokes.P, precision)...)
+            write(file, @namevar(stokes.viscosity.η, precision)...)
+            return write(file, @namevar(T, precision)...)
         end
         # Move the checkpoint file from the temporary directory to the destination directory
         return mv("$(tmpfname).h5", "$(fname).h5"; force = true)
@@ -69,7 +81,6 @@ file_path = "path/to/your/file.h5"
 
 # Use the load_checkpoint function to load the variables from the file
 P, T, Vx, Vy, Vz, η, t, dt = `load_checkpoint(file_path)``
-
 
 """
 function load_checkpoint_hdf5(file_path)
@@ -121,17 +132,17 @@ end
 
 Save `data` as the `fname.h5` HDF5 file
 """
-function save_hdf5(fname, data::Vararg{Any, N}) where {N}
+function save_hdf5(fname, data::Vararg{Any, N}; precision=Float32) where {N}
     return h5open("$(fname).h5", "w") do file
         for data_i in data
-            save_data(file, data_i)
+            save_data(file, data_i, precision)
         end
     end
 end
 
-@inline save_data(file, data) = write(file, @namevar(data)...)
+@inline save_data(file, data, precision) = write(file, @namevar(data, precision)...)
 
-function save_data(file, data::Geometry{N}) where {N}
+function save_data(file, data::Geometry{N}, ::Any) where {N}
     xci = center_coordinates(data)
     xvi = vertex_coordinates(data)
 

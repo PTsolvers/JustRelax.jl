@@ -85,7 +85,7 @@ In short, `JustRelax.jl` delivers a high‑performance, portable alternative to 
 
 ![Core dependencies of `JustRelax.jl`. \label{fig:dependencies}](figs/dependencies.png){width=75%}
 
-- **Continuous integration (CI) and testing**: The package is continuously tested and validated against a suite of benchmarks and model examples to ensure correctness and performance on various hardware configurations. The CI/CD pipeline is implemented using GitHub Actions, automatically running tests on every commit and pull request. GPU CI is run with Buildkite and on the Swiss National Supercomputing Centre (CSCS) GPU cluster. This ensures that the package remains robust and reliable across different hardware architectures and Julia versions.
+- **Continuous integration (CI) and testing**: The package is tested and validated against a suite of benchmarks and model examples to ensure correctness and performance on various hardware. The default CI/CD pipeline is implemented using GitHub Actions, automatically running tests on every commit and pull request. Single GPU CI is run on using JuliaGPU Buildkite and multi-GPU CI executes on the Swiss National Supercomputing Centre (CSCS) ALPS supercomputer. This ensures that the package remains robust and reliable across different hardware architectures and Julia versions.
   
 # Examples
 

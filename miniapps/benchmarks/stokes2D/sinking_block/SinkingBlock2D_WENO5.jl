@@ -243,9 +243,6 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     WENO_advection!(phases, (Vx_c, Vy_c), weno_c, di, dt)
     WENO_advection!(phases_blob, (Vx_c, Vy_c), weno_c, di, dt)
     WENO_advection!(phases_bg, (Vx_c, Vy_c), weno_c, di, dt)
-    clamp!(phases, 1.0, 2.0) # clamp phases to 1.0 and 2.0
-    clamp!(phases_blob, 0.0, 1.0) # clamp phases_blob to 0.0 and 1.0
-    clamp!(phases_bg, 0.0, 1.0) # clamp phases_bg to 0.0 and 1
 
     # update phase ratios
     update_phase_ratios_2D!(phase_ratios, (phases_bg, phases_blob), xci, xvi)
@@ -296,7 +293,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 end
 
 ar = 1 # aspect ratio
-n = 96
+n = 128
 nx = n * ar - 2
 ny = n - 2
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

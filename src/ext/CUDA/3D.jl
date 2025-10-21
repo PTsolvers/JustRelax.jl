@@ -493,7 +493,7 @@ end
 
 # Phase ratios with arrays
 
-function JR3D.update_phase_ratios!(
+function JR3D.update_phase_ratios_3D!(
         phase_ratios::JustPIC.PhaseRatios{CUDABackend, T},
         phase_arrays::NTuple{N, CuArray{U, 3}},
         xci,

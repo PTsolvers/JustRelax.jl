@@ -85,33 +85,29 @@ function phase_ratios_center_from_arrays!(phase_ratios::JustPIC.PhaseRatios, pha
 end
 
 @parallel_indices (I...) function phase_ratios_center_from_arrays_kernel!(
-        ratio_centers, phase_arrays::NTuple{N, AbstractArray}
-    ) where {N}
+    ratio_centers, phase_arrays::NTuple{N, AbstractArray}
+) where {N}
 
     values = ntuple(i -> phase_arrays[i][I...], Val(N))
-
-    total = zero(eltype(values[1]))
-    for i in 1:N
-        total += values[i]
-    end
+    # Sum
+    total = sum(values)
 
     # Normalize
-    normalized_values = ntuple(i -> values[i] / total, Val(N))
-    # Manual clamping
-    normalized_values = ntuple(i -> min(max(normalized_values[i], 0.0), 1.0), Val(N))
-    # Clean up very small values (round to zero if < 1e-5)
-    cleaned_values = ntuple(i -> normalized_values[i] < 1.0e-5 ? zero(eltype(normalized_values)) : normalized_values[i], Val(N))
-    # Renormalize to ensure sum = 1
-    final_total = zero(eltype(values[1]))  # Fixed: was 'value[1]'
-    for i in 1:N
-        final_total += cleaned_values[i]
-    end
+    normalized = values ./ total
 
-    normalized_values = ntuple(i -> cleaned_values[i] / final_total, Val(N))
+    # Clamp
+    clamped = map(x -> min(max(x, 0.0), 1.0), normalized)
 
-    # Update phase ratios array
+    # Threshold small values
+    cleaned = map(x -> x < 1e-5 ? zero(eltype(values)) : x, clamped)
+
+    # Renormalize
+    final_total = sum(cleaned)
+    final = cleaned ./ final_total
+
+    # Write back
     for k in 1:N
-        @index ratio_centers[k, I...] = normalized_values[k]
+        @index ratio_centers[k, I...] = final[k]
     end
 
     return nothing
@@ -137,84 +133,75 @@ end
 @parallel_indices (I...) function phase_ratios_vertex_from_arrays_kernel!(
         ratio_vertices, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, xvi::NTuple{ND}, di::NTuple{ND, T}
     ) where {N, ND, T}
-    w = ntuple(_ -> zero(T), Val(N))
+    w_vals = @MVector zeros(T, N)
+    total_weight = zero(T)
+
     # Vertex position
     cell_vertex = ntuple(d -> xvi[d][I[d]], Val(ND))
-    if ND == 2
-        ni = size(first(phase_arrays))
-        total_weight = zero(T)
-        w_vals = ntuple(_ -> zero(T), Val(N))
-        x_v, y_v = cell_vertex
+    ni = size(first(phase_arrays))
 
+    if ND == 2
         for offset₁ in -1:0, offset₂ in -1:0
             i_cell = I[1] + offset₁
             j_cell = I[2] + offset₂
             if 1 <= i_cell <= ni[1] && 1 <= j_cell <= ni[2]
                 x_c = xci[1][i_cell]
                 y_c = xci[2][j_cell]
-                wx = 1.0 - abs(x_v - x_c) / di[1]
-                wy = 1.0 - abs(y_v - y_c) / di[2]
+                wx = muladd(-abs(cell_vertex[1] - x_c), inv(di[1]), 1.0)
+                wy = muladd(-abs(cell_vertex[2] - y_c), inv(di[2]), 1.0)
                 weight = wx * wy
                 total_weight += weight
 
                 for k in 1:N
-                    phase_val = phase_arrays[k][i_cell, j_cell]
-                    w_vals = Base.setindex(w_vals, w_vals[k] + weight * phase_val, k)
+                    @inbounds w_vals[k] += weight * phase_arrays[k][i_cell, j_cell]
                 end
             end
         end
-        # Normalize and clamp only once at the end
-        w = ntuple(i -> w_vals[i] / total_weight, Val(N))
-        w = ntuple(i -> min(max(w[i], zero(T)), one(T)), Val(N))
-        # Clean up very small values
-        w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
-        total_phases = zero(T)
-        for i in 1:N
-            total_phases += w[i]
-        end
-
-        w = ntuple(i -> w[i] / total_phases, Val(N))
 
     elseif ND == 3
-        ni = size(first(phase_arrays))
-        w_vals = ntuple(_ -> zero(T), Val(N))
-        total_weight = zero(T)
         vertex_pos = ntuple(d -> xvi[d][I[d]], Val(ND))
         for offset₁ in -1:0, offset₂ in -1:0, offset₃ in -1:0
             i_cell = I[1] + offset₁
             j_cell = I[2] + offset₂
             k_cell = I[3] + offset₃
             if 1 <= i_cell <= ni[1] && 1 <= j_cell <= ni[2] && 1 <= k_cell <= ni[3]
-            cell_center = (xci[1][i_cell], xci[2][j_cell], xci[3][k_cell])
-            # Use trilinear weights for 3D interpolation
-            weight = 1.0
-            for d in 1:3
-                weight *= 1.0 - abs(vertex_pos[d] - cell_center[d]) / di[d]
-            end
-            total_weight += weight
-            for k in 1:N
-                phase_val = phase_arrays[k][i_cell, j_cell, k_cell]
-                w_vals = Base.setindex(w_vals, w_vals[k] + weight * phase_val, k)
-            end
+                cell_center = (xci[1][i_cell], xci[2][j_cell], xci[3][k_cell])
+                # Use trilinear weights for 3D interpolation
+                weight = 1.0
+                for d in 1:3
+                    weight *= (1.0 - abs(vertex_pos[d] - cell_center[d]) * inv(di[d]))
+                end
+                total_weight += weight
+
+                for k in 1:N
+                    @inbounds w_vals[k] += weight * phase_arrays[k][i_cell, j_cell]
+                end
             end
         end
+    end
 
-        # Normalize and clamp only once at the end
-        w = ntuple(i -> w_vals[i] / total_weight, Val(N))
-        w = ntuple(i -> min(max(w[i], zero(T)), one(T)), Val(N))
-        # Clean up very small values
-        w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
-        total_phases = zero(T)
-        for i in 1:N
-            total_phases += w[i]
+        # Normalize
+        @inbounds for k in 1:N
+            w_vals[k] /= total_weight
         end
 
-        w = ntuple(i -> w[i] / total_phases, Val(N))
-    end
-    # Write to vertex grid
-    for ip in cellaxes(ratio_vertices)
-        @index ratio_vertices[ip, I...] = w[ip]
-    end
+        # Clamp
+        @inbounds for k in 1:N
+            w_vals[k] = min(max(w_vals[k], zero(T)), one(T))
+        end
+
+        # Threshold small values and renormalize
+        total = zero(T)
+        @inbounds for k in 1:N
+            w_vals[k] = w_vals[k] < T(1e-5) ? zero(T) : w_vals[k]
+            total += w_vals[k]
+        end
+
+        @inbounds for k in 1:N
+            w_vals[k] /= total
+            @index ratio_vertices[k, I...] = w_vals[k]
+        end
+
     return nothing
 end
 
@@ -242,11 +229,9 @@ end
     ) where {N, ND, T}
 
     # Face index I corresponds to the face grid position
-    w = ntuple(_ -> zero(T), Val(N))
+    w_vals = @MVector zeros(T, N)
     total_weight = zero(T)
-    cell_center = getindex.(xci, I)
-    cell_face = @. cell_center + di * offsets / 2
-    ni = size(first(phase_arrays))
+
     # For staggered face grids, a face at position I lies between cells
     # We average from the two adjacent cells along the staggered dimension
     for side in 0:1
@@ -271,29 +256,35 @@ end
         total_weight += weight
 
         # Accumulate weighted phase values from this cell
-        for k in 1:N
-            phase_val = phase_arrays[k][cell_index...]
-            w = Base.setindex(w, w[k] + weight * phase_val, k)
+        @inbounds for k in 1:N
+            w_vals[k] += weight * phase_arrays[k][cell_index...]
         end
     end
 
-    # Normalize and clamp only once at the end
-    w = ntuple(i -> w[i] / total_weight, Val(N))
-
-    w = ntuple(i -> min(max(w[i], zero(T)), one(T)), Val(N))
-
-    # Clean up very small values
-    w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
-
-    total_phases = zero(T)
-    for i in 1:N
-        total_phases += w[i]
+    # Normalize
+    @inbounds for k in 1:N
+        w_vals[k] /= total_weight
     end
 
-    w = ntuple(i -> w[i] / total_phases, Val(N))
+    # Clamp
+    @inbounds for k in 1:N
+        w_vals[k] = min(max(w_vals[k], zero(T)), one(T))
+    end
+
+    # Clean up very small values and renormalize
+    total = zero(T)
+    @inbounds for k in 1:N
+        w_vals[k] = w_vals[k] < T(1e-5) ? zero(T) : w_vals[k]
+        total += w_vals[k]
+    end
+
+    @inbounds for k in 1:N
+        w_vals[k] /= total
+    end
+
     # Write to face grid
-    for ip in cellaxes(ratio_faces)
-        @index ratio_faces[ip, (I .+ offsets)...] = w[ip]
+    @inbounds for ip in 1:N
+        @index ratio_faces[ip, (I .+ offsets)...] = w_vals[ip]
     end
 
     return nothing
@@ -333,7 +324,7 @@ end
     ) where {N, ND, T}
 
     # I represents the midpoint grid position
-    w = ntuple(_ -> zero(T), Val(N))
+    w_vals = @MVector zeros(T, N)
     total_weight = zero(T)
 
     # For midpoint grids, we average from the corner cells
@@ -368,29 +359,35 @@ end
         total_weight += weight
 
         # Accumulate weighted phase values from this corner cell
-        for k in 1:N
-            phase_val = phase_arrays[k][cell_index...]
-            w = Base.setindex(w, w[k] + weight * phase_val, k)
+        @inbounds for k in 1:N
+            w_vals[k] += weight * phase_arrays[k][cell_index...]
         end
     end
 
-    # Normalize weights to ensure they sum to 1
-    w = ntuple(i -> w_vals[i] / total_weight, Val(N))
-    # Clamp it
-    w = ntuple(i -> min(max(w[i], zero(T)), one(T)), Val(N))
-    # Clean up very small values
-    w = ntuple(i -> w[i] < T(1e-5) ? zero(T) : w[i], Val(N))
-
-    total_phases = zero(T)
-    for i in 1:N
-        total_phases += w[i]
+    # Normalize
+    @inbounds for k in 1:N
+        w_vals[k] /= total_weight
     end
 
-    w = ntuple(i -> w[i] / total_phases, Val(N))
+    # Clamp
+    @inbounds for k in 1:N
+        w_vals[k] = min(max(w_vals[k], zero(T)), one(T))
+    end
 
-    # Write to midpoint grid - use cellaxes like the original implementation
-    for ip in cellaxes(ratio_midpoints)
-        @index ratio_midpoints[ip, (I .+ offsets)...] = w[ip]
+    # Clean up very small values and renormalize
+    total = zero(T)
+    @inbounds for k in 1:N
+        w_vals[k] = w_vals[k] < T(1e-5) ? zero(T) : w_vals[k]
+        total += w_vals[k]
+    end
+
+    @inbounds for k in 1:N
+        w_vals[k] /= total
+    end
+
+    # Write to midpoint grid
+    @inbounds for ip in 1:N
+        @index ratio_midpoints[ip, (I .+ offsets)...] = w_vals[ip]
     end
 
     return nothing

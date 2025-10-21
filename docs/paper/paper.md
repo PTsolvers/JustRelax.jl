@@ -10,11 +10,9 @@ tags:
 authors:
   - name: Albert de Montserrat
     orcid: 0000-0003-1694-3735
-    equal-contrib: true
     affiliation: 1
   - name: Pascal S. Aellig
     orcid: 0009-0008-9039-5646
-    equal-contrib: true
     affiliation: 2
   - name: Christian Schuler
     orcid: 0009-0004-9873-9774

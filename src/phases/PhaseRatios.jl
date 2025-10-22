@@ -85,8 +85,8 @@ function phase_ratios_center_from_arrays!(phase_ratios::JustPIC.PhaseRatios, pha
 end
 
 @parallel_indices (I...) function phase_ratios_center_from_arrays_kernel!(
-    ratio_centers, phase_arrays::NTuple{N, AbstractArray}
-) where {N}
+        ratio_centers, phase_arrays::NTuple{N, AbstractArray}
+    ) where {N}
 
     values = ntuple(i -> phase_arrays[i][I...], Val(N))
     # Sum
@@ -99,7 +99,7 @@ end
     clamped = map(x -> min(max(x, 0.0), 1.0), normalized)
 
     # Threshold small values
-    cleaned = map(x -> x < 1e-5 ? zero(eltype(values)) : x, clamped)
+    cleaned = map(x -> x < 1.0e-5 ? zero(eltype(values)) : x, clamped)
 
     # Renormalize
     final_total = sum(cleaned)
@@ -121,7 +121,7 @@ function phase_ratios_vertex_from_arrays!(
         phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractArray}, xvi::NTuple{ND}, xci::NTuple{ND}
     ) where {N, ND}
 
-    ni = size(first(phase_arrays)) .+1
+    ni = size(first(phase_arrays)) .+ 1
     di = compute_dx(xvi)
 
     @parallel (@idx ni) phase_ratios_vertex_from_arrays_kernel!(
@@ -180,27 +180,27 @@ end
         end
     end
 
-        # Normalize
-        @inbounds for k in 1:N
-            w_vals[k] /= total_weight
-        end
+    # Normalize
+    @inbounds for k in 1:N
+        w_vals[k] /= total_weight
+    end
 
-        # Clamp
-        @inbounds for k in 1:N
-            w_vals[k] = min(max(w_vals[k], zero(T)), one(T))
-        end
+    # Clamp
+    @inbounds for k in 1:N
+        w_vals[k] = min(max(w_vals[k], zero(T)), one(T))
+    end
 
-        # Threshold small values and renormalize
-        total = zero(T)
-        @inbounds for k in 1:N
-            w_vals[k] = w_vals[k] < T(1e-5) ? zero(T) : w_vals[k]
-            total += w_vals[k]
-        end
+    # Threshold small values and renormalize
+    total = zero(T)
+    @inbounds for k in 1:N
+        w_vals[k] = w_vals[k] < T(1.0e-5) ? zero(T) : w_vals[k]
+        total += w_vals[k]
+    end
 
-        @inbounds for k in 1:N
-            w_vals[k] /= total
-            @index ratio_vertices[k, I...] = w_vals[k]
-        end
+    @inbounds for k in 1:N
+        w_vals[k] /= total
+        @index ratio_vertices[k, I...] = w_vals[k]
+    end
 
     return nothing
 end
@@ -236,16 +236,18 @@ end
     # We average from the two adjacent cells along the staggered dimension
     for side in 0:1
         # Calculate which cell this face point samples from
-        cell_index = ntuple(d -> begin
-            if offsets[d] == 1  # This dimension is staggered
-                # Face I[d] is between cells I[d]-1 and I[d]
-                # side=0 gives left cell (I[d]-1), side=1 gives right cell (I[d])
-                I[d] - 1 + side
-            else
-                # Non-staggered dimension: use face index directly
-                I[d]
-            end
-        end, Val(ND))
+        cell_index = ntuple(
+            d -> begin
+                if offsets[d] == 1  # This dimension is staggered
+                    # Face I[d] is between cells I[d]-1 and I[d]
+                    # side=0 gives left cell (I[d]-1), side=1 gives right cell (I[d])
+                    I[d] - 1 + side
+                else
+                    # Non-staggered dimension: use face index directly
+                    I[d]
+                end
+            end, Val(ND)
+        )
 
         # Check if cell index is within bounds
         valid_cell = all(1 ≤ cell_index[d] ≤ ni[d] for d in 1:ND)
@@ -274,7 +276,7 @@ end
     # Clean up very small values and renormalize
     total = zero(T)
     @inbounds for k in 1:N
-        w_vals[k] = w_vals[k] < T(1e-5) ? zero(T) : w_vals[k]
+        w_vals[k] = w_vals[k] < T(1.0e-5) ? zero(T) : w_vals[k]
         total += w_vals[k]
     end
 
@@ -333,22 +335,24 @@ end
     num_corners = 2^num_staggered
 
     # Iterate over all corner combinations
-    for corner_bits in 0:(num_corners-1)
+    for corner_bits in 0:(num_corners - 1)
         # Calculate which cell this corner corresponds to
         bit_index = 0
-        cell_index = ntuple(d -> begin
-            if offsets[d] == 1  # This dimension is staggered
-                # Extract the bit for this staggered dimension
-                corner_bit = (corner_bits >> bit_index) & 1
-                bit_index += 1
-                # Midpoint I[d] is between cells I[d]-1 and I[d]
-                # corner_bit=0 gives left cell (I[d]-1), corner_bit=1 gives right cell (I[d])
-                I[d] - 1 + corner_bit
-            else
-                # Non-staggered dimension: use midpoint index directly
-                I[d]
-            end
-        end, Val(ND))
+        cell_index = ntuple(
+            d -> begin
+                if offsets[d] == 1  # This dimension is staggered
+                    # Extract the bit for this staggered dimension
+                    corner_bit = (corner_bits >> bit_index) & 1
+                    bit_index += 1
+                    # Midpoint I[d] is between cells I[d]-1 and I[d]
+                    # corner_bit=0 gives left cell (I[d]-1), corner_bit=1 gives right cell (I[d])
+                    I[d] - 1 + corner_bit
+                else
+                    # Non-staggered dimension: use midpoint index directly
+                    I[d]
+                end
+            end, Val(ND)
+        )
 
         # Check if cell index is within bounds
         valid_cell = all(1 ≤ cell_index[d] ≤ ni[d] for d in 1:ND)
@@ -377,7 +381,7 @@ end
     # Clean up very small values and renormalize
     total = zero(T)
     @inbounds for k in 1:N
-        w_vals[k] = w_vals[k] < T(1e-5) ? zero(T) : w_vals[k]
+        w_vals[k] = w_vals[k] < T(1.0e-5) ? zero(T) : w_vals[k]
         total += w_vals[k]
     end
 

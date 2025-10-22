@@ -29,8 +29,9 @@ fig = plot_particles(particles, pPhases;)
 - `units`: Units for the axis labels (default: `:km`)
 
 """
-function plot_particles(particles, pPhases;
-        chain= nothing,
+function plot_particles(
+        particles, pPhases;
+        chain = nothing,
         clrmap = :roma,
         title = "Particle Position",
         filename = nothing,
@@ -47,7 +48,8 @@ function plot_particles(particles, pPhases;
     f = Figure(; fontsize = 25, size = resolution)
 
     # Define axis
-    ax = Axis(f[1, 1];
+    ax = Axis(
+        f[1, 1];
         title = title,
         xlabel = "x [$units]",
         ylabel = "y [$units]",
@@ -64,12 +66,12 @@ function plot_particles(particles, pPhases;
     clr = pPhases.data[:]
     idxv = particles.index.data[:]
 
-    h = scatter!(ax, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), colormap =  clrmap, markersize = 1)
+    h = scatter!(ax, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), colormap = clrmap, markersize = 1)
 
     if !isnothing(chain)
-    chain_x = chain.coords[1].data[:] ./ conversion
-    chain_y = chain.coords[2].data[:] ./ conversion
-    scatter!(ax, Array(chain_x), Array(chain_y), color = linecolor, markersize = markersize)
+        chain_x = chain.coords[1].data[:] ./ conversion
+        chain_y = chain.coords[2].data[:] ./ conversion
+        scatter!(ax, Array(chain_x), Array(chain_y), color = linecolor, markersize = markersize)
     end
 
     Colorbar(f[1, 2], h)
@@ -107,7 +109,8 @@ Plots a 2D field from a CellArrays structure using Makie.jl
 f = plot_field(phase_ratios.center; title = "Phase Ratios at Cell Centers", units = :km)
 
 """
-function plot_field(data, grid::NTuple{N, LinRange{T, Int64}};
+function plot_field(
+        data, grid::NTuple{N, LinRange{T, Int64}};
         clrmap = :roma,
         title = "Field Plot",
         filename = nothing,
@@ -121,7 +124,8 @@ function plot_field(data, grid::NTuple{N, LinRange{T, Int64}};
     f = Figure(; fontsize = 25, size = resolution)
 
     # Define axis
-    ax = Axis(f[1, 1];
+    ax = Axis(
+        f[1, 1];
         title = title,
         xlabel = "x [$units]",
         ylabel = "y [$units]",

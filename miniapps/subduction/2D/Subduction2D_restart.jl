@@ -77,16 +77,16 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # ----------------------------------------------------
 
     # Load particles -------------------------------
-    data            = load(joinpath(figdir, "checkpoint", "particles.jld2"))
-    particles       = TA(backend)(Float64, data["particles"])
-    pPhases         = TA(backend)(Float64, data["phases"])
-    phase_ratios    = TA(backend)(Float64, data["phase_ratios"])
-    particle_args   = TA(backend).(Float64, data["particle_args"])
+    data = load(joinpath(figdir, "checkpoint", "particles.jld2"))
+    particles = TA(backend)(Float64, data["particles"])
+    pPhases = TA(backend)(Float64, data["phases"])
+    phase_ratios = TA(backend)(Float64, data["phase_ratios"])
+    particle_args = TA(backend).(Float64, data["particle_args"])
     particle_args_reduced = TA(backend).(Float64, data["particle_args_reduced"])
 
-    subgrid_arrays  = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity staggered grids
-    grid_vxi        = velocity_grids(xci, xvi, di)
+    grid_vxi = velocity_grids(xci, xvi, di)
 
     # particle fields for the stress rotation
     pτ = StressParticles(particles)

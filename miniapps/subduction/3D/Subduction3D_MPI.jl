@@ -76,7 +76,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 150, 175, 125
-       particles = init_particles(
+    particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)

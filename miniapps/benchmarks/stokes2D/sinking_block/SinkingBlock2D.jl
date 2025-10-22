@@ -74,9 +74,9 @@ function plot_particles(particles, pPhases)
     clr = pPhases.data[:]
     # clr = pϕ.data[:]
     idxv = particles.index.data[:]
-    f,ax,h=scatter(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:roma, markersize=1)
-    Colorbar(f[1,2], h)
-    f
+    f, ax, h = scatter(Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), colormap = :roma, markersize = 1)
+    Colorbar(f[1, 2], h)
+    return f
 end
 # --------------------------------------------------------------------------------
 # BEGIN MAIN SCRIPT
@@ -160,52 +160,52 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 
     it = 0 # iteration counter
     while it < 50
-    # Stokes solver ----------------
-    args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
-    solve!(
-        stokes,
-        pt_stokes,
-        di,
-        flow_bcs,
-        ρg,
-        phase_ratios,
-        rheology,
-        args,
-        dt,
-        igg;
-        kwargs = (
-            iterMax = 150.0e3,
-            nout = 1.0e3,
-            viscosity_cutoff = η_cutoff,
-            verbose = false,
+        # Stokes solver ----------------
+        args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+        solve!(
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            phase_ratios,
+            rheology,
+            args,
+            dt,
+            igg;
+            kwargs = (
+                iterMax = 150.0e3,
+                nout = 1.0e3,
+                viscosity_cutoff = η_cutoff,
+                verbose = false,
+            )
         )
-    )
-    dt = compute_dt(stokes, di, igg)
-    # ------------------------------
+        dt = compute_dt(stokes, di, igg)
+        # ------------------------------
 
-    Vx_v = @zeros(ni .+ 1...)
-    Vy_v = @zeros(ni .+ 1...)
-    velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-    velocity = @. √(Vx_v^2 + Vy_v^2)
+        Vx_v = @zeros(ni .+ 1...)
+        Vy_v = @zeros(ni .+ 1...)
+        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        velocity = @. √(Vx_v^2 + Vy_v^2)
 
-    # Advection --------------------
-    # advect particles in space
-    advection_MQS!(particles, RungeKutta4(), @velocity(stokes), grid_vxi, dt)
-    # advect particles in memory
-    move_particles!(particles, xvi, particle_args)
-    # check if we need to inject particles
-    inject_particles_phase!(particles, pPhases, (), (), xvi)
-    # update phase ratios
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        # Advection --------------------
+        # advect particles in space
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), grid_vxi, dt)
+        # advect particles in memory
+        move_particles!(particles, xvi, particle_args)
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
 
-    # Plotting ---------------------
-    f, _, h = heatmap(velocity, colormap = :vikO)
-    Colorbar(f[1, 2], h)
-    display(f)
-    it += 1
-    @show it
-    # ------------------------------
+        # Plotting ---------------------
+        f, _, h = heatmap(velocity, colormap = :vikO)
+        Colorbar(f[1, 2], h)
+        display(f)
+        it += 1
+        @show it
+        # ------------------------------
     end
     return nothing
 end

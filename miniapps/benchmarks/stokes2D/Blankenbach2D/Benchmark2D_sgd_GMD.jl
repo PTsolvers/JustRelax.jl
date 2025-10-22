@@ -382,20 +382,24 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
 
             fig3 = Figure(size = (1800, 1200), font = "TeX Gyre Heros Makie")
-            ax31 = Axis(fig3[1:2,1:2], aspect = DataAspect(), title = "t=$(round(t / (1.0e6 * 3600 * 24 * 365.25); digits = 2)) Myrs",
-                titlesize = 20,
-                yticklabelsize = 12,
-                xticklabelsize = 12,
-                xlabelsize = 12,
-                ylabelsize = 12)
-            ax32 = Axis(fig3[1, 4:5], aspect = 3, title = L"V_{RMS}",
+            ax31 = Axis(
+                fig3[1:2, 1:2], aspect = DataAspect(), title = "t=$(round(t / (1.0e6 * 3600 * 24 * 365.25); digits = 2)) Myrs",
                 titlesize = 20,
                 yticklabelsize = 12,
                 xticklabelsize = 12,
                 xlabelsize = 12,
                 ylabelsize = 12
             )
-            ax33 = Axis(fig3[2, 4:5], aspect = 3, title = L"Nu_{top}",
+            ax32 = Axis(
+                fig3[1, 4:5], aspect = 3, title = L"V_{RMS}",
+                titlesize = 20,
+                yticklabelsize = 12,
+                xticklabelsize = 12,
+                xlabelsize = 12,
+                ylabelsize = 12
+            )
+            ax33 = Axis(
+                fig3[2, 4:5], aspect = 3, title = L"Nu_{top}",
                 titlesize = 20,
                 yticklabelsize = 12,
                 xticklabelsize = 12,
@@ -404,7 +408,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             )
             hm = heatmap!(ax31, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :lipari, colorrange = (273, 1273))
             contour!(ax31, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), levels = 4, color = :white, linewidth = 1)
-            Colorbar(fig3[1:2,3], hm; height = Relative(0.75), label = "T [K]", labelsize = 14, ticklabelsize = 12)
+            Colorbar(fig3[1:2, 3], hm; height = Relative(0.75), label = "T [K]", labelsize = 14, ticklabelsize = 12)
             l1 = lines!(ax32, trms ./ (1.0e6 * (365.25 * 24 * 60 * 60)), Urms, color = :black)
             l2 = lines!(ax33, trms ./ (1.0e6 * (365.25 * 24 * 60 * 60)), Nu_top, color = :black)
             fig3
@@ -467,10 +471,10 @@ if runtype == :single
         igg
     end
     # run main script
-    main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, do_vtk = do_vtk, finalize_MPI = true);
+    main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, do_vtk = do_vtk, finalize_MPI = true)
 
 elseif runtype == :multiple
-     nrange = 5:8
+    nrange = 5:8
     all_results = Dict()
 
     for i in nrange
@@ -478,7 +482,7 @@ elseif runtype == :multiple
         local n = 2^i
         local nx = n
         local ny = n
-        local igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...)
+        local igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_MPI)...)
 
         figdir = joinpath("Blankenbach_subgrid", "$(nx)x$(ny)")
 
@@ -493,32 +497,36 @@ elseif runtype == :multiple
 
     # plot all results together
     fig3 = Figure(size = (1800, 1200), font = "TeX Gyre Heros Makie")
-        ax31 = Axis(fig3[1:2,1:2], aspect = DataAspect(), title = "t=$(round(t / (1.0e6 * 3600 * 24 * 365.25); digits = 2)) Myrs",
-            titlesize = 20,
-            yticklabelsize = 12,
-            xticklabelsize = 12,
-            xlabelsize = 12,
-            ylabelsize = 12)
-        ax32 = Axis(fig3[1, 4:5], aspect = 3, title = L"V_{RMS}",
-            titlesize = 20,
-            yticklabelsize = 12,
-            xticklabelsize = 12,
-            xlabelsize = 12,
-            ylabelsize = 12
-        )
-        ax33 = Axis(fig3[2, 4:5], aspect = 3, title = L"Nu_{top}",
-            titlesize = 20,
-            yticklabelsize = 12,
-            xticklabelsize = 12,
-            xlabelsize = 12,
-            ylabelsize = 12
-        )
+    ax31 = Axis(
+        fig3[1:2, 1:2], aspect = DataAspect(), title = "t=$(round(t / (1.0e6 * 3600 * 24 * 365.25); digits = 2)) Myrs",
+        titlesize = 20,
+        yticklabelsize = 12,
+        xticklabelsize = 12,
+        xlabelsize = 12,
+        ylabelsize = 12
+    )
+    ax32 = Axis(
+        fig3[1, 4:5], aspect = 3, title = L"V_{RMS}",
+        titlesize = 20,
+        yticklabelsize = 12,
+        xticklabelsize = 12,
+        xlabelsize = 12,
+        ylabelsize = 12
+    )
+    ax33 = Axis(
+        fig3[2, 4:5], aspect = 3, title = L"Nu_{top}",
+        titlesize = 20,
+        yticklabelsize = 12,
+        xticklabelsize = 12,
+        xlabelsize = 12,
+        ylabelsize = 12
+    )
 
     T = all_results[2^last(nrange)].T
     xvi = all_results[2^last(nrange)].xvi
     hm = heatmap!(ax31, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(T[2:(end - 1), :]), colormap = :lipari, colorrange = (273, 1273))
     contour!(ax31, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), levels = 4, color = :white, linewidth = 1)
-    Colorbar(fig3[1:2,3], hm; height = Relative(0.75), label = "T [K]", labelsize = 14, ticklabelsize = 12)
+    Colorbar(fig3[1:2, 3], hm; height = Relative(0.75), label = "T [K]", labelsize = 14, ticklabelsize = 12)
 
     for (n, data) in all_results
         trms = data.trms

@@ -226,58 +226,58 @@ function main(igg, nx, ny)
 
         (; η_vep, η) = stokes.viscosity
         if do_vtk && (it == 1 || rem(it, 1) == 0)
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        velocity_v = @. √(Vx_v^2 .+ Vy_v^2)
-        data_v = (;
-            Vx = Array(Vx_v),
-            Vy = Array(Vy_v),
-            Vel = Array(velocity_v),
-        )
-        data_c = (;
-            stress_II = Array(stokes.τ.II),
-            strain_rate_II = Array(stokes.ε.II),
-            P = Array(stokes.P),
-            visc_eff = Array(η_vep),
-        )
-        velocity_v = (
-            Array(Vx_v),
-            Array(Vy_v),
-        )
-        JustRelax.DataIO.save_vtk(
-            joinpath(vtkdir, "vtk_" * lpad("$it", 6, "0")),
-            xvi,
-            xci,
-            data_v,
-            data_c,
-            velocity_v;
-            t = t,
-            pvd = joinpath(vtkdir, "Crameri2012")
-        )
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            velocity_v = @. √(Vx_v^2 .+ Vy_v^2)
+            data_v = (;
+                Vx = Array(Vx_v),
+                Vy = Array(Vy_v),
+                Vel = Array(velocity_v),
+            )
+            data_c = (;
+                stress_II = Array(stokes.τ.II),
+                strain_rate_II = Array(stokes.ε.II),
+                P = Array(stokes.P),
+                visc_eff = Array(η_vep),
+            )
+            velocity_v = (
+                Array(Vx_v),
+                Array(Vy_v),
+            )
+            JustRelax.DataIO.save_vtk(
+                joinpath(vtkdir, "vtk_" * lpad("$it", 6, "0")),
+                xvi,
+                xci,
+                data_v,
+                data_c,
+                velocity_v;
+                t = t,
+                pvd = joinpath(vtkdir, "Crameri2012")
+            )
         end
 
         if it == 1 || rem(it, 1) == 0
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        fig = Figure(size = (900, 900), title = "t = $t")
-        ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            fig = Figure(size = (900, 900), title = "t = $t")
+            ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
 
-        # Make particles plottable
-        # nt = 5
-        # p = particles.coords
-        # ppx, ppy = p
-        # pxv = ppx.data[:] ./ 1.0e3
-        # pyv = ppy.data[:] ./ 1.0e3
-        # clr = pPhases.data[:]
-        # idxv = particles.index.data[:]
-        heatmap!(ax, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(stokes.V.Vy); colormap = :vikO, colorrange = (-maximum(stokes.V.Vy) , maximum(stokes.V.Vy)))
-        # scatter!(ax, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 2, colormap = :grayC)
-        arrows2d!(
-            ax,
-            xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
-            lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),
-            color = :red,
-        )
-        save(joinpath(figdir, "$(it).png"), fig)
-        display(fig)
+            # Make particles plottable
+            # nt = 5
+            # p = particles.coords
+            # ppx, ppy = p
+            # pxv = ppx.data[:] ./ 1.0e3
+            # pyv = ppy.data[:] ./ 1.0e3
+            # clr = pPhases.data[:]
+            # idxv = particles.index.data[:]
+            heatmap!(ax, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(stokes.V.Vy); colormap = :vikO, colorrange = (-maximum(stokes.V.Vy), maximum(stokes.V.Vy)))
+            # scatter!(ax, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 2, colormap = :grayC)
+            arrows2d!(
+                ax,
+                xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
+                lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),
+                color = :red,
+            )
+            save(joinpath(figdir, "$(it).png"), fig)
+            display(fig)
         end
     end
     return nothing

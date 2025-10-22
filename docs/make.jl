@@ -113,7 +113,7 @@ makedocs(;
             "Checkpointing/Restart" => Any[
                 "Checkpointing" => "man/checkpointing.md",
                 "Restart" => "man/restart.md",
-            ]
+            ],
         ],
         "List of functions" => "man/listfunctions.md",
         "References" => Any[

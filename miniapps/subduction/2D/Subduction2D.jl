@@ -278,7 +278,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 10) == 0
             checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
-            checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced ,t = t, dt = dt, it = it)
+            checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)

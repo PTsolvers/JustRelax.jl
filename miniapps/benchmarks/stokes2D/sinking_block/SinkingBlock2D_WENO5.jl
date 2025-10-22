@@ -114,9 +114,9 @@ function plot_particles(particles, pPhases)
     clr = pPhases.data[:]
     # clr = pϕ.data[:]
     idxv = particles.index.data[:]
-    f,ax,h=scatter(Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:roma, markersize=1)
-    Colorbar(f[1,2], h)
-    f
+    f, ax, h = scatter(Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), colormap = :roma, markersize = 1)
+    Colorbar(f[1, 2], h)
+    return f
 end
 # --------------------------------------------------------------------------------
 # BEGIN MAIN SCRIPT
@@ -169,7 +169,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 
     phases = @zeros(ni...)
     # phases = Float64.([argmax(p) for p in Array(phase_ratios.center)])
-    weno = WENO5(backend_JR, Val(2), ni.+1) # ni.+1 for Temp
+    weno = WENO5(backend_JR, Val(2), ni .+ 1) # ni.+1 for Temp
     weno_c = WENO5(backend_JR, Val(2), ni) # ni.+1 for Temp
     init_phases!(phases, xc_anomaly, abs(yc_anomaly), r_anomaly, xci[1], xci[2])
 
@@ -208,86 +208,86 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 
     it = 0 # iteration counter
     while it < 50
-    # Stokes solver ----------------
-    args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
-    solve!(
-        stokes,
-        pt_stokes,
-        di,
-        flow_bcs,
-        ρg,
-        phase_ratios,
-        rheology,
-        args,
-        dt,
-        igg;
-        kwargs = (
-            iterMax = 150.0e3,
-            nout = 1.0e3,
-            viscosity_cutoff = η_cutoff,
-            verbose = false,
+        # Stokes solver ----------------
+        args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+        solve!(
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            phase_ratios,
+            rheology,
+            args,
+            dt,
+            igg;
+            kwargs = (
+                iterMax = 150.0e3,
+                nout = 1.0e3,
+                viscosity_cutoff = η_cutoff,
+                verbose = false,
+            )
         )
-    )
-    dt = compute_dt(stokes, di, igg)
-    # ------------------------------
+        dt = compute_dt(stokes, di, igg)
+        # ------------------------------
 
-    Vx_v = @zeros(ni .+ 1...)
-    Vy_v = @zeros(ni .+ 1...)
-    Vx_c = @zeros(ni...)
-    Vy_c = @zeros(ni...)
-    velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-    velocity2center!(Vx_c, Vy_c, @velocity(stokes)...)
-    velocity = @. √(Vx_v^2 + Vy_v^2)
+        Vx_v = @zeros(ni .+ 1...)
+        Vy_v = @zeros(ni .+ 1...)
+        Vx_c = @zeros(ni...)
+        Vy_c = @zeros(ni...)
+        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        velocity2center!(Vx_c, Vy_c, @velocity(stokes)...)
+        velocity = @. √(Vx_v^2 + Vy_v^2)
 
-    # Advection ---------------------
-    WENO_advection!(phases, (Vx_c, Vy_c), weno_c, di, dt)
-    WENO_advection!(phases_blob, (Vx_c, Vy_c), weno_c, di, dt)
-    WENO_advection!(phases_bg, (Vx_c, Vy_c), weno_c, di, dt)
+        # Advection ---------------------
+        WENO_advection!(phases, (Vx_c, Vy_c), weno_c, di, dt)
+        WENO_advection!(phases_blob, (Vx_c, Vy_c), weno_c, di, dt)
+        WENO_advection!(phases_bg, (Vx_c, Vy_c), weno_c, di, dt)
 
-    # update phase ratios
-    update_phase_ratios_2D!(phase_ratios, (phases_bg, phases_blob), xci, xvi)
+        # update phase ratios
+        update_phase_ratios_2D!(phase_ratios, (phases_bg, phases_blob), xci, xvi)
 
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni...), P = stokes.P))
-    # Plotting ---------------------
-    fig = Figure(size = (1200, 1200))
-    ax1 = Axis(fig[1, 1]; aspect = DataAspect(), title = "Velocity")
-    ax2 = Axis(fig[1, 3]; aspect = DataAspect(), title = "Phase ratio center")
-    ax3 = Axis(fig[2, 1]; aspect = DataAspect(), title = "Phase ratio vertex")
-    ax4 = Axis(fig[2, 3]; aspect = DataAspect(), title = "Phase ratio Vx")
-    ax5 = Axis(fig[3, 1]; aspect = DataAspect(), title = "Phase ratio Vy")
-    ax6 = Axis(fig[3, 3]; aspect = DataAspect(), title = "Density")
+        compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni...), P = stokes.P))
+        # Plotting ---------------------
+        fig = Figure(size = (1200, 1200))
+        ax1 = Axis(fig[1, 1]; aspect = DataAspect(), title = "Velocity")
+        ax2 = Axis(fig[1, 3]; aspect = DataAspect(), title = "Phase ratio center")
+        ax3 = Axis(fig[2, 1]; aspect = DataAspect(), title = "Phase ratio vertex")
+        ax4 = Axis(fig[2, 3]; aspect = DataAspect(), title = "Phase ratio Vx")
+        ax5 = Axis(fig[3, 1]; aspect = DataAspect(), title = "Phase ratio Vy")
+        ax6 = Axis(fig[3, 3]; aspect = DataAspect(), title = "Density")
 
-    pp_c = [argmax(p) for p in Array(phase_ratios.center)]
-    pp_v = [argmax(p) for p in Array(phase_ratios.vertex)]
-    pp_Vx = [argmax(p) for p in Array(phase_ratios.Vx)]
-    pp_Vy = [argmax(p) for p in Array(phase_ratios.Vy)]
+        pp_c = [argmax(p) for p in Array(phase_ratios.center)]
+        pp_v = [argmax(p) for p in Array(phase_ratios.vertex)]
+        pp_Vx = [argmax(p) for p in Array(phase_ratios.Vx)]
+        pp_Vy = [argmax(p) for p in Array(phase_ratios.Vy)]
 
-    h1 = heatmap!(ax1, (xvi./1e3)..., Array(velocity), colormap = :vikO)
-    Colorbar(fig[1, 2], h1)
+        h1 = heatmap!(ax1, (xvi ./ 1.0e3)..., Array(velocity), colormap = :vikO)
+        Colorbar(fig[1, 2], h1)
 
-    h2 = heatmap!(ax2, (xci./1e3)..., Array(pp_c); colormap = :roma)
-    Colorbar(fig[1, 4], h2)
+        h2 = heatmap!(ax2, (xci ./ 1.0e3)..., Array(pp_c); colormap = :roma)
+        Colorbar(fig[1, 4], h2)
 
-    h3 = heatmap!(ax3, (xvi./1e3)..., Array(pp_v); colormap = :roma)
-    Colorbar(fig[2, 4], h3)
+        h3 = heatmap!(ax3, (xvi ./ 1.0e3)..., Array(pp_v); colormap = :roma)
+        Colorbar(fig[2, 4], h3)
 
-    h4 = heatmap!(ax4, (xvi./1e3)..., Array(pp_Vx); colormap = :roma)
-    Colorbar(fig[2, 2], h4)
+        h4 = heatmap!(ax4, (xvi ./ 1.0e3)..., Array(pp_Vx); colormap = :roma)
+        Colorbar(fig[2, 2], h4)
 
-    h5 = heatmap!(ax5, (xvi./1e3)..., Array(pp_Vy); colormap = :roma)
-    Colorbar(fig[3, 2], h5)
+        h5 = heatmap!(ax5, (xvi ./ 1.0e3)..., Array(pp_Vy); colormap = :roma)
+        Colorbar(fig[3, 2], h5)
 
-    h6 = heatmap!(ax6, (xci./1e3)..., Array(ρg[2]./9.81); colormap = :lapaz)
-    Colorbar(fig[3, 4], h6)
+        h6 = heatmap!(ax6, (xci ./ 1.0e3)..., Array(ρg[2] ./ 9.81); colormap = :lapaz)
+        Colorbar(fig[3, 4], h6)
 
-    linkaxes!(ax1, ax2, ax3, ax4, ax5)
-    # f3, ax3, h3 = heatmap(xvi..., Array(pp_c); colormap = :roma)
-    # Colorbar(f3[1, 2], h3)
+        linkaxes!(ax1, ax2, ax3, ax4, ax5)
+        # f3, ax3, h3 = heatmap(xvi..., Array(pp_c); colormap = :roma)
+        # Colorbar(f3[1, 2], h3)
 
-    display(fig)
-    it += 1
-    @show it
-    # ------------------------------
+        display(fig)
+        it += 1
+        @show it
+        # ------------------------------
     end
     return nothing
 end

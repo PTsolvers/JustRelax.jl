@@ -46,21 +46,21 @@ end
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = false)
-    
+
     # Physical domain ------------------------------------
-    ly     = 40.0e3         # domain length in y
-    lx     = 70.0e3         # domain length in x
-    ni     = nx, ny         # number of cells
-    li     = lx, ly         # domain length in x- and y-
-    di     = @. li / ni     # grid step in x- and -y
+    ly = 40.0e3         # domain length in y
+    lx = 70.0e3         # domain length in x
+    ni = nx, ny         # number of cells
+    li = lx, ly         # domain length in x- and y-
+    di = @. li / ni     # grid step in x- and -y
     origin = 0.0, -ly       # origin coordinates (15km f sticky air layer)
-    grid   = Geometry(ni, li; origin = origin)
+    grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid     # nodes at the center and vertices of the cells
     # ----------------------------------------------------
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies(; is_TP_Conductivity = false)
-    κ        = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
-    dt       = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
+    κ = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
+    dt = dt_diff = 0.5 * min(di...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -71,63 +71,63 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
-    pT, pPhases      = init_cell_arrays(particles, Val(3))
-    particle_args    = (pT, pPhases)
+    pT, pPhases = init_cell_arrays(particles, Val(3))
+    particle_args = (pT, pPhases)
 
     # Elliptical temperature anomaly
-    xc_anomaly    = lx / 2           # origin of thermal anomaly
-    yc_anomaly    = 40.0e3           # origin of thermal anomaly
-    r_anomaly     = 3.0e3            # radius of perturbation
-    phase_ratios  = PhaseRatios(backend, length(rheology), ni)
+    xc_anomaly = lx / 2           # origin of thermal anomaly
+    yc_anomaly = 40.0e3           # origin of thermal anomaly
+    r_anomaly = 3.0e3            # radius of perturbation
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes        = StokesArrays(backend_JR, ni)
-    pt_stokes     = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √2.1)
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal       = ThermalArrays(backend_JR, ni)
-    thermal_bc    = TemperatureBoundaryConditions(;
+    thermal = ThermalArrays(backend_JR, ni)
+    thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
 
     # Initialize constant temperature
-    thermal.T    .= 273.0 + 400
+    thermal.T .= 273.0 + 400
     thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
-    ρg            = @zeros(ni...), @zeros(ni...)
+    ρg = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology
-    args          = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
-    pt_thermal    = PTThermalCoeffs(
+    pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 1.0e-3 / √2.1
     )
 
     # Boundary conditions
-    flow_bcs      = VelocityBoundaryConditions(;
+    flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
     )
     ## Compression and not extension - fix this
-    εbg           = 5.0e-14
-    stokes.V.Vx  .= PTArray(backend_JR)([ -(x - lx / 2) * εbg for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy  .= PTArray(backend_JR)([ (ly - abs(y)) * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    εbg = 5.0e-14
+    stokes.V.Vx .= PTArray(backend_JR)([ -(x - lx / 2) * εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend_JR)([ (ly - abs(y)) * εbg for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    T_buffer      = @zeros(ni .+ 1)
-    Told_buffer   = similar(T_buffer)
+    T_buffer = @zeros(ni .+ 1)
+    Told_buffer = similar(T_buffer)
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
@@ -136,7 +136,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # IO -----------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
-        vtk_dir    = joinpath(figdir, "vtk")
+        vtk_dir = joinpath(figdir, "vtk")
         take(vtk_dir)
     end
     take(figdir)
@@ -144,11 +144,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # Plot initial T and η profiles
     let
-        Yv        = [y for x in xvi[1], y in xvi[2]][:]
-        Y         = [y for x in xci[1], y in xci[2]][:]
-        fig       = Figure(size = (1200, 900))
-        ax1       = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
-        ax2       = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
+        Yv = [y for x in xvi[1], y in xvi[2]][:]
+        Y = [y for x in xci[1], y in xci[2]][:]
+        fig = Figure(size = (1200, 900))
+        ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
+        ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
         scatter!(ax1, Array(thermal.T[2:(end - 1), :][:]), Yv ./ 1.0e3)
         scatter!(ax2, Array(log10.(stokes.viscosity.η[:])), Y ./ 1.0e3)
         ylims!(ax1, minimum(xvi[2]) ./ 1.0e3, 0)
@@ -160,12 +160,12 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     local Vx_v, Vy_v
     if do_vtk
-        Vx_v      = @zeros(ni .+ 1...)
-        Vy_v      = @zeros(ni .+ 1...)
+        Vx_v = @zeros(ni .+ 1...)
+        Vy_v = @zeros(ni .+ 1...)
     end
 
     # Time loop
-    t, it        = 0.0, 0
+    t, it = 0.0, 0
     while it < 1
 
         # Stokes solver ----------------

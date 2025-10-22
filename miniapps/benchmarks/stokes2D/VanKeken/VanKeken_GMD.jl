@@ -181,16 +181,18 @@ function VanKeken2D(igg; ny = 64, nx = 64, figdir = "model_figs", finalize_MPI =
         # Plotting ---------------------
         if it == 1 || rem(it, 25) == 0 || t >= tmax
             fig = Figure(size = (1000, 1000), font = "TeX Gyre Heros Makie")
-            ax1 = Axis(fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
+            ax1 = Axis(
+                fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
                 titlesize = 20,
                 yticklabelsize = 12,
                 xticklabelsize = 12,
                 xlabelsize = 12,
                 ylabelsize = 12
             )
-            h=heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :lapaz)
+            h = heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :lapaz)
             Colorbar(fig[1:2, 2], h; height = Relative(1.0), label = "Density", labelsize = 20, ticklabelsize = 12)
-            ax2 = Axis(fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel =  L"V_{RMS}",
+            ax2 = Axis(
+                fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel = L"V_{RMS}",
                 titlesize = 20,
                 yticklabelsize = 12,
                 xticklabelsize = 12,
@@ -238,7 +240,7 @@ elseif runtype == :multiple
         local n = 2^i
         local nx = n
         local ny = n
-        local igg = IGG(init_global_grid(nx, ny, 1; init_MPI=init_MPI)...)
+        local igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_MPI)...)
 
         figdir = joinpath("VanKenken", "$(nx)x$(ny)")
 
@@ -253,7 +255,8 @@ elseif runtype == :multiple
 
     # plot all results together
     fig = Figure(size = (1000, 1000), font = "TeX Gyre Heros Makie")
-    ax1 = Axis(fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
+    ax1 = Axis(
+        fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
         titlesize = 20,
         yticklabelsize = 12,
         xticklabelsize = 12,
@@ -263,9 +266,10 @@ elseif runtype == :multiple
 
     ρg = all_results[2^last(nrange)].ρg
     xci = all_results[2^last(nrange)].xci
-    h=heatmap!(ax1, xci[1], xci[2], Array(ρg), colormap = :lapaz)
+    h = heatmap!(ax1, xci[1], xci[2], Array(ρg), colormap = :lapaz)
     Colorbar(fig[1:2, 2], h; height = Relative(1.0), label = "Density", labelsize = 20, ticklabelsize = 12)
-    ax2 = Axis(fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel =  L"V_{RMS}",
+    ax2 = Axis(
+        fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel = L"V_{RMS}",
         titlesize = 20,
         yticklabelsize = 12,
         xticklabelsize = 12,

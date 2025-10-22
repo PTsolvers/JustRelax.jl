@@ -180,16 +180,18 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
         # Plotting ---------------------
         if it == 1 || rem(it, 25) == 0 || t >= tmax
             fig = Figure(size = (1000, 1000), font = "TeX Gyre Heros Makie")
-            ax1 = Axis(fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
+            ax1 = Axis(
+                fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
                 titlesize = 20,
                 yticklabelsize = 12,
                 xticklabelsize = 12,
                 xlabelsize = 12,
                 ylabelsize = 12
             )
-            h=heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :lapaz)
+            h = heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :lapaz)
             Colorbar(fig[1:2, 2], h; height = Relative(1.0), label = "Density", labelsize = 20, ticklabelsize = 12)
-            ax2 = Axis(fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel =  L"V_{RMS}",
+            ax2 = Axis(
+                fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel = L"V_{RMS}",
                 titlesize = 20,
                 yticklabelsize = 12,
                 xticklabelsize = 12,

@@ -81,7 +81,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -149,6 +149,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     if do_vtk
         vtk_dir = joinpath(figdir, "vtk")
         take(vtk_dir)
+        checkpoint = joinpath(figdir, "checkpoint")
+        take(checkpoint)
     end
     take(figdir)
     # ----------------------------------------------------
@@ -221,6 +223,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         dt = compute_dt(stokes, di) * 0.8
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -274,7 +277,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 10) == 0
-            # checkpointing(figdir, stokes, thermal.T, η, t)
+            checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
+            checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)

@@ -125,7 +125,7 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 60, 80, 40
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -143,7 +143,7 @@ function main(igg, nx, ny)
     # RockRatios
     air_phase = 1
     ϕ = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, (phase_ratios.Vx, phase_ratios.Vy), air_phase)
+    update_rock_ratio!(ϕ, phase_ratios, air_phase)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -161,7 +161,7 @@ function main(igg, nx, ny)
     args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
-    compute_viscosity!(stokes, phase_ratios, args, rheology, air_phase, (1.0e18, 1.0e24))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (1.0e18, 1.0e24); air_phase = air_phase)
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
@@ -174,11 +174,14 @@ function main(igg, nx, ny)
     Vy_v = @zeros(ni .+ 1...)
 
     figdir = "Crameri2012"
+    vtkdir = joinpath(figdir, "vtk")
     take(figdir)
+    take(vtkdir)
 
     # Time loop
     t, it = 0.0, 0
     dt = 10.0e3 * (3600 * 24 * 365.25)
+    dt_max = dt
 
     while it < 20
 
@@ -215,117 +218,70 @@ function main(igg, nx, ny)
         inject_particles_phase!(particles, pPhases, (), (), xvi)
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, (phase_ratios.Vx, phase_ratios.Vy), air_phase)
+        update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
         @show it += 1
         t += dt
 
 
         (; η_vep, η) = stokes.viscosity
-        # if do_vtk
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        velocity_v = @. √(Vx_v^2 .+ Vy_v^2)
-        data_v = (;
-            τII = Array(stokes.τ.II),
-            εII = Array(stokes.ε.II),
-            Vx = Array(Vx_v),
-            Vy = Array(Vy_v),
-            Vel = Array(velocity_v),
-        )
-        data_c = (;
-            P = Array(stokes.P),
-            η = Array(η_vep),
-        )
-        velocity_v = (
-            Array(Vx_v),
-            Array(Vy_v),
-        )
-        JustRelax.DataIO.save_vtk(
-            joinpath(figdir, "vtk_" * lpad("$it", 6, "0")),
-            xvi,
-            xci,
-            data_v,
-            data_c,
-            velocity_v;
-            t = t
-        )
-        # end
+        if do_vtk && (it == 1 || rem(it, 1) == 0)
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            velocity_v = @. √(Vx_v^2 .+ Vy_v^2)
+            data_v = (;
+                Vx = Array(Vx_v),
+                Vy = Array(Vy_v),
+                Vel = Array(velocity_v),
+            )
+            data_c = (;
+                stress_II = Array(stokes.τ.II),
+                strain_rate_II = Array(stokes.ε.II),
+                P = Array(stokes.P),
+                visc_eff = Array(η_vep),
+            )
+            velocity_v = (
+                Array(Vx_v),
+                Array(Vy_v),
+            )
+            JustRelax.DataIO.save_vtk(
+                joinpath(vtkdir, "vtk_" * lpad("$it", 6, "0")),
+                xvi,
+                xci,
+                data_v,
+                data_c,
+                velocity_v;
+                t = t,
+                pvd = joinpath(vtkdir, "Crameri2012")
+            )
+        end
 
-        # if it == 1 || rem(it, 1) == 0
-        #     px, py = particles.coords
+        if it == 1 || rem(it, 1) == 0
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            fig = Figure(size = (900, 900), title = "t = $t")
+            ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
 
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        #     nt = 5
-        #     fig = Figure(size = (900, 900), title = "t = $t")
-        #     ax  = Axis(fig[1,1], aspect = 1, title = " t=$(round.(t/(1e3 * 3600 * 24 *365.25); digits=3)) Kyrs")
-        #     heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array(stokes.V.Vy), colormap = :vikO)
-        #     # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
-        #     # scatter!(ax, Array(px.data[:]).*1e-3, Array(py.data[:]).*1e-3, color =Array(pPhases.data[:]), colormap = :grayC)
-        #     # arrows!(
-        #     #     ax,
-        #     #     xvi[1][1:nt:end-1]./1e3, xvi[2][1:nt:end-1]./1e3, Array.((Vx_v[1:nt:end-1, 1:nt:end-1], Vy_v[1:nt:end-1, 1:nt:end-1]))...,
-        #     #     lengthscale = 25 / max(maximum(Vx_v),  maximum(Vy_v)),
-        #     #     color = :red,
-        #     # )
-        #     fig
-        #     save(joinpath(figdir, "$(it).png"), fig)
-
-        fig = Figure(size = (900, 900), title = "t = $t")
-        ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
-
-        # Make particles plottable
-        nt = 5
-        p = particles.coords
-        ppx, ppy = p
-        pxv = ppx.data[:] ./ 1.0e3
-        pyv = ppy.data[:] ./ 1.0e3
-        clr = pPhases.data[:]
-        idxv = particles.index.data[:]
-        heatmap!(ax, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(stokes.V.Vy))
-        scatter!(ax, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 2, colormap = :grayC)
-        arrows!(
-            ax,
-            xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
-            lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),
-            color = :red,
-        )
-        save(joinpath(figdir, "$(it).png"), fig)
-        fig
-        # end
+            # Make particles plottable
+            # nt = 5
+            # p = particles.coords
+            # ppx, ppy = p
+            # pxv = ppx.data[:] ./ 1.0e3
+            # pyv = ppy.data[:] ./ 1.0e3
+            # clr = pPhases.data[:]
+            # idxv = particles.index.data[:]
+            heatmap!(ax, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(stokes.V.Vy); colormap = :vikO, colorrange = (-maximum(stokes.V.Vy), maximum(stokes.V.Vy)))
+            # scatter!(ax, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 2, colormap = :grayC)
+            arrows2d!(
+                ax,
+                xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
+                lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),
+                color = :red,
+            )
+            save(joinpath(figdir, "$(it).png"), fig)
+            display(fig)
+        end
     end
     return nothing
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 main(igg, nx, ny)
-
-
-# @parallel_indices (I...) function compute_P!(
-#     P,
-#     P0,
-#     RP,
-#     ∇V,
-#     η,
-#     rheology::NTuple{N,MaterialParams},
-#     phase_ratio,
-#     ϕ::JustRelax.RockRatio,
-#     dt,
-#     r,
-#     θ_dτ,
-#     ::Nothing,
-# ) where {N}
-#     # if isvalid_c(ϕ, I...)
-#     #     K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
-#     #     RP[I...], P[I...] = _compute_P!(
-#     #         P[I...], P0[I...], ∇V[I...], η[I...], K, dt, r, θ_dτ
-#     #     )
-#     # else
-#     #     RP[I...] = P[I...] = zero(eltype(P))
-#     # end
-#     return nothing
-# end
-
-# @parallel (@idx ni) compute_P_kernel!(
-#         stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.viscosityη,
-#         rheology, phase_ratio.center, ϕ, dt, pt_stokes.r, pt_stokes.θ_dτ, nothing
-#     )

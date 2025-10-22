@@ -149,7 +149,7 @@ function _solve_VS!(
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
                     @strain(stokes),
                     @strain_increment(stokes),
-                    @tensor_center(stokes.ε_pl),
+                    @plastic_strain(stokes),
                     stokes.EII_pl,
                     @tensor_center(stokes.τ),
                     (stokes.τ.xy,),
@@ -173,7 +173,7 @@ function _solve_VS!(
             else
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
                     @strain(stokes),
-                    @tensor_center(stokes.ε_pl),
+                    @plastic_strain(stokes),
                     stokes.EII_pl,
                     @tensor_center(stokes.τ),
                     (stokes.τ.xy,),
@@ -264,8 +264,13 @@ function _solve_VS!(
         stokes.ω.xy, @velocity(stokes)..., inv.(di)...
     )
 
+    # Interpolate shear components to cell center arrays
+    shear2center!(stokes.ε)
+    shear2center!(stokes.ε_pl)
+    shear2center!(stokes.Δε)
+
     # accumulate plastic strain tensor
-    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+    accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))

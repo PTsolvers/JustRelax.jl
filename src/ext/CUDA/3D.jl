@@ -25,7 +25,7 @@ import JustRelax:
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
-import JustPIC._3D: numphases, nphases
+import JustPIC._3D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
 
 __init__() = @init_parallel_stencil(CUDA, Float64, 3)
 
@@ -248,6 +248,14 @@ function JR3D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor
     return _tensor_invariant!(A)
 end
 
+function JR3D.accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
+function accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
 ## Buoyancy forces
 function JR3D.compute_ρg!(ρg::Union{CuArray, NTuple{N, CuArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
@@ -281,6 +289,16 @@ end
 
 function temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)
+end
+
+function JR3D.shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
+end
+
+function shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
 end
 
 function JR3D.vertex2center!(center::T, vertex::T) where {T <: CuArray}
@@ -470,6 +488,30 @@ function JR3D.rotate_stress!(
         τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, xci, xvi, dt
     )
     rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
+    return nothing
+end
+
+# Phase ratios with arrays
+
+function JR3D.update_phase_ratios_3D!(
+        phase_ratios::JustPIC.PhaseRatios{CUDABackend, T},
+        phase_arrays::NTuple{N, CuArray{U, 3}},
+        xci,
+        xvi
+    ) where {T <: AbstractMatrix, N, U}
+
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
+    phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
+
+    # velocity nodes
+    phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
+    phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, xci, :y)
+    phase_ratios_face_from_arrays!(phase_ratios.Vz, phase_arrays, xci, :z)
+
+    # shear stress nodes
+    phase_ratios_midpoint_from_centers!(phase_ratios.xy, phase_arrays, xci, :xy)
+    phase_ratios_midpoint_from_centers!(phase_ratios.yz, phase_arrays, xci, :yz)
+    phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, xci, :xz)
     return nothing
 end
 

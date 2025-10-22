@@ -86,7 +86,7 @@ end
 """
     fig = plot_field(field;)
 
-Plots a 2D field from a CellArays structure using Makie.jl
+Plots a 2D field from a CellArrays structure using Makie.jl
 
 # Arguments
 - `data`: Field to plot, must be a subtype of `CellArrays` e.g. `phase_ratios`

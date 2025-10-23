@@ -17,6 +17,10 @@ using TOML, Crayons
 function solve!() end
 #! format: off
 function __init__(io = stdout)
+    if !isa(stdout, Base.TTY)
+        return
+    end
+
     j = string(Crayon(foreground = (50,74,201)))
     u = string(Crayon(foreground = (50,74,201)))
     s = string(Crayon(foreground = (50,74,201)))

@@ -82,12 +82,10 @@ end
             (ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_xy, τ_yz, τ_xz, τ_xy), dt
         )
 
-        @inbounds @index xx[ip, I...] = τ_rotated[1]
-        @inbounds @index yy[ip, I...] = τ_rotated[2]
-        @inbounds @index zz[ip, I...] = τ_rotated[3]
-        @inbounds @index yz[ip, I...] = τ_rotated[4]
-        @inbounds @index xz[ip, I...] = τ_rotated[5]
-        @inbounds @index xy[ip, I...] = τ_rotated[6]
+        components = xx, yy, zz, yz, xz, xy
+        Base.@nexprs 6 i -> begin
+            @inline @inbounds @index components[i][ip, I...] = τ_rotated[i]
+        end
     end
 
     return nothing

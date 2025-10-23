@@ -6,6 +6,8 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
+const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"]) : false
+
 using Test, Suppressor, GeoParams
 using JustRelax, JustRelax.JustRelax3D
 using JustRelax
@@ -99,6 +101,7 @@ function diffusion_3D(;
         K0 = 3.0,
         init_MPI = JustRelax.MPI.Initialized() ? false : true,
         finalize_MPI = false,
+        select_device = true,
     )
 
     kyr = 1.0e3 * 3600 * 24 * 365.25
@@ -109,7 +112,7 @@ function diffusion_3D(;
     # Physical domain
     ni = nx, ny, nz
     li = lx, ly, lz  # domain length in x- and y-
-    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI)...) # init MPI
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI, select_device = select_device)...) # init MPI
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
     origin = 0, 0, -lz # nodes at the center and vertices of the cells
     grid = Geometry(ni, li; origin = origin)
@@ -219,11 +222,14 @@ function diffusion_3D(;
 
     return thermal
 end
-
-@suppress begin
-    if backend_JR == CPUBackend
-        diffusion_3D()
-    else
-        println("This test is only for CPU CI yet")
+if CSCS_CI != true
+    @suppress begin
+        if backend_JR == CPUBackend
+            diffusion_3D()
+        else
+            println("This test is only for CPU CI yet")
+        end
     end
+else
+    diffusion_3D(; select_device = false)
 end

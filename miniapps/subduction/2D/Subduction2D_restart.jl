@@ -99,7 +99,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # STOKES ---------------------------------------------
     # Load Stokes arrays
     !isfile(joinpath(figdir, "checkpoint", "checkpoint.jld2")) && error("Checkpoint file not found. Please check the path.")
-    stokes_cpu, thermal_cpu, t, dt = load_checkpoint_jld2(joinpath(figdir, "checkpoint"))
+    stokes_cpu, thermal_cpu, t, dt, it = JLD2.load(joinpath(figdir, "checkpoint"))
     stokes = PTArray(backend_JR, stokes_cpu)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 1.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------

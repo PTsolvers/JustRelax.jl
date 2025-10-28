@@ -213,12 +213,11 @@ function phase_ratios_face_from_arrays!(
         phase_face, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, dimension::Symbol
     ) where {N, ND}
     ni = size(first(phase_arrays))  # Cell grid size
-    face_size = size(phase_face)  # Face grid size (including phase dimension)
-    # ni_face = face_size[2:end]  # Face grid size excluding phase dimension
     di = compute_dx(xci)
     offsets = face_offset(Val(ND), dimension)
+    face_ni = ntuple(d -> ni[d] + offsets[d], Val(ND))
 
-    @parallel (@idx ni) phase_ratios_face_from_arrays_kernel!(
+    @parallel (@idx face_ni) phase_ratios_face_from_arrays_kernel!(
         phase_face, phase_arrays, xci, di, offsets, ni
     )
     return nothing
@@ -228,12 +227,8 @@ end
         ratio_faces, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, di::NTuple{ND, T}, offsets, ni
     ) where {N, ND, T}
 
-    # Face index I corresponds to the face grid position
     w_vals = @MVector zeros(T, N)
     total_weight = zero(T)
-
-    # For staggered face grids, a face at position I lies between cells
-    # We average from the two adjacent cells along the staggered dimension
     for side in 0:1
         # Calculate which cell this face point samples from
         cell_index = ntuple(
@@ -286,7 +281,7 @@ end
 
     # Write to face grid
     @inbounds for ip in 1:N
-        @index ratio_faces[ip, (I .+ offsets)...] = w_vals[ip]
+        @index ratio_faces[ip, I...] = w_vals[ip]
     end
 
     return nothing
@@ -300,8 +295,6 @@ function phase_ratios_midpoint_from_arrays!(
         phase_midpoints, phase_arrays::NTuple{N, AbstractArray}, xci, dimension
     ) where {N}
     ni = size(first(phase_arrays))  # Cell grid size
-    midpoint_size = size(phase_midpoints)  # Midpoint grid size (including phase dimension)
-    ni_midpoint = midpoint_size[2:end]  # Midpoint grid size excluding phase dimension
     di = compute_dx(xci)
 
     # Define staggered offsets for midpoint grids
@@ -315,7 +308,9 @@ function phase_ratios_midpoint_from_arrays!(
         throw("Unknown dimension: $(dimension). Valid dimensions are :xy, :yz, :xz")
     end
 
-    @parallel (@idx ni_midpoint) phase_ratios_midpoint_from_arrays_kernel!(
+    midpoint_ni = ntuple(d -> ni[d] + offsets[d], Val(length(ni)))
+
+    @parallel (@idx midpoint_ni) phase_ratios_midpoint_from_arrays_kernel!(
         phase_midpoints, phase_arrays, xci, di, offsets, ni
     )
     return nothing
@@ -325,18 +320,14 @@ end
         ratio_midpoints, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, di::NTuple{ND, T}, offsets, ni
     ) where {N, ND, T}
 
-    # I represents the midpoint grid position
     w_vals = @MVector zeros(T, N)
     total_weight = zero(T)
 
-    # For midpoint grids, we average from the corner cells
-    # Number of corners depends on how many dimensions are staggered
     num_staggered = count(x -> x == 1, offsets)
     num_corners = 2^num_staggered
 
     # Iterate over all corner combinations
     for corner_bits in 0:(num_corners - 1)
-        # Calculate which cell this corner corresponds to
         bit_index = 0
         cell_index = ntuple(
             d -> begin
@@ -391,7 +382,7 @@ end
 
     # Write to midpoint grid
     @inbounds for ip in 1:N
-        @index ratio_midpoints[ip, (I .+ offsets)...] = w_vals[ip]
+        @index ratio_midpoints[ip, I...] = w_vals[ip]
     end
 
     return nothing

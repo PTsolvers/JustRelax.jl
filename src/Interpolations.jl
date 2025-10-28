@@ -310,8 +310,8 @@ function shear2center_kernel!(
     ) where {T <: AbstractArray{_T, 3} where {_T <: Real}}
     yz_c, xz_c, xy_c = center
     yz, xz, xy = shear
-    @parallel vertex2center_kernel!(yz_c, yz)
-    @parallel vertex2center_kernel!(xz_c, xz)
-    @parallel vertex2center_kernel!(xy_c, xy)
+    yz_c[i, j, k] = 0.25 * (yz[i, j, k] + yz[i, j + 1, k] + yz[i, j, k + 1] + yz[i, j + 1, k + 1])
+    xz_c[i, j, k] = 0.25 * (xz[i, j, k] + xz[i + 1, j, k] + xz[i, j, k + 1] + xz[i + 1, j, k + 1])
+    xy_c[i, j, k] = 0.25 * (xy[i, j, k] + xy[i + 1, j, k] + xy[i, j + 1, k] + xy[i + 1, j + 1, k])
     return nothing
 end

@@ -20,7 +20,6 @@ fig = plot_particles(particles, pPhases;)
 - `title`: Title of the plot (default: `"Particle Position"`)
 - `filename`: If provided, saves the figure to this filename (default: `nothing`)
 - `resolution`: Resolution of the figure in pixels (default: `(1200, 1200)`)
-- `legendsize`: Font size of the legend (default: `15`)
 - `labelsize`: Font size of the axis labels (default: `35`)
 - `titlesize`: Font size of the title (default: `50`)
 - `linecolor`: Color of the markerchain line (default: `:black`)
@@ -36,7 +35,6 @@ function plot_particles(
         title = "Particle Position",
         filename = nothing,
         resolution = (1200, 1200),
-        legendsize = 15,
         labelsize = 35,
         titlesize = 50,
         linecolor = :black,
@@ -86,12 +84,13 @@ function plot_particles(
 end
 
 """
-    fig = plot_field(field;)
+    fig = plot_field(data, number, grid;)
 
 Plots a 2D field from a CellArrays structure using Makie.jl
 
 # Arguments
 - `data`: Field to plot, must be a subtype of `CellArrays` e.g. `phase_ratios`
+- `index`: Index of the field to plot (e.g. phase number)
 - `grid`: Grid to use for plotting, must be a `LinRange`
 
 # Keyword Arguments
@@ -99,26 +98,29 @@ Plots a 2D field from a CellArrays structure using Makie.jl
 - `title`: Title of the plot (default: `"Field Plot"`)
 - `filename`: If provided, saves the figure to this filename (default: `nothing`)
 - `resolution`: Resolution of the figure in pixels (default: `(1200, 1200)`)
-- `legendsize`: Font size of the legend (default: `15`)
 - `labelsize`: Font size of the axis labels (default: `35`)
 - `titlesize`: Font size of the title (default: `50`)
 - `units`: Units for the axis labels (default: `:km`)
+- `conversion`: Conversion factor for coordinates (default: `1.0e3`, to convert from m to km)
 
 # Example
-
-f = plot_field(phase_ratios.center; title = "Phase Ratios at Cell Centers", units = :km)
+Plot the ratio of the second phase at cell centers:
+f = plot_field(phase_ratios.center, 2, xci; title = "Phase Ratios at Cell Centers", units = :km)
 
 """
 function plot_field(
-        data, grid::NTuple{N, LinRange{T, Int64}};
-        clrmap = :roma,
+        data,
+        index::Int,
+        grid::NTuple{N, LinRange{T, Int64}};
+        colormap = :roma,
         title = "Field Plot",
         filename = nothing,
-        resolution = (1200, 1200),
-        legendsize = 15,
+        resolution = (1200, 1000),
         labelsize = 35,
         titlesize = 50,
-        units = :km
+        units = :km,
+        conversion = 1.0e3
+
     ) where {T, N}
 
     f = Figure(; fontsize = 25, size = resolution)
@@ -139,7 +141,7 @@ function plot_field(
     y = grid[2] ./ conversion
 
 
-    h = heatmap!(ax, x, y, Array(field(data)), colormap = clrmap)
+    h = heatmap!(ax, x, y, Array(field(data, index)), colormap = colormap)
 
     Colorbar(f[1, 2], h)
     if !isnothing(filename)

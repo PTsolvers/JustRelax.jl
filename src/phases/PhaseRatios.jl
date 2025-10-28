@@ -96,7 +96,7 @@ end
     normalized = values ./ total
 
     # Clamp
-    clamped = map(x -> min(max(x, 0.0), 1.0), normalized)
+    clamped = map(x -> clamp(x, 0.0, 1.0), normalized)
 
     # Threshold small values
     cleaned = map(x -> x < 1.0e-5 ? zero(eltype(values)) : x, clamped)
@@ -144,7 +144,7 @@ end
         for offset₁ in -1:0, offset₂ in -1:0
             i_cell = I[1] + offset₁
             j_cell = I[2] + offset₂
-            if 1 <= i_cell <= ni[1] && 1 <= j_cell <= ni[2]
+            if 1 ≤ i_cell ≤ ni[1] && 1 ≤ j_cell ≤ ni[2]
                 x_c = xci[1][i_cell]
                 y_c = xci[2][j_cell]
                 wx = muladd(-abs(cell_vertex[1] - x_c), inv(di[1]), 1.0)
@@ -164,7 +164,7 @@ end
             i_cell = I[1] + offset₁
             j_cell = I[2] + offset₂
             k_cell = I[3] + offset₃
-            if 1 <= i_cell <= ni[1] && 1 <= j_cell <= ni[2] && 1 <= k_cell <= ni[3]
+            if 1 ≤ i_cell ≤ ni[1] && 1 ≤ j_cell ≤ ni[2] && 1 ≤ k_cell ≤ ni[3]
                 cell_center = (xci[1][i_cell], xci[2][j_cell], xci[3][k_cell])
                 # Use trilinear weights for 3D interpolation
                 weight = 1.0
@@ -187,7 +187,7 @@ end
 
     # Clamp
     @inbounds for k in 1:N
-        w_vals[k] = min(max(w_vals[k], zero(T)), one(T))
+        w_vals[k] = clamp(w_vals[k], zero(T), one(T))
     end
 
     # Threshold small values and renormalize

@@ -130,6 +130,7 @@ function multiple_solKz(; Δη = 1.0e-6, nrange::UnitRange = 4:10)
     end
 
     nx = @. 2^nrange - 1
+    h = @. (1 / nx)
 
     f = Figure(; fontsize = 28)
     ax = Axis(
@@ -139,9 +140,9 @@ function multiple_solKz(; Δη = 1.0e-6, nrange::UnitRange = 4:10)
         yminorticksvisible = true,
         yminorticks = IntervalsBetween(8),
     )
-    lines!(ax, nx, (L2_vx); linewidth = 3, label = "Vx")
-    lines!(ax, nx, (L2_vy); linewidth = 3, label = "Vy")
-    lines!(ax, nx, (L2_p); linewidth = 3, label = "P")
+    lines!(ax, h, (L2_vx); linewidth = 3, label = "Vx")
+    lines!(ax, h, (L2_vy); linewidth = 3, label = "Vy")
+    lines!(ax, h, (L2_p); linewidth = 3, label = "P")
     axislegend(ax; position = :rt)
     ax.xlabel = "h"
     ax.ylabel = "L1 norm"

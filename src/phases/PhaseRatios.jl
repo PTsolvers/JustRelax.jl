@@ -24,7 +24,6 @@ function update_phase_ratios_2D!(
         phase_ratios::JustPIC.PhaseRatios{B, T}, phase_arrays::NTuple{N, AbstractMatrix}, xci, xvi
     ) where {B, T <: AbstractMatrix, N}
 
-
     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
     # velocity nodes
@@ -96,7 +95,7 @@ end
     normalized = values ./ total
 
     # Clamp
-    clamped = map(x -> clamp(x, 0.0, 1.0), normalized)
+    clamped = clamp.(normalized, 0.0, 1.0)
 
     # Threshold small values
     cleaned = map(x -> x < 1.0e-5 ? zero(eltype(values)) : x, clamped)

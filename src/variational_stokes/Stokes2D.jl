@@ -322,7 +322,7 @@ function _solve_VS_displacement!(
 
     _di = inv.(di)
     _dt = inv.(dt)
-    (; ϵ_rel, ϵ_abs, r,lτ, Vpdτ, θ_dτ, ηdτ) = pt_stokes
+    (; ϵ_rel, ϵ_abs, r, lτ, Vpdτ, θ_dτ, ηdτ) = pt_stokes
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
@@ -403,14 +403,14 @@ function _solve_VS_displacement!(
             update_ρg!(ρg[2], phase_ratios, rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                    @strain_increment(stokes)..., stokes.∇U, @displacement(stokes)..., ϕ, _di...
-                )
+                @strain_increment(stokes)..., stokes.∇U, @displacement(stokes)..., ϕ, _di...
+            )
 
-        
+
             @parallel (@idx ni .+ 1) compute_strain_rate_from_increment!(
                 @strain(stokes)..., @strain_increment(stokes)..., ϕ, _dt
             )
-            
+
             update_viscosity_τII!(
                 stokes,
                 phase_ratios,
@@ -445,7 +445,7 @@ function _solve_VS_displacement!(
                 phase_ratios.vertex,
                 ϕ,
             )
-        
+
 
             update_halo!(stokes.τ.xy)
 

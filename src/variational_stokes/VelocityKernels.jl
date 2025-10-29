@@ -461,7 +461,7 @@ end
                 -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
             )
-            Ux[i + 1, j + 1] += R_Ux * ηdτ * dt / ( av_xa(ητ) )
+            Ux[i + 1, j + 1] += R_Ux * ηdτ * dt / (av_xa(ητ))
         else
             Rx[i, j] = zero(T)
             Ux[i + 1, j + 1] = zero(T)
@@ -474,7 +474,7 @@ end
                 R_Uy =
                 -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                 av_ya(ρgy, ϕ.center)
-            Uy[i + 1, j + 1] += R_Uy * ηdτ * dt / (av_ya(ητ) )
+            Uy[i + 1, j + 1] += R_Uy * ηdτ * dt / (av_ya(ητ))
         else
             Ry[i, j] = zero(T)
             Uy[i + 1, j + 1] = zero(T)
@@ -483,7 +483,6 @@ end
 
     return nothing
 end
-
 
 
 @parallel_indices (i, j) function compute_U!(
@@ -526,7 +525,7 @@ end
                 -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
             )
-            Ux[i + 1, j + 1] += R_Ux * ηdτ * dt / (av_xa(ητ)  )
+            Ux[i + 1, j + 1] += R_Ux * ηdτ * dt / (av_xa(ητ))
 
         else
             Rx[i, j] = zero(T)
@@ -546,12 +545,12 @@ end
             # Spatial derivatives
             ∂ρg∂y = (ρg_N - ρg_S) * _dy
             # correction term
-            ρg_correction = (Vyᵢⱼ * ∂ρg∂y ) * θ * dt * free_surface
+            ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt * free_surface
             Ry[i, j] =
                 R_Uy =
                 @inbounds -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                 av_ya(ρgy, ϕ.center) + ρg_correction
-            Uy[i + 1, j + 1] += R_Uy * ηdτ * dt / (av_ya(ητ) )
+            Uy[i + 1, j + 1] += R_Uy * ηdτ * dt / (av_ya(ητ))
 
         else
             Ry[i, j] = zero(T)

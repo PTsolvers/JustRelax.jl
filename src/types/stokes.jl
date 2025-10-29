@@ -207,6 +207,6 @@ struct PTStokesCoeffs{T}
         θ_dτ = lτ * (r + 4 / 3) / (Re * Vpdτ)
         ηdτ = Vpdτ * lτ / Re
 
-        return new{Float64}(CFL, ϵ_rel, ϵ_abs, Re, r,lτ, Vpdτ, θ_dτ, ηdτ)
+        return new{Float64}(CFL, ϵ_rel, ϵ_abs, Re, r, lτ, Vpdτ, θ_dτ, ηdτ)
     end
 end

@@ -293,7 +293,7 @@ function shear2center!(::CPUBackendTrait, A::JustRelax.SymmetricTensor)
 end
 
 function _shear2center!(A::JustRelax.SymmetricTensor)
-    shear2center_kernel!(@shear_center(A), @shear(A))
+    @parallel (@idx size(A.xy_c)) shear2center_kernel!(@shear_center(A), @shear(A))
     return nothing
 end
 

@@ -298,14 +298,15 @@ function _shear2center!(A::JustRelax.SymmetricTensor)
 end
 
 # 2D
-function shear2center_kernel!(
+@parallel_indices (i, j) function shear2center_kernel!(
         xy_c::T, xy::T
     ) where {T <: AbstractArray{_T, 2} where {_T <: Real}}
-    @parallel vertex2center_kernel!(xy_c, xy)
+    xy_c[i, j] = 0.25 * (xy[i, j] + xy[i + 1, j] + xy[i, j + 1] + xy[i + 1, j + 1])
     return nothing
 end
 
-function shear2center_kernel!(
+# 3D
+@parallel_indices (i, j, k) function shear2center_kernel!(
         center::NTuple{3, T}, shear::NTuple{3, T}
     ) where {T <: AbstractArray{_T, 3} where {_T <: Real}}
     yz_c, xz_c, xy_c = center

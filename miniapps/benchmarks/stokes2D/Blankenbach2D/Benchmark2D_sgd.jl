@@ -1,16 +1,35 @@
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-const backend_JR = CPUBackend
+
+const backend_JR = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-using JustPIC
-using JustPIC._2D
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
 
@@ -54,7 +73,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", do_vtk = false)
+function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", do_vtk = false, finalize_MPI = true)
 
     # Physical domain ------------------------------------
     ly = 1000.0e3               # domain length in y
@@ -76,7 +95,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -392,7 +411,9 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
 
     @show Urms[Int64(nit)] Nu_top[Int64(nit)]
 
-    return nothing
+    finalize_global_grid(; finalize_MPI = finalize_MPI)
+
+    return Urms, Nu_top, trms, thermal.T, xvi
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 

@@ -90,4 +90,9 @@ include("IO/DataIO.jl")
 include("types/type_conversions.jl")
 export Array, copy
 
+function plot_particles end
+function plot_field end
+
+export plot_particles, plot_field
+
 end # module

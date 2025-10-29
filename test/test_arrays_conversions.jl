@@ -57,3 +57,19 @@ end
     @test typeof(S7) <: JustRelax.Vorticity
     @test typeof(T1) <: JustRelax.ThermalArrays
 end
+
+@testset "Restart functionality/CPU to GPU conversion" begin
+    if backend != CPUBackend
+        # Convert to CPU arrays and back to GPU arrays
+        stokes_cpu = Array(stokes)
+        thermal_cpu = Array(thermal)
+
+        stokes_gpu = PTArray(backend, stokes_cpu)
+        thermal_gpu = PTArray(backend, thermal_cpu)
+
+        @test typeof(stokes_gpu) == typeof(stokes)
+        @test typeof(thermal_gpu) == typeof(thermal)
+    else
+        @test true === true
+    end
+end

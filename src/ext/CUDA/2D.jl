@@ -26,7 +26,7 @@ import JustRelax:
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
-import JustPIC._2D: numphases, nphases
+import JustPIC._2D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
 
 __init__() = @init_parallel_stencil(CUDA, Float64, 2)
 
@@ -236,6 +236,14 @@ function JR2D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor
     return _tensor_invariant!(A)
 end
 
+function JR2D.accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
+function accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
 ## Buoyancy forces
 function JR2D.compute_ρg!(ρg::Union{CuArray, NTuple{N, CuArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
@@ -265,6 +273,16 @@ end
 
 function temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)
+end
+
+function JR2D.shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
+end
+
+function shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
 end
 
 function JR2D.vertex2center!(center::T, vertex::T) where {T <: CuArray}
@@ -464,6 +482,22 @@ function JR2D.update_phases_given_markerchain!(
         args::NTuple{N, Any},
     ) where {N}
     return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, args)
+end
+
+# Phase ratios with arrays
+
+function JR2D.update_phase_ratios_2D!(
+        phase_ratios::JustPIC.PhaseRatios{CUDABackend, T},
+        phase_arrays::NTuple{N, CuArray{U, 2}},
+        xci,
+        xvi
+    ) where {T <: AbstractMatrix, N, U}
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
+    phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
+    # velocity nodes
+    phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
+    phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, xci, :y)
+    return nothing
 end
 
 end

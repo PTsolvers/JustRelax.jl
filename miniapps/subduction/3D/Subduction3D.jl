@@ -75,8 +75,10 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 150, 175, 125
-    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    nxcell, max_xcell, min_xcell = 50, 75, 25
+    particles = init_particles(
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+    )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)

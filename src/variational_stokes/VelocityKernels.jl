@@ -420,3 +420,142 @@ end
 
     return nothing
 end
+
+
+@parallel_indices (i, j) function compute_U!(
+        Ux::AbstractArray{T, 2},
+        Uy,
+        Vy,
+        Rx,
+        Ry,
+        P,
+        τxx,
+        τyy,
+        τxy,
+        ηdτ,
+        ρgx,
+        ρgy,
+        ητ,
+        lτ,
+        Vpdτ,
+        dt,
+        ϕ::JustRelax.RockRatio,
+        _dx,
+        _dy,
+    ) where {T}
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
+
+    if all((i, j) .< size(Ux) .- 1)
+        if isvalid_vx(ϕ, i + 1, j)
+            Rx[i, j] =
+                R_Ux = (
+                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
+                    av_xa(ρgx, ϕ.center)
+            )
+            Ux[i + 1, j + 1] += R_Ux * ηdτ * dt / (av_xa(ητ))
+        else
+            Rx[i, j] = zero(T)
+            Ux[i + 1, j + 1] = zero(T)
+        end
+    end
+
+    if all((i, j) .< size(Uy) .- 1)
+        if isvalid_vy(ϕ, i, j + 1)
+            Ry[i, j] =
+                R_Uy =
+                -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                av_ya(ρgy, ϕ.center)
+            Uy[i + 1, j + 1] += R_Uy * ηdτ * dt / (av_ya(ητ))
+        else
+            Ry[i, j] = zero(T)
+            Uy[i + 1, j + 1] = zero(T)
+        end
+    end
+
+    return nothing
+end
+
+
+@parallel_indices (i, j) function compute_U!(
+        Ux::AbstractArray{T, 2},
+        Uy,
+        Vy,
+        Rx,
+        Ry,
+        P,
+        τxx,
+        τyy,
+        τxy,
+        ηdτ,
+        ρgx,
+        ρgy,
+        ητ,
+        lτ,
+        Vpdτ,
+        ϕ::JustRelax.RockRatio,
+        _dx,
+        _dy,
+        dt,
+        free_surface
+    ) where {T}
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
+
+    if all((i, j) .< size(Ux) .- 1)
+        @inbounds if isvalid_vx(ϕ, i + 1, j)
+            Rx[i, j] =
+                R_Ux = @inbounds (
+                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
+                    av_xa(ρgx, ϕ.center)
+            )
+            Ux[i + 1, j + 1] += R_Ux * ηdτ * dt / (av_xa(ητ))
+
+        else
+            Rx[i, j] = zero(T)
+            Ux[i + 1, j + 1] = zero(T)
+        end
+    end
+
+    if all((i, j) .< size(Uy) .- 1)
+        @inbounds if isvalid_vy(ϕ, i, j + 1)
+            θ = 1.0
+            # Vertical velocity
+            Vyᵢⱼ = Vy[i + 1, j + 1]
+            # Get necessary buoyancy forces
+            j_N = min(j + 1, size(ρgy, 2))
+            ρg_S = ρgy[i, j] * ϕ.center[i, j]
+            ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
+            # Spatial derivatives
+            ∂ρg∂y = (ρg_N - ρg_S) * _dy
+            # correction term
+            ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt * free_surface
+            Ry[i, j] =
+                R_Uy =
+                @inbounds -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                av_ya(ρgy, ϕ.center) + ρg_correction
+            Uy[i + 1, j + 1] += R_Uy * ηdτ * dt / (av_ya(ητ))
+
+        else
+            Ry[i, j] = zero(T)
+            Uy[i + 1, j + 1] = zero(T)
+        end
+    end
+    return nothing
+end

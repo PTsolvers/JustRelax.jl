@@ -236,7 +236,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-                Fv = if Pv_ij ≥ 0
+        Fv = if Pv_ij ≥ 0
             # DP in extension
             τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         else
@@ -307,7 +307,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-                Fv = if Pv_ij ≥ 0
+        Fv = if Pv_ij ≥ 0
             # DP in extension
             τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         else
@@ -379,7 +379,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-                Fv = if Pv_ij ≥ 0
+        Fv = if Pv_ij ≥ 0
             # DP in extension
             τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         else

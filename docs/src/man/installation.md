@@ -21,7 +21,7 @@ julia> ]
 If you downloaded or cloned the repository manually, you need to instantiate the package to install all dependencies. Navigate to the directory where you have JustRelax.jl and run:
 ```julia
 julia> ]
-(@v1.10) pkg> instatiate
+(@v1.10) pkg> instantiate
 ```
 
 

@@ -123,6 +123,11 @@ Interpolates the values at the `center` onto `vertex` points.
 
 function center2vertex!(vertex, center)
     @parallel center2vertex_kernel!(vertex, center)
+    @views vertex[1, :] .= vertex[2, :]
+    @views vertex[end, :] .= vertex[end - 1, :]
+    @views vertex[:, 1] .= vertex[:, 2]
+    @views vertex[:, end] .= vertex[:, end - 1]
+
     return nothing
 end
 

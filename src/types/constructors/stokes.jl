@@ -56,11 +56,11 @@ end
 
 function Viscosity(ni::NTuple{N, Integer}) where {N}
     η = @ones(ni...)
+    ηv = @ones(ni.+1...)
     η_vep = @ones(ni...)
     ητ = @zeros(ni...)
-    return JustRelax.Viscosity(η, η_vep, ητ)
+    return JustRelax.Viscosity(η, ηv, η_vep, ητ)
 end
-
 
 # Principal stress
 
@@ -152,7 +152,9 @@ Create the Stokes arrays object in 2D or 3D.
 - `R`: Residual fields
 - `Δε`: Strain increment tensor
 - `∇U`: Displacement gradient
-
+- `λ` : plastic multiplier @ centers
+- `λv` : plastic multiplier @ vertices
+- `ΔPψ` : pressure correction in dilatant case
 """
 function StokesArrays(ni::NTuple{N, Integer}) where {N}
     P = @zeros(ni...)
@@ -171,5 +173,9 @@ function StokesArrays(ni::NTuple{N, Integer}) where {N}
     R = Residual(ni...)
     Δε = SymmetricTensor(ni...)
     ∇U = @zeros(ni...)
-    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, Δε, ∇U)
+    λ = @zeros(ni...)
+    λv = @zeros(ni.+1...)
+    ΔPψ = @zeros(ni...)
+
+    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, Δε, ∇U, λ, λv, ΔPψ)
 end

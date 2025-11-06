@@ -58,9 +58,10 @@ end
 ## Viscosity type
 
 struct Viscosity{T}
-    η::T # with no plasticity
+    η::T # with no plasticity nor elasticity @ centers
+    ηv::T # with no plasticity nor elasticity @ vertices
     η_vep::T # with plasticity
-    ητ::T # PT viscosi
+    ητ::T # PT viscosity
 
     Viscosity(args::Vararg{T, N}) where {T, N} = new{T}(args...)
 end
@@ -166,7 +167,12 @@ struct StokesArrays{A, B, C, D, E, F, T}
     ω::F
     Δε::B
     ∇U::T
+    λ::T
+    λv::T
+    ΔPψ::T
 end
+
+Adapt.@adapt_structure StokesArrays
 
 function StokesArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}
     return StokesArrays(tuple(ni...))

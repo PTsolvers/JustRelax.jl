@@ -1,4 +1,4 @@
-import JustRelax.JustRelax2D: get_shear_modulus, compute_∇V!, update_ρg!, compute_strain_rate!, cache_tensors, get_bulk_modulus
+import JustRelax.JustRelax2D: get_shear_modulus, compute_∇V!, update_ρg!, compute_strain_rate!, cache_tensors, get_bulk_modulus, clamped_indices, av_clamped
 
 include("pressure_kernels.jl")
 include("Gershgorin.jl")
@@ -122,60 +122,8 @@ function _solve!(
                 viscosity_cutoff;
                 relaxation = viscosity_relaxation,
             )
-            # end
 
-            if strain_increment
-                @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
-                    @strain(stokes),
-                    @strain_increment(stokes),
-                    @plastic_strain(stokes),
-                    stokes.EII_pl,
-                    @tensor_center(stokes.τ),
-                    (stokes.τ.xy,),
-                    @tensor_center(stokes.τ_o),
-                    (stokes.τ_o.xy,),
-                    θ,
-                    stokes.P,
-                    stokes.viscosity.η,
-                    λ,
-                    λv,
-                    stokes.τ.II,
-                    stokes.viscosity.η_vep,
-                    relλ,
-                    dt,
-                    θ_dτ,
-                    rheology,
-                    phase_ratios.center,
-                    phase_ratios.vertex,
-                    phase_ratios.xy,
-                    phase_ratios.yz,
-                    phase_ratios.xz
-                )
-            else
-                @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
-                    @strain(stokes),
-                    @plastic_strain(stokes),
-                    stokes.EII_pl,
-                    @tensor_center(stokes.τ),
-                    (stokes.τ.xy,),
-                    @tensor_center(stokes.τ_o),
-                    (stokes.τ_o.xy,),
-                    θ,
-                    stokes.P,
-                    stokes.viscosity.η,
-                    λ,
-                    λv,
-                    stokes.τ.II,
-                    stokes.viscosity.η_vep,
-                    relλ,
-                    dt,
-                    θ_dτ,
-                    rheology,
-                    phase_ratios.center,
-                    phase_ratios.vertex,
-                )
-            end
-
+            compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1, dt)
             update_halo!(stokes.τ.xy)
 
             @hide_communication b_width begin # communication/computation overlap

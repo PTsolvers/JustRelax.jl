@@ -96,7 +96,7 @@
             dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
 
             # cache strain rates for center calculations
-            τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
+            τij, τij_o, εij, εij_pl = cache_tensors(τ, τ_o, ε, ε_pl, I...)
 
             # visco-elastic strain rates @ center
             εij_ve = @. εij + 0.5 * τij_o * _Gdt
@@ -131,8 +131,8 @@
             else
                 # stress correction @ center
                 Base.@nexprs 3 i -> begin
-                    τ[i][I...] = dτij[i] + τij[i]
-                    ε_pl[i][I...] = 0.0
+                    @inbounds τ[i][I...] = dτij[i] + τij[i]
+                    @inbounds ε_pl[i][I...] = 0.0
                 end
                 τII_ij
             end

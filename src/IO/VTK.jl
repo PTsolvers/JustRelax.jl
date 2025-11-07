@@ -224,7 +224,7 @@ Save a vector of points as a line in a VTK file.
 save_marker_chain(fname::String, chain; conversion = 1.0e3, pvd::Union{Nothing, String} = nothing, t::Number = 0.0) = save_marker_chain(fname, chain.cell_vertices ./ conversion, chain.h_vertices ./ conversion; pvd = pvd, t = t)
 
 function save_marker_chain(
-        fname::String, cell_vertices::LinRange{Float64}, h_vertices::Vector{Float64};
+        fname::String, cell_vertices::Union{LinRange{Float64}, Vector{Float64}}, h_vertices::Vector{Float64};
         pvd::Union{Nothing, String} = nothing, t::Number = 0.0
     )
     cell_vertices_vec = collect(cell_vertices)  # Convert LinRange to Vector

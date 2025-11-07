@@ -1,5 +1,5 @@
 
-function compute_RP!(
+function compute_residual_P!(
         RP,
         P,
         P0,
@@ -11,10 +11,10 @@ function compute_RP!(
         dt,
         kwargs::NamedTuple,
     ) where {N}
-    return compute_RP!(P, P0, RP, ∇V, Q, ηb, rheology, phase_ratio, dt; kwargs...)
+    return compute_residual_P!(P, P0, RP, ∇V, Q, ηb, rheology, phase_ratio, dt; kwargs...)
 end
 
-function compute_RP!(
+function compute_residual_P!(
         P,
         P0,
         RP,
@@ -48,7 +48,7 @@ end
         ::Nothing,
         ::Nothing,
     ) where {N, C <: JustRelax.CellArray}
-    _compute_RP!(P[I...], P0[I...], ∇V[I...], Q[I...], ηb[I...], dt)
+    RP[I...] = _compute_RP!(P[I...], P0[I...], ∇V[I...], Q[I...], ηb[I...], dt)
     return nothing
 end
 
@@ -65,7 +65,7 @@ end
         ::Nothing,
         melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
-    _compute_RP!(P[I...], P0[I...], ∇V[I...], Q[I...], ηb[I...], dt)
+    RP[I...] = _compute_RP!(P[I...], P0[I...], ∇V[I...], Q[I...], ηb[I...], dt)
     return nothing
 end
 
@@ -82,9 +82,9 @@ end
         ΔTc,
         ::Nothing,
     ) where {N, C <: JustRelax.CellArray}
-    @inbounds phase_ratio_I = phase_ratio[I...]
-    @inbounds α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
-    @inbounds RP[I...] = _compute_RP!(
+    phase_ratio_I = phase_ratio[I...]
+    α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
+    RP[I...] = _compute_RP!(
         P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, ηb[I...], dt
     )
     return nothing
@@ -102,8 +102,8 @@ end
         ΔTc,
         melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
-    @inbounds α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
-    @inbounds RP[I...] = _compute_RP!(
+    α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
+    RP[I...] = _compute_RP!(
         P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, ηb[I...], dt
     )
     return nothing

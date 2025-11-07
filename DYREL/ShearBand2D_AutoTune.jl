@@ -44,6 +44,7 @@ function init_phases!(phase_ratios, xci, xvi, circle)
 end
 
 using Statistics
+include("DYREL_solver.jl")
 
 # MAIN SCRIPT --------------------------------------------------------------------
 function main(igg; nx = 64, ny = 64, figdir = "model_figs")
@@ -103,7 +104,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Initialize phase ratios -------------------------------
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    radius = 0.1
+    radius = 0.09
     origin = 0e0, 0e0
     circle = GGU.Circle(origin, radius)
     init_phases!(phase_ratios, xci, xvi, circle)
@@ -118,7 +119,24 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
-     ### DYREL stuff
+    # Rheology
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+    center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
+
+    # Boundary conditions
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true),
+        no_slip   = (left = false, right = false, top = false, bot = false),
+    )
+    stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.V.Vx[2:end-1,:] .= 0 # ensure non zero initial pressure residual
+    stokes.V.Vy[:,2:end-1] .= 0 # ensure non zero initial pressure residual
+    
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(@velocity(stokes)...)
+
+    ### DYREL stuff
 
     # Bulk viscosity
     Kb   = 1e-10
@@ -131,6 +149,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     γ_num = @fill(γi, ni...)
     γ_phy = ηb
     γ_eff = ((γ_phy.*γ_num)./(γ_phy.+γ_num))
+    c_fact   = 0.5          # damping factor
 
     # Diagonal preconditioner arrays
     Dx     = @zeros(ni[1]-1, ni[2])
@@ -138,38 +157,46 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     # maximum eigenvalue estimates
     λmaxVx = @zeros(ni[1]-1, ni[2])
     λmaxVy = @zeros(ni[1], ni[2]-1)
+    dVxdτ  = @zeros(ni[1]-1, ni[2])
+    dVydτ  = @zeros(ni[1], ni[2]-1)
+    dτVx   = @zeros(ni[1]-1, ni[2])
+    dτVy   = @zeros(ni[1], ni[2]-1)
+    dVx    = @zeros(ni[1]-1, ni[2])
+    dVy    = @zeros(ni[1], ni[2]-1)
+    βVx    = @zeros(ni[1]-1, ni[2])
+    βVy    = @zeros(ni[1], ni[2]-1)
+    cVx    = @zeros(ni[1]-1, ni[2])
+    cVy    = @zeros(ni[1], ni[2]-1)
+    αVx    = @zeros(ni[1]-1, ni[2])
+    αVy    = @zeros(ni[1], ni[2]-1)
 
-    βVx = @zeros(ni[1]-1, ni[2])
-    βVy = @zeros(ni[1], ni[2]-1)
-    cVx = @zeros(ni[1]-1, ni[2])
-    cVy = @zeros(ni[1], ni[2]-1)
-    αVx = @zeros(ni[1]-1, ni[2])
-    αVy = @zeros(ni[1], ni[2]-1)
-
-    # Rheology
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
-    center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
-
-    Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, rheology, di, dt)
+    Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, di, dt)
 
     CFL_v = 0.98
-    dτVx = @. 2 / √(λmaxVx) * CFL_v
-    dτVy = @. 2 / √(λmaxVy) * CFL_v
+    update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
 
-    update_α_β!(βVx, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
-
-    # Boundary conditions
-    flow_bcs = VelocityBoundaryConditions(;
-        free_slip = (left = true, right = true, top = true, bot = true),
-        no_slip   = (left = false, right = false, top = false, bot = false),
+    DYREL = (;
+        γ_eff,
+        Dx,
+        Dy,
+        λmaxVx,
+        λmaxVy,
+        dVxdτ,
+        dVydτ,
+        dτVx,
+        dτVy,
+        dVx,
+        dVy,
+        βVx,
+        βVy,
+        cVx,
+        cVy,
+        αVx,
+        αVy,
+        CFL_v,
+        c_fact,
+        ηb,
     )
-    stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
-    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    stokes.V.Vx[2:end-1,:] .= 0 # ensure non zero initial pressure residual
-    stokes.V.Vy[:,2:end-1] .= 0 # ensure non zero initial pressure residual
-    update_halo!(@velocity(stokes)...)
-
     # IO -------------------------------------------------
     take(figdir)
 
@@ -179,11 +206,11 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     τII = Float64[]
     sol = Float64[]
     ttot = Float64[]
-    # while t < tmax
-    for _ in 1:150
+
+    for _ in 1:50
 
         # Stokes solver ----------------
-        iters = solve!(
+        _solve_DYREL!(
             stokes,
             pt_stokes,
             di,
@@ -193,13 +220,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             rheology,
             args,
             dt,
+            DYREL,
             igg;
-            kwargs = (
-                verbose = false,
-                iterMax = 150.0e3,
-                nout = 2.0e3,
-                viscosity_cutoff = (-Inf, Inf),
-            )
+            verbose = false,
+            iterMax = 50.0e3,
+            nout    = 100,
+            viscosity_cutoff = (-Inf, Inf),
         )
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
@@ -214,14 +240,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         println("it = $it; t = $t \n")
 
         # visualisation
-        th = 0:(pi / 50):(3 * pi)
-        xunit = @. radius * cos(th) + 0.5
-        yunit = @. radius * sin(th) + 0.5
+        aspect_ratio = 2 
         fig = Figure(size = (1600, 1600), title = "t = $t")
-        ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
-        ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
-        ax3 = Axis(fig[1, 2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
-        ax4 = Axis(fig[2, 2], aspect = 1)
+        ax1 = Axis(fig[1, 1], aspect = aspect_ratio, title = L"\tau_{II}", titlesize = 35)
+        ax2 = Axis(fig[2, 1], aspect = aspect_ratio, title = L"E_{II}", titlesize = 35)
+        ax3 = Axis(fig[1, 2], aspect = aspect_ratio, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
+        ax4 = Axis(fig[2, 2], aspect = aspect_ratio)
         heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
         heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
@@ -231,19 +255,28 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         # lines!(ax4, ttot, sol, color = :red)
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
+        fig
         save(joinpath(figdir, "$(it).png"), fig)
     end
 
     return nothing
 end
 
-n = 128
-nx = n
-ny = n*2
-figdir = "ShearBands2D"
+n = 1
+
+nx, ny = 2*n*31, n*31   # numerical grid resolution
+
+figdir = "ShearBands2D_DYREL"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
-# main(igg; figdir = figdir, nx = nx, ny = ny);
+
+main(igg; figdir = figdir, nx = nx, ny = ny);
+
+
+stokes.τ.xx == stokes.τ_o.xx
+stokes.τ.yy == stokes.τ_o.yy
+stokes.τ.xy == stokes.τ_o.xy
+stokes.τ.xy_c == stokes.τ_o.xy_c

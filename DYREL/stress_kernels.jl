@@ -11,7 +11,7 @@ end
     ni = size(phase_ratios_center)
 
     ## VERTEX CALCULATION
-    @inbounds begin
+    # @inbounds begin
         Ic    = clamped_indices(ni, I...)
         τij_o = av_clamped(stokes.τ_o.xx, Ic...), av_clamped(stokes.τ_o.yy, Ic...), stokes.τ_o.xy[I...]
         εij   = av_clamped(stokes.ε.xx, Ic...),   av_clamped(stokes.ε.yy, Ic...),   stokes.ε.xy[I...]
@@ -26,23 +26,24 @@ end
         stokes.λv[I...]   = λ_I
 
         ## CENTER CALCULATION
-        !all(I .≤ ni) && continue
-        τij_o = stokes.τ_o.xx[I...], stokes.τ_o.yy[I...], stokes.τ_o.xy_c[I...]
-        εij   = stokes.ε.xx[I...], stokes.ε.yy[I...], av(stokes.ε.xy)
-        λij   = stokes.λ[I...]
-        ηij   = stokes.viscosity.η[I...]
-        Pij   = stokes.P[I...]
-        ratio = phase_ratios_center[I...]
-
-        # compute local stress
-        τxx_I, τyy_I, τxy_I, τII_I, ηvep_I, λ_I, ΔPψ_I = compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt)
-        # update arrays
-        stokes.τ.xx[I...], stokes.τ.yy[I...], stokes.τ.xy_c[I...] = τxx_I, τyy_I, τxy_I
-        stokes.τ.II[I...]            = τII_I
-        stokes.viscosity.η_vep[I...] = ηvep_I
-        stokes.λ[I...]               = λ_I
-        stokes.ΔPψ[I...]             = ΔPψ_I
-    end
+        if all(I .≤ ni)
+            τij_o = stokes.τ_o.xx[I...], stokes.τ_o.yy[I...], stokes.τ_o.xy_c[I...]
+            εij   = stokes.ε.xx[I...], stokes.ε.yy[I...], av(stokes.ε.xy)
+            λij   = stokes.λ[I...]
+            ηij   = stokes.viscosity.η[I...]
+            Pij   = stokes.P[I...]
+            ratio = phase_ratios_center[I...]
+            
+            # compute local stress
+            τxx_I, τyy_I, τxy_I, τII_I, ηvep_I, λ_I, ΔPψ_I = compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt)
+            # update arrays
+            stokes.τ.xx[I...], stokes.τ.yy[I...], stokes.τ.xy_c[I...] = τxx_I, τyy_I, τxy_I
+            stokes.τ.II[I...]            = τII_I
+            stokes.viscosity.η_vep[I...] = ηvep_I
+            stokes.λ[I...]               = λ_I
+            stokes.ΔPψ[I...]             = ΔPψ_I
+        end
+    # end
 
     return nothing
 end
@@ -59,8 +60,8 @@ end
 
             else
                 # get rheological properties for this phase
-                G  = fn_ratio(get_shear_modulus, rheology, phase)
-                Kb = fn_ratio(get_bulk_modulus, rheology, phase)
+                G  = get_shear_modulus(rheology, phase)
+                Kb = get_bulk_modulus(rheology, phase)
                 ispl, C, sinϕ, cosϕ, sinΨ, η_reg = JustRelax2D.plastic_params(rheology[phase].CompositeRheology[1].elements, 0e0)
                 # compute local stress
                 _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, ratio_I, dt)
@@ -74,15 +75,17 @@ end
 
 function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, phase_ratio, dt)
 
-    εII  = second_invariant(εij)
-    # early return if there is no deformation
-    iszero(εII) && return (0.0, 0.0, 0.0, 0.0, η, 0.0, 0.0)
-
     # viscoelastic viscosity
     η_ve  = inv(inv(η) + inv(G * dt))
     # Deviatoric stress
     _Gdt2 = inv(2 * G * dt)
-    τij   = @. 2 * η_ve * (εij + τij_o .* _Gdt2)
+    εij_eff = @. εij + τij_o * _Gdt2
+
+    εII  = second_invariant(εij_eff)
+    # early return if there is no deformation
+    iszero(εII) && return (0.0, 0.0, 0.0, 0.0, η, 0.0, 0.0)
+
+    τij   = @. 2 * η_ve * εij_eff
     τII   = second_invariant(τij)
     # Plasticity
     F     = @muladd τII - C * cosϕ - max(P, 0) * sinϕ
@@ -94,12 +97,9 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
     end
 
     η_vep  = @muladd (τII - λ * η_ve) / (2 * εII) * phase_ratio
-    τij    = @. 2 * η_vep * (εij + τij_o * _Gdt2) * phase_ratio
+    τij    = @. 2 * η_vep * εij_eff * phase_ratio
     ΔPψ    = iszero(sinΨ) ? 0.0 : λ * sinΨ * Kb * dt * phase_ratio
     τII    = second_invariant(τij)
 
     return τij..., τII, η_vep, λ * phase_ratio, ΔPψ
 end
-
-@b compute_stress_DRYEL!($(stokes, rheology, phase_ratios, 1, dt)...)
-compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1, dt)

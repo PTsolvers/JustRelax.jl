@@ -14,9 +14,6 @@ import JustPIC._2D.GridGeometryUtils as GGU
 const backend_JP = JustPIC.CPUBackend
 # const backend_JP = CUDABackend
 
-# HELPER FUNCTIONS ----------------------------------- ----------------------------
-solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
-
 # Initialize phases on the particles
 function init_phases!(phase_ratios, xci, xvi, circle)
     ni = size(phase_ratios.center)
@@ -73,10 +70,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     visc_inc = LinearViscous(; η = 4e-2)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
-        C = C,
+        C = C * Inf,
         ϕ = ϕ,
         η_vp = η_reg,
-        Ψ = 5e0,
+        Ψ = 0e0,
     )
 
     rheology = (
@@ -207,10 +204,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     sol = Float64[]
     ttot = Float64[]
 
-    for _ in 1:50
+    for _ in 1:150
 
         # Stokes solver ----------------
-        _solve_DYREL!(
+        iters = _solve_DYREL!(
             stokes,
             pt_stokes,
             di,
@@ -225,11 +222,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             verbose = false,
             iterMax = 50.0e3,
             nout    = 100,
+            λ_relaxation = 1.075,
             viscosity_cutoff = (-Inf, Inf),
         )
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
-        push!(τII, maximum(stokes.τ.xx))
+        push!(τII, maximum(stokes.τ.II))
 
         it += 1
         t  += dt
@@ -244,12 +242,21 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         fig = Figure(size = (1600, 1600), title = "t = $t")
         ax1 = Axis(fig[1, 1], aspect = aspect_ratio, title = L"\tau_{II}", titlesize = 35)
         ax2 = Axis(fig[2, 1], aspect = aspect_ratio, title = L"E_{II}", titlesize = 35)
-        ax3 = Axis(fig[1, 2], aspect = aspect_ratio, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
-        ax4 = Axis(fig[2, 2], aspect = aspect_ratio)
-        heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
+        ax3 = Axis(fig[1, 3], aspect = aspect_ratio, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
+        ax4 = Axis(fig[2, 3], aspect = aspect_ratio)
+        h1 = heatmap!(ax1, xci..., Array(stokes.P), colormap = :inferno)
+        Colorbar(fig[1, 2], h1)
+        # heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :inferno)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
-        heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
+        # heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
+
+        lines!(ax2, (iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_V), label="V")
+        lines!(ax2, (iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_P), label="P")
+        axislegend(ax2; position = :rt)
+
+        h2 = heatmap!(ax3, xci..., Array(stokes.ε.II), colormap = :inferno)
+        Colorbar(fig[1, 4], h2)
+
         # lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
         # lines!(ax4, ttot, sol, color = :red)
@@ -262,7 +269,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 1
+n = 2
 
 nx, ny = 2*n*31, n*31   # numerical grid resolution
 
@@ -274,9 +281,3 @@ else
 end
 
 main(igg; figdir = figdir, nx = nx, ny = ny);
-
-
-stokes.τ.xx == stokes.τ_o.xx
-stokes.τ.yy == stokes.τ_o.yy
-stokes.τ.xy == stokes.τ_o.xy
-stokes.τ.xy_c == stokes.τ_o.xy_c

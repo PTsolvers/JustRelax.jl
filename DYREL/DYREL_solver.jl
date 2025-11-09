@@ -103,7 +103,7 @@ function _solve_DYREL!(
     errVx00    = 1.0
     errVy00    = 1.0 
     iter       = 1
-    ϵ          = 1e-9
+    ϵ          = 1e-6
     err        = 2 * ϵ
     err_evo_V  = Float64[]
     err_evo_P  = Float64[]
@@ -111,7 +111,7 @@ function _solve_DYREL!(
     itg        = 0
 
     # Powell-Hestenes iterations
-    for itPH in 1:50
+    for itPH in 1:1000
 
         # compute divergence
         @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
@@ -260,18 +260,18 @@ function _solve_DYREL!(
         # update pressure
         stokes.P .+= γ_eff.*stokes.R.RP
         
-        # update buoyancy forces
-        JustRelax2D.update_ρg!(ρg, phase_ratios, rheology, args)
+        # # update buoyancy forces
+        # JustRelax2D.update_ρg!(ρg, phase_ratios, rheology, args)
         
-        # update buoyancy viscosity
-        JustRelax2D.update_viscosity_τII!(
-            stokes,
-            phase_ratios,
-            args,
-            rheology,
-            viscosity_cutoff;
-            relaxation = viscosity_relaxation,
-        )
+        # # update buoyancy viscosity
+        # JustRelax2D.update_viscosity_τII!(
+        #     stokes,
+        #     phase_ratios,
+        #     args,
+        #     rheology,
+        #     viscosity_cutoff;
+        #     relaxation = viscosity_relaxation,
+        # )
 
         # if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
         #     println("Pseudo-transient iterations converged in $iter iterations")
@@ -279,21 +279,23 @@ function _solve_DYREL!(
     end
 
     # compute vorticity
-    # @parallel (@idx ni .+ 1) JustRelax2D.compute_vorticity!(
-    #     stokes.ω.xy, @velocity(stokes)..., inv.(di)...
-    # )
+    @parallel (@idx ni .+ 1) JustRelax2D.compute_vorticity!(
+        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+    )
 
-    # # Interpolate shear components to cell center arrays
-    # JustRelax2D.shear2center!(stokes.ε)
-    # JustRelax2D.shear2center!(stokes.ε_pl)
-    # JustRelax2D.shear2center!(stokes.Δε)
+    # Interpolate shear components to cell center arrays
+    JustRelax2D.shear2center!(stokes.ε)
+    JustRelax2D.shear2center!(stokes.ε_pl)
+    JustRelax2D.shear2center!(stokes.Δε)
 
-    # # accumulate plastic strain tensor
-    # JustRelax2D.accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    # accumulate plastic strain tensor
+    JustRelax2D.accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
 
     @parallel (@idx ni .+ 1) JustRelax2D.multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) JustRelax2D.multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
+    return (; err_evo_it, err_evo_V, err_evo_P)
+     
     # return (
     #     iter = iter,
     #     err_evo1 = err_evo1,

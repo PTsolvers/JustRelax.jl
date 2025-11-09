@@ -91,8 +91,11 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
     F     = @muladd τII - C * cosϕ - max(P, 0) * sinϕ
     λ     = if ispl && F > 0
         λ_new = max(F, 0.0) / (@muladd η_ve + η_reg + Kb * dt * sinϕ * sinΨ)
-        @muladd (1.0 - λ_relaxation) * λ + λ_relaxation * λ_new
+        # @muladd (1.0 - λ_relaxation) * λ + λ_relaxation * λ_new
+        λ_relaxation * λ_new + (1 - λ_relaxation) * λ
+
     else
+        
         0.0
     end
 

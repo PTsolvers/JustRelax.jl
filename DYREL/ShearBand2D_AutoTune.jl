@@ -250,7 +250,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ax2 = Axis(fig[2, 1], aspect = aspect_ratio, title = L"E_{II}", titlesize = 35)
         ax3 = Axis(fig[1, 3], aspect = aspect_ratio, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
         ax4 = Axis(fig[2, 3], aspect = aspect_ratio)
-        h1 = heatmap!(ax1, xci..., Array(stokes.P), colormap = :inferno)
+        h1 = heatmap!(ax1, xci..., Array(stokes.ε_pl.II), colormap = :inferno)
         Colorbar(fig[1, 2], h1)
         # heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :inferno)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
@@ -299,4 +299,3 @@ end
 
 main(igg; figdir = figdir, nx = nx, ny = ny);
 
-dyrel = DYREL(stokes, rheology, phase_ratios, di, dt);

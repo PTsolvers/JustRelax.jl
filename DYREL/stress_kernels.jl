@@ -21,7 +21,8 @@ end
         Pij   = av_clamped(stokes.P, Ic...)
         ratio = phase_ratios_vertex[I...]
         # # compute local stress
-        τxx_I, τyy_I, τxy_I, _, _, λ_I, _ = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt)
+        τxx_I, τyy_I, τxy_I, _, _, _, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt)
+
         # update arrays
         stokes.τ.xx_v[I...], stokes.τ.yy_v[I...], stokes.τ.xy[I...] = τxx_I, τyy_I, τxy_I
         stokes.λv[I...]   = λ_I
@@ -36,9 +37,10 @@ end
             ratio = phase_ratios_center[I...]
             
             # compute local stress
-            τxx_I, τyy_I, τxy_I, τII_I, ηvep_I, λ_I, ΔPψ_I = compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt)
+            τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I = compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt)
             # update arrays
-            stokes.τ.xx[I...], stokes.τ.yy[I...], stokes.τ.xy_c[I...] = τxx_I, τyy_I, τxy_I
+            stokes.τ.xx[I...],    stokes.τ.yy[I...],   stokes.τ.xy_c[I...]     = τxx_I, τyy_I, τxy_I
+            stokes.ε_pl.xx[I...], stokes.ε_pl.yy[I...], stokes.ε_pl.xy_c[I...] = εxx_pl, εyy_pl, εxy_pl
             stokes.τ.II[I...]            = τII_I
             stokes.viscosity.η_vep[I...] = ηvep_I
             stokes.λ[I...]               = λ_I
@@ -49,7 +51,7 @@ end
     return nothing
 end
 
-@generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt) where N
+@generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt) where {N}
     quote
         @inline
         # iterate over phases
@@ -57,9 +59,10 @@ end
             # get phase ratio
             ratio_I = phase_ratio[phase]
             v = if iszero(ratio_I) # this phase does not contribute
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+                empty_stress_solution(εij)
 
             else
+
                 # get rheological properties for this phase
                 G  = get_shear_modulus(rheology, phase)
                 Kb = get_bulk_modulus(rheology, phase)
@@ -70,7 +73,7 @@ end
         end
         # sum contributions from all phases
         v = reduce(.+, v_phases)
-        return v # this returns τxx, τyy, τxy, τII, ηvep, λ, ΔPψ
+        return v # this returns (τ_ij...), (εij_pl...), τII, λ, ΔPψ, ηvep
     end
 end
 
@@ -78,14 +81,15 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
 
     # viscoelastic viscosity
     η_ve  = inv(inv(η) + inv(G * dt))
-    # Deviatoric stress
+    # effectice stgrain rate
     _Gdt2 = inv(2 * G * dt)
     εij_eff = @. εij + τij_o * _Gdt2
 
     εII  = second_invariant(εij_eff)
     # early return if there is no deformation
-    iszero(εII) && return (0.0, 0.0, 0.0, 0.0, η, 0.0, 0.0)
+    iszero(εII) && return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η)
 
+    # Plastic stress correction starts here
     τij   = @. 2 * η_ve * εij_eff
     τII   = second_invariant(τij)
     # Plasticity
@@ -100,15 +104,25 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
         0.0
     end
 
+    # Effective viscoelastic-plastic viscosity
     η_vep  = (τII - λ * η_ve) / (2 * εII) * phase_ratio
+    # Update stress and plastic strain rate
     τij    = @. 2 * η_vep * εij_eff * phase_ratio
-    ΔPψ    = iszero(sinΨ) ? 0.0 : λ * sinΨ * Kb * dt * phase_ratio
     τII    = second_invariant(τij)
+    dQdτij = @. 0.5 * τij / τII
+    εij_pl = @. λ * dQdτij * phase_ratio
+    # Update pressure correction due to dilatation
+    ΔPψ    = iszero(sinΨ) ? 0.0 : λ * sinΨ * Kb * dt * phase_ratio
 
-    return τij..., τII, η_vep, λ * phase_ratio, ΔPψ
+    return τij..., εij_pl..., τII, λ * phase_ratio, ΔPψ, η_vep
 end
 
-# stokes.viscosity.η[60,26]
-# stokes.viscosity.η[59,25]
-# stokes.viscosity.η[59,26]
-# stokes.viscosity.η[60,25]
+# this returns zero for: τxx, τyy, τxy, τII, ηvep, λ, ΔPψ
+@inline empty_stress_solution(::NTuple{3, T}) where T = zero_tuple(T, Val(10))
+# this returns zero for: τxx, τyy, τyy, τyz, τxz, τxy, τII, ηvep, λ, ΔPψ
+@inline empty_stress_solution(::NTuple{6, T}) where T = zero_tuple(T, Val(13)) 
+
+@inline zero_tuple(::Type{T}, ::Val{N}) where {T, N} = ntuple(_-> zero(T), Val(N))
+@inline zero_tuple(::NTuple{N, T}) where {T, N} = zero_tuple(T, Val(N))
+
+

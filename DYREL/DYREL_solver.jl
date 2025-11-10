@@ -51,7 +51,6 @@ function _solve_DYREL!(
         cVy,
         αVx,
         αVy,
-        CFL,
         c_fact,
         ηb,
     ) = dyrel
@@ -91,9 +90,6 @@ function _solve_DYREL!(
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
-
-    # while iter ≤ iterMax
-    #     iterMin < iter && ((err / err_it1) < ϵ_rel || err < ϵ_abs) && break
 
     rel_drop = 1e-1         # relative drop of velocity residual per PH iteration
     # Iteration loop

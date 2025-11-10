@@ -79,6 +79,11 @@ struct SymmetricTensor{T}
     xx::T
     yy::T
     zz::Union{T, Nothing}
+
+    xx_v::T
+    yy_v::T
+    zz_v::Union{T, Nothing}
+
     xy::T
     yz::Union{T, Nothing}
     xz::Union{T, Nothing}
@@ -91,6 +96,9 @@ struct SymmetricTensor{T}
             xx::T,
             yy::T,
             zz::Union{T, Nothing},
+            xx_v::T,
+            yy_v::T,
+            zz_v::Union{T, Nothing},
             xy::T,
             yz::Union{T, Nothing},
             xz::Union{T, Nothing},
@@ -99,13 +107,13 @@ struct SymmetricTensor{T}
             xz_c::Union{T, Nothing},
             II::T,
         ) where {T}
-        return new{T}(xx, yy, zz, xy, yz, xz, xy_c, yz_c, xz_c, II)
+        return new{T}(xx, yy, zz, xx_v, yy_v, zz_v, xy, yz, xz, xy_c, yz_c, xz_c, II)
     end
 end
 
-function SymmetricTensor(xx::T, yy::T, xy::T, xy_c::T, II::T) where {T}
+function SymmetricTensor(xx::T, yy::T, xx_v::T, yy_v::T, xy::T, xy_c::T, II::T) where {T}
     return SymmetricTensor(
-        xx, yy, nothing, xy, nothing, nothing, xy_c, nothing, nothing, II
+        xx, yy, nothing, xx_v, yy_v, nothing, xy, nothing, nothing, xy_c, nothing, nothing, II
     )
 end
 

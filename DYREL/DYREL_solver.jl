@@ -25,7 +25,7 @@ function _solve_DYREL!(
         iterMax = 50.0e3,
         iterMin = 1.0e2,
         free_surface = false,
-        nout = 500,
+        nout = 100,
         b_width = (4, 4, 0),
         verbose = true,
         kwargs...,
@@ -58,11 +58,9 @@ function _solve_DYREL!(
     _di = inv.(di)
     _dt = inv.(dt)
     # (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokes
-    (; η, η_vep) = stokes.viscosity
+    # (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
-    # ~preconditioner
-    ητ = deepcopy(η)
 
     # errors
     err_it1 = 1.0
@@ -242,6 +240,8 @@ function _solve_DYREL!(
                 @. dVx = dVxdτ * βVx * dτVx
                 @. dVy = dVydτ * βVy * dτVy
 
+                # @printf("it = %d, iter = %d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", it, iter, err, errVx, errVy)
+
                 λminV  = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy.*(stokes.R.Ry .- Ry0))) / 
                     (sum(dVx.*dVx) .+ sum(dVy.*dVy))
                 cVx .= 2 * √(λminV) * c_fact
@@ -260,18 +260,18 @@ function _solve_DYREL!(
         # update pressure
         stokes.P .+= γ_eff.*stokes.R.RP
         
-        # # update buoyancy forces
-        # JustRelax2D.update_ρg!(ρg, phase_ratios, rheology, args)
+        # update buoyancy forces
+        JustRelax2D.update_ρg!(ρg, phase_ratios, rheology, args)
         
-        # # update buoyancy viscosity
-        # JustRelax2D.update_viscosity_τII!(
-        #     stokes,
-        #     phase_ratios,
-        #     args,
-        #     rheology,
-        #     viscosity_cutoff;
-        #     relaxation = viscosity_relaxation,
-        # )
+        # update buoyancy viscosity
+        JustRelax2D.update_viscosity_τII!(
+            stokes,
+            phase_ratios,
+            args,
+            rheology,
+            viscosity_cutoff;
+            relaxation = viscosity_relaxation,
+        )
 
         # if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
         #     println("Pseudo-transient iterations converged in $iter iterations")
@@ -293,6 +293,8 @@ function _solve_DYREL!(
 
     @parallel (@idx ni .+ 1) JustRelax2D.multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) JustRelax2D.multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+    stokes.τ_o.xx_v .= stokes.τ.xx_v
+    stokes.τ_o.yy_v .= stokes.τ.yy_v
 
     return (; err_evo_it, err_evo_V, err_evo_P)
      
@@ -305,5 +307,3 @@ function _solve_DYREL!(
     #     norm_∇V = norm_∇V,
     # )
 end
-
-

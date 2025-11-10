@@ -88,6 +88,8 @@ function SymmetricTensor(nx::Integer, ny::Integer)
     return JustRelax.SymmetricTensor(
         @zeros(nx, ny), # xx
         @zeros(nx, ny), # yy
+        @zeros(nx + 1, ny + 1), # xx_v
+        @zeros(nx + 1, ny + 1), # yy_v
         @zeros(nx + 1, ny + 1), # xy
         @zeros(nx, ny), # xy @ cell center
         @zeros(nx, ny) # II (second invariant)
@@ -99,6 +101,9 @@ function SymmetricTensor(nx::Integer, ny::Integer, nz::Integer)
         @zeros(nx, ny, nz), # xx
         @zeros(nx, ny, nz), # yy
         @zeros(nx, ny, nz), # zz
+        @zeros(nx + 1, ny + 1, nz + 1), # xx_v
+        @zeros(nx + 1, ny + 1, nz + 1), # yy_v
+        @zeros(nx + 1, ny + 1, nz + 1), # zz_v
         @zeros(nx + 1, ny + 1, nz), # xy
         @zeros(nx, ny + 1, nz + 1), # yz
         @zeros(nx + 1, ny, nz + 1), # xz

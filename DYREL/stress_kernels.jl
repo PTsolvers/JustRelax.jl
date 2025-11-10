@@ -13,16 +13,17 @@ end
     ## VERTEX CALCULATION
     # @inbounds begin
         Ic    = clamped_indices(ni, I...)
-        τij_o = av_clamped(stokes.τ_o.xx, Ic...), av_clamped(stokes.τ_o.yy, Ic...), stokes.τ_o.xy[I...]
-        εij   = av_clamped(stokes.ε.xx, Ic...),   av_clamped(stokes.ε.yy, Ic...),   stokes.ε.xy[I...]
+        # τij_o = av_clamped(stokes.τ_o.xx, Ic...), av_clamped(stokes.τ_o.yy, Ic...), stokes.τ_o.xy[I...]
+        τij_o = stokes.τ_o.xx_v[I...], stokes.τ_o.yy_v[I...], stokes.τ_o.xy[I...]
+        εij   = av_clamped(stokes.ε.xx, Ic...), av_clamped(stokes.ε.yy, Ic...), stokes.ε.xy[I...]
         λvij  = stokes.λv[I...]
-        ηij   = av_clamped(stokes.viscosity.η, Ic...)
+        ηij   = JustRelax2D.harm_clamped(stokes.viscosity.η, Ic...)
         Pij   = av_clamped(stokes.P, Ic...)
         ratio = phase_ratios_vertex[I...]
         # # compute local stress
-        _, _, τxy_I, _, _, λ_I, _ = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt)
+        τxx_I, τyy_I, τxy_I, _, _, λ_I, _ = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt)
         # update arrays
-        stokes.τ.xy[I...] = τxy_I
+        stokes.τ.xx_v[I...], stokes.τ.yy_v[I...], stokes.τ.xy[I...] = τxx_I, τyy_I, τxy_I
         stokes.λv[I...]   = λ_I
 
         ## CENTER CALCULATION
@@ -88,10 +89,10 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
     τij   = @. 2 * η_ve * εij_eff
     τII   = second_invariant(τij)
     # Plasticity
-    F     = @muladd τII - C * cosϕ - max(P, 0) * sinϕ
+    # F     = τII - C * cosϕ - max(P, 0) * sinϕ
+    F     = τII - C * cosϕ - P * sinϕ
     λ     = if ispl && F > 0
-        λ_new = max(F, 0.0) / (@muladd η_ve + η_reg + Kb * dt * sinϕ * sinΨ)
-        # @muladd (1.0 - λ_relaxation) * λ + λ_relaxation * λ_new
+        λ_new = F / (η_ve + η_reg + Kb * dt * sinϕ * sinΨ)
         λ_relaxation * λ_new + (1 - λ_relaxation) * λ
 
     else
@@ -99,10 +100,15 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
         0.0
     end
 
-    η_vep  = @muladd (τII - λ * η_ve) / (2 * εII) * phase_ratio
+    η_vep  = (τII - λ * η_ve) / (2 * εII) * phase_ratio
     τij    = @. 2 * η_vep * εij_eff * phase_ratio
     ΔPψ    = iszero(sinΨ) ? 0.0 : λ * sinΨ * Kb * dt * phase_ratio
     τII    = second_invariant(τij)
 
     return τij..., τII, η_vep, λ * phase_ratio, ΔPψ
 end
+
+# stokes.viscosity.η[60,26]
+# stokes.viscosity.η[59,25]
+# stokes.viscosity.η[59,26]
+# stokes.viscosity.η[60,25]

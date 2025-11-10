@@ -594,15 +594,15 @@ Base.@propagate_inbounds @inline function av_clamped_xy(A, i0, j0, k0, ic, jc, k
 end
 
 Base.@propagate_inbounds @inline function harm_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
-    return 4 / (1/A[ic, j0, k0] + 1/A[ic, jc, k0] + 1/A[ic, j0, kc] + 1/A[ic, jc, kc])
+    return 4 / (1 / A[ic, j0, k0] + 1 / A[ic, jc, k0] + 1 / A[ic, j0, kc] + 1 / A[ic, jc, kc])
 end
 
 Base.@propagate_inbounds @inline function harm_clamped_xz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
-    return 4 / (1/A[i0, jc, k0] + 1/A[ic, jc, k0] + 1/A[i0, jc, kc] + 1/A[ic, jc, kc])
+    return 4 / (1 / A[i0, jc, k0] + 1 / A[ic, jc, k0] + 1 / A[i0, jc, kc] + 1 / A[ic, jc, kc])
 end
 
 Base.@propagate_inbounds @inline function harm_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
-    return 4 / (1/A[i0, j0, kc] + 1/A[ic, j0, kc] + 1/A[i0, jc, kc] + 1/A[ic, jc, kc])
+    return 4 / (1 / A[i0, j0, kc] + 1 / A[ic, j0, kc] + 1 / A[i0, jc, kc] + 1 / A[ic, jc, kc])
 end
 
 # on yz
@@ -1185,5 +1185,5 @@ Base.@propagate_inbounds @inline function av_clamped(A, i0, j0, ic, jc)
 end
 
 Base.@propagate_inbounds @inline function harm_clamped(A, i0, j0, ic, jc)
-    return 4 / (1/A[i0, j0] + 1/A[ic, jc] + 1/A[i0, jc] + 1/A[ic, j0])
+    return 4 / (1 / A[i0, j0] + 1 / A[ic, jc] + 1 / A[i0, jc] + 1 / A[ic, j0])
 end

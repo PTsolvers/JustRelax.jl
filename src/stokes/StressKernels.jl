@@ -593,6 +593,18 @@ Base.@propagate_inbounds @inline function av_clamped_xy(A, i0, j0, k0, ic, jc, k
     return 0.25 * (A[i0, j0, kc] + A[ic, j0, kc] + A[i0, jc, kc] + A[ic, jc, kc])
 end
 
+Base.@propagate_inbounds @inline function harm_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (1/A[ic, j0, k0] + 1/A[ic, jc, k0] + 1/A[ic, j0, kc] + 1/A[ic, jc, kc])
+end
+
+Base.@propagate_inbounds @inline function harm_clamped_xz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (1/A[i0, jc, k0] + 1/A[ic, jc, k0] + 1/A[i0, jc, kc] + 1/A[ic, jc, kc])
+end
+
+Base.@propagate_inbounds @inline function harm_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (1/A[i0, j0, kc] + 1/A[ic, j0, kc] + 1/A[i0, jc, kc] + 1/A[ic, jc, kc])
+end
+
 # on yz
 Base.@propagate_inbounds @inline function av_clamped_yz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
     return 0.25 * (A[ic, jc, k0] + A[i1, jc, k0] + A[ic, jc, kc] + A[i1, jc, kc])
@@ -655,7 +667,7 @@ end
     ## yz
     @inbounds if all(I .≤ size(ε[4]))
         # interpolate to ith vertex
-        ηv_ij = av_clamped_yz(η, Ic...)
+        ηv_ij = harm_clamped_yz(η, Ic...)
         Pv_ij = av_clamped_yz(Pr, Ic...)
         EIIv_ij = av_clamped_yz(EII, Ic...)
         εxxv_ij = av_clamped_yz(ε[1], Ic...)
@@ -720,7 +732,7 @@ end
     ## xz
     @inbounds if all(I .≤ size(ε[5]))
         # interpolate to ith vertex
-        ηv_ij = av_clamped_xz(η, Ic...)
+        ηv_ij = harm_clamped_xz(η, Ic...)
         EIIv_ij = av_clamped_xz(EII, Ic...)
         Pv_ij = av_clamped_xz(Pr, Ic...)
         εxxv_ij = av_clamped_xz(ε[1], Ic...)
@@ -783,7 +795,7 @@ end
     ## xy
     if all(I .≤ size(ε[6]))
         # interpolate to ith vertex
-        ηv_ij = av_clamped_xy(η, Ic...)
+        ηv_ij = harm_clamped_xy(η, Ic...)
         EIIv_ij = av_clamped_xy(EII, Ic...)
         Pv_ij = av_clamped_xy(Pr, Ic...)
         εxxv_ij = av_clamped_xy(ε[1], Ic...)
@@ -939,7 +951,7 @@ end
     _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     Kv = fn_ratio(get_bulk_modulus, rheology, phase)
     volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-    ηv_ij = @inbounds av_clamped(η, Ic...)
+    ηv_ij = @inbounds harm_clamped(η, Ic...)
     dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
     # stress increments @ vertex
@@ -1074,7 +1086,7 @@ end
     _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     Kv = fn_ratio(get_bulk_modulus, rheology, phase)
     volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-    ηv_ij = av_clamped(η, Ic...)
+    ηv_ij = harm_clamped(η, Ic...)
     dτ_rv = inv(θ_dτ * dt + ηv_ij * _Gv + dt)
     dτ_rv2 = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
     # stress increments @ vertex
@@ -1159,7 +1171,6 @@ end
     return nothing
 end
 
-
 Base.@propagate_inbounds @inline function clamped_indices(ni::NTuple{2, Integer}, i, j)
     nx, ny = ni
     i0 = clamp(i - 1, 1, nx)
@@ -1171,4 +1182,8 @@ end
 
 Base.@propagate_inbounds @inline function av_clamped(A, i0, j0, ic, jc)
     return 0.25 * (A[i0, j0] + A[ic, jc] + A[i0, jc] + A[ic, j0])
+end
+
+Base.@propagate_inbounds @inline function harm_clamped(A, i0, j0, ic, jc)
+    return 4 / (1/A[i0, j0] + 1/A[ic, jc] + 1/A[i0, jc] + 1/A[ic, j0])
 end

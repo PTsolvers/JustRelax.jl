@@ -1172,3 +1172,7 @@ end
 Base.@propagate_inbounds @inline function av_clamped(A, i0, j0, ic, jc)
     return 0.25 * (A[i0, j0] + A[ic, jc] + A[i0, jc] + A[ic, j0])
 end
+
+Base.@propagate_inbounds @inline function harm_clamped(A, i0, j0, ic, jc)
+    return 4 / (1/A[i0, j0] + 1/A[ic, jc] + 1/A[i0, jc] + 1/A[ic, j0])
+end

@@ -1,7 +1,7 @@
 # using CUDA
 using GeoParams, CellArrays
-# using GLMakie
-using Plots
+using GLMakie
+# using Plots
 
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
@@ -139,6 +139,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     ### DYREL stuff
 
+    dyrel = DYREL(stokes, rheology, phase_ratios, di, dt)
+
     # Bulk viscosity
     Kb   = 1e-10
     ηb   = @fill(Kb * dt, ni...)
@@ -176,28 +178,28 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     CFL_v = 0.99
     update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
 
-    DYREL = (;
-        γ_eff,
-        Dx,
-        Dy,
-        λmaxVx,
-        λmaxVy,
-        dVxdτ,
-        dVydτ,
-        dτVx,
-        dτVy,
-        dVx,
-        dVy,
-        βVx,
-        βVy,
-        cVx,
-        cVy,
-        αVx,
-        αVy,
-        CFL_v,
-        c_fact,
-        ηb,
-    )
+    # DYREL = (;
+    #     γ_eff,
+    #     Dx,
+    #     Dy,
+    #     λmaxVx,
+    #     λmaxVy,
+    #     dVxdτ,
+    #     dVydτ,
+    #     dτVx,
+    #     dτVy,
+    #     dVx,
+    #     dVy,
+    #     βVx,
+    #     βVy,
+    #     cVx,
+    #     cVy,
+    #     αVx,
+    #     αVy,
+    #     CFL_v,
+    #     c_fact,
+    #     ηb,
+    # )
     # IO -------------------------------------------------
     take(figdir)
 
@@ -221,7 +223,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             rheology,
             args,
             dt,
-            DYREL,
+            dyrel,
             igg;
             verbose = false,
             iterMax = 50.0e3,
@@ -241,44 +243,44 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
         println("it = $it; t = $t \n")
 
-        # # visualisation
-        # aspect_ratio = 2 
-        # fig = Figure(size = (1600, 1600), title = "t = $t")
-        # ax1 = Axis(fig[1, 1], aspect = aspect_ratio, title = L"\tau_{II}", titlesize = 35)
-        # ax2 = Axis(fig[2, 1], aspect = aspect_ratio, title = L"E_{II}", titlesize = 35)
-        # ax3 = Axis(fig[1, 3], aspect = aspect_ratio, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
-        # ax4 = Axis(fig[2, 3], aspect = aspect_ratio)
-        # h1 = heatmap!(ax1, xci..., Array(stokes.P), colormap = :inferno)
-        # Colorbar(fig[1, 2], h1)
-        # # heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :inferno)
-        # # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        # # heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
+        # visualisation
+        aspect_ratio = 2 
+        fig = Figure(size = (1600, 1600), title = "t = $t")
+        ax1 = Axis(fig[1, 1], aspect = aspect_ratio, title = L"\tau_{II}", titlesize = 35)
+        ax2 = Axis(fig[2, 1], aspect = aspect_ratio, title = L"E_{II}", titlesize = 35)
+        ax3 = Axis(fig[1, 3], aspect = aspect_ratio, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
+        ax4 = Axis(fig[2, 3], aspect = aspect_ratio)
+        h1 = heatmap!(ax1, xci..., Array(stokes.P), colormap = :inferno)
+        Colorbar(fig[1, 2], h1)
+        # heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :inferno)
+        # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
+        # heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
 
-        # lines!(ax2, (iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_V), label="V")
-        # lines!(ax2, (iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_P), label="P")
-        # axislegend(ax2; position = :rt)
+        lines!(ax2, (iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_V), label="V")
+        lines!(ax2, (iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_P), label="P")
+        axislegend(ax2; position = :rt)
 
-        # h2 = heatmap!(ax3, xci..., Array(stokes.ε.II), colormap = :inferno)
-        # Colorbar(fig[1, 4], h2)
+        h2 = heatmap!(ax3, xci..., Array(stokes.ε.II), colormap = :inferno)
+        Colorbar(fig[1, 4], h2)
 
-        # # lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-        # lines!(ax4, ttot, τII, color = :black)
-        # # lines!(ax4, ttot, sol, color = :red)
-        # hidexdecorations!(ax1)
-        # hidexdecorations!(ax3)
-        # fig
-        # save(joinpath(figdir, "$(it).png"), fig)
+        # lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
+        lines!(ax4, ttot, τII, color = :black)
+        # lines!(ax4, ttot, sol, color = :red)
+        hidexdecorations!(ax1)
+        hidexdecorations!(ax3)
+        fig
+        save(joinpath(figdir, "$(it).png"), fig)
 
-        Lx = li[1]
-        p1 = heatmap(xci..., stokes.ε.II' , aspect_ratio=1, c=:inferno, title="EII", xlims=(-Lx/2,Lx/2), xlabel="x",ylabel="y")
-        p2 = heatmap(xci..., stokes.P' , aspect_ratio=1, c=:inferno, title="Pt", xlims=(-Lx/2,Lx/2), xlabel="x",ylabel="y")
-        p3 = plot(title="Convergence", xlabel="DR iterations / nx",ylabel="errors") 
-        p3 = plot!((iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_V), label="V")
-        p3 = plot!((iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_P), label="P")
-        # p3 = plot!((err_evo_it.-err_evo_it[1])/ncx, log10.(ϵ.*ones(size(err_evo_it))), label="tol")  
-        p4 = plot(ttot, τII, xlabel="time",ylabel="mean dev. stress", label=:none)
-        # p4 = heatmap(xc, yc, log10.(ηc)' , aspect_ratio=1, c=:inferno, title="ηc", xlims=(-Lx/2,Lx/2))
-        display(plot(p1, p2, p3, p4))
+        # Lx = li[1]
+        # p1 = heatmap(xci..., stokes.ε.II' , aspect_ratio=1, c=:inferno, title="EII", xlims=(-Lx/2,Lx/2), xlabel="x",ylabel="y")
+        # p2 = heatmap(xci..., stokes.P' , aspect_ratio=1, c=:inferno, title="Pt", xlims=(-Lx/2,Lx/2), xlabel="x",ylabel="y")
+        # p3 = plot(title="Convergence", xlabel="DR iterations / nx",ylabel="errors") 
+        # p3 = plot!((iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_V), label="V")
+        # p3 = plot!((iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_P), label="P")
+        # # p3 = plot!((err_evo_it.-err_evo_it[1])/ncx, log10.(ϵ.*ones(size(err_evo_it))), label="tol")  
+        # p4 = plot(ttot, τII, xlabel="time",ylabel="mean dev. stress", label=:none)
+        # # p4 = heatmap(xc, yc, log10.(ηc)' , aspect_ratio=1, c=:inferno, title="ηc", xlims=(-Lx/2,Lx/2))
+        # display(plot(p1, p2, p3, p4))
     end
 
     return nothing
@@ -296,3 +298,5 @@ else
 end
 
 main(igg; figdir = figdir, nx = nx, ny = ny);
+
+dyrel = DYREL(stokes, rheology, phase_ratios, di, dt);

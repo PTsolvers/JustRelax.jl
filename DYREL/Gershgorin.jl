@@ -105,6 +105,11 @@ end
     return nothing
 end
 
+    
+function update_dτV_α_β!(dyrel::DYREL)
+    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.CFL)
+end
+
 function update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
     ni = size(βVx) .+ (1, 0)
     @parallel (@idx ni) _update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)

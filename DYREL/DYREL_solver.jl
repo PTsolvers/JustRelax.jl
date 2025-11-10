@@ -2,6 +2,8 @@ using StaticArrays, MuladdMacro, Printf
 import JustRelax.JustRelax2D: get_shear_modulus, compute_∇V!, update_ρg!, compute_strain_rate!, cache_tensors, get_bulk_modulus, clamped_indices, av_clamped
 using LinearAlgebra
 
+include("types.jl")
+include("constructors.jl")
 include("pressure_kernels.jl")
 include("stress_kernels.jl")
 include("velocity_kernels.jl")
@@ -17,7 +19,7 @@ function _solve_DYREL!(
         rheology,
         args,
         dt,
-        DYREL,
+        dyrel,
         igg::IGG;
         viscosity_cutoff = (-Inf, Inf),
         viscosity_relaxation = 1.0e-2,
@@ -49,10 +51,10 @@ function _solve_DYREL!(
         cVy,
         αVx,
         αVy,
-        CFL_v,
+        CFL,
         c_fact,
         ηb,
-    ) = DYREL
+    ) = dyrel
     # unpack
 
     _di = inv.(di)
@@ -251,8 +253,8 @@ function _solve_DYREL!(
                 Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, di, dt)
             
                 # Select dτ
-                update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
-
+                # update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL)
+                update_dτV_α_β!(dyrel)
             end
             iter += 1 
         end

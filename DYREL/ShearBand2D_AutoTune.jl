@@ -1,21 +1,21 @@
-# using CUDA
+using CUDA
 using GeoParams, CellArrays
 using GLMakie
 # using Plots
 
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
-# @init_parallel_stencil(CUDA, Float64, 2)
-@init_parallel_stencil(Threads, Float64, 2)
+@init_parallel_stencil(CUDA, Float64, 2)
+# @init_parallel_stencil(Threads, Float64, 2)
 
-const backend = CPUBackend
-# const backend = CUDABackend
+# const backend = CPUBackend
+const backend = CUDABackend
 
 using JustPIC, JustPIC._2D
 import JustPIC._2D.GridGeometryUtils as GGU
 
-const backend_JP = JustPIC.CPUBackend
-# const backend_JP = CUDABackend
+# const backend_JP = JustPIC.CPUBackend
+const backend_JP = CUDABackend
 
 # Initialize phases on the particles
 function init_phases!(phase_ratios, xci, xvi, circle)
@@ -113,8 +113,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1e-1, CFL = 0.95 / √2.1)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-1, Re = 1.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -139,7 +137,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     ### DYREL stuff
 
-    dyrel = DYREL(stokes, rheology, phase_ratios, di, dt)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt)
 
     # IO -------------------------------------------------
     take(figdir)
@@ -240,4 +238,3 @@ else
 end
 
 main(igg; figdir = figdir, nx = nx, ny = ny);
-

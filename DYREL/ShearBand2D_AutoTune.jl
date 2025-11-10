@@ -45,7 +45,7 @@ end
 
 
 using Statistics
-include("DYREL_solver.jl")
+# include("DYREL_solver.jl")
 
 # MAIN SCRIPT --------------------------------------------------------------------
 function main(igg; nx = 64, ny = 64, figdir = "model_figs")
@@ -141,65 +141,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     dyrel = DYREL(stokes, rheology, phase_ratios, di, dt)
 
-    # Bulk viscosity
-    Kb   = 1e-10
-    ηb   = @fill(Kb * dt, ni...)
-    # Select γ
-    γfact = 20           # penalty: multiplier to the arithmetic mean of η
-    γi    = γfact * mean(stokes.viscosity.η)
-    # (Pseudo-)compressibility
-    γ_eff = @zeros(ni...) 
-    γ_num = @fill(γi, ni...)
-    γ_phy = ηb
-    γ_eff = ((γ_phy.*γ_num)./(γ_phy.+γ_num))
-    c_fact   = 0.5          # damping factor
-
-    # Diagonal preconditioner arrays
-    Dx     = @zeros(ni[1]-1, ni[2])
-    Dy     = @zeros(ni[1], ni[2]-1)
-    # maximum eigenvalue estimates
-    λmaxVx = @zeros(ni[1]-1, ni[2])
-    λmaxVy = @zeros(ni[1], ni[2]-1)
-    dVxdτ  = @zeros(ni[1]-1, ni[2])
-    dVydτ  = @zeros(ni[1], ni[2]-1)
-    dτVx   = @zeros(ni[1]-1, ni[2])
-    dτVy   = @zeros(ni[1], ni[2]-1)
-    dVx    = @zeros(ni[1]-1, ni[2])
-    dVy    = @zeros(ni[1], ni[2]-1)
-    βVx    = @zeros(ni[1]-1, ni[2])
-    βVy    = @zeros(ni[1], ni[2]-1)
-    cVx    = @zeros(ni[1]-1, ni[2])
-    cVy    = @zeros(ni[1], ni[2]-1)
-    αVx    = @zeros(ni[1]-1, ni[2])
-    αVy    = @zeros(ni[1], ni[2]-1)
-
-    Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, di, dt)
-
-    CFL_v = 0.99
-    update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
-
-    # DYREL = (;
-    #     γ_eff,
-    #     Dx,
-    #     Dy,
-    #     λmaxVx,
-    #     λmaxVy,
-    #     dVxdτ,
-    #     dVydτ,
-    #     dτVx,
-    #     dτVy,
-    #     dVx,
-    #     dVy,
-    #     βVx,
-    #     βVy,
-    #     cVx,
-    #     cVy,
-    #     αVx,
-    #     αVy,
-    #     CFL_v,
-    #     c_fact,
-    #     ηb,
-    # )
     # IO -------------------------------------------------
     take(figdir)
 
@@ -213,23 +154,24 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     for _ in 1:50
 
         # Stokes solver ----------------
-        iters = _solve_DYREL!(
+        iters = solve_DYREL!(
             stokes,
-            pt_stokes,
-            di,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
             rheology,
             args,
+            di,
             dt,
-            dyrel,
             igg;
-            verbose = false,
-            iterMax = 50.0e3,
-            nout    = 100,
-            λ_relaxation = 1.075,
-            viscosity_cutoff = (-Inf, Inf),
+            kwargs = (;
+                verbose = false,
+                iterMax = 50.0e3,
+                nout    = 100,
+                λ_relaxation = 1.075,
+                viscosity_cutoff = (-Inf, Inf),
+            )
         )
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)

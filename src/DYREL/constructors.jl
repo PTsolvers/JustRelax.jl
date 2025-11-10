@@ -1,5 +1,3 @@
-DYREL(nx::Integer, ny::Integer; ϵ=1e-6, CFL= 0.99, c_fat = 0.5) = DYREL((nx, ny); ϵ=ϵ, CFL=CFL, c_fat=c_fat)
-
 function DYREL(ni::NTuple{2}; ϵ=1e-6, CFL= 0.99, c_fat = 0.5)
     nx, ny = ni
     # penalty parameter
@@ -29,6 +27,12 @@ function DYREL(ni::NTuple{2}; ϵ=1e-6, CFL= 0.99, c_fat = 0.5)
     F = typeof(CFL)
     JustRelax.DYREL{T, F}(γ_eff, Dx, Dy, λmaxVx, λmaxVy, dVxdτ, dVydτ, dτVx, dτVy,
                      dVx, dVy, βVx, βVy, cVx, cVy, αVx, αVy, ηb, CFL, ϵ, c_fat)
+end
+
+DYREL(nx::Integer, ny::Integer; ϵ=1e-6, CFL= 0.99, c_fat = 0.5) = DYREL((nx, ny); ϵ=ϵ, CFL=CFL, c_fat=c_fat)
+
+function DYREL(::Type{CPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ=1e-6, CFL= 0.99, c_fat = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ=ϵ, CFL=CFL, c_fat=c_fat, γfact=γfact)
 end
 
 function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ=1e-6, CFL= 0.99, c_fat = 0.5, γfact = 20.0)

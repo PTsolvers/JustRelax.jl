@@ -73,8 +73,8 @@
                 @muladd (1.0 - relλ) * λv[I...] +
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-            εij_pl = λv[I...] * dQdτxy
-            τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_pl * dτ_rv
+            εij_plv = λv[I...] * dQdτxy
+            τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_plv * dτ_rv
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv

@@ -45,7 +45,7 @@
         _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
         Kv = fn_ratio(get_bulk_modulus, rheology, phase)
         volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-        ηv_ij = av_clamped(η, Ic...)
+        ηv_ij = harm_clamped(η, Ic...)
         dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
         # stress increments @ vertex
@@ -189,7 +189,7 @@ end
     ## yz
     if all(I .≤ size(ε[4])) && isvalid_yz(ϕ, I...)
         # interpolate to ith vertex
-        ηv_ij = av_clamped_yz(η, Ic...)
+        ηv_ij = harm_clamped_yz(η, Ic...)
         Pv_ij = av_clamped_yz(Pr, Ic...)
         EIIv_ij = av_clamped_yz(EII, Ic...)
         εxxv_ij = av_clamped_yz(ε[1], Ic...)
@@ -262,7 +262,7 @@ end
     ## xz
     if all(I .≤ size(ε[5])) && isvalid_xz(ϕ, I...)
         # interpolate to ith vertex
-        ηv_ij = av_clamped_xz(η, Ic...)
+        ηv_ij = harm_clamped_xz(η, Ic...)
         EIIv_ij = av_clamped_xz(EII, Ic...)
         Pv_ij = av_clamped_xz(Pr, Ic...)
         εxxv_ij = av_clamped_xz(ε[1], Ic...)
@@ -333,7 +333,7 @@ end
     ## xy
     if all(I .≤ size(ε[6])) && isvalid_xy(ϕ, I...)
         # interpolate to ith vertex
-        ηv_ij = av_clamped_xy(η, Ic...)
+        ηv_ij = harm_clamped_xy(η, Ic...)
         EIIv_ij = av_clamped_xy(EII, Ic...)
         Pv_ij = av_clamped_xy(Pr, Ic...)
         εxxv_ij = av_clamped_xy(ε[1], Ic...)
@@ -520,7 +520,7 @@ end
         _Gv = inv(fn_ratio(get_shear_modulus, rheology, phase))
         Kv = fn_ratio(get_bulk_modulus, rheology, phase)
         volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-        ηv_ij = av_clamped(η, Ic...)
+        ηv_ij = harm_clamped(η, Ic...)
         dτ_rv = inv(θ_dτ * dt + ηv_ij * _Gv + dt)
 
         # stress increments @ vertex

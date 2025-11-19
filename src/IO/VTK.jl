@@ -283,7 +283,7 @@ function save_particles2D(particles, pPhases, precision; conversion = 1.0e3, fna
     y = pyv[idxv]
     phase = clr[idxv]
     npoints = length(x)
-    z = zeros(npoints)
+    z = zeros(precision, npoints)
     cells = [MeshCell(VTKCellTypes.VTK_VERTEX, (i,)) for i in 1:npoints]
 
     return vtk_grid(fname, x, y, z, cells) do vtk

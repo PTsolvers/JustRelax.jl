@@ -28,8 +28,12 @@ module JustRelax2D
     __init__() = @init_parallel_stencil(Threads, Float64, 2)
 
     include("common.jl")
+    
     include("stokes/Stokes2D.jl")
     export solve!
+
+    include("DYREL/DYREL2D.jl")
+    export solve_DYREL!, DYREL
 
     include("variational_stokes/Stokes2D.jl")
     export solve_VariationalStokes!

@@ -67,7 +67,7 @@ In short, `JustRelax.jl` delivers a high‑performance, portable alternative to 
 
 # Methods
 
-`JustRelax.jl` solves the (in)compressible Stokes equations, described by the equations of conservation of momentum and mass, as well as the conservation of energy equation. This system of equations is solved using the APT method [@Raess2022], which transforms the elliptic PDEs into damped wave equations by augmenting them with a second order pseudo-time derivative which should vanish upon convergence, thus recovering the original form of the PDE. For an in-depth description of this method, we refer the reader to @Raess2022.
+`JustRelax.jl` solves the (in)compressible Stokes equations, described by the equations of conservation of momentum and mass, as well as the conservation of energy equation. This system of equations is solved using the APT method [@Raess2022], which transforms the PDEs into damped wave equations by augmenting them with a second order pseudo-time derivative which should vanish upon convergence, thus recovering the original form of the PDE. For an in-depth description of this method, we refer the reader to @Raess2022.
 
 # Package summary
 

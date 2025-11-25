@@ -9,3 +9,4 @@ extend-ignore-words-re = [
     "(?i)normale\\s+supérieure"
 ]
 nd = "nd"
+Heros = "Heros"

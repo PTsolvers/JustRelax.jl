@@ -354,10 +354,49 @@ end
 end
 
 ## Accumulate tensor
-@parallel_indices (I...) function accumulate_tensor!(
-        II, tensor::NTuple{N, T}, dt
-    ) where {N, T}
-    @inbounds II[I...] += second_invariant(getindex.(tensor, I...)...) * dt
+function accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
+    return accumulate_tensor!(backend(A), II, A, dt)
+end
+
+function accumulate_tensor!(::CPUBackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    _accumulate_tensor!(II, A, dt)
+    return nothing
+end
+
+function _accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
+    ni = size(II)
+    @parallel (@idx ni) accumulate_tensor_kernel!(II, @tensor(A)..., dt)
+    return nothing
+end
+
+@parallel_indices (I...) function accumulate_tensor_kernel!(
+        II, xx, yy, xy, dt
+    )
+
+    # convenience closures
+    @inline gather(A) = _gather(A, I...)
+
+    @inbounds begin
+        ε_pl = xx[I...], yy[I...], gather(xy)
+        II[I...] += second_invariant_staggered(ε_pl...) * dt
+    end
+
+    return nothing
+end
+
+@parallel_indices (I...) function accumulate_tensor_kernel!(
+        II, xx, yy, zz, yz, xz, xy, dt
+    )
+    # convenience closures
+    @inline gather_yz(A) = _gather_yz(A, I...)
+    @inline gather_xz(A) = _gather_xz(A, I...)
+    @inline gather_xy(A) = _gather_xy(A, I...)
+
+    @inbounds begin
+        ε_pl = xx[I...], yy[I...], zz[I...], gather_yz(yz), gather_xz(xz), gather_xy(xy)
+        II[I...] += second_invariant_staggered(ε_pl...) * dt
+    end
+
     return nothing
 end
 
@@ -508,7 +547,7 @@ function update_stress!(
         stokes.τ.II,
         @tensor_center(stokes.τ_o),
         @strain(stokes),
-        @tensor_center(stokes.ε_pl),
+        @plastic_strain(stokes.ε_pl),
         stokes.EII_pl,
         stokes.P,
         θ,
@@ -552,6 +591,18 @@ end
 
 Base.@propagate_inbounds @inline function av_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
     return 0.25 * (A[i0, j0, kc] + A[ic, j0, kc] + A[i0, jc, kc] + A[ic, jc, kc])
+end
+
+Base.@propagate_inbounds @inline function harm_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (1 / A[ic, j0, k0] + 1 / A[ic, jc, k0] + 1 / A[ic, j0, kc] + 1 / A[ic, jc, kc])
+end
+
+Base.@propagate_inbounds @inline function harm_clamped_xz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (1 / A[i0, jc, k0] + 1 / A[ic, jc, k0] + 1 / A[i0, jc, kc] + 1 / A[ic, jc, kc])
+end
+
+Base.@propagate_inbounds @inline function harm_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (1 / A[i0, j0, kc] + 1 / A[ic, j0, kc] + 1 / A[i0, jc, kc] + 1 / A[ic, jc, kc])
 end
 
 # on yz
@@ -616,7 +667,7 @@ end
     ## yz
     @inbounds if all(I .≤ size(ε[4]))
         # interpolate to ith vertex
-        ηv_ij = av_clamped_yz(η, Ic...)
+        ηv_ij = harm_clamped_yz(η, Ic...)
         Pv_ij = av_clamped_yz(Pr, Ic...)
         EIIv_ij = av_clamped_yz(EII, Ic...)
         εxxv_ij = av_clamped_yz(ε[1], Ic...)
@@ -681,7 +732,7 @@ end
     ## xz
     @inbounds if all(I .≤ size(ε[5]))
         # interpolate to ith vertex
-        ηv_ij = av_clamped_xz(η, Ic...)
+        ηv_ij = harm_clamped_xz(η, Ic...)
         EIIv_ij = av_clamped_xz(EII, Ic...)
         Pv_ij = av_clamped_xz(Pr, Ic...)
         εxxv_ij = av_clamped_xz(ε[1], Ic...)
@@ -744,7 +795,7 @@ end
     ## xy
     if all(I .≤ size(ε[6]))
         # interpolate to ith vertex
-        ηv_ij = av_clamped_xy(η, Ic...)
+        ηv_ij = harm_clamped_xy(η, Ic...)
         EIIv_ij = av_clamped_xy(EII, Ic...)
         Pv_ij = av_clamped_xy(Pr, Ic...)
         εxxv_ij = av_clamped_xy(ε[1], Ic...)
@@ -817,7 +868,7 @@ end
         dτ_r = inv(θ_dτ + ηij * _Gdt + 1.0)
 
         # cache strain rates for center calculations
-        τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
+        τij, τij_o, εij, εij_pl = cache_tensors(τ, τ_o, ε, ε_pl, I...)
 
         # visco-elastic strain rates @ center
         εij_ve = @. εij + 0.5 * τij_o * _Gdt
@@ -828,7 +879,7 @@ end
         # yield function @ center
         F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-        if is_pl && !iszero(τII_ij) && F > 0
+        τII_ij = if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
@@ -900,7 +951,7 @@ end
     _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     Kv = fn_ratio(get_bulk_modulus, rheology, phase)
     volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-    ηv_ij = @inbounds av_clamped(η, Ic...)
+    ηv_ij = @inbounds harm_clamped(η, Ic...)
     dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
     # stress increments @ vertex
@@ -941,7 +992,7 @@ end
         dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
 
         # cache strain rates for center calculations
-        τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
+        τij, τij_o, εij, εij_pl = cache_tensors(τ, τ_o, ε, ε_pl, I...)
 
         # visco-elastic strain rates @ center
         εij_ve = @. εij + 0.5 * τij_o * _Gdt
@@ -1035,7 +1086,7 @@ end
     _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     Kv = fn_ratio(get_bulk_modulus, rheology, phase)
     volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-    ηv_ij = av_clamped(η, Ic...)
+    ηv_ij = harm_clamped(η, Ic...)
     dτ_rv = inv(θ_dτ * dt + ηv_ij * _Gv + dt)
     dτ_rv2 = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
     # stress increments @ vertex
@@ -1076,7 +1127,7 @@ end
         dτ_r = 1.0 / (θ_dτ * dt + ηij * _G + dt)
         dτ_r2 = inv(θ_dτ + ηij * _Gdt + 1.0)
         # cache strain rates for center calculations
-        τij, τij_o, εij, Δεij = cache_tensors(τ, τ_o, ε, Δε, I...)
+        τij, τij_o, εij, εij_pl, Δεij = cache_tensors(τ, τ_o, ε, ε_pl, Δε, I...)
 
         # visco-elastic strain rates @ center
         εij_ve = @. εij + 0.5 * τij_o * _Gdt
@@ -1120,7 +1171,6 @@ end
     return nothing
 end
 
-
 Base.@propagate_inbounds @inline function clamped_indices(ni::NTuple{2, Integer}, i, j)
     nx, ny = ni
     i0 = clamp(i - 1, 1, nx)
@@ -1132,4 +1182,8 @@ end
 
 Base.@propagate_inbounds @inline function av_clamped(A, i0, j0, ic, jc)
     return 0.25 * (A[i0, j0] + A[ic, jc] + A[i0, jc] + A[ic, j0])
+end
+
+Base.@propagate_inbounds @inline function harm_clamped(A, i0, j0, ic, jc)
+    return 4 / (1 / A[i0, j0] + 1 / A[ic, jc] + 1 / A[i0, jc] + 1 / A[ic, j0])
 end

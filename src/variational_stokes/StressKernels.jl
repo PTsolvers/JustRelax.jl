@@ -45,7 +45,7 @@
         _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
         Kv = fn_ratio(get_bulk_modulus, rheology, phase)
         volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-        ηv_ij = av_clamped(η, Ic...)
+        ηv_ij = harm_clamped(η, Ic...)
         dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
         # stress increments @ vertex
@@ -59,7 +59,13 @@
         τIIv_ij = second_invariant(dτijv .+ τijv)
 
         # yield function @ center
-        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        Fv = if Pv_ij ≥ 0
+            # DP in extension
+            τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        else
+            # VM in extension
+            τIIv_ij - Cv
+        end
 
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
@@ -67,8 +73,8 @@
                 @muladd (1.0 - relλ) * λv[I...] +
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-            εij_pl = λv[I...] * dQdτxy
-            τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_pl * dτ_rv
+            εij_plv = λv[I...] * dQdτxy
+            τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_plv * dτ_rv
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv
@@ -90,7 +96,7 @@
             dτ_r = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
 
             # cache strain rates for center calculations
-            τij, τij_o, εij = cache_tensors(τ, τ_o, ε, I...)
+            τij, τij_o, εij, εij_pl = cache_tensors(τ, τ_o, ε, ε_pl, I...)
 
             # visco-elastic strain rates @ center
             εij_ve = @. εij + 0.5 * τij_o * _Gdt
@@ -99,7 +105,14 @@
             dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
             τII_ij = second_invariant(dτij .+ τij)
             # yield function @ center
-            F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
+            P_ij = Pr[I...]
+            F = if P_ij ≥ 0
+                # DP in extension
+                τII_ij - C * cosϕ - P_ij * sinϕ
+            else
+                # VM in extension
+                τII_ij - C
+            end
 
             τII_ij = if is_pl && !iszero(τII_ij) && F > 0
                 # stress correction @ center
@@ -118,8 +131,8 @@
             else
                 # stress correction @ center
                 Base.@nexprs 3 i -> begin
-                    τ[i][I...] = dτij[i] + τij[i]
-                    ε_pl[i][I...] = 0.0
+                    @inbounds τ[i][I...] = dτij[i] + τij[i]
+                    @inbounds ε_pl[i][I...] = 0.0
                 end
                 τII_ij
             end
@@ -176,7 +189,7 @@ end
     ## yz
     if all(I .≤ size(ε[4])) && isvalid_yz(ϕ, I...)
         # interpolate to ith vertex
-        ηv_ij = av_clamped_yz(η, Ic...)
+        ηv_ij = harm_clamped_yz(η, Ic...)
         Pv_ij = av_clamped_yz(Pr, Ic...)
         EIIv_ij = av_clamped_yz(EII, Ic...)
         εxxv_ij = av_clamped_yz(ε[1], Ic...)
@@ -223,7 +236,13 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        Fv = if Pv_ij ≥ 0
+            # DP in extension
+            τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        else
+            # VM in extension
+            τIIv_ij - Cv
+        end
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
@@ -243,7 +262,7 @@ end
     ## xz
     if all(I .≤ size(ε[5])) && isvalid_xz(ϕ, I...)
         # interpolate to ith vertex
-        ηv_ij = av_clamped_xz(η, Ic...)
+        ηv_ij = harm_clamped_xz(η, Ic...)
         EIIv_ij = av_clamped_xz(EII, Ic...)
         Pv_ij = av_clamped_xz(Pr, Ic...)
         εxxv_ij = av_clamped_xz(ε[1], Ic...)
@@ -288,7 +307,13 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        Fv = if Pv_ij ≥ 0
+            # DP in extension
+            τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        else
+            # VM in extension
+            τIIv_ij - Cv
+        end
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
@@ -308,7 +333,7 @@ end
     ## xy
     if all(I .≤ size(ε[6])) && isvalid_xy(ϕ, I...)
         # interpolate to ith vertex
-        ηv_ij = av_clamped_xy(η, Ic...)
+        ηv_ij = harm_clamped_xy(η, Ic...)
         EIIv_ij = av_clamped_xy(EII, Ic...)
         Pv_ij = av_clamped_xy(Pr, Ic...)
         εxxv_ij = av_clamped_xy(ε[1], Ic...)
@@ -354,7 +379,13 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        Fv = if Pv_ij ≥ 0
+            # DP in extension
+            τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        else
+            # VM in extension
+            τIIv_ij - Cv
+        end
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
@@ -392,7 +423,14 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
+        P_ij = Pr[I...]
+        F = if P_ij ≥ 0
+            # DP in extension
+            τII_ij - C * cosϕ - P_ij * sinϕ
+        else
+            # VM in extension
+            τII_ij - C
+        end
 
         if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
@@ -482,7 +520,7 @@ end
         _Gv = inv(fn_ratio(get_shear_modulus, rheology, phase))
         Kv = fn_ratio(get_bulk_modulus, rheology, phase)
         volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-        ηv_ij = av_clamped(η, Ic...)
+        ηv_ij = harm_clamped(η, Ic...)
         dτ_rv = inv(θ_dτ * dt + ηv_ij * _Gv + dt)
 
         # stress increments @ vertex
@@ -496,7 +534,13 @@ end
         τIIv_ij = second_invariant(dτijv .+ τijv)
 
         # yield function @ center
-        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        Fv = if Pv_ij ≥ 0
+            # DP in extension
+            τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        else
+            # VM in extension
+            τIIv_ij - Cv
+        end
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[I...] =
@@ -538,7 +582,14 @@ end
             dτij = compute_stress_increment(τij, τij_o, ηij, Δεij, _G, dτ_r, dt)
             τII_ij = second_invariant(dτij .+ τij)
             # yield function @ center
-            F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
+            P_ij = Pr[I...]
+            F = if P_ij ≥ 0
+                # DP in extension
+                τII_ij - C * cosϕ - P_ij * sinϕ
+            else
+                # VM in extension
+                τII_ij - C
+            end
 
             τII_ij = if is_pl && !iszero(τII_ij) && F > 0
                 # stress correction @ center

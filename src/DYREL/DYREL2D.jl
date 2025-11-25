@@ -104,7 +104,7 @@ function _solve_DYREL!(
     itg        = 0
 
     # Powell-Hestenes iterations
-    for itPH in 1:1000
+    for itPH in 1:100
 
         # compute divergence
         @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
@@ -156,6 +156,7 @@ function _solve_DYREL!(
             (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
         )
         @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e, Rp=%1.3e] \n", itPH, iter, iter/ni[1], err, min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
+        # @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e, Rp=%1.3e] \n", itPH, iter, iter/ni[1], err, errVx, errVy, errPt)
         err<ϵ && break
 
         # Set tolerance of velocity solve proportional to residual
@@ -188,11 +189,21 @@ function _solve_DYREL!(
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
-                  
+
+            # update viscosity
+            update_viscosity_τII!(
+                stokes,
+                phase_ratios,
+                args,
+                rheology,
+                viscosity_cutoff;
+                relaxation = viscosity_relaxation,
+            )
+
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt)
             update_halo!(stokes.τ.xy)
-            
+
             # Residuals
             P_num = γ_eff .* stokes.R.RP
             @parallel (@idx ni) compute_DR_residual_V!(
@@ -219,8 +230,8 @@ function _solve_DYREL!(
             # Residual check
             if iszero(iter % nout)
                 
-                errVx = norm(Dx.*stokes.R.Rx)
-                errVy = norm(Dy.*stokes.R.Ry)
+                errVx = norm(Dx .* stokes.R.Rx)
+                errVy = norm(Dy .* stokes.R.Ry)
                 
                 if iter == nout 
                     errVx00 = errVx
@@ -246,7 +257,6 @@ function _solve_DYREL!(
                 Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, di, dt)
             
                 # Select dτ
-                # update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL)
                 update_dτV_α_β!(dyrel)
             end
             iter += 1 
@@ -256,10 +266,10 @@ function _solve_DYREL!(
         stokes.P .+= γ_eff.*stokes.R.RP
         
         # update buoyancy forces
-        JustRelax2D.update_ρg!(ρg, phase_ratios, rheology, args)
+        update_ρg!(ρg, phase_ratios, rheology, args)
         
-        # update buoyancy viscosity
-        JustRelax2D.update_viscosity_τII!(
+        # update viscosity
+        update_viscosity_τII!(
             stokes,
             phase_ratios,
             args,
@@ -274,31 +284,23 @@ function _solve_DYREL!(
     end
 
     # compute vorticity
-    @parallel (@idx ni .+ 1) JustRelax2D.compute_vorticity!(
+    @parallel (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.xy, @velocity(stokes)..., inv.(di)...
     )
 
     # Interpolate shear components to cell center arrays
-    JustRelax2D.shear2center!(stokes.ε)
-    JustRelax2D.shear2center!(stokes.ε_pl)
-    JustRelax2D.shear2center!(stokes.Δε)
+    shear2center!(stokes.ε)
+    shear2center!(stokes.ε_pl)
+    shear2center!(stokes.Δε)
 
     # accumulate plastic strain tensor
-    JustRelax2D.accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
 
-    @parallel (@idx ni .+ 1) JustRelax2D.multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
-    @parallel (@idx ni) JustRelax2D.multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+    @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
+    @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
     stokes.τ_o.xx_v .= stokes.τ.xx_v
     stokes.τ_o.yy_v .= stokes.τ.yy_v
 
     return (; err_evo_it, err_evo_V, err_evo_P)
      
-    # return (
-    #     iter = iter,
-    #     err_evo1 = err_evo1,
-    #     err_evo2 = err_evo2,
-    #     norm_Rx = norm_Rx,
-    #     norm_Ry = norm_Ry,
-    #     norm_∇V = norm_∇V,
-    # )
 end

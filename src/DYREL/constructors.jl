@@ -62,9 +62,10 @@ end
 @parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η_mean, γfact, dt)
 
     # bulk viscosity
-    ratios   = @cell phase_ratios_center[I...]
-    Kb       = fn_ratio(get_bulk_modulus, rheology, ratios)
-    ηb[I...] = Kb * dt
+    ratios      = @cell phase_ratios_center[I...]
+    Kb          = fn_ratio(get_bulk_modulus, rheology, ratios)
+    Kb          = isinf(Kb) ? η_mean : Kb
+    ηb[I...]    = Kb * dt
 
     # penalty parameter factor
     γ_num       = γfact * η_mean

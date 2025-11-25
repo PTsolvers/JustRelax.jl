@@ -42,7 +42,6 @@ end
             λmaxVx[i, j] = inv(Dx_ij) * (Cxx + Cxy)
         end
 
-        
         # viscosity coefficients at surrounding points
         GS = GW # reuse cached value
         phase = phase_vertex[i, j+1]
@@ -68,7 +67,7 @@ end
             ηW = 1 / (1 / ηW + 1 / (GW * dt))
             ηE = 1 / (1 / ηE + 1 / (GE * dt))
             # compute Gershgorin entries
-            Cyy = abs(ηE / dx ^ 2) + abs(ηW / dx ^ 2) + abs(γN / dy ^ 2 + (4 / 3) * ηN / dy ^ 2) + abs(γS / dy ^ 2 + (4 / 3) * ηS / dy ^ 2) + abs((γN / dy + γS / dy) / dy + ((4 / 3) * ηN / dy + (4 / 3) * ηS / dy) / dy - (-ηE / dx - ηW / dx) / dx)
+            Cyy = (ηE / dx ^ 2) + (ηW / dx ^ 2) + (γN / dy ^ 2 + (4 / 3) * ηN / dy ^ 2) + abs(γS / dy ^ 2 + (4 / 3) * ηS / dy ^ 2) + abs((γN / dy + γS / dy) / dy + ((4 / 3) * ηN / dy + (4 / 3) * ηS / dy) / dy - (-ηE / dx - ηW / dx) / dx)
             Cyx = abs(γN / (dx * dy) + ηE / (dx * dy) - 2 / 3 * ηN / (dx * dy)) + abs(γN / (dx * dy) - 2 / 3 * ηN / (dx * dy) + ηW / (dx * dy)) + abs(γS / (dx * dy) + ηE / (dx * dy) - 2 / 3 * ηS / (dx * dy)) + abs(γS / (dx * dy) - 2 / 3 * ηS / (dx * dy) + ηW / (dx * dy))
             # this is the preconditioner diagonal entry
             Dy_ij = Dy[i, j] = (γN / dy + γS / dy) / dy + ((4 / 3) * ηN / dy + (4 / 3) * ηS / dy) / dy - (-ηE / dx - ηW / dx) / dx

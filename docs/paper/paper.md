@@ -85,7 +85,7 @@ In short, `JustRelax.jl` delivers a high‑performance, portable alternative to 
   
 # Examples
 
-An extensive set of benchmarks and model examples are available in the GitHub repository of [`JustRelax.jl`](https://github.com/PTsolvers/`JustRelax.jl`). Some examples such as [shear band localization](https://ptsolvers.github.io/`JustRelax.jl`/dev/man/ShearBands), [2D subduction](https://ptsolvers.github.io/`JustRelax.jl`/dev/man/subduction2D/subduction2D) or the rise of a [3D plume](https://ptsolvers.github.io/`JustRelax.jl`/dev/man/plume3D/plume3D) are described in the [documentation](https://ptsolvers.github.io/`JustRelax.jl`/dev/). Here we limit ourselves to show some snapshots of the results of these examples in Fig. \ref{fig:examples}.
+An extensive set of benchmarks and model examples are available in the GitHub repository of [`JustRelax.jl`](https://github.com/PTsolvers/JustRelax.jl). Some examples such as [shear band localization](https://ptsolvers.github.io/JustRelax.jl/dev/man/ShearBands), [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/subduction2D) or the rise of a [3D plume](https://ptsolvers.github.io/JustRelax.jl/dev/man/plume3D/plume3D) are described in the [documentation](https://ptsolvers.github.io/JustRelax.jl/dev/). Here we limit ourselves to show some snapshots of the results of these examples in Fig. \ref{fig:examples}.
 
 ![Model examples from the documentation: a) 2D shear band localization of a visco-elasto-viscoplastic body ($10240 \times 10240$ cells), b) 2D subduction ($512 \times 512$ cells), and c) raising of a hot plume in 3D ($128 \times 128 \times 128$ cells). All models were run on one NVIDIA GH200 Grace Hopper GPU. \label{fig:examples}](figs/models_JOSS.png)
 

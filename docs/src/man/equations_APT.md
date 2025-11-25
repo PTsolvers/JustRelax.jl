@@ -22,7 +22,7 @@ $\begin{align}
 \end{align}$
 
 $\begin{align}
-\frac{1}{\widetilde{K}}\frac{\partial p}{\partial \psi} + \nabla\cdot\boldsymbol{v} = \beta \frac{\partial p}{\partial t} + \alpha \frac{\partial T}{\partial t}
+\frac{1}{\widetilde{K}}\frac{\partial p}{\partial \psi} + \nabla\cdot\boldsymbol{v} = - \beta \frac{\partial p}{\partial t} + \alpha \frac{\partial T}{\partial t}
 \end{align}$
 
 ## Constitutive equations

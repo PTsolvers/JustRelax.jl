@@ -9,7 +9,7 @@ $\begin{align}
 \end{align}$
 
 $\begin{align}
-\nabla\cdot\boldsymbol{v} = \beta \frac{\partial p}{\partial t} + \alpha \frac{\partial T}{\partial t}
+\nabla\cdot\boldsymbol{v} = - \beta \frac{\partial p}{\partial t} + \alpha \frac{\partial T}{\partial t}
 \end{align}$
 
 where $\boldsymbol{\tau}$ is the deviatoric stress tensor, $p$ is pressure, $f$ is the external forces vector, $\boldsymbol{v}$ is the velocity vector, $\beta$ is the compressibility coefficient, $\alpha$ is the thermal expansivity coefficient and $T$ is temperature.

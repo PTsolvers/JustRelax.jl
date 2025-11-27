@@ -1,6 +1,6 @@
 using JustRelax, JustRelax.JustRelax2D, Printf, LinearAlgebra
 using MPI: MPI
-using GLMakie
+using CairoMakie
 
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)

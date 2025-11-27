@@ -33,7 +33,7 @@ end
 
 # Load script dependencies
 using GeoParams, CellArrays
-using GLMakie
+using CairoMakie
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")

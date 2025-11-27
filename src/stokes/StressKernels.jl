@@ -994,11 +994,11 @@ end
         dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
         εij_plv = λv[I...] * dQdτxy
         τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_plv * dτ_rv
-        εijv_pl[I...] = εij_plv
+        ε_pl[3][I...] = εij_plv
     else
         # stress correction @ vertex
         τxyv[I...] += dτxyv
-        εijv_pl[I...] = 0.0
+        ε_pl[3][I...] = 0.0
     end
 
     ## center
@@ -1136,11 +1136,11 @@ end
         dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
         εij_plv = λv[I...] * dQdτxy
         τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * εij_plv * dτ_rv
-        εijv_pl[I...] = εij_plv
+        ε_pl[3][I...] = εij_plv
     else
         # stress correction @ vertex
         τxyv[I...] += dτxyv
-        εijv_pl[I...] = 0.0
+        ε_pl[3][I...] = 0.0
     end
 
     ## center

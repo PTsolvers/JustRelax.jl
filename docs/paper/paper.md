@@ -51,7 +51,7 @@ bibliography: paper.bib
 
 # Summary
 
-`JustRelax.jl` is an open source, highly portable, and high-performance [Julia](https://julialang.org/) [@bezanson2017julia] package designed for geodynamic modeling. It employs the Accelerated Pseudo-Transient (APT) method —a matrix-free, embarrassingly parallel iterative method— to solve the Stokes and diffusion equations, making it well-suited to exploit Graphics Processing Unit (GPU) hardware accelerators.
+`JustRelax.jl` is an open source, highly portable, and high-performance [Julia](https://julialang.org/) [@bezanson2017julia] package designed for geodynamic modeling. It employs the Accelerated Pseudo-Transient (APT) method to solve the Stokes and diffusion equations, making it well-suited to exploit Graphics Processing Unit (GPU) hardware accelerators.
 
 `JustRelax.jl` incorporates a wide range of features critical to computational geodynamics, including complex and highly non-linear rheologies, free surface, and a particle-in-cell method to advect material information. Several of the features available in  `JustRelax.jl` are are outsourced to specialized external packages, reducing the core code base, and improving maintainability and reusability.
 

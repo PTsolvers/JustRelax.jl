@@ -465,7 +465,7 @@ end
             Base.@nexprs 6 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
                 if i < 4
-                @inbounds ε_pl[i][I...] = 0.0
+                    @inbounds ε_pl[i][I...] = 0.0
                 end
             end
             τII[I...] = τII_ij = second_invariant(τij)
@@ -474,7 +474,7 @@ end
             Base.@nexprs 6 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
                 if i < 4
-                @inbounds ε_pl[i][I...] = 0.0
+                    @inbounds ε_pl[i][I...] = 0.0
                 end
             end
             # η_vep[I...] = ηij

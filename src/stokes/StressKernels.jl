@@ -950,6 +950,7 @@ end
     )
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
+    εij_plv = ε_pl[3]
     ni = size(Pr)
     Ic = clamped_indices(ni, I...)
 
@@ -997,7 +998,7 @@ end
     else
         # stress correction @ vertex
         τxyv[I...] += dτxyv
-        εijv_pl[I...] = zero(eltype(T))
+        εijv_pl[I...] = 0.0
     end
 
     ## center
@@ -1035,7 +1036,9 @@ end
 
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = τij[i]
-                @inbounds ε_pl[i][I...] = εij_pl[i]
+                if i < 3
+                    @inbounds ε_pl[i][I...] = εij_pl[i]
+                end
             end
             τII_ij = second_invariant(τij)
         else
@@ -1043,7 +1046,9 @@ end
 
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-                @inbounds ε_pl[i][I...] = 0.0
+                if i < 3
+                    @inbounds ε_pl[i][I...] = 0.0
+                end
             end
             τII_ij
         end
@@ -1084,6 +1089,7 @@ end
     )
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
+    εij_plv = ε_pl[3]
     ni = size(Pr)
     Ic = clamped_indices(ni, I...)
 
@@ -1128,10 +1134,13 @@ end
             @muladd (1.0 - relλ) * λv[I...] +
             relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv * dt + η_regv + volumev))
         dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-        τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * λv[I...] * dQdτxy * dτ_rv
+        εij_plv = λv[I...] * dQdτxy
+        τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * εij_plv * dτ_rv
+        εijv_pl[I...] = εij_plv
     else
         # stress correction @ vertex
         τxyv[I...] += dτxyv
+        εijv_pl[I...] = 0.0
     end
 
     ## center
@@ -1172,13 +1181,17 @@ end
 
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = τij[i]
-                @inbounds ε_pl[i][I...] = εij_pl[i]
+                if i < 3
+                    @inbounds ε_pl[i][I...] = εij_pl[i]
+                end
             end
             τII_ij = second_invariant(τij)
         else
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-                @inbounds ε_pl[i][I...] = 0.0
+                if i < 3
+                    @inbounds ε_pl[i][I...] = 0.0
+                end
             end
             τII_ij
         end

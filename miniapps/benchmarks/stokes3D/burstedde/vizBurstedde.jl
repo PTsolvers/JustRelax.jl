@@ -3,9 +3,9 @@ function analytical_velocity(xci, xvi)
     nci = length.(xci)
     xc, yc, zc = xci
     xv, yv, zv = xvi
-    Vx = @allocate(nvi[1], nci[2], nci[3])
-    Vy = @allocate(nci[1], nvi[2], nci[3])
-    Vz = @allocate(nci[1], nci[2], nvi[3])
+    Vx = PTArray(backend)(zeros(nvi[1], nci[2], nci[3]))
+    Vy = PTArray(backend)(zeros(nci[1], nvi[2], nci[3]))
+    Vz = PTArray(backend)(zeros(nci[1], nci[2], nvi[3]))
 
     _velocity_x(x, y, z) = x + x^2 + x * y + x^3 * y
     _velocity_y(x, y, z) = y + x * y + y^2 + x^2 * y^2
@@ -33,7 +33,7 @@ end
 function analytical_pressure(xci)
     nci = length.(xci)
     x, y, z = xci
-    P = @allocate nci...
+    P = PTArray(backend)(zeros(nci[1], nci[2], nci[3]))
 
     @parallel_indices (ix, iy, iz) function _pressure(P, x, y, z)
         P[ix, iy, iz] = x[ix] * y[iy] * z[iz] + x[ix]^3 * y[iy]^3 * z[iz] - 5 / 32

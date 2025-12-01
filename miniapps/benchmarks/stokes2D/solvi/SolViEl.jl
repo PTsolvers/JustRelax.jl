@@ -55,14 +55,16 @@ function solViEl(;
 
     ## Allocate arrays needed for every Stokes problem
     # general stokes arrays
-    stokes = StokesArrays(ni, ViscoElastic)
+    stokes = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
     pt_stokes = PTStokesCoeffs(li, di)
 
     ## Setup-specific parameters and fields
     η0 = 1.0e0  # matrix viscosity
     ηi = 1.0e-1 # inclusion viscosity
-    η = solvi_viscosity(xci, ni, li, rc, η0, ηi) # viscosity field
+    η0 = solvi_viscosity(xci, ni, li, rc, η0, ηi) # viscosity field
+    (; η) = stokes.viscosity
+    η .= η0
     ξ = 1.0 # Maxwell relaxation time
     G = 1.0 # elastic shear modulus
     dt = 0.25
@@ -72,7 +74,7 @@ function solViEl(;
     ρg = @zeros(ni...), @zeros(ni...)
 
     ## Boundary conditions
-    pureshear_bc!(stokes, xci, xvi, εbg)
+    pureshear_bc!(stokes, xci, xvi, εbg, backend)
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true)
     )
@@ -88,15 +90,16 @@ function solViEl(;
             di,
             flow_bcs,
             ρg,
-            η,
             Gc,
             Kb,
             dt,
             igg;
-            iterMax = 100.0e3,
-            nout = 1.0e3,
-            b_width = (4, 4, 1),
-            verbose = true,
+            kwargs = (;
+                iterMax = 100.0e3,
+                nout = 1.0e3,
+                b_width = (4, 4, 1),
+                verbose = true,
+            )
         )
         t += Δt
     end

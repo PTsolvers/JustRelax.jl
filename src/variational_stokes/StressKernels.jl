@@ -128,18 +128,18 @@
                 τij = dτij .+ τij
                 Base.@nexprs 3 i -> begin
                     @inbounds τ[i][I...] = τij[i]
-                    if i < 3
+                end
+                Base.@nexprs 2 i -> begin
                     @inbounds ε_pl[i][I...] = εij_pl[i]
-                    end
                 end
                 τII_ij = second_invariant(τij)
             else
                 # stress correction @ center
                 Base.@nexprs 3 i -> begin
                     τ[i][I...] = dτij[i] + τij[i]
-                    if i < 3
+                end
+                Base.@nexprs 2 i -> begin
                     @inbounds ε_pl[i][I...] = 0.0
-                    end
                 end
                 τII_ij
             end
@@ -464,18 +464,18 @@ end
             τij = dτij .+ τij
             Base.@nexprs 6 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-                if i < 4
-                    @inbounds ε_pl[i][I...] = 0.0
-                end
+            end
+            Base.@nexprs 3 i -> begin
+                @inbounds ε_pl[i][I...] = εij_pl[i]
             end
             τII[I...] = τII_ij = second_invariant(τij)
         else
             # stress correction @ center
             Base.@nexprs 6 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-                if i < 4
-                    @inbounds ε_pl[i][I...] = 0.0
-                end
+            end
+            Base.@nexprs 3 i -> begin
+                @inbounds ε_pl[i][I...] = 0.0
             end
             # η_vep[I...] = ηij
             τII[I...] = τII_ij
@@ -632,18 +632,18 @@ end
                 τij = dτij .+ τij
                 Base.@nexprs 3 i -> begin
                     @inbounds τ[i][I...] = τij[i]
-                    if i < 3
+                end
+                Base.@nexprs 2 i -> begin
                     @inbounds ε_pl[i][I...] = εij_pl[i]
-                    end
                 end
                 τII_ij = second_invariant(τij)
             else
                 # stress correction @ center
                 Base.@nexprs 3 i -> begin
                     @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-                    if i < 3
+                end
+                Base.@nexprs 2 i -> begin
                     @inbounds ε_pl[i][I...] = 0.0
-                    end
                 end
                 τII_ij
             end

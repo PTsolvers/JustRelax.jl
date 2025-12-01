@@ -903,18 +903,18 @@ end
             τij = dτij .+ τij
             Base.@nexprs 6 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-                if i < 4
-                    @inbounds ε_pl[i][I...] = 0.0
-                end
+            end
+            Base.@nexprs 3 i -> begin
+                @inbounds ε_pl[i][I...] = εij_pl[i]
             end
             τII[I...] = τII_ij = second_invariant(τij)
         else
             # stress correction @ center
             Base.@nexprs 6 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-                if i < 4
-                    @inbounds ε_pl[i][I...] = 0.0
-                end
+            end
+            Base.@nexprs 3 i -> begin
+                @inbounds ε_pl[i][I...] = 0.0
             end
             τII[I...] = τII_ij
         end
@@ -1036,9 +1036,9 @@ end
 
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = τij[i]
-                if i < 3
-                    @inbounds ε_pl[i][I...] = εij_pl[i]
-                end
+            end
+            Base.@nexprs 2 i -> begin
+                @inbounds ε_pl[i][I...] = εij_pl[i]
             end
             τII_ij = second_invariant(τij)
         else
@@ -1046,9 +1046,9 @@ end
 
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-                if i < 3
-                    @inbounds ε_pl[i][I...] = 0.0
-                end
+            end
+            Base.@nexprs 2 i -> begin
+                @inbounds ε_pl[i][I...] = 0.0
             end
             τII_ij
         end
@@ -1181,17 +1181,17 @@ end
 
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = τij[i]
-                if i < 3
-                    @inbounds ε_pl[i][I...] = εij_pl[i]
-                end
+            end
+            Base.@nexprs 2 i -> begin
+                @inbounds ε_pl[i][I...] = εij_pl[i]
             end
             τII_ij = second_invariant(τij)
         else
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-                if i < 3
-                    @inbounds ε_pl[i][I...] = 0.0
-                end
+            end
+            Base.@nexprs 2 i -> begin
+                @inbounds ε_pl[i][I...] = 0.0
             end
             τII_ij
         end

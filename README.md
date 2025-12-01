@@ -58,19 +58,18 @@ After installation, you can test the package by running the following commands:
 
 ```julia
 using JustRelax
+
 julia> ]
-  pkg> test JustRelax
+
+(@v1.xx) pkg> test JustRelax
 ```
+
 The test will take a while, so grab a :coffee: or :tea:
 
 ## Miniapps
 
-Available miniapps can be found in the [miniapps folder](miniapps) and will be updated regularly. The miniapps are designed to be simple and easy to understand, while still providing a good basis for more complex applications. The miniapps are designed to be run on a single node, but can be easily extended to run on multiple nodes using [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) and [MPI.jl](https://github.com/JuliaParallel/MPI.jl).
-
-
-## Benchmarks
-
-Current (Blankenback2D, Stokes 2D-3D, thermal diffusion, thermal stress) and future benchmarks can be found in the [Benchmarks](miniapps/benchmarks).
+Available examples and [Benchmark](miniapps/benchmarks) miniapps can be found in the [miniapps folder](miniapps). The miniapps are simple and easy to understand, while still providing a good basis for more complex applications. The miniapps are designed to be run on a single node, but can be easily extended to run on multiple nodes using [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) and [MPI.jl](https://github.com/JuliaParallel/MPI.jl). To get started, instantiate the miniapps folder and run our favourite one!
 
 ## Funding
+
 The development of this package is supported by the [GPU4GEO](https://ptsolvers.github.io/GPU4GEO/) [PASC](https://www.pasc-ch.org) project.

@@ -79,9 +79,10 @@ function _solve_DYREL!(
 
     stokes.λ  .= 0.0
     stokes.λv .= 0.0
-    
+
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
+    # viscosity guess based on strain rate
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
     
@@ -114,7 +115,7 @@ function _solve_DYREL!(
         )
 
         # compute deviatoric stress
-        compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt) # λ_relaxation = 1 to reset λ
+        compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt) # not resetting λ in every PH iteration seems to work better
         # compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1, dt) # λ_relaxation = 1 to reset λ
         # update_halo!(stokes.τ.xy)
 
@@ -190,7 +191,7 @@ function _solve_DYREL!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            # update viscosity
+            # update viscosity based on the deviatoric stress tensor
             update_viscosity_τII!(
                 stokes,
                 phase_ratios,
@@ -266,10 +267,10 @@ function _solve_DYREL!(
         # update pressure
         stokes.P .+= γ_eff.*stokes.R.RP
         
+        # Because pressure changed....
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
-        
-        # update viscosity
+        # update viscosity based on the deviatoric stress tensor
         update_viscosity_τII!(
             stokes,
             phase_ratios,
@@ -279,7 +280,6 @@ function _solve_DYREL!(
             relaxation = viscosity_relaxation,
         )
         center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
-        # compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
        
         # if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
         #     println("Pseudo-transient iterations converged in $iter iterations")

@@ -1,7 +1,7 @@
 # Load script dependencies
 using GeoParams, GLMakie
 
-const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -73,7 +73,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheology_nonNewtonian_plastic()
-    dt = 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt     = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt_max = 30.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -222,7 +223,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
-        # dt = compute_dt(stokes, di) * 0.8
+        dt = compute_dt(stokes, di, dt_max) #* 0.8
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
@@ -357,7 +358,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
 figdir = "Subduction2D"
-n = 128 ÷ 2
+n = 128 *2
 # n = 32 # *4
 nx, ny = n * 2, n
 

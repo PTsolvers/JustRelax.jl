@@ -87,7 +87,8 @@ function _solve_DYREL!(
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
     
-    # DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt)
+    # recompute all the DYREL variables
+    DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt)
 
     rel_drop   = 1e-2 # relative drop of velocity residual per PH iteration
     # Iteration loop

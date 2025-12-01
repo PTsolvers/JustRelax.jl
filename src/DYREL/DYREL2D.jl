@@ -77,6 +77,7 @@ function _solve_DYREL!(
         Aij .= 0.0
     end
 
+    # reset plastic multiplier at the beginning of the time step
     stokes.λ  .= 0.0
     stokes.λv .= 0.0
 

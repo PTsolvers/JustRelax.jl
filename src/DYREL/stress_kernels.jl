@@ -93,7 +93,7 @@ end
     ni = size(phase_ratios_center)
 
     ## VERTEX CALCULATION
-    # @inbounds begin
+    @inbounds begin
         Ic    = clamped_indices(ni, I...)
         τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
         εij   = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
@@ -128,7 +128,7 @@ end
             λ[I...]     = λ_I
             ΔPψ[I...]   = ΔPψ_I
         end
-    # end
+    end
 
     return nothing
 end
@@ -175,8 +175,8 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
     τij   = @. 2 * η_ve * εij_eff
     τII   = second_invariant(τij)
     # Plasticity
-    # F     = τII - C * cosϕ - max(P, 0) * sinϕ
-    F     = τII - C * cosϕ - P * sinϕ
+    F     = τII - C * cosϕ - max(P, 0) * sinϕ
+    # F     = τII - C * cosϕ - P * sinϕ
     λ     = if ispl && F > 0
         λ_new = F / (η_ve + η_reg + Kb * dt * sinϕ * sinΨ)
         λ_relaxation * λ_new + (1 - λ_relaxation) * λ
@@ -206,5 +206,111 @@ end
 
 @inline zero_tuple(::Type{T}, ::Val{N}) where {T, N} = ntuple(_-> zero(T), Val(N))
 @inline zero_tuple(::NTuple{N, T}) where {T, N} = zero_tuple(T, Val(N))
+
+
+## VARIATIONAL STOKES STRESS KERNELS
+
+function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt)
+    ni = size(phase_ratios.vertex)
+    @parallel (@idx ni) compute_stress_DRYEL!(
+        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
+        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),        # vertices
+        (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),    # centers
+        (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),  # vertices
+        stokes.τ.II,
+        (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),            # staggered grid
+        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy_c), # centers
+        stokes.P,
+        stokes.λ,
+        stokes.λv,
+        stokes.viscosity.η,
+        stokes.viscosity.η_vep,
+        stokes.ΔPψ,
+        ϕ::JustRelax.RockRatio,
+        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt
+    )
+    return nothing
+end
+
+@parallel_indices (I...) function compute_stress_DRYEL!(
+    τ,
+    τ_v,
+    τ_o,
+    τ_ov,
+    τII,
+    ε,
+    ε_pl,
+    P,
+    λ,
+    λv,
+    η,
+    η_vep,
+    ΔPψ,
+    ϕ::JustRelax.RockRatio,
+    rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt
+)
+
+    Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
+
+    ni = size(phase_ratios_center)
+
+    @inbounds begin
+        ## VERTEX CALCULATION
+        @inbounds if isvalid_v(ϕ, I...)
+            Ic    = clamped_indices(ni, I...)
+            τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
+            εij   = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
+            λvij  = λv[I...]
+            ηij   = harm_clamped(η, Ic...)
+            Pij   = av_clamped(P, Ic...)
+            ratio = phase_ratios_vertex[I...]
+            
+            # compute local stress
+            τxx_I, τyy_I, τxy_I, _, _, _, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt)
+
+            # update arrays
+            τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
+            λv[I...]   = λ_I
+            
+        else
+            τ_v[1][I...], τ_v[2][I...], τ_v[3][I...]  = 0e0, 0e0, 0e0
+            λv[I...]   = 0e0
+        
+        end
+        
+        ## CENTER CALCULATION
+        if all(I .≤ ni)
+            @inbounds if isvalid_c(ϕ, I...)
+                τij_o = τ_o[1][I...], τ_o[2][I...], τ_o[3][I...]
+                εij   = ε[1][I...], ε[2][I...], av(ε[3])
+                λij   = λ[I...]
+                ηij   = η[I...]
+                Pij   = P[I...]
+                ratio = phase_ratios_center[I...]
+                
+                # compute local stress
+                τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I = compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt)
+                # update arrays
+                τ[1][I...],    τ[2][I...],    τ[3][I...]    = τxx_I, τyy_I, τxy_I
+                ε_pl[1][I...], ε_pl[2][I...], ε_pl[3][I...] = εxx_pl, εyy_pl, εxy_pl
+                τII[I...]   = τII_I
+                η_vep[I...] = ηvep_I
+                λ[I...]     = λ_I
+                ΔPψ[I...]   = ΔPψ_I
+            
+            else
+                τ[1][I...],    τ[2][I...],    τ[3][I...]    = 0e0, 0e0, 0e0
+                ε_pl[1][I...], ε_pl[2][I...], ε_pl[3][I...] = 0e0, 0e0, 0e0
+                τII[I...]   = 0e0
+                η_vep[I...] = 0e0
+                λ[I...]     = 0e0
+                ΔPψ[I...]   = 0e0
+
+            end
+        end
+    end
+
+    return nothing
+end
 
 

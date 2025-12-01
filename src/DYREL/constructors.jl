@@ -40,7 +40,7 @@ function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; �
     ni = size(stokes.P)
     
     # instantiate DYREL object
-    dyrel = DYREL(ni; ϵ=ϵ, CFL=CFL, c_fat=c_fat)
+    dyrel = DYREL(ni; ϵ = ϵ, CFL = CFL, c_fat = c_fat)
     
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
@@ -54,8 +54,35 @@ function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; �
     return dyrel
 end
 
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL= 0.99,  γfact = 20.0)    
+    # compute bulk viscosity and penalty parameter
+    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
+    
+    # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
+    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    
+    # compute damping coefficients
+    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+    
+    return nothing
+end
+
+# variational version
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL= 0.99,  γfact = 20.0)    
+    # compute bulk viscosity and penalty parameter
+    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
+    
+    # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
+    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    
+    # compute damping coefficients
+    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+    
+    return nothing
+end
+
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
-    @parallel compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, mean(stokes.viscosity.η), γfact, dt)
+    @parallel compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, mean(@views stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
     return nothing
 end
 
@@ -75,4 +102,31 @@ end
     return nothing
 end
 
+# variational version
 
+function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
+    ni = size(stokes.P)
+    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, ϕ, mean(@views stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
+    return nothing
+end
+
+@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, ϕ, η_mean, γfact, dt)
+
+    if isvalid_c(ϕ, I...)
+        # bulk viscosity
+        ratios      = @cell phase_ratios_center[I...]
+        Kb          = fn_ratio(get_bulk_modulus, rheology, ratios)
+        Kb          = isinf(Kb) ? η_mean : Kb
+        ηb[I...]    = Kb * dt * ϕ.center[I...]
+        
+        # penalty parameter factor
+        γ_num       = γfact * η_mean
+        γ_phy       = Kb * dt
+        γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num) * ϕ.center[I...]
+    else
+        ηb[I...]    = 0e0
+        γ_eff[I...] = 0e0
+    end
+
+    return nothing
+end

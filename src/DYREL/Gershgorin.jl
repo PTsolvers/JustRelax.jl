@@ -1,6 +1,7 @@
 
 function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, rheology, di, dt)
     ni = size(η)
+    center2vertex!(ηv, η)
     @parallel (@idx ni) _Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di..., phase_ratios.vertex, phase_ratios.center, rheology, dt)
     return nothing
 end
@@ -29,13 +30,13 @@ end
             ηE = η[i+1, j]
             γE = γ_eff[i+1, j]
             # effective viscoelastic viscosity 
-            ηN = 1 / (1 / ηN + 1 / (GN * dt))
-            ηS = 1 / (1 / ηS + 1 / (GS * dt))
-            ηW = 1 / (1 / ηW + 1 / (GW * dt))
-            ηE = 1 / (1 / ηE + 1 / (GE * dt))
+            ηN = inv(inv(ηN) + inv(GN * dt))
+            ηS = inv(inv(ηS) + inv(GS * dt))
+            ηW = inv(inv(ηW) + inv(GW * dt))
+            ηE = inv(inv(ηE) + inv(GE * dt))
             # compute Gershgorin entries
-            Cxx = abs(ηN / dy ^ 2) + abs(ηS / dy ^ 2) + abs(γE / dx ^ 2 + (4 / 3) * ηE / dx ^ 2) + abs(γW / dx ^ 2 + (4 / 3) * ηW / dx ^ 2) + abs(-(-ηN / dy - ηS / dy) / dy + (γE / dx + γW / dx) / dx + ((4 / 3) * ηE / dx + (4 / 3) * ηW / dx) / dx)
-            Cxy = abs(γE / (dx * dy) - 2 / 3 * ηE / (dx * dy) + ηN / (dx * dy)) + abs(γE / (dx * dy) - 2 / 3 * ηE / (dx * dy) + ηS / (dx * dy)) + abs(γW / (dx * dy) + ηN / (dx * dy) - 2 / 3 * ηW / (dx * dy)) + abs(γW / (dx * dy) + ηS / (dx * dy) - 2 / 3 * ηW / (dx * dy))
+            Cxx = (ηN / dy ^ 2) + (ηS / dy ^ 2) + (γE / dx ^ 2 + (4 / 3) * ηE / dx ^ 2) + (γW / dx ^ 2 + (4 / 3) * ηW / dx ^ 2) + (-(-ηN / dy - ηS / dy) / dy + (γE / dx + γW / dx) / dx + ((4 / 3) * ηE / dx + (4 / 3) * ηW / dx) / dx)
+            Cxy = (γE / (dx * dy) - 2 / 3 * ηE / (dx * dy) + ηN / (dx * dy)) + (γE / (dx * dy) - 2 / 3 * ηE / (dx * dy) + ηS / (dx * dy)) + (γW / (dx * dy) + ηN / (dx * dy) - 2 / 3 * ηW / (dx * dy)) + (γW / (dx * dy) + ηS / (dx * dy) - 2 / 3 * ηW / (dx * dy))
             # this is the preconditioner diagonal entry
             Dx_ij = Dx[i, j] = -(-ηN / dy - ηS / dy) / dy + (γE / dx + γW / dx) / dx + ((4 / 3) * ηE / dx + (4 / 3) * ηW / dx) / dx
             # maximum eigenvalue estimate
@@ -62,13 +63,13 @@ end
             ηN = η[i, j+1]
             γN = γ_eff[i, j+1]
             # effective viscoelastic viscosity 
-            ηN = 1 / (1 / ηN + 1 / (GN * dt))
-            ηS = 1 / (1 / ηS + 1 / (GS * dt))
-            ηW = 1 / (1 / ηW + 1 / (GW * dt))
-            ηE = 1 / (1 / ηE + 1 / (GE * dt))
+            ηN = inv(inv(ηN) + inv(GN * dt))
+            ηS = inv(inv(ηS) + inv(GS * dt))
+            ηW = inv(inv(ηW) + inv(GW * dt))
+            ηE = inv(inv(ηE) + inv(GE * dt))
             # compute Gershgorin entries
-            Cyy = (ηE / dx ^ 2) + (ηW / dx ^ 2) + (γN / dy ^ 2 + (4 / 3) * ηN / dy ^ 2) + abs(γS / dy ^ 2 + (4 / 3) * ηS / dy ^ 2) + abs((γN / dy + γS / dy) / dy + ((4 / 3) * ηN / dy + (4 / 3) * ηS / dy) / dy - (-ηE / dx - ηW / dx) / dx)
-            Cyx = abs(γN / (dx * dy) + ηE / (dx * dy) - 2 / 3 * ηN / (dx * dy)) + abs(γN / (dx * dy) - 2 / 3 * ηN / (dx * dy) + ηW / (dx * dy)) + abs(γS / (dx * dy) + ηE / (dx * dy) - 2 / 3 * ηS / (dx * dy)) + abs(γS / (dx * dy) - 2 / 3 * ηS / (dx * dy) + ηW / (dx * dy))
+            Cyy = (ηE / dx ^ 2) + (ηW / dx ^ 2) + (γN / dy ^ 2 + (4 / 3) * ηN / dy ^ 2) + (γS / dy ^ 2 + (4 / 3) * ηS / dy ^ 2) + ((γN / dy + γS / dy) / dy + ((4 / 3) * ηN / dy + (4 / 3) * ηS / dy) / dy - (-ηE / dx - ηW / dx) / dx)
+            Cyx = (γN / (dx * dy) + ηE / (dx * dy) - 2 / 3 * ηN / (dx * dy)) + (γN / (dx * dy) - 2 / 3 * ηN / (dx * dy) + ηW / (dx * dy)) + (γS / (dx * dy) + ηE / (dx * dy) - 2 / 3 * ηS / (dx * dy)) + (γS / (dx * dy) - 2 / 3 * ηS / (dx * dy) + ηW / (dx * dy))
             # this is the preconditioner diagonal entry
             Dy_ij = Dy[i, j] = (γN / dy + γS / dy) / dy + ((4 / 3) * ηN / dy + (4 / 3) * ηS / dy) / dy - (-ηE / dx - ηW / dx) / dx
             # maximum eigenvalue estimate

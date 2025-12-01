@@ -577,7 +577,7 @@ end
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εij_pl = λv[I...] * dQdτxy
             τxyv[I...] += dτxyv - 2.0 * ηv_ij * dt * εij_pl * dτ_rv
-            ε_pl[3][I...] = εij_plv
+            ε_pl[3][I...] = εij_pl
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv

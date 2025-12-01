@@ -73,7 +73,9 @@ In short, `JustRelax.jl` delivers a high‑performance, portable alternative to 
 
 `JustRelax.jl` features:
 
-- **High-performance and scalable matrix-free solver**: `JustRelax.jl` implements the APT method for (in)compressible Stokes and diffusion problems to circumvent the need for computationally expensive linear algebra operations and direct solvers, significantly improving computational efficiency for large-scale simulations. The embarrassingly parallel nature of the APT method makes it an excellent solver to exploit hardware accelerators. The weak scaling curve of the 3D Stokes solver is shown in Fig. \ref{fig:scaling}, where the parallel efficiency is the wall-time of any simulation normalized against the wall-time of a simulation with a single process. Distributed parallelism across multiple CPU/GPU nodes is achieved with [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl) [@Omlin2024].
+- **High-performance and scalable matrix-free solver**: `JustRelax.jl` implements the APT method for (in)compressible Stokes and diffusion problems to circumvent the need for computationally expensive linear algebra operations and direct solvers, significantly improving computational efficiency for large-scale simulations. The embarrassingly parallel nature of the APT method makes it an excellent solver to exploit hardware accelerators. The weak scaling curve of the 3D Stokes solver is shown in Fig. \ref{fig:scaling}, where the parallel efficiency is the wall-time of any simulation normalized by the wall-time of a single process simulation ($t_{\text{parallel}}/t_{\text{series}}$). Distributed parallelism across multiple CPU/GPU nodes is achieved with [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl) [@Omlin2024].
+
+the wall-time of the single-process run normalized by the product of the number of processes and the wall-time of the parallel run
 
 ![GPU weak scaling performance of `JustRelax.jl` of the three-dimensional backend, demonstrating efficient parallelization and scalability of the Stokes solver. \label{fig:scaling}](figs/efficiency_Stokes3D.png){width=50%}
 

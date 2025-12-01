@@ -1,9 +1,3 @@
-include("constructors.jl")
-include("pressure_kernels.jl")
-include("stress_kernels.jl")
-include("velocity_kernels.jl")
-include("Gershgorin.jl")
-
 ## 2D VISCO-ELASTIC STOKES SOLVER
 
 # backend trait
@@ -83,6 +77,9 @@ function _solve_DYREL!(
         Aij .= 0.0
     end
 
+    stokes.λ  .= 0.0
+    stokes.λv .= 0.0
+    
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
@@ -90,7 +87,7 @@ function _solve_DYREL!(
     
     # DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt)
 
-    rel_drop   = 1e-1         # relative drop of velocity residual per PH iteration
+    rel_drop   = 1e-2 # relative drop of velocity residual per PH iteration
     # Iteration loop
     errVx0     = 1.0
     errVy0     = 1.0
@@ -106,7 +103,7 @@ function _solve_DYREL!(
     itg        = 0
 
     # Powell-Hestenes iterations
-    for itPH in 1:50
+    for itPH in 1:100
 
         # compute divergence
         @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
@@ -117,8 +114,9 @@ function _solve_DYREL!(
         )
 
         # compute deviatoric stress
-        compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1, dt)
-        update_halo!(stokes.τ.xy)
+        compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt) # λ_relaxation = 1 to reset λ
+        # compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1, dt) # λ_relaxation = 1 to reset λ
+        # update_halo!(stokes.τ.xy)
 
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
@@ -159,12 +157,12 @@ function _solve_DYREL!(
         )
         @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e, Rp=%1.3e] \n", itPH, iter, iter/ni[1], err, min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
         # @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e, Rp=%1.3e] \n", itPH, iter, iter/ni[1], err, errVx, errVy, errPt)
-        err<ϵ && break
+        err < ϵ && break
 
         # Set tolerance of velocity solve proportional to residual
         ϵ_vel = err * rel_drop
         itPT  = 0
-        while (err>ϵ_vel && itPT<=iterMax)
+        while (err > ϵ_vel && itPT ≤ iterMax)
             itPT   += 1
             itg    += 1
 
@@ -193,19 +191,19 @@ function _solve_DYREL!(
             )
 
             # update viscosity
-            # update_viscosity_τII!(
-            #     stokes,
-            #     phase_ratios,
-            #     args,
-            #     rheology,
-            #     viscosity_cutoff;
-            #     relaxation = viscosity_relaxation,
-            # )
+            update_viscosity_τII!(
+                stokes,
+                phase_ratios,
+                args,
+                rheology,
+                viscosity_cutoff;
+                relaxation = viscosity_relaxation,
+            )
             # compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt)
-            update_halo!(stokes.τ.xy)
+            # update_halo!(stokes.τ.xy)
 
             # Residuals
             P_num = γ_eff .* stokes.R.RP
@@ -249,12 +247,12 @@ function _solve_DYREL!(
                 @. dVx = dVxdτ * βVx * dτVx
                 @. dVy = dVydτ * βVy * dτVy
 
-                # @printf("it = %d, iter = %d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", it, iter, err, errVx, errVy)
+                # @printf("it = %d, iter = %d, ϵ_vel = %1.3e, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", itPT, iter, ϵ_vel, err, errVx, errVy)
 
                 λminV  = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy.*(stokes.R.Ry .- Ry0))) / 
-                    (sum(dVx.*dVx) .+ sum(dVy.*dVy))
-                cVx .= 2 * √(λminV) * c_fact
-                cVy .= 2 * √(λminV) * c_fact
+                    (sum(dVx.^2) .+ sum(dVy.^2))
+                @. cVx = 2 * √(λminV) * c_fact
+                @. cVy = 2 * √(λminV) * c_fact
 
                 # Optimal pseudo-time steps - can be replaced by AD
                 Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, di, dt)
@@ -280,8 +278,8 @@ function _solve_DYREL!(
             viscosity_cutoff;
             relaxation = viscosity_relaxation,
         )
-        # center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
-        compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
+        center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
+        # compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
        
         # if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
         #     println("Pseudo-transient iterations converged in $iter iterations")
@@ -462,7 +460,7 @@ function _solve_DYREL!(
         # Set tolerance of velocity solve proportional to residual
         ϵ_vel = err * rel_drop
         itPT  = 0
-        while (err>ϵ_vel && itPT<=iterMax)
+        while (err>ϵ_vel && itPT ≤ iterMax)
             itPT   += 1
             itg    += 1
 
@@ -549,12 +547,12 @@ function _solve_DYREL!(
                 @. dVx = dVxdτ * βVx * dτVx
                 @. dVy = dVydτ * βVy * dτVy
 
-                # @printf("it = %d, iter = %d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", it, iter, err, errVx, errVy)
+                @printf("it = %d, iter = %d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", it, iter, err, errVx, errVy)
 
                 λminV  = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy.*(stokes.R.Ry .- Ry0))) / 
                     (sum(dVx.*dVx) .+ sum(dVy.*dVy))
-                cVx .= 2 * √(λminV) * c_fact
-                cVy .= 2 * √(λminV) * c_fact
+                @. cVx = cVy = 2 * √(λminV) * c_fact
+                # cVy .= 2 * √(λminV) * c_fact
 
                 # Optimal pseudo-time steps - can be replaced by AD
                 # Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, di, dt)

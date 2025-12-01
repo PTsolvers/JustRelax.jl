@@ -121,18 +121,13 @@ end
     if all(I .≤ size(βVx))
 
         dτVx_ij = dτVx[I...] =  2 / √(λmaxVx[I...]) * CFL_v
-
-        dτVx_ij = dτVx[I...]
         cVx_ij  = cVx[I...]
-
         βVx[I...] = @muladd  2 * dτVx_ij / (2 + cVx_ij * dτVx_ij)
         αVx[I...] = @muladd (2 - cVx_ij * dτVx_ij) / (2 + cVx_ij * dτVx_ij)
     end
 
     if all(I .≤ size(βVy))
         dτVy_ij = dτVy[I...] =  2 / √(λmaxVy[I...]) * CFL_v
-
-        dτVy_ij = dτVy[I...]
         cVy_ij  = cVy[I...]
         βVy[I...] = @muladd  2 * dτVy_ij / (2 + cVy_ij *dτVy_ij)
         αVy[I...] = @muladd (2 - cVy_ij * dτVy_ij) / (2 + cVy_ij *dτVy_ij)

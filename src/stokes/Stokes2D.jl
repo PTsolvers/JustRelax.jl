@@ -328,6 +328,7 @@ function _solve!(
     # end
 
     Kb = get_Kb(rheology)
+    G = get_G(rheology)
 
     # errors
     err_it1 = 1.0
@@ -368,7 +369,7 @@ function _solve!(
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
             @parallel compute_P!(
-                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, η, Kb, dt, r, θ_dτ
+                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, η, Kb, G, dt, r, θ_dτ
             )
 
             update_ρg!(ρg[2], rheology, args)

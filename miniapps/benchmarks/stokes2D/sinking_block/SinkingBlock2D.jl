@@ -7,7 +7,7 @@ using ParallelStencil, ParallelStencil.FiniteDifferences2D
 using JustPIC, JustPIC._2D
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

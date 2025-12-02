@@ -16,7 +16,7 @@ const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBac
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CellArrays
-using GLMakie
+using CairoMakie
 
 # Load file with all the rheology configurations
 include("Shearheating_rheology.jl")

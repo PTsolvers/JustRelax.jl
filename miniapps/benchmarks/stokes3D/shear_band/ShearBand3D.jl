@@ -2,7 +2,7 @@ using CUDA
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
 const backend_JR = CUDABackend
-using Printf, GeoParams, GLMakie, CellArrays
+using Printf, GeoParams, CairoMakie, CellArrays
 
 using ParallelStencil
 @init_parallel_stencil(CUDA, Float64, 3)

@@ -1,6 +1,6 @@
 using JustRelax, JustRelax.JustRelax2D, Printf, LinearAlgebra
 using MPI: MPI
-using GLMakie
+using CairoMakie
 
 using ParallelStencil
 using ParallelStencil.FiniteDifferences2D

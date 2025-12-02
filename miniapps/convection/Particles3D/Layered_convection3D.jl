@@ -12,7 +12,7 @@ using JustPIC, JustPIC._3D
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using Printf, GeoParams, CairoMakie, GeoParams
+using Printf, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")

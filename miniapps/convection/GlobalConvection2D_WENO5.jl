@@ -6,7 +6,7 @@ const backend = CPUBackend
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-using GeoParams, GLMakie, SpecialFunctions
+using GeoParams, CairoMakie, SpecialFunctions
 
 # function to compute strain rate (compulsory)
 @inline function custom_εII(a::CustomRheology, TauII; args...)

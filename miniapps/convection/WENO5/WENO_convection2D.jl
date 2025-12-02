@@ -12,7 +12,7 @@ using JustPIC, JustPIC._2D
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie, SpecialFunctions, CellArrays
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")

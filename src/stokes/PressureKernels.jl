@@ -178,7 +178,7 @@ function _compute_P!(P, P0, ∇V, Q, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
     _dt = inv(dt)
     RP = muladd(-(P - P0), _Kdt, (-∇V + (Q * _dt)))
-    ψ = inv(inv(r / θ_dτ * η) + _Kdt)
+    ψ = inv(inv(η) + _Kdt) * r / θ_dτ
     P = ((muladd(P0, _Kdt, (-∇V + (Q * _dt)))) * ψ + P) / (1 + _Kdt * ψ)
 
     return RP, P
@@ -188,7 +188,7 @@ function _compute_P!(P, P0, ∇V, Q, ΔTc, α, η, K, dt, r, θ_dτ)
     _Kdt = inv(K * dt)
     _dt = inv(dt)
     RP = muladd(-(P - P0), _Kdt, (-∇V + (α * (ΔTc * _dt)) + (Q * _dt)))
-    ψ = inv(inv(r / θ_dτ * η) + _Kdt)
+    ψ = inv(inv(η) + _Kdt) * r / θ_dτ
     P = ((muladd(P0, _Kdt, (-∇V + (α * (ΔTc * _dt)) + (Q * _dt)))) * ψ + P) / (1 + _Kdt * ψ)
 
     return RP, P

@@ -7,9 +7,9 @@
 end
 
 ## Compressible
-@parallel_indices (I...) function compute_P!(P, P0, RP, ∇V, Q, η, K, dt, r, θ_dτ)
+@parallel_indices (I...) function compute_P!(P, P0, RP, ∇V, Q, η, K, Gdt, dt, r, θ_dτ)
     @inbounds RP[I...], P[I...] = _compute_P!(
-        P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K[I...], dt, r, θ_dτ
+        P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K[I...], Gdt[I...], dt, r, θ_dτ
     )
     return nothing
 end
@@ -20,7 +20,8 @@ end
         P, P0, RP, ∇V, Q, η, rheology::NTuple{N, MaterialParams}, phase, dt, r, θ_dτ, args
     ) where {N}
     K = get_bulk_modulus(rheology, phase[I...])
-    @inbounds RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, dt, r, θ_dτ)
+    Gdt = get_shear_modulus(rheology, phase[I...]) * dt
+    @inbounds RP[I...], P[I...] = _compute_P!(P[I...], P0[I...], ∇V[I...], Q[I...], η[I...], K, Gdt, dt, r, θ_dτ)
     return nothing
 end
 

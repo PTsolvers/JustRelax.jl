@@ -22,9 +22,9 @@ end
 
 function body_forces(xi::NTuple{3, T}, η, β) where {T}
     xx, yy, zz = xi
-    x = PTArray([x for x in xx, y in yy, z in zz])
-    y = PTArray([y for x in xx, y in yy, z in zz])
-    z = PTArray([z for x in xx, y in yy, z in zz])
+    x = PTArray(backend)([x for x in xx, y in yy, z in zz])
+    y = PTArray(backend)([y for x in xx, y in yy, z in zz])
+    z = PTArray(backend)([z for x in xx, y in yy, z in zz])
 
     dηdx = @. -β * (1 - 2 * x) * η
     dηdy = @. -β * (1 - 2 * y) * η
@@ -201,6 +201,7 @@ function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = 
 
     ## Setup-specific parameters and fields
     β = 10.0
+    (; η) = stokes.viscosity
     η = viscosity(xci, di, β) # add reference
     ρg = body_forces(xci, η, β) # => ρ*(gx, gy, gz)
     dt = Inf
@@ -208,9 +209,18 @@ function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = 
     K = @fill(Inf, ni...)
 
     ## Boundary conditions
-    flow_bcs = VelocityBoundaryConditionsionsions(;
-        free_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),
-        no_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (
+            left = false, right = false,
+            top = false, bot = false,
+            back = false, front = false,
+        ),
+
+        no_slip = (
+            left = false, right = false,
+            top = false, bot = false,
+            back = false, front = false,
+        ),
     )
     # impose analytical velociity at the boundaries of the domain
     velocity!(stokes, xci, xvi, di)
@@ -228,15 +238,16 @@ function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = 
             di,
             flow_bcs,
             ρg,
-            η,
             G,
             K,
             dt,
             igg;
-            iterMax = 10.0e3,
-            nout = 1.0e3,
-            b_width = (4, 4, 4),
-            verbose = false,
+            kwargs = (;
+                iterMax = 100.0e3,
+                nout = 1.0e3,
+                b_width = (4, 4, 4),
+                verbose = true,
+            )
         )
         t += Δt
     end

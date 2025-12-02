@@ -3,9 +3,10 @@ function analytical_velocity(xci, xvi)
     nci = length.(xci)
     xc, yc, zc = xci
     xv, yv, zv = xvi
-    Vx = @allocate(nvi[1], nci[2], nci[3])
-    Vy = @allocate(nci[1], nvi[2], nci[3])
-    Vz = @allocate(nci[1], nci[2], nvi[3])
+
+    Vx = PTArray(backend)(zeros(nvi[1], nci[2], nci[3]))
+    Vy = PTArray(backend)(zeros(nci[1], nvi[2], nci[3]))
+    Vz = PTArray(backend)(zeros(nci[1], nci[2], nvi[3]))
 
     _velocity_x(x, y, z) = -2cos(2 * π * x) * sin(2 * π * y) * sin(2 * π * z)
     _velocity_y(x, y, z) = sin(2 * π * x) * cos(2 * π * y) * sin(2 * π * z)
@@ -33,7 +34,7 @@ end
 function analytical_pressure(xci)
     nci = length.(xci)
     x, y, z = xci
-    P = @allocate nci...
+    P = PTArray(backend)(zeros(nci[1], nci[2], nci[3]))
 
     _pressure(x, y, z) = -6 * π * sin(2 * π * x) * sin(2 * π * y) * sin(2 * π * z)
 

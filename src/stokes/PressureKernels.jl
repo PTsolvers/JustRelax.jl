@@ -14,7 +14,7 @@ end
     return nothing
 end
 
-  # With GeoParams
+# With GeoParams
 
 @parallel_indices (I...) function compute_P!(
         P, P0, RP, ∇V, Q, η, rheology::NTuple{N, MaterialParams}, phase, dt, r, θ_dτ, args

@@ -74,7 +74,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # Physical properties using GeoParams ----------------
     rheology = init_rheology_nonNewtonian_plastic()
     dt     = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
-    dt_max = 30.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt_max = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -174,7 +174,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-3)
 
     # Time loop
     t, it = 0.0, 0
@@ -209,7 +209,9 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     verbose = false,
                     iterMax = 50.0e3,
                     nout    = 200,
-                    λ_relaxation = 1.075,
+                    λ_relaxation = 1,
+                    # λ_relaxation = 1e-2,
+                    # λ_relaxation = 1.075,
                     viscosity_relaxation = 1.0e-3,
                     viscosity_cutoff = (1e18, 1e23),
                 )
@@ -357,9 +359,9 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D"
-n = 128 *2
-# n = 32 # *4
+figdir = "Subduction2D_reset_lambda"
+# n = 128 * 2
+n = 128
 nx, ny = n * 2, n
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)

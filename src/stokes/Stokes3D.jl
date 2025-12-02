@@ -81,6 +81,7 @@ function _solve!(
                 stokes.Q,
                 η,
                 K,
+                G,
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,

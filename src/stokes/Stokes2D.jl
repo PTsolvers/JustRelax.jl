@@ -203,7 +203,7 @@ function _solve!(
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
             @parallel compute_P!(
-                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, ητ, K, G*dt, dt, r, θ_dτ
+                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, ητ, K, G, dt, r, θ_dτ
             )
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(

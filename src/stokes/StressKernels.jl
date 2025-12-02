@@ -725,7 +725,7 @@ end
 
             dQdτyz = 0.5 * (τyzv_ij + dτyzv) / τIIv_ij
             ε_plyzv_ij = λv[1][I...] * dQdτyz
-            τyzv[I...] += dτyzv - 2.0 * ηv_ij * ε_plyzv_ij * dτ_rv
+            τyzv[I...] += @muladd dτyzv - 2.0 * ηv_ij * ε_plyzv_ij * dτ_rv
             ε_pl[4][I...] = ε_plyzv_ij
         else
             # stress correction @ vertex
@@ -792,7 +792,7 @@ end
 
             dQdτxz = 0.5 * (τxzv_ij + dτxzv) / τIIv_ij
             ε_plxzv_ij = λv[2][I...] * dQdτxz
-            τxzv[I...] += dτxzv - 2.0 * ηv_ij * ε_plxzv_ij * dτ_rv
+            τxzv[I...] += @muladd dτxzv - 2.0 * ηv_ij * ε_plxzv_ij * dτ_rv
             ε_pl[5][I...] = ε_plxzv_ij
         else
             # stress correction @ vertex
@@ -860,7 +860,7 @@ end
 
             dQdτxy = 0.5 * (τxyv_ij + dτxyv) / τIIv_ij
             ε_plxyv_ij = λv[3][I...] * dQdτxy
-            τxyv[I...] += dτxyv - 2.0 * ηv_ij * ε_plxyv_ij * dτ_rv
+            τxyv[I...] += @muladd  dτxyv - 2.0 * ηv_ij * ε_plxyv_ij * dτ_rv
             ε_pl[6][I...] = ε_plxyv_ij
         else
             # stress correction @ vertex
@@ -902,7 +902,7 @@ end
             dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
             τij = dτij .+ τij
             Base.@nexprs 6 i -> begin
-                @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+                @inbounds τ[i][I...] = dτij[i] + τij[i]
             end
             Base.@nexprs 3 i -> begin
                 @inbounds ε_pl[i][I...] = εij_pl[i]

@@ -22,6 +22,7 @@
         phase_vertex,
         ϕ::JustRelax.RockRatio,
     ) where {T}
+    εijv_pl = ε_pl[3]
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
     ni = size(Pr)
@@ -75,9 +76,11 @@
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εij_plv = λv[I...] * dQdτxy
             τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_plv * dτ_rv
+            ε_pl[3][I...] = εij_plv
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv
+            ε_pl[3][I...] = 0.0
         end
     else
         τxyv[I...] = zero(eltype(T))
@@ -125,13 +128,17 @@
                 τij = dτij .+ τij
                 Base.@nexprs 3 i -> begin
                     @inbounds τ[i][I...] = τij[i]
+                end
+                Base.@nexprs 2 i -> begin
                     @inbounds ε_pl[i][I...] = εij_pl[i]
                 end
                 τII_ij = second_invariant(τij)
             else
                 # stress correction @ center
                 Base.@nexprs 3 i -> begin
-                    @inbounds τ[i][I...] = dτij[i] + τij[i]
+                    τ[i][I...] = dτij[i] + τij[i]
+                end
+                Base.@nexprs 2 i -> begin
                     @inbounds ε_pl[i][I...] = 0.0
                 end
                 τII_ij
@@ -145,6 +152,7 @@
             η_vep[I...] = zero(eltype(T))
             Base.@nexprs 3 i -> begin
                 τ[i][I...] = zero(eltype(T))
+                ε_pl[i][I...] = zero(eltype(T))
             end
 
         end
@@ -199,6 +207,8 @@ end
         εxzv_ij = av_clamped_yz_y(ε[5], Ic...)
         εxyv_ij = av_clamped_yz_z(ε[6], Ic...)
 
+        ε_plyzv_ij = ε_pl[4][I...]
+
         τxxv_ij = av_clamped_yz(τ[1], Ic...)
         τyyv_ij = av_clamped_yz(τ[2], Ic...)
         τzzv_ij = av_clamped_yz(τ[3], Ic...)
@@ -250,10 +260,13 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτyz = 0.5 * (τyzv_ij + dτyzv) / τIIv_ij
-            τyzv[I...] += dτyzv - 2.0 * ηv_ij * λv[1][I...] * dQdτyz * dτ_rv
+            ε_plxyv_ij = λv[1][I...] * dQdτyz
+            τyzv[I...] += @muladd dτyzv - 2.0 * ηv_ij * ε_plxyv_ij * dτ_rv
+            ε_pl[4][I...] = ε_plxyv_ij
         else
             # stress correction @ vertex
             τyzv[I...] += dτyzv
+            ε_pl[4][I...] = 0.0
         end
     else
         τyzv[I...] = zero(eltype(T))
@@ -283,6 +296,7 @@ end
         τyzv_old_ij = av_clamped_xz_x(τyzv_old, Ic...)
         τxzv_old_ij = τxzv_old[I...]
         τxyv_old_ij = av_clamped_xz_z(τxyv_old, Ic...)
+        ε_plxzv_ij = ε_pl[5][I...]
 
         # vertex parameters
         phase = @inbounds phase_xz[I...]
@@ -321,10 +335,13 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτxz = 0.5 * (τxzv_ij + dτxzv) / τIIv_ij
-            τxzv[I...] += dτxzv - 2.0 * ηv_ij * λv[2][I...] * dQdτxz * dτ_rv
+            ε_plxzv_ij = λv[2][I...] * dQdτxz
+            τxzv[I...] += @muladd dτxzv - 2.0 * ηv_ij * ε_plxzv_ij * dτ_rv
+            ε_pl[5][I...] = ε_plxzv_ij
         else
             # stress correction @ vertex
             τxzv[I...] += dτxzv
+            ε_pl[5][I...] = 0.0
         end
     else
         τxzv[I...] = zero(eltype(T))
@@ -342,6 +359,7 @@ end
         εyzv_ij = av_clamped_xy_x(ε[4], Ic...)
         εxzv_ij = av_clamped_xy_y(ε[5], Ic...)
         εxyv_ij = ε[6][I...]
+        ε_plxyv_ij = ε_pl[6][I...]
 
         τxxv_ij = av_clamped_xy(τ[1], Ic...)
         τyyv_ij = av_clamped_xy(τ[2], Ic...)
@@ -393,10 +411,13 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτxy = 0.5 * (τxyv_ij + dτxyv) / τIIv_ij
-            τxyv[I...] += dτxyv - 2.0 * ηv_ij * λv[3][I...] * dQdτxy * dτ_rv
+            ε_plxyv_ij = λv[3][I...] * dQdτxy
+            τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * ε_plxyv_ij * dτ_rv
+            ε_pl[6][I...] = ε_plxyv_ij
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv
+            ε_pl[6][I...] = 0.0
         end
     else
         τxyv[I...] = zero(eltype(T))
@@ -441,13 +462,19 @@ end
             εij_pl = λ[I...] .* dQdτij
             dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
             τij = dτij .+ τij
-            setindex!.(τ, τij, I...)
-            setindex!.(ε_pl, εij_pl, I...)
+            Base.@nexprs 6 i -> begin
+                @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+            end
+            Base.@nexprs 3 i -> begin
+                @inbounds ε_pl[i][I...] = εij_pl[i]
+            end
             τII[I...] = τII_ij = second_invariant(τij)
         else
             # stress correction @ center
             Base.@nexprs 6 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+            end
+            Base.@nexprs 3 i -> begin
                 @inbounds ε_pl[i][I...] = 0.0
             end
             # η_vep[I...] = ηij
@@ -494,6 +521,7 @@ end
         phase_vertex,
         ϕ::JustRelax.RockRatio,
     ) where {T}
+    εijv_pl = ε_pl[3]
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
     ni = size(Pr)
@@ -548,10 +576,12 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv * dt + η_regv + volumev))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εij_pl = λv[I...] * dQdτxy
-            τxyv[I...] += dτxyv - 2.0 * ηv_ij * dt * εij_pl * dτ_rv
+            τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * εij_pl * dτ_rv
+            ε_pl[3][I...] = εij_pl
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv
+            ε_pl[3][I...] = 0.0
         end
     else
         τxyv[I...] = zero(eltype(T))
@@ -602,6 +632,8 @@ end
                 τij = dτij .+ τij
                 Base.@nexprs 3 i -> begin
                     @inbounds τ[i][I...] = τij[i]
+                end
+                Base.@nexprs 2 i -> begin
                     @inbounds ε_pl[i][I...] = εij_pl[i]
                 end
                 τII_ij = second_invariant(τij)
@@ -609,6 +641,8 @@ end
                 # stress correction @ center
                 Base.@nexprs 3 i -> begin
                     @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+                end
+                Base.@nexprs 2 i -> begin
                     @inbounds ε_pl[i][I...] = 0.0
                 end
                 τII_ij

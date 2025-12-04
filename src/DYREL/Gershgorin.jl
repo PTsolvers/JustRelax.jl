@@ -119,7 +119,6 @@ end
 @parallel_indices (I...) function _update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
 
     if all(I .≤ size(βVx))
-
         dτVx_ij = dτVx[I...] =  2 / √(λmaxVx[I...]) * CFL_v
         cVx_ij  = cVx[I...]
         βVx[I...] = @muladd  2 * dτVx_ij / (2 + cVx_ij * dτVx_ij)

@@ -104,9 +104,9 @@ function _solve_DYREL!(
     err_evo_P  = Float64[]
     err_evo_it = Float64[]
     itg        = 0
-
+    P_num      = similar(stokes.P)
     # Powell-Hestenes iterations
-    for itPH in 1:100
+    for itPH in 1:250
 
         # compute divergence
         @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
@@ -209,7 +209,7 @@ function _solve_DYREL!(
             # update_halo!(stokes.τ.xy)
 
             # Residuals
-            P_num = γ_eff .* stokes.R.RP
+            @. P_num = γ_eff * stokes.R.RP
             @parallel (@idx ni) compute_DR_residual_V!(
                 stokes.R.Rx,
                 stokes.R.Ry,
@@ -267,7 +267,7 @@ function _solve_DYREL!(
         end
         
         # update pressure
-        stokes.P .+= γ_eff.*stokes.R.RP
+        @. stokes.P += γ_eff.*stokes.R.RP
         
         # Because pressure changed....
         # update buoyancy forces
@@ -387,14 +387,14 @@ function _solve_DYREL!(
     
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, di, dt)
 
-    rel_drop   = 1e-1         # relative drop of velocity residual per PH iteration
+    rel_drop   = 0.75 #1e-1         # relative drop of velocity residual per PH iteration
     # Iteration loop
     errVx0     = 1.0
     errVy0     = 1.0
     errPt0     = 1.0 
     errVx00    = 1.0
     errVy00    = 1.0 
-    iter       = 1
+    iter       = 0
     ϵ          = dyrel.ϵ
     err        = 2 * ϵ
     err_evo_V  = Float64[]
@@ -463,8 +463,9 @@ function _solve_DYREL!(
         ϵ_vel = err * rel_drop
         itPT  = 0
         while (err>ϵ_vel && itPT ≤ iterMax)
-            itPT   += 1
-            itg    += 1
+            itPT += 1
+            itg  += 1
+            iter += 1 
 
             # Pseudo-old dudes 
             copyto!(Rx0, stokes.R.Rx)
@@ -562,7 +563,6 @@ function _solve_DYREL!(
                 # Select dτ
                 update_dτV_α_β!(dyrel)
             end
-            iter += 1 
         end
         
         # update pressure
@@ -581,7 +581,6 @@ function _solve_DYREL!(
             relaxation = viscosity_relaxation,
         )
         center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
-        compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
         # if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
         #     println("Pseudo-transient iterations converged in $iter iterations")

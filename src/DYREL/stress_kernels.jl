@@ -144,13 +144,12 @@ end
                 empty_stress_solution(εij)
 
             else
-
                 # get rheological properties for this phase
                 G  = get_shear_modulus(rheology, phase)
                 Kb = get_bulk_modulus(rheology, phase)
-                ispl, C, sinϕ, cosϕ, sinΨ, η_reg = JustRelax2D.plastic_params(rheology[phase].CompositeRheology[1].elements, 0e0) # this 0e0 is accumulated plastic strain, not used here
+                ispl, C, sinϕ, cosϕ, sinΨ, η_reg = plastic_params(rheology[phase].CompositeRheology[1].elements, 0e0) # this 0e0 is accumulated plastic strain, not used here
                 # compute local stress
-                _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, ratio_I, dt)
+                ratio_I .* _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, ratio_I, dt)
             end
         end
         # sum contributions from all phases
@@ -164,39 +163,36 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
     # viscoelastic viscosity
     η_ve  = inv(inv(η) + inv(G * dt))
     # effectice stgrain rate
-    _Gdt2 = inv(2 * G * dt)
-    εij_eff = @. εij + τij_o * _Gdt2
+    εij_eff = @. εij + τij_o / (2 * G * dt)
 
     εII  = second_invariant(εij_eff)
+
     # early return if there is no deformation
-    iszero(εII) && return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η)
+    iszero(εII) && return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η * phase_ratio)
 
     # Plastic stress correction starts here
     τij   = @. 2 * η_ve * εij_eff
     τII   = second_invariant(τij)
     # Plasticity
-    F     = τII - C * cosϕ - max(P, 0) * sinϕ
-    # F     = τII - C * cosϕ - P * sinϕ
+    # F     = τII - C * cosϕ - max(P, 0e0) * sinϕ
+    F     = τII - C * cosϕ - P * sinϕ
     λ     = if ispl && F > 0
         λ_new = F / (η_ve + η_reg + Kb * dt * sinϕ * sinΨ)
         λ_relaxation * λ_new + (1 - λ_relaxation) * λ
-
     else
-        
         0.0
     end
-
     # Effective viscoelastic-plastic viscosity
-    η_vep  = (τII - λ * η_ve) / (2 * εII) * phase_ratio
+    η_vep  = (τII - λ * η_ve) / (2 * εII) 
     # Update stress and plastic strain rate
-    τij    = @. 2 * η_vep * εij_eff * phase_ratio
-    τII    = second_invariant(τij)
+    τij    = @. 2 * η_vep * εij_eff 
+    # τII    = second_invariant(τij)
     dQdτij = @. 0.5 * τij / τII
-    εij_pl = @. λ * dQdτij * phase_ratio
+    εij_pl = @. λ * dQdτij
     # Update pressure correction due to dilatation
-    ΔPψ    = iszero(sinΨ) ? 0.0 : λ * sinΨ * Kb * dt * phase_ratio
+    ΔPψ    = iszero(sinΨ) ? 0.0 : λ * sinΨ * Kb * dt
 
-    return τij..., εij_pl..., τII, λ * phase_ratio, ΔPψ, η_vep
+    return τij..., εij_pl..., τII, λ, ΔPψ, η_vep
 end
 
 # this returns zero for: τxx, τyy, τxy, τII, ηvep, λ, ΔPψ

@@ -136,6 +136,22 @@ end
     return nothing
 end
 
+function center2vertex_harm!(vertex, center)
+    ni = size(center)
+    @parallel (@idx ni.-1) center2vertex_kernel_harm!(vertex, center)
+    @views vertex[1, :] .= vertex[2, :]
+    @views vertex[end, :] .= vertex[end - 1, :]
+    @views vertex[:, 1] .= vertex[:, 2]
+    @views vertex[:, end] .= vertex[:, end - 1]
+    
+    return nothing
+end
+
+@parallel_indices (i, j) function center2vertex_kernel_harm!(vertex::T, center::T) where T <: AbstractArray{N, 2} where N
+    vertex[i + 1, j + 1] = 4 / (1 / center[i, j] + 1 / center[i+ 1, j] + 1 / center[i, j+ 1] + 1 / center[i+ 1, j+ 1])
+    return nothing
+end
+
 function center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
     @parallel center2vertex_kernel!(
         vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy

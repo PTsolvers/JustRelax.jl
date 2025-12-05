@@ -111,6 +111,9 @@ function _solve_DYREL!(
         stokes.λ  .= 0.0
         stokes.λv .= 0.0
         
+        # update buoyancy forces
+        update_ρg!(ρg, phase_ratios, rheology, args)
+
         # compute divergence
         @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
@@ -273,18 +276,16 @@ function _solve_DYREL!(
         @. stokes.P += γ_eff.*stokes.R.RP
         
         # Because pressure changed....
-        # update buoyancy forces
-        update_ρg!(ρg, phase_ratios, rheology, args)
-        # # update viscosity based on the deviatoric stress tensor
-        # update_viscosity_τII!(
-        #     stokes,
-        #     phase_ratios,
-        #     args,
-        #     rheology,
-        #     viscosity_cutoff;
-        #     relaxation = viscosity_relaxation,
-        # )
-        # center2vertex_harm!(stokes.viscosity.ηv, stokes.viscosity.η)
+        # update viscosity based on the deviatoric stress tensor
+        update_viscosity_τII!(
+            stokes,
+            phase_ratios,
+            args,
+            rheology,
+            viscosity_cutoff;
+            relaxation = viscosity_relaxation,
+        )
+        center2vertex_harm!(stokes.viscosity.ηv, stokes.viscosity.η)
        
         # if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
         #     println("Pseudo-transient iterations converged in $iter iterations")

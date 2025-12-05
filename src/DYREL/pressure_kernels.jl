@@ -110,4 +110,4 @@ end
 end
 
 @inline _compute_RP!(P, P0, ∇V, Q, ηb, dt) = -∇V - (P - P0) / ηb + (Q / dt)
-@inline _compute_RP!(P, P0, ∇V, Q, ΔTc, α, ηb, dt) = -∇V - (P - P0) / ηb  + α * (ΔTc / dt) + (Q * inv(dt)) 
+@inline _compute_RP!(P, P0, ∇V, Q, ΔTc, α, ηb, dt) = -∇V - (P - P0) / ηb  + α * (ΔTc / dt) + (Q / dt) 

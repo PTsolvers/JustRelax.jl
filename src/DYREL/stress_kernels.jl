@@ -149,7 +149,7 @@ end
                 Kb = get_bulk_modulus(rheology, phase)
                 ispl, C, sinϕ, cosϕ, sinΨ, η_reg = plastic_params(rheology[phase].CompositeRheology[1].elements, 0e0) # this 0e0 is accumulated plastic strain, not used here
                 # compute local stress
-                ratio_I .* _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, ratio_I, dt)
+                ratio_I .* _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, dt)
             end
         end
         # sum contributions from all phases
@@ -158,7 +158,7 @@ end
     end
 end
 
-function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, phase_ratio, dt)
+function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, dt)
 
     # viscoelastic viscosity
     η_ve  = inv(inv(η) + inv(G * dt))
@@ -168,7 +168,7 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
     εII  = second_invariant(εij_eff)
 
     # early return if there is no deformation
-    iszero(εII) && return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η * phase_ratio)
+    iszero(εII) && return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η)
 
     # Plastic stress correction starts here
     τij   = @. 2 * η_ve * εij_eff

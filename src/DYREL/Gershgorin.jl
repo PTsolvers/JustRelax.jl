@@ -1,7 +1,7 @@
 
 function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, rheology, di, dt)
     ni = size(η)
-    center2vertex!(ηv, η)
+    center2vertex_harm!(ηv, η)
     @parallel (@idx ni) _Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di..., phase_ratios.vertex, phase_ratios.center, rheology, dt)
     return nothing
 end
@@ -89,22 +89,20 @@ end
 @parallel_indices (I...) function _update_α_β!(βVx, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
 
     if all(I .≤ size(βVx))
-        dτVx_ij = dτVx[I...]
-        cVx_ij = cVx[I...]
-
+        dτVx_ij   = dτVx[I...]
+        cVx_ij    = cVx[I...]
         βVx[I...] = @muladd  2 * dτVx_ij / (2 + cVx_ij * dτVx_ij)
         αVx[I...] = @muladd (2 - cVx_ij * dτVx_ij) / (2 + cVx_ij * dτVx_ij)
     end
     if all(I .≤ size(βVy))
-        dτVy_ij = dτVy[I...]
-        cVy_ij  = cVy[I...]
+        dτVy_ij   = dτVy[I...]
+        cVy_ij    = cVy[I...]
         βVy[I...] = @muladd  2 * dτVy_ij / (2 + cVy_ij *dτVy_ij)
         αVy[I...] = @muladd (2 - cVy_ij * dτVy_ij) / (2 + cVy_ij *dτVy_ij)
     end
 
     return nothing
 end
-
     
 function update_dτV_α_β!(dyrel::JustRelax.DYREL)
     update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.CFL)
@@ -126,8 +124,8 @@ end
     end
 
     if all(I .≤ size(βVy))
-        dτVy_ij = dτVy[I...] =  2 / √(λmaxVy[I...]) * CFL_v
-        cVy_ij  = cVy[I...]
+        dτVy_ij   = dτVy[I...] =  2 / √(λmaxVy[I...]) * CFL_v
+        cVy_ij    = cVy[I...]
         βVy[I...] = @muladd  2 * dτVy_ij / (2 + cVy_ij *dτVy_ij)
         αVy[I...] = @muladd (2 - cVy_ij * dτVy_ij) / (2 + cVy_ij *dτVy_ij)
     end

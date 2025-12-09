@@ -232,7 +232,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     nxcell = 20
     max_xcell = 40
     min_xcell = 15
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi...)
 
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids

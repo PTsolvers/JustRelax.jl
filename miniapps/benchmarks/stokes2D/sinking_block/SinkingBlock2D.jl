@@ -7,7 +7,7 @@ using ParallelStencil, ParallelStencil.FiniteDifferences2D
 using JustPIC, JustPIC._2D
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -101,6 +101,9 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     dt = 1
     # ----------------------------------------------------
 
+    # velocity grids
+    grid_vxi = velocity_grids(xci, xvi, di)
+
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 12
     particles = init_particles(
@@ -120,7 +123,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-5, CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-5, ϵ_rel = 1.0e-5, CFL = 0.95 / √2.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni...), P = stokes.P))
@@ -140,40 +143,55 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    # Stokes solver ----------------
-    args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
-    solve!(
-        stokes,
-        pt_stokes,
-        di,
-        flow_bcs,
-        ρg,
-        phase_ratios,
-        rheology,
-        args,
-        dt,
-        igg;
-        kwargs = (
-            iterMax = 150.0e3,
-            nout = 1.0e3,
-            viscosity_cutoff = η_cutoff,
-            verbose = false,
+    it = 0 # iteration counter
+    while it < 50
+        # Stokes solver ----------------
+        args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+        solve!(
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            phase_ratios,
+            rheology,
+            args,
+            dt,
+            igg;
+            kwargs = (
+                iterMax = 150.0e3,
+                nout = 1.0e3,
+                viscosity_cutoff = η_cutoff,
+                verbose = false,
+            )
         )
-    )
-    dt = compute_dt(stokes, di, igg)
-    # ------------------------------
+        dt = compute_dt(stokes, di, igg)
+        # ------------------------------
 
-    Vx_v = @zeros(ni .+ 1...)
-    Vy_v = @zeros(ni .+ 1...)
-    velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-    velocity = @. √(Vx_v^2 + Vy_v^2)
+        Vx_v = @zeros(ni .+ 1...)
+        Vy_v = @zeros(ni .+ 1...)
+        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        velocity = @. √(Vx_v^2 + Vy_v^2)
 
-    # Plotting ---------------------
-    f, _, h = heatmap(velocity, colormap = :vikO)
-    Colorbar(f[1, 2], h)
-    display(f)
-    # ------------------------------
+        # Advection --------------------
+        # advect particles in space
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), grid_vxi, dt)
+        # advect particles in memory
+        move_particles!(particles, xvi, particle_args)
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
+
+        # Plotting ---------------------
+        f, _, h = heatmap(velocity, colormap = :vikO)
+        Colorbar(f[1, 2], h)
+        display(f)
+        it += 1
+        @show it
+        # ------------------------------
+    end
     return nothing
 end
 

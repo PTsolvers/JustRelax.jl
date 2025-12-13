@@ -26,6 +26,7 @@ function parse_flags!(args, flag; default = nothing, type = typeof(default))
     return false, default
 end
 
+
 function runtests()
     testdir = pwd()
     istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
@@ -63,7 +64,7 @@ function runtests()
             end
         else
             try
-                run(`$(Base.julia_cmd()) -O3 --startup-file=no $(joinpath(testdir, f))`)
+                run(`$(Base.julia_cmd()) -O3 -t auto --startup-file=no $(joinpath(testdir, f))`)
             catch ex
                 nfail += 1
             end
@@ -78,9 +79,11 @@ _, backend_name = parse_flags!(ARGS, "--backend"; default = "CPU", type = String
 @static if backend_name == "AMDGPU"
     Pkg.add("AMDGPU")
     ENV["JULIA_JUSTRELAX_BACKEND"] = "AMDGPU"
+    using AMDGPU; AMDGPU.versioninfo()
 elseif backend_name == "CUDA"
     Pkg.add("CUDA")
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CUDA"
+    using CUDA; CUDA.versioninfo()
 elseif backend_name == "CPU"
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CPU"
 end

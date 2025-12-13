@@ -5,6 +5,8 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
+const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"]) : false
+
 using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax3D
@@ -92,7 +94,7 @@ function main(igg; nx = 64, ny = 64, nz = 64)
     visc_inc = LinearViscous(; η = η0 / 10)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
-        C = C,
+        C = C / cosd(ϕ),
         ϕ = ϕ,
         η_vp = η_reg,
         Ψ = 0.0,
@@ -118,7 +120,7 @@ function main(igg; nx = 64, ny = 64, nz = 64)
 
     # Initialize phase ratios -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
     radius = 0.1
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     pPhases, = init_cell_arrays(particles, Val(1))
@@ -130,7 +132,7 @@ function main(igg; nx = 64, ny = 64, nz = 64)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-5, Re = 3.0e0, r = 0.7, CFL = 0.9 / √3.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-5, Re = 3.0e0, r = 0.7, CFL = 0.9 / √3.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     args = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
@@ -184,7 +186,7 @@ function main(igg; nx = 64, ny = 64, nz = 64)
     sol = Float64[]
     ttot = Float64[]
 
-    while t < tmax
+    while it < 3
         # Stokes solver ----------------
         solve!(
             stokes,
@@ -241,19 +243,32 @@ function main(igg; nx = 64, ny = 64, nz = 64)
     return nothing
 end
 
-@suppress begin
-    if backend_JR == CPUBackend
-        n = 32 + 2
-        nx = n ÷ 2
-        ny = n - 2
-        nz = n - 2 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
+if CSCS_CI != true
+    @suppress begin
+        if backend_JR == CPUBackend
+            n = 32 + 2
+            nx = n ÷ 2
+            ny = n - 2
+            nz = n - 2 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
+            igg = if !(JustRelax.MPI.Initialized())
+                IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
+            else
+                igg
+            end
+            main(igg; nx = nx, ny = ny, nz = nz)
         else
-            igg
+            println("This test is only for CPU CI yet")
         end
-        main(igg; nx = nx, ny = ny, nz = nz)
-    else
-        println("This test is only for CPU CI yet")
     end
+else
+    n = 64 + 2
+    nx = n ÷ 2
+    ny = n ÷ 2
+    nz = n ÷ 2
+    igg = if !(JustRelax.MPI.Initialized())
+        IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
+    else
+        igg
+    end
+    main(igg; nx = nx, ny = ny, nz = nz)
 end

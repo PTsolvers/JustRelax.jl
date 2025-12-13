@@ -13,7 +13,7 @@ using JustPIC, JustPIC._2D
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Shearheating_rheology.jl")
@@ -48,16 +48,15 @@ end
 function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = false)
 
     # Physical domain ------------------------------------
-    ly = 40.0e3       # domain length in y
-    lx = 70.0e3       # domain length in x
-    ni = nx, ny     # number of cells
-    li = lx, ly     # domain length in x- and y-
-    di = @. li / ni # grid step in x- and -y
-    origin = 0.0, -ly   # origin coordinates (15km f sticky air layer)
+    ly = 40.0e3         # domain length in y
+    lx = 70.0e3         # domain length in x
+    ni = nx, ny         # number of cells
+    li = lx, ly         # domain length in x- and y-
+    di = @. li / ni     # grid step in x- and -y
+    origin = 0.0, -ly       # origin coordinates (15km f sticky air layer)
     grid = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid       # nodes at the center and vertices of the cells
+    (; xci, xvi) = grid     # nodes at the center and vertices of the cells
     # ----------------------------------------------------
-
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies(; is_TP_Conductivity = false)
     κ = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ))
@@ -76,9 +75,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     particle_args = (pT, pPhases)
 
     # Elliptical temperature anomaly
-    xc_anomaly = lx / 2 # origin of thermal anomaly
-    yc_anomaly = 40.0e3   # origin of thermal anomaly
-    r_anomaly = 3.0e3    # radius of perturbation
+    xc_anomaly = lx / 2           # origin of thermal anomaly
+    yc_anomaly = 40.0e3           # origin of thermal anomaly
+    r_anomaly = 3.0e3            # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
@@ -87,7 +86,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, CFL = 0.9 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -97,7 +96,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     )
 
     # Initialize constant temperature
-    @views thermal.T .= 273.0 + 400
+    thermal.T .= 273.0 + 400
     thermal_bcs!(thermal, thermal_bc)
     temperature2center!(thermal)
     # ----------------------------------------------------
@@ -134,8 +133,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     end
     grid2particle!(pT, xvi, T_buffer, particles)
 
-
-    # IO ----- -------------------------------------------
+    # IO -----------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
         vtk_dir = joinpath(figdir, "vtk")
@@ -169,13 +167,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # Time loop
     t, it = 0.0, 0
     while it < 1
-        # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
-        compute_viscosity!(
-            stokes, phase_ratios, args, rheology, (-Inf, Inf)
-        )
-        # ------------------------------
 
         # Stokes solver ----------------
         solve!(

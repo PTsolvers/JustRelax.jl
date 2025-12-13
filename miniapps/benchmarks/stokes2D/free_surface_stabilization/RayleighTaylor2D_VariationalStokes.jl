@@ -33,7 +33,7 @@ end
 
 # Load script dependencies
 using GeoParams
-using GLMakie
+using CairoMakie
 
 # Velocity helper grids for the particle advection
 function copyinn_x!(A, B)
@@ -141,7 +141,7 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 125, 175, 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -156,21 +156,21 @@ function main(igg, nx, ny)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
-    # RockRatios
-    air_phase = 1
-    ϕ = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, air_phase)
-
     # Initialize marker chain-------------------------------
     nxcell, max_xcell, min_xcell = 100, 150, 75
     initial_elevation = -100.0e3
     chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
     # ----------------------------------------------------
 
+    # RockRatios
+    air_phase = 1
+    ϕ = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ, chain, xvi, di)
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -243,7 +243,7 @@ function main(igg, nx, ny)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, air_phase)
+        compute_rock_fraction!(ϕ, chain, xvi, di)
 
         @show it += 1
         t += dt
@@ -259,7 +259,7 @@ function main(igg, nx, ny)
             # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
             scatter!(ax, Array(px.data[:]) .* 1.0e-3, Array(py.data[:]) .* 1.0e-3, color = Array(pPhases.data[:]), colormap = :grayC)
             scatter!(ax, Array(chain_x.data[:]) .* 1.0e-3, Array(chain_y.data[:]) .* 1.0e-3, color = :red)
-            arrows!(
+            arrows2d!(
                 ax,
                 xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
                 lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),

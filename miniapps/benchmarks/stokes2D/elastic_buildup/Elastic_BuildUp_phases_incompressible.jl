@@ -4,7 +4,7 @@ using ParallelStencil
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = CPUBackend
 
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -62,7 +62,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.75 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.75 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)

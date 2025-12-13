@@ -6,7 +6,7 @@ solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 function plot_elastic_buildup(av_τyy, sol_τyy, t)
     f = Figure()
     ax = Axis(f[1, 1]; xlabel = "kyrs", ylabel = "Stress Mpa")
-    scatter!(ax, t ./ 1.0e3, sol_τyy ./ 1.0e6; label = "analytic", linewidth = 3)
+    scatter!(ax, t ./ 1.0e3, sol_τyy ./ 1.0e6; label = "analytic")
     lines!(ax, t ./ 1.0e3, av_τyy ./ 1.0e6; label = "numeric", linewidth = 3, color = :black)
     axislegend(ax)
     ylims!(ax, 0, 220)
@@ -46,7 +46,7 @@ function elastic_buildup(;
     # general stokes arrays
     stokes = StokesArrays(backend, ni)
     # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 1 / √2.1)
 
     ## Setup-specific parameters and fields
     (; η) = stokes.viscosity

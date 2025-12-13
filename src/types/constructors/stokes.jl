@@ -61,6 +61,27 @@ function Viscosity(ni::NTuple{N, Integer}) where {N}
     return JustRelax.Viscosity(η, η_vep, ητ)
 end
 
+
+# Principal stress
+
+function PrincipalStress(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return PrincipalStress(ni)
+end
+
+function PrincipalStress(ni::NTuple{2, Integer})
+    σ1 = @zeros(2, ni...)
+    σ2 = @zeros(2, ni...)
+    σ3 = @zeros(2, 1, 1)
+    return JustRelax.PrincipalStress(σ1, σ2, σ3)
+end
+
+function PrincipalStress(ni::NTuple{3, Integer})
+    σ1 = @zeros(3, ni...)
+    σ2 = @zeros(3, ni...)
+    σ3 = @zeros(3, ni...)
+    return JustRelax.PrincipalStress(σ1, σ2, σ3)
+end
+
 ## SymmetricTensor type
 
 function SymmetricTensor(nx::Integer, ny::Integer)
@@ -129,6 +150,8 @@ Create the Stokes arrays object in 2D or 3D.
 - `EII_pl`: Second invariant of the accumulated plastic strain
 - `viscosity`: Viscosity fields
 - `R`: Residual fields
+- `Δε`: Strain increment tensor
+- `∇U`: Displacement gradient
 
 """
 function StokesArrays(ni::NTuple{N, Integer}) where {N}
@@ -146,6 +169,7 @@ function StokesArrays(ni::NTuple{N, Integer}) where {N}
     EII_pl = @zeros(ni...)
     viscosity = Viscosity(ni)
     R = Residual(ni...)
-
-    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω)
+    Δε = SymmetricTensor(ni...)
+    ∇U = @zeros(ni...)
+    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, Δε, ∇U)
 end

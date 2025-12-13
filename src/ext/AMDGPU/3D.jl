@@ -33,7 +33,7 @@ import JustRelax:
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
-import JustPIC._3D: numphases, nphases
+import JustPIC._3D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
 
 __init__() = @init_parallel_stencil(AMDGPU, Float64, 3)
 
@@ -187,34 +187,35 @@ end
 # Rheology
 
 ## viscosity
-function JR3D.compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff)
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
+
+function JR3D.compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
 end
 
 function JR3D.compute_viscosity!(
-        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
-    )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity)
 end
 
 function JR3D.compute_viscosity!(
-        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
-    )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
+        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
 end
 
 function JR3D.compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
-function compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff)
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
+function compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
 end
 
 function compute_viscosity!(
-        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
-    )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
+        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
 end
 
 function compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
@@ -224,6 +225,14 @@ end
 ## Stress
 function JR3D.tensor_invariant!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
     return _tensor_invariant!(A)
+end
+
+function JR3D.accumulate_tensor!(::AMDGPUBackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
+function accumulate_tensor!(::AMDGPUBackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
 end
 
 ## Buoyancy forces
@@ -264,6 +273,16 @@ end
 
 function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)
+end
+
+function JR3D.shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
+end
+
+function shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
 end
 
 function JR3D.vertex2center!(center::T, vertex::T) where {T <: ROCArray}
@@ -468,6 +487,29 @@ function JR3D.rotate_stress!(
         dt,
     )
     rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
+    return nothing
+end
+
+# Phase ratios with arrays
+function JR3D.update_phase_ratios_3D!(
+        phase_ratios::JustPIC.PhaseRatios{AMDGPUBackend, T},
+        phase_arrays::NTuple{N, ROCArray{U, 3}},
+        xci,
+        xvi
+    ) where {T <: AbstractMatrix, N, U}
+
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
+    phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
+
+    # velocity nodes
+    phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
+    phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, xci, :y)
+    phase_ratios_face_from_arrays!(phase_ratios.Vz, phase_arrays, xci, :z)
+
+    # shear stress nodes
+    phase_ratios_midpoint_from_centers!(phase_ratios.xy, phase_arrays, xci, :xy)
+    phase_ratios_midpoint_from_centers!(phase_ratios.yz, phase_arrays, xci, :yz)
+    phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, xci, :xz)
     return nothing
 end
 

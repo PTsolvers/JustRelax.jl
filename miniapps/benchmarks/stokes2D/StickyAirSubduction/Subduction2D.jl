@@ -32,7 +32,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -83,7 +83,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     max_xcell = 125
     min_xcell = 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
     grid_vxi = velocity_grids(xci, xvi, di)
@@ -106,8 +106,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------

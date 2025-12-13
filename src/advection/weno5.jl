@@ -116,14 +116,16 @@ end
 end
 
 @inline function _WENO_flux_x(u, nx, weno, i, j, fun::F) where {F}
-    jw, jww = clamp(j - 1, 1, nx), clamp(j - 2, 1, nx)
-    je, jee = clamp(j + 1, 1, nx), clamp(j + 2, 1, nx)
+    iw, iww = clamp(i - 1, 1, nx), clamp(i - 2, 1, nx)
+    ie, iee = clamp(i + 1, 1, nx), clamp(i + 2, 1, nx)
 
-    u1 = @inbounds u[i, jww]
-    u2 = @inbounds u[i, jw]
-    u3 = @inbounds u[i, j]
-    u4 = @inbounds u[i, je]
-    u5 = @inbounds u[i, jee]
+    @inbounds begin
+        u1 = u[iww, j]
+        u2 = u[iw, j]
+        u3 = u[i, j]
+        u4 = u[ie, j]
+        u5 = u[iee, j]
+    end
     return f = fun(u1, u2, u3, u4, u5, weno)
 end
 
@@ -136,40 +138,39 @@ end
 end
 
 @inline function _WENO_flux_y(u, ny, weno, i, j, fun::F) where {F}
-    iw, iww = clamp(i - 1, 1, ny), clamp(i - 2, 1, ny)
-    ie, iee = clamp(i + 1, 1, ny), clamp(i + 2, 1, ny)
-
-    u1 = @inbounds u[iww, j]
-    u2 = @inbounds u[iw, j]
-    u3 = @inbounds u[i, j]
-    u4 = @inbounds u[ie, j]
-    u5 = @inbounds u[iee, j]
-
+    jw, jww = clamp(j - 1, 1, ny), clamp(j - 2, 1, ny)
+    je, jee = clamp(j + 1, 1, ny), clamp(j + 2, 1, ny)
+    @inbounds begin
+        u1 = u[i, jww]
+        u2 = u[i, jw]
+        u3 = u[i, j]
+        u4 = u[i, je]
+        u5 = u[i, jee]
+    end
     return f = fun(u1, u2, u3, u4, u5, weno)
 end
 
-@inline function weno_rhs(vy, vx, weno, _dx, _dy, nx, ny, i, j)
-    jW, jE = clamp(j - 1, 1, ny), clamp(j + 1, 1, ny)
+
+@inline function weno_rhs(vx, vy, weno, _dx, _dy, nx, ny, i, j)
     iS, iN = clamp(i - 1, 1, nx), clamp(i + 1, 1, nx)
+    jW, jE = clamp(j - 1, 1, ny), clamp(j + 1, 1, ny)
 
-    vx_ij = vx[i, j]
-    vy_ij = vy[i, j]
+    return @inbounds begin
+        vx_ij = vx[i, j]
+        vy_ij = vy[i, j]
 
-    return r = @inbounds begin
-        @muladd begin
-            max(vx_ij, 0) * (weno.fL[i, j] - weno.fL[i, jW]) * _dx +
-                min(vx_ij, 0) * (weno.fR[i, jE] - weno.fR[i, j]) * _dx +
-                max(vy_ij, 0) * (weno.fB[i, j] - weno.fB[iS, j]) * _dy +
-                min(vy_ij, 0) * (weno.fT[iN, j] - weno.fT[i, j]) * _dy
-        end
+        r = @muladd max(vx_ij, 0) * (weno.fB[i, j] - weno.fB[iS, j]) * _dx +
+            min(vx_ij, 0) * (weno.fT[iN, j] - weno.fT[i, j]) * _dx +
+            max(vy_ij, 0) * (weno.fL[i, j] - weno.fL[i, jW]) * _dy +
+            min(vy_ij, 0) * (weno.fR[i, jE] - weno.fR[i, j]) * _dy
     end
 end
 
-@parallel_indices (i, j) function weno_f!(u, weno, nx, ny)
-    weno.fL[i, j] = WENO_flux_upwind_x(u, nx, weno, i, j)
-    weno.fR[i, j] = WENO_flux_downwind_x(u, nx, weno, i, j)
-    weno.fB[i, j] = WENO_flux_upwind_y(u, ny, weno, i, j)
-    weno.fT[i, j] = WENO_flux_downwind_y(u, ny, weno, i, j)
+@parallel_indices inbounds = true (i, j) function weno_f!(u, weno, nx, ny)
+    weno.fB[i, j] = WENO_flux_upwind_x(u, nx, weno, i, j)
+    weno.fT[i, j] = WENO_flux_downwind_x(u, nx, weno, i, j)
+    weno.fL[i, j] = WENO_flux_upwind_y(u, ny, weno, i, j)
+    weno.fR[i, j] = WENO_flux_downwind_y(u, ny, weno, i, j)
     return nothing
 end
 
@@ -188,7 +189,7 @@ Perform the advection step of the Weighted Essentially Non-Oscillatory (WENO) sc
 - `dt`: time step.
 
 # Description
-The function first calculates the fluxes using the WENO scheme. Then it performs three steps of the WENO scheme. Each step involves calculating the right-hand side of the WENO equation and updating the solution `u`. The updating of the solution `u` is done using different combinations of the original solution and the temporary solution `weno.ut`.
+The function approximates the advected fluxes using the WENO scheme and use a strong-stability preserving (SSP) Runge-Kutta method of order 3 for the time integration.
 """
 function WENO_advection!(u, Vxi, weno, di, dt)
     _di = inv.(di)

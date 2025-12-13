@@ -6,7 +6,7 @@ const backend_JR = CPUBackend
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(Threads, Float64, 3) #or (CUDA, Float64, 3) or (AMDGPU, Float64, 3)
 
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
+using Printf, LinearAlgebra, GeoParams, CairoMakie, SpecialFunctions
 
 # function to compute strain rate (compulsory)
 @inline function custom_εII(a::CustomRheology, TauII; args...)
@@ -172,7 +172,7 @@ function thermal_convection3D(; ar = 8, nz = 16, nx = ny * 8, ny = nx, figdir = 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, CFL = 1.0 / √3.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 1.0 / √3.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
     for _ in 1:2

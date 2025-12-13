@@ -165,6 +165,18 @@ macro strain(A)
 end
 
 """
+    @strain_increment(A)
+
+Unpacks the strain rate tensor `ε` from the StokesArrays `A`, where its components are defined in the staggered grid.
+Shear components are unpack following Voigt's notation.
+"""
+macro strain_increment(A)
+    return quote
+        unpack_tensor_stag(($(esc(A))).Δε)
+    end
+end
+
+"""
     @plastic_strain(A)
 
 Unpacks the plastic strain rate tensor `ε_pl` from the StokesArrays `A`, where its components are defined in the staggered grid.
@@ -232,6 +244,29 @@ end
         A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}
     ) where {T}
     return A.yz, A.xz, A.xy
+end
+
+"""
+    @shear_center(A)
+
+Unpacks the shear components of the symmetric tensor `A`, where its components are defined in the center of the grid cells.
+Shear components are unpack following Voigt's notation.
+"""
+macro shear_center(A)
+    return quote
+        unpack_shear_center(($(esc(A))))
+    end
+end
+
+@inline function unpack_shear_center(
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 2}}
+    ) where {T}
+    return A.xy_c
+end
+@inline function unpack_shear_center(
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}
+    ) where {T}
+    return A.yz_c, A.xz_c, A.xy_c
 end
 
 """
@@ -350,7 +385,7 @@ function compute_maxloc!(B, A; window = (1, 1, 1))
     ni = size(A)
 
     @parallel_indices (I...) function _maxloc!(B, A, window)
-        B[I...] = _maxloc_window_clamped(A, I..., window...)
+        @inbounds B[I...] = _maxloc_window_clamped(A, I..., window...)
         return nothing
     end
 
@@ -358,7 +393,7 @@ function compute_maxloc!(B, A; window = (1, 1, 1))
     return nothing
 end
 
-@inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
+Base.@propagate_inbounds @inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
     nx, ny = size(A)
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)
@@ -377,7 +412,7 @@ end
     return x
 end
 
-@inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
+Base.@propagate_inbounds @inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
     nx, ny, nz = size(A)
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)

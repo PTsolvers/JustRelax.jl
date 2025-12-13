@@ -84,7 +84,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -112,7 +112,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-5, Re = 2π√2, r=0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
@@ -138,7 +138,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     # Rheology
     args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
-    compute_viscosity!(stokes, phase_ratios, args0, rheology, 0, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
@@ -336,12 +336,12 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
         #MPI gathering
         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
         #centers
-        @views P_nohalo .= Array(stokes.P[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        @views τII_nohalo .= Array(stokes.τ.II[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:(end - 1), 2:(end - 1), 2:(end - 1)])       # Copy data to CPU removing the halo
-        @views εII_nohalo .= Array(stokes.ε.II[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-        @views phases_c_nohalo .= Array(phase_center[2:(end - 1), 2:(end - 1), 2:(end - 1)])
-        @async gather!(P_nohalo, P_v)
+        @views P_nohalo .= Array(stokes.P[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views τII_nohalo .= Array(stokes.τ.II[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:(end - 1), 2:(end - 1)])       # Copy data to CPU removing the halo
+        @views εII_nohalo .= Array(stokes.ε.II[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views phases_c_nohalo .= Array(phase_center[2:(end - 1), 2:(end - 1)])
+        gather!(P_nohalo, P_v)
         gather!(τII_nohalo, τII_v)
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
@@ -351,12 +351,12 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             vertex2center!(Vx, Vx_v)
             vertex2center!(Vy, Vy_v)
-            @views Vxv_nohalo .= Array(Vx[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
-            @views Vyv_nohalo .= Array(Vy[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+            @views Vxv_nohalo .= Array(Vx[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+            @views Vyv_nohalo .= Array(Vy[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
             gather!(Vxv_nohalo, Vxv_v)
             gather!(Vyv_nohalo, Vyv_v)
         end
-        @views T_nohalo .= Array(thermal.Tc[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array(thermal.Tc[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         # Data I/O and plotting ---------------------
@@ -388,32 +388,34 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             end
 
             # Make Makie figure
-            ar = 3
-            fig = Figure(size = (1200, 900), title = "t = $t")
-            ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
-            ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
-            ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
-            ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
-            # Plot temperature
-            h1 = heatmap!(ax1, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(T_v), colormap = :batlow)
-            # Plot particles phase
-            # h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
-            h2 = heatmap!(ax2, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(phases_c_v), colormap = :batlow)
-            # Plot 2nd invariant of strain rate
-            # h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(log10.(εII_v)) , colormap=:batlow)
-            h3 = heatmap!(ax3, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(τII_v), colormap = :batlow)
-            # Plot effective viscosity
-            h4 = heatmap!(ax4, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(log10.(η_vep_v)), colormap = :batlow)
-            hidexdecorations!(ax1)
-            hidexdecorations!(ax2)
-            hidexdecorations!(ax3)
-            Colorbar(fig[1, 2], h1)
-            Colorbar(fig[2, 2], h2)
-            Colorbar(fig[1, 4], h3)
-            Colorbar(fig[2, 4], h4)
-            linkaxes!(ax1, ax2, ax3, ax4)
-            fig
-            save(joinpath(figdir, "$(it).png"), fig)
+            if it > 5
+                ar = 3
+                fig = Figure(size = (1200, 900), title = "t = $t")
+                ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
+                ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
+                ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
+                ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
+                # Plot temperature
+                h1 = heatmap!(ax1, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(T_v), colormap = :batlow)
+                # Plot particles phase
+                # h2  = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+                h2 = heatmap!(ax2, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(phases_c_v), colormap = :batlow)
+                # Plot 2nd invariant of strain rate
+                # h3  = heatmap!(ax3, xci_v[1].*1e-3, xci_v[2].*1e-3, Array(log10.(εII_v)) , colormap=:batlow)
+                h3 = heatmap!(ax3, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(τII_v), colormap = :batlow)
+                # Plot effective viscosity
+                h4 = heatmap!(ax4, xci_v[1] .* 1.0e-3, xci_v[2] .* 1.0e-3, Array(log10.(η_vep_v)), colormap = :batlow)
+                hidexdecorations!(ax1)
+                hidexdecorations!(ax2)
+                hidexdecorations!(ax3)
+                Colorbar(fig[1, 2], h1)
+                Colorbar(fig[2, 2], h2)
+                Colorbar(fig[1, 4], h3)
+                Colorbar(fig[2, 4], h4)
+                linkaxes!(ax1, ax2, ax3, ax4)
+                fig
+                save(joinpath(figdir, "$(it).png"), fig)
+            end
         end
         # ------------------------------
 
@@ -432,7 +434,6 @@ igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
-extents = Array{NTuple}[]
 
 # GLOBAL Physical domain ------------------------------------
 model_depth = 660
@@ -450,29 +451,4 @@ figdir = "Subduction2D_$(nx_g())x$(ny_g())"
 
 li_GMG, origin_GMG, phases_GMG, T_GMG = GMG_subduction_2D(model_depth, grid_global.xvi, nx + 1, ny + 1)
 
-
-function generate_extents(nx, ny, num_processes)
-    extents = Array{NTuple{2, UnitRange{Int}}}(undef, num_processes)
-    for i in 1:num_processes
-        x_start = (i - 1) * div(nx, num_processes[1]) + 1
-        x_end = i * div(nx, num_processes)
-        y_start = (i - 1) * div(ny, num_processes[2]) + 1
-        y_end = ny
-        extents[i] = (x_start:x_end, y_start:y_end)
-    end
-    return extents
-end
-
-
-ni = nx, ny           # number of cells
-di = @. li_GMG / (nx_g(), ny_g())       # grid steps
-grid = Geometry(ni, li; origin = origin_GMG)
-(; xci, xvi) = grid
-
-# extents = generate_extents(nx(), ny(), igg.dims)
-# push!(extents, xci...)
-# println("extents: ",extents)
-println("nx()", @nx())
-println("ny()", @ny())
-
-#  main(x_global, z_global,li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(x_global, z_global, li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

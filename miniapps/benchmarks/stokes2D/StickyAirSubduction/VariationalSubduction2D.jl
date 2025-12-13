@@ -1,5 +1,5 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -32,7 +32,8 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, CellArrays
+using CairoMakie
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -83,7 +84,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     max_xcell = 125
     min_xcell = 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
     grid_vxi = velocity_grids(xci, xvi, di)
@@ -97,21 +98,22 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
-    # RockRatios
-    air_phase = 3
-    ϕ_R = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
-
     # marker chain
     nxcell, min_xcell, max_xcell = 100, 75, 125
     initial_elevation = 0.0e0
     chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
 
+    # RockRatios
+    air_phase = 3
+    ϕ_R = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ_R, chain, xvi, di)
+    update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-6, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -157,8 +159,8 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     # Time loop
     t, it = 0.0, 0
     dt = 25.0e3 * (3600 * 24 * 365.25)
-    dtmax = 50.0e3 * (3600 * 24 * 365.25)
-    while it < 500 # run only for 5 Myrs
+    dt_max = 250.0e3 * (3600 * 24 * 365.25)
+    while it < 15 # run only for 5 Myrs
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
@@ -179,12 +181,11 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
                 kwargs = (;
                     iterMax = 50.0e3,
                     free_surface = true,
-                    nout = 2.0e3,
+                    nout = 5.0e3,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
         end
-
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di, dtmax) * 0.8
@@ -207,7 +208,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
+        compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         @show it += 1
         t += dt
@@ -288,13 +289,14 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
     end
 
-    return stokes
+    return
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
 figdir = "Subduction2D_MQS_variational"
 nx, ny = 250, 100
+# nx, ny = 25, 10
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
@@ -302,7 +304,7 @@ else
     igg
 end
 
-stokes = main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
 
 
 nits = [

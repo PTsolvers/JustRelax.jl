@@ -12,7 +12,7 @@ using JustPIC, JustPIC._2D
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie, SpecialFunctions, CellArrays
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
@@ -76,10 +76,26 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
 
     return nothing
 end
+
+function plot_particles(particles, pPhases)
+    p = particles.coords
+    # pp = [argmax(p) for p in phase_ratios.center] #if you want to plot it in a heatmap rather than scatter
+    ppx, ppy = p
+    # pxv = ustrip.(dimensionalize(ppx.data[:], km, CharDim))
+    # pyv = ustrip.(dimensionalize(ppy.data[:], km, CharDim))
+    pxv = ppx.data[:]
+    pyv = ppy.data[:]
+    clr = pPhases.data[:]
+    # clr = pϕ.data[:]
+    idxv = particles.index.data[:]
+    f, ax, h = scatter(Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), colormap = :roma, markersize = 1)
+    Colorbar(f[1, 2], h)
+    return f
+end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = false)
+function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = "vtk2D", do_vtk = false)
 
     # Physical domain ------------------------------------
     ly = 700.0e3            # domain length in y
@@ -123,7 +139,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, CFL = 0.9 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -245,8 +261,10 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             ),
         )
         T_WENO .= thermal.T[2:(end - 1), :]
+
         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
         WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
+
         thermal.T[2:(end - 1), :] .= T_WENO
         # ------------------------------
 
@@ -271,6 +289,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             Colorbar(fig[1, 2], h1)
             save(joinpath(figdir, "$(it).png"), fig)
             fig
+
+            save_particles(particles, pPhases; conversion = 1.0e3, fname = joinpath(vtk_dir, "particles_" * lpad("$it", 6, "0")))
         end
         # ------------------------------
 
@@ -283,6 +303,8 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir = "Weno2D"
+vtk_dir = "Weno2D" # folder where vtk files are stored
+do_vtk = true # save vtk files with particles
 ar = 1 # aspect ratio
 n = 64
 nx = n * ar
@@ -294,4 +316,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny);
+main2D(igg; figdir = figdir, vtk_dir = vtk_dir, ar = ar, nx = nx, ny = ny);

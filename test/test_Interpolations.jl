@@ -80,6 +80,11 @@ end
         velocity2center!(Vx, Vy, stokes.V.Vx, stokes.V.Vy)
         @test iszero(Vx[1, 1])
         @test Vy[1, 1] == 10
+
+        # shear2center!
+        stokes.ε.xy .= 2
+        shear2center!(stokes.ε)
+        @test stokes.ε.xy_c[1, 1] == 2
     else
         @test true == true
     end

@@ -168,7 +168,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     max_xcell = 150
     min_xcell = 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -211,7 +211,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.98 / √2.1) # Re=3π, r=0.7
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.98 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -251,7 +251,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # Rheology
     args0 = (; ϕ = ϕ_m, T = thermal.Tc, P = stokes.P, dt = Inf, perturbation_C = perturbation_C)
     viscosity_cutoff = (1.0e17, 1.0e23)
-    compute_viscosity!(stokes, phase_ratios, args0, rheology, air_phase, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff; air_phase = air_phase)
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
@@ -338,7 +338,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     thermal.Told .= thermal.T
 
     while it < 100 #000 # run only for 5 Myrs
-        if it > 1 && iters.iter > iterMax && iters.err_evo1[end] > pt_stokes.ϵ * 5
+        if it > 1 && iters.iter > iterMax && iters.err_evo1[end] > pt_stokes.ϵ_rel * 5
             iterMax += 10.0e3
             iterMax = min(iterMax, 200.0e3)
             println("Increasing maximum pseudo timesteps to $iterMax")

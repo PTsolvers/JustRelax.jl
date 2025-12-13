@@ -17,6 +17,10 @@ using TOML, Crayons
 function solve!() end
 #! format: off
 function __init__(io = stdout)
+    if !isa(stdout, Base.TTY)
+        return
+    end
+
     j = string(Crayon(foreground = (50,74,201)))
     u = string(Crayon(foreground = (50,74,201)))
     s = string(Crayon(foreground = (50,74,201)))
@@ -85,5 +89,10 @@ include("IO/DataIO.jl")
 
 include("types/type_conversions.jl")
 export Array, copy
+
+function plot_particles end
+function plot_field end
+
+export plot_particles, plot_field
 
 end # module

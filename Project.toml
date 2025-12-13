@@ -1,7 +1,7 @@
 name = "JustRelax"
 uuid = "34418575-392d-4e26-8c6d-96b0910afa06"
+version = "0.4.2"
 authors = ["Albert De Montserrat <albertdemontserratnavarro@erdw.ethz.ch>, Pascal Aellig <paellig@uni-mainz.de>"]
-version = "0.4.1"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -26,31 +26,31 @@ WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 [weakdeps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 
 [extensions]
 JustRelaxAMDGPUExt = "AMDGPU"
 JustRelaxCUDAExt = "CUDA"
+JustRelaxMakieExt = "Makie"
 
 [compat]
-AMDGPU = "0.8, 0.9, 1"
+AMDGPU = "1, 2"
 Adapt = "4"
 CUDA = "5"
-CellArrays = "0.2, 0.3"
+CellArrays = "0.3.2"
 Crayons = "4.1.1"
-GeoParams = "0.6.8, 0.7"
+GeoParams = "0.7.8"
 HDF5 = "0.17.1"
-ImplicitGlobalGrid = "0.15, 0.16"
-JLD2 = "0.4, 0.5"
-JustPIC = "0.5"
+ImplicitGlobalGrid = "0.16"
+JLD2 = "0.5, 0.6"
+JustPIC = "0.5.9"
 MPI = "0.20"
+Makie = "0.24"
 MuladdMacro = "0.2"
-ParallelStencil = "0.13.6, 0.14"
+ParallelStencil = "0.14.2"
 Reexport = "1.2.2"
 StaticArrays = "1"
 Statistics = "1"
 TOML = "1.0.3"
-WriteVTK = "1.18, 1.19"
-julia = "1.9, 1.10"
-
-[extras]
-CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
+WriteVTK = "1.21"
+julia = "1.9, 1.10, 1.11"

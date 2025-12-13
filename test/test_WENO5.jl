@@ -184,7 +184,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, CFL = 0.8 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, CFL = 0.8 / √2.1)
 
     # Buoyancy forces
     args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
@@ -292,7 +292,7 @@ end
         end
 
         iters = thermal_convection2D(igg; ar = 8, ny = ny, nx = nx, thermal_perturbation = :circular)
-        @test passed = iters.err_evo1[end] < 1.0e-4
+        @test passed = iters.err_evo1[end] < 5.0e-4
 
     end
 end

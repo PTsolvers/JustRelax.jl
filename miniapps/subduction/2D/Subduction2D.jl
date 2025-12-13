@@ -1,4 +1,7 @@
-const isCUDA = false
+# Load script dependencies
+using GeoParams, CairoMakie
+
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -29,9 +32,6 @@ const backend_JP = @static if isCUDA
 else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
-
-# Load script dependencies
-using GeoParams, CellArrays, GLMakie
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -81,7 +81,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -104,7 +104,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 1.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -149,6 +149,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     if do_vtk
         vtk_dir = joinpath(figdir, "vtk")
         take(vtk_dir)
+        checkpoint = joinpath(figdir, "checkpoint")
+        take(checkpoint)
     end
     take(figdir)
     # ----------------------------------------------------
@@ -221,6 +223,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         dt = compute_dt(stokes, di) * 0.8
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -274,7 +277,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 10) == 0
-            # checkpointing(figdir, stokes, thermal.T, η, t)
+            checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
+            checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -339,6 +343,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             linkaxes!(ax1, ax2, ax3, ax4)
             fig
             save(joinpath(figdir, "$(it).png"), fig)
+
         end
         # ------------------------------
 

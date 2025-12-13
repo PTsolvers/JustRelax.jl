@@ -6,32 +6,34 @@ using ParallelStencil
 const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
+import JustPIC._2D.GridGeometryUtils as GGU
 
-const backend = JustPIC.CPUBackend
+const backend_JP = JustPIC.CPUBackend
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, xvi, radius)
+function init_phases!(phase_ratios, xci, xvi, circle)
     ni = size(phase_ratios.center)
-    origin = 0.5, 0.5
 
-    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
         x, y = xc[i], yc[j]
-        if ((x - o_x)^2 + (y - o_y)^2) > radius^2
+        p = GGU.Point(x, y)
+        if GGU.inside(p, circle)
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
+
+        else
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
 
-        else
-            @index phases[1, i, j] = 0.0
-            @index phases[2, i, j] = 1.0
         end
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
-    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
+    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
     return nothing
 end
 
@@ -64,7 +66,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     visc = LinearViscous(; η = η0)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
-        C = C,
+        C = C / cosd(ϕ),
         ϕ = ϕ,
         η_vp = η_reg,
         Ψ = 0
@@ -94,14 +96,16 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     perturbation_C = @zeros(ni...)
 
     # Initialize phase ratios -------------------------------
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     radius = 0.1
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    init_phases!(phase_ratios, xci, xvi, radius)
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
+    init_phases!(phase_ratios, xci, xvi, circle)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.75 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.75 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -147,6 +151,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (
+                strain_increment = true,
                 verbose = false,
                 iterMax = 50.0e3,
                 nout = 1.0e2,
@@ -154,6 +159,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             )
         )
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -171,13 +177,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
         fig = Figure(size = (1600, 1600), title = "t = $t")
         ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
-        # ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
         ax3 = Axis(fig[1, 2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
         ax4 = Axis(fig[2, 2], aspect = 1)
         heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        # heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
+        heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)

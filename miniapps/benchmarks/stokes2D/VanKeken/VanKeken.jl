@@ -6,7 +6,7 @@ using JustRelax, JustRelax.JustRelax2D
 
 const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using GLMakie
+using CairoMakie
 
 using JustPIC, JustPIC._2D
 # Threads is the default backend,
@@ -79,7 +79,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     # Initialize particles -------------------------------
     nxcell, max_p, min_p = 20, 30, 10
     particles = init_particles(
-        backend, nxcell, max_p, min_p, xvi, di, ni
+        backend, nxcell, max_p, min_p, xvi...
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -93,7 +93,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ = 1.0e-8, CFL = 1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ_abs = 1.0e-8, CFL = 1 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -157,7 +157,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
 
         # Compute U rms ---------------
         Urms_it = let
-            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes = true)
+            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
             sum(Vx_v .^ 2) * prod(di) |> sqrt
         end
@@ -179,9 +179,28 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
 
         # Plotting ---------------------
         if it == 1 || rem(it, 25) == 0 || t >= tmax
-            fig = Figure(size = (1000, 1000), title = "t = $t")
-            ax1 = Axis(fig[1, 1], aspect = 1 / λ, title = "t=$t")
-            heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :oleron)
+            fig = Figure(size = (1000, 1000), font = "TeX Gyre Heros Makie")
+            ax1 = Axis(
+                fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
+                titlesize = 20,
+                yticklabelsize = 12,
+                xticklabelsize = 12,
+                xlabelsize = 12,
+                ylabelsize = 12
+            )
+            h = heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :lapaz)
+            Colorbar(fig[1:2, 2], h; height = Relative(1.0), label = "Density", labelsize = 20, ticklabelsize = 12)
+            ax2 = Axis(
+                fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel = L"V_{RMS}",
+                titlesize = 20,
+                yticklabelsize = 12,
+                xticklabelsize = 12,
+                xlabelsize = 12,
+                ylabelsize = 12
+            )
+            ylims!(ax2, 0, 0.005)
+            lines!(ax2, trms, Urms, color = :black)
+
             save(joinpath(figdir, "$(it).png"), fig)
             fig
         end
@@ -189,7 +208,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     end
 
     # df = DataFrame(t=trms, Urms=Urms)
-    # CSV.write(joinpath(figdir, "Urms.csv"), df)
+    # CSV.write(joinpath(figdir, "Urms_$(nx)x$(ny).csv"), df)
 
     return nothing
 end

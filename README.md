@@ -3,11 +3,13 @@
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
 [![Ask us anything](https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg)](https://github.com/PTsolvers/JustRelax.jl/discussions/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
-![CI](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml/badge.svg)
-[![Build status](https://badge.buildkite.com/6b970b1066dc828a56a75bccc65a8bc896a8bb76012a61fe96.svg?branch=main)](https://buildkite.com/julialang/justrelax-dot-jl)
+[![CPU Unit Tests](https://img.shields.io/github/actions/workflow/status/PTSolvers/JustRelax.jl/ci.yml?label=CPU%20Unit%20Tests)](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml)
+[![GPU Unit Tests](https://img.shields.io/buildkite/6b970b1066dc828a56a75bccc65a8bc896a8bb76012a61fe96/main?label=GPU%20Unit%20Tests)](https://buildkite.com/julialang/justrelax-dot-jl)
+[![CSCS CI](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/282716251344384/8101554320689785/badges/main/pipeline.svg?ignore_skipped=true)](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/282716251344384/8101554320689785/-/pipelines)
 [![codecov](https://codecov.io/gh/PTsolvers/JustRelax.jl/graph/badge.svg?token=4ZJO7ZGT8H)](https://codecov.io/gh/PTsolvers/JustRelax.jl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
+[![Downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Fmonthly_downloads%2FJustRelax&query=total_requests&suffix=%2Fmonth&label=Downloads)](http://juliapkgstats.com/pkg/JustRelax)
 
 <p align="center"><img src="./docs/src/assets/logo.png" alt="JustRelax.jl" width="200"></p>
 
@@ -57,19 +59,18 @@ After installation, you can test the package by running the following commands:
 
 ```julia
 using JustRelax
+
 julia> ]
-  pkg> test JustRelax
+
+(@v1.xx) pkg> test JustRelax
 ```
+
 The test will take a while, so grab a :coffee: or :tea:
 
 ## Miniapps
 
-Available miniapps can be found in the [miniapps folder](miniapps) and will be updated regularly. The miniapps are designed to be simple and easy to understand, while still providing a good basis for more complex applications. The miniapps are designed to be run on a single node, but can be easily extended to run on multiple nodes using [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) and [MPI.jl](https://github.com/JuliaParallel/MPI.jl).
-
-
-## Benchmarks
-
-Current (Blankenback2D, Stokes 2D-3D, thermal diffusion, thermal stress) and future benchmarks can be found in the [Benchmarks](miniapps/benchmarks).
+Available examples and [Benchmark](miniapps/benchmarks) miniapps can be found in the [miniapps folder](miniapps). The miniapps are simple and easy to understand, while still providing a good basis for more complex applications. The miniapps are designed to be run on a single node, but can be easily extended to run on multiple nodes using [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) and [MPI.jl](https://github.com/JuliaParallel/MPI.jl). To get started, instantiate the miniapps folder and run our favourite one!
 
 ## Funding
+
 The development of this package is supported by the [GPU4GEO](https://ptsolvers.github.io/GPU4GEO/) [PASC](https://www.pasc-ch.org) project.

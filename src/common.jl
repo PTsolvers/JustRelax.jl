@@ -25,6 +25,7 @@ export @allocate,
     @stress_center,
     @strain_center,
     @tensor_center,
+    @shear_center,
     @qT,
     @qT2,
     @residuals,
@@ -52,11 +53,14 @@ include("MiniKernels.jl")
 include("phases/phases.jl")
 export fn_ratio
 
+include("phases/PhaseRatios.jl")
+export update_phase_ratios_2D!, update_phase_ratios_3D!
+
 include("rheology/BuoyancyForces.jl")
 export compute_ρg!
 
 include("rheology/Viscosity.jl")
-export compute_viscosity!
+export compute_viscosity!, compute_viscosity_εII!, compute_viscosity_τII!
 
 include("rheology/Melting.jl")
 export compute_melt_fraction!
@@ -66,7 +70,7 @@ export subgrid_characteristic_time!
 
 include("Interpolations.jl")
 export vertex2center!,
-    center2vertex!, temperature2center!, velocity2vertex!, velocity2center!
+    center2vertex!, temperature2center!, velocity2vertex!, velocity2center!, shear2center!
 
 include("advection/weno5.jl")
 export WENO_advection!
@@ -81,7 +85,10 @@ include("rheology/GeoParams.jl")
 include("rheology/StressUpdate.jl")
 
 include("stokes/StressKernels.jl")
-export tensor_invariant!
+export tensor_invariant!, accumulate_tensor!
+
+include("stokes/PrincipalStresses.jl")
+export compute_principal_stresses, compute_principal_stresses!, PrincipalStress
 
 include("stokes/PressureKernels.jl")
 export rotate_stress_particles!

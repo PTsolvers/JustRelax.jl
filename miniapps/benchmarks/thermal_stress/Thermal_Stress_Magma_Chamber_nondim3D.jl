@@ -12,7 +12,7 @@ using JustPIC._3D
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using Printf, Statistics, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
 using StaticArrays
 using ImplicitGlobalGrid
 using MPI: MPI
@@ -267,7 +267,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni) # initialise stokes arrays with the defined regime
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, CFL = 0.9 / √3.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
     args = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)

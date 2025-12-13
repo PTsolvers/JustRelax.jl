@@ -25,7 +25,7 @@ import JustRelax:
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
-import JustPIC._3D: numphases, nphases
+import JustPIC._3D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
 
 __init__() = @init_parallel_stencil(CUDA, Float64, 3)
 
@@ -155,6 +155,23 @@ function JR3D.update_thermal_coeffs!(
     return nothing
 end
 
+function JR3D.PrincipalStress(backend::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
+    return PrincipalStress(ni)
+end
+
+function JR3D.compute_principal_stresses(backend::Type{CUDABackend}, stokes::JustRelax.StokesArrays)
+    ni = size(stokes.P)
+    σ = JR3D.PrincipalStress(backend, ni)
+    compute_principal_stresses!(stokes, σ)
+    return σ
+end
+
+function JR3D.compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress{<:CuArray})
+    ni = size(stokes.P)
+    @parallel (@idx ni) principal_stresses_eigen!(σ, @stress_center(stokes)...)
+    return nothing
+end
+
 # Boundary conditions
 function JR3D.flow_bcs!(
         ::CUDABackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
@@ -191,42 +208,52 @@ end
 # Rheology
 
 ## viscosity
-function JR3D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff)
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
+
+function JR3D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
 end
 
 function JR3D.compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff
-    )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff)
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity)
 end
 
 function JR3D.compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
-    )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
 end
 
 function JR3D.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
-function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff)
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff)
+function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
 end
 
 function compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff
-    )
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff)
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
 end
 
 function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
+
 ## Stress
 function JR3D.tensor_invariant!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
     return _tensor_invariant!(A)
+end
+
+function JR3D.accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
+end
+
+function accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
+    return _accumulate_tensor!(II, A, dt)
 end
 
 ## Buoyancy forces
@@ -262,6 +289,16 @@ end
 
 function temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
     return _temperature2center!(thermal)
+end
+
+function JR3D.shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
+end
+
+function shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
+    _shear2center!(A)
+    return nothing
 end
 
 function JR3D.vertex2center!(center::T, vertex::T) where {T <: CuArray}
@@ -451,6 +488,30 @@ function JR3D.rotate_stress!(
         τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, xci, xvi, dt
     )
     rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
+    return nothing
+end
+
+# Phase ratios with arrays
+
+function JR3D.update_phase_ratios_3D!(
+        phase_ratios::JustPIC.PhaseRatios{CUDABackend, T},
+        phase_arrays::NTuple{N, CuArray{U, 3}},
+        xci,
+        xvi
+    ) where {T <: AbstractMatrix, N, U}
+
+    phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
+    phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
+
+    # velocity nodes
+    phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
+    phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, xci, :y)
+    phase_ratios_face_from_arrays!(phase_ratios.Vz, phase_arrays, xci, :z)
+
+    # shear stress nodes
+    phase_ratios_midpoint_from_centers!(phase_ratios.xy, phase_arrays, xci, :xy)
+    phase_ratios_midpoint_from_centers!(phase_ratios.yz, phase_arrays, xci, :yz)
+    phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, xci, :xz)
     return nothing
 end
 

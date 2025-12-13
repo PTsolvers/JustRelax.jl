@@ -3,10 +3,10 @@ using StaticArrays
 # Vorticity tensor
 
 @parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _dx, _dy)
-    @inline dx(A) = _d_xa(A, _dx, I...)
-    @inline dy(A) = _d_ya(A, _dy, I...)
+    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
+    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
 
-    ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+    @inbounds ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
 
     return nothing
 end
@@ -14,18 +14,18 @@ end
 @parallel_indices (I...) function compute_vorticity!(
         ωyz, ωxz, ωxy, Vx, Vy, Vz, _dx, _dy, _dz
     )
-    dx(A) = _d_xa(A, _dx, I...)
-    dy(A) = _d_ya(A, _dy, I...)
-    dz(A) = _d_za(A, _dz, I...)
+    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
+    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
+    Base.@propagate_inbounds @inline dz(A) = _d_za(A, _dz, I...)
 
     if all(I .≤ size(ωyz))
-        ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
+        @inbounds ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
     end
     if all(I .≤ size(ωxz))
-        ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
+        @inbounds ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
     end
     if all(I .≤ size(ωxy))
-        ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+        @inbounds ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
     end
 
     return nothing
@@ -48,16 +48,16 @@ end
     for ip in cellaxes(index)
         @index(index[ip, I...]) || continue # no particle in this location
 
-        ω_xy = @index ω[ip, I...]
-        τ_xx = @index xx[ip, I...]
-        τ_yy = @index yy[ip, I...]
-        τ_xy = @index xy[ip, I...]
+        ω_xy = @inbounds @index ω[ip, I...]
+        τ_xx = @inbounds @index xx[ip, I...]
+        τ_yy = @inbounds @index yy[ip, I...]
+        τ_xy = @inbounds @index xy[ip, I...]
 
         τ_rotated = GeoParams.rotate_elastic_stress2D(ω_xy, (τ_xx, τ_yy, τ_xy), dt)
 
-        @index xx[ip, I...] = τ_rotated[1]
-        @index yy[ip, I...] = τ_rotated[2]
-        @index xy[ip, I...] = τ_rotated[3]
+        @inbounds @index xx[ip, I...] = τ_rotated[1]
+        @inbounds @index yy[ip, I...] = τ_rotated[2]
+        @inbounds @index xy[ip, I...] = τ_rotated[3]
     end
 
     return nothing
@@ -69,25 +69,23 @@ end
     for ip in cellaxes(index)
         @index(index[ip, I...]) || continue # no particle in this location
 
-        ω_yz = @index ωyz[ip, I...]
-        ω_xz = @index ωxz[ip, I...]
-        ω_xy = @index ωxy[ip, I...]
-        τ_xx = @index xx[ip, I...]
-        τ_yy = @index yy[ip, I...]
-        τ_yz = @index yz[ip, I...]
-        τ_xz = @index xz[ip, I...]
-        τ_xy = @index xy[ip, I...]
+        ω_yz = @inbounds @index ωyz[ip, I...]
+        ω_xz = @inbounds @index ωxz[ip, I...]
+        ω_xy = @inbounds @index ωxy[ip, I...]
+        τ_xx = @inbounds @index xx[ip, I...]
+        τ_yy = @inbounds @index yy[ip, I...]
+        τ_yz = @inbounds @index yz[ip, I...]
+        τ_xz = @inbounds @index xz[ip, I...]
+        τ_xy = @inbounds @index xy[ip, I...]
 
         τ_rotated = GeoParams.rotate_elastic_stress3D(
             (ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_xy, τ_yz, τ_xz, τ_xy), dt
         )
 
-        @index xx[ip, I...] = τ_rotated[1]
-        @index yy[ip, I...] = τ_rotated[2]
-        @index zz[ip, I...] = τ_rotated[3]
-        @index yz[ip, I...] = τ_rotated[4]
-        @index xz[ip, I...] = τ_rotated[5]
-        @index xy[ip, I...] = τ_rotated[6]
+        components = xx, yy, zz, yz, xz, xy
+        Base.@nexprs 6 i -> begin
+            @inline @inbounds @index components[i][ip, I...] = τ_rotated[i]
+        end
     end
 
     return nothing
@@ -97,15 +95,15 @@ end
     for ip in cellaxes(index)
         !@index(index[ip, I...]) && continue # no particle in this location
 
-        ω_xy = @index ω[ip, I...]
-        τ_xx = @index xx[ip, I...]
-        τ_yy = @index yy[ip, I...]
-        τ_xy = @index xy[ip, I...]
+        ω_xy = @inbounds @index ω[ip, I...]
+        τ_xx = @inbounds @index xx[ip, I...]
+        τ_yy = @inbounds @index yy[ip, I...]
+        τ_xy = @inbounds @index xy[ip, I...]
 
-        tmp = τ_xy * ω_xy * 2.0
-        @index xx[ip, I...] = fma(dt, cte, τ_xx)
-        @index yy[ip, I...] = fma(dt, cte, τ_yy)
-        @index xy[ip, I...] = fma(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
+        tmp = τ_xy * ω_xy * 2
+        @inbounds @index xx[ip, I...] = muladd(dt, cte, τ_xx)
+        @inbounds @index yy[ip, I...] = muladd(dt, cte, τ_yy)
+        @inbounds @index xy[ip, I...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
     end
 
     return nothing
@@ -117,12 +115,12 @@ end
     for ip in cellaxes(index)
         !@index(index[ip, I...]) && continue # no particle in this location
 
-        θ = dt * @index ω[ip, I...]
+        θ = @inbounds dt * @index ω[ip, I...]
         sinθ, cosθ = sincos(θ)
 
-        τ_xx = @index xx[ip, I...]
-        τ_yy = @index yy[ip, I...]
-        τ_xy = @index xy[ip, I...]
+        τ_xx = @inbounds @index xx[ip, I...]
+        τ_yy = @inbounds @index yy[ip, I...]
+        τ_xy = @inbounds @index xy[ip, I...]
 
         R = @SMatrix [
             cosθ -sinθ
@@ -137,9 +135,9 @@ end
         # this could be fully unrolled in 2D
         τr = R * (τ * R')
 
-        @index xx[ip, I...] = τr[1, 1]
-        @index yy[ip, I...] = τr[2, 2]
-        @index xy[ip, I...] = τr[1, 2]
+        @inbounds @index xx[ip, I...] = τr[1, 1]
+        @inbounds @index yy[ip, I...] = τr[2, 2]
+        @inbounds @index xy[ip, I...] = τr[1, 2]
     end
 
     return nothing

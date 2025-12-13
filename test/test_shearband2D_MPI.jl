@@ -6,6 +6,8 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
+const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"]) : false
+
 using Test, Suppressor
 using GeoParams, CellArrays
 using JustRelax, JustRelax.JustRelax2D
@@ -87,7 +89,7 @@ function main(igg; nx = 64, ny = 64)
     visc = LinearViscous(; η = η0)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
-        C = C,
+        C = C / cosd(ϕ),
         ϕ = ϕ,
         η_vp = η_reg,
         Ψ = 0,
@@ -119,7 +121,7 @@ function main(igg; nx = 64, ny = 64)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.75 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-6, CFL = 0.75 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -168,7 +170,7 @@ function main(igg; nx = 64, ny = 64)
     sol = Float64[]
     ttot = Float64[]
 
-    while t < tmax
+    while it < 5
 
         # Stokes solver ----------------
         solve!(
@@ -225,19 +227,32 @@ function main(igg; nx = 64, ny = 64)
 
 end
 
-@suppress begin
-    if backend_JR == CPUBackend
+let
+    if CSCS_CI != true
+        @suppress begin
+            if backend_JR == CPUBackend
+                N = 30
+                nx = N * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+                ny = N * 2
+                igg = if !(JustRelax.MPI.Initialized())
+                    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+                else
+                    igg
+                end
+                main(igg; nx = nx, ny = ny)
+            else
+                println("This test is only for CPU CI yet")
+            end
+        end
+    else
         N = 30
-        n = N
-        nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-        ny = n * 2
+        nx = N * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+        ny = N * 2
         igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+            IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device = false)...)
         else
             igg
         end
         main(igg; nx = nx, ny = ny)
-    else
-        println("This test is only for CPU CI yet")
     end
 end

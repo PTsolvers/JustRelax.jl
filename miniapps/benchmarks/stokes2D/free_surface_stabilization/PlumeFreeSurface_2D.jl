@@ -1,18 +1,39 @@
-using CUDA
-using JustRelax, JustRelax.JustRelax2D
-const backend_JR = CUDABackend
-# const backend_JR = CPUBackend
+const isCUDA = false
 
-using JustPIC, JustPIC._2D
-const backend = CUDABackend
-# const backend = JustPIC.CPUBackend
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+
+const backend_JR = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(CUDA, Float64, 2)
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC, JustPIC._2D
+import JustPIC._2D.GridGeometryUtils as GGU
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 
 # Load script dependencies
-using LinearAlgebra, GeoParams, GLMakie
+using LinearAlgebra, GeoParams, CairoMakie
 
 # Velocity helper grids for the particle advection
 function copyinn_x!(A, B)
@@ -38,8 +59,11 @@ end
 function init_phases!(phases, particles)
     ni = size(phases)
 
+    radius = 100.0e3
+    origin = 250.0e3, 250.0e3
+    circle = GGU.Circle(origin, radius)
+
     @parallel_indices (i, j) function init_phases!(phases, px, py, index)
-        r = 100.0e3
         f(x, A, λ) = A * sin(π * x / λ)
 
         @inbounds for ip in cellaxes(phases)
@@ -55,8 +79,8 @@ function init_phases!(phases, particles)
 
             else
                 @index phases[ip, i, j] = 2.0
-
-                if ((x - 250.0e3)^2 + (depth - 250.0e3)^2 ≤ r^2)
+                p = GGU.Point(x, depth)
+                if GGU.inside(p, circle)
                     @index phases[ip, i, j] = 3.0
                 end
             end
@@ -113,7 +137,7 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 15
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)
@@ -130,7 +154,7 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -201,7 +225,7 @@ function main(igg, nx, ny)
             fig = Figure(size = (900, 900), title = "t = $t")
             ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
             heatmap!(ax, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η)), colormap = :grayC)
-            arrows!(
+            arrows2d!(
                 ax,
                 xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
                 lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),

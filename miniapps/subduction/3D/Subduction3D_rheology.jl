@@ -1,38 +1,41 @@
-function init_rheologies()
+function init_rheologies(CharDim)
     # Define rheolgy struct
     return rheology = (
-
         # Name              = "slab",
         SetMaterialParams(;
             Phase = 1,
-            Density = ConstantDensity(; ρ = 3.28e3),
-            CompositeRheology = CompositeRheology((LinearViscous(η = 2.0e23),)),
-            # Elasticity        = el_upper_crust,
-            Gravity = ConstantGravity(; g = 9.81),
+            Density = ConstantDensity(; ρ = 3.28e3kg / m^3),
+            CompositeRheology = CompositeRheology((LinearViscous(η = 2.0e23 * Pa * s),)),
+            # Elasticity     = el_upper_crust,
+            Gravity = ConstantGravity(; g = 9.81m / s^2),
+            CharDim = CharDim,
         ),
         # Name              = "crust",
         SetMaterialParams(;
             Phase = 2,
-            Density = ConstantDensity(; ρ = 3.28e3),
-            CompositeRheology = CompositeRheology((LinearViscous(η = 1.0e21),)),
-            # Elasticity        = el_upper_crust,
-            Gravity = ConstantGravity(; g = 9.81),
+            Density = ConstantDensity(; ρ = 3.28e3kg / m^3),
+            CompositeRheology = CompositeRheology((LinearViscous(η = 1.0e21 * Pa * s),)),
+            # Elasticity     = el_upper_crust,
+            Gravity = ConstantGravity(; g = 9.81m / s^2),
+            CharDim = CharDim,
         ),
         # Name              = "mantle",
         SetMaterialParams(;
             Phase = 3,
-            Density = ConstantDensity(; ρ = 3.2e3),
-            CompositeRheology = CompositeRheology((LinearViscous(η = 1.0e21),)),
-            # Elasticity        = el_upper_crust,
-            Gravity = ConstantGravity(; g = 9.81),
+            Density = ConstantDensity(; ρ = 3.2e3kg / m^3),
+            CompositeRheology = CompositeRheology((LinearViscous(η = 1.0e21 * Pa * s),)),
+            # Elasticity     = el_upper_crust,
+            Gravity = ConstantGravity(; g = 9.81m / s^2),
+            CharDim = CharDim,
         ),
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase = 4,
-            Density = ConstantDensity(; ρ = 100), # water density
-            HeatCapacity = ConstantHeatCapacity(; Cp = 3.0e3),
-            Conductivity = ConstantConductivity(; k = 1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e19),)),
+            Density = ConstantDensity(; ρ = 100kg / m^3), # water density
+            HeatCapacity = ConstantHeatCapacity(; Cp = 3.0e3J / kg / K),
+            Conductivity = ConstantConductivity(; k = 1.0Watt / K / m),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e19 * Pa * s),)),
+            CharDim = CharDim,
         ),
     )
 end

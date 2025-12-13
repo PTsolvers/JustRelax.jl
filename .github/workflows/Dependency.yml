@@ -7,12 +7,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Check for GLMakie and JustPIC dependencies
+      - name: Check for GLMakie and GMG dependencies
         run: |
           if grep -q "GLMakie" ./Project.toml; then
             echo "GLMakie dependency found, failing the test."
             exit 1
           fi
-          echo "Neither GLMakie dependencies found."
+          if grep -q "GeophysicalModelGenerator" ./Project.toml; then
+            echo "GeophysicalModelGenerator dependency found, failing the test."
+            exit 1
+          fi
+          echo "Neither GLMakie or GMG dependencies found."

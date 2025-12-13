@@ -28,7 +28,7 @@ else
 end
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie
+using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Subduction3D_rheology.jl")
@@ -66,7 +66,9 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
-    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    particles = init_particles(
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+    )
     # velocity grids
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
@@ -82,7 +84,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-3, CFL = 0.95 / √3.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-3, CFL = 0.95 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------

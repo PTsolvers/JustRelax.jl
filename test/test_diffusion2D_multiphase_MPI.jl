@@ -6,6 +6,8 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
+const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"]) : false
+
 using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
@@ -93,7 +95,7 @@ end
     return nothing
 end
 
-function diffusion_2D(figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e3, K0 = 3.0)
+function diffusion_2D(figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e3, K0 = 3.0, select_device = true)
     kyr = 1.0e3 * 3600 * 24 * 365.25
     Myr = 1.0e3 * kyr
     ttot = 1 * Myr # total simulation time
@@ -114,7 +116,7 @@ function diffusion_2D(figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 
     li = lx, ly  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
     origin = 0.0, -ly
-    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true)...) #init MPI
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device = select_device)...) #init MPI
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -225,13 +227,16 @@ function diffusion_2D(figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 
 
     return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), thermal
 end
-
-@suppress begin
-    if backend_JR == CPUBackend
-        figdir = "MPI_Diffusion2D"
-        n = 32
-        diffusion_2D(figdir; nx = n, ny = n)
-    else
-        println("This test is only for CPU CI yet")
+if CSCS_CI != true
+    @suppress begin
+        if backend_JR == CPUBackend
+            figdir = "MPI_Diffusion2D"
+            n = 32
+            diffusion_2D(figdir; nx = n, ny = n)
+        else
+            println("This test is only for CPU CI yet")
+        end
     end
+else
+    diffusion_2D("MPI_Diffusion2D"; nx = 32, ny = 32, select_device = false)
 end

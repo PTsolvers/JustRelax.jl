@@ -98,7 +98,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend, nxcell, max_xcell, min_xcell, xvi...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -114,7 +114,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, CFL = 1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------

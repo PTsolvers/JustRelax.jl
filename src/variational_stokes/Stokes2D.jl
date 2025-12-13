@@ -23,9 +23,11 @@ function _solve_VS!(
         args,
         dt,
         igg::IGG;
+        strain_increment = false,
         air_phase::Integer = 0,
         viscosity_cutoff = (-Inf, Inf),
         viscosity_relaxation = 1.0e-2,
+        λ_relaxation = 0.2,
         iterMax = 50.0e3,
         iterMin = 1.0e2,
         nout = 500,
@@ -38,9 +40,14 @@ function _solve_VS!(
     # unpack
 
     _di = inv.(di)
-    (; ϵ, r, θ_dτ, ηdτ) = pt_stokes
+    _dt = inv.(dt)
+    (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokes
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
+
+    nRx = √((nx_g() - 2) * (ny_g() - 1))
+    nRy = √((nx_g() - 1) * (ny_g() - 2))
+    nRP = √(nx_g() * ny_g())
 
     # ~preconditioner
     ητ = deepcopy(η)
@@ -50,7 +57,8 @@ function _solve_VS!(
     # end
 
     # errors
-    err = 2 * ϵ
+    err_it1 = 1.0
+    err = 1.0
     iter = 0
     err_evo1 = Float64[]
     err_evo2 = Float64[]
@@ -66,7 +74,7 @@ function _solve_VS!(
     # solver loop
     @copy stokes.P0 stokes.P
     wtime0 = 0.0
-    relλ = 0.2
+    relλ = λ_relaxation
     θ = deepcopy(stokes.P)
     λ = @zeros(ni...)
     λv = @zeros(ni .+ 1...)
@@ -84,13 +92,17 @@ function _solve_VS!(
     displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
-        iterMin < iter && err < ϵ && break
+        iterMin < iter && ((err / err_it1) < ϵ_rel || err < ϵ_abs) && break
 
         wtime0 += @elapsed begin
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
+
+            if strain_increment
+                @parallel (@idx ni) compute_∇V!(stokes.∇U, @displacement(stokes), ϕ, _di)
+            end
 
             compute_P!(
                 θ,
@@ -109,11 +121,21 @@ function _solve_VS!(
 
             update_ρg!(ρg[2], phase_ratios, rheology, args)
 
-            @parallel (@idx ni .+ 1) compute_strain_rate!(
-                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., ϕ, _di...
-            )
+            if strain_increment
+                @parallel (@idx ni .+ 1) compute_strain_rate!(
+                    @strain_increment(stokes)..., stokes.∇U, @displacement(stokes)..., ϕ, _di...
+                )
 
-            update_viscosity!(
+                @parallel (@idx ni .+ 1) compute_strain_rate_from_increment!(
+                    @strain(stokes)..., @strain_increment(stokes)..., ϕ, _dt
+                )
+            else
+                @parallel (@idx ni .+ 1) compute_strain_rate!(
+                    @strain(stokes)..., stokes.∇V, @velocity(stokes)..., ϕ, _di...
+                )
+            end
+
+            update_viscosity_τII!(
                 stokes,
                 phase_ratios,
                 args,
@@ -123,29 +145,57 @@ function _solve_VS!(
                 relaxation = viscosity_relaxation,
             )
 
-            @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
-                @strain(stokes),
-                @tensor_center(stokes.ε_pl),
-                stokes.EII_pl,
-                @tensor_center(stokes.τ),
-                (stokes.τ.xy,),
-                @tensor_center(stokes.τ_o),
-                (stokes.τ_o.xy,),
-                θ,
-                stokes.P,
-                stokes.viscosity.η,
-                λ,
-                λv,
-                stokes.τ.II,
-                stokes.viscosity.η_vep,
-                relλ,
-                dt,
-                θ_dτ,
-                rheology,
-                phase_ratios.center,
-                phase_ratios.vertex,
-                ϕ,
-            )
+            if strain_increment
+                @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
+                    @strain(stokes),
+                    @strain_increment(stokes),
+                    @plastic_strain(stokes),
+                    stokes.EII_pl,
+                    @tensor_center(stokes.τ),
+                    (stokes.τ.xy,),
+                    @tensor_center(stokes.τ_o),
+                    (stokes.τ_o.xy,),
+                    θ,
+                    stokes.P,
+                    stokes.viscosity.η,
+                    λ,
+                    λv,
+                    stokes.τ.II,
+                    stokes.viscosity.η_vep,
+                    relλ,
+                    dt,
+                    θ_dτ,
+                    rheology,
+                    phase_ratios.center,
+                    phase_ratios.vertex,
+                    ϕ,
+                )
+            else
+                @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
+                    @strain(stokes),
+                    @plastic_strain(stokes),
+                    stokes.EII_pl,
+                    @tensor_center(stokes.τ),
+                    (stokes.τ.xy,),
+                    @tensor_center(stokes.τ_o),
+                    (stokes.τ_o.xy,),
+                    θ,
+                    stokes.P,
+                    stokes.viscosity.η,
+                    λ,
+                    λv,
+                    stokes.τ.II,
+                    stokes.viscosity.η_vep,
+                    relλ,
+                    dt,
+                    θ_dτ,
+                    rheology,
+                    phase_ratios.center,
+                    phase_ratios.vertex,
+                    ϕ,
+                )
+            end
+
             update_halo!(stokes.τ.xy)
 
             # @hide_communication b_width begin # communication/computation overlap
@@ -173,26 +223,29 @@ function _solve_VS!(
         iter += 1
 
         if iter % nout == 0 && iter > 1
+
+            Acell = prod(di)
             errs = (
-                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
-                    length(stokes.R.Rx),
-                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
-                    length(stokes.R.Ry),
-                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) /
-                    length(@views stokes.R.RP[ϕ.center .> 0]),
+                norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:(end - 1), :] .> 0]) / nRx,
+                norm_mpi(@views stokes.R.Ry[ϕ.Vy[:, 2:(end - 1)] .> 0]) / nRy,
+                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) / nRP,
             )
+
             push!(norm_Rx, errs[1])
             push!(norm_Ry, errs[2])
             push!(norm_∇V, errs[3])
             err = maximum_mpi(errs)
             push!(err_evo1, err)
             push!(err_evo2, iter)
+            err_it1 = maximum_mpi([norm_Rx[1], norm_Ry[1], norm_∇V[1]])
+            rel_err = err / err_it1
 
-            if igg.me == 0 && verbose #((verbose && err > ϵ) || iter == iterMax)
+            if igg.me == 0 #&& ((verbose && err > ϵ_rel) || iter == iterMax)
                 @printf(
-                    "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
+                    "Total steps = %d, abs_err = %1.3e , rel_err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
                     iter,
                     err,
+                    rel_err,
                     norm_Rx[end],
                     norm_Ry[end],
                     norm_∇V[end]
@@ -201,7 +254,7 @@ function _solve_VS!(
             isnan(err) && error("NaN(s)")
         end
 
-        if igg.me == 0 && err ≤ ϵ
+        if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
             println("Pseudo-transient iterations converged in $iter iterations")
         end
     end
@@ -211,8 +264,13 @@ function _solve_VS!(
         stokes.ω.xy, @velocity(stokes)..., inv.(di)...
     )
 
+    # Interpolate shear components to cell center arrays
+    shear2center!(stokes.ε)
+    shear2center!(stokes.ε_pl)
+    shear2center!(stokes.Δε)
+
     # accumulate plastic strain tensor
-    @parallel (@idx ni) accumulate_tensor!(stokes.EII_pl, @tensor_center(stokes.ε_pl), dt)
+    accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))

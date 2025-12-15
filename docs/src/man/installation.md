@@ -9,7 +9,7 @@ or
 ```julia-repl
 julia> ]
 
-(@v1.10) pkg> add JustRelax
+(@v1.xx) pkg> add JustRelax
 ```
 
 !!! info "Install from a specific branch"
@@ -21,7 +21,7 @@ julia> ]
 If you downloaded or cloned the repository manually, you need to instantiate the package to install all dependencies. Navigate to the directory where you have JustRelax.jl and run:
 ```julia
 julia> ]
-(@v1.10) pkg> instantiate
+(@v1.xx) pkg> instantiate
 ```
 
 
@@ -31,6 +31,26 @@ using JustRelax
 
 julia> ]
 
-(@v1.10) pkg> test JustRelax
+(@v1.xx) pkg> test JustRelax
 ```
 The test will take a while, so grab a ☕️ or 🍵
+
+# Running the miniapps
+
+Available benchmarks and examples can be found in the `miniapps/` folder. These scrpits are simple and easy to understand, providing a good basis for more complex applications. These miniapps have their own environment and dependencies, defined in `miniapps/Project.toml`, so they need to be instantiated separately. If you cloned the repository, navigate to `path/to/JustRelax.jl/` and run:
+```julia-repl
+julia> ]
+(@v1.xx) pkg> activate miniapps
+
+(@v1.xx) pkg> instantiate
+
+(@v1.xx) pkg> activate .
+```
+After that, you can run any of the miniapps, for example:
+```julia
+julia> using JustRelax
+
+julia> include("miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl")
+```
+
+If JustRelax.jl is installed via the package manager, the dependencies that exclusive to the miniapps should be added manually.

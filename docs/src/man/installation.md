@@ -37,7 +37,7 @@ The test will take a while, so grab a ☕️ or 🍵
 
 # Running the miniapps
 
-Available benchmarks and examples can be found in the `miniapps/` folder. These scrpits are simple and easy to understand, providing a good basis for more complex applications. These miniapps have their own environment and dependencies, defined in `miniapps/Project.toml`, so they need to be instantiated separately. If you cloned the repository, navigate to `path/to/JustRelax.jl/` and run:
+Available benchmarks and examples can be found in the `miniapps/` folder. These scripts are simple and easy to understand, providing a good basis for more complex applications. These miniapps have their own environment and dependencies, defined in `miniapps/Project.toml`, so they need to be instantiated separately. If you cloned the repository, navigate to `path/to/JustRelax.jl/` and run:
 ```julia-repl
 julia> ]
 (@v1.xx) pkg> activate miniapps

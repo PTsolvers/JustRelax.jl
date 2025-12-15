@@ -45,8 +45,11 @@ jobs:
         id: runic
         run: |
           set +e
+          EXCLUDES=(
+            ':(exclude)miniapps/**'
+          )
           MERGE_BASE=$(git merge-base upstream/${{ github.base_ref }} HEAD) || exit 1
-          DIFF=$(git runic --diff $MERGE_BASE)
+          DIFF=$(git runic --diff "$MERGE_BASE" -- . "${EXCLUDES[@]}")
           EXIT_CODE=$?
 
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT

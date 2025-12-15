@@ -4,7 +4,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 const backend_JR = CUDABackend
 # const backend_JR = CPUBackend
 
-using Printf, GeoParams, GLMakie, CellArrays
+using Printf, GeoParams, CairoMakie, CellArrays
 
 using JustPIC, JustPIC._3D
 const backend_JP = CUDABackend

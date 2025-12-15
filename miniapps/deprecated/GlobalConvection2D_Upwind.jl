@@ -4,7 +4,7 @@ const backend_JR = CPUBackend
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-using Printf, LinearAlgebra, GeoParams, GLMakie, SpecialFunctions
+using Printf, LinearAlgebra, GeoParams, CairoMakie, SpecialFunctions
 
 # function to compute strain rate (compulsory)
 @inline function custom_εII(a::CustomRheology, TauII; args...)

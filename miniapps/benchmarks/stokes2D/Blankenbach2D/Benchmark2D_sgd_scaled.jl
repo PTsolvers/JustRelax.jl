@@ -12,7 +12,7 @@ using JustPIC._2D
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie
+using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Blankenbach_Rheology_scaled.jl")

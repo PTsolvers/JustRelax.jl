@@ -11,7 +11,7 @@ using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(CUDA, Float64, 2)
 
 # Load script dependencies
-using LinearAlgebra, GeoParams, GLMakie
+using LinearAlgebra, GeoParams, CairoMakie
 
 # Velocity helper grids for the particle advection
 function copyinn_x!(A, B)

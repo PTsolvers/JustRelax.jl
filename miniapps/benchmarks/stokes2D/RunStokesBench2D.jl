@@ -1,14 +1,15 @@
 using JustRelax, JustRelax.JustRelax2D, Printf, LinearAlgebra
 using MPI: MPI
-using GLMakie
+using CairoMakie
 
 using ParallelStencil
+using ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
 
 const backend = CPUBackend
 
 # choose benchmark
-benchmark = :solcx
+benchmark = :solviel
 
 # model resolution (number of gridpoints)
 nx, ny = 64, 64

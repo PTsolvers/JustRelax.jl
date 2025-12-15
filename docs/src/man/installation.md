@@ -53,4 +53,4 @@ julia> using JustRelax
 julia> include("miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl")
 ```
 
-If JustRelax.jl is installed via the package manager, the dependencies that exclusive to the miniapps should be added manually.
+If JustRelax.jl is installed via the package manager, the dependencies that are exclusive to the miniapps should be added manually.

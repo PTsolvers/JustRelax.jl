@@ -1,0 +1,45 @@
+# Official format description at https://citation-file-format.github.io
+cff-version: 1.2.0
+message: "Cite this release if you are using JustRelax.jl"
+authors:
+- affiliation: ETH
+  family-names: "de Montserrat"
+  given-names: "Albert"
+  orcid: https://orcid.org/0000-0003-1694-3735
+- affiliation: Johannes Gutenberg University Mainz
+  family-names: "Aellig"
+  given-names: "Pascal S."
+  orcid: https://orcid.org/0009-0008-9039-5646
+- affiliation: Johannes Gutenberg University Mainz
+  family-names: "Schuler"
+  given-names: "Christian"
+  orcid: https://orcid.org/0009-0004-9873-9774
+- affiliation: "\xC9cole Normale Sup\xE9rieure - PSL"
+  family-names: "Navarrete Jara"
+  given-names: "Iv\xE1n"
+  orcid: https://orcid.org/0009-0004-9272-511X
+- affiliation: University of Lausanne
+  family-names: "R\xE4ss"
+  given-names: "Ludovic"
+  orcid: https://orcid.org/0000-0002-1136-899X
+- affiliation: Goethe University Frankfurt
+  family-names: "Fuchs"
+  given-names: "Lukas"
+  orcid: https://orcid.org/0000-0002-9165-6384
+- affiliation: Johannes Gutenberg University Mainz
+  family-names: "Kaus"
+  given-names: "Boris J. P. "
+  orcid: https://orcid.org/0000-0002-0247-8660
+- family-names: Patrick Sanan
+- family-names: Sidney Beeler
+- affiliation: Johannes Gutenberg University Mainz
+  family-names: "Dominguez"
+  given-names: "Hugo"
+  orcid: https://orcid.org/0009-0001-8425-0503
+date-released: '2025-06-14'
+doi: 10.5281/zenodo.10212422
+license: "MIT"
+repository-code: https://github.com/PTsolvers/JustRelax.jl/tree/main
+title: 'PTsolvers/JustRelax.jl: v0.4.1'
+type: software
+version: v0.4.2

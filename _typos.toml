@@ -10,3 +10,4 @@ extend-ignore-words-re = [
 ]
 nd = "nd"
 Heros = "Heros"
+Normale = "Normale"

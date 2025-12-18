@@ -427,8 +427,8 @@ function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
                 λ_relaxation = 1.0e0,
             )
         )
-        # tensor_invariant!(stokes.ε)
-        # tensor_invariant!(stokes.ε_pl)
+        tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         dt = compute_dt(stokes, di, dt_max, igg)
         # # --------------------------------
 

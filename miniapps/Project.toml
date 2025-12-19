@@ -2,6 +2,7 @@
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
 ExactFieldSolutions = "2a6b1ac7-2de5-4354-bffb-bf009f6a4bef"
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 GeoParams = "e018b62d-d9de-4a26-8697-af89c310ae38"
 GeophysicalModelGenerator = "3700c31b-fa53-48a6-808a-ef22d5a84742"
 JustPIC = "10dc771f-8528-4cd9-9d3b-b21b2e693339"

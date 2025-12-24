@@ -36,7 +36,7 @@ julia> ]
 The test will take a while, so grab a ☕️ or 🍵
 
 !!! info "Testing a development version of JustRelax"
-    If you plan on developing JustRelax.jl and/or modifying the source coude, you can test your local version by running the testing framework again
+    If you plan on developing JustRelax.jl and/or modifying the source code, you can test your local version by running the testing framework again
     ```julia
     julia> ]
     (@v1.xx) pkg> test JustRelax

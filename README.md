@@ -68,6 +68,12 @@ julia> ]
 
 The test will take a while, so grab a :coffee: or :tea:
 
+:warning: If you plan on developing JustRelax.jl and/or modifying the source coude, you can test your local version by running the testing framework again
+```julia
+julia> ]
+(@v1.xx) pkg> test JustRelax
+```
+
 ## Miniapps
 
 Available examples and [Benchmark](miniapps/benchmarks) miniapps can be found in the [miniapps folder](miniapps). The miniapps are simple and easy to understand, while still providing a good basis for more complex applications. The miniapps are designed to be run on a single node, but can be easily extended to run on multiple nodes using [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) and [MPI.jl](https://github.com/JuliaParallel/MPI.jl). To get started, instantiate the miniapps folder and run our favourite one!

@@ -34,7 +34,7 @@ end
 
 # Load script dependencies
 using GeoParams
-using GLMakie
+using CairoMakie
 
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]

@@ -1,5 +1,5 @@
 # Load script dependencies
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
 const isCUDA = false
 
@@ -219,7 +219,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt)
 
         update_cell_halo!(particles.coords..., particle_args...)
         update_cell_halo!(particles.index)

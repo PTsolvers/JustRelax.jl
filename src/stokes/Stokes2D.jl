@@ -203,7 +203,7 @@ function _solve!(
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
             @parallel compute_P!(
-                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, ητ, K, dt, r, θ_dτ
+                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, ητ, K, G, dt, r, θ_dτ
             )
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
@@ -243,11 +243,12 @@ function _solve!(
                 stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
             )
 
-            Acell = prod(di)
             errs = (
-                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) * √(Acell),
-                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) * √(Acell),
-                norm_mpi(stokes.R.RP) * √(Acell),
+                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                    √((nx_g() - 2) * (ny_g() - 1)),
+                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                    √((nx_g() - 1) * (ny_g() - 2)),
+                norm_mpi(stokes.R.RP) / √(nx_g() * ny_g()),
             )
 
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
@@ -327,6 +328,7 @@ function _solve!(
     # end
 
     Kb = get_Kb(rheology)
+    G = get_G(rheology)
 
     # errors
     err_it1 = 1.0
@@ -367,7 +369,7 @@ function _solve!(
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
             @parallel compute_P!(
-                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, η, Kb, dt, r, θ_dτ
+                stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, η, Kb, G, dt, r, θ_dτ
             )
 
             update_ρg!(ρg[2], rheology, args)
@@ -532,6 +534,8 @@ function _solve!(
     ni = size(stokes.P)
 
     # ~preconditioner
+    @copy stokes.P0 stokes.P
+
     ητ = deepcopy(η)
     # @hide_communication b_width begin # communication/computation overlap
     compute_maxloc!(ητ, η; window = (1, 1))
@@ -554,7 +558,6 @@ function _solve!(
     sizehint!(err_evo2, Int(iterMax))
 
     # solver loop
-    @copy stokes.P0 stokes.P
     wtime0 = 0.0
     relλ = λ_relaxation
     θ = deepcopy(stokes.P)
@@ -569,7 +572,6 @@ function _solve!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     displacement2velocity!(stokes, dt, flow_bcs)
 
     while iter ≤ iterMax
@@ -616,15 +618,6 @@ function _solve!(
                 )
             end
 
-            update_viscosity_τII!(
-                stokes,
-                phase_ratios,
-                args,
-                rheology,
-                viscosity_cutoff;
-                relaxation = viscosity_relaxation,
-            )
-            # end
 
             if strain_increment
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
@@ -677,8 +670,16 @@ function _solve!(
                     phase_ratios.vertex,
                 )
             end
-
             update_halo!(stokes.τ.xy)
+
+            update_viscosity_τII!(
+                stokes,
+                phase_ratios,
+                args,
+                rheology,
+                viscosity_cutoff;
+                relaxation = viscosity_relaxation,
+            )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -766,6 +767,10 @@ function _solve!(
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
+
+
+    tensor_invariant!(stokes.ε)
+    tensor_invariant!(stokes.ε_pl)
 
     return (
         iter = iter,

@@ -85,7 +85,7 @@ function Shearheating2D(igg; nx = 32, ny = 32)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 50, 12
+    nxcell, max_xcell, min_xcell = 50, 75, 25
     particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)

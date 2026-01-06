@@ -6,7 +6,7 @@ using JustRelax, JustRelax.JustRelax2D
 
 const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using GLMakie
+using CairoMakie
 
 using JustPIC, JustPIC._2D
 # Threads is the default backend,

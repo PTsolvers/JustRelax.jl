@@ -2,7 +2,7 @@ using CUDA
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
 const backend_JR = CUDABackend
-using Printf, GeoParams, GLMakie, CellArrays
+using Printf, GeoParams, CairoMakie, CellArrays
 
 using ParallelStencil
 @init_parallel_stencil(CUDA, Float64, 3)
@@ -96,7 +96,7 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
 
     # Initialize phase ratios -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi...)
     radius = 0.1
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     pPhases, = init_cell_arrays(particles, Val(1))

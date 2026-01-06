@@ -1,14 +1,14 @@
-using LinearAlgebra, CairoMakie
+using LinearAlgebra, GLMakie
 using JustRelax, JustRelax.JustRelax3D
 using MPI: MPI
 
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
-const backend_JR = CPUBackend
+const backend = CPUBackend
 
 # choose benchmark
-benchmark = :Burstedde
+benchmark = :solvi
 
 # model resolution (number of gridpoints)
 nx, ny, nz = 16, 16, 16
@@ -39,6 +39,8 @@ if benchmark == :taylorGreen
     # plot results
     f = plot(stokes, geometry; cmap = :vik)
 
+    display(f)
+
     # compute error
     L2_p, L2_vx, L2_vy, L2_vz = error(stokes, geometry)
 
@@ -61,6 +63,8 @@ elseif benchmark == :Burstedde
 
     # plot results
     f = plot(stokes, geometry; cmap = :vik)
+
+    display(f)
 
     # compute error
     L2_p, L2_vx, L2_vy, L2_vz = error(stokes, geometry)
@@ -95,6 +99,8 @@ elseif benchmark == :solvi
     )
     # plot results
     f = plot(stokes, geometry, rc; cmap = :vik)
+
+    display(f)
 
 else
     throw("Benchmark not available.")

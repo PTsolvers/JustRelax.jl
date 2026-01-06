@@ -593,6 +593,18 @@ Base.@propagate_inbounds @inline function av_clamped_xy(A, i0, j0, k0, ic, jc, k
     return 0.25 * (A[i0, j0, kc] + A[ic, j0, kc] + A[i0, jc, kc] + A[ic, jc, kc])
 end
 
+Base.@propagate_inbounds @inline function harm_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (1 / A[ic, j0, k0] + 1 / A[ic, jc, k0] + 1 / A[ic, j0, kc] + 1 / A[ic, jc, kc])
+end
+
+Base.@propagate_inbounds @inline function harm_clamped_xz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (1 / A[i0, jc, k0] + 1 / A[ic, jc, k0] + 1 / A[i0, jc, kc] + 1 / A[ic, jc, kc])
+end
+
+Base.@propagate_inbounds @inline function harm_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (1 / A[i0, j0, kc] + 1 / A[ic, j0, kc] + 1 / A[i0, jc, kc] + 1 / A[ic, jc, kc])
+end
+
 # on yz
 Base.@propagate_inbounds @inline function av_clamped_yz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
     return 0.25 * (A[ic, jc, k0] + A[i1, jc, k0] + A[ic, jc, kc] + A[i1, jc, kc])
@@ -655,7 +667,7 @@ end
     ## yz
     @inbounds if all(I .≤ size(ε[4]))
         # interpolate to ith vertex
-        ηv_ij = av_clamped_yz(η, Ic...)
+        ηv_ij = harm_clamped_yz(η, Ic...)
         Pv_ij = av_clamped_yz(Pr, Ic...)
         EIIv_ij = av_clamped_yz(EII, Ic...)
         εxxv_ij = av_clamped_yz(ε[1], Ic...)
@@ -664,6 +676,8 @@ end
         εyzv_ij = ε[4][I...]
         εxzv_ij = av_clamped_yz_y(ε[5], Ic...)
         εxyv_ij = av_clamped_yz_z(ε[6], Ic...)
+
+        ε_plyzv_ij = ε_pl[4][I...]
 
         τxxv_ij = av_clamped_yz(τ[1], Ic...)
         τyyv_ij = av_clamped_yz(τ[2], Ic...)
@@ -710,17 +724,20 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτyz = 0.5 * (τyzv_ij + dτyzv) / τIIv_ij
-            τyzv[I...] += dτyzv - 2.0 * ηv_ij * λv[1][I...] * dQdτyz * dτ_rv
+            ε_plyzv_ij = λv[1][I...] * dQdτyz
+            τyzv[I...] += @muladd dτyzv - 2.0 * ηv_ij * ε_plyzv_ij * dτ_rv
+            ε_pl[4][I...] = ε_plyzv_ij
         else
             # stress correction @ vertex
             τyzv[I...] += dτyzv
+            ε_pl[4][I...] = 0.0
         end
     end
 
     ## xz
     @inbounds if all(I .≤ size(ε[5]))
         # interpolate to ith vertex
-        ηv_ij = av_clamped_xz(η, Ic...)
+        ηv_ij = harm_clamped_xz(η, Ic...)
         EIIv_ij = av_clamped_xz(EII, Ic...)
         Pv_ij = av_clamped_xz(Pr, Ic...)
         εxxv_ij = av_clamped_xz(ε[1], Ic...)
@@ -741,6 +758,7 @@ end
         τyzv_old_ij = av_clamped_xz_x(τyzv_old, Ic...)
         τxzv_old_ij = τxzv_old[I...]
         τxyv_old_ij = av_clamped_xz_z(τxyv_old, Ic...)
+        ε_plxzv_ij = ε_pl[5][I...]
 
         # vertex parameters
         phase = @inbounds phase_xz[I...]
@@ -773,17 +791,20 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτxz = 0.5 * (τxzv_ij + dτxzv) / τIIv_ij
-            τxzv[I...] += dτxzv - 2.0 * ηv_ij * λv[2][I...] * dQdτxz * dτ_rv
+            ε_plxzv_ij = λv[2][I...] * dQdτxz
+            τxzv[I...] += @muladd dτxzv - 2.0 * ηv_ij * ε_plxzv_ij * dτ_rv
+            ε_pl[5][I...] = ε_plxzv_ij
         else
             # stress correction @ vertex
             τxzv[I...] += dτxzv
+            ε_pl[5][I...] = 0.0
         end
     end
 
     ## xy
     if all(I .≤ size(ε[6]))
         # interpolate to ith vertex
-        ηv_ij = av_clamped_xy(η, Ic...)
+        ηv_ij = harm_clamped_xy(η, Ic...)
         EIIv_ij = av_clamped_xy(EII, Ic...)
         Pv_ij = av_clamped_xy(Pr, Ic...)
         εxxv_ij = av_clamped_xy(ε[1], Ic...)
@@ -792,6 +813,7 @@ end
         εyzv_ij = av_clamped_xy_x(ε[4], Ic...)
         εxzv_ij = av_clamped_xy_y(ε[5], Ic...)
         εxyv_ij = ε[6][I...]
+        ε_plxyv_ij = ε_pl[6][I...]
 
         τxxv_ij = av_clamped_xy(τ[1], Ic...)
         τyyv_ij = av_clamped_xy(τ[2], Ic...)
@@ -837,10 +859,13 @@ end
                 relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
 
             dQdτxy = 0.5 * (τxyv_ij + dτxyv) / τIIv_ij
-            τxyv[I...] += dτxyv - 2.0 * ηv_ij * λv[3][I...] * dQdτxy * dτ_rv
+            ε_plxyv_ij = λv[3][I...] * dQdτxy
+            τxyv[I...] += @muladd  dτxyv - 2.0 * ηv_ij * ε_plxyv_ij * dτ_rv
+            ε_pl[6][I...] = ε_plxyv_ij
         else
             # stress correction @ vertex
             τxyv[I...] += dτxyv
+            ε_pl[6][I...] = 0.0
         end
     end
 
@@ -876,13 +901,19 @@ end
             εij_pl = λ[I...] .* dQdτij
             dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
             τij = dτij .+ τij
-            setindex!.(τ, τij, I...)
-            setindex!.(ε_pl, εij_pl, I...)
+            Base.@nexprs 6 i -> begin
+                @inbounds τ[i][I...] = dτij[i] + τij[i]
+            end
+            Base.@nexprs 3 i -> begin
+                @inbounds ε_pl[i][I...] = εij_pl[i]
+            end
             τII[I...] = τII_ij = second_invariant(τij)
         else
             # stress correction @ center
             Base.@nexprs 6 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+            end
+            Base.@nexprs 3 i -> begin
                 @inbounds ε_pl[i][I...] = 0.0
             end
             τII[I...] = τII_ij
@@ -917,9 +948,9 @@ end
         phase_center,
         phase_vertex,
     )
-
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
+    εij_plv = ε_pl[3]
     ni = size(Pr)
     Ic = clamped_indices(ni, I...)
 
@@ -939,7 +970,7 @@ end
     _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     Kv = fn_ratio(get_bulk_modulus, rheology, phase)
     volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-    ηv_ij = @inbounds av_clamped(η, Ic...)
+    ηv_ij = @inbounds harm_clamped(η, Ic...)
     dτ_rv = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
     # stress increments @ vertex
@@ -961,11 +992,13 @@ end
             @muladd (1.0 - relλ) * λv[I...] +
             relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
         dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-        εij_pl = λv[I...] * dQdτxy
-        τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_pl * dτ_rv
+        εij_plv = λv[I...] * dQdτxy
+        τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_plv * dτ_rv
+        ε_pl[3][I...] = εij_plv
     else
         # stress correction @ vertex
         τxyv[I...] += dτxyv
+        ε_pl[3][I...] = 0.0
     end
 
     ## center
@@ -1003,6 +1036,8 @@ end
 
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = τij[i]
+            end
+            Base.@nexprs 2 i -> begin
                 @inbounds ε_pl[i][I...] = εij_pl[i]
             end
             τII_ij = second_invariant(τij)
@@ -1011,6 +1046,8 @@ end
 
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+            end
+            Base.@nexprs 2 i -> begin
                 @inbounds ε_pl[i][I...] = 0.0
             end
             τII_ij
@@ -1052,6 +1089,7 @@ end
     )
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
+    εij_plv = ε_pl[3]
     ni = size(Pr)
     Ic = clamped_indices(ni, I...)
 
@@ -1074,7 +1112,7 @@ end
     _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     Kv = fn_ratio(get_bulk_modulus, rheology, phase)
     volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
-    ηv_ij = av_clamped(η, Ic...)
+    ηv_ij = harm_clamped(η, Ic...)
     dτ_rv = inv(θ_dτ * dt + ηv_ij * _Gv + dt)
     dτ_rv2 = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
     # stress increments @ vertex
@@ -1096,10 +1134,13 @@ end
             @muladd (1.0 - relλ) * λv[I...] +
             relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv * dt + η_regv + volumev))
         dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-        τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * λv[I...] * dQdτxy * dτ_rv
+        εij_plv = λv[I...] * dQdτxy
+        τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * εij_plv * dτ_rv
+        ε_pl[3][I...] = εij_plv
     else
         # stress correction @ vertex
         τxyv[I...] += dτxyv
+        ε_pl[3][I...] = 0.0
     end
 
     ## center
@@ -1140,12 +1181,16 @@ end
 
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = τij[i]
+            end
+            Base.@nexprs 2 i -> begin
                 @inbounds ε_pl[i][I...] = εij_pl[i]
             end
             τII_ij = second_invariant(τij)
         else
             Base.@nexprs 3 i -> begin
                 @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+            end
+            Base.@nexprs 2 i -> begin
                 @inbounds ε_pl[i][I...] = 0.0
             end
             τII_ij
@@ -1159,7 +1204,6 @@ end
     return nothing
 end
 
-
 Base.@propagate_inbounds @inline function clamped_indices(ni::NTuple{2, Integer}, i, j)
     nx, ny = ni
     i0 = clamp(i - 1, 1, nx)
@@ -1171,4 +1215,8 @@ end
 
 Base.@propagate_inbounds @inline function av_clamped(A, i0, j0, ic, jc)
     return 0.25 * (A[i0, j0] + A[ic, jc] + A[i0, jc] + A[ic, j0])
+end
+
+Base.@propagate_inbounds @inline function harm_clamped(A, i0, j0, ic, jc)
+    return 4 / (1 / A[i0, j0] + 1 / A[ic, jc] + 1 / A[i0, jc] + 1 / A[ic, j0])
 end

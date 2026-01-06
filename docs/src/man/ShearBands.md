@@ -214,7 +214,7 @@ push!(ttot, t)
 ## Visualization
 We will use [Makie.jl](https://github.com/MakieOrg/Makie.jl) to visualize the results
 ```julia
-using GLMakie
+using CairoMakie
 ```
 
 ## Fields

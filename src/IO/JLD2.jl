@@ -87,8 +87,11 @@ function checkpointing_jld2(dst, stokes, thermal, time, timestep, fname::String;
                 isa(value, AbstractArray) ? Array(value) :
                 isa(value, Tuple) ? Array.(value) : value
         end
-
-        jldsave(tmpfname; args...)
+        try
+            jldsave(tmpfname; args...)
+        catch
+            jldsave(tmpfname, IOStream; args...)
+        end
         # Move the checkpoint file from the temporary directory to the destination directory
         return mv(tmpfname, fname; force = true)
     end

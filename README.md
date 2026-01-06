@@ -10,6 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
 [![Downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Fmonthly_downloads%2FJustRelax&query=total_requests&suffix=%2Fmonth&label=Downloads)](http://juliapkgstats.com/pkg/JustRelax)
+[![SQAaaS badge shields.io](https://img.shields.io/badge/sqaaas%20software-silver-lightgrey)](https://api.eu.badgr.io/public/assertions/gXEVz2XaS4iE-zi4lMY5pA "SQAaaS silver badge achieved")
 
 <p align="center"><img src="./docs/src/assets/logo.png" alt="JustRelax.jl" width="200"></p>
 
@@ -66,6 +67,12 @@ julia> ]
 ```
 
 The test will take a while, so grab a :coffee: or :tea:
+
+:warning: If you plan on developing JustRelax.jl and/or modifying the source coude, you can test your local version by running the testing framework again
+```julia
+julia> ]
+(@v1.xx) pkg> test JustRelax
+```
 
 ## Miniapps
 

@@ -79,4 +79,4 @@ julia> ]
 Available examples and [Benchmark](miniapps/benchmarks) miniapps can be found in the [miniapps folder](miniapps). The miniapps are simple and easy to understand, while still providing a good basis for more complex applications. The miniapps are designed to be run on a single node, but can be easily extended to run on multiple nodes using [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) and [MPI.jl](https://github.com/JuliaParallel/MPI.jl). To get started, instantiate the miniapps folder and run our favourite one!
 
 ## Funding
-The development of this package is supported by the [GPU4GEO & $\partial$GPU4GEO](https://gpu4geo.org/) [PASC](https://www.pasc-ch.org) project, and the European Research Council through the MAGMA project, ERC Consolidator Grant #771143.
+The development of this package is supported by the [GPU4GEO & δGPU4GEO](https://gpu4geo.org/) [PASC](https://www.pasc-ch.org) project, and the European Research Council through the MAGMA project, ERC Consolidator Grant #771143.

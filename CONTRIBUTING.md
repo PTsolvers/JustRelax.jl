@@ -1,7 +1,7 @@
 # Contributing
 
 [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) is an open-source project and we are very happy to accept contributions
-from the community. Please feel free to open [Issues](https://github.com/PTsolvers/JustRelax.jl/issues/new) (issue templeates in [here](https://github.com/PTsolvers/JustRelax.jl/tree/adm/JOSS/.github/ISSUE_TEMPLATE)) or submit [Pull Requests](https://github.com/PTsolvers/JustRelax.jl/pulls) (PR templeates in [here](https://github.com/PTsolvers/JustRelax.jl/blob/adm/JOSS/.github/PULL_REQUEST_TEMPLATE/pull_request_template.md)) to the `main` branch with your contribution. For planned large contributions, it is often
+from the community. Please feel free to open [Issues](https://github.com/PTsolvers/JustRelax.jl/issues/new) (issue templeates in [here](https://github.com/PTsolvers/JustRelax.jl/tree/adm/JOSS/.github/ISSUE_TEMPLATE)) or submit [Pull Requests](https://github.com/PTsolvers/JustRelax.jl/pulls) (PR templeate in [here](https://github.com/PTsolvers/JustRelax.jl/blob/adm/JOSS/.github/PULL_REQUEST_TEMPLATE.md)) to the `main` branch with your contribution. For planned large contributions, it is often
 beneficial to get in contact with one of the principal developers first (see
 [AUTHORS.md](AUTHORS.md)).
 

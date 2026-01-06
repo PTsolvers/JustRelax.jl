@@ -35,6 +35,13 @@ julia> ]
 ```
 The test will take a while, so grab a ☕️ or 🍵
 
+!!! info "Testing a development version of JustRelax"
+    If you plan on developing JustRelax.jl and/or modifying the source code, you can test your local version by running the testing framework again
+    ```julia
+    julia> ]
+    (@v1.xx) pkg> test JustRelax
+    ```
+
 # Running the miniapps
 
 Available benchmarks and examples can be found in the `miniapps/` folder. These scripts are simple and easy to understand, providing a good basis for more complex applications. These miniapps have their own environment and dependencies, defined in `miniapps/Project.toml`, so they need to be instantiated separately. If you cloned the repository, navigate to `path/to/JustRelax.jl/` and run:

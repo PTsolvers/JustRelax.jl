@@ -618,7 +618,7 @@ function _solve!(
                 )
             end
 
-            
+
             if strain_increment
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
                     @strain(stokes),
@@ -671,7 +671,7 @@ function _solve!(
                 )
             end
             update_halo!(stokes.τ.xy)
-            
+
             update_viscosity_τII!(
                 stokes,
                 phase_ratios,
@@ -680,7 +680,7 @@ function _solve!(
                 viscosity_cutoff;
                 relaxation = viscosity_relaxation,
             )
-            
+
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
                     @velocity(stokes)...,
@@ -768,7 +768,7 @@ function _solve!(
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
-    
+
     tensor_invariant!(stokes.ε)
     tensor_invariant!(stokes.ε_pl)
 

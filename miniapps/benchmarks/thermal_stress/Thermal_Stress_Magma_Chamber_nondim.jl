@@ -149,15 +149,6 @@ function init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressi
         β_rock = inv(get_Kb(el))
         β_magma = inv(get_Kb(el_magma))
     end
-    # if steady_state == true
-    #     creep_rock = LinearViscous(; η = 1.0e23 * Pa * s)
-    #     creep_magma = LinearViscous(; η = 1.0e18 * Pa * s)
-    #     creep_air = LinearViscous(; η = 1.0e18 * Pa * s)
-    # else
-    #     creep_rock  = DislocationCreep(; A = 1.67e-24Pa^(-(35//10)) / s, n = 3.5, E = 1.87e5J / mol, V = 6.0e-6m^3 / mol, r = 0.0, R = 8.3145J / mol / K)
-    #     creep_magma = DislocationCreep(; A = 1.67e-24Pa^(-(35//10)) / s, n = 3.5, E = 1.87e5J / mol, V = 6.0e-6m^3 / mol, r = 0.0, R = 8.3145J / mol / K)
-    #     creep_air   = LinearViscous(; η = 1.0e18 * Pa * s)
-    # end
     g = 9.81m / s^2
     return rheology = (
         #Name="UpperCrust"
@@ -235,9 +226,7 @@ function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
     rheology = init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressible = true)
     rheology_inc = init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressible = false)
     cutoff_visc = nondimensionalize((1.0e16Pa * s, 1.0e24Pa * s), CharDim)
-    κ = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
-    dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01)         # diffusive CFL timestep limiter
-    dt_max = nondimensionalize(1.0e3 * yr, CharDim)         # diffusive CFL timestep limiter
+    dt = dt_max = nondimensionalize(1.0e3 * yr, CharDim)         # diffusive CFL timestep limiter
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 15
@@ -263,8 +252,6 @@ function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
-
-
     Ttop = nondimensionalize((20 + 273)K, CharDim)
     Tbot = nondimensionalize((450 + 273)K, CharDim)
     ∇Tz = (Ttop - Tbot) / (L - sticky_air)
@@ -314,7 +301,6 @@ function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
     for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
         # @parallel init_P!(stokes.P, ρg[2], xci[2])
-        @parallel init_P!(stokes.P, ρg[2], xci[2], sticky_air)
         stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
     end
 
@@ -323,7 +309,6 @@ function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
-    # stokes.viscosity.η .= cutoff_visc[1]
 
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -375,8 +360,6 @@ function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
-    # Tsurf = thermal.T[1, end]
-    # Tbot = thermal.T[1, 1]
 
     # Stokes solver -----------------
     args = (; T = thermal.Tc, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
@@ -480,7 +463,7 @@ function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= Tsurf
+        @views T_buffer[:, end] .= Ttop
         @views T_buffer[:, 1] .= Tbot
         @views thermal.T[2:(end - 1), :] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
@@ -668,8 +651,6 @@ function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
                     ax4,
                     ustrip.(dimensionalize(xci[1], km, CharDim)),
                     ustrip.(dimensionalize(xci[2], km, CharDim)),
-                    # ustrip.(dimensionalize((Array((stokes.P))), MPa, CharDim));
-                    # ustrip.(dimensionalize((Array((thermal.T .- thermal.Told)[2:(end - 1), :])), C, CharDim));
                     (@dimstrip(thermal.T, C, CharDim) .- @dimstrip(thermal.Told, C, CharDim))[2:(end - 1), :],
                     colormap = :roma,
                 )

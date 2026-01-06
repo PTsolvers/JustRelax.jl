@@ -199,7 +199,7 @@ function init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressi
 
 end
 
-function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
+function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = false)
 
     # Characteristic lengths
     CharDim = GEO_units(; length = 14km, viscosity = 1.0e21Pa * s, temperature = 450C)
@@ -295,6 +295,11 @@ function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
     )
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
+
+    ϕ = @zeros(ni...)
+    compute_melt_fraction!(
+        ϕ, phase_ratios, rheology, (T = thermal.Tc, P = stokes.P)
+    )
 
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
@@ -451,6 +456,9 @@ function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
             pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, xvi, di, dt
         )
         # ------------------------------
+        compute_melt_fraction!(
+            ϕ, phase_ratios, rheology, (T = thermal.Tc, P = stokes.P)
+        )
 
         # Advection --------------------
         # advect particles in space

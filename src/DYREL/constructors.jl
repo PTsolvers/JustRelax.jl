@@ -92,13 +92,14 @@ end
     # bulk viscosity
     ratios      = @inbounds @cell phase_ratios_center[I...]
     Kb          = fn_ratio(get_bulk_modulus, rheology, ratios)
-    Kb          = isinf(Kb) ? η_mean : Kb * dt
+    Kb          = isinf(Kb) ? γfact * η_mean : Kb * dt
     ηb[I...]    = Kb 
 
     # penalty parameter factor
     γ_num       = γfact * η_mean
     γ_phy       = Kb
-    γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num)
+    # γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num)
+    γ_eff[I...] = γ_num
 
     return nothing
 end

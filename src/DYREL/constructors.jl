@@ -82,7 +82,8 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
 end
 
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
-    @parallel compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
+    @parallel compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, maximum(stokes.viscosity.η), γfact, dt)
+    # @parallel compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
     return nothing
 end
 
@@ -91,12 +92,12 @@ end
     # bulk viscosity
     ratios      = @inbounds @cell phase_ratios_center[I...]
     Kb          = fn_ratio(get_bulk_modulus, rheology, ratios)
-    Kb          = isinf(Kb) ? η_mean : Kb
-    ηb[I...]    = Kb * dt
+    Kb          = isinf(Kb) ? η_mean : Kb * dt
+    ηb[I...]    = Kb 
 
     # penalty parameter factor
     γ_num       = γfact * η_mean
-    γ_phy       = Kb * dt
+    γ_phy       = Kb
     γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num)
 
     return nothing

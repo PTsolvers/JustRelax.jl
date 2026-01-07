@@ -161,12 +161,12 @@ end
         args_ij = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        Aij = AII_0 + A[1], -AII_0 + A[2], gather(Axyv)
+        Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
         AII = second_invariant(Aij...)
 
         # compute and update stress viscosity
-        ηi = fn_viscosity(rheology, AII, args_ij)
-        ηi = continuation_log(ηi, η[I...], ν)
+        ηi = fn_viscosity(rheology, AII, args_ij)                
+        ηi = continuation_linear(ηi, η[I...], ν)
         η[I...] = clamp(ηi, cutoff...)
     end
 
@@ -197,7 +197,8 @@ end
 
         # compute and update stress viscosity
         ηi = fn_viscosity(rheology, AII_ij, args_ij)
-        ηi = continuation_log(ηi, η[I...], ν)
+                
+        ηi = continuation_linear(ηi, η[I...], ν)
         η[I...] = clamp(ηi, cutoff...)
     end
 
@@ -334,8 +335,8 @@ function _compute_viscosity!(
 end
 
 
-@inline select_tensor(stokes, ::typeof(compute_viscosity_εII)) = @strain(stokes)
-@inline select_tensor(stokes, ::typeof(compute_viscosity_τII)) = @stress(stokes)
+@inline select_tensor(stokes, ::typeof(compute_viscosity_εII)) = @strain_center(stokes)
+@inline select_tensor(stokes, ::typeof(compute_viscosity_τII)) = @stress_center(stokes)
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
         η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity
@@ -346,7 +347,7 @@ end
 
     @inbounds begin
         # cache
-        A = Axx[I...], Ayy[I...]
+        A = Axx[I...], Ayy[I...], Axyv[I...]
 
         # we need strain rate not to be zero, otherwise we get NaNs
         AII_0 = allzero(A...) * eps()
@@ -360,12 +361,13 @@ end
         ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
 
         # compute second invariant of strain rate tensor
-        Aij = AII_0 + A[1], -AII_0 + A[2], gather(Axyv)
+        Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
         AII = second_invariant(Aij...)
 
         # compute and update stress viscosity
         ηi = compute_phase_viscosity(rheology, ratio_ij, AII, fn_viscosity, args_ij)
-        ηi = continuation_log(ηi, η[I...], ν)
+                
+        ηi = continuation_linear(ηi, η[I...], ν)
         η[I...] = clamp(ηi, cutoff...)
     end
 
@@ -400,7 +402,7 @@ end
 
         # update stress and effective viscosity
         ηi = fn_viscosity(rheology, AII, args_ijk)
-        ηi = continuation_log(ηi, η[I...], ν)
+        ηi = continuation_linear(ηi, η[I...], ν)
         η[I...] = clamp(ηi, cutoff...)
     end
 
@@ -451,7 +453,8 @@ end
 
         # update stress and effective viscosity
         ηi = compute_phase_viscosity(rheology, ratio_ijk, AII, fn_viscosity, args_ijk)
-        ηi = continuation_log(ηi, η[I...], ν)
+        
+        ηi = continuation_linear(ηi, η[I...], ν)
         η[I...] = clamp(ηi, cutoff...)
     end
 

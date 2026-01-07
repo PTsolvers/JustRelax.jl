@@ -616,15 +616,14 @@ function _solve!(
                 )
             end
 
-            update_viscosity_τII!(
-                stokes,
-                phase_ratios,
-                args,
-                rheology,
-                viscosity_cutoff;
-                relaxation = viscosity_relaxation,
-            )
-            # end
+            # update_viscosity_εII!(
+            #     stokes,
+            #     phase_ratios,
+            #     args,
+            #     rheology,
+            #     viscosity_cutoff;
+            #     relaxation = viscosity_relaxation,
+            # )
 
             if strain_increment
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
@@ -677,8 +676,16 @@ function _solve!(
                     phase_ratios.vertex,
                 )
             end
-
             update_halo!(stokes.τ.xy)
+
+            update_viscosity_τII!(
+                stokes,
+                phase_ratios,
+                args,
+                rheology,
+                viscosity_cutoff;
+                relaxation = viscosity_relaxation,
+            )
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(

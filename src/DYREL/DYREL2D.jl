@@ -127,6 +127,15 @@ function _solve_DYREL!(
         # compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1, dt) # λ_relaxation = 1 to reset λ
         # update_halo!(stokes.τ.xy)
 
+        update_viscosity_τII!(
+            stokes,
+            phase_ratios,
+            args,
+            rheology,
+            viscosity_cutoff;
+            relaxation = viscosity_relaxation,
+        )
+
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
             stokes.R.Rx,
@@ -163,6 +172,8 @@ function _solve_DYREL!(
         end
         err = maximum(
             (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
+            # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
+            # (errVx,  errVy)
         )
         @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e, Rp=%1.3e] \n", itPH, iter, iter/ni[1], err, min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
         # @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e, Rp=%1.3e] \n", itPH, iter, iter/ni[1], err, errVx, errVy, errPt)
@@ -200,7 +211,10 @@ function _solve_DYREL!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
             )
 
-            # update viscosity based on the deviatoric stress tensor
+            # Deviatoric stress
+            compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
+            # update_halo!(stokes.τ.xy)
+            
             update_viscosity_τII!(
                 stokes,
                 phase_ratios,
@@ -209,12 +223,7 @@ function _solve_DYREL!(
                 viscosity_cutoff;
                 relaxation = viscosity_relaxation,
             )
-            # compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
-
-            # Deviatoric stress
-            compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
-            # update_halo!(stokes.τ.xy)
-
+            
             # Residuals
             @. P_num = γ_eff * stokes.R.RP
             @parallel (@idx ni) compute_DR_residual_V!(
@@ -240,16 +249,20 @@ function _solve_DYREL!(
             
             # Residual check
             if iszero(iter % nout)
-                
+               
                 errVx = norm(Dx .* stokes.R.Rx)
                 errVy = norm(Dy .* stokes.R.Ry)
+                # isnan(errVx) && error("NaN detected in velocity residuals")
                 
                 if iter == nout 
                     errVx00 = errVx
                     errVy00 = errVy
                 end
                 
-                err = maximum( (errVx / errVx00, errVy / errVy00) )
+                err = maximum( 
+                    # (errVx, errVy) 
+                    (errVx / errVx00, errVy / errVy00) 
+                )
                 push!(err_evo_V, errVx/errVx00)
                 push!(err_evo_P, errPt/errPt0)
                 push!(err_evo_it, iter)
@@ -277,15 +290,16 @@ function _solve_DYREL!(
         
         # Because pressure changed....
         # update viscosity based on the deviatoric stress tensor
-        update_viscosity_τII!(
-            stokes,
-            phase_ratios,
-            args,
-            rheology,
-            viscosity_cutoff;
-            relaxation = viscosity_relaxation,
-        )
-        center2vertex_harm!(stokes.viscosity.ηv, stokes.viscosity.η)
+        # update_viscosity_τII!(
+        #     stokes,
+        #     phase_ratios,
+        #     args,
+        #     rheology,
+        #     viscosity_cutoff;
+        #     relaxation = 1,
+        #     # relaxation = viscosity_relaxation,
+        # )
+        # # center2vertex_harm!(stokes.viscosity.ηv, stokes.viscosity.η)
        
         # if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
         #     println("Pseudo-transient iterations converged in $iter iterations")
@@ -500,7 +514,6 @@ function _solve_DYREL!(
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., ϕ, _di...
             )
-
             # update viscosity
             update_viscosity_τII!(
                 stokes,
@@ -515,7 +528,7 @@ function _solve_DYREL!(
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation, dt)
             update_halo!(stokes.τ.xy)
-
+            
             # Residuals
             P_num = γ_eff .* stokes.R.RP
             @parallel (@idx ni) compute_DR_residual_V!(

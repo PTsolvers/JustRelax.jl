@@ -10,4 +10,4 @@ JustRelax = {path = ".."}
 
 [compat]
 Documenter = "1"
-DocumenterVitepress = "0.1"
+DocumenterVitepress = "0.2"

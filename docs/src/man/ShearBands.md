@@ -8,9 +8,7 @@ Load [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) necessary modules
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = CPUBackend
-```
 
-```julia
 using JustPIC, JustPIC._2D
 import JustPIC._2D.GridGeometryUtils as GGU
 const backend_JP = JustPIC.CPUBackend
@@ -137,6 +135,7 @@ stokes = StokesArrays(backend_JR, ni)
 ### Pseuo-transient coefficients
 ```julia
 pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2)
+```
 
 ### Initialize viscosity fields
 
@@ -159,9 +158,6 @@ stokes.V.Vx .= PTArray(backend_JR)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
 stokes.V.Vy .= PTArray(backend_JR)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
 flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 update_halo!(@velocity(stokes)...) # if running on MPI
-```
-
-.1)
 ```
 
 ### Just before solving the problem...
@@ -248,5 +244,6 @@ save(joinpath(figdir, "$(it).png"), fig)
 ```
 
 ### Final model
-Shear Bands evolution in a 2D visco-elasto-plastic rheology model
+Shear Bands evolution in a 2D visco-elasto-plastic rheology model with a resolution of $2058\times2058$ cells.
+
 ![Shearbands](../assets/movies/DP_nx2058_2D.gif)

@@ -1,6 +1,6 @@
 <h1> <img src="./docs/src/assets/logo.png" alt="JustRelax.jl" width="50"> JustRelax.jl </h1>
 
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
 [![Ask us anything](https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg)](https://github.com/PTsolvers/JustRelax.jl/discussions/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
 [![CPU Unit Tests](https://img.shields.io/github/actions/workflow/status/PTSolvers/JustRelax.jl/ci.yml?label=CPU%20Unit%20Tests)](https://github.com/PTSolvers/JustRelax.jl/actions/workflows/ci.yml)

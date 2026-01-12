@@ -1,4 +1,4 @@
-using LinearAlgebra, GLMakie
+using LinearAlgebra, CairoMakie
 using JustRelax, JustRelax.JustRelax3D
 using MPI: MPI
 

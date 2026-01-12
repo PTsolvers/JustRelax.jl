@@ -14,6 +14,12 @@ import JustPIC._2D.GridGeometryUtils as GGU
 const backend_JP = JustPIC.CPUBackend
 ```
 
+```julia
+using JustPIC, JustPIC._2D
+import JustPIC._2D.GridGeometryUtils as GGU
+const backend_JP = JustPIC.CPUBackend
+```
+
 We will also use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil

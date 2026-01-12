@@ -8,6 +8,10 @@ Load [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) necessary modules
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = CPUBackend
+
+using JustPIC, JustPIC._2D
+import JustPIC._2D.GridGeometryUtils as GGU
+const backend_JP = JustPIC.CPUBackend
 ```
 
 ```julia
@@ -52,7 +56,7 @@ grid         = Geometry(ni, li; origin = origin)
 C       = τ_y           # Cohesion
 η0      = 1.0           # viscosity
 G0      = 1.0           # elastic shear modulus
-Gi      = G0 / (6 - 4)  # elastic shear modulus perturbation
+Gi      = G0 / 2        # elastic shear modulus perturbation
 εbg     = 1.0           # background strain-rate
 η_reg   = 8e-3          # regularisation "viscosity"
 dt      = η0 / G0 / 4.0 # assumes Maxwell time of 4
@@ -137,14 +141,16 @@ stokes = StokesArrays(backend_JR, ni)
 ### Pseuo-transient coefficients
 ```julia
 pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2)
+```
 
 ### Initialize viscosity fields
 
 We initialize the buoyancy forces and viscosity
 ```julia
-ρg   = @zeros(ni...), @zeros(ni...)
-args = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
-compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+ρg               = @zeros(ni...), @zeros(ni...)
+args             = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
+viscosity_cutoff = (-Inf, Inf)
+compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 ```
 where `(-Inf, Inf)` is the viscosity cutoff.
 
@@ -157,10 +163,7 @@ flow_bcs     = VelocityBoundaryConditions(;
 stokes.V.Vx .= PTArray(backend_JR)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
 stokes.V.Vy .= PTArray(backend_JR)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
 flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-update_halo!(@velocity(stokes)...)
-```
-
-.1)
+update_halo!(@velocity(stokes)...) # if running on MPI
 ```
 
 ### Just before solving the problem...
@@ -170,47 +173,49 @@ solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 ```
 and store their time history in the vectors:
 ```julia
-τII        = Float64[]
-sol        = Float64[]
-ttot       = Float64[]
+τII        = [0e0]
+sol        = [0e0]
+ttot       = [0e0]
 ```
 
-### Advancing one time step
+### Solving Stokes
 
 1. Solve stokes
 ```julia
 t  = 0.0
-it = 1
-solve!(
-    stokes,
-    pt_stokes,
-    di,
-    flow_bcs,
-    ρg,
-    phase_ratios,
-    rheology,
-    args,
-    dt,
-    igg;
-    kwargs = (
-        verbose = false,
-        iterMax = 50.0e3,
-        nout = 1.0e3,
-        viscosity_cutoff = (-Inf, Inf),
+nt = 15 # number of time steps
+for it in 1:nt
+    # solve Stokes equations
+    solve!(
+        stokes,
+        pt_stokes,
+        di,
+        flow_bcs,
+        ρg,
+        phase_ratios,
+        rheology,
+        args,
+        dt,
+        igg;
+        kwargs = (
+            verbose          = false,
+            iterMax          = 50.0e3,
+            nout             = 1.0e3,
+            λ_relaxation     = 0.2, # relaxation parameter for plastic multiplier λ
+            viscosity_cutoff = (-Inf, Inf),
+        )
     )
-)
+    # advance time step
+    it += 1
+    t  += dt
+    # calculate the second invariant and push to history vectors
+    tensor_invariant!(stokes.ε)
+    push!(τII, maximum(stokes.τ.xx))
+    push!(sol, solution(εbg, t, G0, η0))
+    push!(ttot, t)
+end
 ```
-2. calculate the second invariant and push to history vectors
-```julia
-tensor_invariant!(stokes.ε)
-push!(τII, maximum(stokes.τ.xx))
 
-it += 1
-t  += dt
-
-push!(sol, solution(εbg, t, G0, η0))
-push!(ttot, t)
-```
 ## Visualization
 We will use [Makie.jl](https://github.com/MakieOrg/Makie.jl) to visualize the results
 ```julia
@@ -227,7 +232,7 @@ yunit  = @. radius * sin(th) + 0.5;
 
 fig   = Figure(size = (1600, 1600), title = "t = $t")
 ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{II}", titlesize=35)
-ax2   = Axis(fig[2,1], aspect = 1, title = L"E_{II}", titlesize=35)
+ax2   = Axis(fig[2,1], aspect = 1, title = L"E_{II}^{\text{plastic}}", titlesize=35)
 ax3   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize=35)
 ax4   = Axis(fig[2,2], aspect = 1)
 heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
@@ -240,10 +245,11 @@ lines!(ax4, ttot, τII, color = :black)
 lines!(ax4, ttot, sol, color = :red)
 hidexdecorations!(ax1)
 hidexdecorations!(ax3)
-save(joinpath(figdir, "$(it).png"), fig)
 fig
+save(joinpath(figdir, "$(it).png"), fig)
 ```
 
 ### Final model
-Shear Bands evolution in a 2D visco-elasto-plastic rheology model
+Shear Bands evolution in a 2D visco-elasto-plastic rheology model with a resolution of $2058\times2058$ cells.
+
 ![Shearbands](../assets/movies/DP_nx2058_2D.gif)

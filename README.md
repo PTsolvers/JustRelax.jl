@@ -14,10 +14,6 @@
 
 <p align="center"><img src="./docs/src/assets/logo.png" alt="JustRelax.jl" width="200"></p>
 
-:warning: This Package is still under active development
-- The API is still subject to change.
-- The benchmarks and miniapps are working and provide the user with an insight into the capabilities of the package.
-
 Need to solve a very large multi-physics problem on many GPUs in parallel? Just Relax!
 
 `JustRelax.jl` is a collection of accelerated iterative pseudo-transient solvers using MPI and multiple CPU or GPU backends. It's part of the [PTSolvers organisation](https://ptsolvers.github.io) and

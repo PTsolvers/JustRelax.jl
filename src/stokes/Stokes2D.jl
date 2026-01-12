@@ -768,10 +768,6 @@ function _solve!(
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
 
-
-    tensor_invariant!(stokes.ε)
-    tensor_invariant!(stokes.ε_pl)
-
     return (
         iter = iter,
         err_evo1 = err_evo1,

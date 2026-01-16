@@ -92,6 +92,6 @@ An extensive set of benchmarks and model examples are available in the GitHub re
 ![Model examples from the documentation: a) Heatmap of the second invariant of the plastic strain tensor of a visco-elasto-viscoplastic body ($10240 \times 10240$ cells), b) 2D subduction ($512 \times 512$ cells), and c) rise of a hot plume in 3D ($128 \times 128 \times 128$ cells). All models were run on one NVIDIA GH200 Grace Hopper GPU. \label{fig:examples}](figs/models_JOSS.png)
 
 # Acknowledgments
-We acknowledge funding from the Swiss Platform for Advanced Scientific Computing (PASC) as part of the [GPU4GEO & $\partial$GPU4GEO](https://gpu4geo.org/) project, and the European Research Council through the MAGMA project, ERC Consolidator Grant #771143.
+We acknowledge funding from the Swiss Platform for Advanced Scientific Computing (PASC) as part of the GPU4GEO & $\partial$GPU4GEO [projects](https://gpu4geo.org/), and the European Research Council through the MAGMA project, ERC Consolidator Grant #771143.
 
 # References

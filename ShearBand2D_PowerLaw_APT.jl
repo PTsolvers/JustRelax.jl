@@ -53,30 +53,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     dt = Inf
 
     # Physical properties using GeoParams ----------------
-    τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ = 30            # friction angle
-    C = τ_y           # Cohesion
-    η0 = 1.0           # viscosity
-    G0 = 1.0           # elastic shear modulus
-    Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
-    εbg = 1.0           # background strain-rate
-    η_reg = 8.0e-3          # regularisation "viscosity"
-    dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
-    el_bg = ConstantElasticity(; G = G0, Kb = 5)
-    el_inc = ConstantElasticity(; G = Gi, Kb = 5)
     visc_bg  = PowerlawViscous(; η0 = 1e2,  n=3, ε0 = 1e0 )
-    visc_inc = PowerlawViscous(; η0 = 1e-1, n=1, ε0 = 1e0 )
-
-    # visc_bg  = LinearViscous(; η = 1e2)
-    # visc_inc = LinearViscous(; η = 1e-1)
-
-    pl = DruckerPrager_regularised(;
-        # non-regularized plasticity
-        C = C / cosd(ϕ),
-        ϕ = ϕ,
-        η_vp = η_reg,
-        Ψ = 0
-    )
+    visc_inc = PowerlawViscous(; η0 = 1e-1, n=3, ε0 = 1e0 )
 
     rheology = (
         # Low density phase
@@ -85,7 +63,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             Density = ConstantDensity(; ρ = 0.0),
             Gravity = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology((visc_bg,)),
-            # Elasticity = el_bg,
         ),
         # High density phase
         SetMaterialParams(;
@@ -93,12 +70,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             Density = ConstantDensity(; ρ = 0.0),
             Gravity = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology((visc_inc,)),
-            # Elasticity = el_inc,
         ),
     )
-
-    # perturbation array for the cohesion
-    perturbation_C = @zeros(ni...)
 
     # Initialize phase ratios -------------------------------
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
@@ -114,7 +87,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
 
     # Rheology
     stokes.ε.xx .= 1
@@ -160,7 +133,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 iterMax = 150.0e3,
                 nout = 1e3,
                 λ_relaxation = 1,
-                viscosity_relaxation = 1e-2,
+                viscosity_relaxation = 1e-1,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
@@ -177,6 +150,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
         println("it = $it; t = $t \n")
         
+         
         # visualisation
         th = 0:(pi / 50):(3 * pi)
         xunit = @. radius * cos(th) + 0.5
@@ -186,12 +160,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"\eta^{\text{eff}}", titlesize = 35)
         ax3 = Axis(fig[1, 3], aspect = 1, title = L"\varepsilon_{II}", titlesize = 35)
         ax4 = Axis(fig[2, 3], aspect = 1)
-        h11 = heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
+        h11 = GLMakie.heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        h21 = heatmap!(ax2, xci..., Array(stokes.viscosity.η_vep), colormap = :batlow)
-        h22 = heatmap!(ax4, xci..., Array(stokes.viscosity.η), colormap = :batlow)
+        h21 = GLMakie.heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
+        h22 = GLMakie.heatmap!(ax4, xci..., Array(log10.(stokes.viscosity.η)), colormap = :batlow)
         # h21 = heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
-        h12 = heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
+        h12 = GLMakie.heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         # lines!(ax4, ttot, τII, color = :black)
         # lines!(ax4, ttot, sol, color = :red)
@@ -202,13 +176,14 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         display(fig)
+
         save(joinpath(figdir, "$(it).png"), fig)
     end
 
     return nothing
 end
 
-n  = 128
+n  = 63
 nx = n
 ny = n
 figdir = "ShearBands2D_PowerLaw_APT"

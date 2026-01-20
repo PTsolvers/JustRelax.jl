@@ -1,4 +1,16 @@
 # Initialisation
+using GeoParams
+using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
+
+const backend = CPUBackend
+
+using JustPIC, JustPIC._2D
+import JustPIC._2D.GridGeometryUtils as GGU
+
+const backend_JP = JustPIC.CPUBackend
+
 using Plots, Printf, Statistics, LinearAlgebra
 # Macros
 @views    av(A) = 0.25*(A[1:end-1,1:end-1].+A[2:end,1:end-1].+A[1:end-1,2:end].+A[2:end,2:end])
@@ -55,8 +67,78 @@ function Gershgorin_Stokes2D_SchurComplement(ηc, ηv, γ, Δx, Δy, ncx  ,ncy)
     return Dx, Dy, λmaxVx, λmaxVy
 end
 
+# Initialize phases on the particles
+function init_phases!(phase_ratios, xci, xvi, circle)
+    ni = size(phase_ratios.center)
+
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
+        x, y = xc[i], yc[j]
+        p = GGU.Point(x, y)
+        if GGU.inside(p, circle)
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
+
+        else
+            @index phases[1, i, j] = 1.0
+            @index phases[2, i, j] = 0.0
+
+        end
+        return nothing
+    end
+
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
+    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
+    return nothing
+end
+
 # 2D Stokes routine
 @views function Stokes2D_VEP(n, npwl, ηrel)
+
+    nx, ny = n * 32, n * 32   # numerical grid resolution
+
+    # Physical domain --------------------------------
+    ly = 1.0e0          # domain length in y
+    lx = ly             # domain length in x
+    ni = nx, ny         # number of cells
+    li = lx, ly         # domain length in x- and y-
+    di = @. li / ni     # grid step in x- and -y
+    origin = 0.0, 0.0   # origin coordinates
+    grid = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    εbg = 1
+
+    # Initialize phase ratios -------------------------------
+    phase_ratios = PhaseRatios(backend_JP, 2, ni)
+    radius = 0.1
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
+    init_phases!(phase_ratios, xci, xvi, circle)
+
+    # Physical properties using GeoParams ----------------
+    visc_bg  = PowerlawViscous(; η0 = 1e2,  n=3, ε0 = 1e0)
+    visc_inc = PowerlawViscous(; η0 = 1e-1, n=3, ε0 = 1e0)
+
+    rheology = (
+        # Low density phase
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 0.0),
+            Gravity = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((visc_bg,)),
+        ),
+        # High density phase
+        SetMaterialParams(;
+            Phase = 2,
+            Density = ConstantDensity(; ρ = 0.0),
+            Gravity = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((visc_inc,)),
+        ),
+    )
+
+    stokes = StokesArrays(backend, ni)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, Inf; ϵ=1e-6)
+
+
     sc = (σ=1e0, t=1e0, L=1e0)
     # Physics
     Lx, Ly   = 1e0/sc.L, 1e0/sc.L # domain size
@@ -76,7 +158,7 @@ end
     # Numerics
     # N        = 128
     # ncx, ncy = n, 63   # numerical grid resolution
-    ncx, ncy = n*32, n*32   # numerical grid resolution
+    ncx, ncy = ni           # numerical grid resolution
     nt       = 1            # time steps
     ϵ        = 1e-7         # tolerance
     iterMax  = 20000        # max number of iters
@@ -177,76 +259,83 @@ end
     Gv[1,:] .=  Gv[2,:]; Gv[end,:] .=  Gv[end-1,:]
     Gv[:,1] .=  Gv[:,2]; Gv[:,end] .=  Gv[:,end-1]
     # Visco-elastic viscosity
-    ηc .= ηc0
-    ηv .= ηv0
-    ηve_c .= (1 ./ ηc .+ 1 ./ (Gc*Δt)).^-1
-    ηve_v .= (1 ./ ηv .+ 1 ./ (Gv*Δt)).^-1
+    stokes.viscosity.η  .= ηc0
+    stokes.viscosity.ηv .= ηv0
+    ηve_c               .= stokes.viscosity.η
+    ηve_v               .= stokes.viscosity.ηv
     # Bulk viscosity
     # ηb    .= K .* Δt
-    ηb    .= γfact * maximum(ηc).*ones(size(ηc))
+    dyrel.ηb    .= γfact * maximum(stokes.viscosity.η).*ones(size(stokes.viscosity.η))
     # Select γ
-    γi   = γfact * maximum(ηc).*ones(size(ηc))
+    γi   = γfact * maximum(stokes.viscosity.η).*ones(size(stokes.viscosity.η))
     # (Pseudo-)compressibility
-    γ_eff = zeros(size(ηb)) 
+    # γ_eff = zeros(size(ηb)) 
     if comp
         γ_num = γi.*ones(size(ηb))
         γ_phy = ηb
         # γ_eff = ((γ_phy.*γ_num)./(γ_phy.+γ_num))
-        γ_eff = γ_num
+        dyrel.γ_eff .= γ_num
     else
-        γ_eff .= γi
-        γ_eff .= γ_eff
+        dyrel.γ_eff .= γi
+        dyrel.γ_eff .= dyrel.γ_eff
     end
     # Optimal pseudo-time steps - can be replaced by AD
-    Dx, Dy, λmaxVx, λmaxVy = Gershgorin_Stokes2D_SchurComplement(ηve_c, ηve_v, γ_eff, Δx, Δy, ncx ,ncy)
+    Dx, Dy, λmaxVx, λmaxVy = Gershgorin_Stokes2D_SchurComplement(ηve_c, ηve_v, dyrel.γ_eff, Δx, Δy, ncx ,ncy)
+    dyrel.Dx     .= Dx
+    dyrel.Dy     .= Dy
+    dyrel.λmaxVx .= λmaxVx
+    dyrel.λmaxVy .= λmaxVy
     # Select dτ
     # if dτ_local
-    dτVx =  2.0./sqrt.(λmaxVx)*CFL_v
-    dτVy =  2.0./sqrt.(λmaxVy)*CFL_v
+    @. dyrel.dτVx =  2 /sqrt(dyrel.λmaxVx)*CFL_v
+    @. dyrel.dτVy =  2 /sqrt(dyrel.λmaxVy)*CFL_v
     # else
     #     dτVx =  2.0./sqrt.(maximum(λmaxVx))*CFL_v 
     #     dτVy =  2.0./sqrt.(maximum(λmaxVy))*CFL_v
     # end
-    βVx .= 2 .* dτVx ./ (2 .+ cVx.*dτVx)
-    βVy .= 2 .* dτVy ./ (2 .+ cVy.*dτVy)
-    αVx .= (2 .- cVx.*dτVx) ./ (2 .+ cVx.*dτVx)
-    αVy .= (2 .- cVy.*dτVy) ./ (2 .+ cVy.*dτVy)
+    @. βVx =  2 * dyrel.dτVx / (2 + dyrel.cVx * dyrel.dτVx)
+    @. βVy =  2 * dyrel.dτVy / (2 + dyrel.cVy * dyrel.dτVy)
+    @. αVx = (2 - dyrel.cVx * dyrel.dτVx) / (2 + dyrel.cVx * dyrel.dτVx)
+    @. αVy = (2 - dyrel.cVy * dyrel.dτVy) / (2 + dyrel.cVy * dyrel.dτVy)
     # Initial condition
-    Vx     .=   εbg.*xv .+    0*yce'
-    Vy     .=     0*xce .- εbg.*yv'
+    stokes.V.Vx     .=   εbg .* xv  .+   0 .* yce'
+    stokes.V.Vy     .=     0 .* xce .- εbg .* yv'
     # Vx[2:end-1,:] .= 0 # ensure non zero initial pressure residual
     # Vy[:,2:end-1] .= 0 # ensure non zero initial pressure residual
     # Vx[2:end-1,:] .+= 1e-5*rand(size(   Vx[2:end-1,:])...) # ensure non zero initial pressure residual
     # Vy[:,2:end-1] .+= 1e-5*rand(size(   Vy[:,2:end-1])...) # ensure non zero initial pressure residual
 
     # Time
+    nt = 1
     Tii_evo = zeros(nt) 
     it_evo  = zeros(nt)
     itg = 0; kiter = 0
     err_evo_it, err_evo_V, err_evo_P = zeros(iterMax), zeros(iterMax), zeros(iterMax)
     for it=1:nt
-        Txx0 .= Txx; Tyy0 .= Tyy; Txy0 .= Txy; Txy0c .= Txyc;  Txxv0 .= Txxv; Tyyv0 .= Tyyv; Pt0 .= Pt
+        # Txx0 .= Txx; Tyy0 .= Tyy; Txy0 .= Txy; Txy0c .= Txyc;  Txxv0 .= Txxv; Tyyv0 .= Tyyv; Pt0 .= Pt
         # Iteration loop
         errVx0 = 1.0;  errVy0 = 1.0;  errPt0 = 1.0 
         errVx00= 1.0;  errVy00= 1.0; 
         iter=0;  kiter = 0; err=2*ϵ; err_evo_it .= 0.; err_evo_V .= 0.; err_evo_P .= 0.;
         @time for itPH = 1:1000
             # Boundaries
-            Vx[:,1] .= Vx[:,2]; Vx[:,end] .= Vx[:,end-1]
-            Vy[1,:] .= Vy[2,:]; Vy[end,:] .= Vy[end-1,:]
+            stokes.V.Vx[:,1]   .= stokes.V.Vx[:,2]
+            stokes.V.Vx[:,end] .= stokes.V.Vx[:,end-1]
+            stokes.V.Vy[1,:]   .= stokes.V.Vy[2,:]
+            stokes.V.Vy[end,:] .= stokes.V.Vy[end-1,:]
             # Divergence
-            ∇V    .= (Vx[2:end,2:end-1] .- Vx[1:end-1,2:end-1])./Δx .+ (Vy[2:end-1,2:end] .- Vy[2:end-1,1:end-1])./Δy
+            stokes.∇V    .= (stokes.V.Vx[2:end,2:end-1] .- stokes.V.Vx[1:end-1,2:end-1])./Δx .+ (stokes.V.Vy[2:end-1,2:end] .- stokes.V.Vy[2:end-1,1:end-1])./Δy
             # Pressure on vertices
             Ptv[2:end-1,2:end-1] .= av(Pt)
             Ptv[1,:] .=  Ptv[2,:]; Ptv[end,:] .=  Ptv[end-1,:]
             Ptv[:,1] .=  Ptv[:,2]; Ptv[:,end] .=  Ptv[:,end-1]
             # Deviatoric strain rate
-            Exx   .= (Vx[2:end,2:end-1] .- Vx[1:end-1,2:end-1])./Δx .- 1.0/3.0.*∇V
-            Eyy   .= (Vy[2:end-1,2:end] .- Vy[2:end-1,1:end-1])./Δy .- 1.0/3.0.*∇V
-            Exy   .= 0.5.*((Vx[:,2:end] .- Vx[:,1:end-1])./Δy .+ (Vy[2:end,:] .- Vy[1:end-1,:])./Δx)
-            Exxv[2:end-1,2:end-1] .= av(Exx); Exxv[[1 end], :] .= Exxv[[2 end-1], :]; Exxv[:, [1 end]] .= Exxv[:, [2 end-1]]
-            Eyyv[2:end-1,2:end-1] .= av(Eyy); Eyyv[[1 end], :] .= Eyyv[[2 end-1], :]; Eyyv[:, [1 end]] .= Eyyv[:, [2 end-1]]
-            Exyc  .= av(Exy)
+            stokes.ε.xx   .= (stokes.V.Vx[2:end,2:end-1] .- stokes.V.Vx[1:end-1,2:end-1])./Δx .- 1.0/3.0.*stokes.∇V
+            stokes.ε.yy   .= (stokes.V.Vy[2:end-1,2:end] .- stokes.V.Vy[2:end-1,1:end-1])./Δy .- 1.0/3.0.*stokes.∇V
+            stokes.ε.xy   .= 0.5.*((stokes.V.Vx[:,2:end] .- stokes.V.Vx[:,1:end-1])./Δy .+ (stokes.V.Vy[2:end,:] .- stokes.V.Vy[1:end-1,:])./Δx)
+            Exxv[2:end-1,2:end-1] .= av(stokes.ε.xx); Exxv[[1 end], :] .= Exxv[[2 end-1], :]; Exxv[:, [1 end]] .= Exxv[:, [2 end-1]]
+            Eyyv[2:end-1,2:end-1] .= av(stokes.ε.yy); Eyyv[[1 end], :] .= Eyyv[[2 end-1], :]; Eyyv[:, [1 end]] .= Eyyv[:, [2 end-1]]
+            stokes.ε.xy_c  .= av(stokes.ε.xy)
             # EIIc  .= sqrt.(0.5.*((Exx  .+ Txx0 ./(2*Gc*Δt)).^2 .+ (Eyy  .+ Tyy0 ./(2*Gc*Δt)).^2 .+ (.-(Exx  .+ Txx0 ./(2*Gc*Δt)).-(Eyy  .+ Tyy0 ./(2*Gc*Δt))).^2) .+ (Exyc .+ Txy0c./(2*Gc*Δt)).^2 )
             # EIIv  .= sqrt.(0.5.*((Exxv .+ Txxv0./(2*Gv*Δt)).^2 .+ (Eyyv .+ Tyyv0./(2*Gv*Δt)).^2 .+ (.-(Exxv .+ Txxv0./(2*Gv*Δt)).-(Eyyv .+ Tyyv0./(2*Gv*Δt))).^2) .+ (Exy  .+ Txy0 ./(2*Gv*Δt)).^2 )
             
@@ -259,21 +348,21 @@ end
             # ηve_v .= (1 ./ ηv .+ 1 ./ (Gv*Δt)).^-1
             
             # Deviatoric stress
-            Txx     .= 2.0.*ηve_c.*(Exx )
-            Tyy     .= 2.0.*ηve_c.*(Eyy )
-            Txy     .= 2.0.*ηve_v.*(Exy )
-            Txxv    .= 2.0.*ηve_v.*(Exxv)
-            Tyyv    .= 2.0.*ηve_v.*(Eyyv)
-            Txyc    .= 2.0.*ηve_c.*(Exyc)
-            TIIc    .= sqrt.(0.5.*(Txx.^2  .+ Tyy.^2  .+ (.-Txx.-Tyy).^2)   .+ Txyc.^2 )
-            TIIv    .= sqrt.(0.5.*(Txxv.^2 .+ Tyyv.^2 .+ (.-Txxv.-Tyyv).^2) .+ Txy.^2 )
+            stokes.τ.xx   .= 2 .* stokes.viscosity.η  .* stokes.ε.xx
+            stokes.τ.yy   .= 2 .* stokes.viscosity.η  .* stokes.ε.yy
+            stokes.τ.xy   .= 2 .* stokes.viscosity.ηv .* stokes.ε.xy
+            Txxv          .= 2 .* stokes.viscosity.ηv .* Exxv
+            Tyyv          .= 2 .* stokes.viscosity.ηv .* Eyyv
+            stokes.τ.xy_c .= 2 .* stokes.viscosity.η  .* stokes.ε.xy_c
+            stokes.τ.II    .= sqrt.(0.5.*(stokes.τ.xx.^2  .+ stokes.τ.yy.^2  .+ (.-stokes.τ.xx.-stokes.τ.yy).^2)   .+ stokes.τ.xy_c.^2 )
+            TIIv    .= sqrt.(0.5.*(Txxv.^2 .+ Tyyv.^2 .+ (.-Txxv.-Tyyv).^2) .+ stokes.τ.xy.^2 )
 
-            ηc_true .= @. 2^(npwl-1) * ηc0^npwl * TIIc^(1 - npwl)
-            ηv_true .= @. 2^(npwl-1) * ηv0^npwl * TIIv^(1 - npwl)
-            ηc      .= exp.(ηrel*log.(ηc_true) .+ (1-ηrel).*log.(ηc))
-            ηv      .= exp.(ηrel*log.(ηv_true) .+ (1-ηrel).*log.(ηv))
-            ηve_c   .= ηc
-            ηve_v   .= ηv
+            ηc_true             .= @. 2^(npwl-1) * ηc0^npwl * stokes.τ.II^(1 - npwl)
+            ηv_true             .= @. 2^(npwl-1) * ηv0^npwl * TIIv^(1 - npwl)
+            stokes.viscosity.η  .= exp.(ηrel*log.(ηc_true) .+ (1-ηrel).*log.(stokes.viscosity.η))
+            stokes.viscosity.ηv .= exp.(ηrel*log.(ηv_true) .+ (1-ηrel).*log.(stokes.viscosity.ηv))
+            # ηve_c   .= ηc
+            # ηve_v   .= ηv
 
             #                 @show TIIc[20,20], ηc[20,20]
             # error()
@@ -299,18 +388,18 @@ end
             # Txyc  .= 2.0.*ηvep_c.*(Exyc .+ Txy0c./(2*Gc*Δt))
             # ΔPψ   .= λ̇c.*sind(ψ).*K.*Δt
             # Check
-            TIIc  .= sqrt.(0.5.*(Txx.^2  .+ Tyy.^2  .+ (.-Txx.-Tyy).^2)   .+ Txyc.^2 )
-            TIIv  .= sqrt.(0.5.*(Txxv.^2 .+ Tyyv.^2 .+ (.-Txxv.-Tyyv).^2) .+ Txy.^2 )
-            Fc    .= TIIc .- C.*cosd(ϕ) .- (Pt .+ λ̇c.*sind(ψ).*K.*Δt).*sind(ϕ)  .- ηvp.*λ̇c
-            Fv    .= TIIv .- C.*cosd(ϕ) .- (Ptv.+ λ̇v.*sind(ψ).*K.*Δt).*sind(ϕ)  .- ηvp.*λ̇v
+            # TIIc  .= sqrt.(0.5.*(Txx.^2  .+ Tyy.^2  .+ (.-Txx.-Tyy).^2)   .+ Txyc.^2 )
+            # TIIv  .= sqrt.(0.5.*(Txxv.^2 .+ Tyyv.^2 .+ (.-Txxv.-Tyyv).^2) .+ Txy.^2 )
+            # Fc    .= TIIc .- C.*cosd(ϕ) .- (Pt .+ λ̇c.*sind(ψ).*K.*Δt).*sind(ϕ)  .- ηvp.*λ̇c
+            # Fv    .= TIIv .- C.*cosd(ϕ) .- (Ptv.+ λ̇v.*sind(ψ).*K.*Δt).*sind(ϕ)  .- ηvp.*λ̇v
             # Residuals
-            Rx    .= (.-(Pt[2:end,:] .- Pt[1:end-1,:])./Δx .- (ΔPψ[2:end,:] .- ΔPψ[1:end-1,:])./Δx .+ (Txx[2:end,:] .- Txx[1:end-1,:])./Δx .+ (Txy[2:end-1,2:end] .- Txy[2:end-1,1:end-1])./Δy)
-            Ry    .= (.-(Pt[:,2:end] .- Pt[:,1:end-1])./Δy .- (ΔPψ[:,2:end] .- ΔPψ[:,1:end-1])./Δy .+ (Tyy[:,2:end] .- Tyy[:,1:end-1])./Δy .+ (Txy[2:end,2:end-1] .- Txy[1:end-1,2:end-1])./Δx)
-            Rp    .= .-∇V .- comp*(Pt.-Pt0)./ηb 
+            stokes.R.Rx .= (.-(stokes.P[2:end,:] .- stokes.P[1:end-1,:])./Δx .+ (stokes.τ.xx[2:end,:] .- stokes.τ.xx[1:end-1,:])./Δx .+ (stokes.τ.xy[2:end-1,2:end] .- stokes.τ.xy[2:end-1,1:end-1])./Δy)
+            stokes.R.Ry .= (.-(stokes.P[:,2:end] .- stokes.P[:,1:end-1])./Δy .+ (stokes.τ.yy[:,2:end] .- stokes.τ.yy[:,1:end-1])./Δy .+ (stokes.τ.xy[2:end,2:end-1] .- stokes.τ.xy[1:end-1,2:end-1])./Δx)
+            stokes.R.RP .= .-stokes.∇V .- comp*(stokes.P.-Pt0)./dyrel.ηb 
             # Residual check
-            errVx = norm(Rx) / sqrt(length(Rx))
-            errVy = norm(Ry) / sqrt(length(Ry))
-            errPt = norm(Rp) / sqrt(length(Rp))
+            errVx = norm(stokes.R.Rx) / sqrt(length(stokes.R.Rx))
+            errVy = norm(stokes.R.Ry) / sqrt(length(stokes.R.Ry))
+            errPt = norm(stokes.R.RP) / sqrt(length(stokes.R.RP))
             if itPH==1 
                 errVx0=errVx 
                 errVy0=errVy 
@@ -332,21 +421,24 @@ end
                 itPT   += 1
                 itg    += 1
                 # Pseudo-old dudes 
-                Rx0   .= Rx
-                Ry0   .= Ry
+                Rx0   .= stokes.R.Rx
+                Ry0   .= stokes.R.Ry
                 # Boundaries
-                Vx[:,1] .= Vx[:,2]; Vx[:,end] .= Vx[:,end-1]
-                Vy[1,:] .= Vy[2,:]; Vy[end,:] .= Vy[end-1,:]
+                stokes.V.Vx[:,1]   .= stokes.V.Vx[:,2]
+                stokes.V.Vx[:,end] .= stokes.V.Vx[:,end-1]
+                stokes.V.Vy[1,:]   .= stokes.V.Vy[2,:]
+                stokes.V.Vy[end,:] .= stokes.V.Vy[end-1,:]
                 # Divergence 
-                ∇V    .= (Vx[2:end,2:end-1] .- Vx[1:end-1,2:end-1])./Δx .+ (Vy[2:end-1,2:end] .- Vy[2:end-1,1:end-1])./Δy
-                Rp    .= .-∇V .- comp*(Pt.-Pt0)./ηb 
+                stokes.∇V    .= (stokes.V.Vx[2:end,2:end-1] .- stokes.V.Vx[1:end-1,2:end-1])./Δx .+ (stokes.V.Vy[2:end-1,2:end] .- stokes.V.Vy[2:end-1,1:end-1])./Δy
+                stokes.R.RP    .= .-stokes.∇V .- comp*(stokes.P.-Pt0)./dyrel.ηb 
                 # Deviatoric strain rate
-                Exx   .= (Vx[2:end,2:end-1] .- Vx[1:end-1,2:end-1])./Δx .- 1.0/3.0.*∇V
-                Eyy   .= (Vy[2:end-1,2:end] .- Vy[2:end-1,1:end-1])./Δy .- 1.0/3.0.*∇V
-                Exy   .= 0.5.*((Vx[:,2:end] .- Vx[:,1:end-1])./Δy .+ (Vy[2:end,:] .- Vy[1:end-1,:])./Δx)
-                Exxv[2:end-1,2:end-1] .= av(Exx); Exxv[[1 end], :] .= Exxv[[2 end-1], :]; Exxv[:, [1 end]] .= Exxv[:, [2 end-1]]
-                Eyyv[2:end-1,2:end-1] .= av(Eyy); Eyyv[[1 end], :] .= Eyyv[[2 end-1], :]; Eyyv[:, [1 end]] .= Eyyv[:, [2 end-1]]
-                Exyc  .= av(Exy)
+                stokes.ε.xx   .= (stokes.V.Vx[2:end,2:end-1] .- stokes.V.Vx[1:end-1,2:end-1])./Δx .- 1.0/3.0.*stokes.∇V
+                stokes.ε.yy   .= (stokes.V.Vy[2:end-1,2:end] .- stokes.V.Vy[2:end-1,1:end-1])./Δy .- 1.0/3.0.*stokes.∇V
+                stokes.ε.xy   .= 0.5.*((stokes.V.Vx[:,2:end] .- stokes.V.Vx[:,1:end-1])./Δy .+ (stokes.V.Vy[2:end,:] .- stokes.V.Vy[1:end-1,:])./Δx)
+                Exxv[2:end-1,2:end-1] .= av(stokes.ε.xx); Exxv[[1 end], :] .= Exxv[[2 end-1], :]; Exxv[:, [1 end]] .= Exxv[:, [2 end-1]]
+                Eyyv[2:end-1,2:end-1] .= av(stokes.ε.yy); Eyyv[[1 end], :] .= Eyyv[[2 end-1], :]; Eyyv[:, [1 end]] .= Eyyv[:, [2 end-1]]
+                stokes.ε.xy_c  .= av(stokes.ε.xy)
+        
                 # EIIc  .= sqrt.(0.5.*((Exx  .+ Txx0 ./(2*Gc*Δt)).^2 .+ (Eyy  .+ Tyy0 ./(2*Gc*Δt)).^2 .+ (.-(Exx  .+ Txx0 ./(2*Gc*Δt)).-(Eyy  .+ Tyy0 ./(2*Gc*Δt))).^2) .+ (Exyc .+ Txy0c./(2*Gc*Δt)).^2 )
                 # EIIv  .= sqrt.(0.5.*((Exxv .+ Txxv0./(2*Gv*Δt)).^2 .+ (Eyyv .+ Tyyv0./(2*Gv*Δt)).^2 .+ (.-(Exxv .+ Txxv0./(2*Gv*Δt)).-(Eyyv .+ Tyyv0./(2*Gv*Δt))).^2) .+ (Exy  .+ Txy0 ./(2*Gv*Δt)).^2 )
                
@@ -359,21 +451,21 @@ end
                 # ηve_v .= (1 ./ ηv_true .+ 1 ./ (Gv*Δt)).^-1
                
                 # Deviatoric stress
-                Txx   .= 2.0.*ηve_c.*(Exx )
-                Tyy   .= 2.0.*ηve_c.*(Eyy )
-                Txy   .= 2.0.*ηve_v.*(Exy )
-                Txxv  .= 2.0.*ηve_v.*(Exxv)
-                Tyyv  .= 2.0.*ηve_v.*(Eyyv)
-                Txyc  .= 2.0.*ηve_c.*(Exyc)
-                TIIc  .= sqrt.(0.5.*(Txx.^2  .+ Tyy.^2  .+ (.-Txx.-Tyy).^2)   .+ Txyc.^2 )
-                TIIv  .= sqrt.(0.5.*(Txxv.^2 .+ Tyyv.^2 .+ (.-Txxv.-Tyyv).^2) .+ Txy.^2 )
+                stokes.τ.xx   .= 2 .* stokes.viscosity.η  .* stokes.ε.xx
+                stokes.τ.yy   .= 2 .* stokes.viscosity.η  .* stokes.ε.yy
+                stokes.τ.xy   .= 2 .* stokes.viscosity.ηv .* stokes.ε.xy
+                Txxv          .= 2 .* stokes.viscosity.ηv .* Exxv
+                Tyyv          .= 2 .* stokes.viscosity.ηv .* Eyyv
+                stokes.τ.xy_c .= 2 .* stokes.viscosity.η  .* stokes.ε.xy_c
+                stokes.τ.II    .= sqrt.(0.5.*(stokes.τ.xx.^2  .+ stokes.τ.yy.^2  .+ (.-stokes.τ.xx.-stokes.τ.yy).^2)   .+ stokes.τ.xy_c.^2 )
+                TIIv    .= sqrt.(0.5.*(Txxv.^2 .+ Tyyv.^2 .+ (.-Txxv.-Tyyv).^2) .+ stokes.τ.xy.^2 )
 
-                ηc_true .= @. 2^(npwl-1) * ηc0^npwl * TIIc^(1 - npwl)
-                ηv_true .= @. 2^(npwl-1) * ηv0^npwl * TIIv^(1 - npwl)
-                ηc      .= exp.(ηrel*log.(ηc_true) .+ (1-ηrel).*log.(ηc))
-                ηv      .= exp.(ηrel*log.(ηv_true) .+ (1-ηrel).*log.(ηv))
-                ηve_c   .= ηc
-                ηve_v   .= ηv
+                ηc_true             .= @. 2^(npwl-1) * ηc0^npwl * stokes.τ.II^(1 - npwl)
+                ηv_true             .= @. 2^(npwl-1) * ηv0^npwl * TIIv^(1 - npwl)
+                stokes.viscosity.η  .= exp.(ηrel*log.(ηc_true) .+ (1-ηrel).*log.(stokes.viscosity.η))
+                stokes.viscosity.ηv .= exp.(ηrel*log.(ηv_true) .+ (1-ηrel).*log.(stokes.viscosity.ηv))
+                # ηve_c   .= ηc
+                # ηve_v   .= ηv
 
                 # @show TIIc[20,20], ηc[20,20]
                 # error()    
@@ -400,49 +492,54 @@ end
 
                 # Residuals
                 # Rp    .= .-∇V .- comp*(Pt.-Pt0)./ηb 
-                P_num  .= γ_eff .* Rp
-                Rx     .= (1.0./Dx).*(.-(P_num[2:end,:] .- P_num[1:end-1,:])./Δx .- (Pt[2:end,:] .- Pt[1:end-1,:])./Δx .- (ΔPψ[2:end,:] .- ΔPψ[1:end-1,:])./Δx .+ (Txx[2:end,:] .- Txx[1:end-1,:])./Δx .+ (Txy[2:end-1,2:end] .- Txy[2:end-1,1:end-1])./Δy)
-                Ry     .= (1.0./Dy).*(.-(P_num[:,2:end] .- P_num[:,1:end-1])./Δy .- (Pt[:,2:end] .- Pt[:,1:end-1])./Δy .- (ΔPψ[:,2:end] .- ΔPψ[:,1:end-1])./Δy .+ (Tyy[:,2:end] .- Tyy[:,1:end-1])./Δy .+ (Txy[2:end,2:end-1] .- Txy[1:end-1,2:end-1])./Δx)
+                P_num  .= dyrel.γ_eff .* stokes.R.RP
+                stokes.R.Rx .= inv.(Dx).*(.-(P_num[2:end,:] .- P_num[1:end-1,:])./Δx .-(stokes.P[2:end,:] .- stokes.P[1:end-1,:])./Δx .+ (stokes.τ.xx[2:end,:] .- stokes.τ.xx[1:end-1,:])./Δx .+ (stokes.τ.xy[2:end-1,2:end] .- stokes.τ.xy[2:end-1,1:end-1])./Δy)
+                stokes.R.Ry .= inv.(Dy).*(.-(P_num[:,2:end] .- P_num[:,1:end-1])./Δy .-(stokes.P[:,2:end] .- stokes.P[:,1:end-1])./Δy .+ (stokes.τ.yy[:,2:end] .- stokes.τ.yy[:,1:end-1])./Δy .+ (stokes.τ.xy[2:end,2:end-1] .- stokes.τ.xy[1:end-1,2:end-1])./Δx)
+
                 # Damping-pong
-                dVxdτ  .= αVx.*dVxdτ .+ Rx
-                dVydτ  .= αVy.*dVydτ .+ Ry
+                @. dyrel.dVxdτ  = dyrel.αVx * dyrel.dVxdτ + stokes.R.Rx
+                @. dyrel.dVydτ  = dyrel.αVy * dyrel.dVydτ + stokes.R.Ry
                 # PT updates
-                Vx[2:end-1,2:end-1] .+= dVxdτ.*βVx.*dτVx 
-                Vy[2:end-1,2:end-1] .+= dVydτ.*βVy.*dτVy 
+                stokes.V.Vx[2:end-1,2:end-1] .+= dyrel.dVxdτ.*dyrel.βVx.*dyrel.dτVx 
+                stokes.V.Vy[2:end-1,2:end-1] .+= dyrel.dVydτ.*dyrel.βVy.*dyrel.dτVy 
                 # Residual check
                 if mod(iter, nout)==0
                     # error()
 
                     kiter += 1
-                    errVx = norm(Dx.*Rx) / sqrt(length(Rx))
-                    errVy = norm(Dy.*Ry) / sqrt(length(Ry))
+                    errVx = norm(dyrel.Dx.*stokes.R.Rx) / sqrt(length(stokes.R.Rx))
+                    errVy = norm(dyrel.Dy.*stokes.R.Ry) / sqrt(length(stokes.R.Ry))
                     
                     if iter==nout errVx00=errVx; errVy00=errVy; end
                     err = maximum((errVx./errVx00, errVy./errVy00))
                     err_evo_V[kiter] = errVx/errVx00; err_evo_P[kiter] = errPt/errPt0; err_evo_it[kiter] =  iter
                     @printf("it = %d, iter = %d, err = %1.6e - max(f) = %1.3e \n", it, iter, err, 0)
                     
-                    # dVx .= dVxdτ.*βVx.*dτVx
-                    # dVy .= dVydτ.*βVy.*dτVy
-                    # f              = TIIc .- ηve_c.*λ̇c   .- C.*cosd(ϕ) .- (Pt .+ ΔPψ).*sind(ϕ) .- ηvp.*λ̇c
-                    # # λminV  = abs.((sum(dVx.*(Rx .- Rx0))) + abs.((sum(dVy.*(Ry .- Ry0))) )/ ( sum(dVx.*dVx)) + sum(dVy.*dVy) ) 
-                    # λminV  = abs(  sum(dVx.*(Rx .- Rx0)) + sum(dVy.*(Ry .- Ry0))  ) / (sum(dVx.*dVx) .+ sum(dVy.*dVy))
-                    # cVx .= 2*sqrt.(λminV)*c_fact
-                    # cVy .= 2*sqrt.(λminV)*c_fact
-                    # # Optimal pseudo-time steps - can be replaced by AD
-                    # Dx, Dy, λmaxVx, λmaxVy = Gershgorin_Stokes2D_SchurComplement(ηve_c, ηve_v, γ_eff, Δx, Δy, ncx ,ncy)
-                    # # Select dτ
-                    # # if dτ_local
-                    # dτVx =  2.0./sqrt.(λmaxVx)*CFL_v
-                    # dτVy =  2.0./sqrt.(λmaxVy)*CFL_v
-                    # # else
-                    # #     dτVx =  2.0./sqrt.(maximum(λmaxVx))*CFL_v 
-                    # #     dτVy =  2.0./sqrt.(maximum(λmaxVy))*CFL_v
-                    # # end
-                    # βVx .= 2 .* dτVx ./ (2 .+ cVx.*dτVx)
-                    # βVy .= 2 .* dτVy ./ (2 .+ cVy.*dτVy)
-                    # αVx .= (2 .- cVx.*dτVx) ./ (2 .+ cVx.*dτVx)
-                    # αVy .= (2 .- cVy.*dτVy) ./ (2 .+ cVy.*dτVy)
+                    dyrel.dVx .= dyrel.dVxdτ.*dyrel.βVx.*dyrel.dτVx 
+                    dyrel.dVy .= dyrel.dVydτ.*dyrel.βVy.*dyrel.dτVy 
+                    f              = 0 #TIIc .- ηve_c.*λ̇c   .- C.*cosd(ϕ) .- (Pt .+ ΔPψ).*sind(ϕ) .- ηvp.*λ̇c
+                    # λminV  = abs.((sum(dVx.*(Rx .- Rx0))) + abs.((sum(dVy.*(Ry .- Ry0))) )/ ( sum(dVx.*dVx)) + sum(dVy.*dVy) ) 
+                    λminV  = abs(  sum(dyrel.dVx.*(stokes.R.Rx .- Rx0)) + sum(dyrel.dVy.*(stokes.R.Ry .- Ry0))  ) / (sum(dyrel.dVx.^2) .+ sum(dyrel.dVy.^2))
+                    dyrel.cVx    .= 2*sqrt(λminV)*c_fact
+                    dyrel.cVy    .= 2*sqrt(λminV)*c_fact
+                    # Optimal pseudo-time steps - can be replaced by AD
+                    Dx, Dy, λmaxVx, λmaxVy = Gershgorin_Stokes2D_SchurComplement(stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, Δx, Δy, ncx ,ncy)
+                    dyrel.Dx     .= Dx
+                    dyrel.Dy     .= Dy
+                    dyrel.λmaxVx .= λmaxVx
+                    dyrel.λmaxVy .= λmaxVy
+                    # Select dτ
+                    # if dτ_local
+                    @. dyrel.dτVx =  2 /sqrt(dyrel.λmaxVx)*CFL_v
+                    @. dyrel.dτVy =  2 /sqrt(dyrel.λmaxVy)*CFL_v
+                    # else
+                    #     dτVx =  2.0./sqrt.(maximum(λmaxVx))*CFL_v 
+                    #     dτVy =  2.0./sqrt.(maximum(λmaxVy))*CFL_v
+                    # end
+                    @. βVx =  2 * dyrel.dτVx / (2 + dyrel.cVx * dyrel.dτVx)
+                    @. βVy =  2 * dyrel.dτVy / (2 + dyrel.cVy * dyrel.dτVy)
+                    @. αVx = (2 - dyrel.cVx * dyrel.dτVx) / (2 + dyrel.cVx * dyrel.dτVx)
+                    @. αVy = (2 - dyrel.cVy * dyrel.dτVy) / (2 + dyrel.cVy * dyrel.dτVy)
 
                     # @show λminV
                     # @show ηc[20,20]
@@ -451,22 +548,22 @@ end
                     # iter == 50 && error()
                 end
             end
-            Pt .+= γ_eff.*Rp
+            stokes.P .+= dyrelγ_eff .* stokes.RP
         end
-        Tii_evo[it] = maximum(TIIc)
+        # Tii_evo[it] = maximum(TIIc)
         it_evo[it]  = iter/ncx
         # @show err_evo_P[1:kiter]
         # @show err_evo_P[1]
         # Plotting
-        EIIc  .= sqrt.(0.5.*((Exx).^2 .+ (Eyy).^2 .+ (.-(Exx).-(Eyy)).^2) .+ (Exyc).^2 )
+        EIIc  .= sqrt.(0.5.*((stokes.ε.xx).^2 .+ (stokes.ε.yy).^2 .+ (.-(stokes.ε.xx).-(stokes.ε.yy)).^2) .+ (stokes.ε.xy_c).^2 )
         p1 = heatmap(xc, yc, log10.(EIIc'./sc.t) , aspect_ratio=1, c=:coolwarm, title="EII", xlims=(-Lx/2,Lx/2), xlabel="x",ylabel="y", clim=(-0.4, 0.4))
         # p2 = heatmap(xc, yc, TIIc'.*sc.σ , aspect_ratio=1, c=:turbo, title="τII", xlims=(-Lx/2,Lx/2), xlabel="x",ylabel="y", clim=(0, 250))
-        p2 = heatmap(xc, yc, Txx'.*sc.σ , aspect_ratio=1, c=:turbo, title="τxx", xlims=(-Lx/2,Lx/2), xlabel="x",ylabel="y")
+        p2 = heatmap(xc, yc, stokes.τ.xx'.*sc.σ , aspect_ratio=1, c=:turbo, title="τxx", xlims=(-Lx/2,Lx/2), xlabel="x",ylabel="y")
         p3 = plot(title="Convergence", xlabel="DR iterations / nx",ylabel="errors") 
         p3 = plot!((err_evo_it[1:kiter])/ncx, log10.(err_evo_V[1:kiter]), label="V")
         p3 = plot!((err_evo_it[1:kiter])/ncx, log10.(err_evo_P[1:kiter]), label="P")
         # p3 = plot!((err_evo_it.-err_evo_it[1])/ncx, log10.(ϵ.*ones(size(err_evo_it))), label="tol")  
-        p4 = plot(1:it, Tii_evo[1:it]*sc.σ, xlabel="time",ylabel="mean dev. stress", label=:none)
+        # p4 = plot(1:it, Tii_evo[1:it]*sc.σ, xlabel="time",ylabel="mean dev. stress", label=:none)
         p4 = heatmap(xc, yc, log10.(ηc)' , aspect_ratio=1, c=:inferno, title="ηc", xlims=(-Lx/2,Lx/2))
         display(plot(p1, p2, p3, p4))
         @show iter/ncx

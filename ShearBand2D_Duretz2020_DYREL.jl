@@ -146,8 +146,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     εbg = 1e-15
     stokes.V.Vx .= PTArray(backend)([         x * εbg for x in xvi[1], _ in 1:(ny + 2)])
     stokes.V.Vy .= PTArray(backend)([-(y + ly/2) * εbg for _ in 1:(nx + 2), y in xvi[2]])
-    @views stokes.V.Vx[2:end-1, :] .= 0
-    @views stokes.V.Vy[:, 2:end-1] .= 0
+    # @views stokes.V.Vx[2:end-1, :] .= 0
+    # @views stokes.V.Vy[:, 2:end-1] .= 0
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -184,12 +184,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             kwargs = (;
                 verbose = false,
                 iterMax = 50.0e3,
-                nout    = 100,
+                nout    = 400,
                 rel_drop = 0.1,
                 # λ_relaxation = 0,
                 λ_relaxation_DR = 1,
                 λ_relaxation_PH = 1,
-                viscosity_relaxation = 1/2,
+                viscosity_relaxation = 1e-4,
                 viscosity_cutoff = viscosity_cutoff,
             )
         );
@@ -245,7 +245,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         # h1 = heatmap!(ax1, xci..., Array((stokes.viscosity.η_vep)) , colormap=:batlow)
         heatmap!(ax2, xci..., Array(stokes.ε_pl.II), colormap = :lipari)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :lipari)
-        heatmap!(ax4, xci..., Array(log10.(stokes.viscosity.η_vep)), colormap = :lipari)
+        heatmap!(ax4, xci..., Array(log10.(stokes.viscosity.η)), colormap = :lipari)
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         # Colorbar(fig[1, 2], h1)

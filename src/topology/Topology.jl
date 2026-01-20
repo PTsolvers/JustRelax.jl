@@ -107,9 +107,6 @@ function lazy_grid(
     # nodes at the center of the grid cells
     xci = ntuple(Val(N)) do i
         Base.@_inline_meta
-        if i == 1
-            @show origin[i] + Li[i] + di[i] / 2
-        end
         @inbounds LinRange(origin[i] + di[i] / 2, origin[i] + Li[i] - di[i] / 2, ni[i])
     end
 

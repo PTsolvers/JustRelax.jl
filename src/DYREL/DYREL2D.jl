@@ -100,7 +100,7 @@ function _solve_DYREL!(
     P_num      = similar(stokes.P)
 
     # Powell-Hestenes iterations
-    for itPH in 1:1000
+    for itPH in 1:250
 
         # reset plastic multiplier at the beginning of the time step
         stokes.λ  .= 0.0
@@ -165,14 +165,13 @@ function _solve_DYREL!(
             errPt0 = errPt + eps()
         end
         err = maximum(
-            # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
-            (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
+            (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
+            # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
         )
         
         isnan(err) && error("NaN detected in outer loop")
         err > 1e10 && error("Kaboom! Error > 1e10 in outer loop")
         if verbose_PH
-            @show errPt, errPt0
             @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[Rx=%1.3e %1.3e, Ry=%1.3e %1.3e, Rp=%1.3e %1.3e] \n", itPH, iter, iter/ni[1], err, errVx, errVx/errVx0, errVy, errVy/errVy0, errPt, errPt/errPt0)
         end
         err < ϵ && break

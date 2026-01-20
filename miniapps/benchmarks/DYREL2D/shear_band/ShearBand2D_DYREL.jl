@@ -42,30 +42,30 @@ end
 function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Physical domain ------------------------------------
-    ly = 1.0e0          # domain length in y
-    lx = ly           # domain length in x
-    ni = nx, ny       # number of cells
-    li = lx, ly       # domain length in x- and y-
-    di = @. li / ni   # grid step in x- and -y
-    origin = 0.0, 0.0     # origin coordinates
-    grid = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    dt = Inf
+    ly             = 1.0e0          # domain length in y
+    lx             = ly             # domain length in x
+    ni             = nx, ny         # number of cells
+    li             = lx, ly         # domain length in x- and y-
+    di             = @. li / ni     # grid step in x- and -y
+    origin         = 0.0, 0.0       # origin coordinates
+    grid           = Geometry(ni, li; origin = origin)
+    (; xci, xvi)   = grid           # nodes at the center and vertices of the cells
+    dt             = Inf
 
     # Physical properties using GeoParams ----------------
-    τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ = 30            # friction angle
-    C = τ_y           # Cohesion
-    η0 = 1.0           # viscosity
-    G0 = 1.0           # elastic shear modulus
-    Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
-    εbg = 1.0           # background strain-rate
-    η_reg = 8.0e-3          # regularisation "viscosity"
-    dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
-    el_bg = ConstantElasticity(; G = G0, Kb = 5)
-    el_inc = ConstantElasticity(; G = Gi, Kb = 5)
-    visc = LinearViscous(; η = η0)
-    pl = DruckerPrager_regularised(;
+    τ_y            = 1.6            # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ              = 30             # friction angle
+    C              = τ_y            # Cohesion
+    η0             = 1.0            # viscosity
+    G0             = 1.0            # elastic shear modulus
+    Gi             = G0 / 2         # elastic shear modulus perturbation
+    εbg            = 1.0            # background strain-rate
+    η_reg          = 1.0e-2         # regularisation "viscosity"
+    dt             = η0 / G0 / 4.0  # assumes Maxwell time of 4
+    el_bg          = ConstantElasticity(; G = G0, Kb = 5)
+    el_inc         = ConstantElasticity(; G = Gi, Kb = 5)
+    visc           = LinearViscous(; η = η0)
+    pl             = DruckerPrager_regularised(;
         # non-regularized plasticity
         C = C / cosd(ϕ),
         ϕ = ϕ,
@@ -136,7 +136,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     sol   = [0e0]
     ttot  = [0e0]
     # while t < tmax
-    for _ in 1:15
+    for _ in 1:10
 
         # Stokes solver ----------------
         solve_DYREL!(
@@ -151,10 +151,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (;
-                verbose = false,
-                iterMax = 50.0e3,
-                nout    = 100,
-                rel_drop = 1e-3,
+                verbose  = false,
+                iterMax  = 50.0e3,
+                nout     = 100,
+                rel_drop = 0.75,
                 # λ_relaxation = 0,
                 λ_relaxation_PH = 1,
                 λ_relaxation_DR = 1,
@@ -196,8 +196,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         Colorbar(fig[2, 4], h22)
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
-
-    
         save(joinpath(figdir, "$(it).png"), fig)
     end
 

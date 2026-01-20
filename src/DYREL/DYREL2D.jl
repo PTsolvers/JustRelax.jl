@@ -167,13 +167,13 @@ function _solve_DYREL!(
         errVy = norm(stokes.R.Ry) / √(length(stokes.R.Ry))
         errPt = norm(stokes.R.RP) / √(length(stokes.R.RP))
         if isone(itPH)
-            errVx0 = errVx
-            errVy0 = errVy
-            errPt0 = errPt
+            errVx0 = errVx + eps()
+            errVy0 = errVy + eps()
+            errPt0 = errPt + eps()
         end
         err = maximum(
             # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
-            (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/(errPt0 + eps()), errPt))
+            (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
         )
         isnan(err) && error("NaN detected in outer loop")
         err > 1e10 && error("Kaboom! Error > 1e10 in outer loop")

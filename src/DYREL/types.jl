@@ -21,5 +21,6 @@ struct DYREL{T, F}
     ηb::T     # bulk viscosity
     CFL::F    # Courant-Friedrichs-Lewy condition
     ϵ::F      # convergence criterion
+    ϵ_vel::F  # convergence criterion
     c_fact::F # damping factor
 end

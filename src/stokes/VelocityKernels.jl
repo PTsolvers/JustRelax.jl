@@ -11,23 +11,28 @@ end
         εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, _dx, _dy
     ) where {T}
 
+    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j)
+
     @inbounds begin
-        Vx1 = Vx[i, j]
-        Vx2 = Vx[i, j + 1]
-        Vy1 = Vy[i, j]
-        Vy2 = Vy[i + 1, j]
-
+        # normal components are all located @ cell centers
         if all((i, j) .≤ size(εxx))
-            Vx3 = Vx[i + 1, j + 1]
-            Vy3 = Vy[i + 1, j + 1]
-
-            ∇V_ij = ∇V[i, j] / 3
-            εxx[i, j] = (Vx3 - Vx2) * _dx - ∇V_ij
-            εyy[i, j] = (Vy3 - Vy2) * _dy - ∇V_ij
+            ∇Vij = ∇V[i, j] * inv(3)
+            # Compute ε_xx
+            εxx[i, j] = d_xi(Vx) - ∇Vij
+            # Compute ε_yy
+            εyy[i, j] = d_yi(Vy) - ∇Vij
         end
-
-        εxy[i, j] = 0.5 * ((Vx2 - Vx1) * _dy + (Vy2 - Vy1) * _dx)
+       
+        # Compute ε_xy
+        if all((i, j) .≤ size(εxy))
+            εxy[i, j] =
+                0.5 * (
+                _dy * (Vx[i, j + 1] - Vx[i, j]) + _dx * (Vy[i + 1, j] - Vy[i, j])
+            )
+        end
     end
+
     return nothing
 end
 

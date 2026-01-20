@@ -1,55 +1,3 @@
-# function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt)
-#     ni = size(phase_ratios.vertex)
-#     @parallel (@idx ni) compute_stress_DRYEL!(stokes, rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt)
-#     return nothing
-# end
-
-# @parallel_indices (I...) function compute_stress_DRYEL!(stokes::JustRelax.StokesArrays, rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt)
-
-#     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
-
-#     ni = size(phase_ratios_center)
-
-#     ## VERTEX CALCULATION
-#     # @inbounds begin
-#         Ic    = clamped_indices(ni, I...)
-#         τij_o = stokes.τ_o.xx_v[I...], stokes.τ_o.yy_v[I...], stokes.τ_o.xy[I...]
-#         εij   = av_clamped(stokes.ε.xx, Ic...), av_clamped(stokes.ε.yy, Ic...), stokes.ε.xy[I...]
-#         λvij  = stokes.λv[I...]
-#         ηij   = JustRelax2D.harm_clamped(stokes.viscosity.η, Ic...)
-#         Pij   = av_clamped(stokes.P, Ic...)
-#         ratio = phase_ratios_vertex[I...]
-#         # # compute local stress
-#         τxx_I, τyy_I, τxy_I, _, _, _, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt)
-
-#         # update arrays
-#         stokes.τ.xx_v[I...], stokes.τ.yy_v[I...], stokes.τ.xy[I...] = τxx_I, τyy_I, τxy_I
-#         stokes.λv[I...]   = λ_I
-
-#         ## CENTER CALCULATION
-#         if all(I .≤ ni)
-#             τij_o = stokes.τ_o.xx[I...], stokes.τ_o.yy[I...], stokes.τ_o.xy_c[I...]
-#             εij   = stokes.ε.xx[I...], stokes.ε.yy[I...], av(stokes.ε.xy)
-#             λij   = stokes.λ[I...]
-#             ηij   = stokes.viscosity.η[I...]
-#             Pij   = stokes.P[I...]
-#             ratio = phase_ratios_center[I...]
-            
-#             # compute local stress
-#             τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I = compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt)
-#             # update arrays
-#             stokes.τ.xx[I...],    stokes.τ.yy[I...],   stokes.τ.xy_c[I...]     = τxx_I, τyy_I, τxy_I
-#             stokes.ε_pl.xx[I...], stokes.ε_pl.yy[I...], stokes.ε_pl.xy_c[I...] = εxx_pl, εyy_pl, εxy_pl
-#             stokes.τ.II[I...]            = τII_I
-#             stokes.viscosity.η_vep[I...] = ηvep_I
-#             stokes.λ[I...]               = λ_I
-#             stokes.ΔPψ[I...]             = ΔPψ_I
-#         end
-#     # end
-
-#     return nothing
-# end
-
 function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt)
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
@@ -64,6 +12,7 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt
         stokes.λ,
         stokes.λv,
         stokes.viscosity.η,
+        stokes.viscosity.ηv,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt
@@ -83,6 +32,7 @@ end
     λ,
     λv,
     η,
+    ηv,
     η_vep,
     ΔPψ,
     rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt
@@ -98,10 +48,10 @@ end
         τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
         εij   = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
         λvij  = λv[I...]
-        ηij   = harm_clamped(η, Ic...)
+        # ηij   = harm_clamped(η, Ic...)
+        ηij   = ηv[I...]
         Pij   = av_clamped(P, Ic...)
         ratio = phase_ratios_vertex[I...]
-        
         # compute local stress
         τxx_I, τyy_I, τxy_I, _, _, _, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt)
 

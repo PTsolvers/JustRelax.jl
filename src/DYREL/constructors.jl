@@ -1,4 +1,4 @@
-function DYREL(ni::NTuple{2}; ϵ=1e-6, CFL= 0.99, c_fat = 0.5)
+function DYREL(ni::NTuple{2}; ϵ=1e-6, ϵ_vel=1e-6, CFL= 0.99, c_fat = 0.5)
     nx, ny = ni
     # penalty parameter
     γ_eff  = @zeros(nx, ny)
@@ -26,21 +26,21 @@ function DYREL(ni::NTuple{2}; ϵ=1e-6, CFL= 0.99, c_fat = 0.5)
     T = typeof(γ_eff)
     F = typeof(CFL)
     JustRelax.DYREL{T, F}(γ_eff, Dx, Dy, λmaxVx, λmaxVy, dVxdτ, dVydτ, dτVx, dτVy,
-                     dVx, dVy, βVx, βVy, cVx, cVy, αVx, αVy, ηb, CFL, ϵ, c_fat)
+                     dVx, dVy, βVx, βVy, cVx, cVy, αVx, αVy, ηb, CFL, ϵ, ϵ_vel, c_fat)
 end
 
-DYREL(nx::Integer, ny::Integer; ϵ=1e-6, CFL= 0.99, c_fat = 0.5) = DYREL((nx, ny); ϵ=ϵ, CFL=CFL, c_fat=c_fat)
+DYREL(nx::Integer, ny::Integer; ϵ=1e-6, ϵ_vel=1e-6, CFL= 0.99, c_fat = 0.5) = DYREL((nx, ny); ϵ=ϵ, ϵ_vel=ϵ_vel, CFL=CFL, c_fat=c_fat)
 
-function DYREL(::Type{CPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ=1e-6, CFL= 0.99, c_fat = 0.5, γfact = 20.0)
-    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ=ϵ, CFL=CFL, c_fat=c_fat, γfact=γfact)
+function DYREL(::Type{CPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ=1e-6, ϵ_vel=1e-6, CFL= 0.99, c_fat = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ=ϵ, ϵ_vel=ϵ_vel, CFL=CFL, c_fat=c_fat, γfact=γfact)
 end
 
-function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ=1e-6, CFL= 0.99, c_fat = 0.5, γfact = 20.0)
+function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ=1e-6, ϵ_vel=1e-6, CFL= 0.99, c_fat = 0.5, γfact = 20.0)
     
     ni = size(stokes.P)
     
     # instantiate DYREL object
-    dyrel = DYREL(ni; ϵ = ϵ, CFL = CFL, c_fat = c_fat)
+    dyrel = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fat = c_fat)
     
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)

@@ -132,10 +132,9 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Time loop
     t, it = 0.0, 0
-    tmax = 5
-    τII = Float64[]
-    sol = Float64[]
-    ttot = Float64[]
+    τII   = [0e0]
+    sol   = [0e0]
+    ttot  = [0e0]
     # while t < tmax
     for _ in 1:15
 
@@ -155,10 +154,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 verbose = false,
                 iterMax = 50.0e3,
                 nout    = 100,
-                rel_drop = 0.75,
+                rel_drop = 1e-3,
                 # λ_relaxation = 0,
-                λ_relaxation_DR = 1,
                 λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
                 viscosity_relaxation = 1/2,
                 viscosity_cutoff = (-Inf, Inf),
             )
@@ -166,11 +165,11 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
-        push!(τII, maximum(stokes.τ.xx))
 
         it += 1
         t += dt
 
+        push!(τII, maximum(stokes.τ.xx))
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
 
@@ -205,7 +204,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 128
+n  = 64
 nx = n
 ny = n
 figdir = "ShearBands2D_DYREL"
@@ -214,4 +213,4 @@ igg = if !(JustRelax.MPI.Initialized())
 else
     igg
 end
-main(igg; figdir = figdir, nx = nx, ny = ny);
+@time main(igg; figdir = figdir, nx = nx, ny = ny);

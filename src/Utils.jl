@@ -340,6 +340,31 @@ end
 end
 
 """
+    tensor_vertex(A)
+
+Unpacks the symmetric tensor `A`, where its components are defined in the vertices of the grid cells.
+Shear components are unpack following Voigt's notation.
+"""
+macro tensor_vertex(A)
+    return quote
+        unpack_tensor_vertex(($(esc(A))))
+    end
+end
+
+@inline function unpack_tensor_vertex(
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 2}}
+    ) where {T}
+    return A.xx_v, A.yy_v, A.xy
+end
+
+# @inline function unpack_tensor_vertex(
+#         A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}
+#     ) where {T}
+#     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
+# end
+
+
+"""
     @residuals(A)
 
 Unpacks the momentum residuals from `A`.
@@ -510,7 +535,9 @@ take(fldr::String) = !isdir(fldr) && mkpath(fldr)
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """
 @inline function continuation_log(x_new::T, x_old::T, ν) where {T}
-    x_cont = exp((1 - ν) * log(x_old) + ν * log(x_new))
+    a = iszero(x_old) ? zero(T) : log(x_old)
+    b = iszero(x_new) ? zero(T) : log(x_new)
+    x_cont = exp((1 - ν) * a + ν * b)
     return isnan(x_cont) ? 0.0 : x_cont
 end
 @inline continuation_linear(x_new, x_old, ν) = (1 - ν) * x_old + ν * x_new

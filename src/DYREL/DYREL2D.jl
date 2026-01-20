@@ -30,7 +30,8 @@ function _solve_DYREL!(
         nout = 100,
         rel_drop = 1e-2,
         b_width = (4, 4, 0),
-        verbose = true,
+        verbose_PH = true,
+        verbose_DR = true,
         kwargs...,
     ) where {T}
 
@@ -59,16 +60,10 @@ function _solve_DYREL!(
 
     _di   = inv.(di)
     ni    = size(stokes.P)
-    γfact = 20
 
     # errors
     err      = 1.0
     iter     = 0
-    err_evo1 = Float64[]
-    err_evo2 = Float64[]
-    norm_Rx  = Float64[]
-    norm_Ry  = Float64[]
-    norm_∇V  = Float64[]
 
     # solver loop
     @copy stokes.P0 stokes.P
@@ -83,14 +78,12 @@ function _solve_DYREL!(
     stokes.λ  .= 0.0
     stokes.λv .= 0.0
 
-
     # # compute buoyancy forces and viscosity
     # compute_ρg!(ρg, phase_ratios, rheology, args)
     # # viscosity guess based on strain rate
     # compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     # center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
 
-    # rel_drop   = 1e-2 # relative drop of velocity residual per PH iteration
     # Iteration loop
     errVx0     = 1.0
     errVy0     = 1.0
@@ -105,8 +98,9 @@ function _solve_DYREL!(
     err_evo_it = Float64[]
     itg        = 0
     P_num      = similar(stokes.P)
+
     # Powell-Hestenes iterations
-    for itPH in 1:250
+    for itPH in 1:1000
 
         # reset plastic multiplier at the beginning of the time step
         stokes.λ  .= 0.0
@@ -126,7 +120,6 @@ function _solve_DYREL!(
 
         # compute deviatoric stress
         compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt) # not resetting λ in every PH iteration seems to work better
-        # compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1, dt) # λ_relaxation = 1 to reset λ
         update_halo!(stokes.τ.xy)
 
         update_viscosity_τII!(
@@ -175,17 +168,17 @@ function _solve_DYREL!(
             # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
             (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
         )
+        
         isnan(err) && error("NaN detected in outer loop")
         err > 1e10 && error("Kaboom! Error > 1e10 in outer loop")
-        # @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e, Rp=%1.3e] \n", itPH, iter, iter/ni[1], err, min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
-        # @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e, Rp=%1.3e] \n", itPH, iter, iter/ni[1], err, errVx, errVy, errPt)
-        @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[Rx=%1.3e %1.3e, Ry=%1.3e %1.3e, Rp=%1.3e %1.3e] \n", itPH, iter, iter/ni[1], err, errVx, errVx/errVx0, errVy, errVy/errVy0, errPt, errPt/errPt0)
-
+        if verbose_PH
+            @show errPt, errPt0
+            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[Rx=%1.3e %1.3e, Ry=%1.3e %1.3e, Rp=%1.3e %1.3e] \n", itPH, iter, iter/ni[1], err, errVx, errVx/errVx0, errVy, errVy/errVy0, errPt, errPt/errPt0)
+        end
         err < ϵ && break
 
         # Set tolerance of velocity solve proportional to residual
-        # ϵ_vel = err * rel_drop
-        ϵ_vel = 1.5e-6 #err * rel_drop
+        ϵ_vel = err * rel_drop
         itPT  = 0
         # while (err > dyrel.ϵ_vel && itPT ≤ iterMax)
         while (err > ϵ_vel && itPT ≤ iterMax)
@@ -275,8 +268,9 @@ function _solve_DYREL!(
                 push!(err_evo_it, iter)
 
                 # @printf("it = %d, iter = %d, ϵ_vel = %1.3e, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", itPT, iter, ϵ_vel, err, errVx, errVy)
-                @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
-
+                if verbose_DR
+                    @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
+                end
                 @. dVx = dVxdτ * βVx * dτVx
                 @. dVy = dVydτ * βVy * dτVy
 

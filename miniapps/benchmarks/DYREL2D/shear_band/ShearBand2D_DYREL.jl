@@ -50,7 +50,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     origin         = 0.0, 0.0       # origin coordinates
     grid           = Geometry(ni, li; origin = origin)
     (; xci, xvi)   = grid           # nodes at the center and vertices of the cells
-    dt             = Inf
 
     # Physical properties using GeoParams ----------------
     τ_y            = 1.6            # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
@@ -136,10 +135,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     sol   = [0e0]
     ttot  = [0e0]
     # while t < tmax
-    for _ in 1:10
+    for _ in 1:1
 
         # Stokes solver ----------------
-        solve_DYREL!(
+        iters = solve_DYREL!(
             stokes,
             ρg,
             dyrel,
@@ -153,11 +152,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             kwargs = (;
                 verbose  = false,
                 iterMax  = 50.0e3,
-                nout     = 100,
+                nout     = 10,
                 rel_drop = 0.75,
-                # λ_relaxation = 0,
                 λ_relaxation_PH = 1,
-                λ_relaxation_DR = 1,
+                λ_relaxation_DR = 1.075,
+                verbose_PH = true,
+                verbose_DR = false,
                 viscosity_relaxation = 1/2,
                 viscosity_cutoff = (-Inf, Inf),
             )
@@ -186,18 +186,22 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ax4 = Axis(fig[2, 3], aspect = 1)
         h11 = heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        h21 = heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
+        # h21 = heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
+        h21 = lines!(ax2, iters.err_evo_it/nx, log10.(iters.err_evo_V), linewidth = 3, label="V")
+        h21 = lines!(ax2, iters.err_evo_it/nx, log10.(iters.err_evo_P), linewidth = 3, label="P")
         h22 = heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
-        lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
+        # lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
         lines!(ax4, ttot, sol, color = :red)
         Colorbar(fig[1, 2], h11)
-        Colorbar(fig[2, 2], h21)
+        axislegend(ax2)
+        # Colorbar(fig[2, 2], h21)
         Colorbar(fig[2, 4], h22)
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)
     end
+
 
     return nothing
 end

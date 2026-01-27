@@ -108,7 +108,7 @@ end
     end
 end
 
-function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, dt)
+@inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, dt)
 
     # viscoelastic viscosity
     η_ve  = inv(inv(η) + inv(G * dt))
@@ -123,7 +123,6 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
     # Plastic stress correction starts here
     τij   = @. 2 * η_ve * εij_eff
     τII   = second_invariant(τij)
-    # Plasticity
     # F     = τII - C * cosϕ - max(P, 0e0) * sinϕ
     F     = τII - C * cosϕ - P * sinϕ
     λ     = if ispl && F > 0
@@ -132,11 +131,12 @@ function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, is
     else
         0.0
     end
+    # Plasticity
     # Effective viscoelastic-plastic viscosity
     η_vep  = (τII - λ * η_ve) / (2 * εII) 
     # Update stress and plastic strain rate
     τij    = @. 2 * η_vep * εij_eff 
-    # τII    = second_invariant(τij)
+    τII    = second_invariant(τij)
     dQdτij = @. 0.5 * τij / τII
     εij_pl = @. λ * dQdτij
     # Update pressure correction due to dilatation

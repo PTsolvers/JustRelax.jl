@@ -32,6 +32,7 @@ function _solve_DYREL!(
         b_width = (4, 4, 0),
         verbose_PH = true,
         verbose_DR = true,
+        linear_viscosity = false,
         kwargs...,
     ) where {T}
 
@@ -103,8 +104,8 @@ function _solve_DYREL!(
     for itPH in 1:250
 
         # reset plastic multiplier at the beginning of the time step
-        stokes.λ  .= 0.0
-        stokes.λv .= 0.0
+        # stokes.λ  .= 0.0
+        # stokes.λv .= 0.0
         
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
@@ -122,15 +123,17 @@ function _solve_DYREL!(
         compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt) # not resetting λ in every PH iteration seems to work better
         update_halo!(stokes.τ.xy)
 
-        update_viscosity_τII!(
-            stokes,
-            phase_ratios,
-            args,
-            rheology,
-            viscosity_cutoff;
-            relaxation = viscosity_relaxation,
-        )
-
+        if !linear_viscosity
+            update_viscosity_τII!(
+                stokes,
+                phase_ratios,
+                args,
+                rheology,
+                viscosity_cutoff;
+                relaxation = viscosity_relaxation,
+            )
+        end
+        
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
             stokes.R.Rx,
@@ -165,8 +168,8 @@ function _solve_DYREL!(
             errPt0 = errPt + eps()
         end
         err = maximum(
-            (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
-            # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
+            # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
+            (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
         )
         
         isnan(err) && error("NaN detected in outer loop")
@@ -214,15 +217,17 @@ function _solve_DYREL!(
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
             update_halo!(stokes.τ.xy)
             
-            update_viscosity_τII!(
-                stokes,
-                phase_ratios,
-                args,
-                rheology,
-                viscosity_cutoff;
-                relaxation = viscosity_relaxation,
-            )
-
+            if !linear_viscosity
+                update_viscosity_τII!(
+                    stokes,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff;
+                    relaxation = viscosity_relaxation,
+                )
+            end
+        
             # Residuals
             @. P_num = γ_eff * stokes.R.RP
             @parallel (@idx ni) compute_DR_residual_V!(
@@ -257,8 +262,8 @@ function _solve_DYREL!(
                     errVy00 = errVy
                 end
                 
-                err = maximum( 
-                    (errVx / errVx00, errVy / errVy00) 
+                err = max( 
+                    errVx / errVx00, errVy / errVy00
                 )
                 isnan(err) && error("NaN detected in inner loop")
 
@@ -273,7 +278,7 @@ function _solve_DYREL!(
                 @. dVx = dVxdτ * βVx * dτVx
                 @. dVy = dVydτ * βVy * dτVy
 
-                λminV  = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy.*(stokes.R.Ry .- Ry0))) / 
+                λminV = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy.*(stokes.R.Ry .- Ry0))) / 
                     (sum(dVx.^2) + sum(dVy.^2))
                 @. cVx = 2 * √(λminV) * c_fact
                 @. cVy = 2 * √(λminV) * c_fact

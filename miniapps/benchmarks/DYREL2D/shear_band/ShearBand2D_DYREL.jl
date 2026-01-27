@@ -105,11 +105,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
 
     # Rheology
     compute_viscosity!(
@@ -122,6 +121,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     )
     stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
     stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    @views stokes.V.Vx[2:end-1, 2:end-1] .= 0e0
+    @views stokes.V.Vy[2:end-1, 2:end-1] .= 0e0
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -135,7 +136,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     sol   = [0e0]
     ttot  = [0e0]
     # while t < tmax
-    for _ in 1:1
+    for _ in 1:15
 
         # Stokes solver ----------------
         iters = solve_DYREL!(
@@ -155,8 +156,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 nout     = 10,
                 rel_drop = 0.75,
                 λ_relaxation_PH = 1,
-                λ_relaxation_DR = 1.075,
-                verbose_PH = true,
+                λ_relaxation_DR = 0.1,
+                verbose_PH = false,
                 verbose_DR = false,
                 viscosity_relaxation = 1/2,
                 viscosity_cutoff = (-Inf, Inf),
@@ -206,10 +207,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n  = 64
-nx = n
-ny = n
-figdir = "ShearBands2D_DYREL"
+n  = 4
+nx = 32*n
+ny = 32*n
+figdir = "ShearBands2D_DYREL_old"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

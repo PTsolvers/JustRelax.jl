@@ -128,8 +128,10 @@ makedocs(;
     ],
 )
 
-deploydocs(
+DocumenterVitepress.deploydocs(;
     repo = "github.com/PTsolvers/JustRelax.jl",
-    devbranch = "main",
-    push_preview = true
+    target = joinpath(@__DIR__, "build"),
+    branch = "gh-pages",
+    devbranch = "main", # or master, trunk, ...
+    push_preview = true,
 )

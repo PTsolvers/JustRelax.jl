@@ -77,7 +77,7 @@ function GMG_subduction_2D(nx, ny)
     origin = (x[1], z[1]) .* 1.0e3
 
     ph = Phases[:, 1, :] .+ 1
-    T = Temp[:, 1, :]
+    T = Temp[:, 1, :] .+ 273
 
     return li, origin, ph, T
 end

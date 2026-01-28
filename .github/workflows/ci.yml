@@ -27,7 +27,7 @@ jobs:
           # - 'nightly'
         os:
           - ubuntu-latest
-          - macOS-13 # Intel Chip
+          - macOS-15 # Intel Chip
           - windows-latest
         arch:
           - x64
@@ -60,7 +60,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         env:
           cache-name: cache-artifacts
         with:

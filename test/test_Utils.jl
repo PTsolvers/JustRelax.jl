@@ -158,4 +158,9 @@ end
         @test minimum_mpi(stokes.viscosity.η) === 1.0
         @test maximum_mpi(stokes.viscosity.η) === 1.0
     end
+
+
+    @testset "versioninfo" begin
+        JustRelax.versioninfo(devnull)
+    end
 end

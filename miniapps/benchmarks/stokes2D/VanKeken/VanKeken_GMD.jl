@@ -1,0 +1,287 @@
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
+
+using Printf, LinearAlgebra, GeoParams, CellArrays
+using JustRelax, JustRelax.JustRelax2D
+using MPI: MPI
+
+const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+
+using GLMakie
+
+using JustPIC, JustPIC._2D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+
+# x-length of the domain
+const λ = 0.9142
+
+# HELPER FUNCTIONS ---------------------------------------------------------------
+# Initialize phases on the particles
+function init_phases!(phases, particles)
+    ni = size(phases)
+
+    @parallel_indices (i, j) function init_phases!(phases, px, py, index)
+        @inbounds for ip in cellaxes(phases)
+            # quick escape
+            @index(index[ip, i, j]) == 0 && continue
+
+            x = @index px[ip, i, j]
+            y = @index py[ip, i, j]
+
+            # plume - rectangular
+            if y > 0.2 + 0.02 * cos(π * x / λ)
+                @index phases[ip, i, j] = 2.0
+            else
+                @index phases[ip, i, j] = 1.0
+            end
+        end
+        return nothing
+    end
+
+    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index)
+end
+# END OF HELPER FUNCTIONS --------------------------------------------------------
+
+# MAIN SCRIPT --------------------------------------------------------------------
+function VanKeken2D(igg; ny = 64, nx = 64, figdir = "model_figs", finalize_MPI = false)
+
+    # Physical domain ------------------------------------
+    ly = 1            # domain length in y
+    lx = ly           # domain length in x
+    ni = nx, ny       # number of cells
+    li = lx, ly       # domain length in x- and y-
+    di = @. li / ni   # grid step in x- and -y
+    origin = 0.0, 0.0     # origin coordinates
+    grid = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    dt = 1.0e-10
+
+    # Physical properties using GeoParams ----------------
+    rheology = (
+        # Low density phase
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 1),
+            Gravity = ConstantGravity(; g = 1),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e0),)),
+
+        ),
+        # High density phase
+        SetMaterialParams(;
+            Density = ConstantDensity(; ρ = 2),
+            Gravity = ConstantGravity(; g = 1),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e0),)),
+        ),
+    )
+
+    # Initialize particles -------------------------------
+    nxcell, max_p, min_p = 20, 30, 10
+    particles = init_particles(
+        backend, nxcell, max_p, min_p, xvi...
+    )
+    # velocity grids
+    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+    # temperature
+    pPhases, = init_cell_arrays(particles, Val(1))
+    particle_args = (pPhases,)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    init_phases!(pPhases, particles)
+    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+
+    # STOKES ---------------------------------------------
+    # Allocate arrays needed for every Stokes problem
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ_abs = 1.0e-8, CFL = 1 / √2.1)
+
+    # Buoyancy forces
+    ρg = @zeros(ni...), @zeros(ni...)
+    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
+
+    # Rheology
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+
+    # Boundary conditions
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = false, bot = false),
+        no_slip = (left = false, right = false, top = true, bot = true),
+    )
+    flow_bcs!(stokes, flow_bcs)
+    update_halo!(@velocity(stokes)...)
+
+    # IO ----- -------------------------------------------
+    # if it does not exist, make folder where figures are stored
+    !isdir(figdir) && mkpath(figdir)
+    # ----------------------------------------------------
+
+    # Buffer arrays to compute velocity rms
+    Vx_v = @zeros(ni .+ 1...)
+    Vy_v = @zeros(ni .+ 1...)
+
+    # Time loop
+    t, it = 0.0, 0
+    tmax = 2.0e3
+    Urms = Float64[]
+    trms = Float64[]
+    sizehint!(Urms, 100000)
+    sizehint!(trms, 100000)
+
+    while t < tmax
+
+        # Update buoyancy
+        compute_ρg!(ρg[2], phase_ratios, rheology, args)
+        # ------------------------------
+
+        # Stokes solver ----------------
+        solve!(
+            stokes,
+            pt_stokes,
+            di,
+            flow_bcs,
+            ρg,
+            phase_ratios,
+            rheology,
+            args,
+            dt,
+            igg;
+            kwargs = (
+                iterMax = 10.0e3,
+                nout = 1.0e3,
+                viscosity_cutoff = (-Inf, Inf),
+            )
+        )
+        dt = compute_dt(stokes, di) * 0.8
+        # ------------------------------
+
+        # Compute U rms ---------------
+        Urms_it = let
+            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
+            @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
+            sum(Vx_v .^ 2) * prod(di) |> sqrt
+        end
+        push!(Urms, Urms_it)
+        push!(trms, t)
+        # ------------------------------
+
+        # advect particles in space
+        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        # # advect particles in memory
+        move_particles!(particles, xvi, particle_args)
+        # inject && break
+        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+
+        @show it += 1
+        t += dt
+
+        # Plotting ---------------------
+        if it == 1 || rem(it, 25) == 0 || t >= tmax
+            fig = Figure(size = (1000, 1000), font = "TeX Gyre Heros Makie")
+            ax1 = Axis(
+                fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
+                titlesize = 20,
+                yticklabelsize = 12,
+                xticklabelsize = 12,
+                xlabelsize = 12,
+                ylabelsize = 12
+            )
+            h = heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :lapaz)
+            Colorbar(fig[1:2, 2], h; height = Relative(1.0), label = "Density", labelsize = 20, ticklabelsize = 12)
+            ax2 = Axis(
+                fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel = L"V_{RMS}",
+                titlesize = 20,
+                yticklabelsize = 12,
+                xticklabelsize = 12,
+                xlabelsize = 12,
+                ylabelsize = 12
+            )
+            ylims!(ax2, 0, 0.005)
+            lines!(ax2, trms, Urms, color = :black)
+
+            save(joinpath(figdir, "$(nx)x$(ny)_$(it).png"), fig)
+            fig
+        end
+
+    end
+
+    # df = DataFrame(t=trms, Urms=Urms)
+    # CSV.write(joinpath(figdir, "Urms_$(nx)x$(ny).csv"), df)
+
+    finalize_global_grid(; finalize_MPI = finalize_MPI)
+
+    return Urms, trms, ρg[2], xci
+end
+
+# Specify benchmark type and run type (:single or :multiple)
+runtype = :multiple
+
+if runtype == :single
+    figdir = "VanKeken"
+    n = 64
+    nx = n
+    ny = n
+    igg = if !(JustRelax.MPI.Initialized())
+        IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+    else
+        igg
+    end
+    VanKeken2D(igg; figdir = figdir, nx = nx, ny = ny, finalize_MPI = true)
+
+elseif runtype == :multiple
+    nrange = 5:8
+    all_results = Dict()
+
+    for i in nrange
+        init_MPI = MPI.Initialized() ? false : true
+        local n = 2^i
+        local nx = n
+        local ny = n
+        local igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_MPI)...)
+
+        figdir = joinpath("VanKenken", "$(nx)x$(ny)")
+
+        Urms, trms, ρg, xci = VanKeken2D(igg; figdir = figdir, nx = nx, ny = ny, finalize_MPI = false)
+
+        # Store results for each resolution
+        all_results[n] = (Urms = Urms, trms = trms, ρg = ρg, xci = xci)
+
+        println("Completed run for $(nx)x$(ny), max Urms: $(maximum(Urms))")
+        sleep(2) # to avoid file writing conflicts
+    end
+
+    # plot all results together
+    fig = Figure(size = (1000, 1000), font = "TeX Gyre Heros Makie")
+    ax1 = Axis(
+        fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
+        titlesize = 20,
+        yticklabelsize = 12,
+        xticklabelsize = 12,
+        xlabelsize = 12,
+        ylabelsize = 12
+    )
+
+    ρg = all_results[2^last(nrange)].ρg
+    xci = all_results[2^last(nrange)].xci
+    h = heatmap!(ax1, xci[1], xci[2], Array(ρg), colormap = :lapaz)
+    Colorbar(fig[1:2, 2], h; height = Relative(1.0), label = "Density", labelsize = 20, ticklabelsize = 12)
+    ax2 = Axis(
+        fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel = L"V_{RMS}",
+        titlesize = 20,
+        yticklabelsize = 12,
+        xticklabelsize = 12,
+        xlabelsize = 12,
+        ylabelsize = 12
+    )
+    ylims!(ax2, 0, 0.005)
+    for (n, data) in all_results
+        lines!(ax2, data.trms, data.Urms, label = "$(n)x$(n)")
+    end
+
+    axislegend(ax2, position = :rt)
+    save(joinpath(figdir, "VanKeken_convergence.png"), fig)
+    fig
+end

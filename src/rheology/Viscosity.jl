@@ -165,7 +165,7 @@ end
         AII = second_invariant(Aij...)
 
         # compute and update stress viscosity
-        ηi = fn_viscosity(rheology, AII, args_ij)                
+        ηi = fn_viscosity(rheology, AII, args_ij)
         ηi = continuation_log(ηi, η[I...], ν)
         η[I...] = clamp(ηi, cutoff...)
     end
@@ -197,7 +197,7 @@ end
 
         # compute and update stress viscosity
         ηi = fn_viscosity(rheology, AII_ij, args_ij)
-                
+
         ηi = continuation_log(ηi, η[I...], ν)
         η[I...] = clamp(ηi, cutoff...)
     end
@@ -309,7 +309,7 @@ function _compute_viscosity!(
         local_viscosity_args,
     )
     # vertex viscosity
-    @parallel (@idx ni.+1) compute_viscosity_kernel!(
+    @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
         stokes.viscosity.ηv,
         ν,
         phase_ratios.vertex,
@@ -347,16 +347,16 @@ function _compute_viscosity!(
         fn_viscosity
     )
     # if do_vertices
-        @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
-            stokes.viscosity.ηv,
-            ν,
-            select_tensor_vertex(stokes, fn_viscosity)...,
-            args,
-            rheology,
-            air_phase,
-            cutoff,
-            local_viscosity_args_vertex,
-        )
+    @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
+        stokes.viscosity.ηv,
+        ν,
+        select_tensor_vertex(stokes, fn_viscosity)...,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        local_viscosity_args_vertex,
+    )
     # end
     return nothing
 end
@@ -377,7 +377,7 @@ end
     @inbounds begin
         # cache
         A = Axx[I...], Ayy[I...], Axyv[I...]
-  
+
         # we need strain rate not to be zero, otherwise we get NaNs
         AII_0 = allzero(A...) * eps()
 
@@ -500,30 +500,30 @@ end
 @inline function local_viscosity_args_vertex(args, i, j)
     # clamp indices
     nx, ny = size(args[1])
-    il     = max(i-1, 1)  # left
-    ir     = min(i, nx)   # right
-    jb     = max(j-1, 1)  # bottom
-    jt     = min(j, ny)   # top
+    il = max(i - 1, 1)  # left
+    ir = min(i, nx)   # right
+    jb = max(j - 1, 1)  # bottom
+    jt = min(j, ny)   # top
     # average values at cell centers surrounding vertex
     v11 = getindex.(values(args), il, jb)
     v12 = getindex.(values(args), ir, jb)
     v21 = getindex.(values(args), il, jt)
     v22 = getindex.(values(args), ir, jt)
-    v   = @. 0.25 * (v11 + v12 + v21 + v22)
+    v = @. 0.25 * (v11 + v12 + v21 + v22)
     # create local args
     local_args = (; zip(keys(args), v)..., dt = args.dt, τII_old = 0.0)
     return local_args
 end
 
-@inline function local_viscosity_args_vertex(args, i, j, k)    
+@inline function local_viscosity_args_vertex(args, i, j, k)
     # clamp indices
     nx, ny, nz = size(args[1])
-    il     = max(i-1, 1)  # left
-    ir     = min(i, nx)   # right
-    jb     = max(j-1, 1)  # bottom
-    jt     = min(j, ny)   # top
-    kf     = max(k-1, 1)  # front
-    kb     = min(k, nz)   # back
+    il = max(i - 1, 1)  # left
+    ir = min(i, nx)   # right
+    jb = max(j - 1, 1)  # bottom
+    jt = min(j, ny)   # top
+    kf = max(k - 1, 1)  # front
+    kb = min(k, nz)   # back
     # average values at cell centers surrounding vertex
     v111 = getindex.(values(args), il, jb, kf)
     v121 = getindex.(values(args), ir, jb, kf)
@@ -533,7 +533,7 @@ end
     v122 = getindex.(values(args), ir, jb, kb)
     v212 = getindex.(values(args), il, jt, kb)
     v222 = getindex.(values(args), ir, jt, kb)
-    v   = @. 0.125 * (v111 + v121 + v211 + v221 + v112 + v122 + v212 + v222)
+    v = @. 0.125 * (v111 + v121 + v211 + v221 + v112 + v122 + v212 + v222)
     # create local args
     local_args = (; zip(keys(args), v)..., dt = args.dt, τII_old = 0.0)
     return local_args

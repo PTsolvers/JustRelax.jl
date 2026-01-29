@@ -28,7 +28,7 @@ function _solve_DYREL!(
         iterMin = 1.0e2,
         free_surface = false,
         nout = 100,
-        rel_drop = 1e-2,
+        rel_drop = 1.0e-2,
         b_width = (4, 4, 0),
         verbose_PH = true,
         verbose_DR = true,
@@ -59,12 +59,12 @@ function _solve_DYREL!(
     ) = dyrel
     # unpack
 
-    _di   = inv.(di)
-    ni    = size(stokes.P)
+    _di = inv.(di)
+    ni = size(stokes.P)
 
     # errors
-    err      = 1.0
-    iter     = 0
+    err = 1.0
+    iter = 0
 
     # solver loop
     @copy stokes.P0 stokes.P
@@ -76,7 +76,7 @@ function _solve_DYREL!(
     end
 
     # reset plastic multiplier at the beginning of the time step
-    stokes.λ  .= 0.0
+    stokes.λ .= 0.0
     stokes.λv .= 0.0
 
     # # compute buoyancy forces and viscosity
@@ -86,19 +86,19 @@ function _solve_DYREL!(
     # center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
 
     # Iteration loop
-    errVx0     = 1.0
-    errVy0     = 1.0
-    errPt0     = 1.0 
-    errVx00    = 1.0
-    errVy00    = 1.0 
-    iter       = 0
-    ϵ          = dyrel.ϵ
-    err        = 2 * ϵ
-    err_evo_V  = Float64[]
-    err_evo_P  = Float64[]
+    errVx0 = 1.0
+    errVy0 = 1.0
+    errPt0 = 1.0
+    errVx00 = 1.0
+    errVy00 = 1.0
+    iter = 0
+    ϵ = dyrel.ϵ
+    err = 2 * ϵ
+    err_evo_V = Float64[]
+    err_evo_P = Float64[]
     err_evo_it = Float64[]
-    itg        = 0
-    P_num      = similar(stokes.P)
+    itg = 0
+    P_num = similar(stokes.P)
 
     # Powell-Hestenes iterations
     for itPH in 1:250
@@ -106,7 +106,7 @@ function _solve_DYREL!(
         # reset plastic multiplier at the beginning of the time step
         # stokes.λ  .= 0.0
         # stokes.λv .= 0.0
-        
+
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
 
@@ -133,7 +133,7 @@ function _solve_DYREL!(
                 relaxation = viscosity_relaxation,
             )
         end
-        
+
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
             stokes.R.Rx,
@@ -144,7 +144,7 @@ function _solve_DYREL!(
             ρg...,
             _di...,
         )
-        
+
         # compute pressure residual
         compute_residual_P!(
             stokes.R.RP,
@@ -169,30 +169,30 @@ function _solve_DYREL!(
         end
         err = maximum(
             # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
-            (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy), min(errPt/errPt0, errPt))
+            (min(errVx / errVx0, errVx), min(errVy / errVy0, errVy), min(errPt / errPt0, errPt))
         )
-        
+
         isnan(err) && error("NaN detected in outer loop")
-        err > 1e10 && error("Kaboom! Error > 1e10 in outer loop")
+        err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
         if verbose_PH
-            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[Rx=%1.3e %1.3e, Ry=%1.3e %1.3e, Rp=%1.3e %1.3e] \n", itPH, iter, iter/ni[1], err, errVx, errVx/errVx0, errVy, errVy/errVy0, errPt, errPt/errPt0)
+            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[Rx=%1.3e %1.3e, Ry=%1.3e %1.3e, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errVx, errVx / errVx0, errVy, errVy / errVy0, errPt, errPt / errPt0)
         end
         err < ϵ && break
 
         # Set tolerance of velocity solve proportional to residual
         ϵ_vel = err * rel_drop
-        itPT  = 0
+        itPT = 0
         # while (err > dyrel.ϵ_vel && itPT ≤ iterMax)
         while (err > ϵ_vel && itPT ≤ iterMax)
-            itPT   += 1
-            itg    += 1
-            iter   += 1 
+            itPT += 1
+            itg += 1
+            iter += 1
 
-            # Pseudo-old dudes 
+            # Pseudo-old dudes
             copyto!(Rx0, stokes.R.Rx)
             copyto!(Ry0, stokes.R.Ry)
-           
-            # Divergence 
+
+            # Divergence
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
             compute_residual_P!(
                 stokes.R.RP,
@@ -206,7 +206,7 @@ function _solve_DYREL!(
                 dt,
                 args,
             )
-         
+
             # Deviatoric strain rate
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
@@ -216,7 +216,7 @@ function _solve_DYREL!(
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
             update_halo!(stokes.τ.xy)
-            
+
             if !linear_viscosity
                 update_viscosity_τII!(
                     stokes,
@@ -227,7 +227,7 @@ function _solve_DYREL!(
                     relaxation = viscosity_relaxation,
                 )
             end
-        
+
             # Residuals
             @. P_num = γ_eff * stokes.R.RP
             @parallel (@idx ni) compute_DR_residual_V!(
@@ -238,37 +238,37 @@ function _solve_DYREL!(
                 stokes.ΔPψ,
                 @stress(stokes)...,
                 ρg...,
-                Dx, 
+                Dx,
                 Dy,
                 _di...,
-            )  
-            
+            )
+
             # Damping-pong
-            @parallel (@idx ni) update_V_damping!( (dVxdτ, dVydτ), (stokes.R.Rx, stokes.R.Ry), (αVx, αVy) )
+            @parallel (@idx ni) update_V_damping!((dVxdτ, dVydτ), (stokes.R.Rx, stokes.R.Ry), (αVx, αVy))
 
             # PT updates
-            @parallel (@idx ni.+1) update_DR_V!( (stokes.V.Vx, stokes.V.Vy), (dVxdτ, dVydτ), (βVx, βVy), (dτVx, dτVy) )
+            @parallel (@idx ni .+ 1) update_DR_V!((stokes.V.Vx, stokes.V.Vy), (dVxdτ, dVydτ), (βVx, βVy), (dτVx, dτVy))
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)
-            
+
             # Residual check
             if iszero(iter % nout)
 
                 errVx = norm(Dx .* stokes.R.Rx) / √(length(stokes.R.Rx))
                 errVy = norm(Dy .* stokes.R.Ry) / √(length(stokes.R.Ry))
-                
-                if iter == nout 
+
+                if iter == nout
                     errVx00 = errVx
                     errVy00 = errVy
                 end
-                
-                err = max( 
+
+                err = max(
                     errVx / errVx00, errVy / errVy00
                 )
                 isnan(err) && error("NaN detected in inner loop")
 
-                push!(err_evo_V, errVx/errVx00)
-                push!(err_evo_P, errPt/errPt0)
+                push!(err_evo_V, errVx / errVx00)
+                push!(err_evo_P, errPt / errPt0)
                 push!(err_evo_it, iter)
 
                 # @printf("it = %d, iter = %d, ϵ_vel = %1.3e, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", itPT, iter, ϵ_vel, err, errVx, errVy)
@@ -278,22 +278,22 @@ function _solve_DYREL!(
                 @. dVx = dVxdτ * βVx * dτVx
                 @. dVy = dVydτ * βVy * dτVy
 
-                λminV = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy.*(stokes.R.Ry .- Ry0))) / 
-                    (sum(dVx.^2) + sum(dVy.^2))
+                λminV = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy .* (stokes.R.Ry .- Ry0))) /
+                    (sum(dVx .^ 2) + sum(dVy .^ 2))
                 @. cVx = 2 * √(λminV) * c_fact
                 @. cVy = 2 * √(λminV) * c_fact
 
                 # Optimal pseudo-time steps - can be replaced by AD
                 Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, di, dt)
-            
+
                 # Select dτ
                 update_dτV_α_β!(dyrel)
             end
         end
-        
+
         # update pressure
-        @. stokes.P += γ_eff.*stokes.R.RP
-        
+        @. stokes.P += γ_eff .* stokes.R.RP
+
         # Because pressure changed....
         # update viscosity based on the deviatoric stress tensor
         # update_viscosity_τII!(
@@ -306,12 +306,12 @@ function _solve_DYREL!(
         #     # relaxation = viscosity_relaxation,
         # )
         # # center2vertex_harm!(stokes.viscosity.ηv, stokes.viscosity.η)
-       
+
         # if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
         #     println("Pseudo-transient iterations converged in $iter iterations")
         # end
 
-        iter > 200e3 && break
+        iter > 200.0e3 && break
     end
 
     # compute vorticity
@@ -336,7 +336,7 @@ function _solve_DYREL!(
     DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt)
 
     return (; err_evo_it, err_evo_V, err_evo_P)
-     
+
 end
 
 # ## variational version
@@ -413,16 +413,16 @@ end
 #     compute_ρg!(ρg, phase_ratios, rheology, args)
 #     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 #     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
-    
+
 #     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, di, dt)
 
 #     rel_drop   = 0.75 #1e-1         # relative drop of velocity residual per PH iteration
 #     # Iteration loop
 #     errVx0     = 1.0
 #     errVy0     = 1.0
-#     errPt0     = 1.0 
+#     errPt0     = 1.0
 #     errVx00    = 1.0
-#     errVy00    = 1.0 
+#     errVy00    = 1.0
 #     iter       = 0
 #     ϵ          = dyrel.ϵ
 #     err        = 2 * ϵ
@@ -457,7 +457,7 @@ end
 #             ϕ,
 #             _di...,
 #         )
-        
+
 #         # compute pressure residual
 #         compute_residual_P!(
 #             stokes.R.RP,
@@ -495,13 +495,13 @@ end
 #         while (err>ϵ_vel && itPT ≤ iterMax)
 #             itPT += 1
 #             itg  += 1
-#             iter += 1 
+#             iter += 1
 
-#             # Pseudo-old dudes 
+#             # Pseudo-old dudes
 #             copyto!(Rx0, stokes.R.Rx)
 #             copyto!(Ry0, stokes.R.Ry)
-           
-#             # Divergence 
+
+#             # Divergence
 #             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
 
 #             compute_residual_P!(
@@ -516,7 +516,7 @@ end
 #                 dt,
 #                 args,
 #             )
-         
+
 #             # Deviatoric strain rate
 #             @parallel (@idx ni .+ 1) compute_strain_rate!(
 #                 @strain(stokes)..., stokes.∇V, @velocity(stokes)..., ϕ, _di...
@@ -535,7 +535,7 @@ end
 #             # Deviatoric stress
 #             compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation, dt)
 #             update_halo!(stokes.τ.xy)
-            
+
 #             # Residuals
 #             P_num = γ_eff .* stokes.R.RP
 #             @parallel (@idx ni) compute_DR_residual_V!(
@@ -547,11 +547,11 @@ end
 #                 @stress(stokes)...,
 #                 ρg...,
 #                 ϕ,
-#                 Dx, 
+#                 Dx,
 #                 Dy,
 #                 _di...,
-#             )  
-            
+#             )
+
 #             # Damping-pong
 #             @parallel (@idx ni) update_V_damping!( (dVxdτ, dVydτ), (stokes.R.Rx, stokes.R.Ry), (αVx, αVy) )
 
@@ -559,18 +559,18 @@ end
 #             @parallel (@idx ni.+1) update_DR_V!( (stokes.V.Vx, stokes.V.Vy), (dVxdτ, dVydτ), (βVx, βVy), (dτVx, dτVy) )
 #             flow_bcs!(stokes, flow_bcs)
 #             update_halo!(@velocity(stokes)...)
-            
+
 #             # Residual check
 #             if iszero(iter % nout)
-                
+
 #                 errVx = norm(Dx .* stokes.R.Rx)
 #                 errVy = norm(Dy .* stokes.R.Ry)
-                
-#                 if iter == nout 
+
+#                 if iter == nout
 #                     errVx00 = errVx
 #                     errVy00 = errVy
 #                 end
-                
+
 #                 err = maximum( (errVx / errVx00, errVy / errVy00) )
 #                 push!(err_evo_V, errVx/errVx00)
 #                 push!(err_evo_P, errPt/errPt0)
@@ -581,25 +581,25 @@ end
 
 #                 @printf("it = %d, iter = %d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", it, iter, err, errVx, errVy)
 
-#                 λminV  = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy.*(stokes.R.Ry .- Ry0))) / 
+#                 λminV  = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy.*(stokes.R.Ry .- Ry0))) /
 #                     (sum(dVx.*dVx) .+ sum(dVy.*dVy))
 #                 @. cVx = cVy = 2 * √(λminV) * c_fact
 #                 # cVy .= 2 * √(λminV) * c_fact
 
 #                 # Optimal pseudo-time steps - can be replaced by AD
 #                 # Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, di, dt)
-            
+
 #                 # Select dτ
 #                 update_dτV_α_β!(dyrel)
 #             end
 #         end
-        
+
 #         # update pressure
 #         stokes.P .+= γ_eff.*stokes.R.RP
-        
+
 #         # update buoyancy forces
 #         update_ρg!(ρg, phase_ratios, rheology, args)
-        
+
 #         # update viscosity
 #         update_viscosity_τII!(
 #             stokes,
@@ -635,5 +635,5 @@ end
 #     stokes.τ_o.yy_v .= stokes.τ.yy_v
 
 #     return (; err_evo_it, err_evo_V, err_evo_P)
-     
+
 # end

@@ -1,5 +1,4 @@
- 
-# for now lets focus on the 2D DYREL model only 
+# for now lets focus on the 2D DYREL model only
 struct DYREL{T, F}
     γ_eff::T  # penalty parameter
     Dx::T     # diagonal preconditioner

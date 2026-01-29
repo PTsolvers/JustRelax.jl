@@ -139,22 +139,22 @@ end
 function center2vertex_harm!(vertex, center)
     ni = size(vertex)
     @parallel (@idx ni) center2vertex_kernel_harm!(vertex, center)
-    
+
     return nothing
 end
 
-@parallel_indices (i, j) function center2vertex_kernel_harm!(vertex::T, center::T) where T <: AbstractArray{N, 2} where N
+@parallel_indices (i, j) function center2vertex_kernel_harm!(vertex::T, center::T) where {T <: AbstractArray{N, 2}} where {N}
     nx, ny = size(center)
-    il = max(i-1, 1)  # left``
+    il = max(i - 1, 1)  # left``
     ir = min(i, nx)   # right
-    jb = max(j-1, 1)  # bottom
+    jb = max(j - 1, 1)  # bottom
     jt = min(j, ny)   # top
 
     vertex[i, j] = 4 / (
-        1 / center[il, jb] + 
-        1 / center[ir, jb] +
-        1 / center[il, jt] + 
-        1 / center[ir, jt]
+        1 / center[il, jb] +
+            1 / center[ir, jb] +
+            1 / center[il, jt] +
+            1 / center[ir, jt]
     )
     return nothing
 end

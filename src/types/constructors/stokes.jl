@@ -56,7 +56,7 @@ end
 
 function Viscosity(ni::NTuple{N, Integer}) where {N}
     η = @ones(ni...)
-    ηv = @ones(ni.+1...)
+    ηv = @ones(ni .+ 1...)
     η_vep = @ones(ni...)
     ητ = @zeros(ni...)
     return JustRelax.Viscosity(η, ηv, η_vep, ητ)
@@ -179,7 +179,7 @@ function StokesArrays(ni::NTuple{N, Integer}) where {N}
     Δε = SymmetricTensor(ni...)
     ∇U = @zeros(ni...)
     λ = @zeros(ni...)
-    λv = @zeros(ni.+1...)
+    λv = @zeros(ni .+ 1...)
     ΔPψ = @zeros(ni...)
 
     return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, Δε, ∇U, λ, λv, ΔPψ)

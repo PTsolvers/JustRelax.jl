@@ -125,7 +125,7 @@ end
 @inline isplastic(x::AbstractPlasticity) = true
 @inline isplastic(x) = false
 
-@inline plastic_params(v) = plastic_params(v.CompositeRheology[1].elements, 0e0)
+@inline plastic_params(v) = plastic_params(v.CompositeRheology[1].elements, 0.0e0)
 @inline plastic_params(v, EII) = plastic_params(v.CompositeRheology[1].elements, EII)
 
 @generated function plastic_params(v::NTuple{N, Any}, EII) where {N}

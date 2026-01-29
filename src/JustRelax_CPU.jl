@@ -28,7 +28,7 @@ module JustRelax2D
     __init__() = @init_parallel_stencil(Threads, Float64, 2)
 
     include("common.jl")
-    
+
     include("stokes/Stokes2D.jl")
     export solve!
 

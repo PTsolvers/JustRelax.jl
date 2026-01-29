@@ -23,7 +23,7 @@ end
             # Compute ε_yy
             εyy[i, j] = d_yi(Vy) - ∇Vij
         end
-       
+
         # Compute ε_xy
         if all((i, j) .≤ size(εxy))
             εxy[i, j] =

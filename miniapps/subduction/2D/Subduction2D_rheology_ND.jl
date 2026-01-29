@@ -22,7 +22,7 @@ function init_rheology_nonNewtonian_plastic(CharDim)
     ϕ_wet_olivine = asind(0.1)
     C_wet_olivine = 1.0e6 * Pa
     η_reg         = 1.0e20 * Pa * s
-    el = ConstantElasticity(; G = 40e0GPa, ν = 0.45)
+    el = ConstantElasticity(; G = 40e0GPa, ν = 0.25)
     lithosphere_rheology = CompositeRheology(
         (
             el,
@@ -35,7 +35,7 @@ function init_rheology_nonNewtonian_plastic(CharDim)
 end
 
 function init_rheology_linear(CharDim)
-    el = ConstantElasticity(; G = 40e0GPa, ν = 0.45)
+    el = ConstantElasticity(; G = 40e0GPa, ν = 0.25)
 
     # lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), ))
     lithosphere_rheology = CompositeRheology((LinearViscous(; η = 1.0e23Pa*s), el))
@@ -62,7 +62,7 @@ function init_rheologies(lithosphere_rheology, CharDim)
         # Name              = "Oceanic lithosphere",
         SetMaterialParams(;
             Phase             = 2,
-            Density           = PT_Density(; ρ0 = 3.2e3kg/m^3, α = α, β = 0.0e0/Pa, T0 = (273 + 1474)K),
+            Density           = PT_Density(; ρ0 = 3.2e3kg/m^3, α = α, β = 0e0/GPa, T0 = (273 + 1474)K),
             HeatCapacity      = ConstantHeatCapacity(; Cp = Cp),
             Conductivity      = ConstantConductivity(; k = 2.5Watt / m / K),
             Gravity           = ConstantGravity(; g = g),

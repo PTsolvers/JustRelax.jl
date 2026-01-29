@@ -7,7 +7,7 @@ const isCUDA = false
     using CUDA
 end
 
-using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO, JustRelax.DataIO.JLD2
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -181,8 +181,8 @@ function main(li, origin, T_GMG, phases_GMG, igg; nx = 16, ny = 16, figdir = "fi
     end
     grid2particle!(pT, xvi, T_buffer, particles)
 
-    τxx_v = @zeros(ni .+ 1...)
-    τyy_v = @zeros(ni .+ 1...)
+    # τxx_v = @zeros(ni .+ 1...)
+    # τyy_v = @zeros(ni .+ 1...)
 
     dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt)
 
@@ -191,7 +191,7 @@ function main(li, origin, T_GMG, phases_GMG, igg; nx = 16, ny = 16, figdir = "fi
     dt_max = nondimensionalize(10e3 * yr, CharDim)
     # dt_max = dt
 
-    # while it < 100 # run only for 5 Myrs
+    while it < 100 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -219,14 +219,19 @@ function main(li, origin, T_GMG, phases_GMG, igg; nx = 16, ny = 16, figdir = "fi
                 dt,
                 igg;
                 kwargs = (;
-                    verbose = false,
-                    iterMax = 50.0e3,
-                    nout    = 200,
-                    λ_relaxation = 1.075,
+                     verbose  = false,
+                    iterMax  = 50.0e3,
+                    rel_drop = 1e-2,
+                    nout     = 400,
+                    λ_relaxation = 1,
                     viscosity_relaxation = 1.0e-3,
-                    viscosity_cutoff = viscosity_cutoff,
+                    viscosity_cutoff     = viscosity_cutoff,
                 )
             );
+            # jldsave(
+            #     joinpath(figdir, "iters_$(it).jld2");
+            #     out
+            # )
         end
         # print some stuff
         println("Stokes solver time             ")
@@ -277,8 +282,8 @@ function main(li, origin, T_GMG, phases_GMG, igg; nx = 16, ny = 16, figdir = "fi
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         # need stresses on the vertices for injection purposes
-        center2vertex!(τxx_v, stokes.τ.xx)
-        center2vertex!(τyy_v, stokes.τ.yy)
+        # center2vertex!(τxx_v, stokes.τ.xx)
+        # center2vertex!(τyy_v, stokes.τ.yy)
         inject_particles_phase!(
             particles,
             pPhases,
@@ -304,6 +309,7 @@ function main(li, origin, T_GMG, phases_GMG, igg; nx = 16, ny = 16, figdir = "fi
                     T = Array(T_buffer),
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
+                    εII_pl = Array(stokes.ε_pl.II),
                     Vx = Array(Vx_v),
                     Vy = Array(Vy_v),
                 )
@@ -368,17 +374,17 @@ function main(li, origin, T_GMG, phases_GMG, igg; nx = 16, ny = 16, figdir = "fi
         end
         # ------------------------------
 
-    # end
+    end
 
     return nothing
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D"
-n = 50
-# n = 32 # *4
+n      = 200
 nx, ny = n * 2, n
+pth    = pwd()
+figdir = joinpath(pth, "Subduction2D_DYREL_$(nx)x$(ny)")
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -387,4 +393,4 @@ else
     igg
 end
 
-# main(li, origin, T_GMG, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(li, origin, T_GMG, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

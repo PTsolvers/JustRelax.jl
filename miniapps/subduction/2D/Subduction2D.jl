@@ -1,5 +1,5 @@
 # Load script dependencies
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
 const isCUDA = false
 

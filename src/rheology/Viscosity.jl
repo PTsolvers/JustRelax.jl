@@ -552,7 +552,6 @@ end
         Base.@_inline_meta
         η = 0.0
         Base.@nexprs $N i -> begin
-            ηo = fn_viscosity(rheology[i].CompositeRheology[1], AII, args)
             η += iszero(ratio[i]) ?
                 0.0 :
                 inv(fn_viscosity(rheology[i].CompositeRheology[1], AII, args)) * ratio[i]

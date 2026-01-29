@@ -10,9 +10,9 @@ include("vizTaylorGreen.jl")
 
 function body_forces(xi::NTuple{3, T}) where {T}
     xx, yy, zz = xi
-    x = PTArray([x for x in xx, y in yy, z in zz])
-    y = PTArray([y for x in xx, y in yy, z in zz])
-    z = PTArray([z for x in xx, y in yy, z in zz])
+    x = PTArray(backend)([x for x in xx, y in yy, z in zz])
+    y = PTArray(backend)([y for x in xx, y in yy, z in zz])
+    z = PTArray(backend)([z for x in xx, y in yy, z in zz])
 
     fz, fy = @zeros(size(x)...), @zeros(size(x)...)
     fx = @. -36 * π^2 * cos(2 * π * x) * sin(2 * π * y) * sin(2 * π * z)
@@ -106,6 +106,8 @@ function taylorGreen(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI 
 
     ## Setup-specific parameters and fields
     β = 10.0
+    (; η) = stokes.viscosity
+    η .= 1.0
     η = @ones(ni...) # add reference
     ρg = body_forces(xci) # => ρ*(gx, gy, gz)
     dt = Inf
@@ -132,13 +134,16 @@ function taylorGreen(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI 
             di,
             flow_bcs,
             ρg,
-            η,
             K,
             Gc,
             dt,
             igg;
-            iterMax = 10.0e3,
-            b_width = (4, 4, 4),
+            kwargs = (;
+                iterMax = 100.0e3,
+                nout = 1.0e3,
+                b_width = (4, 4, 4),
+                verbose = true,
+            )
         )
         t += Δt
     end

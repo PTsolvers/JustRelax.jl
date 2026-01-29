@@ -1,4 +1,4 @@
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -50,7 +50,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     origin = 0.0, 0.0     # origin coordinates
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    dt = Inf
 
     # Physical properties using GeoParams ----------------
     τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
@@ -193,7 +192,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 128
+n  = 128 ÷ 2
 nx = n
 ny = n
 figdir = "ShearBands2D"

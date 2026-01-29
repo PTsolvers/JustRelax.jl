@@ -31,7 +31,7 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -232,7 +232,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     nxcell = 20
     max_xcell = 40
     min_xcell = 15
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi...)
 
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -408,7 +408,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles

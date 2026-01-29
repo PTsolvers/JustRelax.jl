@@ -9,12 +9,10 @@
 [![codecov](https://codecov.io/gh/PTsolvers/JustRelax.jl/graph/badge.svg?token=4ZJO7ZGT8H)](https://codecov.io/gh/PTsolvers/JustRelax.jl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
+[![Downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Fmonthly_downloads%2FJustRelax&query=total_requests&suffix=%2Fmonth&label=Downloads)](http://juliapkgstats.com/pkg/JustRelax)
+[![SQAaaS badge shields.io](https://img.shields.io/badge/sqaaas%20software-silver-lightgrey)](https://api.eu.badgr.io/public/assertions/gXEVz2XaS4iE-zi4lMY5pA "SQAaaS silver badge achieved")
 
 <p align="center"><img src="./docs/src/assets/logo.png" alt="JustRelax.jl" width="200"></p>
-
-:warning: This Package is still under active development
-- The API is still subject to change.
-- The benchmarks and miniapps are working and provide the user with an insight into the capabilities of the package.
 
 Need to solve a very large multi-physics problem on many GPUs in parallel? Just Relax!
 
@@ -58,19 +56,23 @@ After installation, you can test the package by running the following commands:
 
 ```julia
 using JustRelax
+
 julia> ]
-  pkg> test JustRelax
+
+(@v1.xx) pkg> test JustRelax
 ```
+
 The test will take a while, so grab a :coffee: or :tea:
+
+:warning: If you plan on developing JustRelax.jl and/or modifying the source coude, you can test your local version by running the testing framework again
+```julia
+julia> ]
+(@v1.xx) pkg> test JustRelax
+```
 
 ## Miniapps
 
-Available miniapps can be found in the [miniapps folder](miniapps) and will be updated regularly. The miniapps are designed to be simple and easy to understand, while still providing a good basis for more complex applications. The miniapps are designed to be run on a single node, but can be easily extended to run on multiple nodes using [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) and [MPI.jl](https://github.com/JuliaParallel/MPI.jl).
-
-
-## Benchmarks
-
-Current (Blankenback2D, Stokes 2D-3D, thermal diffusion, thermal stress) and future benchmarks can be found in the [Benchmarks](miniapps/benchmarks).
+Available examples and [Benchmark](miniapps/benchmarks) miniapps can be found in the [miniapps folder](miniapps). The miniapps are simple and easy to understand, while still providing a good basis for more complex applications. The miniapps are designed to be run on a single node, but can be easily extended to run on multiple nodes using [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl) and [MPI.jl](https://github.com/JuliaParallel/MPI.jl). To get started, instantiate the miniapps folder and run our favourite one!
 
 ## Funding
-The development of this package is supported by the [GPU4GEO](https://ptsolvers.github.io/GPU4GEO/) [PASC](https://www.pasc-ch.org) project.
+The development of this package is supported by the [GPU4GEO & δGPU4GEO](https://gpu4geo.org/) [PASC](https://www.pasc-ch.org) project, and the European Research Council through the MAGMA project, ERC Consolidator Grant #771143.

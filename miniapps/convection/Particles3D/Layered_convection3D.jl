@@ -12,7 +12,7 @@ using JustPIC, JustPIC._3D
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
-using Printf, GeoParams, CairoMakie, GeoParams
+using Printf, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")
@@ -99,7 +99,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
     nxcell = 25
     max_xcell = 35
     min_xcell = 8
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi...)
 
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -253,7 +253,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles

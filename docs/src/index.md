@@ -6,7 +6,7 @@ layout: home
 hero:
   name: JustRelax.jl
   text: Solving multi-physical geodynamic problems
-  tagline: A collection of iterative accelerated pseudo-transient solvers using MPI for distributed computing on GPUs or CPUs.
+  tagline: A collection of iterative accelerated pseudo-transient solvers using MPI for distributed computing on GPUs and CPUs.
   actions:
     - theme: brand
       text: Getting Started
@@ -24,18 +24,18 @@ hero:
 features:
   - icon: 🚀
     title: Backend Agnostic
-    details: Effortlessly execute your code on CPUs and GPUs with ParallelStencils.jl.
+    details: Effortlessly execute your code on GPUs and CPUs with ParallelStencils.jl.
     link: /man/backend
 
   - icon: 🛠️
     title: Governing equations
-    details: Governing equations of the solvers using the accelerated pseudo-transient method
+    details: Governing equations of the solvers using the accelerated pseudo-transient method.
     link: /man/equations_basic
 
   - icon: ⚡
     title: Examples
-    details: An overview of available examples from shear bands to 2d subduction
-    link: man/subduction2D/setup
+    details: An overview of available examples from shear bands to 2D subduction.
+    link: man/Blankenbach
 
   - icon: 🧩
     title: Extensibility
@@ -81,6 +81,22 @@ julia> using Pkg
 julia> Pkg.add(url="https://github.com/PTsolvers/JustRelax.jl")
 ```
 
+## Example miniapps
+
+Example and benchmark miniapps solving a variety of geodynamic-related problems can be readily run from the [miniapps](https://github.com/PTsolvers/JustRelax.jl/tree/main/miniapps) folder. To get started, instantiate the miniapps environment and run your favourite one:
+
+```shell
+cd miniapps
+
+julia --project=.
+```
+
+```julia
+julia> import Pkg
+
+julia> Pkg.instantiate()
+```
+
 ## Funding
 
-The development of this package is supported by the [GPU4GEO](https://pasc-ch.org/projects/2021-2024/gpu4geo/index.html) and ∂GPU4GEO PASC projects. More information about the GPU4GEO project can be found on the [GPU4GEO website](https://GPU4GEO.org/).
+The development of this package is supported by the [GPU4GEO](https://pasc-ch.org/projects/2021-2024/gpu4geo/index.html) and [∂GPU4GEO](https://pasc-ch.org/projects/2025-2028/gpu4geo-differentiable-multi-physics-solvers-for-extreme-scale-geophysics-simulations-on-gpus/index.html) PASC projects. More information about the GPU4GEO project can be found on the [GPU4GEO website](https://GPU4GEO.org/).

@@ -12,7 +12,7 @@ using JustPIC._3D
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using Printf, Statistics, LinearAlgebra, GeoParams, GLMakie, CellArrays
+using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
 using StaticArrays
 using ImplicitGlobalGrid
 using MPI: MPI
@@ -411,7 +411,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles

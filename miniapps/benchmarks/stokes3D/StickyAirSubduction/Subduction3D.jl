@@ -28,7 +28,7 @@ else
 end
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, GLMakie
+using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Subduction3D_rheology.jl")

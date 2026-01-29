@@ -27,7 +27,7 @@ jobs:
           # - 'nightly'
         os:
           - ubuntu-latest
-          - macOS-13 # Intel Chip
+          - macOS-15 # Intel Chip
           - windows-latest
         arch:
           - x64
@@ -55,12 +55,12 @@ jobs:
             allow_failure: true
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         env:
           cache-name: cache-artifacts
         with:

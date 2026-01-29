@@ -33,7 +33,7 @@ end
 
 
 # Load script dependencies
-using LinearAlgebra, GeoParams, GLMakie
+using LinearAlgebra, GeoParams, CairoMakie
 
 # Velocity helper grids for the particle advection
 function copyinn_x!(A, B)

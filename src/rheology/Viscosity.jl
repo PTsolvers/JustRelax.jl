@@ -161,7 +161,7 @@ end
         args_ij = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        Aij = AII_0 + A[1], -AII_0 + A[2], gather(Axyv)
+        Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
         AII = second_invariant(Aij...)
 
         # compute and update stress viscosity
@@ -197,6 +197,7 @@ end
 
         # compute and update stress viscosity
         ηi = fn_viscosity(rheology, AII_ij, args_ij)
+
         ηi = continuation_log(ηi, η[I...], ν)
         η[I...] = clamp(ηi, cutoff...)
     end
@@ -294,18 +295,33 @@ function _compute_viscosity!(
         fn_viscosity::F
     ) where {F}
     ni = size(stokes.viscosity.η)
-
+    # centered viscosity
     @parallel (@idx ni) compute_viscosity_kernel!(
         stokes.viscosity.η,
         ν,
         phase_ratios.center,
-        select_tensor(stokes, fn_viscosity)...,
+        select_tensor_center(stokes, fn_viscosity)...,
         args,
         rheology,
         air_phase,
         cutoff,
-        fn_viscosity
+        fn_viscosity,
+        local_viscosity_args,
     )
+    # vertex viscosity
+    @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
+        stokes.viscosity.ηv,
+        ν,
+        phase_ratios.vertex,
+        select_tensor_vertex(stokes, fn_viscosity)...,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        fn_viscosity,
+        local_viscosity_args_vertex,
+    )
+
     return nothing
 end
 
@@ -316,43 +332,58 @@ function _compute_viscosity!(
         rheology,
         air_phase,
         cutoff,
-        fn_viscosity::F
+        fn_viscosity::F,
+        # do_vertices
     ) where {F}
     ni = size(stokes.viscosity.η)
-
     @parallel (@idx ni) compute_viscosity_kernel!(
         stokes.viscosity.η,
         ν,
-        select_tensor(stokes, fn_viscosity)...,
+        select_tensor_center(stokes, fn_viscosity)...,
         args,
         rheology,
         air_phase,
         cutoff,
         fn_viscosity
     )
+    # if do_vertices
+    @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
+        stokes.viscosity.ηv,
+        ν,
+        select_tensor_vertex(stokes, fn_viscosity)...,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        local_viscosity_args_vertex,
+    )
+    # end
     return nothing
 end
 
+@inline select_tensor_center(stokes, ::typeof(compute_viscosity_εII)) = @strain_center(stokes)
+@inline select_tensor_center(stokes, ::typeof(compute_viscosity_τII)) = @stress_center(stokes)
 
-@inline select_tensor(stokes, ::typeof(compute_viscosity_εII)) = @strain(stokes)
-@inline select_tensor(stokes, ::typeof(compute_viscosity_τII)) = @stress(stokes)
+@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_εII)) = @tensor_vertex(stokes.ε)
+@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_τII)) = @tensor_vertex(stokes.τ)
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-        η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity
-    )
+        η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2
+    ) where {F1, F2}
 
     # convenience closure
     Base.@propagate_inbounds @inline gather(A) = _gather(A, I...)
 
     @inbounds begin
         # cache
-        A = Axx[I...], Ayy[I...]
+        A = Axx[I...], Ayy[I...], Axyv[I...]
 
         # we need strain rate not to be zero, otherwise we get NaNs
         AII_0 = allzero(A...) * eps()
 
         # argument fields at local index
-        args_ij = local_viscosity_args(args, I...)
+        args_ij = fn_args(args, I...)
+        # args_ij = local_viscosity_args(args, I...)
 
         # local phase ratio
         ratio_ij = @cell ratios_center[I...]
@@ -360,7 +391,7 @@ end
         ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
 
         # compute second invariant of strain rate tensor
-        Aij = AII_0 + A[1], -AII_0 + A[2], gather(Axyv)
+        Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
         AII = second_invariant(Aij...)
 
         # compute and update stress viscosity
@@ -462,6 +493,48 @@ end
 
 @inline function local_viscosity_args(args, I::Vararg{Integer, N}) where {N}
     v = getindex.(values(args), I...)
+    local_args = (; zip(keys(args), v)..., dt = args.dt, τII_old = 0.0)
+    return local_args
+end
+
+@inline function local_viscosity_args_vertex(args, i, j)
+    # clamp indices
+    nx, ny = size(args[1])
+    il = max(i - 1, 1)  # left
+    ir = min(i, nx)   # right
+    jb = max(j - 1, 1)  # bottom
+    jt = min(j, ny)   # top
+    # average values at cell centers surrounding vertex
+    v11 = getindex.(values(args), il, jb)
+    v12 = getindex.(values(args), ir, jb)
+    v21 = getindex.(values(args), il, jt)
+    v22 = getindex.(values(args), ir, jt)
+    v = @. 0.25 * (v11 + v12 + v21 + v22)
+    # create local args
+    local_args = (; zip(keys(args), v)..., dt = args.dt, τII_old = 0.0)
+    return local_args
+end
+
+@inline function local_viscosity_args_vertex(args, i, j, k)
+    # clamp indices
+    nx, ny, nz = size(args[1])
+    il = max(i - 1, 1)  # left
+    ir = min(i, nx)   # right
+    jb = max(j - 1, 1)  # bottom
+    jt = min(j, ny)   # top
+    kf = max(k - 1, 1)  # front
+    kb = min(k, nz)   # back
+    # average values at cell centers surrounding vertex
+    v111 = getindex.(values(args), il, jb, kf)
+    v121 = getindex.(values(args), ir, jb, kf)
+    v211 = getindex.(values(args), il, jt, kf)
+    v221 = getindex.(values(args), ir, jt, kf)
+    v112 = getindex.(values(args), il, jb, kb)
+    v122 = getindex.(values(args), ir, jb, kb)
+    v212 = getindex.(values(args), il, jt, kb)
+    v222 = getindex.(values(args), ir, jt, kb)
+    v = @. 0.125 * (v111 + v121 + v211 + v221 + v112 + v122 + v212 + v222)
+    # create local args
     local_args = (; zip(keys(args), v)..., dt = args.dt, τII_old = 0.0)
     return local_args
 end

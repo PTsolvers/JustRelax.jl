@@ -180,6 +180,8 @@ include("types/heat_diffusion.jl")
 
 include("variational_stokes/types.jl")
 
+include("DYREL/types.jl")
+
 include("types/weno.jl")
 
 include("mask/mask.jl")

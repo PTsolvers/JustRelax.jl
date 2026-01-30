@@ -101,12 +101,7 @@ function _solve_DYREL!(
     P_num = similar(stokes.P)
 
     # Powell-Hestenes iterations
-    for itPH in 1:250
-
-        # reset plastic multiplier at the beginning of the time step
-        # stokes.λ  .= 0.0
-        # stokes.λv .= 0.0
-
+    for itPH in 1:1000
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
 
@@ -121,7 +116,10 @@ function _solve_DYREL!(
 
         # compute deviatoric stress
         compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt) # not resetting λ in every PH iteration seems to work better
-        update_halo!(stokes.τ.xy)
+        # update_halo!(stokes.λv)
+        # update_halo!(stokes.τ.xx_v)
+        # update_halo!(stokes.τ.yy_v)
+        # update_halo!(stokes.τ.xy)
 
         if !linear_viscosity
             update_viscosity_τII!(
@@ -159,9 +157,9 @@ function _solve_DYREL!(
             args,
         )
         # Residual check
-        errVx = norm(stokes.R.Rx) / √(length(stokes.R.Rx))
-        errVy = norm(stokes.R.Ry) / √(length(stokes.R.Ry))
-        errPt = norm(stokes.R.RP) / √(length(stokes.R.RP))
+        errVx = norm_mpi(stokes.R.Rx) / √((nx_g() - 2) * (ny_g() - 1))
+        errVy = norm_mpi(stokes.R.Ry) / √((nx_g() - 1) * (ny_g() - 2))
+        errPt = norm_mpi(stokes.R.RP) / √(nx_g() * ny_g())
         if isone(itPH)
             errVx0 = errVx + eps()
             errVy0 = errVy + eps()
@@ -172,9 +170,9 @@ function _solve_DYREL!(
             (min(errVx / errVx0, errVx), min(errVy / errVy0, errVy), min(errPt / errPt0, errPt))
         )
 
-        isnan(err) && error("NaN detected in outer loop")
-        err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
-        if verbose_PH
+        igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
+        igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
+        if verbose_PH && igg.me == 0
             @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[Rx=%1.3e %1.3e, Ry=%1.3e %1.3e, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errVx, errVx / errVx0, errVy, errVy / errVy0, errPt, errPt / errPt0)
         end
         err < ϵ && break
@@ -215,7 +213,10 @@ function _solve_DYREL!(
 
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
-            update_halo!(stokes.τ.xy)
+            # update_halo!(stokes.λv)
+            # update_halo!(stokes.τ.xx_v)
+            # update_halo!(stokes.τ.yy_v)
+            # update_halo!(stokes.τ.xy)
 
             if !linear_viscosity
                 update_viscosity_τII!(
@@ -254,8 +255,8 @@ function _solve_DYREL!(
             # Residual check
             if iszero(iter % nout)
 
-                errVx = norm(Dx .* stokes.R.Rx) / √(length(stokes.R.Rx))
-                errVy = norm(Dy .* stokes.R.Ry) / √(length(stokes.R.Ry))
+                errVx = norm_mpi(Dx .* stokes.R.Rx) / √((nx_g() - 2) * (ny_g() - 1))
+                errVy = norm_mpi(Dy .* stokes.R.Ry) / √((nx_g() - 1) * (ny_g() - 2))
 
                 if iter == nout
                     errVx00 = errVx
@@ -265,21 +266,21 @@ function _solve_DYREL!(
                 err = max(
                     errVx / errVx00, errVy / errVy00
                 )
-                isnan(err) && error("NaN detected in inner loop")
+                isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
                 push!(err_evo_V, errVx / errVx00)
                 push!(err_evo_P, errPt / errPt0)
                 push!(err_evo_it, iter)
 
                 # @printf("it = %d, iter = %d, ϵ_vel = %1.3e, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", itPT, iter, ϵ_vel, err, errVx, errVy)
-                if verbose_DR
+                if verbose_DR && igg.me == 0
                     @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
                 end
                 @. dVx = dVxdτ * βVx * dτVx
                 @. dVy = dVydτ * βVy * dτVy
 
-                λminV = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy .* (stokes.R.Ry .- Ry0))) /
-                    (sum(dVx .^ 2) + sum(dVy .^ 2))
+                λminV = abs(sum_mpi(dVx .* (stokes.R.Rx .- Rx0)) + sum_mpi(dVy .* (stokes.R.Ry .- Ry0))) /
+                    (sum_mpi(dVx .^ 2) + sum_mpi(dVy .^ 2))
                 @. cVx = 2 * √(λminV) * c_fact
                 @. cVy = 2 * √(λminV) * c_fact
 
@@ -581,8 +582,8 @@ end
 
 #                 @printf("it = %d, iter = %d, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", it, iter, err, errVx, errVy)
 
-#                 λminV  = abs(sum(dVx .* (stokes.R.Rx .- Rx0)) + sum(dVy.*(stokes.R.Ry .- Ry0))) /
-#                     (sum(dVx.*dVx) .+ sum(dVy.*dVy))
+#                 λminV  = abs(sum_mpi(dVx .* (stokes.R.Rx .- Rx0)) + sum_mpi(dVy.*(stokes.R.Ry .- Ry0))) /
+#                     (sum_mpi(dVx.*dVx) .+ sum_mpi(dVy.*dVy))
 #                 @. cVx = cVy = 2 * √(λminV) * c_fact
 #                 # cVy .= 2 * √(λminV) * c_fact
 

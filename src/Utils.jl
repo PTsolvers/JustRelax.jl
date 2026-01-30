@@ -571,6 +571,10 @@ function norm_mpi(A)
     return sqrt(MPI.Allreduce(sum2_l, MPI.SUM, MPI.COMM_WORLD))
 end
 
+function sum_mpi(A)
+    return MPI.Allreduce(_sum(A), MPI.SUM, MPI.COMM_WORLD)
+end
+
 function minimum_mpi(A)
     min_l = _minimum(A)
     return MPI.Allreduce(min_l, MPI.MIN, MPI.COMM_WORLD)
@@ -585,7 +589,7 @@ for (f1, f2) in zip(
         (:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum)
     )
     @eval begin
-        $f1(A::AbstractArray) = $f2(Array(A))
+        # $f1(A::AbstractArray) = $f2(Array(A))
         $f1(A) = $f2(A)
     end
 end

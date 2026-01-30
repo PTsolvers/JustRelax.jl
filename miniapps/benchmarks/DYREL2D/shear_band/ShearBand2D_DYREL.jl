@@ -135,7 +135,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     τII   = [0e0]
     sol   = [0e0]
     ttot  = [0e0]
-    # while t < tmax
+
     for _ in 1:15
 
         # Stokes solver ----------------
@@ -156,7 +156,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 nout     = 10,
                 rel_drop = 0.75,
                 λ_relaxation_PH = 1,
-                λ_relaxation_DR = 0.1,
+                λ_relaxation_DR = 1,
                 verbose_PH = false,
                 verbose_DR = false,
                 viscosity_relaxation = 1/2,
@@ -211,10 +211,11 @@ end
 n  = 4
 nx = 32*n
 ny = 32*n
-figdir = "ShearBands2D_DYREL_old"
+figdir = "ShearBands2D_DYREL"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
 @time main(igg; figdir = figdir, nx = nx, ny = ny);
+

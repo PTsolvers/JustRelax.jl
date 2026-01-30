@@ -143,7 +143,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     Vy_nohalo = zeros(nx - 2, ny - 2)
     xci_v = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v)
 
-    local Vx, Vy
     Vx = @zeros(ni...)
     Vy = @zeros(ni...)
 
@@ -185,13 +184,9 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
 
-        igg.me == 0 && println("it = $it; t = $t \n")
+        igg.me == 0 && println("igg= $(igg.me); it = $it; t = $t \n")
 
-        # visualisation
-        th = 0:(pi / 50):(3 * pi)
-        xunit = @. radius * cos(th) + 0.5
-        yunit = @. radius * sin(th) + 0.5
-
+      
         # Gather MPI arrays
         velocity2center!(Vx, Vy, @velocity(stokes)...)
         @views Vx_nohalo .= Array(Vx[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
@@ -207,6 +202,11 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         gather!(εII_nohalo, εII_v)
 
         if igg.me == 0
+            # visualisation
+            th = 0:(pi / 50):(3 * pi)
+            xunit = @. radius * cos(th) + 0.5
+            yunit = @. radius * sin(th) + 0.5
+
             fig = Figure(size = (1600, 1600), title = "t = $t")
             ax1 = Axis(fig[1, 1], aspect = 1, title = "τII")
             ax2 = Axis(fig[2, 1], aspect = 1, title = "η_vep")
@@ -229,8 +229,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
 end
 
-N = 30
-n = N
+n = 32
 nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
 ny = n * 2
 figdir = "ShearBands2D_MPI"

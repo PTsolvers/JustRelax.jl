@@ -162,7 +162,10 @@ function stress2grid!(stokes, pτxx, pτyy, pτxy, xvi, xci, particles)
     # normal components
     particle2centroid!(stokes.τ_o.xx, pτxx, xci, particles)
     particle2centroid!(stokes.τ_o.yy, pτyy, xci, particles)
+    particle2centroid!(stokes.τ_o.xy_c, pτxy, xci, particles)
     # shear components
+    particle2grid!(stokes.τ_o.xx_v, pτxx, xvi, particles)
+    particle2grid!(stokes.τ_o.yy_v, pτyy, xvi, particles)
     particle2grid!(stokes.τ_o.xy, pτxy, xvi, particles)
 
     return nothing

@@ -285,8 +285,8 @@ end
 
 function run()
     figdir = "figs2D_test"
-    ar = 2 # aspect ratio
-    n = 128
+    ar = 1 # aspect ratio
+    n = 64
     nx = n * ar - 2
     ny = n - 2
 

@@ -496,7 +496,7 @@ end
 
 figdir = "Blob3D"
 do_vtk = true # set to true to generate VTK files for ParaView
-n = 64
+n = 32
 nx = n
 ny = n
 nz = n

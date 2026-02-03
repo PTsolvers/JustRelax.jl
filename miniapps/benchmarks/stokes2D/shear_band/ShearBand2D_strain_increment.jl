@@ -196,7 +196,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 256
+n = 64
 nx = n
 ny = n
 figdir = "output/ShearBands2D_StrainIncrement"

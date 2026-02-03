@@ -166,10 +166,9 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-N = 32
-n = N + 2
-nx = n - 2
-ny = n - 2
+n = 64
+nx = n
+ny = n
 figdir = "ElasticBuildUp_incompressible"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)

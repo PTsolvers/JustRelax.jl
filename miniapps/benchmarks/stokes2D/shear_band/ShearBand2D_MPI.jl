@@ -229,8 +229,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
 end
 
-N = 30
-n = N
+n = 32
 nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
 ny = n * 2
 figdir = "ShearBands2D_MPI"

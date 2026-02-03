@@ -312,7 +312,7 @@ function velocity_based(igg; nx = 64, ny = 64, figdir = "model_figs")
 end
 
 
-n = 256
+n = 64
 nx = n
 ny = n
 figdir = "output/ShearBands2D_StrainIncrement"

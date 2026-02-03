@@ -421,7 +421,7 @@ end
 figdir = "Blankenbach_subgrid"
 do_vtk = false # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
-n = 128
+n = 64
 nx = n
 ny = n
 nit = 6.0e3

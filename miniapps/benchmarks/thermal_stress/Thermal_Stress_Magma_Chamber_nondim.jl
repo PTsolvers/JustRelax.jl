@@ -743,7 +743,7 @@ end
 
 figdir = "Thermal_stresses_around_cooling_magma_NonLinear"
 do_vtk = true # set to true to generate VTK files for ParaView
-n = 128
+n = 64
 ar = 1
 nx = n * ar - 2
 ny = n - 2

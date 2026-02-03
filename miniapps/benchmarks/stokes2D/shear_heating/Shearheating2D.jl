@@ -321,8 +321,8 @@ figdir = "Benchmark_Duretz_etal_2014"
 do_vtk = false # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
 n = 64
-nx = n * ar - 2
-ny = n - 2
+nx = n * ar
+ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

@@ -287,8 +287,8 @@ function run()
     figdir = "figs2D_test"
     ar = 1 # aspect ratio
     n = 64
-    nx = n * ar - 2
-    ny = n - 2
+    nx = n * ar
+    ny = n
 
     return thermal_convection2D(; figdir = figdir, ar = ar, nx = nx, ny = ny)
 end

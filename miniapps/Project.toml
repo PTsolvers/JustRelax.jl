@@ -9,6 +9,7 @@ JustPIC = "10dc771f-8528-4cd9-9d3b-b21b2e693339"
 JustRelax = "34418575-392d-4e26-8c6d-96b0910afa06"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [compat]
 CellArrays = "0.3.2"

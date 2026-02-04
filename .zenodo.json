@@ -1,0 +1,69 @@
+{
+  "title": "JustRelax.jl: A Julia package for geodynamic modeling with matrix-free solvers",
+  "description": "JustRelax.jl is a Julia package for geodynamic modeling with matrix-free solvers. It provides efficient tools for simulating large-scale geodynamic processes in 2D and 3D on both CPUs and GPUs.",
+  "notes": "Additional funding: (1) PASC GPU4GEO - Frontier GPU multi-physics solvers (c23), funded by ETH Zurich. Project page: https://www.pasc-ch.org/projects/2021-2024/gpu4geo/ and (2) )",
+  "creators": [
+    {
+      "name": "de Montserrat, Albert",
+      "affiliation": "ETH Zürich, Switzerland",
+      "orcid": "https://orcid.org/0000-0003-1694-3735"
+    },
+    {
+      "name": "Aellig, Pascal S.",
+      "affiliation": "Johannes Gutenberg University Mainz, Germany",
+      "orcid": "https://orcid.org/0009-0008-9039-5646"
+    },
+    {
+      "name": "Schuler, Christian",
+      "affiliation": "Johannes Gutenberg University Mainz, Germany",
+      "orcid": "https://orcid.org/0009-0004-9873-9774"
+    },
+    {
+      "name": "Navarrete Jara, Iván",
+      "affiliation": "École Normale Supérieure - PSL, France",
+      "orcid": "https://orcid.org/0009-0004-9272-511X"
+    },
+    {
+      "name": "Räss, Ludovic",
+      "affiliation": "University of Lausanne, Switzerland",
+      "orcid": "https://orcid.org/0000-0002-1136-899X"
+    },
+    {
+      "name": "Fuchs, Lukas",
+      "affiliation": "Goethe University Frankfurt, Germany",
+      "orcid": "https://orcid.org/0000-0002-9165-6384"
+    },
+    {
+      "name": "Kaus, Boris J.P.",
+      "affiliation": "Johannes Gutenberg University Mainz, Germany",
+      "orcid": "https://orcid.org/0000-0002-0247-8660"
+    },
+    {
+      "name": "Dominguez, Hugo",
+      "affiliation": "Johannes Gutenberg University Mainz, Germany",
+      "orcid": "https://orcid.org/0009-0001-8425-0503"
+    }
+  ],
+  "keywords": [
+    "Julia",
+    "Geodynamics",
+    "Numerical Modeling",
+    "Matrix-Free Solvers",
+    "GPU Computing",
+    "High Performance Computing"
+  ],
+  "grants": [
+    {"id": "10.13039/501100000780::771143"},
+    {"id": "05a28rw58::c23"}
+  ],
+  "license": {
+    "id": "MIT"
+  },
+  "upload_type": "software",
+  "access_right": "open",
+  "communities": [
+    {
+      "identifier": "juliapackage"
+    }
+  ]
+}

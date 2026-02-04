@@ -60,7 +60,7 @@ module JustRelax3D
         apply_dirichlet,
         apply_dirichlet!,
         isdirichlet
-        
+
     import JustRelax: normal_stress, shear_stress, shear_vorticity
 
     import JustPIC._3D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset

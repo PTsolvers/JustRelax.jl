@@ -1,12 +1,24 @@
+const isGPU = true
+
+@static if isGPU
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
-const backend_JR = CPUBackend
-
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
-
-using GeoParams
 using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend
+using ParallelStencil, GeoParams
+
+@static if isGPU
+    @init_parallel_stencil(CUDA, Float64, 2)
+    const backend_JR = CUDABackend
+    const backend = CUDABackend
+    
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+    const backend_JR = CPUBackend
+    const backend = JustPIC.CPUBackend
+
+end
 
 distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
 
@@ -71,7 +83,7 @@ end
 function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e3, K0 = 3.0)
     kyr = 1.0e3 * 3600 * 24 * 365.25
     Myr = 1.0e3 * kyr
-    ttot = 1 * Myr # total simulation time
+    ttot = 10 * Myr # total simulation time
     dt = 50 * kyr # physical time step
 
     init_mpi = JustRelax.MPI.Initialized() ? false : true
@@ -114,7 +126,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     Ω_T = 1050.0e0 # inner BCs temperature
     r = 10.0e3   # thermal perturbation radius
     center_perturbation = lx / 2, -ly / 2
-    mask = zeros(size(thermal.T)...)
+    mask = @zeros(size(thermal.T)...)
     elliptical_perturbation!(thermal.T, mask, Ω_T, center_perturbation..., r, xvi)
     temperature2center!(thermal)
 

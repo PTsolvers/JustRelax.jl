@@ -70,13 +70,13 @@ end
 
 
 @inline function isdirichlet(
-        bc::JustRelax.AbstractDirichletBoundaryCondition, inds::Vararg{Int, N}
+        bc::AbstractDirichletBoundaryCondition, inds::Vararg{Int, N}
     ) where {N}
     return bc.mask.mask[inds...] != 0
 end
 
 @inline function isdirichlet(
-        ::JustRelax.AbstractDirichletBoundaryCondition{Nothing, Nothing}, ::Vararg{Int, N}
+        ::AbstractDirichletBoundaryCondition{Nothing, Nothing}, ::Vararg{Int, N}
     ) where {N}
     return false
 end

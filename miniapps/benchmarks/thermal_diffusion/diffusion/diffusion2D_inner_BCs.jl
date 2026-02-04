@@ -12,7 +12,7 @@ using ParallelStencil, GeoParams
     @init_parallel_stencil(CUDA, Float64, 2)
     const backend_JR = CUDABackend
     const backend = CUDABackend
-    
+
 else
     @init_parallel_stencil(Threads, Float64, 2)
     const backend_JR = CPUBackend

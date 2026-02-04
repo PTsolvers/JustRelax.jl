@@ -14,3 +14,17 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+
+  - package-ecosystem: "julia"
+    directories:
+      - "/"
+      - "/test"
+    schedule:
+      interval: "monthly"
+    groups:
+      all-julia-dependencies:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "julia"

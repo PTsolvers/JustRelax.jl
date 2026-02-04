@@ -128,16 +128,21 @@ end
     d_za(A) = _d_za(A, _dz, I...)
 
     I1 = I .+ 1
-    T[I1...] =
-        (
-        av(dτ_ρ) * (
-            -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
-                Told[I1...] * av(ρCp) * _dt +
-                av(H) +
-                av(shear_heating)
-        ) + T[I1...]
-    ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
-    apply_dirichlet!(T, dirichlet, I1...)
+
+    if isdirichlet(dirichlet, I1...)
+        apply_dirichlet!(T, dirichlet, I1...)
+
+    else
+        T[I1...] =
+            (
+            av(dτ_ρ) * (
+                -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
+                    Told[I1...] * av(ρCp) * _dt +
+                    av(H) +
+                    av(shear_heating)
+            ) + T[I1...]
+        ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
+    end
 
     return nothing
 end
@@ -161,6 +166,7 @@ end
         _dz,
         args,
     ) where {_T}
+
     av(A) = _av(A, i, j, k)
     d_xa(A) = _d_xa(A, _dx, i, j, k)
     d_ya(A) = _d_ya(A, _dy, i, j, k)
@@ -168,23 +174,26 @@ end
 
     I1 = i + 1, j + 1, k + 1
 
-    T_ijk = T[I1...]
-    args_ijk = (; T = T_ijk, P = av(args.P))
-    phase_ijk = getindex_phase(phase, i, j, k)
-    ρCp = compute_ρCp(rheology, phase_ijk, args_ijk)
+    if isdirichlet(dirichlet, I1...)
+        apply_dirichlet!(T, dirichlet, I1...)
 
-    T[I1...] =
-        (
-        av(dτ_ρ) * (
-            -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
-                Told[I1...] * ρCp * _dt +
-                av(H) +
-                av(shear_heating) +
-                adiabatic[i, j, k] * T_ijk
-        ) + T_ijk
-    ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
-    apply_dirichlet!(T, dirichlet, I1...)
+    else
+        T_ijk = T[I1...]
+        args_ijk = (; T = T_ijk, P = av(args.P))
+        phase_ijk = getindex_phase(phase, i, j, k)
+        ρCp = compute_ρCp(rheology, phase_ijk, args_ijk)
 
+        T[I1...] =
+            (
+            av(dτ_ρ) * (
+                -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
+                    Told[I1...] * ρCp * _dt +
+                    av(H) +
+                    av(shear_heating) +
+                    adiabatic[i, j, k] * T_ijk
+            ) + T_ijk
+        ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
+    end
     return nothing
 end
 
@@ -401,33 +410,37 @@ end
         _dx,
         _dy,
     ) where {_T}
-    nx, ny = size(ρCp)
-
-    d_xa(A) = _d_xa(A, _dx, i, j)
-    d_ya(A) = _d_ya(A, _dy, i, j)
-    #! format: off
-    function av(A)
-        (
-            A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
-            A[clamp(i - 1, 1, nx), j] +
-            A[i, clamp(j - 1, 1, ny)] +
-            A[i, j]
-        ) * 0.25
-    end
-    #! format: on
-
     I1 = i + 1, j + 1
-    T[I1...] =
-        (
-        av(dτ_ρ) * (
-            -(d_xa(qTx) + d_ya(qTy)) +
-                Told[I1...] * av(ρCp) * _dt +
-                av(H) +
-                av(shear_heating)
-        ) + T[I1...]
-    ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
 
-    apply_dirichlet!(T, dirichlet, I1...)
+    if isdirichlet(dirichlet, I1...)
+        apply_dirichlet!(T, dirichlet, I1...)
+
+    else
+        nx, ny = size(ρCp)
+
+        d_xa(A) = _d_xa(A, _dx, i, j)
+        d_ya(A) = _d_ya(A, _dy, i, j)
+        #! format: off
+        function av(A)
+            (
+                A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
+                A[clamp(i - 1, 1, nx), j] +
+                A[i, clamp(j - 1, 1, ny)] +
+                A[i, j]
+            ) * 0.25
+        end
+        #! format: on
+
+        T[I1...] =
+            (
+            av(dτ_ρ) * (
+                -(d_xa(qTx) + d_ya(qTy)) +
+                    Told[I1...] * av(ρCp) * _dt +
+                    av(H) +
+                    av(shear_heating)
+            ) + T[I1...]
+        ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
+    end
 
     return nothing
 end
@@ -449,41 +462,47 @@ end
         _dy,
         args::NamedTuple,
     ) where {_T}
-    nx, ny = size(args.P)
-
-    i0 = clamp(i - 1, 1, nx)
-    i1 = clamp(i, 1, nx)
-    j0 = clamp(j - 1, 1, ny)
-    j1 = clamp(j, 1, ny)
-
-    d_xa(A) = _d_xa(A, _dx, i, j)
-    d_ya(A) = _d_ya(A, _dy, i, j)
-    av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
-
-    T_ij = T[i + 1, j + 1]
-    args_ij = (; T = T_ij, P = av(args.P))
-
-    ρCp =
-        (
-        compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
-            compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
-            compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
-            compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
-    ) * 0.25
 
     I1 = i + 1, j + 1
-    T[I1...] =
-        (
-        av(dτ_ρ) * (
-            -(d_xa(qTx) + d_ya(qTy)) +
-                Told[I1...] * ρCp * _dt +
-                av(H) +
-                av(shear_heating) +
-                adiabatic[i, j] * T[I1...]
-        ) + T[I1...]
-    ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
 
-    apply_dirichlet!(T, dirichlet, I1...)
+    if isdirichlet(dirichlet, I1...)
+        apply_dirichlet!(T, dirichlet, I1...)
+
+    else
+
+        nx, ny = size(args.P)
+
+        i0 = clamp(i - 1, 1, nx)
+        i1 = clamp(i, 1, nx)
+        j0 = clamp(j - 1, 1, ny)
+        j1 = clamp(j, 1, ny)
+
+        d_xa(A) = _d_xa(A, _dx, i, j)
+        d_ya(A) = _d_ya(A, _dy, i, j)
+        av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
+
+        T_ij = T[i + 1, j + 1]
+        args_ij = (; T = T_ij, P = av(args.P))
+
+        ρCp =
+            (
+            compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
+                compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
+                compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
+                compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
+        ) * 0.25
+
+        T[I1...] =
+            (
+            av(dτ_ρ) * (
+                -(d_xa(qTx) + d_ya(qTy)) +
+                    Told[I1...] * ρCp * _dt +
+                    av(H) +
+                    av(shear_heating) +
+                    adiabatic[i, j] * T[I1...]
+            ) + T[I1...]
+        ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
+    end
 
     return nothing
 end

@@ -131,7 +131,7 @@ end
 
     if isdirichlet(dirichlet, I1...)
         apply_dirichlet!(T, dirichlet, I1...)
-    
+
     else
         T[I1...] =
             (
@@ -414,7 +414,7 @@ end
 
     if isdirichlet(dirichlet, I1...)
         apply_dirichlet!(T, dirichlet, I1...)
-    
+
     else
         nx, ny = size(ρCp)
 
@@ -467,7 +467,7 @@ end
 
     if isdirichlet(dirichlet, I1...)
         apply_dirichlet!(T, dirichlet, I1...)
-    
+
     else
 
         nx, ny = size(args.P)

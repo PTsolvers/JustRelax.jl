@@ -99,7 +99,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
     nxcell = 25
     max_xcell = 35
     min_xcell = 8
-    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, xvi...)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
 
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids

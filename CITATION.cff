@@ -1,43 +1,89 @@
 # Official format description at https://citation-file-format.github.io
-cff-version: 1.2.0
-message: "Cite this release if you are using JustRelax.jl"
+cff-version: "1.2.0"
 authors:
-- affiliation: ETH
-  family-names: "de Montserrat"
-  given-names: "Albert"
-  orcid: https://orcid.org/0000-0003-1694-3735
-- affiliation: Johannes Gutenberg University Mainz
-  family-names: "Aellig"
-  given-names: "Pascal S."
-  orcid: https://orcid.org/0009-0008-9039-5646
-- affiliation: Johannes Gutenberg University Mainz
-  family-names: "Schuler"
-  given-names: "Christian"
-  orcid: https://orcid.org/0009-0004-9873-9774
-- affiliation: "\xC9cole Normale Sup\xE9rieure - PSL"
-  family-names: "Navarrete Jara"
-  given-names: "Iv\xE1n"
-  orcid: https://orcid.org/0009-0004-9272-511X
-- affiliation: University of Lausanne
-  family-names: "R\xE4ss"
-  given-names: "Ludovic"
-  orcid: https://orcid.org/0000-0002-1136-899X
-- affiliation: Goethe University Frankfurt
-  family-names: "Fuchs"
-  given-names: "Lukas"
-  orcid: https://orcid.org/0000-0002-9165-6384
-- affiliation: Johannes Gutenberg University Mainz
-  family-names: "Kaus"
-  given-names: "Boris J. P."
-  orcid: https://orcid.org/0000-0002-0247-8660
-- affiliation: Johannes Gutenberg University Mainz
-  family-names: "Dominguez"
-  given-names: "Hugo"
-  orcid: https://orcid.org/0009-0001-8425-0503
-date-released: '2025-06-14'
-doi: 10.5281/zenodo.10212422
-license: "MIT"
-repository-code: https://github.com/PTsolvers/JustRelax.jl/tree/main
-title: 'PTsolvers/JustRelax.jl: v0.4.1'
-type: software
-version: v0.4.2
+- family-names: Montserrat
+  given-names: Albert
+  name-particle: de
+  affiliation: "ETH Zürich, Switzerland"
+  orcid: "https://orcid.org/0000-0003-1694-3735"
+- family-names: Aellig
+  given-names: Pascal S.
+  affiliation: "Johannes Gutenberg University Mainz, Germany"
+  orcid: "https://orcid.org/0009-0008-9039-5646"
+- family-names: Schuler
+  given-names: Christian
+  affiliation: "Johannes Gutenberg University Mainz, Germany"
+  orcid: "https://orcid.org/0009-0004-9873-9774"
+- family-names: Navarrete Jara
+  given-names: Iván
+  affiliation: "École Normale Supérieure - PSL, France"
+  orcid: "https://orcid.org/0009-0004-9272-511X"
+- family-names: Räss
+  given-names: Ludovic
+  affiliation: "University of Lausanne, Switzerland"
+  orcid: "https://orcid.org/0000-0002-1136-899X"
+- family-names: Fuchs
+  given-names: Lukas
+  affiliation: "Goethe University Frankfurt, Germany"
+  orcid: "https://orcid.org/0000-0002-9165-6384"
+- family-names: Kaus
+  given-names: Boris J. P.
+  affiliation: "Johannes Gutenberg University Mainz, Germany"
+  orcid: "https://orcid.org/0000-0002-0247-8660"
+- family-names: Dominguez
+  given-names: Hugo
+  affiliation: "Johannes Gutenberg University Mainz, Germany"
+  orcid: "https://orcid.org/0009-0001-8425-0503"
+doi: 10.5281/zenodo.18262030
+message: If you use this software, please cite our article in the
+  Journal of Open Source Software.
+preferred-citation:
+  authors:
+  - family-names: Montserrat
+    given-names: Albert
+    name-particle: de
+    affiliation: "ETH Zürich, Switzerland"
+    orcid: "https://orcid.org/0000-0003-1694-3735"
+  - family-names: Aellig
+    given-names: Pascal S.
+    affiliation: "Johannes Gutenberg University Mainz, Germany"
+    orcid: "https://orcid.org/0009-0008-9039-5646"
+  - family-names: Schuler
+    given-names: Christian
+    affiliation: "Johannes Gutenberg University Mainz, Germany"
+    orcid: "https://orcid.org/0009-0004-9873-9774"
+  - family-names: Navarrete Jara
+    given-names: Iván
+    affiliation: "École Normale Supérieure - PSL, France"
+    orcid: "https://orcid.org/0009-0004-9272-511X"
+  - family-names: Räss
+    given-names: Ludovic
+    affiliation: "University of Lausanne, Switzerland"
+    orcid: "https://orcid.org/0000-0002-1136-899X"
+  - family-names: Fuchs
+    given-names: Lukas
+    affiliation: "Goethe University Frankfurt, Germany"
+    orcid: "https://orcid.org/0000-0002-9165-6384"
+  - family-names: Kaus
+    given-names: Boris J. P.
+    affiliation: "Johannes Gutenberg University Mainz, Germany"
+    orcid: "https://orcid.org/0000-0002-0247-8660"
+  - family-names: Dominguez
+    given-names: Hugo
+    affiliation: "Johannes Gutenberg University Mainz, Germany"
+    orcid: "https://orcid.org/0009-0001-8425-0503"
+  date-published: 2026-02-03
+  doi: 10.21105/joss.09365
+  issn: 2475-9066
+  issue: 118
+  journal: Journal of Open Source Software
+  publisher:
+    name: Open Journals
+  start: 9365
+  title: "JustRelax.jl: A Julia package for geodynamic modeling with
+    matrix-free solvers"
+  type: article
+  url: "https://joss.theoj.org/papers/10.21105/joss.09365"
+  volume: 11
+title: "`JustRelax.jl`: A Julia package for geodynamic modeling with
+  matrix-free solvers"

@@ -621,7 +621,7 @@ const plotting = true
 do_vtk = true # set to true to generate VTK files for ParaView
 
 figdir = "Caldera2D_$(today())"
-n = 256
+n = 64
 nx, ny = n, n >>> 1
 
 li, origin, phases_GMG, T_GMG = setup2D(

@@ -1,6 +1,6 @@
 name = "JustRelax"
 uuid = "34418575-392d-4e26-8c6d-96b0910afa06"
-version = "0.4.4"
+version = "0.4.5"
 authors = ["Albert De Montserrat <albertdemontserratnavarro@erdw.ethz.ch>, Pascal Aellig <paellig@uni-mainz.de>"]
 
 [deps]
@@ -39,7 +39,7 @@ Adapt = "4"
 CUDA = "5"
 CellArrays = "0.3.2"
 Crayons = "4.1.1"
-GeoParams = "0.7.8"
+GeoParams = "0.7.10"
 HDF5 = "0.17.1"
 ImplicitGlobalGrid = "0.16.2"
 JLD2 = "0.5, 0.6"

@@ -237,7 +237,7 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 100
+n = 32
 nx = ny = nz = n
 figdir = "MultiInclusions_$n"
 igg = if !(JustRelax.MPI.Initialized())

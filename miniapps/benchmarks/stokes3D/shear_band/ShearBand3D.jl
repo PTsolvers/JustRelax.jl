@@ -224,7 +224,7 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 64
+n = 32
 nx = ny = nz = n
 figdir = "ShearBand3D"
 igg = if !(JustRelax.MPI.Initialized())

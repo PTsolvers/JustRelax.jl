@@ -3,7 +3,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
 const backend = CPUBackend
 
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using GeoParams, CairoMakie, SpecialFunctions
@@ -282,7 +282,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
             h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T), colormap = :batlow)
             h2 = heatmap!(ax2, xci[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(stokes.V.Vy[2:(end - 1), :]), colormap = :batlow)
             h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(stokes.τ.II .* 1.0e-6), colormap = :batlow)
-            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(η_vep)), colormap = :batlow)
+            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -303,10 +303,10 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
 end
 
 figdir = "figs2D_test_weno"
-ar = 8 # aspect ratio
-n = 32
-nx = n * ar - 2
-ny = n - 2
+ar = 1 # aspect ratio
+n = 64
+nx = n * ar
+ny = n
 thermal_perturbation = :circular
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device = false)...)

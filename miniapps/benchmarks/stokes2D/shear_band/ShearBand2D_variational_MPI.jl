@@ -254,7 +254,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 64 - 2
+n = 32 - 2
 nx = n * 2
 ny = n * 2
 figdir = "Variational_ShearBands2D_MPI"

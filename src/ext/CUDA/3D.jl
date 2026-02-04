@@ -21,7 +21,8 @@ import JustRelax:
     DisplacementBoundaryConditions,
     VelocityBoundaryConditions,
     apply_dirichlet,
-    apply_dirichlet!
+    apply_dirichlet!,
+    isdirichlet
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 

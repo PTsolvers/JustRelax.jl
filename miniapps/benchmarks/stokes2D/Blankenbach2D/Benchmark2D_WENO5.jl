@@ -373,7 +373,7 @@ end
 figdir = "Blankenbach_WENO"
 do_vtk = false # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
-n = 51
+n = 64
 nx = n
 ny = n
 nit = 6.0e3

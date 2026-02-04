@@ -3,11 +3,11 @@ Ths = "Ths"
 oly = "oly"
 iy = "iy"
 pn = "pn"
+nd = "nd"
+Heros = "Heros"
+Normale = "Normale"
 
 [default]
 extend-ignore-words-re = [
     "(?i)normale\\s+supérieure"
 ]
-nd = "nd"
-Heros = "Heros"
-Normale = "Normale"

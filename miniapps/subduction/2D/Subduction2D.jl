@@ -1,7 +1,7 @@
 # Load script dependencies
 using GeoParams, CairoMakie
 
-const isCUDA = true
+const isCUDA = false
 
 @static if isCUDA
     using CUDA

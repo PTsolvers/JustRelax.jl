@@ -278,9 +278,9 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 end
 
 ar = 1 # aspect ratio
-n = 128
-nx = n * ar - 2
-ny = n - 2
+n = 64
+nx = n * ar
+ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

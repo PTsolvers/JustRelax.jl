@@ -388,8 +388,10 @@ end
         # local phase ratio
         ratio_ij = @cell ratios_center[I...]
         # remove phase ratio of the air if necessary & normalize ratios
-        ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
-
+        if air_phase > 0
+            ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
+        end
+        
         # compute second invariant of strain rate tensor
         Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
         AII = second_invariant(Aij...)

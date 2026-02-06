@@ -161,8 +161,7 @@ end
         args_ij = local_viscosity_args(args, I...)
 
         # compute second invariant of strain rate tensor
-        Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
-        AII = second_invariant(Aij...)
+        AII = second_invariant(AII_0 + A[1], -AII_0 + A[2], A[3])
 
         # compute and update stress viscosity
         ηi = fn_viscosity(rheology, AII, args_ij)
@@ -391,7 +390,7 @@ end
         if air_phase > 0
             ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
         end
-        
+
         # compute second invariant of strain rate tensor
         Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
         AII = second_invariant(Aij...)
@@ -551,16 +550,94 @@ end
         rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio, AII, fn_viscosity::F, args
     ) where {N, F}
     return quote
-        Base.@_inline_meta
+        @inline
+        # Early exit: if single phase dominates (ratio ≈ 1), skip harmonic mean
+        Base.@nexprs $N i -> begin
+            if ratio[i] > 0.999  # faster than ≈ comparison
+                return fn_viscosity(rheology[i].CompositeRheology[1], AII, args)
+            end
+        end
+
         η = 0.0
         Base.@nexprs $N i -> begin
-            η += iszero(ratio[i]) ?
-                0.0 :
-                inv(fn_viscosity(rheology[i].CompositeRheology[1], AII, args)) * ratio[i]
+            if !iszero(ratio[i])
+                η +=inv(fn_viscosity(rheology[i].CompositeRheology[1], AII, args)) * ratio[i]
+            end
         end
         inv(η)
     end
 end
+
+
+# @generated function compute_phase_viscosity(
+#         rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio, AII, fn_viscosity::F, args
+#     ) where {N, F}
+#     return quote
+#         @inline
+
+#         η = 0.0
+#         Base.@nexprs $N i -> begin
+#             r = ratio[i]
+#             # Early exit: if single phase dominates (ratio ≈ 1), skip harmonic mean
+#             r > 0.999  && fn_viscosity(rheology[i].CompositeRheology[1], AII, args)
+
+#             # accumulate
+#             η += ifelse(
+#                 r > 1e-3,
+#                 0.0,
+#                 r / fn_viscosity(rheology[i].CompositeRheology[1], AII, args)
+#             )
+#         end
+#         inv(η)
+#     end
+# end
+
+# @generated function compute_phase_viscosity(
+#         rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio, AII, fn_viscosity::F, args
+#     ) where {N, F}
+#     return quote
+#         @inline
+
+#         η = 0.0
+#         Base.@nexprs $N i -> begin
+#             r = ratio[i]
+#             # Early exit: if single phase dominates (ratio ≈ 1), skip harmonic mean
+#             r > 0.999  && fn_viscosity(rheology[i].CompositeRheology[1], AII, args)
+
+#             # accumulate
+#             η += ifelse(
+#                 r > 1e-3,
+#                 0.0,
+#                 r / fn_viscosity(rheology[i].CompositeRheology[1], AII, args)
+#             )
+#         end
+#         inv(η)
+#     end
+# end
+
+# # average
+# @generated function compute_phase_viscosity(
+#         rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio, AII, fn_viscosity::F, args
+#     ) where {N, F}
+#     return quote
+#         @inline
+
+#         η = 0.0
+#         Base.@nexprs $N i -> begin
+#             r = ratio[i]
+#             # Early exit: if single phase dominates (ratio ≈ 1), skip harmonic mean
+#             r > 0.999  && fn_viscosity(rheology[i].CompositeRheology[1], AII, args)
+
+#             # accumulate
+#             η += ifelse(
+#                 r > 1.0e-3,
+#                 0.0,
+#                 r * fn_viscosity(rheology[i].CompositeRheology[1], AII, args)
+#             )
+#         end
+#         η
+#     end
+# end
 
 # @generated function compute_phase_viscosity_εII(
 #         rheology::NTuple{N, AbstractMaterialParamsStruct}, ratio, εII::T, args
@@ -583,7 +660,7 @@ function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
     if iszero(air_phase)
         return ratio
     elseif ratio[air_phase] ≈ 1
-        return SVector{N, T}(zero(T) for _ in 1:N)
+        return zeros(SVector{N, T})
     else
         mask = ntuple(i -> (i !== air_phase), Val(N))
         # set air phase ratio to zero

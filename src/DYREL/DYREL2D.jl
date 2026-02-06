@@ -86,6 +86,8 @@ function _solve_DYREL!(
     # center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
 
     # Iteration loop
+    err_min = Inf
+    err    = 1.0
     errVx0 = 1.0
     errVy0 = 1.0
     errPt0 = 1.0
@@ -165,6 +167,7 @@ function _solve_DYREL!(
             errVy0 = errVy + eps()
             errPt0 = errPt + eps()
         end
+        err_prev = err
         err = maximum(
             # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
             (min(errVx / errVx0, errVx), min(errVy / errVy0, errVy), min(errPt / errPt0, errPt))
@@ -178,6 +181,13 @@ function _solve_DYREL!(
         err < ϵ && break
 
         # Set tolerance of velocity solve proportional to residual
+        if err > err_min # * 1.05
+            rel_drop = max(rel_drop * 0.25, ϵ)
+        end
+        if err_min > err
+            err_min = err
+        end
+
         ϵ_vel = err * rel_drop
         itPT = 0
         # while (err > dyrel.ϵ_vel && itPT ≤ iterMax)

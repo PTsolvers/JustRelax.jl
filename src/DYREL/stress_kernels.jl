@@ -108,48 +108,12 @@ end
     end
 end
 
-# @inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, dt)
-
-#     # viscoelastic viscosity
-#     η_ve = inv(inv(η) + inv(G * dt))
-#     # effectice stgrain rate
-#     εij_eff = @. εij + τij_o / (2 * G * dt)
-
-#     εII = second_invariant(εij_eff)
-
-#     # early return if there is no deformation
-#     iszero(εII) && return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η)
-
-#     # Plastic stress correction starts here
-#     τij = @. 2 * η_ve * εij_eff
-#     τII = second_invariant(τij)
-#     # F     = τII - C * cosϕ - max(P, 0e0) * sinϕ
-#     F = τII - C * cosϕ - P * sinϕ
-#     λ = if ispl && F > 0
-#         λ_new = F / (η_ve + η_reg + Kb * dt * sinϕ * sinΨ)
-#         λ_relaxation * λ_new + (1 - λ_relaxation) * λ
-#     else
-#         0.0
-#     end
-#     # Plasticity
-#     # Effective viscoelastic-plastic viscosity
-#     η_vep = (τII - λ * η_ve) / (2 * εII)
-#     # Update stress and plastic strain rate
-#     τij = @. 2 * η_vep * εij_eff
-#     τII = second_invariant(τij)
-#     dQdτij = @. 0.5 * τij / τII
-#     εij_pl = @. λ * dQdτij
-#     # Update pressure correction due to dilatation
-#     ΔPψ = iszero(sinΨ) ? 0.0 : λ * sinΨ * Kb * dt
-
-#     return τij..., εij_pl..., τII, λ, ΔPψ, η_vep
-# end
-
-
 @inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, ispl, C, sinϕ, cosϕ, sinΨ, η_reg, dt)
 
     # viscoelastic viscosity
-    η_ve = (η * G * dt) / (η + G * dt) # more efficient than inv(inv(η) + inv(G * dt))
+    η_ve = isinf(G) ?
+        inv(inv(η) + inv(G * dt)) :
+        (η * G * dt) / (η + G * dt) # more efficient than inv(inv(η) + inv(G * dt))
     # effectice stgrain rate
     inv_2Gdt = inv(2 * G * dt)
     εij_eff = @. εij + τij_o * inv_2Gdt

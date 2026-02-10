@@ -1,5 +1,5 @@
 # Load script dependencies
-using GeoParams, CairoMakie
+using GeoParams, GLMakie
 
 const isCUDA = false
 
@@ -35,7 +35,7 @@ end
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
-include("Subduction2D_rheology.jl")
+include("Subduction2D_rheology_ND.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -62,26 +62,35 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
-
+function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
+    
+    thickness = 120e3 * m
+    η0        = 1.0e22 * Pa * s
+    CharDim   = GEO_units(;
+        length = thickness, viscosity = η0, temperature = 1.0e3K
+    )
+    li_nd     = nondimensionalize(li .* m, CharDim)
+    origin_nd = nondimensionalize(origin .* m, CharDim)
+   
     # Physical domain ------------------------------------
-    ni = nx, ny           # number of cells
-    di = @. li / ni       # grid steps
-    grid = Geometry(ni, li; origin = origin)
+    ni    = nx, ny           # number of cells
+    di    = @. li_nd / ni       # grid steps
+    grid  = Geometry(ni, li_nd; origin = origin_nd)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology = init_rheology_nonNewtonian_plastic()
-    dt = 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    rheology = init_rheology_nonNewtonian_plastic(CharDim)
+    # rheology = init_rheology_linear(CharDim)
+    dt       = nondimensionalize(25e3 * yr, CharDim)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell = 40
+    nxcell    = 40
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -101,15 +110,30 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
+    # marker chain
+    nxcell, min_xcell, max_xcell = 100, 75, 125
+    initial_elevation = 0.0e0
+    chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
+
+    # RockRatios
+    air_phase = 4
+    ϕ_R = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ_R, chain, xvi, di)
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 20e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
+    pt_stokes = PTStokesCoeffs(
+        li_nd, di;
+        ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 20π, r = 0.7, CFL = 0.9 / √2.1
+        # ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 25.0e0, r = 0.7, CFL = 0.9 / √2.1
+    ) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    Ttop = 20 + 273
-    Tbot = maximum(T_GMG)
+    Ttop    = nondimensionalize((20 + 273)K, CharDim)
+    T_GMG  .= nondimensionalize(T_GMG*K, CharDim)
+    Tbot    = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
     @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
     thermal_bc = TemperatureBoundaryConditions(;
@@ -128,18 +152,17 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Rheology
     args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
-    viscosity_cutoff = (1.0e18, 1.0e23)
-    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
+    viscosity_cutoff = nondimensionalize((1.0e18, 1.0e23) .* (Pa * s), CharDim)
+    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff; air_phase = air_phase)
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ = 1.0e-8, CFL = 0.95 / √2
+        backend, rheology, phase_ratios, args0, dt, ni, di, li_nd; ϵ = 1.0e-8, CFL = 0.95 / √2
     )
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
-        free_surface = false,
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
@@ -149,8 +172,6 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     if do_vtk
         vtk_dir = joinpath(figdir, "vtk")
         take(vtk_dir)
-        checkpoint = joinpath(figdir, "checkpoint")
-        take(checkpoint)
     end
     take(figdir)
     # ----------------------------------------------------
@@ -174,13 +195,14 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Time loop
     t, it = 0.0, 0
+    dt_max = nondimensionalize(10e3 * yr, CharDim)
 
     while it < 1000 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= Ttop
-        @views T_buffer[:, 1] .= Tbot
+        @views T_buffer[:, end]          .= Ttop
+        @views T_buffer[:, 1]            .= Tbot
         @views thermal.T[2:(end - 1), :] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
@@ -191,23 +213,23 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # Stokes solver ----------------
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
         t_stokes = @elapsed begin
-            out = solve!(
+            out = solve_VariationalStokes!(
                 stokes,
                 pt_stokes,
                 di,
                 flow_bcs,
                 ρg,
                 phase_ratios,
+                ϕ_R,
                 rheology,
                 args,
                 dt,
                 igg;
-                kwargs = (
-                    iterMax = 100.0e3,
-                    nout = 2.0e3,
+                kwargs = (;
+                    iterMax = 150.0e3,
+                    free_surface = true,
+                    nout = 5.0e3,
                     viscosity_cutoff = viscosity_cutoff,
-                    free_surface = false,
-                    viscosity_relaxation = 1.0e-2,
                 )
             )
         end
@@ -217,13 +239,20 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
 
+        # compute time step
+        dt_max = nondimensionalize(
+            (it < 5 ? 25e3 : 25e3) * yr, 
+            CharDim
+        )
+
+        dt     = compute_dt(stokes, di, dt_max)
+        dt_dim = dimensionalize(dt, yr, CharDim) / 1e3
+        println("   dt:              $dt_dim kyrs")
+
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
-        # compute time step
-        dt = compute_dt(stokes, di) * 0.8
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.ε)
-        tensor_invariant!(stokes.ε_pl)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -236,10 +265,10 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             dt,
             di;
             kwargs = (
-                igg     = igg,
-                phase   = phase_ratios,
+                igg = igg,
+                phase = phase_ratios,
                 iterMax = 50.0e3,
-                nout    = 1.0e2,
+                nout = 1.0e2,
                 verbose = true,
             )
         )
@@ -254,7 +283,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
@@ -269,38 +298,43 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             xvi
         )
 
+        # advect marker chain
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin_nd, di, air_phase)
+
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         @show it += 1
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
-            checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
-            checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
+        if it == 1 || rem(it, 1) == 0
+            xvi_dim = ntuple(i -> ustrip(dimensionalize(xvi[i], km, CharDim)), Val(2))
+            xci_dim = ntuple(i -> ustrip(dimensionalize(xci[i], km, CharDim)), Val(2))
+            # checkpointing(figdir, stokes, thermal.T, η, t)
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(T_buffer),
-                    τII = Array(stokes.τ.II),
-                    εII = Array(stokes.ε.II),
-                    Vx = Array(Vx_v),
-                    Vy = Array(Vy_v),
+                    T   = ustrip(dimensionalize(Array(T_buffer), C, CharDim)),
+                    τII = ustrip(dimensionalize(Array(stokes.τ.II), Pa, CharDim)),
+                    εII = ustrip(dimensionalize(Array(stokes.ε.II), s^-1, CharDim)),
                 )
                 data_c = (;
-                    P = Array(stokes.P),
-                    η = Array(η_vep),
+                    P     = ustrip(dimensionalize(Array(stokes.P), Pa, CharDim)),
+                    η_vep = ustrip(dimensionalize(Array(η_vep), Pa*s, CharDim)),
+                    η     = ustrip(dimensionalize(Array(η), Pa*s, CharDim)),
                 )
                 velocity_v = (
-                    Array(Vx_v),
-                    Array(Vy_v),
+                    ustrip(dimensionalize(Array(Vx_v), m/s, CharDim)),
+                    ustrip(dimensionalize(Array(Vy_v), m/s, CharDim)),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                    xvi,
-                    xci,
+                    xvi_dim,
+                    xci_dim,
                     data_v,
                     data_c,
                     velocity_v;
@@ -309,30 +343,38 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             end
 
             # Make particles plottable
-            p = particles.coords
+            p        = particles.coords
             ppx, ppy = p
-            pxv = ppx.data[:] ./ 1.0e3
-            pyv = ppy.data[:] ./ 1.0e3
-            clr = pPhases.data[:]
-            # clr      = pT.data[:]
-            idxv = particles.index.data[:]
+            pxv      = ustrip(dimensionalize(Array(ppx.data[:]), km, CharDim))
+            pyv      = ustrip(dimensionalize(Array(ppy.data[:]), km, CharDim))
+            clr      = Array(pPhases.data[:])
+            idxv     = Array(particles.index.data[:])
 
             # Make Makie figure
             ar = 3
             fig = Figure(size = (1200, 900), title = "t = $t")
             ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
             ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
-            ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
+            # ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
+            ax3 = Axis(fig[1, 3], aspect = ar, title = "τII")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :batlow)
+            h1 = heatmap!(
+                ax1, xvi_dim..., ustrip(dimensionalize(Array(thermal.T[2:(end - 1), :]), K, CharDim)), colormap = :batlow
+            )
             # Plot particles phase
-            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
+            h2 = scatter!(ax2, pxv[idxv], pyv[idxv], color = clr[idxv], markersize = 1)
             # Plot 2nd invariant of strain rate
             # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
-            h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
+            h3 = heatmap!(
+                ax3, xci_dim..., ustrip(dimensionalize(Array((stokes.τ.II)), MPa, CharDim)), colormap = :batlow
+            )
             # Plot effective viscosity
-            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
+            h4 = heatmap!(
+                ax4, xci_dim..., 
+                log10.(ustrip(dimensionalize(Array((stokes.viscosity.η_vep)), Pa*s, CharDim))), 
+                colormap = :batlow
+            )
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -354,7 +396,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_APT"
+figdir = "Subduction2D_VS"
 n = 64
 nx, ny = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
@@ -364,4 +406,4 @@ else
     igg
 end
 
-main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(li, origin, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

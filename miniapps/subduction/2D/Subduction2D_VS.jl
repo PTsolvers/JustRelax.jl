@@ -1,5 +1,5 @@
 # Load script dependencies
-using GeoParams, CairoMakie
+using GeoParams, GLMakie
 
 const isCUDA = false
 
@@ -73,7 +73,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheology_nonNewtonian_plastic()
-    dt = 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt = 1.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -81,7 +81,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
@@ -101,24 +101,23 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
+    # marker chain
+    nxcell, min_xcell, max_xcell = 100, 75, 125
+    initial_elevation = 0.0e0
+    chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
+
+    # RockRatios
+    air_phase = 4
+    ϕ_R = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ_R, chain, xvi, di)
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 20e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
-    # ----------------------------------------------------
-
-    # TEMPERATURE PROFILE --------------------------------
-    Ttop = 20 + 273
-    Tbot = maximum(T_GMG)
-    thermal = ThermalArrays(backend, ni)
-    @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
-    thermal_bc = TemperatureBoundaryConditions(;
-        no_flux = (left = true, right = true, top = false, bot = false),
-    )
-    thermal_bcs!(thermal, thermal_bc)
-    @views thermal.T[:, end] .= Ttop
-    @views thermal.T[:, 1] .= Tbot
-    temperature2center!(thermal)
+    pt_stokes = PTStokesCoeffs(
+        li, di;
+        ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 25.0e0, r = 0.7, CFL = 0.9 / √2.1
+    ) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # Buoyancy forces
@@ -129,7 +128,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # Rheology
     args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
-    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff; air_phase = air_phase)
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
@@ -139,7 +138,6 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
-        free_surface = false,
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
@@ -149,8 +147,6 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     if do_vtk
         vtk_dir = joinpath(figdir, "vtk")
         take(vtk_dir)
-        checkpoint = joinpath(figdir, "checkpoint")
-        take(checkpoint)
     end
     take(figdir)
     # ----------------------------------------------------
@@ -191,23 +187,23 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # Stokes solver ----------------
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
         t_stokes = @elapsed begin
-            out = solve!(
+            out = solve_VariationalStokes!(
                 stokes,
                 pt_stokes,
                 di,
                 flow_bcs,
                 ρg,
                 phase_ratios,
+                ϕ_R,
                 rheology,
                 args,
                 dt,
                 igg;
-                kwargs = (
-                    iterMax = 100.0e3,
-                    nout = 2.0e3,
+                kwargs = (;
+                    iterMax = 150.0e3,
+                    free_surface = true,
+                    nout = 5.0e3,
                     viscosity_cutoff = viscosity_cutoff,
-                    free_surface = false,
-                    viscosity_relaxation = 1.0e-2,
                 )
             )
         end
@@ -217,13 +213,14 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
 
+        # compute time step
+        dt = compute_dt(stokes, di, 5e3 * 3600 * 24 * 365.25)
+        println("   dt:              $(dt / (1.0e3 * 3600 * 24 * 365.25)) kyrs")
+
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
-        # compute time step
-        dt = compute_dt(stokes, di) * 0.8
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.ε)
-        tensor_invariant!(stokes.ε_pl)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -236,10 +233,10 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             dt,
             di;
             kwargs = (
-                igg     = igg,
-                phase   = phase_ratios,
+                igg = igg,
+                phase = phase_ratios,
                 iterMax = 50.0e3,
-                nout    = 1.0e2,
+                nout = 1.0e2,
                 verbose = true,
             )
         )
@@ -254,7 +251,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
@@ -269,16 +266,20 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             xvi
         )
 
+        # advect marker chain
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         @show it += 1
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
-            checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
-            checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
+        if it == 1 || rem(it, 1) == 0
+            # checkpointing(figdir, stokes, thermal.T, η, t)
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -291,7 +292,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 )
                 data_c = (;
                     P = Array(stokes.P),
-                    η = Array(η_vep),
+                    η_vep = Array(η_vep),
+                    η = Array(η),
                 )
                 velocity_v = (
                     Array(Vx_v),
@@ -354,7 +356,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_APT"
+figdir = "Subduction2D_VS"
 n = 64
 nx, ny = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)

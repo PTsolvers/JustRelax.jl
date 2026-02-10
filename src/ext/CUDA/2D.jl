@@ -9,6 +9,7 @@ using ParallelStencil, ParallelStencil.FiniteDifferences2D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
 using MPI
+using Statistics
 
 import JustRelax.JustRelax2D as JR2D
 
@@ -34,10 +35,19 @@ __init__() = @init_parallel_stencil(CUDA, Float64, 2)
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 include("../../variational_stokes/Stokes2D.jl")
+include("../../DYREL/DYREL2D.jl")
 
 # Types
 function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
+end
+
+function JR2D.DYREL(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
+    return DYREL(ni)
+end
+
+function JR2D.DYREL(::Type{CUDABackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, CFL = 0.99, c_fat = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, CFL = CFL, c_fat = c_fat, γfact = γfact)
 end
 
 function JR2D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N, Number}) where {N}
@@ -334,6 +344,10 @@ end
 
 function JR2D.solve_VariationalStokes!(::CUDABackendTrait, stokes, args...; kwargs)
     return _solve_VS!(stokes, args...; kwargs...)
+end
+
+function JR2D.solve_DYREL!(::CUDABackendTrait, stokes, args...; kwargs)
+    return _solve_DYREL!(stokes, args...; kwargs...)
 end
 
 function JR2D.heatdiffusion_PT!(::CUDABackendTrait, thermal, args...; kwargs)

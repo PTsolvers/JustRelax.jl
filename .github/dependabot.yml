@@ -27,4 +27,3 @@ updates:
           - "*"
     labels:
       - "dependencies"
-      - "julia"

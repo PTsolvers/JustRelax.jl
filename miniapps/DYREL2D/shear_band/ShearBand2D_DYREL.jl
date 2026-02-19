@@ -92,9 +92,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ),
     )
 
-    # perturbation array for the cohesion
-    perturbation_C = @zeros(ni...)
-
     # Initialize phase ratios -------------------------------
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     radius = 0.1

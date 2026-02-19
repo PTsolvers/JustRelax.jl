@@ -182,7 +182,7 @@ function _solve_DYREL!(
 
         # Set tolerance of velocity solve proportional to residual
         if err > err_min # * 1.05
-            rel_drop = max(rel_drop * 0.25, ϵ)
+            rel_drop = max(rel_drop * 0.1, ϵ)
         end
         if err_min > err
             err_min = err
@@ -193,7 +193,7 @@ function _solve_DYREL!(
         # while (err > dyrel.ϵ_vel && itPT ≤ iterMax)
         while (err > ϵ_vel && itPT ≤ iterMax)
             itPT += 1
-            itg += 1
+            itg  += 1
             iter += 1
 
             # Pseudo-old dudes

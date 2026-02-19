@@ -7,31 +7,83 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fat = 
     # Diagonal preconditioner arrays
     Dx = @zeros(nx - 1, ny)
     Dy = @zeros(nx, ny - 1)
+    Dz = @zeros(1, 1)  # dummy for 2D
     # maximum eigenvalue estimates
     λmaxVx = @zeros(nx - 1, ny)
     λmaxVy = @zeros(nx, ny - 1)
+    λmaxVz = @zeros(1, 1)  # dummy for 2D
     dVxdτ = @zeros(nx - 1, ny)
     dVydτ = @zeros(nx, ny - 1)
+    dVzdτ = @zeros(1, 1)  # dummy for 2D
     dτVx = @zeros(nx - 1, ny)
     dτVy = @zeros(nx, ny - 1)
+    dτVz = @zeros(1, 1)  # dummy for 2D
     dVx = @zeros(nx - 1, ny)
     dVy = @zeros(nx, ny - 1)
+    dVz = @zeros(1, 1)  # dummy for 2D
     βVx = @zeros(nx - 1, ny)
     βVy = @zeros(nx, ny - 1)
+    βVz = @zeros(1, 1)  # dummy for 2D
     cVx = @zeros(nx - 1, ny)
     cVy = @zeros(nx, ny - 1)
+    cVz = @zeros(1, 1)  # dummy for 2D
     αVx = @zeros(nx - 1, ny)
     αVy = @zeros(nx, ny - 1)
+    αVz = @zeros(1, 1)  # dummy for 2D
 
     T = typeof(γ_eff)
     F = typeof(CFL)
     return JustRelax.DYREL{T, F}(
-        γ_eff, Dx, Dy, λmaxVx, λmaxVy, dVxdτ, dVydτ, dτVx, dτVy,
-        dVx, dVy, βVx, βVy, cVx, cVy, αVx, αVy, ηb, CFL, ϵ, ϵ_vel, c_fat
+        γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fat
     )
 end
 
 DYREL(nx::Integer, ny::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fat = 0.5) = DYREL((nx, ny); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fat = c_fat)
+
+function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fat = 0.5)
+    nx, ny, nz = ni
+    # penalty parameter
+    γ_eff = @zeros(nx, ny, nz)
+    # bulk viscosity
+    ηb = @zeros(nx, ny, nz)
+    # Diagonal preconditioner arrays
+    Dx = @zeros(nx - 1, ny, nz)
+    Dy = @zeros(nx, ny - 1, nz)
+    Dz = @zeros(nx, ny, nz - 1)
+    # maximum eigenvalue estimates
+    λmaxVx = @zeros(nx - 1, ny, nz)
+    λmaxVy = @zeros(nx, ny - 1, nz)
+    λmaxVz = @zeros(nx, ny, nz - 1)
+    dVxdτ = @zeros(nx - 1, ny, nz)
+    dVydτ = @zeros(nx, ny - 1, nz)
+    dVzdτ = @zeros(nx, ny, nz - 1)
+    dτVx = @zeros(nx - 1, ny, nz)
+    dτVy = @zeros(nx, ny - 1, nz)
+    dτVz = @zeros(nx, ny, nz - 1)
+    dVx = @zeros(nx - 1, ny, nz)
+    dVy = @zeros(nx, ny - 1, nz)
+    dVz = @zeros(nx, ny, nz - 1)
+    βVx = @zeros(nx - 1, ny, nz)
+    βVy = @zeros(nx, ny - 1, nz)
+    βVz = @zeros(nx, ny, nz - 1)
+    cVx = @zeros(nx - 1, ny, nz)
+    cVy = @zeros(nx, ny - 1, nz)
+    cVz = @zeros(nx, ny, nz - 1)
+    αVx = @zeros(nx - 1, ny, nz)
+    αVy = @zeros(nx, ny - 1, nz)
+    αVz = @zeros(nx, ny, nz - 1)
+
+    T = typeof(γ_eff)
+    F = typeof(CFL)
+    return JustRelax.DYREL{T, F}(
+        γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fat
+    )
+end
+
+DYREL(nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fat = 0.5) = DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fat = c_fat)
+
 
 function DYREL(::Type{CPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fat = 0.5, γfact = 20.0)
     return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fat = c_fat, γfact = γfact)

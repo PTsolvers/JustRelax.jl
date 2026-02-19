@@ -1,7 +1,7 @@
 # Load script dependencies
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
-const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -178,7 +178,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Time loop
     t, it = 0.0, 0
-    while it < 1000 # run only for 5 Myrs
+    while it < 1 #000 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -211,7 +211,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     rel_drop = 1e-2,
                     nout     = 400,
                     λ_relaxation = 1,
-                    viscosity_relaxation = 1.0e-3,
+                    viscosity_relaxation = 1.0e-2,
                     viscosity_cutoff = (1e18, 1e23),
                 )
             );
@@ -371,3 +371,14 @@ else
 end
 
 main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+
+# rel drop = 1e-3 ----------------
+# it = 400, iter = 35200, err = 1.325e-06
+# itPH = 77 iter = 035200 iter/nx = 088, err = 9.461e-04 - norm[Rx=3.977e-01 7.160e-04, Ry=7.378e-01 9.461e-04, Rp=1.322e-19 5.952e-04]
+# Stokes solver time
+#    Total time:      17.207872623 s
+
+# it = 400, iter = 32800, err = 1.328e-06
+# itPH = 73 iter = 032800 iter/nx = 082, err = 8.048e-04 - norm[Rx=3.764e-01 6.955e-04, Ry=6.276e-01 8.048e-04, Rp=1.299e-19 5.849e-04]
+# Stokes solver time
+#    Total time:      15.819583205 s

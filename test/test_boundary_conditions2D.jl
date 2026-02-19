@@ -188,10 +188,12 @@ end
             A = rand(ni...)
             @test JustRelax.apply_dirichlet(A, bc, 1, 1) == A[1, 1]
             @test JustRelax.apply_dirichlet(A, bc, 5, 5) == 5
+            @test JustRelax.isdirichlet(bc, 1, 1) === false
+            @test JustRelax.isdirichlet(bc, 5, 5) === true
 
-            bc = JustRelax.DirichletBoundaryCondition()
+            bc2 = JustRelax.DirichletBoundaryCondition()
 
-            @test all(JustRelax.apply_dirichlet(A, bc) == A)
+            @test all(JustRelax.apply_dirichlet(A, bc2) == A)
 
         end
 
@@ -205,13 +207,14 @@ end
 
             @test JustRelax.apply_dirichlet(A, bc, 1, 1) == A[1, 1]
             @test JustRelax.apply_dirichlet(A, bc, 5, 5) == 5
+            @test JustRelax.isdirichlet(bc, 1, 1) === false
+            @test JustRelax.isdirichlet(bc, 5, 5) === true
 
-            bc = JustRelax.ConstantDirichletBoundaryCondition()
+            bc2 = JustRelax.ConstantDirichletBoundaryCondition()
 
-            @test all(JustRelax.apply_dirichlet(A, bc) == A)
+            @test all(JustRelax.apply_dirichlet(A, bc2) == A)
 
-            @test JustRelax.apply_dirichlet(A, bc, 1, 1) == A[1, 1]
-            @test JustRelax.apply_dirichlet(A, bc, 5, 5) == A[5, 5]
+            @test JustRelax.apply_dirichlet(A, bc2, 1, 1) == A[1, 1]
         end
     end
 end

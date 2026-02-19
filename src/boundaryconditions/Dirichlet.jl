@@ -68,6 +68,19 @@ function Base.getindex(
     return 0
 end
 
+
+@inline function isdirichlet(
+        bc::AbstractDirichletBoundaryCondition, inds::Vararg{Int, N}
+    ) where {N}
+    return bc.mask.mask[inds...] != 0
+end
+
+@inline function isdirichlet(
+        ::AbstractDirichletBoundaryCondition{Nothing, Nothing}, ::Vararg{Int, N}
+    ) where {N}
+    return false
+end
+
 @inline function apply_dirichlet!(A::AbstractArray, bc::AbstractDirichletBoundaryCondition)
     apply_mask!(A, bc.value, bc.mask)
     return nothing

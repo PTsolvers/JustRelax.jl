@@ -308,19 +308,21 @@ function _compute_viscosity!(
         local_viscosity_args,
     )
     # vertex viscosity
-    @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
-        stokes.viscosity.ηv,
-        ν,
-        phase_ratios.vertex,
-        select_tensor_vertex(stokes, fn_viscosity)...,
-        args,
-        rheology,
-        air_phase,
-        cutoff,
-        fn_viscosity,
-        local_viscosity_args_vertex,
-    )
-
+    # skip for 3D for now, may change in the future
+    if length(ni) == 2 
+        @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
+            stokes.viscosity.ηv,
+            ν,
+            phase_ratios.vertex,
+            select_tensor_vertex(stokes, fn_viscosity)...,
+            args,
+            rheology,
+            air_phase,
+            cutoff,
+            fn_viscosity,
+            local_viscosity_args_vertex,
+        )
+    end
     return nothing
 end
 
@@ -343,20 +345,22 @@ function _compute_viscosity!(
         rheology,
         air_phase,
         cutoff,
-        fn_viscosity
+        fn_viscosity,
+        local_viscosity_args,
     )
-    # if do_vertices
-    @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
-        stokes.viscosity.ηv,
-        ν,
-        select_tensor_vertex(stokes, fn_viscosity)...,
-        args,
-        rheology,
-        air_phase,
-        cutoff,
-        local_viscosity_args_vertex,
-    )
-    # end
+    # skip for 3D for now, may change in the future
+    if length(size(phase_ratios.center)) == 3 
+        @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
+            stokes.viscosity.ηv,
+            ν,
+            select_tensor_vertex(stokes, fn_viscosity)...,
+            args,
+            rheology,
+            air_phase,
+            cutoff,
+            local_viscosity_args_vertex,
+        )
+    end
     return nothing
 end
 
@@ -405,39 +409,38 @@ end
 end
 
 ## 3D KERNELS
+# @parallel_indices (I...) function compute_viscosity_kernel!(
+#         η, ν, Axx, Ayy, Azz, Ayzv, Axzv, Axyv, args, rheology, cutoff, fn_viscosity::F1, fn_args::F2
+#     ) where {F1, F2}
 
-@parallel_indices (I...) function compute_viscosity_kernel!(
-        η, ν, Axx, Ayy, Azz, Ayzv, Axzv, Axyv, args, rheology, cutoff, fn_viscosity::F
-    ) where {F}
+#     # convenience closures
+#     Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)
+#     Base.@propagate_inbounds @inline gather_xz(A) = _gather_xz(A, I...)
+#     Base.@propagate_inbounds @inline gather_xy(A) = _gather_xy(A, I...)
 
-    # convenience closures
-    Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)
-    Base.@propagate_inbounds @inline gather_xz(A) = _gather_xz(A, I...)
-    Base.@propagate_inbounds @inline gather_xy(A) = _gather_xy(A, I...)
+#     @inbounds begin
+#         Aij_normal = Axx[I...], Ayy[I...], Azz[I...]
 
-    @inbounds begin
-        Aij_normal = Axx[I...], Ayy[I...], Azz[I...]
+#         # we need strain rate not to be zero, otherwise we get NaNs
+#         AII_0 = allzero(Aij_normal...) * eps()
 
-        # we need strain rate not to be zero, otherwise we get NaNs
-        AII_0 = allzero(Aij_normal...) * eps()
+#         # # argument fields at local index
+#         args_ijk = fn_args(args, I...)
 
-        # # argument fields at local index
-        args_ijk = local_viscosity_args(args, I...)
+#         # compute second invariant of strain rate tensor
+#         Aij_normal = Aij_normal .+ (AII_0, -AII_0 * 0.5, -AII_0 * 0.5)
+#         Aij_shear = gather_yz(Ayzv), gather_xz(Axzv), gather_xy(Axyv)
+#         Aij = (Aij_normal..., Aij_shear...)
+#         AII = second_invariant(Aij...)
 
-        # compute second invariant of strain rate tensor
-        Aij_normal = Aij_normal .+ (AII_0, -AII_0 * 0.5, -AII_0 * 0.5)
-        Aij_shear = gather_yz(Ayzv), gather_xz(Axzv), gather_xy(Axyv)
-        Aij = (Aij_normal..., Aij_shear...)
-        AII = second_invariant(Aij...)
+#         # update stress and effective viscosity
+#         ηi = fn_viscosity(rheology, AII, args_ijk)
+#         ηi = continuation_linear(ηi, η[I...], ν)
+#         η[I...] = clamp(ηi, cutoff...)
+#     end
 
-        # update stress and effective viscosity
-        ηi = fn_viscosity(rheology, AII, args_ijk)
-        ηi = continuation_linear(ηi, η[I...], ν)
-        η[I...] = clamp(ηi, cutoff...)
-    end
-
-    return nothing
-end
+#     return nothing
+# end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
         η,
@@ -453,8 +456,9 @@ end
         rheology,
         air_phase::Integer,
         cutoff,
-        fn_viscosity::F
-    ) where {F}
+        fn_viscosity::F1,
+        fn_args::F2
+    ) where {F1, F2}
 
     # convenience closures
     Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)
@@ -468,7 +472,7 @@ end
         AII_0 = allzero(Aij_normal...) * eps()
 
         # # argument fields at local index
-        args_ijk = local_viscosity_args(args, I...)
+        args_ijk = fn_args(args, I...)
 
         # local phase ratio
         ratio_ijk = @cell ratios_center[I...]

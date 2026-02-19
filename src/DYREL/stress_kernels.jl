@@ -114,7 +114,7 @@ end
     η_ve = isinf(G) ?
         inv(inv(η) + inv(G * dt)) :
         (η * G * dt) / (η + G * dt) # more efficient than inv(inv(η) + inv(G * dt))
-    # effectice stgrain rate
+    # effective stgrain rate
     inv_2Gdt = inv(2 * G * dt)
     εij_eff = @. εij + τij_o * inv_2Gdt
 

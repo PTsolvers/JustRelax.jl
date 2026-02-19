@@ -11,12 +11,12 @@
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
 
     # @inbounds begin
-        if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-            Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
-        end
-        if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-            Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy)
-        end
+    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
+        Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
+    end
+    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+        Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy)
+    end
     # end
     return nothing
 end
@@ -33,10 +33,10 @@ end
 
     nx, ny = size(ρgy)
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-         Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
+        Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
     end
 
-     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
         θ = 1.0
         # Vertical velocity
         Vyᵢⱼ = Vy[i + 1, j + 1]
@@ -67,12 +67,12 @@ end
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
 
     # @inbounds begin
-        if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-            Rx[i, j] = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(P_num) - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j]
-        end
-        if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-            Ry[i, j] = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(P_num) - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j]
-        end
+    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
+        Rx[i, j] = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(P_num) - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j]
+    end
+    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+        Ry[i, j] = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(P_num) - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j]
+    end
     # end
 
     return nothing
@@ -92,15 +92,15 @@ end
     Base.@propagate_inbounds @inline av_za(A) = _av_za(A, i, j, k)
 
     # @inbounds begin
-        if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
-            Rx[i, j, k] = d_xa(τxx) + d_yi(τxy) + d_zi(τxz) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
-        end
-        if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
-            Ry[i, j, k] = d_ya(τyy) + d_xi(τxy) + d_zi(τyz) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy)
-        end
-        if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
-            Rz[i, j, k] = d_za(τzz) + d_xi(τxz) + d_yi(τyz) - d_za(P) - d_za(ΔPψ) - av_za(ρgz)
-        end
+    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
+        Rx[i, j, k] = d_xa(τxx) + d_yi(τxy) + d_zi(τxz) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
+    end
+    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
+        Ry[i, j, k] = d_ya(τyy) + d_xi(τxy) + d_zi(τyz) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy)
+    end
+    if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
+        Rz[i, j, k] = d_za(τzz) + d_xi(τxz) + d_yi(τyz) - d_za(P) - d_za(ΔPψ) - av_za(ρgz)
+    end
     # end
     return nothing
 end
@@ -120,14 +120,14 @@ end
 
     nx, ny, nz = size(ρgz)
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
-         Rx[i, j, k] = d_xa(τxx) + d_yi(τxy) + d_zi(τxz) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
+        Rx[i, j, k] = d_xa(τxx) + d_yi(τxy) + d_zi(τxz) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
     end
 
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
-         Ry[i, j, k] = d_ya(τyy) + d_xi(τxy) + d_zi(τyz) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy)
+        Ry[i, j, k] = d_ya(τyy) + d_xi(τxy) + d_zi(τyz) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy)
     end
 
-     if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
+    if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
         θ = 1.0
         # Vertical velocity
         Vzᵢⱼₖ = Vz[i + 1, j + 1, k + 1]
@@ -161,15 +161,15 @@ end
     Base.@propagate_inbounds @inline av_za(A) = _av_za(A, i, j, k)
 
     # @inbounds begin
-        if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
-            Rx[i, j, k] = (d_xa(τxx) + d_yi(τxy) + d_zi(τxz) - d_xa(P) - d_xa(P_num) - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j, k]
-        end
-        if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
-            Ry[i, j, k] = (d_ya(τyy) + d_xi(τxy) + d_zi(τyz) - d_ya(P) - d_ya(P_num) - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j, k]
-        end
-        if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
-            Rz[i, j, k] = (d_za(τzz) + d_xi(τxz) + d_yi(τyz) - d_za(P) - d_za(P_num) - d_za(ΔPψ) - av_za(ρgz)) / Dz[i, j, k]
-        end
+    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
+        Rx[i, j, k] = (d_xa(τxx) + d_yi(τxy) + d_zi(τxz) - d_xa(P) - d_xa(P_num) - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j, k]
+    end
+    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
+        Ry[i, j, k] = (d_ya(τyy) + d_xi(τxy) + d_zi(τyz) - d_ya(P) - d_ya(P_num) - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j, k]
+    end
+    if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
+        Rz[i, j, k] = (d_za(τzz) + d_xi(τxz) + d_yi(τyz) - d_za(P) - d_za(P_num) - d_za(ΔPψ) - av_za(ρgz)) / Dz[i, j, k]
+    end
     # end
 
     return nothing

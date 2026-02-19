@@ -87,7 +87,7 @@ function _solve_DYREL!(
 
     # Iteration loop
     err_min = Inf
-    err    = 1.0
+    err = 1.0
     errVx0 = 1.0
     errVy0 = 1.0
     errPt0 = 1.0
@@ -193,7 +193,7 @@ function _solve_DYREL!(
         # while (err > dyrel.ϵ_vel && itPT ≤ iterMax)
         while (err > ϵ_vel && itPT ≤ iterMax)
             itPT += 1
-            itg  += 1
+            itg += 1
             iter += 1
 
             # Pseudo-old dudes

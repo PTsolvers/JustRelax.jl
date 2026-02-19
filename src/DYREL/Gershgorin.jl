@@ -135,22 +135,22 @@ the pseudo-time step `dτV` and the preconditioner diagonal `cV`.
 - `cV::NTuple{N, AbstractArray{T, N}}`: Tuple of preconditioner diagonal entries for each velocity component
 """
 function update_α_β!(
-    βV::NTuple{N, AbstractArray{T, N}},
-    αV::NTuple{N, AbstractArray{T, N}},
-    dτV::NTuple{N, AbstractArray{T, N}},
-    cV::NTuple{N, AbstractArray{T, N}}
-) where {N, T}
+        βV::NTuple{N, AbstractArray{T, N}},
+        αV::NTuple{N, AbstractArray{T, N}},
+        dτV::NTuple{N, AbstractArray{T, N}},
+        cV::NTuple{N, AbstractArray{T, N}}
+    ) where {N, T}
     ni = size(βV[1]) .+ ntuple(i -> i == 1 ? 1 : 0, Val(N))
     @parallel (@idx ni) _update_α_β!(βV, αV, dτV, cV)
     return nothing
 end
 
 @parallel_indices (I...) function _update_α_β!(
-    βV::NTuple{N, AbstractArray{T, N}},
-    αV::NTuple{N, AbstractArray{T, N}},
-    dτV::NTuple{N, AbstractArray{T, N}},
-    cV::NTuple{N, AbstractArray{T, N}}
-) where {N, T}
+        βV::NTuple{N, AbstractArray{T, N}},
+        αV::NTuple{N, AbstractArray{T, N}},
+        dτV::NTuple{N, AbstractArray{T, N}},
+        cV::NTuple{N, AbstractArray{T, N}}
+    ) where {N, T}
     ntuple(Val(N)) do i
         @inline
         if all(I .≤ size(βV[i]))
@@ -180,26 +180,26 @@ then updates the damping parameters `βV` and acceleration parameters `αV` acco
 - `CFL_v::Real`: CFL number for velocity
 """
 function update_dτV_α_β!(
-    dτV::NTuple{N, AbstractArray{T, N}},
-    βV::NTuple{N, AbstractArray{T, N}},
-    αV::NTuple{N, AbstractArray{T, N}},
-    cV::NTuple{N, AbstractArray{T, N}},
-    λmaxV::NTuple{N, AbstractArray{T, N}},
-    CFL_v::Real
-) where {N, T}
+        dτV::NTuple{N, AbstractArray{T, N}},
+        βV::NTuple{N, AbstractArray{T, N}},
+        αV::NTuple{N, AbstractArray{T, N}},
+        cV::NTuple{N, AbstractArray{T, N}},
+        λmaxV::NTuple{N, AbstractArray{T, N}},
+        CFL_v::Real
+    ) where {N, T}
     ni = size(βV[1]) .+ ntuple(i -> i == 1 ? 1 : 0, Val(N))
     @parallel (@idx ni) _update_dτV_α_β!(dτV, βV, αV, cV, λmaxV, CFL_v)
     return nothing
 end
 
 @parallel_indices (I...) function _update_dτV_α_β!(
-    dτV::NTuple{N, AbstractArray{T, N}},
-    βV::NTuple{N, AbstractArray{T, N}},
-    αV::NTuple{N, AbstractArray{T, N}},
-    cV::NTuple{N, AbstractArray{T, N}},
-    λmaxV::NTuple{N, AbstractArray{T, N}},
-    CFL_v::Real
-) where {N, T}
+        dτV::NTuple{N, AbstractArray{T, N}},
+        βV::NTuple{N, AbstractArray{T, N}},
+        αV::NTuple{N, AbstractArray{T, N}},
+        cV::NTuple{N, AbstractArray{T, N}},
+        λmaxV::NTuple{N, AbstractArray{T, N}},
+        CFL_v::Real
+    ) where {N, T}
     ntuple(Val(N)) do i
         @inline
         if all(I .≤ size(βV[i]))

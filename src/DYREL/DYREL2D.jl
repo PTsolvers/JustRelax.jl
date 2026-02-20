@@ -1,6 +1,33 @@
 ## 2D VISCO-ELASTIC STOKES SOLVER
+"""
+    solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
 
-# backend trait
+Internal solver implementation for the 2D DYREL method on the CPU.
+
+# Arguments (in the following order)
+- `stokes`: `JustRelax.StokesArrays` containing the simulation fields.
+- `ρg`: buoyancy forces arrays.
+- `dyrel`: DYREL-specific parameters and fields.
+- `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions.
+- `phase_ratios`: `JustPIC.PhaseRatios` for material phase tracking.
+- `rheology`: Material properties and rheological laws.
+- `args`: Tuple of additional arguments needed to update viscosity, stress, and buoyancy forces.
+- `di`: Grid spacing tuple `(dx, dy)`.
+- `dt`: Time step.
+- `igg`: `IGG` object for global grid information (MPI).
+
+# Keyword Arguments
+- `viscosity_cutoff`: Limits for viscosity `(min, max)`. Default: `(-Inf, Inf)`.
+- `viscosity_relaxation`: Relaxation factor for viscosity updates. Default: `1.0e-2`.
+- `λ_relaxation_DR`: Relaxation factor for dynamic relaxation. Default: `1`.
+- `λ_relaxation_PH`: Relaxation factor for Powell-Hestenes iterations. Default: `1`.
+- `iterMax`: Maximum number of iterations. Default: `50.0e3`.
+- `nout`: Output frequency for residuals. Default: `100`.
+- `rel_drop`: Relative residual drop tolerance. Default: `1.0e-2`.
+- `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
+- `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
+- `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
+"""
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
     out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
     return out
@@ -25,8 +52,6 @@ function _solve_DYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         iterMax = 50.0e3,
-        iterMin = 1.0e2,
-        free_surface = false,
         nout = 100,
         rel_drop = 1.0e-2,
         b_width = (4, 4, 0),
@@ -35,7 +60,8 @@ function _solve_DYREL!(
         linear_viscosity = false,
         kwargs...,
     ) where {T}
-
+    
+    # unpack
     (;
         γ_eff,
         Dx,
@@ -57,7 +83,6 @@ function _solve_DYREL!(
         c_fact,
         ηb,
     ) = dyrel
-    # unpack
 
     _di = inv.(di)
     ni = size(stokes.P)
@@ -78,12 +103,6 @@ function _solve_DYREL!(
     # reset plastic multiplier at the beginning of the time step
     stokes.λ .= 0.0
     stokes.λv .= 0.0
-
-    # # compute buoyancy forces and viscosity
-    # compute_ρg!(ρg, phase_ratios, rheology, args)
-    # # viscosity guess based on strain rate
-    # compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
-    # center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
 
     # Iteration loop
     err_min = Inf
@@ -181,7 +200,7 @@ function _solve_DYREL!(
         err < ϵ && break
 
         # Set tolerance of velocity solve proportional to residual
-        if err > err_min # * 1.05
+        if err > err_min * 1.05
             rel_drop = max(rel_drop * 0.1, ϵ)
         end
         if err_min > err
@@ -190,7 +209,6 @@ function _solve_DYREL!(
 
         ϵ_vel = err * rel_drop
         itPT = 0
-        # while (err > dyrel.ϵ_vel && itPT ≤ iterMax)
         while (err > ϵ_vel && itPT ≤ iterMax)
             itPT += 1
             itg += 1
@@ -305,23 +323,6 @@ function _solve_DYREL!(
         # update pressure
         @. stokes.P += γ_eff .* stokes.R.RP
 
-        # Because pressure changed....
-        # update viscosity based on the deviatoric stress tensor
-        # update_viscosity_τII!(
-        #     stokes,
-        #     phase_ratios,
-        #     args,
-        #     rheology,
-        #     viscosity_cutoff;
-        #     relaxation = 1,
-        #     # relaxation = viscosity_relaxation,
-        # )
-        # # center2vertex_harm!(stokes.viscosity.ηv, stokes.viscosity.η)
-
-        # if igg.me == 0 && ((err / err_it1) < ϵ_rel || (err < ϵ_abs))
-        #     println("Pseudo-transient iterations converged in $iter iterations")
-        # end
-
         iter > 200.0e3 && break
     end
 
@@ -350,6 +351,7 @@ function _solve_DYREL!(
 
 end
 
+# TODO: will be adressed in following PRs
 # ## variational version
 # function _solve_DYREL!(
 #         stokes::JustRelax.StokesArrays,

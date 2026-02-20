@@ -1,4 +1,25 @@
-# DYREL struct supporting both 2D and 3D
+
+"""
+    struct DYREL{T, F}
+
+Structure containing parameters and arrays for the DYREL (Dynamic Relaxation) solver.
+
+# Fields
+- `γ_eff`: Effective penalty parameter.
+- `Dx`, `Dy`, `Dz`: Diagonal preconditioners for velocity updates in x, y, (and z) directions.
+- `λmaxVx`, `λmaxVy`, `λmaxVz`: Maximum eigenvalues for stability calculation.
+- `dVxdτ`, `dVydτ`, `dVzdτ`: Pseudo-time step related damping terms.
+- `dτVx`, `dτVy`, `dτVz`: Pseudo-time steps for velocity fields.
+- `dVx`, `dVy`, `dVz`: Velocity increments for the current iteration.
+- `βVx`, `βVy`, `βVz`: Damping coefficients for momentum equation.
+- `cVx`, `cVy`, `cVz`: Damping coefficients related to dynamic relaxation.
+- `αVx`, `αVy`, `αVz`: Scaling factors for damping.
+- `ηb`: Bulk viscosity field.
+- `CFL`: Courant-Friedrichs-Lewy number.
+- `ϵ`: General convergence tolerance.
+- `ϵ_vel`: Velocity convergence tolerance.
+- `c_fact`: Damping scaling factor.
+"""
 struct DYREL{T, F}
     γ_eff::T  # penalty parameter
     Dx::T     # diagonal preconditioner

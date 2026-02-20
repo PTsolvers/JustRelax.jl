@@ -18,6 +18,9 @@ by this one
 dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-6)
 ```
 
+> [!NOTE]
+> Note that the `DYREL` arrays need effective viscosity of the model, so it needs to be instantiatef *after* having a effective viscosity guess.
+
 2. The last change requires changing the solver function call to the following:
 ```julia
 solve_DYREL!(

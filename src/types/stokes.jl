@@ -195,7 +195,7 @@ function StokesArrays(::Number, ::Number, ::Number)
 end
 
 @inline dims(stokes::StokesArrays) = size(stokes.P)
-@inline static_dims(::StokesArrays{Velocity{AbstractArray{T, N}}}) where {N, T} = Val(N)
+@inline static_dims(::StokesArrays{Velocity{A}}) where {A <: AbstractArray{T, N}} where {T, N} = Val(N)
 
 ## PTStokesCoeffs type
 struct PTStokesCoeffs{T}

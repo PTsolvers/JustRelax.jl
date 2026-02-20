@@ -357,13 +357,6 @@ end
     return A.xx_v, A.yy_v, A.xy
 end
 
-# @inline function unpack_tensor_vertex(
-#         A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}
-#     ) where {T}
-#     return A.xx, A.yy, A.zz, A.yz_c, A.xz_c, A.xy_c
-# end
-
-
 """
     @residuals(A)
 

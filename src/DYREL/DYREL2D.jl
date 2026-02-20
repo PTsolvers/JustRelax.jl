@@ -351,7 +351,7 @@ function _solve_DYREL!(
 
 end
 
-# TODO: will be adressed in following PRs
+# TODO: will be addressed in following PRs
 # ## variational version
 # function _solve_DYREL!(
 #         stokes::JustRelax.StokesArrays,

@@ -102,7 +102,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    
+
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = @zeros(ni...), P = stokes.P, dt = dt)

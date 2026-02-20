@@ -147,7 +147,7 @@ function init_rheologies(CharDim; is_plastic = true)
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase = 5,
-            Density = ConstantDensity(; ρ = 1e0kg / m^3), # water density
+            Density = ConstantDensity(; ρ = 1.0e0kg / m^3), # water density
             HeatCapacity = ConstantHeatCapacity(; Cp = 3.0e3J / kg / K),
             RadioactiveHeat = ConstantRadioactiveHeat(0.0),
             Conductivity = ConstantConductivity(; k = 1.0Watt / m / K),

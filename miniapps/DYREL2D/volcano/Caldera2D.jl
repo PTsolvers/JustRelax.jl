@@ -330,7 +330,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-6)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6)
 
     # Time loop
     t, it = 0.0, 0
@@ -339,7 +339,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     local iters
     thermal.Told .= thermal.T
 
-    while it < 1#00 #000 # run only for 5 Myrs
+    while it < 1 #00 #000 # run only for 5 Myrs
         # if it > 1 && iters.iter > iterMax && iters.err_evo1[end] > pt_stokes.ϵ_rel * 5
         #     iterMax += 10.0e3
         #     iterMax = min(iterMax, 200.0e3)
@@ -374,27 +374,27 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         stress2grid!(stokes, pτ, xvi, xci, particles)
 
         t_stokes = @elapsed solve_DYREL!(
-                stokes,
-                ρg,
-                dyrel,
-                flow_bcs,
-                phase_ratios,
-                rheology,
-                args,
-                di,
-                dt,
-                igg;
-                kwargs = (;
-                    verbose_DR      = false,
-                    iterMax         = 250.0e3,
-                    nout            = 400,
-                    rel_drop        = 0.1,
-                    λ_relaxation_DR = 1,
-                    λ_relaxation_PH = 1,
-                    viscosity_relaxation = 1e-2,
-                    viscosity_cutoff = viscosity_cutoff,
-                )
-            );
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            rheology,
+            args,
+            di,
+            dt,
+            igg;
+            kwargs = (;
+                verbose_DR = false,
+                iterMax = 250.0e3,
+                nout = 400,
+                rel_drop = 0.1,
+                λ_relaxation_DR = 1,
+                λ_relaxation_PH = 1,
+                viscosity_relaxation = 1.0e-2,
+                viscosity_cutoff = viscosity_cutoff,
+            )
+        )
 
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)

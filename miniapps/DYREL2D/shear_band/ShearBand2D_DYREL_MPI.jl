@@ -42,29 +42,29 @@ end
 function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Physical domain ------------------------------------
-    ly             = 1.0e0          # domain length in y
-    lx             = ly             # domain length in x
-    ni             = nx, ny         # number of cells
-    li             = lx, ly         # domain length in x- and y-
-    di             = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    origin         = 0.0, 0.0       # origin coordinates
-    grid           = Geometry(ni, li; origin = origin)
-    (; xci, xvi)   = grid           # nodes at the center and vertices of the cells
+    ly = 1.0e0          # domain length in y
+    lx = ly             # domain length in x
+    ni = nx, ny         # number of cells
+    li = lx, ly         # domain length in x- and y-
+    di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    origin = 0.0, 0.0       # origin coordinates
+    grid = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid           # nodes at the center and vertices of the cells
 
     # Physical properties using GeoParams ----------------
-    τ_y            = 1.6            # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ              = 30             # friction angle
-    C              = τ_y            # Cohesion
-    η0             = 1.0            # viscosity
-    G0             = 1.0            # elastic shear modulus
-    Gi             = G0 / 2         # elastic shear modulus perturbation
-    εbg            = 1.0            # background strain-rate
-    η_reg          = 1.0e-2         # regularisation "viscosity"
-    dt             = η0 / G0 / 4.0  # assumes Maxwell time of 4
-    el_bg          = ConstantElasticity(; G = G0, Kb = 5)
-    el_inc         = ConstantElasticity(; G = Gi, Kb = 5)
-    visc           = LinearViscous(; η = η0)
-    pl             = DruckerPrager_regularised(;
+    τ_y = 1.6            # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ = 30             # friction angle
+    C = τ_y            # Cohesion
+    η0 = 1.0            # viscosity
+    G0 = 1.0            # elastic shear modulus
+    Gi = G0 / 2         # elastic shear modulus perturbation
+    εbg = 1.0            # background strain-rate
+    η_reg = 1.0e-2         # regularisation "viscosity"
+    dt = η0 / G0 / 4.0  # assumes Maxwell time of 4
+    el_bg = ConstantElasticity(; G = G0, Kb = 5)
+    el_inc = ConstantElasticity(; G = Gi, Kb = 5)
+    visc = LinearViscous(; η = η0)
+    pl = DruckerPrager_regularised(;
         # non-regularized plasticity
         C = C / cosd(ϕ),
         ϕ = ϕ,
@@ -119,14 +119,14 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     )
     stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
     stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
-    @views stokes.V.Vx[2:end-1, 2:end-1] .= 0e0
-    @views stokes.V.Vy[2:end-1, 2:end-1] .= 0e0
+    @views stokes.V.Vx[2:(end - 1), 2:(end - 1)] .= 0.0e0
+    @views stokes.V.Vy[2:(end - 1), 2:(end - 1)] .= 0.0e0
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
     # IO -------------------------------------------------
     take(figdir)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-6)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6)
 
     # global arrays
     nx_v = (nx - 2) * igg.dims[1]
@@ -148,9 +148,9 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Time loop
     t, it = 0.0, 0
-    τII   = [0e0]
-    sol   = [0e0]
-    ttot  = [0e0]
+    τII = [0.0e0]
+    sol = [0.0e0]
+    ttot = [0.0e0]
     # while t < tmax
     for _ in 1:15
 
@@ -167,19 +167,19 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (;
-                verbose  = false,
-                iterMax  = 50.0e3,
-                nout     = 10,
+                verbose = false,
+                iterMax = 50.0e3,
+                nout = 10,
                 rel_drop = 0.75,
                 λ_relaxation_PH = 1,
                 λ_relaxation_DR = 1,
                 verbose_PH = true,
                 verbose_DR = true,
-                viscosity_relaxation = 1/2,
+                viscosity_relaxation = 1 / 2,
                 linear_viscosity = true,
                 viscosity_cutoff = (-Inf, Inf),
             )
-        );
+        )
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
@@ -192,7 +192,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         push!(ttot, t)
 
         igg.me == 0 && println("it = $it; t = $t \n")
-        
+
         # Gather MPI arrays
         velocity2center!(Vx, Vy, @velocity(stokes)...)
         @views Vx_nohalo .= Array(Vx[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
@@ -207,7 +207,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         gather!(η_vep_nohalo, η_vep_v)
         gather!(εII_nohalo, εII_v)
 
-       if igg.me == 0
+        if igg.me == 0
             # visualisation
             th = 0:(pi / 50):(3 * pi)
             xunit = @. radius * cos(th) + 0.5
@@ -234,9 +234,9 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n  = 1
-nx = 32*n
-ny = 32*n
+n = 1
+nx = 32 * n
+ny = 32 * n
 figdir = "ShearBands2D_DYREL_MPI"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device = false)...)

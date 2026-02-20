@@ -21,8 +21,8 @@ function init_rheology_nonNewtonian_plastic(CharDim)
     # plasticity
     ϕ_wet_olivine = asind(0.1)
     C_wet_olivine = 1.0e6 * Pa
-    η_reg         = 1.0e20 * Pa * s
-    el = ConstantElasticity(; G = 40e0GPa, ν = 0.25)
+    η_reg = 1.0e20 * Pa * s
+    el = ConstantElasticity(; G = 40.0e0GPa, ν = 0.25)
     lithosphere_rheology = CompositeRheology(
         (
             el,
@@ -35,59 +35,59 @@ function init_rheology_nonNewtonian_plastic(CharDim)
 end
 
 function init_rheology_linear(CharDim)
-    el = ConstantElasticity(; G = 40e0GPa, ν = 0.25)
+    el = ConstantElasticity(; G = 40.0e0GPa, ν = 0.25)
 
     # lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), ))
-    lithosphere_rheology = CompositeRheology((LinearViscous(; η = 1.0e23Pa*s), el))
+    lithosphere_rheology = CompositeRheology((LinearViscous(; η = 1.0e23Pa * s), el))
     return init_rheologies(lithosphere_rheology, CharDim)
 end
 
 function init_rheologies(lithosphere_rheology, CharDim)
     # common physical properties
-    α  = 2.4e-5 / K
-    Cp = 750    * J / kg / K
-    g  = 9.81m/s^2
+    α = 2.4e-5 / K
+    Cp = 750 * J / kg / K
+    g = 9.81m / s^2
     # Define rheolgy struct
     return rheology = (
         # Name = "Asthenoshpere",
         SetMaterialParams(;
-            Phase             = 1,
-            Density           = ConstantDensity(; ρ = 3.2e3 * kg / m^3),
-            HeatCapacity      = ConstantHeatCapacity(; Cp = Cp),
-            Conductivity      = ConstantConductivity(; k = 2.5Watt / m / K),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e20Pa*s),)),
-            Gravity           = ConstantGravity(; g = g),
-            CharDim           = CharDim,
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 3.2e3 * kg / m^3),
+            HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
+            Conductivity = ConstantConductivity(; k = 2.5Watt / m / K),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e20Pa * s),)),
+            Gravity = ConstantGravity(; g = g),
+            CharDim = CharDim,
         ),
         # Name              = "Oceanic lithosphere",
         SetMaterialParams(;
-            Phase             = 2,
-            Density           = PT_Density(; ρ0 = 3.2e3kg/m^3, α = α, β = 0e0/GPa, T0 = (273 + 1474)K),
-            HeatCapacity      = ConstantHeatCapacity(; Cp = Cp),
-            Conductivity      = ConstantConductivity(; k = 2.5Watt / m / K),
-            Gravity           = ConstantGravity(; g = g),
+            Phase = 2,
+            Density = PT_Density(; ρ0 = 3.2e3kg / m^3, α = α, β = 0.0e0 / GPa, T0 = (273 + 1474)K),
+            HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
+            Conductivity = ConstantConductivity(; k = 2.5Watt / m / K),
+            Gravity = ConstantGravity(; g = g),
             CompositeRheology = lithosphere_rheology,
-            CharDim           = CharDim,
+            CharDim = CharDim,
         ),
         # Name              = "oceanic crust",
         SetMaterialParams(;
-            Phase             = 3,
-            Density           = ConstantDensity(; ρ = 3.2e3 * kg / m^3),
-            HeatCapacity      = ConstantHeatCapacity(; Cp = Cp),
-            Conductivity      = ConstantConductivity(; k = 2.5Watt / m / K),
-            Gravity           = ConstantGravity(; g = g),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e20Pa*s),)),
-            CharDim           = CharDim,
+            Phase = 3,
+            Density = ConstantDensity(; ρ = 3.2e3 * kg / m^3),
+            HeatCapacity = ConstantHeatCapacity(; Cp = Cp),
+            Conductivity = ConstantConductivity(; k = 2.5Watt / m / K),
+            Gravity = ConstantGravity(; g = g),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e20Pa * s),)),
+            CharDim = CharDim,
         ),
         # Name              = "StickyAir",
         SetMaterialParams(;
-            Phase             = 4,
-            Density           = ConstantDensity(; ρ = 100 * kg / m^3), # water density
-            HeatCapacity      = ConstantHeatCapacity(; Cp = 3.0e3 * J / kg / K),
-            Conductivity      = ConstantConductivity(; k = 1.0Watt / m / K),
-            Gravity           = ConstantGravity(; g = g),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e19Pa*s),)),
-            CharDim           = CharDim,
+            Phase = 4,
+            Density = ConstantDensity(; ρ = 100 * kg / m^3), # water density
+            HeatCapacity = ConstantHeatCapacity(; Cp = 3.0e3 * J / kg / K),
+            Conductivity = ConstantConductivity(; k = 1.0Watt / m / K),
+            Gravity = ConstantGravity(; g = g),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e19Pa * s),)),
+            CharDim = CharDim,
         ),
     )
 end

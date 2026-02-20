@@ -150,7 +150,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     while it < 1
         # Stokes solver ----------------
         args = (; T = @ones(ni...), P = stokes.P, dt = dt)
-        
+
         solve_DYREL!(
             stokes,
             ρg,
@@ -165,11 +165,11 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
             kwargs = (;
                 verbose = false,
                 iterMax = 50.0e3,
-                nout    = 100,
+                nout = 100,
                 λ_relaxation = 1.075,
                 viscosity_cutoff = (-Inf, Inf),
             )
-        );
+        )
         dt = compute_dt(stokes, di, igg)
         # ------------------------------
 
@@ -201,7 +201,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 end
 
 ar = 1 # aspect ratio
-n  = 128
+n = 128
 nx = n * ar
 ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

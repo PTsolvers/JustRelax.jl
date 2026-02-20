@@ -182,13 +182,13 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
                 igg;
                 kwargs = (;
                     verbose = false,
-                    iterMax = 1e0,
-                    nout    = 200,
+                    iterMax = 1.0e0,
+                    nout = 200,
                     λ_relaxation = 1.075,
                     viscosity_relaxation = 1.0e-3,
                     viscosity_cutoff = viscosity_cutoff,
                 )
-            );
+            )
         end
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
         tensor_invariant!(stokes.ε)
@@ -304,4 +304,3 @@ else
 end
 
 main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
-

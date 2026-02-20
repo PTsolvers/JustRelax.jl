@@ -164,7 +164,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, di, dt; ϵ=1e-6)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6)
 
     # Time loop
     t, it = 0.0, 0
@@ -185,15 +185,15 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             kwargs = (;
                 verbose = false,
                 iterMax = 50.0e3,
-                nout    = 100,
+                nout = 100,
                 rel_drop = 0.1,
                 # λ_relaxation = 0,
                 λ_relaxation_DR = 1,
                 λ_relaxation_PH = 1,
-                viscosity_relaxation = 1e-1,
+                viscosity_relaxation = 1.0e-1,
                 viscosity_cutoff = (-Inf, Inf),
             )
-        );
+        )
         tensor_invariant!(stokes.ε)
         # dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------

@@ -73,12 +73,12 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheology_nonNewtonian_plastic()
-    dt     = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     dt_max = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell    = 40
+    nxcell = 40
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
@@ -174,7 +174,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-3)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-3)
 
     # Time loop
     t, it = 0.0, 0
@@ -206,15 +206,15 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 dt,
                 igg;
                 kwargs = (;
-                    verbose  = false,
-                    iterMax  = 50.0e3,
-                    rel_drop = 1e-2,
-                    nout     = 400,
+                    verbose = false,
+                    iterMax = 50.0e3,
+                    rel_drop = 1.0e-2,
+                    nout = 400,
                     λ_relaxation = 1,
                     viscosity_relaxation = 1.0e-2,
-                    viscosity_cutoff = (1e18, 1e23),
+                    viscosity_cutoff = (1.0e18, 1.0e23),
                 )
-            );
+            )
         end
         # print some stuff
         println("Stokes solver time             ")
@@ -240,10 +240,10 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             dt,
             di;
             kwargs = (
-                igg     = igg,
-                phase   = phase_ratios,
+                igg = igg,
+                phase = phase_ratios,
                 iterMax = 50.0e3,
-                nout    = 1.0e2,
+                nout = 1.0e2,
                 verbose = true,
             )
         )

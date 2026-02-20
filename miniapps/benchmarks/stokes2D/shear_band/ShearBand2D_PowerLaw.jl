@@ -52,10 +52,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     (; xci, xvi) = grid   # nodes at the center and vertices of the cells
     dt = Inf
     εbg = 1
-    
+
     # Physical properties using GeoParams ----------------
-    visc_bg  = PowerlawViscous(; η0 = 1e2,  n=3, ε0 = 1e0 )
-    visc_inc = PowerlawViscous(; η0 = 1e-1, n=3, ε0 = 1e0 )
+    visc_bg = PowerlawViscous(; η0 = 1.0e2, n = 3, ε0 = 1.0e0)
+    visc_inc = PowerlawViscous(; η0 = 1.0e-1, n = 3, ε0 = 1.0e0)
 
     rheology = (
         # Low density phase
@@ -100,8 +100,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    stokes.V.Vx .= PTArray(backend)([ (x - li[1]/2) * εbg for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend)([-(y - li[2]/2) * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend)([ (x - li[1] / 2) * εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend)([-(y - li[2] / 2) * εbg for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -110,7 +110,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Time loop
     t, it = 0.0, 0
-   
+
     # Stokes solver ----------------
     solve!(
         stokes,
@@ -126,9 +126,9 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         kwargs = (
             verbose = false,
             iterMax = 150.0e3,
-            nout = 1e3,
+            nout = 1.0e3,
             λ_relaxation = 1,
-            viscosity_relaxation = 1e-1,
+            viscosity_relaxation = 1.0e-1,
             viscosity_cutoff = (-Inf, Inf),
         )
     )
@@ -137,7 +137,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     it += 1
     t += dt
-        
+
     # visualisation
     th = 0:(pi / 50):(3 * pi)
     xunit = @. radius * cos(th) + 0.5
@@ -169,7 +169,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n  = 63
+n = 63
 nx = n
 ny = n
 figdir = "ShearBands2D_PowerLaw_APT"

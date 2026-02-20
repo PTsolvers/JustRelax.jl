@@ -88,8 +88,8 @@ function heat_chamber_particles!(pT, phases, particles, T_chamber)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
 
-            # thermal anomaly 
-            if  @index(phases[ip, i, j]) == 2.0
+            # thermal anomaly
+            if @index(phases[ip, i, j]) == 2.0
                 @index pT[ip, i, j] = T_chamber
             end
         end
@@ -227,7 +227,7 @@ function init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressi
 end
 
 # function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
-function main2D(igg; εbg_0 = 0e0, linear_rheology = true, figdir = figdir, nx = nx, ny = ny, do_vtk = false)
+function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx = nx, ny = ny, do_vtk = false)
     # Characteristic lengths
     CharDim = GEO_units(; length = 14km, viscosity = 1.0e21Pa * s, temperature = 450C)
 
@@ -401,10 +401,10 @@ function main2D(igg; εbg_0 = 0e0, linear_rheology = true, figdir = figdir, nx =
     # Tbot = thermal.T[1, 1]
 
     pulse_recurrence_time = nondimensionalize(25.0e3 * yr, CharDim)
-    pulse_timer           = 0e0
+    pulse_timer = 0.0e0
 
     # Stokes solver -----------------
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)  
+    args = (; T = thermal.Tc, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
     solve_VariationalStokes!(
         stokes,
         pt_stokes,
@@ -516,7 +516,7 @@ function main2D(igg; εbg_0 = 0e0, linear_rheology = true, figdir = figdir, nx =
         if pulse_timer > pulse_recurrence_time
             # add thermal perturbation
             heat_chamber_particles!(pT, pPhases, particles, anomaly)
-            pulse_timer = 0e0
+            pulse_timer = 0.0e0
             println("Kaboom! Thermal pulse added at t = $(dimensionalize(t, yr, CharDim).val) yrs")
         end
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -542,11 +542,11 @@ function main2D(igg; εbg_0 = 0e0, linear_rheology = true, figdir = figdir, nx =
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 if do_vtk
                     data_v = (;
-                        T   = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
+                        T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
                         τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
                         εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
-                        Vx  = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
-                        Vy  = Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),
+                        Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
+                        Vy = Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),
                     )
                     data_c = (;
                         P = Array(ustrip.(dimensionalize(stokes.P, MPa, CharDim))),
@@ -794,19 +794,17 @@ function main2D(igg; εbg_0 = 0e0, linear_rheology = true, figdir = figdir, nx =
 end
 
 
-
-
-εbg_0  = 0e0
-linear_rheology  = false
-n      = 100
-ar     = 1
-nx     = n * ar
-ny     = n
+εbg_0 = 0.0e0
+linear_rheology = false
+n = 100
+ar = 1
+nx = n * ar
+ny = n
 # figdir = "Thermal_stresses_cooling_magma_linear_viscosity_Nx_$(nx)_Ny_$(ny)_εbg_$(εbg_0)"
 figdir = "VS_ThermalStresses_LinearViscosity__εbg_$(εbg_0)"
 local igg
 if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)        
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 end
 # run main script
 main2D(igg; εbg_0 = εbg_0, linear_rheology = linear_rheology, figdir = figdir, nx = nx, ny = ny, do_vtk = true);

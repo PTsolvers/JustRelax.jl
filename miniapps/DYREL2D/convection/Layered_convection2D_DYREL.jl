@@ -167,7 +167,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # Rheology
     viscosity_cutoff = nondimensionalize((1.0e16Pa * s, 1.0e24Pa * s), CharDim)
-    stokes.ε.II      .= nondimensionalize(1.0e-8/s, CharDim) 
+    stokes.ε.II .= nondimensionalize(1.0e-8 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
     # ------------------------------
@@ -253,12 +253,12 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             kwargs = (;
                 verbose = false,
                 iterMax = 50.0e3,
-                nout    = 200,
+                nout = 200,
                 λ_relaxation = 1.075,
                 viscosity_relaxation = 1.0e-3,
                 viscosity_cutoff = viscosity_cutoff,
             )
-        );
+        )
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------

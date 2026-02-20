@@ -63,30 +63,30 @@ end
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
-    
-    thickness = 120e3 * m
-    η0        = 1.0e22 * Pa * s
-    CharDim   = GEO_units(;
+
+    thickness = 120.0e3 * m
+    η0 = 1.0e22 * Pa * s
+    CharDim = GEO_units(;
         length = thickness, viscosity = η0, temperature = 1.0e3K
     )
-    li_nd     = nondimensionalize(li .* m, CharDim)
+    li_nd = nondimensionalize(li .* m, CharDim)
     origin_nd = nondimensionalize(origin .* m, CharDim)
-   
+
     # Physical domain ------------------------------------
-    ni    = nx, ny           # number of cells
-    di    = @. li_nd / ni       # grid steps
-    grid  = Geometry(ni, li_nd; origin = origin_nd)
+    ni = nx, ny           # number of cells
+    di = @. li_nd / ni       # grid steps
+    grid = Geometry(ni, li_nd; origin = origin_nd)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheology_nonNewtonian_plastic(CharDim)
     # rheology = init_rheology_linear(CharDim)
-    dt       = nondimensionalize(25e3 * yr, CharDim)
+    dt = nondimensionalize(25.0e3 * yr, CharDim)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell    = 40
+    nxcell = 40
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
@@ -131,9 +131,9 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    Ttop    = nondimensionalize((20 + 273)K, CharDim)
-    T_GMG  .= nondimensionalize(T_GMG*K, CharDim)
-    Tbot    = maximum(T_GMG)
+    Ttop = nondimensionalize((20 + 273)K, CharDim)
+    T_GMG .= nondimensionalize(T_GMG * K, CharDim)
+    Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
     @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
     thermal_bc = TemperatureBoundaryConditions(;
@@ -195,14 +195,14 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     # Time loop
     t, it = 0.0, 0
-    dt_max = nondimensionalize(10e3 * yr, CharDim)
+    dt_max = nondimensionalize(10.0e3 * yr, CharDim)
 
     while it < 1000 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end]          .= Ttop
-        @views T_buffer[:, 1]            .= Tbot
+        @views T_buffer[:, end] .= Ttop
+        @views T_buffer[:, 1] .= Tbot
         @views thermal.T[2:(end - 1), :] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
@@ -241,12 +241,12 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
         # compute time step
         dt_max = nondimensionalize(
-            (it < 5 ? 25e3 : 25e3) * yr, 
+            (it < 5 ? 25.0e3 : 25.0e3) * yr,
             CharDim
         )
 
-        dt     = compute_dt(stokes, di, dt_max)
-        dt_dim = dimensionalize(dt, yr, CharDim) / 1e3
+        dt = compute_dt(stokes, di, dt_max)
+        dt_dim = dimensionalize(dt, yr, CharDim) / 1.0e3
         println("   dt:              $dt_dim kyrs")
 
         # rotate stresses
@@ -318,18 +318,18 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T   = ustrip(dimensionalize(Array(T_buffer), C, CharDim)),
+                    T = ustrip(dimensionalize(Array(T_buffer), C, CharDim)),
                     τII = ustrip(dimensionalize(Array(stokes.τ.II), Pa, CharDim)),
                     εII = ustrip(dimensionalize(Array(stokes.ε.II), s^-1, CharDim)),
                 )
                 data_c = (;
-                    P     = ustrip(dimensionalize(Array(stokes.P), Pa, CharDim)),
-                    η_vep = ustrip(dimensionalize(Array(η_vep), Pa*s, CharDim)),
-                    η     = ustrip(dimensionalize(Array(η), Pa*s, CharDim)),
+                    P = ustrip(dimensionalize(Array(stokes.P), Pa, CharDim)),
+                    η_vep = ustrip(dimensionalize(Array(η_vep), Pa * s, CharDim)),
+                    η = ustrip(dimensionalize(Array(η), Pa * s, CharDim)),
                 )
                 velocity_v = (
-                    ustrip(dimensionalize(Array(Vx_v), m/s, CharDim)),
-                    ustrip(dimensionalize(Array(Vy_v), m/s, CharDim)),
+                    ustrip(dimensionalize(Array(Vx_v), m / s, CharDim)),
+                    ustrip(dimensionalize(Array(Vy_v), m / s, CharDim)),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -343,12 +343,12 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             end
 
             # Make particles plottable
-            p        = particles.coords
+            p = particles.coords
             ppx, ppy = p
-            pxv      = ustrip(dimensionalize(Array(ppx.data[:]), km, CharDim))
-            pyv      = ustrip(dimensionalize(Array(ppy.data[:]), km, CharDim))
-            clr      = Array(pPhases.data[:])
-            idxv     = Array(particles.index.data[:])
+            pxv = ustrip(dimensionalize(Array(ppx.data[:]), km, CharDim))
+            pyv = ustrip(dimensionalize(Array(ppy.data[:]), km, CharDim))
+            clr = Array(pPhases.data[:])
+            idxv = Array(particles.index.data[:])
 
             # Make Makie figure
             ar = 3
@@ -371,8 +371,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             )
             # Plot effective viscosity
             h4 = heatmap!(
-                ax4, xci_dim..., 
-                log10.(ustrip(dimensionalize(Array((stokes.viscosity.η_vep)), Pa*s, CharDim))), 
+                ax4, xci_dim...,
+                log10.(ustrip(dimensionalize(Array((stokes.viscosity.η_vep)), Pa * s, CharDim))),
                 colormap = :batlow
             )
             hidexdecorations!(ax1)

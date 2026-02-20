@@ -168,12 +168,12 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 kwargs = (;
                     verbose = false,
                     iterMax = 50.0e3,
-                    nout    = 200,
+                    nout = 200,
                     λ_relaxation = 1.075,
                     viscosity_relaxation = 1.0e-3,
                     viscosity_cutoff = viscosity_cutoff,
                 )
-            );
+            )
         end
 
         println("Stokes solver time             ")

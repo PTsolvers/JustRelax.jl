@@ -186,7 +186,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
         igg.me == 0 && println("igg= $(igg.me); it = $it; t = $t \n")
 
-      
+
         # Gather MPI arrays
         velocity2center!(Vx, Vy, @velocity(stokes)...)
         @views Vx_nohalo .= Array(Vx[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo

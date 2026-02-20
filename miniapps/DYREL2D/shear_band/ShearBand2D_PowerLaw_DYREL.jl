@@ -50,12 +50,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     origin = @. -li / 2  # origin coordinates
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    dt  = Inf
+    dt = Inf
     εbg = 1
-    
+
     # Physical properties using GeoParams ----------------
-    visc_bg  = PowerlawViscous(; η0 = 1e2,  n=3, ε0 = 1e0)
-    visc_inc = PowerlawViscous(; η0 = 1e-1, n=3, ε0 = 1e0)
+    visc_bg = PowerlawViscous(; η0 = 1.0e2, n = 3, ε0 = 1.0e0)
+    visc_inc = PowerlawViscous(; η0 = 1.0e-1, n = 3, ε0 = 1.0e0)
 
     rheology = (
         # Low density phase
@@ -91,7 +91,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     args = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
 
     # Rheology
-    stokes.ε.xx   .= 1
+    stokes.ε.xx .= 1
     stokes.ε.xx_v .= 1
     compute_viscosity!(
         stokes, phase_ratios, args, rheology, (-Inf, Inf)
@@ -109,8 +109,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # IO -------------------------------------------------
     take(figdir)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, Inf; ϵ=1e-6);
-    1 
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, Inf; ϵ = 1.0e-6)
+    1
     # Time loop
     t, it = 0.0, 0
 
@@ -127,17 +127,17 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         dt,
         igg;
         kwargs = (;
-            verbose  = false,
-            iterMax  = 50.0e3,
-            nout     = 400,
-            rel_drop = 1e-5,
+            verbose = false,
+            iterMax = 50.0e3,
+            nout = 400,
+            rel_drop = 1.0e-5,
             # λ_relaxation = 0,
             λ_relaxation_DR = 1,
             λ_relaxation_PH = 1,
-            viscosity_relaxation = 1e-1,
+            viscosity_relaxation = 1.0e-1,
             viscosity_cutoff = (-Inf, Inf),
         )
-    );
+    )
     tensor_invariant!(stokes.ε)
     tensor_invariant!(stokes.ε_pl)
 
@@ -145,7 +145,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     t += dt
 
     println("it = $it; t = $t \n")
-    
+
     # visualisation
     th = 0:(pi / 50):(3 * pi)
     xunit = @. radius * cos(th) + 0.5
@@ -177,7 +177,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n  = 128
+n = 128
 nx = n
 ny = n
 figdir = "ShearBands2D_PowerLaw_DYREL"

@@ -214,7 +214,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         println("   Time/iteration:  $(t_stokes / out.iter) s")
 
         # compute time step
-        dt = compute_dt(stokes, di, 5e3 * 3600 * 24 * 365.25)
+        dt = compute_dt(stokes, di, 5.0e3 * 3600 * 24 * 365.25)
         println("   dt:              $(dt / (1.0e3 * 3600 * 24 * 365.25)) kyrs")
 
         # rotate stresses

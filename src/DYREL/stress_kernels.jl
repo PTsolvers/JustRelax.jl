@@ -126,8 +126,16 @@ end
     # Plastic stress correction starts here
     τij = @. 2 * η_ve * εij_eff
     τII = second_invariant(τij)
-    F = τII - C * cosϕ - max(P, 0.0e0) * sinϕ
+    # F = τII - C * cosϕ - max(P, 0.0e0) * sinϕ
     # F = τII - C * cosϕ - P * sinϕ
+    F = if P ≥ 0
+        # DP in extension
+        τII - C * cosϕ - P * sinϕ
+    else
+        # VM in extension
+        τII - C
+    end
+
     λ = if ispl && F > 0
         λ_new = F / (η_ve + η_reg + Kb * dt * sinϕ * sinΨ)
         λ_relaxation * λ_new + (1 - λ_relaxation) * λ

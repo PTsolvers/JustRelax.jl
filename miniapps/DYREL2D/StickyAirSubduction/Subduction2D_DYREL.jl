@@ -32,12 +32,11 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CellArrays
-using GLMakie
+using GeoParams, GLMakie, CellArrays
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
-include("VariationalSubduction2D_rheology.jl")
+include("Subduction2D_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -64,7 +63,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do_vtk::Bool = false)
+function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
 
     # Physical domain ------------------------------------
     ni = nx, ny           # number of cells
@@ -79,9 +78,9 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell = 100
-    max_xcell = 125
-    min_xcell = 75
+    nxcell = 40
+    max_xcell = 60
+    min_xcell = 20
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
@@ -97,21 +96,9 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
-    # marker chain
-    nxcell, min_xcell, max_xcell = 100, 75, 125
-    initial_elevation = 0.0e0
-    chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
-
-    # RockRatios
-    air_phase = 3
-    ϕ_R = RockRatio(backend, ni)
-    compute_rock_fraction!(ϕ_R, chain, xvi, di)
-    update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
-
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-  dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, di, dt)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -124,9 +111,9 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
 
     # Rheology
-    args = (T = thermal.Tc, P = stokes.P, dt = Inf)
+    args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase = air_phase)
+    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
@@ -156,24 +143,22 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
     # Time loop
     t, it = 0.0, 0
-    dt = 25.0e3 * (3600 * 24 * 365.25)
-    dt_max = 250.0e3 * (3600 * 24 * 365.25)
 
     dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt)
 
-    while it < 15 # run only for 5 Myrs
+    while it < 1000 # run only for 5 Myrs
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
+
         # Stokes solver ----------------
         t_stokes = @elapsed begin
-            solve_DYREL!(
+            out = solve_DYREL!(
                 stokes,
                 ρg,
                 dyrel,
                 flow_bcs,
                 phase_ratios,
-                ϕ_R,
                 rheology,
                 args,
                 di,
@@ -181,7 +166,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
                 igg;
                 kwargs = (;
                     verbose = false,
-                    iterMax = 1.0e0,
+                    iterMax = 50.0e3,
                     nout = 200,
                     λ_relaxation = 1.075,
                     viscosity_relaxation = 1.0e-3,
@@ -189,35 +174,31 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
                 )
             )
         end
-        # println("   Time/iteration:  $(t_stokes / out.iter) s")
-        tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di, dt_max)
+
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
-        println("           Δt:      $(dt / (3600 * 24 * 365.25)) kyrs")
+        # println("   Time/iteration:  $(t_stokes / out.iter) s")
+        tensor_invariant!(stokes.ε)
+        dt = compute_dt(stokes, di) * 0.8
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        # advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), (), xvi)
 
-        # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
-
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         @show it += 1
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 10) == 0
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -239,7 +220,8 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
                     xci,
                     data_v,
                     data_c,
-                    velocity_v
+                    velocity_v,
+                    t = t
                 )
             end
 
@@ -252,9 +234,6 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
             # clr      = pT.data[:]
             idxv = particles.index.data[:]
 
-            chain_x = Array(chain.coords[1].data)[:] ./ 1.0e3
-            chain_y = Array(chain.coords[2].data)[:] ./ 1.0e3
-
             # Make Makie figure
             ar = 3
             fig = Figure(size = (1200, 900), title = "t = $t")
@@ -264,12 +243,10 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
             # Plot temperature
             h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
-            scatter!(ax1, chain_x, chain_y, markersize = 3)
             # Plot particles phase
             h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
             # Plot 2nd invariant of strain rate
             h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
-            scatter!(ax3, chain_x, chain_y, markersize = 3, color = :red)
             # Plot effective viscosity
             h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
             hidexdecorations!(ax1)
@@ -280,21 +257,21 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
             Colorbar(fig[1, 4], h3)
             Colorbar(fig[2, 4], h4)
             linkaxes!(ax1, ax2, ax3, ax4)
-            # display(fig)
+            fig
             save(joinpath(figdir, "$(it).png"), fig)
         end
         # ------------------------------
 
     end
 
-    return
+    return nothing
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_MQS_variational"
+figdir = "Subduction2D_MQS"
+n = 128
 nx, ny = 250, 100
-# nx, ny = 25, 10
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)

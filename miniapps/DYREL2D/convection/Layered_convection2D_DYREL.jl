@@ -140,7 +140,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-      dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, di, dt)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -159,9 +158,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    for _ in 1:1
+    for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
-        # @parallel init_P!(stokes.P, ρg[2], xci[2])
         stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
     end
 

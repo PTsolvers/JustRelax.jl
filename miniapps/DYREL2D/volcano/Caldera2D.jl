@@ -211,7 +211,6 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-6)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------

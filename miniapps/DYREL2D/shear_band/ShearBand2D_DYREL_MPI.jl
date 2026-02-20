@@ -102,7 +102,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-6)
     
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -127,7 +126,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # IO -------------------------------------------------
     take(figdir)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6)
 
     # global arrays
     nx_v = (nx - 2) * igg.dims[1]
@@ -152,7 +150,9 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     τII = [0.0e0]
     sol = [0.0e0]
     ttot = [0.0e0]
-    # while t < tmax
+
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6)
+
     for _ in 1:15
 
         # Stokes solver ----------------

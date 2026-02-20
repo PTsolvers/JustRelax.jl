@@ -254,7 +254,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     dt = dt_max = nondimensionalize(1.0e3 * yr, CharDim)         # diffusive CFL timestep limiter
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 15
+    nxcell, max_xcell, min_xcell = 60, 80, 30
     particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids

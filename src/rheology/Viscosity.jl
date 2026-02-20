@@ -349,26 +349,37 @@ function _compute_viscosity!(
         local_viscosity_args,
     )
     # skip for 3D for now, may change in the future
-    if length(size(phase_ratios.center)) == 3 
-        @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
-            stokes.viscosity.ηv,
-            ν,
-            select_tensor_vertex(stokes, fn_viscosity)...,
-            args,
-            rheology,
-            air_phase,
-            cutoff,
-            local_viscosity_args_vertex,
-        )
-    end
+    length(size(phase_ratios.center)) == 3 && return 
+
+    @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
+        stokes.viscosity.ηv,
+        ν,
+        select_tensor_vertex(stokes, fn_viscosity)...,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        local_viscosity_args_vertex,
+    )
     return nothing
 end
 
-@inline select_tensor_center(stokes, ::typeof(compute_viscosity_εII)) = @strain_center(stokes)
-@inline select_tensor_center(stokes, ::typeof(compute_viscosity_τII)) = @stress_center(stokes)
+@inline select_tensor_center(stokes, fn::F) where {F<:Function} = select_tensor_center(stokes, fn, JustRelax.static_dims(stokes))
+@inline select_tensor_center(stokes, fn::F) where {F<:Function} = select_tensor_center(stokes, fn, JustRelax.static_dims(stokes))
 
-@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_εII)) = @tensor_vertex(stokes.ε)
-@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_τII)) = @tensor_vertex(stokes.τ)
+# for 2D, we compute viscosity using the tensor defined at the cell centers or vertices, depending on the viscosity function
+@inline select_tensor_center(stokes, ::typeof(compute_viscosity_εII), ::Val{2}) = @strain_center(stokes)
+@inline select_tensor_center(stokes, ::typeof(compute_viscosity_τII), ::Val{2}) = @stress_center(stokes)
+# in 3D we still do some interpolations
+@inline select_tensor_center(stokes, ::typeof(compute_viscosity_εII), ::Val{3}) = @strain(stokes)
+@inline select_tensor_center(stokes, ::typeof(compute_viscosity_τII), ::Val{3}) = @stress(stokes)
+
+# for 2D, we compute viscosity using the tensor defined at the cell centers or vertices, depending on the viscosity function
+@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_εII), ::Val{2}) = @tensor_vertex(stokes.ε)
+@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_τII), ::Val{2}) = @tensor_vertex(stokes.τ)
+# in 3D we still do some interpolations
+@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_εII), ::Val{3}) = @strain(stokes.ε)
+@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_τII), ::Val{3}) = @stress(stokes.τ)
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
         η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2
@@ -498,7 +509,7 @@ end
 
 @inline function local_viscosity_args(args, I::Vararg{Integer, N}) where {N}
     v = getindex.(values(args), I...)
-    local_args = (; zip(keys(args), v)..., dt = args.dt, τII_old = 0.0)
+    local_args = (; zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
     return local_args
 end
 
@@ -516,7 +527,7 @@ end
     v22 = getindex.(values(args), ir, jt)
     v = @. 0.25 * (v11 + v12 + v21 + v22)
     # create local args
-    local_args = (; zip(keys(args), v)..., dt = args.dt, τII_old = 0.0)
+    local_args = (; zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
     return local_args
 end
 
@@ -540,13 +551,13 @@ end
     v222 = getindex.(values(args), ir, jt, kb)
     v = @. 0.125 * (v111 + v121 + v211 + v221 + v112 + v122 + v212 + v222)
     # create local args
-    local_args = (; zip(keys(args), v)..., dt = args.dt, τII_old = 0.0)
+    local_args = (; zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
     return local_args
 end
 
 @inline function local_args(args, I::Vararg{Integer, N}) where {N}
     v = getindex.(values(args), I...)
-    local_args = (; zip(keys(args), v)...)
+    local_args = (; zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
     return local_args
 end
 

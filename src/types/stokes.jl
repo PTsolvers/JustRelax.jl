@@ -194,8 +194,10 @@ function StokesArrays(::Number, ::Number, ::Number)
     throw(ArgumentError("StokesArrays dimensions must be given as integers"))
 end
 
-## PTStokesCoeffs type
+@inline dims(stokes::StokesArrays) = size(stokes.P)
+@inline static_dims(::JustRelax.StokesArrays{JustRelax.Velocity{Array{T, N}}}) where {N,T} = Val(N)
 
+## PTStokesCoeffs type
 struct PTStokesCoeffs{T}
     CFL::T
     ϵ_rel::T # relative PT tolerance

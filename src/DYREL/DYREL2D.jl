@@ -60,7 +60,7 @@ function _solve_DYREL!(
         linear_viscosity = false,
         kwargs...,
     ) where {T}
-    
+
     # unpack
     (;
         γ_eff,

@@ -364,22 +364,24 @@ function _compute_viscosity!(
     return nothing
 end
 
-@inline select_tensor_center(stokes, fn::F) where {F<:Function} = select_tensor_center(stokes, fn, JustRelax.static_dims(stokes))
-@inline select_tensor_center(stokes, fn::F) where {F<:Function} = select_tensor_center(stokes, fn, JustRelax.static_dims(stokes))
+for fn in (:select_tensor_center, :select_tensor_vertex)
+    @eval begin
+        @inline ($fn)(stokes, fn_viscosity) = ($fn)(stokes, fn_viscosity, JustRelax.static_dims(stokes))
+        # for 2D, we compute viscosity using the tensor defined at the cell centers or vertices, depending on the viscosity function
+        @inline ($fn)(stokes, ::typeof(compute_viscosity_εII), ::Val{2}) = @strain_center(stokes)
+        @inline ($fn)(stokes, ::typeof(compute_viscosity_τII), ::Val{2}) = @stress_center(stokes)
+        # in 3D we still do some interpolations
+        @inline ($fn)(stokes, ::typeof(compute_viscosity_εII), ::Val{3}) = @strain(stokes)
+        @inline ($fn)(stokes, ::typeof(compute_viscosity_τII), ::Val{3}) = @stress(stokes)
+    end
+end
 
-# for 2D, we compute viscosity using the tensor defined at the cell centers or vertices, depending on the viscosity function
-@inline select_tensor_center(stokes, ::typeof(compute_viscosity_εII), ::Val{2}) = @strain_center(stokes)
-@inline select_tensor_center(stokes, ::typeof(compute_viscosity_τII), ::Val{2}) = @stress_center(stokes)
-# in 3D we still do some interpolations
-@inline select_tensor_center(stokes, ::typeof(compute_viscosity_εII), ::Val{3}) = @strain(stokes)
-@inline select_tensor_center(stokes, ::typeof(compute_viscosity_τII), ::Val{3}) = @stress(stokes)
-
-# for 2D, we compute viscosity using the tensor defined at the cell centers or vertices, depending on the viscosity function
-@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_εII), ::Val{2}) = @tensor_vertex(stokes.ε)
-@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_τII), ::Val{2}) = @tensor_vertex(stokes.τ)
-# in 3D we still do some interpolations
-@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_εII), ::Val{3}) = @strain(stokes.ε)
-@inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_τII), ::Val{3}) = @stress(stokes.τ)
+# # for 2D, we compute viscosity using the tensor defined at the cell centers or vertices, depending on the viscosity function
+# @inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_εII), ::Val{2}) = @tensor_vertex(stokes.ε)
+# @inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_τII), ::Val{2}) = @tensor_vertex(stokes.τ)
+# # in 3D we still do some interpolations
+# @inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_εII), ::Val{3}) = @strain(stokes.ε)
+# @inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_τII), ::Val{3}) = @stress(stokes.τ)
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
         η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2

@@ -5,7 +5,7 @@ function init_rheologies(; linear = false, incompressible = true, isplastic = tr
 
     η_reg = 1.0e17
     C = isplastic ? 10.0e6 : Inf
-    ϕ = 30e0
+    ϕ = 30.0e0
     Ψ = 0.0
     soft_C = NonLinearSoftening(; ξ₀ = C, Δ = C / 1.0e5)       # nonlinear softening law
     pl = DruckerPrager_regularised(; C = C * MPa, ϕ = ϕ, η_vp = (η_reg) * Pas, Ψ = Ψ, softening_C = soft_C)

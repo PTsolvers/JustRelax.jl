@@ -59,4 +59,4 @@ where the solver keyword arguments are:
 
 # Examples
 
-Examples of a set of miniapps using this solver can be found in [this folder](https://github.com/PTsolvers/JustRelax.jl/tree/adm/DYREL/miniapps/DYREL2D).
+Examples of a set of miniapps using this solver can be found in [this folder](https://github.com/PTsolvers/JustRelax.jl/tree/main/miniapps/DYREL2D).

@@ -3,9 +3,9 @@ using GeoParams.Diffusion
 
 function init_rheologies(; linear = false, incompressible = true, isplastic = true, magma = false)
 
-    η_reg = 1.0e15
+    η_reg = 1.0e17
     C = isplastic ? 10.0e6 : Inf
-    ϕ = 15
+    ϕ = 30e0
     Ψ = 0.0
     soft_C = NonLinearSoftening(; ξ₀ = C, Δ = C / 1.0e5)       # nonlinear softening law
     pl = DruckerPrager_regularised(; C = C * MPa, ϕ = ϕ, η_vp = (η_reg) * Pas, Ψ = Ψ, softening_C = soft_C)
@@ -54,7 +54,7 @@ function init_rheologies(; linear = false, incompressible = true, isplastic = tr
         # Name              = "magma chamber",
         SetMaterialParams(;
             Phase = 3,
-            Density = MeltDependent_Density(ρsolid = PT_Density(ρ0 = 2.4e3, T0 = 273.15, β = β_magma), ρmelt = T_Density(ρ0 = 2.2e3, T0 = 273.15)),
+            Density = MeltDependent_Density(ρsolid = PT_Density(ρ0 = 2.7e3, T0 = 273.15, β = β_magma), ρmelt = T_Density(ρ0 = 2.2e3, T0 = 273.15)),
             # Density           = PT_Density(; ρ0=2.4e3, T0=273.15, β=β_magma),
             Conductivity = ConstantConductivity(; k = 1.5),
             # HeatCapacity      = Latent_HeatCapacity(Cp=ConstantHeatCapacity()),
@@ -68,7 +68,7 @@ function init_rheologies(; linear = false, incompressible = true, isplastic = tr
             Phase = 4,
             # Density           = T_Density(; ρ0=2.2e3, T0=273.15),
             # Density           = BubbleFlow_Density(ρgas=ConstantDensity(ρ=10.0), ρmelt=ConstantDensity(ρ=2.4e3), c0=4e-2),
-            Density = BubbleFlow_Density(ρgas = ConstantDensity(ρ = 10.0), ρmelt = MeltDependent_Density(ρsolid = T_Density(ρ0 = 2.4e3, T0 = 273.15), ρmelt = ConstantDensity(ρ = 2.2e3)), c0 = 4.0e-2),
+            Density = BubbleFlow_Density(ρgas = ConstantDensity(ρ = 10.0), ρmelt = MeltDependent_Density(ρsolid = T_Density(ρ0 = 2.7e3, T0 = 273.15), ρmelt = ConstantDensity(ρ = 2.2e3)), c0 = 4.0e-2),
             Conductivity = ConstantConductivity(; k = 1.5),
             # HeatCapacity      = Latent_HeatCapacity(Cp=ConstantHeatCapacity()),
             HeatCapacity = Latent_HeatCapacity(Cp = ConstantHeatCapacity(), Q_L = 350.0e3J / kg),

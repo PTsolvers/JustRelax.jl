@@ -105,6 +105,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-3)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -226,6 +227,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # compute time step
         dt = compute_dt(stokes, di, dt_max) #* 0.8
         # compute strain rate 2nd invartian - for plotting
+        tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
         # ------------------------------
@@ -358,9 +360,9 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_reset_lambda"
+figdir = "Subduction2D_DYREL"
 # n = 128 * 2
-n = 200
+n = 64
 nx, ny = n * 2, n
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)

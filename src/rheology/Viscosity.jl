@@ -309,7 +309,7 @@ function _compute_viscosity!(
     )
     # vertex viscosity
     # skip for 3D for now, may change in the future
-    if length(ni) == 2 
+    if length(ni) == 2
         @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
             stokes.viscosity.ηv,
             ν,
@@ -349,7 +349,7 @@ function _compute_viscosity!(
         local_viscosity_args,
     )
     # skip for 3D for now, may change in the future
-    length(size(phase_ratios.center)) == 3 && return 
+    length(size(phase_ratios.center)) == 3 && return
 
     @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
         stokes.viscosity.ηv,

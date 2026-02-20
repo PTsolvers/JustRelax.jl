@@ -360,7 +360,6 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
 figdir = "Subduction2D_DYREL"
-# n = 128 * 2
 n = 64
 nx, ny = n * 2, n
 
@@ -372,14 +371,3 @@ else
 end
 
 main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
-
-# rel drop = 1e-3 ----------------
-# it = 400, iter = 35200, err = 1.325e-06
-# itPH = 77 iter = 035200 iter/nx = 088, err = 9.461e-04 - norm[Rx=3.977e-01 7.160e-04, Ry=7.378e-01 9.461e-04, Rp=1.322e-19 5.952e-04]
-# Stokes solver time
-#    Total time:      17.207872623 s
-
-# it = 400, iter = 32800, err = 1.328e-06
-# itPH = 73 iter = 032800 iter/nx = 082, err = 8.048e-04 - norm[Rx=3.764e-01 6.955e-04, Ry=6.276e-01 8.048e-04, Rp=1.299e-19 5.849e-04]
-# Stokes solver time
-#    Total time:      15.819583205 s

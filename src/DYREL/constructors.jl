@@ -1,3 +1,15 @@
+"""
+    DYREL(ni::NTuple{N, Integer}; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fat=0.5) where N
+
+Creates a new `DYREL` struct with fields initialized to zero.
+
+# Arguments
+- `ni`: Tuple containing the grid dimensions `(nx, ny)` for 2D or `(nx, ny, nz)` for 3D.
+- `ϵ`: General convergence tolerance.
+- `ϵ_vel`: Velocity convergence tolerance.
+- `CFL`: Courant-Friedrichs-Lewy number.
+- `c_fat`: Damping scaling factor.
+"""
 function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fat = 0.5)
     nx, ny = ni
     # penalty parameter
@@ -89,6 +101,26 @@ function DYREL(::Type{CPUBackend}, stokes::JustRelax.StokesArrays, rheology, pha
     return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fat = c_fat, γfact = γfact)
 end
 
+
+"""
+    DYREL(stokes, rheology, phase_ratios, di, dt; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fat=0.5, γfact=20.0)
+
+Constructs and initializes a `DYREL` object based on existing Stokes fields.
+
+This function:
+1. Allocates zero-initialized arrays using grid dimensions from `stokes`.
+2. Computes initial bulk viscosity and penalty parameters.
+3. Computes Gershgorin estimates for eigenvalues and preconditioners.
+4. Updates damping coefficients.
+
+# Arguments
+- `stokes`: `JustRelax.StokesArrays` struct.
+- `rheology`: Material properties.
+- `phase_ratios`: Phase fraction information.
+- `di`: Grid spacing tuple.
+- `dt`: Time step.
+- `γfact`: Factor for penalty parameter calculation (default: 20.0).
+"""
 function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fat = 0.5, γfact = 20.0)
 
     ni = size(stokes.P)
@@ -108,6 +140,28 @@ function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; �
     return dyrel
 end
 
+
+"""
+    DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL=0.99, γfact=20.0)
+
+Updates the fields of the `DYREL` struct in-place for the current time step.
+
+This function recomputes:
+- Bulk viscosity and penalty parameter `γ_eff`.
+- Gershgorin estimates for eigenvalues and preconditioners.
+- Damping coefficients.
+
+# Arguments
+- `dyrel`: `JustRelax.DYREL` struct to modify.
+- `stokes`: `JustRelax.StokesArrays` containing current simulation state.
+- `rheology`, `phase_ratios`: Material properties.
+- `di`: Grid spacing.
+- `dt`: Current time step.
+- `CFL`: Courant number (default: 0.99).
+- `γfact`: Penalty factor (default: 20.0).
+
+Returns `nothing`.
+"""
 function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = 0.99, γfact = 20.0)
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
@@ -135,8 +189,33 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
     return nothing
 end
 
+
+"""
+    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
+
+Computes the bulk viscosity `ηb` and the effective penalty parameter `γ_eff`.
+
+1. **Bulk Viscosity (`ηb`)**: Computed based on the bulk modulus of the material phases.
+   - If `Kb` is infinite (incompressible), `ηb` defaults to `γfact * η_mean`.
+   - Otherwise `ηb = Kb * dt`.
+
+2. **Penalty Parameter (`γ_eff`)**: A combination of numerical (`γ_num`) and physical (`γ_phy`) penalty terms.
+   - `γ_num = γfact * η_mean`
+   - `γ_phy = Kb` (or related term)
+   - `γ_eff = (γ_phy * γ_num) / (γ_phy + γ_num)`
+
+# Arguments
+- `dyrel`: `JustRelax.DYREL` struct to update.
+- `stokes`: `JustRelax.StokesArrays`.
+- `rheology`: Material properties.
+- `phase_ratios`: Phase fraction information.
+- `γfact`: Numerical factor for penalty parameter (default: 20.0).
+- `dt`: Time step.
+
+This function parallelizes the computation across grid cells.
+"""
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
-    # @parallel compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, maximum(stokes.viscosity.η), γfact, dt)
+
     @parallel compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
     return nothing
 end
@@ -153,7 +232,6 @@ end
     γ_num = γfact * η_mean
     γ_phy = Kb
     γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num)
-    # γ_eff[I...] = γ_num
 
     return nothing
 end

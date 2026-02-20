@@ -114,7 +114,7 @@ end
     η_ve = isinf(G) ?
         inv(inv(η) + inv(G * dt)) :
         (η * G * dt) / (η + G * dt) # more efficient than inv(inv(η) + inv(G * dt))
-    # effective stgrain rate
+    # effective strain rate
     inv_2Gdt = inv(2 * G * dt)
     εij_eff = @. εij + τij_o * inv_2Gdt
 
@@ -126,8 +126,8 @@ end
     # Plastic stress correction starts here
     τij = @. 2 * η_ve * εij_eff
     τII = second_invariant(τij)
-    # F     = τII - C * cosϕ - max(P, 0e0) * sinϕ
-    F = τII - C * cosϕ - P * sinϕ
+    F = τII - C * cosϕ - max(P, 0.0e0) * sinϕ
+    # F = τII - C * cosϕ - P * sinϕ
     λ = if ispl && F > 0
         λ_new = F / (η_ve + η_reg + Kb * dt * sinϕ * sinΨ)
         λ_relaxation * λ_new + (1 - λ_relaxation) * λ

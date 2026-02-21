@@ -716,11 +716,12 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = if Pv_ij ≥ 0
-            τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-        else
-            τIIv_ij - Cv
-        end
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        # Fv = if Pv_ij ≥ 0
+        #     τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        # else
+        #     τIIv_ij - Cv
+        # end
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[1][I...] =
@@ -787,11 +788,12 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = if Pv_ij ≥ 0
-            τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-        else
-            τIIv_ij - Cv
-        end
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        # Fv = if Pv_ij ≥ 0
+        #     τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        # else
+        #     τIIv_ij - Cv
+        # end
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[2][I...] =
@@ -859,11 +861,12 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = if Pv_ij ≥ 0
-            τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-        else
-            τIIv_ij - Cv
-        end
+        Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        # Fv = if Pv_ij ≥ 0
+        #     τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+        # else
+        #     τIIv_ij - Cv
+        # end
         if is_pl && !iszero(τIIv_ij) && Fv > 0
             # stress correction @ vertex
             λv[3][I...] =
@@ -903,13 +906,11 @@ end
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
         F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
-
-        F = if Pr[I...] ≥ 0
-            τII_ij - C * cosϕ - Pr[I...] * sinϕ
-        else
-            τII_ij - C
-        end
-
+        # F = if Pr[I...] ≥ 0
+        #     τII_ij - C * cosϕ - Pr[I...] * sinϕ
+        # else
+        #     τII_ij - C
+        # end
         τII_ij = if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
@@ -1002,11 +1003,12 @@ end
     τIIv_ij = second_invariant(dτijv .+ τijv)
 
     # yield function @ center
-    Fv = if Pv_ij ≥ 0
-        τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-    else
-        τIIv_ij - Cv
-    end
+    Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+    # Fv = if Pv_ij ≥ 0
+    #     τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+    # else
+    #     τIIv_ij - Cv
+    # end
     @inbounds if is_pl && !iszero(τIIv_ij)  && Fv > 0
         # stress correction @ vertex
         λv[I...] =
@@ -1043,11 +1045,12 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        F = if Pr[I...] ≥ 0
-            @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
-        else
-            @inbounds τII_ij - C
-        end
+        F = @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
+        # F = if Pr[I...] ≥ 0
+        #     @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
+        # else
+        #     @inbounds τII_ij - C
+        # end
         τII_ij = @inbounds if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =
@@ -1151,11 +1154,12 @@ end
     τIIv_ij = second_invariant(dτijv .+ τijv)
 
     # yield function @ center
-    Fv = if Pv_ij ≥ 0
-        τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
-    else
-        τIIv_ij - Cv
-    end
+    Fv = τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+    # Fv = if Pv_ij ≥ 0
+    #     τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
+    # else
+    #     τIIv_ij - Cv
+    # end
     @inbounds if is_pl && !iszero(τIIv_ij) && Fv > 0
         # stress correction @ vertex
         λv[I...] =
@@ -1194,11 +1198,12 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, Δεij, _G, dτ_r, dt)
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        F = if Pr[I...] ≥ 0
-            @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
-        else
-            τII_ij - C
-        end
+        F = @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
+        # F = if Pr[I...] ≥ 0
+        #     @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
+        # else
+        #     τII_ij - C
+        # end
         τII_ij = @inbounds if is_pl && !iszero(τII_ij) && F > 0
             # stress correction @ center
             λ[I...] =

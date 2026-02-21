@@ -136,7 +136,7 @@ end
         τII - C
     end
 
-    λ = if ispl && F > 0
+    λ = if ispl && F ≥ 0
         λ_new = F / (η_ve + η_reg + Kb * dt * sinϕ * sinΨ)
         λ_relaxation * λ_new + (1 - λ_relaxation) * λ
     else

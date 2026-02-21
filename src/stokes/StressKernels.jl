@@ -716,7 +716,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = if Pv_ij > 0
+        Fv = if Pv_ij ≥ 0
             τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         else
             τIIv_ij - Cv
@@ -787,7 +787,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = if Pv_ij > 0
+        Fv = if Pv_ij ≥ 0
             τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         else
             τIIv_ij - Cv
@@ -859,7 +859,7 @@ end
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
         # yield function @ vertex
-        Fv = if Pv_ij > 0
+        Fv = if Pv_ij ≥ 0
             τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
         else
             τIIv_ij - Cv
@@ -904,7 +904,7 @@ end
         # yield function @ center
         F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-        F = if Pr[I...] > 0
+        F = if Pr[I...] ≥ 0
             τII_ij - C * cosϕ - Pr[I...] * sinϕ
         else
             τII_ij - C
@@ -1002,7 +1002,7 @@ end
     τIIv_ij = second_invariant(dτijv .+ τijv)
 
     # yield function @ center
-    Fv = if Pv_ij > 0
+    Fv = if Pv_ij ≥ 0
         τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
     else
         τIIv_ij - Cv
@@ -1043,7 +1043,7 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        F = if Pr[I...] > 0
+        F = if Pr[I...] ≥ 0
             @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
         else
             @inbounds τII_ij - C
@@ -1151,7 +1151,7 @@ end
     τIIv_ij = second_invariant(dτijv .+ τijv)
 
     # yield function @ center
-    Fv = if Pv_ij > 0
+    Fv = if Pv_ij ≥ 0
         τIIv_ij - Cv * cosϕv - Pv_ij * sinϕv
     else
         τIIv_ij - Cv
@@ -1194,7 +1194,7 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, Δεij, _G, dτ_r, dt)
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        F = if Pr[I...] > 0
+        F = if Pr[I...] ≥ 0
             @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
         else
             τII_ij - C

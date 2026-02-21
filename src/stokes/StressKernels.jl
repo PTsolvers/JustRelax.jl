@@ -904,7 +904,7 @@ end
         # yield function @ center
         F = τII_ij - C * cosϕ - Pr[I...] * sinϕ
 
-        Fv = if Pr[I...] > 0
+        F = if Pr[I...] > 0
             τII_ij - C * cosϕ - Pr[I...] * sinϕ
         else
             τII_ij - C
@@ -1043,7 +1043,7 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        Fv = if Pr[I...] > 0
+        F = if Pr[I...] > 0
             @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
         else
             @inbounds τII_ij - C
@@ -1194,7 +1194,7 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, Δεij, _G, dτ_r, dt)
         τII_ij = second_invariant(dτij .+ τij)
         # yield function @ center
-        Fv = if Pr[I...] > 0
+        F = if Pr[I...] > 0
             @inbounds τII_ij - C * cosϕ - Pr[I...] * sinϕ
         else
             τII_ij - C

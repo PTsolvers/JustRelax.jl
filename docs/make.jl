@@ -110,6 +110,7 @@ makedocs(;
                 "Rheology" => "man/plume3D/rheology.md",
                 "Setting up the model" => "man/plume3D/plume3D.md",
             ],
+            "Self-tuned APT solver" => "man/DYREL.md",
             "Checkpointing/Restart" => Any[
                 "Checkpointing" => "man/checkpointing.md",
                 "Restart" => "man/restart.md",

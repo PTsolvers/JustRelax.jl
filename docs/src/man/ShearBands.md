@@ -1,6 +1,6 @@
-# ShearBand benchmark
+# Shear band localization 
 
-Shear Band benchmark to test the visco-elasto-plastic rheology implementation in [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl)
+Shear band localization miniapp to test the visco-elasto-plastic rheology implementation in [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl)
 
 ## Initialize packages
 

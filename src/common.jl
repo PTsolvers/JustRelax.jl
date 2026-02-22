@@ -113,6 +113,14 @@ export StressParticles
 include("stress_rotation/stress_rotation_particles.jl")
 export rotate_stress!, stress2grid!
 
+## DYREL solver
+
+include("DYREL/constructors.jl")
+include("DYREL/pressure_kernels.jl")
+include("DYREL/stress_kernels.jl")
+include("DYREL/velocity_kernels.jl")
+include("DYREL/Gershgorin.jl")
+
 # thermal diffusion
 
 include("thermal_diffusion/DiffusionPT.jl")

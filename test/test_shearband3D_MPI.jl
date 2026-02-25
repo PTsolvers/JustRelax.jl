@@ -243,7 +243,7 @@ function main(igg; nx = 64, ny = 64, nz = 64)
     return nothing
 end
 
-let 
+let
     if CSCS_CI != true
         @suppress begin
             if backend_JR == CPUBackend

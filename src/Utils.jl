@@ -49,19 +49,6 @@ end
     return nothing
 end
 
-Base.@propagate_inbounds @generated function unrolled_copy!(
-        dst::NTuple{N, T}, src::NTuple{N, T}, I::Vararg{Int, NI}
-    ) where {N, NI, T}
-    return quote
-        Base.@_inline_meta
-        Base.@nexprs $N n -> begin
-            if all(tuple(I...) .≤ size(dst[n]))
-                dst[n][I...] = src[n][I...]
-            end
-        end
-    end
-end
-
 """
     @add(I, args...)
 
@@ -379,19 +366,6 @@ end
 
 macro allocate(ni...)
     return esc(:(PTArray(undef, $(ni...))))
-end
-
-function indices(::NTuple{3, T}) where {T}
-    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
-    k = (blockIdx().z - 1) * blockDim().z + threadIdx().z
-    return i, j, k
-end
-
-function indices(::NTuple{2, T}) where {T}
-    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
-    return i, j
 end
 
 """

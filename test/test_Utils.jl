@@ -106,13 +106,13 @@ end
 
         @test @strain(stokes) === (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy)
         @test @strain_center(stokes) === (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy_c)
-        @test JustRelax2D.@strain_increment(stokes) === (stokes.Δε.xx, stokes.Δε.yy, stokes.Δε.xy)
+        @test @strain_increment(stokes) === (stokes.Δε.xx, stokes.Δε.yy, stokes.Δε.xy)
         @test @plastic_strain(stokes) === (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy)
         @test @stress(stokes) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy)
         @test @stress_center(stokes) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
         @test @tensor(stokes.τ_o) === (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy)
         @test @tensor_center(stokes.τ) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
-        @test JustRelax2D.@tensor_vertex(stokes.τ) === (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
+        @test @tensor_vertex(stokes.τ) === (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
         @test @shear(stokes.τ) === (stokes.τ.xy)
         @test @normal(stokes.τ) === (stokes.τ.xx, stokes.τ.yy)
         @test @residuals(stokes.R) === (stokes.R.Rx, stokes.R.Ry)
@@ -154,6 +154,7 @@ end
 
         @test @strain(stokes) === (stokes.ε.xx, stokes.ε.yy, stokes.ε.zz, stokes.ε.yz, stokes.ε.xz, stokes.ε.xy)
         @test @strain_center(stokes) === (stokes.ε.xx, stokes.ε.yy, stokes.ε.zz, stokes.ε.yz_c, stokes.ε.xz_c, stokes.ε.xy_c)
+        @test @strain_increment(stokes) === (stokes.Δε.xx, stokes.Δε.yy, stokes.Δε.zz, stokes.Δε.yz, stokes.Δε.xz, stokes.Δε.xy)
         @test @plastic_strain(stokes) === (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.zz, stokes.ε_pl.yz, stokes.ε_pl.xz, stokes.ε_pl.xy)
         @test @stress(stokes) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
         @test @stress_center(stokes) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c)
@@ -275,5 +276,6 @@ end
     end
     @testset "versioninfo" begin
         JustRelax.versioninfo(devnull)
+        JustRelax.versioninfo(devnull;verbose=true)
     end
 end

@@ -86,7 +86,7 @@ const BackendArray = PTArray(backend)
 
     σ = JR2.PrincipalStress(backend, ni)
 
-    @test size(σ.σ1) == (2,ni...)
+    @test size(σ.σ1) == (2, ni...)
     @test size(σ.σ2) == (2, ni...)
     @test size(σ.σ3) == (2, 1, 1)
     @test JR2.compute_principal_stresses!(stokes, σ) == nothing

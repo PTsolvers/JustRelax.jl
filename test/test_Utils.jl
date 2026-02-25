@@ -276,6 +276,6 @@ end
     end
     @testset "versioninfo" begin
         JustRelax.versioninfo(devnull)
-        JustRelax.versioninfo(devnull;verbose=true)
+        JustRelax.versioninfo(devnull; verbose = true)
     end
 end

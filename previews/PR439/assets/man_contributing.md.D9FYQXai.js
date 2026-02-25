@@ -1,0 +1,37 @@
+import{_ as e,o as a,c as s,aA as t}from"./chunks/framework.CqEQyYyG.js";const d=JSON.parse('{"title":"Contributing","description":"","frontmatter":{},"headers":[],"relativePath":"man/contributing.md","filePath":"man/contributing.md","lastUpdated":null}'),i={name:"man/contributing.md"};function r(p,n,o,l,c,h){return a(),s("div",null,[...n[0]||(n[0]=[t(`<h1 id="Contributing" tabindex="-1">Contributing <a class="header-anchor" href="#Contributing" aria-label="Permalink to &quot;Contributing {#Contributing}&quot;">​</a></h1><p><a href="https://github.com/PTsolvers/JustRelax.jl" target="_blank" rel="noreferrer">JustRelax.jl</a> is an open-source project and we are very happy to accept contributions from the community. Please feel free to open <a href="https://github.com/PTsolvers/JustRelax.jl/issues/new" target="_blank" rel="noreferrer">Issues</a> (issue templeates in <a href="https://github.com/PTsolvers/JustRelax.jl/tree/adm/JOSS/.github/ISSUE_TEMPLATE" target="_blank" rel="noreferrer">here</a>) or submit <a href="https://github.com/PTsolvers/JustRelax.jl/pulls" target="_blank" rel="noreferrer">Pull Requests</a> (PR templeate in <a href="https://github.com/PTsolvers/JustRelax.jl/blob/adm/JOSS/.github/PULL_REQUEST_TEMPLATE.md" target="_blank" rel="noreferrer">here</a>) to the <code>main</code> branch with your contribution. For planned large contributions, it is often beneficial to get in contact with one of the principal developers first (see <a href="/JustRelax.jl/previews/PR439/man/authors#Authors">Authors</a>).</p><p><a href="https://github.com/PTsolvers/JustRelax.jl" target="_blank" rel="noreferrer">JustRelax.jl</a> and its contributions are licensed under the MIT license. As a contributor, you certify that all your contributions are in conformance with the <em>Developer Certificate of Origin (Version 1.1)</em>, which is reproduced below.</p><h2 id="Developer-Certificate-of-Origin-Version-1.1" tabindex="-1">Developer Certificate of Origin (Version 1.1) <a class="header-anchor" href="#Developer-Certificate-of-Origin-Version-1.1" aria-label="Permalink to &quot;Developer Certificate of Origin (Version 1.1) {#Developer-Certificate-of-Origin-Version-1.1}&quot;">​</a></h2><p>The following text was taken from <a href="https://developercertificate.org" target="_blank" rel="noreferrer">https://developercertificate.org</a>:</p><div class="language- vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang"></span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span>Developer Certificate of Origin</span></span>
+<span class="line"><span>Version 1.1</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Copyright (C) 2004, 2006 The Linux Foundation and its contributors.</span></span>
+<span class="line"><span>1 Letterman Drive</span></span>
+<span class="line"><span>Suite D4700</span></span>
+<span class="line"><span>San Francisco, CA, 94129</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Everyone is permitted to copy and distribute verbatim copies of this</span></span>
+<span class="line"><span>license document, but changing it is not allowed.</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Developer&#39;s Certificate of Origin 1.1</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>By making a contribution to this project, I certify that:</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>(a) The contribution was created in whole or in part by me and I</span></span>
+<span class="line"><span>    have the right to submit it under the open source license</span></span>
+<span class="line"><span>    indicated in the file; or</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>(b) The contribution is based upon previous work that, to the best</span></span>
+<span class="line"><span>    of my knowledge, is covered under an appropriate open source</span></span>
+<span class="line"><span>    license and I have the right under that license to submit that</span></span>
+<span class="line"><span>    work with modifications, whether created in whole or in part</span></span>
+<span class="line"><span>    by me, under the same open source license (unless I am</span></span>
+<span class="line"><span>    permitted to submit under a different license), as indicated</span></span>
+<span class="line"><span>    in the file; or</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>(c) The contribution was provided directly to me by some other</span></span>
+<span class="line"><span>    person who certified (a), (b) or (c) and I have not modified</span></span>
+<span class="line"><span>    it.</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>(d) I understand and agree that this project and the contribution</span></span>
+<span class="line"><span>    are public and that a record of the contribution (including all</span></span>
+<span class="line"><span>    personal information I submit with it, including my sign-off) is</span></span>
+<span class="line"><span>    maintained indefinitely and may be redistributed consistent with</span></span>
+<span class="line"><span>    this project or the open source license(s) involved.</span></span></code></pre></div>`,6)])])}const b=e(i,[["render",r]]);export{d as __pageData,b as default};

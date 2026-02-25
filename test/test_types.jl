@@ -79,6 +79,54 @@ const BackendArray = PTArray(backend)
     @test typeof(tensor.II) <: BackendArray
 
     @test_throws MethodError JR2.StokesArrays(backend, 10.0, 10.0)
+    @test_throws MethodError JR2.Velocity(10.0, 10.0)
+    @test_throws MethodError JR2.Displacement(10.0, 10.0)
+    @test_throws MethodError JR2.Vorticity(10.0, 10.0)
+    @test_throws MethodError JR2.SymmetricTensor(10.0, 10.0, 10.0)
+
+    σ = JR2.PrincipalStress(backend, ni)
+
+    @test size(σ.σ1) == (2,ni...)
+    @test size(σ.σ2) == (2, ni...)
+    @test size(σ.σ3) == (2, 1, 1)
+    @test JR2.compute_principal_stresses!(stokes, σ) == nothing
+
+    @test_throws MethodError JR2.PrincipalStress(backend, 10.0, 10.0)
+
+    thermal = JR2.ThermalArrays(backend, ni)
+    @test size(thermal.T) == (nx + 3, ny + 1)
+    @test size(thermal.Tc) == ni
+    @test size(thermal.Told) == (nx + 3, ny + 1)
+    @test size(thermal.ΔT) == (nx + 3, ny + 1)
+    @test size(thermal.ΔTc) == ni
+    @test size(thermal.adiabatic) == (nx + 1, ny - 1)
+    @test size(thermal.dT_dt) == (nx + 1, ny - 1)
+    @test size(thermal.qTx) == (nx + 2, ny - 1)
+    @test size(thermal.qTy) == (nx + 1, ny)
+    @test size(thermal.qTx2) == (nx + 2, ny - 1)
+    @test size(thermal.qTy2) == (nx + 1, ny)
+    @test size(thermal.ResT) == (nx + 1, ny - 1)
+    @test thermal.qTz === nothing
+    @test thermal.qTz2 === nothing
+
+    @test typeof(thermal.T) <: BackendArray
+    @test typeof(thermal.Tc) <: BackendArray
+    @test typeof(thermal.Told) <: BackendArray
+    @test typeof(thermal.ΔT) <: BackendArray
+    @test typeof(thermal.ΔTc) <: BackendArray
+    @test typeof(thermal.adiabatic) <: BackendArray
+    @test typeof(thermal.dT_dt) <: BackendArray
+    @test typeof(thermal.qTx) <: BackendArray
+    @test typeof(thermal.qTy) <: BackendArray
+    @test typeof(thermal.qTx2) <: BackendArray
+    @test typeof(thermal.qTy2) <: BackendArray
+    @test typeof(thermal.ResT) <: BackendArray
+
+    @test JR2.ThermalArrays(10, 10) isa JustRelax.ThermalArrays
+    @test JR2.ThermalArrays(ni...) isa JustRelax.ThermalArrays
+
+    @test_throws MethodError JR2.ThermalArrays(10.0, 10.0)
+
 end
 
 @testset "2D Displacement" begin
@@ -162,7 +210,53 @@ end
     @test typeof(tensor.xz_c) <: BackendArray
     @test typeof(tensor.II) <: BackendArray
 
-    @test_throws MethodError JR3.StokesArrays(backend, 10.0, 10.0)
+    @test_throws MethodError JR3.StokesArrays(backend, 10.0, 10.0, 10.0)
+    @test_throws MethodError JR3.Velocity(10.0, 10.0, 10.0)
+    @test_throws MethodError JR3.Displacement(10.0, 10.0, 10.0)
+    @test_throws MethodError JR3.Vorticity(10.0, 10.0, 10.0)
+    @test_throws MethodError JR3.SymmetricTensor(10.0, 10.0, 10.0)
+
+
+    σ = JR3.PrincipalStress(backend, ni)
+    @test size(σ.σ1) == (3, ni...)
+    @test size(σ.σ2) == (3, ni...)
+    @test size(σ.σ3) == (3, ni...)
+    @test JR3.compute_principal_stresses!(stokes, σ) == nothing
+
+    thermal = JR3.ThermalArrays(backend, ni)
+    @test size(thermal.T) == (nx + 1, ny + 1, nz + 1)
+    @test size(thermal.Tc) == ni
+    @test size(thermal.Told) == (nx + 1, ny + 1, nz + 1)
+    @test size(thermal.ΔT) == (nx + 1, ny + 1, nz + 1)
+    @test size(thermal.ΔTc) == ni
+    @test size(thermal.adiabatic) == (nx - 1, ny - 1, nz - 1)
+    @test size(thermal.dT_dt) == (nx - 1, ny - 1, nz - 1)
+    @test size(thermal.qTx) == (nx, ny - 1, nz - 1)
+    @test size(thermal.qTy) == (nx - 1, ny, nz - 1)
+    @test size(thermal.qTz) == (nx - 1, ny - 1, nz)
+    @test size(thermal.qTx2) == (nx, ny - 1, nz - 1)
+    @test size(thermal.qTy2) == (nx - 1, ny, nz - 1)
+    @test size(thermal.qTz2) == (nx - 1, ny - 1, nz)
+    @test size(thermal.ResT) == (nx - 1, ny - 1, nz - 1)
+
+    @test typeof(thermal.T) <: BackendArray
+    @test typeof(thermal.Tc) <: BackendArray
+    @test typeof(thermal.Told) <: BackendArray
+    @test typeof(thermal.ΔT) <: BackendArray
+    @test typeof(thermal.ΔTc) <: BackendArray
+    @test typeof(thermal.adiabatic) <: BackendArray
+    @test typeof(thermal.dT_dt) <: BackendArray
+    @test typeof(thermal.qTx) <: BackendArray
+    @test typeof(thermal.qTy) <: BackendArray
+    @test typeof(thermal.qTz) <: BackendArray
+    @test typeof(thermal.qTx2) <: BackendArray
+    @test typeof(thermal.qTy2) <: BackendArray
+    @test typeof(thermal.qTz2) <: BackendArray
+    @test typeof(thermal.ResT) <: BackendArray
+    @test JR3.ThermalArrays(10, 10, 10) isa JustRelax.ThermalArrays
+    @test JR3.ThermalArrays(ni...) isa JustRelax.ThermalArrays
+
+    @test_throws MethodError JR3.ThermalArrays(10.0, 10.0, 10.0)
 end
 
 @testset "3D Displacement" begin

@@ -50,7 +50,7 @@ end
         τ_13 τ_23 τ_zz[I...]
     ]
 
-    σ1, σ2, σ3 = hessenberg_eigen_3x3(A)
+    σ1, σ2, σ3 = hessenberg_eigen_3x3(τ)
 
     Base.@nexprs 3 i -> begin
         @inbounds σ.σ1[i, I...] = σ1[i]

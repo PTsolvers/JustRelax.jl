@@ -10,7 +10,7 @@ end
 """
     ThermalArrays(::Backend, ni::NTuple{N, Integer}) where {N}
 
-Internal entry poiint function for the ThermalArrays constructor. This allows for dispatching on the backend type and then calling the main constructor with the dimensions.
+Internal entry point function for the ThermalArrays constructor. This allows for dispatching on the backend type and then calling the main constructor with the dimensions.
 """
 function ThermalArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}
     return ThermalArrays(ni...)

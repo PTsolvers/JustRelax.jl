@@ -39,6 +39,10 @@ Compute the pressure field `P` and the residual `RP` for the compressible case. 
 - `η`: viscosity field
 - `rheology`: material parameters
 - `phase_ratio`: phase field
+- `melt_fraction`: melt fraction field, used for the thermal expansion coefficient if provided
+- `dt`: time step
+- `r`: relaxation parameter for the pressure update
+- `θ_dτ`: numerical parameter for the pressure update
 """
 function compute_P!(
         P,

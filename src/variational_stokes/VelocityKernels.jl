@@ -1,3 +1,8 @@
+"""
+    compute_∇V!(∇V, V, ϕ, _di)
+
+Compute the divergence of the velocity field `V` and store it in `∇V`, taking into account the rock ratio `ϕ` and grid spacing `_di`.
+"""
 @parallel_indices (I...) function compute_∇V!(
         ∇V::AbstractArray{T, N}, V::NTuple{N}, ϕ::JustRelax.RockRatio, _di::NTuple{N}
     ) where {T, N}
@@ -5,6 +10,11 @@
     return nothing
 end
 
+"""
+    compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, ϕ, _dx, _dy)
+
+Compute the components of the strain rate tensor `ε` from the velocity field `V` and its divergence `∇V`, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`.
+"""
 @parallel_indices (i, j) function compute_strain_rate!(
         εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, ϕ::JustRelax.RockRatio, _dx, _dy
     ) where {T}
@@ -35,6 +45,11 @@ end
     return nothing
 end
 
+"""
+    compute_strain_rate_from_increment!(εxx, εyy, εxy, Δεxx, Δεyy, Δεxy, ϕ, _dt)
+
+Compute the components of the strain rate tensor `ε` from the strain increments `Δε`, taking into account the rock ratio `ϕ` and time step `_dt`.
+"""
 @parallel_indices (i, j) function compute_strain_rate_from_increment!(
         εxx::AbstractArray{T, 2}, εyy, εxy, Δεxx, Δεyy, Δεxy, ϕ::JustRelax.RockRatio, _dt
     ) where {T}
@@ -60,7 +75,11 @@ end
     return nothing
 end
 
+"""
+    compute_strain_rate!(εxx, εyy, εzz, εyz, εxz, εxy, ∇V, Vx, Vy, Vz, ϕ, _dx, _dy, _dz)
 
+Compute the 3D components of the strain rate tensor `ε` from the velocity field `V` and its divergence `∇V`, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`, `_dz`.
+"""
 @parallel_indices (i, j, k) function compute_strain_rate!(
         ∇V::AbstractArray{T, 3},
         εxx,
@@ -122,6 +141,11 @@ end
     return nothing
 end
 
+"""
+    compute_V!(Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, ϕ, _dx, _dy)
+
+Compute the velocity field `V` from the pressure `P`, stress components `τ`, and other parameters, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`.
+"""
 @parallel_indices (i, j) function compute_V!(
         Vx::AbstractArray{T, 2},
         Vy,
@@ -180,6 +204,11 @@ end
     return nothing
 end
 
+"""
+    compute_Vx!(Vx, Rx, P, τxx, τxy, ηdτ, ρgx, ητ, ϕ, _dx, _dy)
+
+Compute the x-component of the velocity field `Vx` from the pressure `P`, stress components `τ`, and other parameters, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`.
+"""
 @parallel_indices (i, j) function compute_Vx!(
         Vx::AbstractArray{T, 2}, Rx, P, τxx, τxy, ηdτ, ρgx, ητ, ϕ::JustRelax.RockRatio, _dx, _dy
     ) where {T}
@@ -211,6 +240,11 @@ end
     return nothing
 end
 
+"""
+    compute_Vy!(Vy, Vx_on_Vy, Ry, P, τyy, τxy, ηdτ, ρgy, ητ, ϕ, _dx, _dy, dt)
+
+Compute the y-component of the velocity field `Vy` from the pressure `P`, stress components `τ`, and other parameters, taking into account the rock ratio `ϕ`, grid spacing `_dx`, `_dy`, and time step `dt`.
+"""
 @parallel_indices (i, j) function compute_Vy!(
         Vy::AbstractArray{T, 2},
         Vx_on_Vy,
@@ -270,6 +304,11 @@ end
     return nothing
 end
 
+"""
+    compute_V!(Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, ϕ, _dx, _dy, dt)
+
+Compute the velocity field `V` with the timestep dt from the pressure `P`, stress components `τ`, and other parameters, taking into account the rock ratio `ϕ`, grid spacing `_dx`, `_dy`, and time step `dt`.
+"""
 @parallel_indices (i, j) function compute_V!(
         Vx::AbstractArray{T, 2},
         Vy,
@@ -339,6 +378,11 @@ end
     return nothing
 end
 
+"""
+    compute_V!(Vx, Vy, Vz, Rx, Ry, Rz, P, fx, fy, fz, τxx, τyy, τzz, τyz, τxz, τxy, ητ, ηdτ, ϕ, _dx, _dy, _dz)
+
+Compute the 3D velocity field `V` from the pressure `P`, stress components `τ`, body forces `f`, and other parameters, with the rock ratio `ϕ` and grid spacing `_dx`, `_dy`, `_dz`.
+"""
 @parallel_indices (i, j, k) function compute_V!(
         Vx::AbstractArray{T, 3},
         Vy,

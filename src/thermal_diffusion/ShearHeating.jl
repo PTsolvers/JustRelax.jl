@@ -1,3 +1,8 @@
+"""
+    compute_shear_heating!(thermal, stokes, rheology, dt)
+
+Compute the shear heating term at cell centers for the thermal arrays `thermal` using the stress and strain rate from the Stokes arrays `stokes` and the rheology model `rheology` with a time step `dt`.
+"""
 function compute_shear_heating!(thermal, args...)
     return compute_shear_heating!(backend(thermal), thermal, args...)
 end

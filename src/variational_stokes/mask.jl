@@ -2,6 +2,12 @@ function RockRatio(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return RockRatio(ni...)
 end
 
+"""
+    RockRatio(nx, ny)
+
+Create a `RockRatio` object for a 2D grid with dimensions `nx` x `ny` on a staggered grid.
+
+"""
 function RockRatio(nx, ny)
     ni = nx, ny
     center = @zeros(ni...)
@@ -12,6 +18,11 @@ function RockRatio(nx, ny)
     return JustRelax.RockRatio(center, vertex, Vx, Vy, dummy, dummy, dummy, dummy)
 end
 
+"""
+    RockRatio(nx, ny, nz)
+
+Create a `RockRatio` object for a 3D grid with dimensions `nx` x `ny` x `nz` on a staggered grid.
+"""
 function RockRatio(nx, ny, nz)
     ni = nx, ny, nz
     center = @zeros(ni...)
@@ -61,6 +72,16 @@ function update_rock_ratio!(ϕ::JustRelax.RockRatio{T, 2}, phase_ratios, air_pha
     return nothing
 end
 
+"""
+    update_rock_ratio!(ϕ::JustRelax.RockRatio, phase_ratios, air_phase)
+
+Update the rock ratio `ϕ` for a 3D grid based on the provided `phase_ratios` and `air_phase`.
+
+# Arguments
+- `ϕ::JustRelax.RockRatio`: The rock ratio object to be updated.
+- `phase_ratios`: The ratios of different phases present.
+- `air_phase`: The phase representing air.
+"""
 function update_rock_ratio!(ϕ::JustRelax.RockRatio{T, 3}, phase_ratios, air_phase) where {T}
     nvi = size_v(ϕ)
     @parallel (@idx nvi) update_rock_ratio_cv!(
@@ -79,6 +100,11 @@ function update_rock_ratio!(ϕ::JustRelax.RockRatio{T, 3}, phase_ratios, air_pha
     return nothing
 end
 
+"""
+    compute_rock_ratio(phase_ratio, air_phase, inds...)
+
+Compute the rock ratio at the given indices based on the `phase_ratio` and `air_phase`.
+"""
 @inline function compute_rock_ratio(
         phase_ratio::CellArray, air_phase, I::Vararg{Integer, N}
     ) where {N}
@@ -88,6 +114,11 @@ end
     return x
 end
 
+"""
+    compute_air_ratio(phase_ratio, air_phase, inds...)
+
+Compute the air ratio at the given indices based on the `phase_ratio` and `air_phase`.
+"""
 @inline function compute_air_ratio(
         phase_ratio::CellArray, air_phase, I::Vararg{Integer, N}
     ) where {N}
@@ -95,6 +126,11 @@ end
     return @index phase_ratio[air_phase, I...]
 end
 
+"""
+    update_rock_ratio_cv!(ϕ, ratio_center, ratio_vertex, air_phase)
+
+Update the rock ratio for both center and vertex values based on the provided `ratio_center`, `ratio_vertex`, and `air_phase`.
+"""
 @parallel_indices (I...) function update_rock_ratio_cv!(
         ϕ, ratio_center, ratio_vertex, air_phase
     )
@@ -105,6 +141,11 @@ end
     return nothing
 end
 
+"""
+    _update_rock_ratio!(ϕ, ratio, air_phase)
+
+Inner kernel of `update_rock_ratio` that clamps the computed rock ratio to the range [0, 1] for the given `ratio` and `air_phase`.
+"""
 @parallel_indices (I...) function _update_rock_ratio!(ϕ, ratio, air_phase)
     # ϕ[I...] = Float64(Float16(compute_rock_ratio(ratio, air_phase, I...)))
     ϕ[I...] = clamp(compute_rock_ratio(ratio, air_phase, I...), 0, 1)
@@ -114,7 +155,7 @@ end
 """
     isvalid_c(ϕ::JustRelax.RockRatio, inds...)
 
-Check if  `ϕ.center[inds...]` is a not a nullspace.
+Check if  `ϕ.center[inds...]` is a not a nullspace in 2D.
 
 # Arguments
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
@@ -127,6 +168,11 @@ Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, 
     return v * isvalid(ϕ.center, i, j)
 end
 
+"""
+    isvalid_v(ϕ::JustRelax.RockRatio, inds...)
+
+Check if  `ϕ.vertex[inds...]` is a not a nullspace in 3D.
+"""
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j, k)
     vx = isvalid(ϕ.Vx, i, j, k) * isvalid(ϕ.Vx, i + 1, j, k)
     vy = isvalid(ϕ.Vy, i, j, k) * isvalid(ϕ.Vy, i, j + 1, k)
@@ -138,7 +184,7 @@ end
 """
     isvalid_v(ϕ::JustRelax.RockRatio, inds...)
 
-Check if  `ϕ.vertex[inds...]` is a not a nullspace.
+Check if  `ϕ.vertex[inds...]` is a not a nullspace 2D.
 
 # Arguments
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
@@ -218,14 +264,29 @@ Base.@propagate_inbounds @inline function isvalid_vz(
     return isvalid(ϕ.Vz, I...)
 end
 
+"""
+    isvalid_velocity(ϕ::JustRelax.RockRatio, inds...)
+
+Check if the velocity components at the given indices are not nullspaces in 2D.
+"""
 Base.@propagate_inbounds @inline function isvalid_velocity(ϕ::JustRelax.RockRatio, i, j)
     return isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vy, i, j)
 end
 
+"""
+    isvalid_velocity(ϕ::JustRelax.RockRatio, inds...)
+
+Check if the velocity components at the given indices are not nullspaces in 3D.
+"""
 Base.@propagate_inbounds @inline function isvalid_velocity(ϕ::JustRelax.RockRatio, i, j, k)
     return isvalid(ϕ.Vx, i, j, k) * isvalid(ϕ.Vy, i, j, k) * isvalid(ϕ.Vz, i, j, k)
 end
 
+"""
+    isvalid_v(ϕ::JustRelax.RockRatio, inds...)
+
+Check if `ϕ.vertex[inds...]` is a not a nullspace in 3D.
+"""
 Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, j, k)
     # yz
     nx, ny, nz = size(ϕ.yz)
@@ -251,6 +312,11 @@ Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, 
     return v * isvalid(ϕ.vertex, i, j, k)
 end
 
+"""
+    isvalid_xz(ϕ, inds...)
+
+Check if the xz shear component at the given indices is not a nullspace.
+"""
 Base.@propagate_inbounds @inline function isvalid_xz(ϕ::JustRelax.RockRatio, i, j, k)
 
     # check vertices
@@ -271,6 +337,11 @@ Base.@propagate_inbounds @inline function isvalid_xz(ϕ::JustRelax.RockRatio, i,
     return v * vx * vz * isvalid(ϕ.vertex, i, j, k)
 end
 
+"""
+    isvalid_xy(ϕ, inds...)
+
+Check if the xy shear component at the given indices is not a nullspace.
+"""
 Base.@propagate_inbounds @inline function isvalid_xy(ϕ::JustRelax.RockRatio, i, j, k)
 
     # check vertices
@@ -291,6 +362,11 @@ Base.@propagate_inbounds @inline function isvalid_xy(ϕ::JustRelax.RockRatio, i,
     return v * vy * vz * isvalid(ϕ.vertex, i, j, k)
 end
 
+"""
+    isvalid_yz(ϕ, inds...)
+
+Check if the yz shear component at the given indices is not a nullspace.
+"""
 Base.@propagate_inbounds @inline function isvalid_yz(ϕ::JustRelax.RockRatio, i, j, k)
 
     # check vertices

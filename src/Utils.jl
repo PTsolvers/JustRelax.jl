@@ -36,7 +36,11 @@ function detect_args_size(A::NTuple{N, AbstractArray{T, Dims}}) where {N, T, Dim
         return maximum(s)
     end
 end
+"""
+    multi_copy!(dst::NTuple{N, T}, src::NTuple{N, T}) where {N, T}
 
+Copy data from the tuple of arrays `src` into the tuple of arrays `dst` in parallel.
+"""
 @parallel_indices (I...) function multi_copy!(
         dst::NTuple{N, T}, src::NTuple{N, T}
     ) where {N, T}
@@ -62,6 +66,12 @@ macro add(I, args...)
     end
 end
 
+"""
+    @tuple(A)
+
+Convenience maktro to unpack the fields of the struct `A` into a tuple.
+Works with Velocity and SymmetricTensor structs.
+"""
 macro tuple(A)
     return quote
         _tuple($(esc(A)))
@@ -364,12 +374,17 @@ end
 
 ## Memory allocators
 
+"""
+    @allocate(ni...)
+
+Convenience macro to allocate a `PTArray` of size `ni...` with `undef` values.
+"""
 macro allocate(ni...)
     return esc(:(PTArray(undef, $(ni...))))
 end
 
 """
-    maxloc!(B, A; window)
+    compute_maxloc!(B, A; window)
 
 Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` and store the result in `B`.
 """
@@ -427,7 +442,11 @@ Base.@propagate_inbounds @inline function _maxloc_window_clamped(A, I, J, K, wid
     return x
 end
 
-# unpacks fields of the struct x into a tuple
+"""
+    unpack(x::T)
+
+Generated function to unpack the fields of the struct `x` into a tuple.
+"""
 @generated function unpack(x::T) where {T}
     return quote
         Base.@_inline_meta
@@ -436,6 +455,11 @@ end
 end
 _unpack(a, fields) = (getfield(a, fi) for fi in fields)
 
+"""
+    @unpack(x)
+
+Convenience macro to unpack the fields of the struct `x` into a tuple.
+"""
 macro unpack(x)
     return quote
         unpack($(esc(x)))
@@ -511,6 +535,11 @@ Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping par
     return isnan(x_cont) ? x_old : x_cont
 end
 
+"""
+    continuation_linear(x_new, x_old, ν)
+
+Do a continuation step `(1-ν)*x_old + ν*x_new` with damping parameter `ν`
+"""
 @inline continuation_linear(x_new, x_old, ν) = (1 - ν) * x_old + ν * x_new
 # @inline continuation_linear(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
 
@@ -532,25 +561,50 @@ end
 
 # MPI reductions
 
+"""
+    mean_mpi(A)
+
+Compute the mean of array `A` across all MPI processes.
+"""
 function mean_mpi(A)
     mean_l = _mean(A)
     return MPI.Allreduce(mean_l, MPI.SUM, MPI.COMM_WORLD) / MPI.Comm_size(MPI.COMM_WORLD)
 end
 
+"""
+    norm_mpi(A)
+
+Compute the L2 norm of array `A` across all MPI processes.
+"""
 function norm_mpi(A)
     sum2_l = _sum(A .^ 2)
     return sqrt(MPI.Allreduce(sum2_l, MPI.SUM, MPI.COMM_WORLD))
 end
 
+"""
+    sum_mpi(A)
+
+Compute the sum of array `A` across all MPI processes.
+"""
 function sum_mpi(A)
     return MPI.Allreduce(_sum(A), MPI.SUM, MPI.COMM_WORLD)
 end
 
+"""
+    minimum_mpi(A)
+
+Compute the minimum value of array `A` across all MPI processes.
+"""
 function minimum_mpi(A)
     min_l = _minimum(A)
     return MPI.Allreduce(min_l, MPI.MIN, MPI.COMM_WORLD)
 end
 
+"""
+    maximum_mpi(A)
+
+Compute the maximum value of array `A` across all MPI processes.
+"""
 function maximum_mpi(A)
     max_l = _maximum(A)
     return MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD)

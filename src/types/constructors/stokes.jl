@@ -1,5 +1,12 @@
 ## Velocity type
+"""
+    Velocity(nx::Integer, ny::Integer)
 
+Create the velocity arrays for the Stokes solver in 2D.
+## Fields
+- `Vx`: Velocity in x direction (nx + 1, ny + 2)
+- `Vy`: Velocity in y direction (nx + 2, ny + 1)
+"""
 function Velocity(nx::Integer, ny::Integer)
     nVx = (nx + 1, ny + 2)
     nVy = (nx + 2, ny + 1)
@@ -8,6 +15,15 @@ function Velocity(nx::Integer, ny::Integer)
     return JustRelax.Velocity(Vx, Vy, nothing)
 end
 
+"""
+    Velocity(nx::Integer, ny::Integer, nz::Integer)
+
+Create the velocity arrays for the Stokes solver in 3D.
+## Fields
+- `Vx`: Velocity in x direction (nx + 1, ny + 2, nz + 2)
+- `Vy`: Velocity in y direction (nx + 2, ny + 1, nz + 2)
+- `Vz`: Velocity in z direction (nx + 2, ny + 2, nz + 1)
+"""
 function Velocity(nx::Integer, ny::Integer, nz::Integer)
     nVx = (nx + 1, ny + 2, nz + 2)
     nVy = (nx + 2, ny + 1, nz + 2)
@@ -18,7 +34,14 @@ function Velocity(nx::Integer, ny::Integer, nz::Integer)
 end
 
 ## Displacement type
+"""
+    Displacement(nx::Integer, ny::Integer)
 
+Create the displacement arrays for the Stokes solver in 2D.
+## Fields
+- `Ux`: Displacement in x direction at their staggered location
+- `Uy`: Displacement in y direction at their staggered location
+"""
 function Displacement(nx::Integer, ny::Integer)
     nUx = (nx + 1, ny + 2)
     nUy = (nx + 2, ny + 1)
@@ -27,6 +50,15 @@ function Displacement(nx::Integer, ny::Integer)
     return JustRelax.Displacement(Ux, Uy, nothing)
 end
 
+"""
+    Displacement(nx::Integer, ny::Integer, nz::Integer)
+
+Create the displacement arrays for the Stokes solver in 3D.
+## Fields
+- `Ux`: Displacement in x direction at their staggered location
+- `Uy`: Displacement in y direction at their staggered location
+- `Uz`: Displacement in z direction at their staggered location
+"""
 function Displacement(nx::Integer, ny::Integer, nz::Integer)
     nUx = (nx + 1, ny + 2, nz + 2)
     nUy = (nx + 2, ny + 1, nz + 2)
@@ -37,13 +69,28 @@ function Displacement(nx::Integer, ny::Integer, nz::Integer)
 end
 
 ## Vorticity type
+"""
+    Vorticity(nx::Integer, ny::Integer)
 
+Create the vorticity arrays for the Stokes solver in 2D.
+## Fields
+- `xy`: Vorticity component xy at vertices
+"""
 function Vorticity(nx::Integer, ny::Integer)
     xy = @zeros(nx + 1, ny + 1)
 
     return JustRelax.Vorticity(nothing, nothing, xy)
 end
 
+"""
+    Vorticity(nx::Integer, ny::Integer, nz::Integer)
+
+Create the vorticity arrays for the Stokes solver in 3D.
+## Fields
+- `yz`: Vorticity component yz at their staggered location
+- `xz`: Vorticity component xz at their staggered location
+- `xy`: Vorticity component xy at their staggered location
+"""
 function Vorticity(nx::Integer, ny::Integer, nz::Integer)
     yz = @zeros(nx, ny + 1, nz + 1)
     xz = @zeros(nx + 1, ny, nz + 1)
@@ -53,7 +100,16 @@ function Vorticity(nx::Integer, ny::Integer, nz::Integer)
 end
 
 ## Viscosity type
+"""
+    Viscosity(ni::NTuple{N, Integer}) where {N}
 
+Create the viscosity arrays for the Stokes solver in 2D or 3D with the extents given by ni (`nx x ny` or `nx x ny x nz``).
+## Fields
+- `η`: Viscosity at cell centers
+- `ηv`: Viscosity at vertices
+- `η_vep`: Viscosity for visco-elastic-plastic rheology
+- `ητ`: Pseudo-transient viscosity for stress update
+"""
 function Viscosity(ni::NTuple{N, Integer}) where {N}
     η = @ones(ni...)
     ηv = @ones(ni .+ 1...)
@@ -63,7 +119,15 @@ function Viscosity(ni::NTuple{N, Integer}) where {N}
 end
 
 # Principal stress
+"""
+    PrincipalStress(ni::NTuple{N, Integer}) where {N}
 
+Create the principal stress arrays for the Stokes solver in 2D or 3D with the extents given by ni (`nx x ny` or `nx x ny x nz``).
+## Fields
+- `σ1`: First principal stress
+- `σ2`: Second principal stress
+- `σ3`: Third principal stress (only in 3D). In 2D it is a placeholder array of size (2, 1, 1).
+"""
 function PrincipalStress(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return PrincipalStress(ni)
 end
@@ -84,6 +148,19 @@ end
 
 ## SymmetricTensor type
 
+"""
+    SymmetricTensor(nx::Integer, ny::Integer)
+
+Create the symmetric tensor arrays for the Stokes solver in 2D.
+## Fields
+- `xx`: xx component of the tensor at cell centers
+- `yy`: yy component of the tensor at cell centers
+- `xx_v`: xx component of the tensor at vertices
+- `yy_v`: yy component of the tensor at vertices
+- `xy`: xy component of the tensor at vertices
+- `xy_c`: xy component of the tensor at cell centers
+- `II`: second invariant of the tensor at cell centers
+"""
 function SymmetricTensor(nx::Integer, ny::Integer)
     return JustRelax.SymmetricTensor(
         @zeros(nx, ny), # xx
@@ -96,6 +173,26 @@ function SymmetricTensor(nx::Integer, ny::Integer)
     )
 end
 
+"""
+    SymmetricTensor(nx::Integer, ny::Integer, nz::Integer)
+
+Create the symmetric tensor arrays for the Stokes solver in 3D.
+
+## Fields
+- `xx`: xx component of the tensor at cell centers
+- `yy`: yy component of the tensor at cell centers
+- `zz`: zz component of the tensor at cell centers
+- `xx_v`: xx component of the tensor at vertices
+- `yy_v`: yy component of the tensor at vertices
+- `zz_v`: zz component of the tensor at vertices
+- `xy`: xy component of the tensor at vertices
+- `yz`: yz component of the tensor at vertices
+- `xz`: xz component of the tensor at vertices
+- `yz_c`: yz component of the tensor at cell centers
+- `xz_c`: xz component of the tensor at cell centers
+- `xy_c`: xy component of the tensor at cell centers
+- `II`: second invariant of the tensor at cell centers
+"""
 function SymmetricTensor(nx::Integer, ny::Integer, nz::Integer)
     return JustRelax.SymmetricTensor(
         @zeros(nx, ny, nz), # xx
@@ -115,7 +212,15 @@ function SymmetricTensor(nx::Integer, ny::Integer, nz::Integer)
 end
 
 ## Residual type
+"""
+    Residual(nx::Integer, ny::Integer)
 
+Create the residual arrays for the Stokes solver in 2D.
+## Fields
+- `Rx`: Residual for the x-momentum equation
+- `Ry`: Residual for the y-momentum equation
+- `RP`: Residual for the continuity equation
+"""
 function Residual(nx::Integer, ny::Integer)
     Rx = @zeros(nx - 1, ny)
     Ry = @zeros(nx, ny - 1)
@@ -123,6 +228,16 @@ function Residual(nx::Integer, ny::Integer)
     return JustRelax.Residual(RP, Rx, Ry)
 end
 
+"""
+    Residual(nx::Integer, ny::Integer, nz::Integer)
+
+Create the residual arrays for the Stokes solver in 3D.
+## Fields
+- `Rx`: Residual for the x-momentum equation
+- `Ry`: Residual for the y-momentum equation
+- `Rz`: Residual for the z-momentum equation
+- `RP`: Residual for the continuity equation
+"""
 function Residual(nx::Integer, ny::Integer, nz::Integer)
     Rx = @zeros(nx - 1, ny, nz)
     Ry = @zeros(nx, ny - 1, nz)

@@ -5,7 +5,7 @@
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
     update_viscosity!(
-        islinear(rheology), stokes, args, rheology, cutoff, compute_viscosity_εII; relaxation = relaxation
+        stokes, args, rheology, cutoff, compute_viscosity_εII; relaxation = relaxation
     )
     return nothing
 end
@@ -14,15 +14,14 @@ end
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
     update_viscosity!(
-        islinear(rheology), stokes, args, rheology, cutoff, compute_viscosity_τII; relaxation = relaxation
+        stokes, args, rheology, cutoff, compute_viscosity_τII; relaxation = relaxation
     )
     return nothing
 end
 
-@inline update_viscosity!(::LinearRheologyTrait, args::Vararg{Any, N}; relaxation = 1.0e0) where {N} = nothing
+# @inline update_viscosity!(::LinearRheologyTrait, args::Vararg{Any, N}; relaxation = 1.0e0) where {N} = nothing
 
 @inline function update_viscosity!(
-        ::NonLinearRheologyTrait,
         stokes::JustRelax.StokesArrays,
         args,
         rheology,
@@ -53,7 +52,6 @@ end
         relaxation = 1.0e0,
     )
     update_viscosity!(
-        islinear(rheology),
         stokes,
         phase_ratios,
         args,
@@ -76,7 +74,6 @@ end
         relaxation = 1.0e0,
     )
     update_viscosity!(
-        islinear(rheology),
         stokes,
         phase_ratios,
         args,
@@ -90,7 +87,6 @@ end
 end
 
 @inline function update_viscosity!(
-        ::NonLinearRheologyTrait,
         stokes::JustRelax.StokesArrays,
         phase_ratios,
         args,

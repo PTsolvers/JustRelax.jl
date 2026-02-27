@@ -142,7 +142,7 @@ function _solve_DYREL!(
         # update_halo!(stokes.τ.yy_v)
         # update_halo!(stokes.τ.xy)
 
-        if !linear_viscosity
+        if itPH < 2 || !linear_viscosity
             update_viscosity_τII!(
                 stokes,
                 phase_ratios,
@@ -200,9 +200,10 @@ function _solve_DYREL!(
         err < ϵ && break
 
         # Set tolerance of velocity solve proportional to residual
-        if err > err_min * 1.05
-            rel_drop = max(rel_drop * 0.1, ϵ)
-        end
+        # if err > err_min * 1.05
+        #     # rel_drop = max(rel_drop * 0.1, ϵ)
+        #     rel_drop = max(rel_drop * 0.1, 1e-3)
+        # end
         if err_min > err
             err_min = err
         end

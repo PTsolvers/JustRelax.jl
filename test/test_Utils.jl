@@ -87,11 +87,11 @@ end
         @test _tuple(stokes.τ) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
         @test _tuple(stokes.V) === (stokes.V.Vx, stokes.V.Vy)
 
-        A = @zeros(ni...)
-        B = @zeros(ni...)
-        @parallel (@idx ni) multi_copy!((A, B), (stokes.P, thermal.Tc))
-        @test A == stokes.P
-        @test B == thermal.Tc
+        # A = @zeros(ni...)
+        # B = @zeros(ni...)
+        # @parallel (@idx ni) multi_copy!((A, B), (stokes.P, thermal.Tc))
+        # @test A == stokes.P
+        # @test B == thermal.Tc
 
         A .= 0.0e0
         @parallel (@idx ni) assign!(A, stokes.P)

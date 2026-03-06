@@ -3,9 +3,28 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'AUTHORS.md'
+      - 'CITATION.cff'
+      - 'CONTRIBUTING.md'
+      - 'LICENSE.md'
+      - 'README.md'
+      - '.github/workflows/Documenter.yml'
+      - 'docs/**'
   pull_request:
-    branches:
-      - main
+    paths-ignore:
+      - 'AUTHORS.md'
+      - 'CITATION.cff'
+      - 'CONTRIBUTING.md'
+      - 'LICENSE.md'
+      - 'README.md'
+      - '.github/workflows/Documenter.yml'
+      - 'docs/**'
+
+# Needed for julia-actions/cache to delete old caches
+permissions:
+  actions: write
+  contents: read
 
 # Cancel redundant CI tests automatically
 concurrency:
@@ -31,8 +50,13 @@ jobs:
           - windows-latest
         arch:
           - x64
+        coverage: [false]
         allow_failure: [false]
         include:
+          - os: ubuntu-latest
+            arch: x64
+            version: '1'
+            coverage: true
           - os: macOS-latest
             arch: aarch64
             version: 'lts'
@@ -60,20 +84,17 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/cache@v5
-        env:
-          cache-name: cache-artifacts
+      - uses: julia-actions/cache@v2
         with:
-          path: ~/.julia/artifacts
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-test-${{ env.cache-name }}-
-            ${{ runner.os }}-test-
-            ${{ runner.os }}-
+          include-matrix: false
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest
+        with:
+          coverage: ${{ matrix.coverage }}
       - uses: julia-actions/julia-processcoverage@v1
+        if: matrix.coverage
       - uses: codecov/codecov-action@v5
+        if: matrix.coverage
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false  # or true if you want CI to fail when Codecov fails

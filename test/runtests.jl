@@ -2,7 +2,7 @@ using JustRelax
 
 using Pkg
 using MPI
-using Test
+using Test, ParallelTestRunner
 
 push!(LOAD_PATH, "..")
 
@@ -13,7 +13,6 @@ function parse_flags!(args, flag; default = nothing, type = typeof(default))
         if f != flag
             val = split(f, '=')[2]
             if !(type ≡ nothing || type <: AbstractString)
-                @show type val
                 val = parse(type, val)
             end
         else
@@ -26,55 +25,74 @@ function parse_flags!(args, flag; default = nothing, type = typeof(default))
     return false, default
 end
 
-
-function runtests()
-    testdir = pwd()
-    istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
-    testfiles = sort(
-        filter(
-            istest,
-            vcat([joinpath.(root, files) for (root, dirs, files) in walkdir(testdir)]...),
-        ),
+# light tests that require simple or no PS/IGG.
+function test_worker(name)
+    if name in (
+        "test_traits", "test_types", "test_arrays_conversions",
+        "test_Interpolations", "test_mask",
+        "test_boundary_conditions2D", "test_boundary_conditions3D",
+        "test_grid2D", "test_grid3D",
     )
-    nfail = 0
+        return nothing
+    end
+    return addworker()
+end
+
+function runtests(args)
     printstyled("Testing package JustRelax.jl\n"; bold = true, color = :white)
 
-    f0 = ("test_traits.jl", "test_types.jl", "test_arrays_conversions.jl")
-    for f in f0
-        include(f)
+    testsuite = find_tests(@__DIR__)
+    for k in collect(keys(testsuite))
+        startswith(basename(k), "test_") || delete!(testsuite, k)
     end
 
-    testfiles = [f for f in testfiles if basename(f) ∉ f0]
+    # Separate MPI tests – always run sequentially via mpiexec
+    mpi_keys = [k for k in keys(testsuite) if occursin("MPI", k)]
+    mpi_files = Dict(k => joinpath(@__DIR__, k * ".jl") for k in mpi_keys)
+    for k in mpi_keys
+        delete!(testsuite, k)
+    end
 
-    for f in testfiles
-        occursin("burstedde", f) && continue
-        occursin("VanKeken", f) && continue
+    # Parse args for ParallelTestRunner and apply exclusions
+    pt_args = ParallelTestRunner.parse_args(args)
+    if ParallelTestRunner.filter_tests!(testsuite, pt_args)
+        for k in collect(keys(testsuite))
+            (occursin("burstedde", k) || occursin("VanKeken", k)) && delete!(testsuite, k)
+        end
+    end
 
-        println("")
-        println("Running tests from $f")
-        if occursin("MPI", f)
-            try
-                @testset "$(basename(f))" begin
-                    n = 2
-                    p = run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no $(joinpath(testdir, f))`)
-                    @test success(p)
-                end
-            catch ex
-                nfail += 1
+    nfail = 0
+    # Parallel tests
+    printstyled("\nRunning parallel tests with ParallelTestRunner\n"; bold = true, color = :white)
+    try
+        ParallelTestRunner.runtests(JustRelax, pt_args; testsuite, test_worker)
+    catch ex
+        nfail += 1
+    end
+
+    # MPI tests
+    printstyled("\nRunning MPI tests sequentially\n"; bold = true, color = :cyan)
+    for k in sort(mpi_keys)
+        f = mpi_files[k]
+        isfile(f) || continue
+        println("\nRunning MPI test: $f")
+        try
+            @testset "$k" begin
+                n = 2
+                p = run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no $f`)
+                @test success(p)
             end
-        else
-            try
-                run(`$(Base.julia_cmd()) -O3 -t auto --startup-file=no $(joinpath(testdir, f))`)
-            catch ex
-                nfail += 1
-            end
+        catch ex
+            @warn "MPI test $k failed: $ex"
+            nfail += 1
         end
     end
 
     return nfail
 end
 
-_, backend_name = parse_flags!(ARGS, "--backend"; default = "CPU", type = String)
+args = copy(ARGS)
+_, backend_name = parse_flags!(args, "--backend"; default = "CPU", type = String)
 
 @static if backend_name == "AMDGPU"
     Pkg.add("AMDGPU")
@@ -88,4 +106,4 @@ elseif backend_name == "CPU"
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CPU"
 end
 
-exit(runtests())
+exit(runtests(args))

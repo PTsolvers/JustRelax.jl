@@ -11,11 +11,9 @@ using Test, Suppressor, JustRelax, JustRelax.JustRelax2D
         n = 4 # number of cells
         nx = n
         ny = n
-        igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-        else
-            igg
-        end
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+
         ly = 1.0e0         # domain length in y
         lx = ly          # domain length in x
         ni = nx, ny      # number of cells
@@ -36,5 +34,6 @@ using Test, Suppressor, JustRelax, JustRelax.JustRelax2D
         # test velocity grids
         @test grid.grid_v[1][2][1] == origin[2] - di[1] / 2
         @test grid.grid_v[2][1][1] == origin[1] - di[2] / 2
+        finalize_global_grid(; finalize_MPI = false)
     end
 end

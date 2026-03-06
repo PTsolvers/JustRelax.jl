@@ -300,7 +300,7 @@ end
 
 function save_particles3D(particles, pPhases, precision; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     p = particles.coords
-    ppx, ppy = p
+    ppx, ppy, ppz = p
     pxv = precision.(Array(ppx.data)[:] ./ conversion)
     pyv = precision.(Array(ppy.data)[:] ./ conversion)
     pzv = precision.(Array(ppz.data)[:] ./ conversion)

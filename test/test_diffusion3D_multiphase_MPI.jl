@@ -100,7 +100,7 @@ function diffusion_3D(;
         Cp0 = 1.2e3,
         K0 = 3.0,
         init_MPI = JustRelax.MPI.Initialized() ? false : true,
-        finalize_MPI = false,
+        finalize_MPI = true,
         select_device = true,
     )
 

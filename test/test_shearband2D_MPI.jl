@@ -231,28 +231,23 @@ let
     if CSCS_CI != true
         @suppress begin
             if backend_JR == CPUBackend
-                N = 30
-                nx = N * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-                ny = N * 2
-                igg = if !(JustRelax.MPI.Initialized())
-                    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-                else
-                    igg
-                end
+                N = 32
+                nx = N  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+                ny = N
+                init_mpi = JustRelax.MPI.Initialized() ? false : true
+                igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
                 main(igg; nx = nx, ny = ny)
             else
                 println("This test is only for CPU CI yet")
             end
         end
     else
-        N = 30
-        nx = N * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-        ny = N * 2
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device = false)...)
-        else
-            igg
-        end
+        N = 32
+        nx = N   # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+        ny = N
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+
         main(igg; nx = nx, ny = ny)
     end
 end

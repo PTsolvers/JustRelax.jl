@@ -240,11 +240,8 @@ end
         nx = n
         ny = n
         nz = n
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
-        else
-            igg
-        end
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi)...)
 
         # Initialize iters and thermal to ensure they are defined
         iters, thermal = Shearheating3D(igg; nx = nx, ny = ny, nz = nz)

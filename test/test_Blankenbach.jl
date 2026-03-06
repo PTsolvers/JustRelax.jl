@@ -289,11 +289,8 @@ end
 @testset "Blankenbach 2D" begin
     @suppress begin
         nx, ny = 32, 32           # number of cells
-        igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-        else
-            igg
-        end
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
         Urms, Nu_top, iters = main2D(igg; nx = nx, ny = ny)
         @test Urms[end] ≈ 0.55 rtol = 1.0e-1

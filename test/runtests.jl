@@ -92,7 +92,7 @@ function runtests(args)
 end
 
 args = copy(ARGS)
-_, backend_name = parse_flags!(ARGS, "--backend"; default = "CPU", type = String)
+_, backend_name = parse_flags!(args, "--backend"; default = "CPU", type = String)
 
 @static if backend_name == "AMDGPU"
     Pkg.add("AMDGPU")

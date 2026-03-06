@@ -12,6 +12,8 @@ on:
       - '.github/workflows/Documenter.yml'
       - 'docs/**'
   pull_request:
+    branches:
+      - main
     paths-ignore:
       - 'AUTHORS.md'
       - 'CITATION.cff'

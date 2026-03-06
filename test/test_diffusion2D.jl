@@ -122,6 +122,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
         it += 1
     end
 
+    finalize_global_grid(; finalize_MPI = true)
     return thermal
 end
 

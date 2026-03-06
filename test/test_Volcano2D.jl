@@ -402,12 +402,8 @@ end
             chamber_radius = 0.5,
             aspect_x = 6,
         )
-
-        igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-        else
-            igg
-        end
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
         iters = main(li, origin, phases_GMG, T_GMG, igg; nx = nx, ny = ny)
         @test passed = iters.err_evo1[end] < 1.0e-2

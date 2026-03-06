@@ -10,11 +10,8 @@ using Test, Suppressor, JustRelax, JustRelax.JustRelax3D
     @suppress begin
         n = 4 # number of cells
         nx = ny = nz = n
-        igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-            IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
-        else
-            igg
-        end
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi)...)
         lx = ly = lz = 1.0e0   # domain length in x
         ni = nx, ny, nz     # number of cells
         li = lx, ly, lz     # domain length in x- and y-
@@ -36,5 +33,7 @@ using Test, Suppressor, JustRelax, JustRelax.JustRelax3D
         @test grid.grid_v[1][2][1] == origin[2] - di[1] / 2
         @test grid.grid_v[2][1][1] == origin[1] - di[2] / 2
         @test grid.grid_v[3][1][1] == origin[1] - di[3] / 2
+
+        finalize_global_grid(; finalize_MPI = true)
     end
 end

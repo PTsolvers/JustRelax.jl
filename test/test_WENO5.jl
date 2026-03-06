@@ -285,11 +285,8 @@ end
         n = 32
         nx = n
         ny = n
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-        else
-            igg
-        end
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
         iters = thermal_convection2D(igg; ar = 8, ny = ny, nx = nx, thermal_perturbation = :circular)
         @test passed = iters.err_evo1[end] < 5.0e-4

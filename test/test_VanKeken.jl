@@ -105,7 +105,7 @@ function VanKeken2D(ny = 32, nx = 32)
     # Initialize particles -------------------------------
     nxcell, max_p, min_p = 40, 80, 20
     particles = init_particles(
-        backend, nxcell, max_p, min_p, xvi..., di..., nx, ny
+        backend, nxcell, max_p, min_p, xvi...
     )
     # velocity grids
     grid_vx, grid_vy = velocity_grids(xci, xvi, di)

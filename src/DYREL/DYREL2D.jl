@@ -121,6 +121,11 @@ function _solve_DYREL!(
     itg = 0
     P_num = similar(stokes.P)
 
+    # recompute all the DYREL variables
+    DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt)
+
+    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+
     # Powell-Hestenes iterations
     for itPH in 1:1000
         # update buoyancy forces
@@ -186,7 +191,9 @@ function _solve_DYREL!(
             errVy0 = errVy + eps()
             errPt0 = errPt + eps()
         end
-        err_prev = err
+        if itPH == 2
+            errPt0 = errPt + eps()
+        end
         err = maximum(
             # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
             (min(errVx / errVx0, errVx), min(errVy / errVy0, errVy), min(errPt / errPt0, errPt))
@@ -200,10 +207,10 @@ function _solve_DYREL!(
         err < ϵ && break
 
         # Set tolerance of velocity solve proportional to residual
-        # if err > err_min * 1.05
-        #     # rel_drop = max(rel_drop * 0.1, ϵ)
-        #     rel_drop = max(rel_drop * 0.1, 1e-3)
-        # end
+        if err > err_min * 1.05
+            # rel_drop = max(rel_drop * 0.1, ϵ)
+            rel_drop = max(rel_drop * 0.1, 1e-3)
+        end
         if err_min > err
             err_min = err
         end
@@ -345,8 +352,6 @@ function _solve_DYREL!(
     stokes.τ_o.xx_v .= stokes.τ.xx_v
     stokes.τ_o.yy_v .= stokes.τ.yy_v
 
-    # recompute all the DYREL variables
-    DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt)
 
     return (; err_evo_it, err_evo_V, err_evo_P)
 

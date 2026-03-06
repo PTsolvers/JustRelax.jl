@@ -121,7 +121,7 @@ This function:
 - `dt`: Time step.
 - `γfact`: Factor for penalty parameter calculation (default: 20.0).
 """
-function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fat = 0.5, γfact = 20.0)
+function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fat = 0.5, γfact = 25.0)
 
     ni = size(stokes.P)
 
@@ -162,7 +162,7 @@ This function recomputes:
 
 Returns `nothing`.
 """
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = 0.99, γfact = 20.0)
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = 0.99, γfact = 25.0)
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
@@ -176,7 +176,7 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
 end
 
 # variational version
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL = 0.99, γfact = 20.0)
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL = 0.99, γfact = 25.0)
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
 
@@ -215,8 +215,10 @@ Computes the bulk viscosity `ηb` and the effective penalty parameter `γ_eff`.
 This function parallelizes the computation across grid cells.
 """
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
-
-    @parallel compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
+    # γ = mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)])
+    # γ = stokes.viscosity.η
+    γ = maximum(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]) #* 1e3
+    @parallel compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, γ, γfact, dt)
     return nothing
 end
 
@@ -225,13 +227,13 @@ end
     # bulk viscosity
     ratios = @inbounds @cell phase_ratios_center[I...]
     Kb = fn_ratio(get_bulk_modulus, rheology, ratios)
-    Kb = isinf(Kb) ? γfact * η_mean : Kb * dt
+    # Kb = isinf(Kb) ? γfact * η_mean : Kb * dt
     ηb[I...] = Kb
 
     # penalty parameter factor
     γ_num = γfact * η_mean
-    γ_phy = Kb
-    γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num)
+    γ_phy = isinf(Kb) ? γfact * η_mean : Kb * dt
+    γ_eff[I...] = 2 * γ_phy * γ_num / (γ_phy + γ_num)
 
     return nothing
 end

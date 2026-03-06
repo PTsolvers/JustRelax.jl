@@ -50,7 +50,8 @@ end
         lx = 1.0       # domain length in x
         nx, ny, nz = 4, 4, 4   # number of cells
         ni = nx, ny     # number of cells
-        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
         li = lx, ly     # domain length in x- and y-
         di = @. li / ni # grid step in x- and -y
         origin = 0.0, -ly   # origin coordinates (15km f sticky air layer)
@@ -275,6 +276,7 @@ end
         @test JustRelax2D.mysum(inv, A3, 2:3, 2:3, 2:3) == 0.2634535347004082
     end
     @testset "versioninfo" begin
+        JustRelax.__init__(devnull)
         JustRelax.versioninfo(devnull)
         JustRelax.versioninfo(devnull; verbose = true)
     end

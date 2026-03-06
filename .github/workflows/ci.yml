@@ -3,25 +3,9 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - 'AUTHORS.md'
-      - 'CITATION.cff'
-      - 'CONTRIBUTING.md'
-      - 'LICENSE.md'
-      - 'README.md'
-      - '.github/workflows/Documenter.yml'
-      - 'docs/**'
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - 'AUTHORS.md'
-      - 'CITATION.cff'
-      - 'CONTRIBUTING.md'
-      - 'LICENSE.md'
-      - 'README.md'
-      - '.github/workflows/Documenter.yml'
-      - 'docs/**'
 
 # Needed for julia-actions/cache to delete old caches
 permissions:
@@ -52,13 +36,8 @@ jobs:
           - windows-latest
         arch:
           - x64
-        coverage: [false]
         allow_failure: [false]
         include:
-          - os: ubuntu-latest
-            arch: x64
-            version: '1'
-            coverage: true
           - os: macOS-latest
             arch: aarch64
             version: 'lts'
@@ -92,11 +71,11 @@ jobs:
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest
         with:
-          coverage: ${{ matrix.coverage }}
+          coverage: ${{ matrix.version == '1' && matrix.os == 'ubuntu-latest' && matrix.arch == 'x64' }}
       - uses: julia-actions/julia-processcoverage@v1
-        if: matrix.coverage
+        if: matrix.version == '1' && matrix.os == 'ubuntu-latest' && matrix.arch == 'x64'
       - uses: codecov/codecov-action@v5
-        if: matrix.coverage
+        if: matrix.version == '1' && matrix.os == 'ubuntu-latest' && matrix.arch == 'x64'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false  # or true if you want CI to fail when Codecov fails

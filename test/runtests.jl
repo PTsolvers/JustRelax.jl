@@ -29,9 +29,8 @@ end
 function test_worker(name)
     if name in (
         "test_traits", "test_types", "test_arrays_conversions",
-        "test_Interpolations", "test_mask",
+        "test_mask", "test_mini_kernels", "test_Interpolations",
         "test_boundary_conditions2D", "test_boundary_conditions3D",
-        "test_grid2D", "test_grid3D",
     )
         return nothing
     end

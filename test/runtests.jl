@@ -79,7 +79,7 @@ function runtests(args)
         try
             @testset "$k" begin
                 n = 2
-                p = run(`$(mpiexec()) -n $n $(Base.julia_cmd()) -O3 --startup-file=no $f`)
+                p = run(`$(mpiexec()) -n $n $(Base.julia_cmd()) --startup-file=no $f`)
                 @test success(p)
             end
         catch ex

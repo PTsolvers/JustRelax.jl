@@ -65,7 +65,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function Shearheating2D(igg; nx = 32, ny = 32)
+function Shearheating2D(; nx = 32, ny = 32)
 
     # Physical domain ------------------------------------
     ly = 40.0e3              # domain length in y
@@ -73,6 +73,8 @@ function Shearheating2D(igg; nx = 32, ny = 32)
     ni = nx, ny            # number of cells
     li = lx, ly            # domain length in x- and y-
     di = @. li / ni        # grid step in x- and -y
+    init_mpi = JustRelax.MPI.Initialized() ? false : true
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
     origin = 0.0, -ly          # origin coordinates (15km f sticky air layer)
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -232,7 +234,7 @@ function Shearheating2D(igg; nx = 32, ny = 32)
 
     end
 
-    # finalize_global_grid(; finalize_MPI=true)
+    finalize_global_grid(; finalize_MPI = true)
 
     return iters, thermal
 end
@@ -242,14 +244,11 @@ end
         n = 32
         nx = n
         ny = n
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-        else
-            igg
-        end
+
 
         # Initialize iters and thermal to ensure they are defined
-        iters, thermal = Shearheating2D(igg; nx = nx, ny = ny)
+        # iters, thermal = Shearheating2D(igg; nx = nx, ny = ny)
+        iters, thermal = Shearheating2D(; nx = nx, ny = ny)
 
         # Ensure iters is defined before running the test
         @test iters != nothing && iters.err_evo1[end] < 1.0e-4

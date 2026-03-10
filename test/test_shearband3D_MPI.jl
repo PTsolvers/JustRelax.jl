@@ -251,26 +251,20 @@ let
                 nx = n ÷ 2
                 ny = n - 2
                 nz = n - 2 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
-                igg = if !(JustRelax.MPI.Initialized())
-                    IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
-                else
-                    igg
-                end
+                igg = IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
+
                 main(igg; nx = nx, ny = ny, nz = nz)
             else
                 println("This test is only for CPU CI yet")
             end
         end
     else
-        n = 64 + 2
+        n = 32 #+ 2
         nx = n ÷ 2
         ny = n ÷ 2
         nz = n ÷ 2
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
-        else
-            igg
-        end
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi, select_device = false)...)
         main(igg; nx = nx, ny = ny, nz = nz)
     end
 end

@@ -96,7 +96,7 @@ function diffusion_3D(;
         Cp0 = 1.2e3,
         K0 = 3.0,
         init_MPI = JustRelax.MPI.Initialized() ? false : true,
-        finalize_MPI = false,
+        finalize_MPI = true,
     )
 
     kyr = 1.0e3 * 3600 * 24 * 365.25
@@ -109,6 +109,7 @@ function diffusion_3D(;
     li = (lx, ly, lz)  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
     origin = 0, 0, -lz # nodes at the center and vertices of the cells
+    init_MPI = JustRelax.MPI.Initialized() ? false : true
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI)...) # init MPI
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -201,7 +202,7 @@ function diffusion_3D(;
         it += 1
     end
 
-    finalize_global_grid(; finalize_MPI = finalize_MPI)
+    finalize_global_grid(; finalize_MPI = true)
 
     return thermal
 end

@@ -234,7 +234,7 @@ function Shearheating2D(; nx = 32, ny = 32)
 
     end
 
-    finalize_global_grid(; finalize_MPI=true)
+    finalize_global_grid(; finalize_MPI = true)
 
     return iters, thermal
 end

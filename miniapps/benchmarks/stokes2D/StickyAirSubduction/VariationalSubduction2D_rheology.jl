@@ -25,13 +25,12 @@ function init_rheologies()
         ),
     )
 end
-
-function init_phases!(phases, phase_grid, particles, xvi)
+function init_phases!(phases, particles)
     ni = size(phases)
-    return @parallel (@idx ni) _init_phases!(phases, phase_grid, particles.coords, particles.index, xvi)
+    return @parallel (@idx ni) _init_phases!(phases, particles.coords, particles.index)
 end
 
-@parallel_indices (I...) function _init_phases!(phases, phase_grid, pcoords::NTuple{N, T}, index, xvi) where {N, T}
+@parallel_indices (I...) function _init_phases!(phases, pcoords::NTuple{N, T}, index) where {N, T}
 
     ni = size(phases)
 
@@ -39,30 +38,20 @@ end
         # quick escape
         @index(index[ip, I...]) == 0 && continue
 
-        pᵢ = ntuple(Val(N)) do i
+        px, py = ntuple(Val(N)) do i
             @index pcoords[i][ip, I...]
         end
 
-        d = Inf # distance to the nearest particle
-        particle_phase = -1
-        for offi in 0:1, offj in 0:1
-            ii = I[1] + offi
-            jj = I[2] + offj
+        @index phases[ip, I...] = 1.0
 
-            !(ii ≤ ni[1]) && continue
-            !(jj ≤ ni[2]) && continue
-
-            xvᵢ = (
-                xvi[1][ii],
-                xvi[2][jj],
-            )
-            d_ijk = √(sum((pᵢ[i] - xvᵢ[i])^2 for i in 1:N))
-            if d_ijk < d
-                d = d_ijk
-                particle_phase = phase_grid[ii, jj]
-            end
+        # air
+        if py > 0
+            @index phases[ip, I...] = 3.0
         end
-        @index phases[ip, I...] = Float64(particle_phase)
+        # slab
+        if (px ≥ 1000e3 && 0 ≥ py ≥ -100e3) || (1100e3 ≥ px ≥ 1000e3 && 0 ≥ py ≥ -200e3)
+            @index phases[ip, I...] = 2.0
+        end
     end
 
     return nothing

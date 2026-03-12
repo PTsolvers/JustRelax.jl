@@ -1,5 +1,4 @@
 const isCUDA = false
-# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -32,10 +31,9 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 
 # Load file with all the rheology configurations
-include("Subduction2D_setup.jl")
 include("Subduction2D_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -63,9 +61,11 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
+function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
 
     # Physical domain ------------------------------------
+    li = 300e3, 750e3
+    origin = 0.0, -700.0
     ni = nx, ny           # number of cells
     di = @. li / ni       # grid steps
     grid = Geometry(ni, li; origin = origin)
@@ -79,8 +79,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Initialize particles -------------------------------
     nxcell = 40
-    max_xcell = 60
-    min_xcell = 20
+    max_xcell = 80
+    min_xcell = 1
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
@@ -90,9 +90,9 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases,)
     # Assign particles phases anomaly
-    phases_device = PTArray(backend)(phases_GMG)
-    phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    init_phases!(pPhases, phases_device, particles, xvi)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    # init_phases!(pPhases, phases_device, particles, xvi)
+    init_phases!(pPhases, particles)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
@@ -145,8 +145,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     t, it = 0.0, 0
 
     dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt)
-
-    while it < 1000 # run only for 5 Myrs
+    local out
+    while it < 10 # run only for 5 Myrs
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
@@ -165,15 +165,22 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 dt,
                 igg;
                 kwargs = (;
-                    verbose = false,
+                    verbose_DR = false,
                     iterMax = 50.0e3,
-                    nout = 200,
+                    nout = 10,
+                    rel_drop = 1e-1,
                     λ_relaxation = 1.075,
-                    viscosity_relaxation = 1.0e-3,
+                    viscosity_relaxation = 1,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
+            @show  out.err_evo_V[end]
+            if out.err_evo_V[end] > 1e-1
+                # @warn "High error in Stokes solver: $(out.err_evo_VII[end])"
+                break
+            end
         end
+
 
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
@@ -198,7 +205,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 1) == 0
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -269,14 +276,13 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_MQS"
-n = 128
-nx, ny = 250, 100
-li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
+figdir = "Schmelling2D_DR"
+n      = 1
+nx, ny = (125, 50) .* n 
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
 
-main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

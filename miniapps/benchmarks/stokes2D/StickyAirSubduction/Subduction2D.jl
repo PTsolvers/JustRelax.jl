@@ -64,8 +64,8 @@ end
 function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
 
     # Physical domain ------------------------------------
-    li = 300.0e3, 750.0e3
-    origin = 0.0, -700.0
+    li = 3000.0e3, 750.0e3
+    origin = 0.0, -700.0e3
     ni = nx, ny           # number of cells
     di = @. li / ni       # grid steps
     grid = Geometry(ni, li; origin = origin)

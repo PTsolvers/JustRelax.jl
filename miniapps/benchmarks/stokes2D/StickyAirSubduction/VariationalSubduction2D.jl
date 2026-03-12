@@ -36,7 +36,6 @@ using GeoParams, CellArrays
 using CairoMakie
 
 # Load file with all the rheology configurations
-include("Subduction2D_setup.jl")
 include("VariationalSubduction2D_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -64,9 +63,11 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do_vtk::Bool = false)
+function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do_vtk::Bool = false)
 
     # Physical domain ------------------------------------
+    li = 300.0e3, 750.0e3
+    origin = 0.0, -700.0
     ni = nx, ny           # number of cells
     di = @. li / ni       # grid steps
     grid = Geometry(ni, li; origin = origin)
@@ -91,9 +92,8 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases,)
     # Assign particles phases anomaly
-    phases_device = PTArray(backend)(phases_GMG)
-    phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    init_phases!(pPhases, phases_device, particles, xvi)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    init_phases!(pPhases, xvi)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
@@ -280,7 +280,6 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
             save(joinpath(figdir, "$(it).png"), fig)
         end
         # ------------------------------
-
     end
 
     return
@@ -288,14 +287,12 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_MQS_variational"
-nx, ny = 250, 100
-# nx, ny = 25, 10
-li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
+figdir = "Schmelling2D_APT_variational"
+nx, ny = (250, 100) .÷ 2
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
 
-main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

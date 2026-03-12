@@ -230,7 +230,7 @@ end
 
     # penalty parameter factor
     γ_num = γfact * η_mean
-    γ_phy = isinf(Kb) ? γfact * η_mean : Kb
+    γ_phy = isinf(Kbdt) ? γfact * η_mean : Kbdt
     γ_eff[I...] = 2 * γ_phy * γ_num / (γ_phy + γ_num)
 
     return nothing

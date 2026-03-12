@@ -122,9 +122,9 @@ function _solve_DYREL!(
     P_num = similar(stokes.P)
 
     # recompute all the DYREL variables
-    DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt)
-
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt)
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
@@ -147,7 +147,7 @@ function _solve_DYREL!(
         # update_halo!(stokes.τ.yy_v)
         # update_halo!(stokes.τ.xy)
 
-        if itPH < 2 || !linear_viscosity
+        if !linear_viscosity
             update_viscosity_τII!(
                 stokes,
                 phase_ratios,
@@ -199,11 +199,11 @@ function _solve_DYREL!(
             (min(errVx / errVx0, errVx), min(errVy / errVy0, errVy), min(errPt / errPt0, errPt))
         )
 
-        igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
-        igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
         if verbose_PH && igg.me == 0
             @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[Rx=%1.3e %1.3e, Ry=%1.3e %1.3e, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errVx, errVx / errVx0, errVy, errVy / errVy0, errPt, errPt / errPt0)
         end
+        igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
+        igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
         err < ϵ && break
 
         # Set tolerance of velocity solve proportional to residual

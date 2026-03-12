@@ -150,7 +150,6 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
-
         # Stokes solver ----------------
         t_stokes = @elapsed begin
             out = solve_DYREL!(
@@ -174,13 +173,7 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
-            @show  out.err_evo_V[end]
-            if out.err_evo_V[end] > 1.0e-1
-                # @warn "High error in Stokes solver: $(out.err_evo_VII[end])"
-                break
-            end
         end
-
 
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")

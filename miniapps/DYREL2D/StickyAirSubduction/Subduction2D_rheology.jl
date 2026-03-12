@@ -49,7 +49,7 @@ end
             @index phases[ip, I...] = 3.0
         end
         # slab
-        if (px ≥ 1000e3 && 0 ≥ py ≥ -100e3) || (1100e3 ≥ px ≥ 1000e3 && 0 ≥ py ≥ -200e3)
+        if (px ≥ 1000.0e3 && 0 ≥ py ≥ -100.0e3) || (1100.0e3 ≥ px ≥ 1000.0e3 && 0 ≥ py ≥ -200.0e3)
             @index phases[ip, I...] = 2.0
         end
     end

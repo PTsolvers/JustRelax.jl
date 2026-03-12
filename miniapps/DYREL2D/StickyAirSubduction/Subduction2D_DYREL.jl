@@ -64,7 +64,7 @@ end
 function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
 
     # Physical domain ------------------------------------
-    li = 300e3, 750e3
+    li = 300.0e3, 750.0e3
     origin = 0.0, -700.0
     ni = nx, ny           # number of cells
     di = @. li / ni       # grid steps
@@ -168,14 +168,14 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
                     verbose_DR = false,
                     iterMax = 50.0e3,
                     nout = 10,
-                    rel_drop = 1e-1,
+                    rel_drop = 1.0e-1,
                     λ_relaxation = 1.075,
                     viscosity_relaxation = 1,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
             @show  out.err_evo_V[end]
-            if out.err_evo_V[end] > 1e-1
+            if out.err_evo_V[end] > 1.0e-1
                 # @warn "High error in Stokes solver: $(out.err_evo_VII[end])"
                 break
             end
@@ -277,8 +277,8 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
 figdir = "Schmelling2D_DR"
-n      = 1
-nx, ny = (125, 50) .* n 
+n = 1
+nx, ny = (125, 50) .* n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

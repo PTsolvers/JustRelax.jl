@@ -66,7 +66,7 @@ end
 function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do_vtk::Bool = false)
 
     # Physical domain ------------------------------------
-    li = 300e3, 750e3
+    li = 300.0e3, 750.0e3
     origin = 0.0, -700.0
     ni = nx, ny           # number of cells
     di = @. li / ni       # grid steps

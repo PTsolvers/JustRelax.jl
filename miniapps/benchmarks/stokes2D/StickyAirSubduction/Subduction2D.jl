@@ -64,7 +64,7 @@ end
 function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
 
     # Physical domain ------------------------------------
-    li = 300e3, 750e3
+    li = 300.0e3, 750.0e3
     origin = 0.0, -700.0
     ni = nx, ny           # number of cells
     di = @. li / ni       # grid steps
@@ -269,8 +269,8 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
 figdir = "Schmelling2D_APT"
-n      = 1
-nx, ny = (125, 50) .* n 
+n = 1
+nx, ny = (125, 50) .* n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

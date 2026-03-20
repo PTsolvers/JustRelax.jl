@@ -206,11 +206,13 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 dt,
                 igg;
                 kwargs = (;
-                    verbose = false,
+                    verbose_PH = false,
+                    verbose_DR = false,
                     iterMax = 50.0e3,
                     rel_drop = 1.0e-2,
                     nout = 400,
-                    λ_relaxation = 1,
+                    λ_relaxation_PH = 1,
+                    λ_relaxation_DR = 1,
                     viscosity_relaxation = 1.0e-2,
                     viscosity_cutoff = (1.0e18, 1.0e23),
                 )

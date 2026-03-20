@@ -168,7 +168,8 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
                     iterMax = 50.0e3,
                     nout = 10,
                     rel_drop = 1.0e-1,
-                    λ_relaxation = 1.075,
+                    λ_relaxation_PH = 1,
+                    λ_relaxation_DR = 1,
                     viscosity_relaxation = 1,
                     viscosity_cutoff = viscosity_cutoff,
                 )

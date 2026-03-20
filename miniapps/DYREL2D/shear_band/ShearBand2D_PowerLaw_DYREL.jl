@@ -126,11 +126,13 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         dt,
         igg;
         kwargs = (;
-            verbose = false,
+            verbose_PH = false,
+            verbose_DR = false,
             iterMax = 50.0e3,
             nout = 400,
             rel_drop = 1.0e-5,
-            # λ_relaxation = 0,
+            # λ_relaxation_DR = 0,
+            # λ_relaxation_PH = 0,
             λ_relaxation_DR = 1,
             λ_relaxation_PH = 1,
             viscosity_relaxation = 1.0e-1,

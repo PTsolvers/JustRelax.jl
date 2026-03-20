@@ -249,10 +249,12 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             dt,
             igg;
             kwargs = (;
-                verbose = false,
+                verbose_PH = false,
+                verbose_DR = false,
                 iterMax = 50.0e3,
                 nout = 200,
-                λ_relaxation = 1.075,
+                λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
                 viscosity_relaxation = 1.0e-3,
                 viscosity_cutoff = viscosity_cutoff,
             )

@@ -131,12 +131,9 @@ function _solve_DYREL!(
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
 
-        # compute divergence
-        @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
-
-        # compute deviatoric strain rate
-        @parallel (@idx ni .+ 1) compute_strain_rate!(
-            @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di
+        # compute divergence and deviatoric strain rate in one pass
+        @parallel (@idx ni .+ 1) compute_∇V_strain_rate!(
+            stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
         )
         vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
 
@@ -226,8 +223,12 @@ function _solve_DYREL!(
             copyto!(Rx0, stokes.R.Rx)
             copyto!(Ry0, stokes.R.Ry)
 
-            # Divergence
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
+            # Deviatoric strain rate and divergence
+            @parallel (@idx ni .+ 1) compute_∇V_strain_rate!(
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
+            )
+            vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
+
             compute_residual_P!(
                 stokes.R.RP,
                 stokes.P,
@@ -240,12 +241,6 @@ function _solve_DYREL!(
                 dt,
                 args,
             )
-
-            # Deviatoric strain rate
-            @parallel (@idx ni .+ 1) compute_strain_rate!(
-                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di
-            )
-            vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
 
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)

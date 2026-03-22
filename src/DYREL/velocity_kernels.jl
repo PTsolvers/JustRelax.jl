@@ -1,3 +1,42 @@
+## DIVERGENCE + DEVIATORIC STRAIN RATE TENSOR
+
+@parallel_indices (i, j) function compute_∇V_strain_rate!(
+        ∇V::AbstractArray{T, 2}, εxx::AbstractArray{T, 2}, εyy, εxy, Vx, Vy, _di
+    ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
+    third = T(1) / T(3)
+
+    @inbounds begin
+        vx_s = Vx[i, j]
+        vx_n = Vx[i, j + 1]
+        vx_ne = Vx[i + 1, j + 1]
+        vy_w = Vy[i, j]
+        vy_e = Vy[i + 1, j]
+        vy_ne = Vy[i + 1, j + 1]
+
+        if i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
+            dVx_dy = (vx_n - vx_s) * _dy
+            dVy_dx = (vy_e - vy_w) * _dx
+            εxy[i, j] = 0.5 * (dVx_dy + dVy_dx)
+        end
+
+        if i ≤ size(∇V, 1) && j ≤ size(∇V, 2)
+            dVx_dx = (vx_ne - vx_n) * _dx
+            dVy_dy = (vy_ne - vy_e) * _dy
+            div_ij = dVx_dx + dVy_dy
+            ∇V[i, j] = div_ij
+
+            if i ≤ size(εxx, 1) && j ≤ size(εxx, 2)
+                div_third = div_ij * third
+                εxx[i, j] = dVx_dx - div_third
+                εyy[i, j] = dVy_dy - div_third
+            end
+        end
+    end
+
+    return nothing
+end
+
 ## RESIDUALS
 
 @parallel_indices (i, j) function compute_PH_residual_V!(

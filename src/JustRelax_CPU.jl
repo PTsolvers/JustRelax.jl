@@ -23,6 +23,7 @@ module JustRelax2D
         isdirichlet
 
     import JustRelax: normal_stress, shear_stress, shear_vorticity
+    import JustRelax: @dxi, @dx, @dy, @dz
 
     import JustPIC._2D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
 
@@ -66,6 +67,7 @@ module JustRelax3D
         isdirichlet
 
     import JustRelax: normal_stress, shear_stress, shear_vorticity
+    import JustRelax: @dxi, @dx, @dy, @dz
 
     import JustPIC._3D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
 

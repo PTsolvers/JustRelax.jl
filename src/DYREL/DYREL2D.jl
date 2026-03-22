@@ -136,7 +136,7 @@ function _solve_DYREL!(
 
         # compute deviatoric strain rate
         @parallel (@idx ni .+ 1) compute_strain_rate!(
-            @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+            @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di
         )
         vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
 
@@ -166,7 +166,7 @@ function _solve_DYREL!(
             stokes.ΔPψ,
             @stress(stokes)...,
             ρg...,
-            _di...,
+            _di,
         )
 
         # compute pressure residual
@@ -243,7 +243,7 @@ function _solve_DYREL!(
 
             # Deviatoric strain rate
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di
             )
             vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
 
@@ -277,7 +277,7 @@ function _solve_DYREL!(
                 ρg...,
                 Dx,
                 Dy,
-                _di...,
+                _di,
             )
 
             # Damping-pong
@@ -336,7 +336,7 @@ function _solve_DYREL!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+        stokes.ω.xy, @velocity(stokes)..., _di
     )
 
     # Interpolate shear components to cell center arrays

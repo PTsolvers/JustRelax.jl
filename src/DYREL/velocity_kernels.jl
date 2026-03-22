@@ -1,8 +1,9 @@
 ## RESIDUALS
 
 @parallel_indices (i, j) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy
+        Rx::AbstractArray{T, 2}, Ry, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _di
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
     Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j)
     Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j)
     Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j)
@@ -22,8 +23,9 @@
 end
 
 @parallel_indices (i, j) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, Vx, Vy, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
+        Rx::AbstractArray{T, 2}, Ry, Vx, Vy, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _di, dt
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
     Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j)
     Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j)
     Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j)
@@ -56,8 +58,9 @@ end
 end
 
 @parallel_indices (i, j) function compute_DR_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, P, P_num, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, Dx, Dy, _dx, _dy
+        Rx::AbstractArray{T, 2}, Ry, P, P_num, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, Dx, Dy, _di
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
 
     Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j)
     Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j)
@@ -79,8 +82,9 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 3}, Ry, Rz, P, ΔPψ, τxx, τyy, τzz, τxy, τxz, τyz, ρgx, ρgy, ρgz, _dx, _dy, _dz
+        Rx::AbstractArray{T, 3}, Ry, Rz, P, ΔPψ, τxx, τyy, τzz, τxy, τxz, τyz, ρgx, ρgy, ρgz, _di
     ) where {T}
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
     Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j, k)
     Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j, k)
     Base.@propagate_inbounds @inline d_za(A) = _d_za(A, _dz, i, j, k)
@@ -106,8 +110,9 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 3}, Ry, Rz, Vx, Vy, Vz, P, ΔPψ, τxx, τyy, τzz, τxy, τxz, τyz, ρgx, ρgy, ρgz, _dx, _dy, _dz, dt
+        Rx::AbstractArray{T, 3}, Ry, Rz, Vx, Vy, Vz, P, ΔPψ, τxx, τyy, τzz, τxy, τxz, τyz, ρgx, ρgy, ρgz, _di, dt
     ) where {T}
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
     Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j, k)
     Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j, k)
     Base.@propagate_inbounds @inline d_za(A) = _d_za(A, _dz, i, j, k)
@@ -147,8 +152,9 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_DR_residual_V!(
-        Rx::AbstractArray{T, 3}, Ry, Rz, P, P_num, ΔPψ, τxx, τyy, τzz, τxy, τxz, τyz, ρgx, ρgy, ρgz, Dx, Dy, Dz, _dx, _dy, _dz
+        Rx::AbstractArray{T, 3}, Ry, Rz, P, P_num, ΔPψ, τxx, τyy, τzz, τxy, τxz, τyz, ρgx, ρgy, ρgz, Dx, Dy, Dz, _di
     ) where {T}
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
 
     Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j, k)
     Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j, k)

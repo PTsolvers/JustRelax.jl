@@ -132,7 +132,7 @@ Compute the velocity grids for N dimensionional problems.
 - `di`: A tuple containing the cell dimensions.
 """
 function velocity_grids(xci, xvi, di::NTuple{2, T}) where {T}
-    dx, dy = di
+    dx, dy = @dxi(di, 1, 1)
     yVx = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2]) + 2)
     xVy = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1]) + 2)
     grid_vx = xvi[1], yVx
@@ -143,7 +143,14 @@ end
 
 function velocity_grids(xci, xvi, di::NTuple{3, T}) where {T}
     xghost = ntuple(Val(3)) do i
-        return LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i]) + 2)
+        dii = if i == 1
+            @dx(di, 1)
+        elseif i == 2
+            @dy(di, 1)
+        else
+            @dz(di, 1)
+        end
+        return LinRange(xci[i][1] - dii, xci[i][end] + dii, length(xci[i]) + 2)
     end
     grid_vx = xvi[1], xghost[2], xghost[3]
     grid_vy = xghost[1], xvi[2], xghost[3]

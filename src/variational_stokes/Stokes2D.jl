@@ -133,7 +133,7 @@ function _solve_VS!(
 
             if strain_increment
                 @parallel (@idx ni .+ 1) compute_strain_rate!(
-                    @strain_increment(stokes)..., stokes.∇U, @displacement(stokes)..., ϕ, _di...
+                    @strain_increment(stokes)..., stokes.∇U, @displacement(stokes)..., ϕ, _di
                 )
 
                 @parallel (@idx ni .+ 1) compute_strain_rate_from_increment!(
@@ -141,7 +141,7 @@ function _solve_VS!(
                 )
             else
                 @parallel (@idx ni .+ 1) compute_strain_rate!(
-                    @strain(stokes)..., stokes.∇V, @velocity(stokes)..., ϕ, _di...
+                    @strain(stokes)..., stokes.∇V, @velocity(stokes)..., ϕ, _di
                 )
             end
 
@@ -219,7 +219,7 @@ function _solve_VS!(
                 ρg...,
                 ητ,
                 ϕ,
-                _di...,
+                _di,
                 dt * free_surface,
             )
             # apply boundary conditions
@@ -271,7 +271,7 @@ function _solve_VS!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+        stokes.ω.xy, @velocity(stokes)..., _di
     )
 
     # Interpolate shear components to cell center arrays

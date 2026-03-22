@@ -33,7 +33,7 @@ function _solve!(
     ) where {T}
 
     # unpack
-    _di = _dx, _dy = inv.(di)
+    _di = inv.(di)
     (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)
 
@@ -64,7 +64,7 @@ function _solve!(
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di
             )
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.RP, stokes.∇V, stokes.Q, η, K, dt, r, θ_dτ
@@ -78,7 +78,7 @@ function _solve!(
                     ηdτ,
                     ρg...,
                     ητ,
-                    _di...,
+                    _di,
                     dt,
                 )
                 # apply boundary conditions
@@ -97,7 +97,7 @@ function _solve!(
                 stokes.P,
                 @stress(stokes)...,
                 ρg...,
-                _di...,
+                _di,
                 dt,
             )
             Vmin, Vmax = extrema(stokes.V.Vx)
@@ -207,7 +207,7 @@ function _solve!(
             )
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di
             )
 
             @parallel (@idx ni) compute_τ!(
@@ -228,7 +228,7 @@ function _solve!(
                     pt_stokes.ηdτ,
                     ρg...,
                     ητ,
-                    _di...,
+                    _di,
                 )
                 # free slip boundary conditions
                 velocity2displacement!(stokes, dt)
@@ -240,7 +240,7 @@ function _solve!(
         iter += 1
         if iter % nout == 0 && iter > 1
             @parallel (@idx ni) compute_Res!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di...
+                stokes.R.Rx, stokes.R.Ry, stokes.P, @stress(stokes)..., ρg..., _di
             )
 
             errs = (
@@ -375,7 +375,7 @@ function _solve!(
             update_ρg!(ρg[2], rheology, args)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di
             )
 
             compute_viscosity_τII!(
@@ -413,7 +413,7 @@ function _solve!(
                     pt_stokes.ηdτ,
                     ρg...,
                     ητ,
-                    _di...,
+                    _di,
                     dt * free_surface,
                 )
                 # apply boundary conditions
@@ -432,7 +432,7 @@ function _solve!(
                 stokes.P,
                 @stress(stokes)...,
                 ρg...,
-                _di...,
+                _di,
                 dt * free_surface,
             )
 
@@ -476,7 +476,7 @@ function _solve!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+        stokes.ω.xy, @velocity(stokes)..., _di
     )
 
     # Interpolate shear components to cell center arrays
@@ -606,7 +606,7 @@ function _solve!(
 
             if strain_increment
                 @parallel (@idx ni .+ 1) compute_strain_rate!(
-                    @strain_increment(stokes)..., stokes.∇U, @displacement(stokes)..., _di...
+                    @strain_increment(stokes)..., stokes.∇U, @displacement(stokes)..., _di
                 )
 
                 @parallel (@idx ni .+ 1) compute_strain_rate_from_increment!(
@@ -614,7 +614,7 @@ function _solve!(
                 )
             else
                 @parallel (@idx ni .+ 1) compute_strain_rate!(
-                    @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+                    @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di
                 )
             end
 
@@ -689,7 +689,7 @@ function _solve!(
                     ηdτ,
                     ρg...,
                     ητ,
-                    _di...,
+                    _di,
                     dt * free_surface,
                 )
                 # apply boundary conditions
@@ -712,7 +712,7 @@ function _solve!(
                 stokes.P,
                 @stress(stokes)...,
                 ρg...,
-                _di...,
+                _di,
                 dt * free_surface,
             )
 
@@ -754,7 +754,7 @@ function _solve!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+        stokes.ω.xy, @velocity(stokes)..., _di
     )
 
     # Interpolate shear components to cell center arrays

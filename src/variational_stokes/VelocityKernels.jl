@@ -6,7 +6,8 @@ Compute the divergence of the velocity field `V` and store it in `∇V`, taking 
 @parallel_indices (I...) function compute_∇V!(
         ∇V::AbstractArray{T, N}, V::NTuple{N}, ϕ::JustRelax.RockRatio, _di::NTuple{N}
     ) where {T, N}
-    @inbounds ∇V[I...] = isvalid_c(ϕ, I...) ? div(V..., _di..., I...) : zero(T)
+    @inbounds ∇V[I...] =
+        isvalid_c(ϕ, I...) ? div(V..., @dxi(_di, I...)..., I...) : zero(T)
     return nothing
 end
 
@@ -16,8 +17,9 @@ end
 Compute the components of the strain rate tensor `ε` from the velocity field `V` and its divergence `∇V`, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`.
 """
 @parallel_indices (i, j) function compute_strain_rate!(
-        εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, ϕ::JustRelax.RockRatio, _dx, _dy
+        εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, ϕ::JustRelax.RockRatio, _di
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
 
     Vx1 = Vx[i, j]
     Vx2 = Vx[i, j + 1]
@@ -92,10 +94,9 @@ Compute the 3D components of the strain rate tensor `ε` from the velocity field
         Vy,
         Vz,
         ϕ::JustRelax.RockRatio,
-        _dx,
-        _dy,
-        _dz,
+        _di,
     ) where {T}
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
     Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j, k)
     Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j, k)
     Base.@propagate_inbounds @inline d_zi(A) = _d_zi(A, _dz, i, j, k)
@@ -160,9 +161,9 @@ Compute the velocity field `V` from the pressure `P`, stress components `τ`, an
         ρgy,
         ητ,
         ϕ::JustRelax.RockRatio,
-        _dx,
-        _dy,
+        _di,
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
     Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
     Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
@@ -210,8 +211,9 @@ end
 Compute the x-component of the velocity field `Vx` from the pressure `P`, stress components `τ`, and other parameters, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`.
 """
 @parallel_indices (i, j) function compute_Vx!(
-        Vx::AbstractArray{T, 2}, Rx, P, τxx, τxy, ηdτ, ρgx, ητ, ϕ::JustRelax.RockRatio, _dx, _dy
+        Vx::AbstractArray{T, 2}, Rx, P, τxx, τxy, ηdτ, ρgx, ητ, ϕ::JustRelax.RockRatio, _di
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
     Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
     Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
@@ -256,10 +258,10 @@ Compute the y-component of the velocity field `Vy` from the pressure `P`, stress
         ρgy,
         ητ,
         ϕ::JustRelax.RockRatio,
-        _dx,
-        _dy,
+        _di,
         dt,
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
     Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
     Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
@@ -323,10 +325,10 @@ Compute the velocity field `V` with the timestep dt from the pressure `P`, stres
         ρgy,
         ητ,
         ϕ::JustRelax.RockRatio,
-        _dx,
-        _dy,
+        _di,
         dt,
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
     Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
     Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
@@ -403,10 +405,9 @@ Compute the 3D velocity field `V` from the pressure `P`, stress components `τ`,
         ητ,
         ηdτ,
         ϕ::JustRelax.RockRatio,
-        _dx,
-        _dy,
-        _dz,
+        _di,
     ) where {T}
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
     Base.@propagate_inbounds @inline harm_x(A) = _harm_x(A, i, j, k)
     Base.@propagate_inbounds @inline harm_y(A) = _harm_y(A, i, j, k)
     Base.@propagate_inbounds @inline harm_z(A) = _harm_z(A, i, j, k)

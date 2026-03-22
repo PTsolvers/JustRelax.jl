@@ -54,7 +54,7 @@ function _heatdiffusion_PT!(
     while err > ϵ && iter < iterMax
         wtime0 += @elapsed begin
             @parallel flux_range(ni...) compute_flux!(
-                @qT(thermal)..., @qT2(thermal)..., thermal.T, K, pt_thermal.θr_dτ, _di...
+                @qT(thermal)..., @qT2(thermal)..., thermal.T, K, pt_thermal.θr_dτ, _di
             )
             update_T(
                 nothing,
@@ -85,7 +85,7 @@ function _heatdiffusion_PT!(
                     ρCp,
                     thermal_bc.dirichlet,
                     _dt,
-                    _di...,
+                    _di,
                 )
             end
 
@@ -173,7 +173,7 @@ function _heatdiffusion_PT!(
                 rheology,
                 phases,
                 pt_thermal.θr_dτ,
-                _di...,
+                _di,
                 args,
             )
             update_T(
@@ -212,7 +212,7 @@ function _heatdiffusion_PT!(
                     phases,
                     thermal_bc.dirichlet,
                     _dt,
-                    _di...,
+                    _di,
                     args,
                 )
             end

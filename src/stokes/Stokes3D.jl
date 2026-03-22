@@ -87,7 +87,7 @@ function _solve!(
                 pt_stokes.θ_dτ,
             )
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
             )
             @parallel (@idx ni .+ 1) compute_τ!(
                 @stress(stokes)...,
@@ -109,7 +109,7 @@ function _solve!(
                     @stress(stokes)...,
                     ητ,
                     pt_stokes.ηdτ,
-                    _di...,
+                    _di,
                 )
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
@@ -260,7 +260,7 @@ function _solve!(
                 pt_stokes.θ_dτ,
             )
             @parallel (@idx ni) compute_strain_rate!(
-                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
             )
 
             # Update buoyancy
@@ -314,7 +314,7 @@ function _solve!(
                     @stress(stokes)...,
                     ητ,
                     pt_stokes.ηdτ,
-                    _di...,
+                    _di,
                 )
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
@@ -377,7 +377,7 @@ function _solve!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di
     )
 
     # Interpolate shear components to cell center arrays
@@ -488,7 +488,7 @@ function _solve!(
             )
 
             @parallel (@idx ni) compute_strain_rate!(
-                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di...
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
             )
 
             # Update buoyancy
@@ -543,7 +543,7 @@ function _solve!(
                     @stress(stokes)...,
                     ητ,
                     pt_stokes.ηdτ,
-                    _di...,
+                    _di,
                 )
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
@@ -594,7 +594,7 @@ function _solve!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di
     )
 
     # Interpolate shear components to cell center arrays

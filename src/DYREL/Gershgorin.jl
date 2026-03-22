@@ -1,14 +1,28 @@
 function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, rheology, di, dt)
     ni = size(η)
-    @parallel (@idx ni) _Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di..., phase_ratios.vertex, phase_ratios.center, rheology, dt)
+    @parallel (@idx ni) _Gershgorin_Stokes2D_SchurComplement!(
+        Dx,
+        Dy,
+        λmaxVx,
+        λmaxVy,
+        η,
+        ηv,
+        γ_eff,
+        di,
+        phase_ratios.vertex,
+        phase_ratios.center,
+        rheology,
+        dt,
+    )
     return nothing
 end
 
 @parallel_indices (i, j) function _Gershgorin_Stokes2D_SchurComplement!(
-        Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, dx, dy,
+        Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di,
         phase_vertex, phase_center, rheology, dt
     )
     # Hoist common parameters
+    dx, dy = @dxi(di, i, j)
     _dx = inv(dx)
     _dy = inv(dy)
     _dx2 = _dx * _dx

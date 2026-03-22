@@ -146,8 +146,9 @@ end
             if 1 ≤ i_cell ≤ ni[1] && 1 ≤ j_cell ≤ ni[2]
                 x_c = xci[1][i_cell]
                 y_c = xci[2][j_cell]
-                wx = muladd(-abs(cell_vertex[1] - x_c), inv(di[1]), 1.0)
-                wy = muladd(-abs(cell_vertex[2] - y_c), inv(di[2]), 1.0)
+                dx, dy = @dxi(di, i_cell, j_cell)
+                wx = muladd(-abs(cell_vertex[1] - x_c), inv(dx), 1.0)
+                wy = muladd(-abs(cell_vertex[2] - y_c), inv(dy), 1.0)
                 weight = wx * wy
                 total_weight += weight
 
@@ -165,10 +166,12 @@ end
             k_cell = I[3] + offset₃
             if 1 ≤ i_cell ≤ ni[1] && 1 ≤ j_cell ≤ ni[2] && 1 ≤ k_cell ≤ ni[3]
                 cell_center = (xci[1][i_cell], xci[2][j_cell], xci[3][k_cell])
+                dx, dy, dz = @dxi(di, i_cell, j_cell, k_cell)
+                dxyz = (dx, dy, dz)
                 # Use trilinear weights for 3D interpolation
                 weight = 1.0
                 for d in 1:3
-                    weight *= (1.0 - abs(vertex_pos[d] - cell_center[d]) * inv(di[d]))
+                    weight *= (1.0 - abs(vertex_pos[d] - cell_center[d]) * inv(dxyz[d]))
                 end
                 total_weight += weight
 

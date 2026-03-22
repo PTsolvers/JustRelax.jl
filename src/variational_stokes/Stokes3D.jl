@@ -79,7 +79,7 @@ function _solve_VS!(
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
             compute_P!(
                 θ,
                 stokes.P0,
@@ -96,7 +96,7 @@ function _solve_VS!(
             )
 
             @parallel (@idx ni) compute_strain_rate!(
-                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di...
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di
             )
 
             # Update buoyancy
@@ -154,7 +154,7 @@ function _solve_VS!(
                     ητ,
                     pt_stokes.ηdτ,
                     ϕ,
-                    _di...,
+                    _di,
                 )
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
@@ -204,7 +204,7 @@ function _solve_VS!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di
     )
 
     # Interpolate shear components to cell center arrays

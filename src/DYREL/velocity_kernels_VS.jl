@@ -1,8 +1,9 @@
 ## RESIDUALS
 
 @parallel_indices (i, j) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, ϕ::JustRelax.RockRatio, _dx, _dy
+        Rx::AbstractArray{T, 2}, Ry, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, ϕ::JustRelax.RockRatio, _di
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
     Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
     Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
@@ -30,8 +31,9 @@
 end
 
 @parallel_indices (i, j) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, Vx, Vy, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
+        Rx::AbstractArray{T, 2}, Ry, Vx, Vy, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _di, dt
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
     Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j)
     Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j)
     Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j)
@@ -64,8 +66,9 @@ end
 end
 
 @parallel_indices (i, j) function compute_DR_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, P, P_num, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, Dx, Dy, ϕ::JustRelax.RockRatio, _dx, _dy
+        Rx::AbstractArray{T, 2}, Ry, P, P_num, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, Dx, Dy, ϕ::JustRelax.RockRatio, _di
     ) where {T}
+    _dx, _dy = @dxi(_di, i, j)
 
     Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
     Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)

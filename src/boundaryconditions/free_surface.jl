@@ -18,7 +18,7 @@ function free_surface_bcs!(
             rheology,
             phase_ratios.center,
             dt,
-            di...,
+            di,
         )
     end
 end
@@ -33,9 +33,9 @@ end
         rheology,
         phase_ratios,
         dt::T,
-        dx::T,
-        dy::T,
+        di,
     ) where {T}
+    dx, dy = @dxi(di, i, size(P, 2))
     phase = @inbounds phase_ratios[i, end]
     Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
     ν = 1.0e-2
@@ -64,10 +64,9 @@ end
         rheology,
         phase_ratios,
         dt::T,
-        dx::T,
-        dy::T,
-        dz::T,
+        di,
     ) where {T}
+    dx, dy, dz = @dxi(di, i, j, size(P, 3))
     phase = @inbounds phase_ratios[i, j, end]
     Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
     Vz[i + 1, j + 1, end] =

@@ -130,6 +130,23 @@ end
         @test continuation_log(1.0, 0.8, 0.05) ≈ 0.8089757207980266
         @test continuation_linear(1.0, 0.8, 0.05) === 0.81
 
+        @testset "spacing macros" begin
+            di_scalar_2d = (2.0, 3.0)
+            @test JustRelax.@dx(di_scalar_2d, 1) == 2.0
+            @test JustRelax.@dy(di_scalar_2d, 1) == 3.0
+            @test JustRelax.@dxi(di_scalar_2d, 4, 2) == (2.0, 3.0)
+
+            di_vector_2d = ([1.0, 1.5, 2.0, 2.5], [4.0, 4.5, 5.0, 5.5])
+            @test JustRelax.@dx(di_vector_2d, 3) == 2.0
+            @test JustRelax.@dy(di_vector_2d, 2) == 4.5
+            @test JustRelax.@dxi(di_vector_2d, 4, 1) == (2.5, 4.0)
+
+            _di_scalar_2d = inv.(di_scalar_2d)
+            @test JustRelax.@dx(_di_scalar_2d, 2) == 0.5
+            @test JustRelax.@dy(_di_scalar_2d, 2) == inv(3.0)
+            @test JustRelax.@dxi(_di_scalar_2d, 2, 3) == (0.5, inv(3.0))
+        end
+
         #MPI
         @test sum_mpi(stokes.viscosity.η) === 16.0
         @test mean_mpi(stokes.viscosity.η) === 1.0
@@ -174,6 +191,27 @@ end
         @test compute_dt(stokes, di, dt_diff, igg) === 0.008064516129032258
         @test compute_dt(stokes, di, dt_diff) ≈ 0.008064516129032258
         @test compute_dt(stokes, di) ≈ 0.008064516129032258
+
+        @testset "spacing macros 3D" begin
+            di_scalar_3d = (2.0, 3.0, 4.0)
+            @test JustRelax.@dx(di_scalar_3d, 1) == 2.0
+            @test JustRelax.@dy(di_scalar_3d, 1) == 3.0
+            @test JustRelax.@dz(di_scalar_3d, 1) == 4.0
+            @test JustRelax.@dxi(di_scalar_3d, 2, 3, 4) == (2.0, 3.0, 4.0)
+
+            di_vector_3d = (
+                [1.0, 1.5, 2.0],
+                [3.0, 3.5, 4.0],
+                [5.0, 5.5, 6.0],
+            )
+            @test JustRelax.@dx(di_vector_3d, 2) == 1.5
+            @test JustRelax.@dy(di_vector_3d, 3) == 4.0
+            @test JustRelax.@dz(di_vector_3d, 1) == 5.0
+            @test JustRelax.@dxi(di_vector_3d, 3, 2, 1) == (2.0, 3.5, 5.0)
+
+            _di_scalar_3d = inv.(di_scalar_3d)
+            @test JustRelax.@dxi(_di_scalar_3d, 1, 1, 1) == (0.5, inv(3.0), 0.25)
+        end
 
         #MPI
         @test mean_mpi(stokes.viscosity.η) === 1.0

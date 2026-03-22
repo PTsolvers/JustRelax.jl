@@ -55,7 +55,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     # Physical domain ------------------------------------
     ly = 500.0e3
     lx = ly * ar
-    origin = -lx/2, -ly                         # origin coordinates
+    origin = -lx / 2, -ly                         # origin coordinates
     ni = nx, ny                           # number of cells
     li = lx, ly                           # domain length in x- and y-
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
@@ -126,7 +126,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, di, dt; ϵ = 1e-6)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6)
 
     it = 0 # iteration counter
     while it < 1
@@ -180,7 +180,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         f, _, h = heatmap(log10.(abs.(stokes.∇V)))
         Colorbar(f[1, 2], h)
         save(
-            joinpath(@__DIR__, "sinking_DR_$(it).png"), 
+            joinpath(@__DIR__, "sinking_DR_$(it).png"),
             f
         )
         display(f)

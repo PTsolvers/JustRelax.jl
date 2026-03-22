@@ -38,7 +38,7 @@ function _solve!(
     ni = size(stokes.P)
 
     # ~preconditioner
-    ητ = deepcopy(η)
+    ητ = deepcopy(stokes.viscosity.η)
     # @hide_communication b_width begin # communication/computation overlap
     compute_maxloc!(ητ, stokes.viscosity.η; window = (1, 1))
     update_halo!(ητ)

@@ -1,4 +1,5 @@
 const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -31,9 +32,10 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, GLMakie
 
 # Load file with all the rheology configurations
+include("Subduction2D_setup.jl")
 include("Subduction2D_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -61,26 +63,25 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
+function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
 
     # Physical domain ------------------------------------
-    li = 3000.0e3, 750.0e3
-    origin = 0.0, -700.0e3
     ni = nx, ny           # number of cells
     di = @. li / ni       # grid steps
     grid = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    (; xci, xvi) = grid  # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
-    dt = 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt = 5.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    # dt_max = 5.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
     nxcell = 40
-    max_xcell = 80
-    min_xcell = 1
+    max_xcell = 60
+    min_xcell = 20
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
@@ -90,9 +91,9 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases,)
     # Assign particles phases anomaly
-    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    # init_phases!(pPhases, phases_device, particles, xvi)
-    init_phases!(pPhases, particles)
+    phases_device = PTArray(backend)(phases_GMG)
+    phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    init_phases!(pPhases, phases_device, particles, xvi)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
 
@@ -144,12 +145,13 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
     # Time loop
     t, it = 0.0, 0
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt)
-    local out
-    while it < 10 # run only for 5 Myrs
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, γfact = 100)
+
+    while it < 1 # run only for 5 Myrs
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-
+        stokes.V.Vx .= 0.0
+        stokes.V.Vy .= 0.0
         # Stokes solver ----------------
         t_stokes = @elapsed begin
             out = solve_DYREL!(
@@ -164,14 +166,16 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
                 dt,
                 igg;
                 kwargs = (;
+                    verbose_PH = false,
                     verbose_DR = false,
                     iterMax = 50.0e3,
-                    nout = 10,
-                    rel_drop = 1.0e-1,
+                    nout = 200,
+                    rel_drop = 0.75,
                     λ_relaxation_PH = 1,
                     λ_relaxation_DR = 1,
                     viscosity_relaxation = 1,
                     viscosity_cutoff = viscosity_cutoff,
+                    # verbose_DR = false,
                 )
             )
         end
@@ -198,71 +202,73 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
         @show it += 1
         t += dt
 
-        # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
-            (; η_vep, η) = stokes.viscosity
-            if do_vtk
-                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-                data_v = (;
-                    τII = Array(stokes.τ.II),
-                    εII = Array(stokes.ε.II),
-                )
-                data_c = (;
-                    P = Array(stokes.P),
-                    η = Array(η_vep),
-                )
-                velocity_v = (
-                    Array(Vx_v),
-                    Array(Vy_v),
-                )
-                save_vtk(
-                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                    xvi,
-                    xci,
-                    data_v,
-                    data_c,
-                    velocity_v,
-                    t = t
-                )
-            end
+        # # Data I/O and plotting ---------------------
+        # if it == 1 || rem(it, 1) == 0
+        #     (; η_vep, η) = stokes.viscosity
+        #     if do_vtk
+        #         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        #         data_v = (;
+        #             τII = Array(stokes.τ.II),
+        #             εII = Array(stokes.ε.II),
+        #         )
+        #         data_c = (;
+        #             P = Array(stokes.P),
+        #             η = Array(η_vep),
+        #         )
+        #         velocity_v = (
+        #             Array(Vx_v),
+        #             Array(Vy_v),
+        #         )
+        #         save_vtk(
+        #             joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+        #             xvi,
+        #             xci,
+        #             data_v,
+        #             data_c,
+        #             velocity_v,
+        #             t = t
+        #         )
+        #     end
 
-            # Make particles plottable
-            p = particles.coords
-            ppx, ppy = p
-            pxv = ppx.data[:] ./ 1.0e3
-            pyv = ppy.data[:] ./ 1.0e3
-            clr = pPhases.data[:]
-            # clr      = pT.data[:]
-            idxv = particles.index.data[:]
+        #     # Make particles plottable
+        #     p = particles.coords
+        #     ppx, ppy = p
+        #     pxv = ppx.data[:] ./ 1.0e3
+        #     pyv = ppy.data[:] ./ 1.0e3
+        #     clr = pPhases.data[:]
+        #     # clr      = pT.data[:]
+        #     idxv = particles.index.data[:]
 
-            # Make Makie figure
-            ar = 3
-            fig = Figure(size = (1200, 900), title = "t = $t")
-            ax1 = Axis(fig[1, 1], aspect = ar, title = "log10(εII)  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
-            ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
-            ax3 = Axis(fig[1, 3], aspect = ar, title = "τII")
-            ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
-            # Plot temperature
-            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
-            # Plot particles phase
-            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
-            # Plot 2nd invariant of strain rate
-            h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
-            # Plot effective viscosity
-            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
-            hidexdecorations!(ax1)
-            hidexdecorations!(ax2)
-            hidexdecorations!(ax3)
-            Colorbar(fig[1, 2], h1)
-            Colorbar(fig[2, 2], h2)
-            Colorbar(fig[1, 4], h3)
-            Colorbar(fig[2, 4], h4)
-            linkaxes!(ax1, ax2, ax3, ax4)
-            fig
-            save(joinpath(figdir, "$(it).png"), fig)
-        end
+        #     # Make Makie figure
+        #     ar = 3
+        #     fig = Figure(size = (1200, 900), title = "t = $t")
+        #     ax1 = Axis(fig[1, 1], aspect = ar, title = "log10(εII)  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
+        #     ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
+        #     ax3 = Axis(fig[1, 3], aspect = ar, title = "τII")
+        #     ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
+        #     # Plot temperature
+        #     h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(stokes.V.Vy), colormap = :batlow)
+        #     # h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
+        #     # Plot particles phase
+        #     h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
+        #     # Plot 2nd invariant of strain rate
+        #     # h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
+        #     h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.V.Vx)), colormap = :batlow)
+        #     # Plot effective viscosity
+        #     # h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η)), colormap = :batlow)
+        #     h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(abs.(stokes.∇V))), colormap = :batlow)
+        #     hidexdecorations!(ax1)
+        #     hidexdecorations!(ax2)
+        #     hidexdecorations!(ax3)
+        #     Colorbar(fig[1, 2], h1)
+        #     Colorbar(fig[2, 2], h2)
+        #     Colorbar(fig[1, 4], h3)
+        #     Colorbar(fig[2, 4], h4)
+        #     linkaxes!(ax1, ax2, ax3, ax4)
+        #     fig
+        #     save(joinpath(figdir, "$(it).png"), fig)
+        # end
         # ------------------------------
-
     end
 
     return nothing
@@ -270,13 +276,23 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Schmelling2D_DR"
-n = 1
-nx, ny = (125, 50) .* n
+figdir = "Schmelling_DYREL"
+n = 128
+nx, ny = (250, 100) .÷ 1
+li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
 
-main(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+
+# heatmap(xci.*1.0e-3..., Array(log10.(stokes.viscosity.η)), colormap = :batlow)
+# scatter(Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 5)
+
+# heatmap(xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(stokes.V.Vy), colormap = :batlow)
+
+# itPH = 03 iter = 005020 iter/nx = 040, err = 7.617e-07 - norm[Rx=1.205e-03 7.617e-07, Ry=1.121e-03 6.284e-07, Rp=1.515e-17 2.400e-02]
+# Stokes solver time
+#    Total time:      2.09007375 s

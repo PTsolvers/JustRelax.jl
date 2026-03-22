@@ -3,7 +3,6 @@
 # backend trait
 function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs)
     solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs)
-    return nothing
 end
 
 # entry point for extensions

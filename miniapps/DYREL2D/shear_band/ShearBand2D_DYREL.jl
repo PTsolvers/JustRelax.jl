@@ -148,14 +148,13 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (;
-                verbose = false,
+                verbose_PH = false,
+                verbose_DR = false,
                 iterMax = 50.0e3,
                 nout = 10,
                 rel_drop = 0.75,
                 λ_relaxation_PH = 1,
                 λ_relaxation_DR = 1,
-                verbose_PH = false,
-                verbose_DR = false,
                 viscosity_relaxation = 1 / 2,
                 linear_viscosity = true,
                 viscosity_cutoff = (-Inf, Inf),

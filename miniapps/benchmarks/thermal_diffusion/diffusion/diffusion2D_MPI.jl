@@ -112,7 +112,7 @@ function diffusion_2D(
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 b_width = (4, 4, 1),

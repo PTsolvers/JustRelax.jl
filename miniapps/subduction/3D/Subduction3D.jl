@@ -153,7 +153,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
             out = solve!(
                 stokes,
                 pt_stokes,
-                di,
+                grid,
                 flow_bcs,
                 ρg,
                 phase_ratios,

@@ -162,7 +162,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 phase_ratios,
                 rheology,
                 args,
-                di,
+                grid,
                 dt,
                 igg;
                 kwargs = (;

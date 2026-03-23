@@ -156,7 +156,7 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
             out = solve!(
                 stokes,
                 pt_stokes,
-                di,
+                grid,
                 flow_bcs,
                 ρg,
                 phase_ratios,

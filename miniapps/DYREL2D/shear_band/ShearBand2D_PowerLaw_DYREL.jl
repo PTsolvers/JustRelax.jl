@@ -122,7 +122,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         phase_ratios,
         rheology,
         args,
-        di,
+        grid,
         dt,
         igg;
         kwargs = (;

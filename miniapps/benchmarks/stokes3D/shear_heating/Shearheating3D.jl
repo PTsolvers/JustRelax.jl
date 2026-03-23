@@ -168,7 +168,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -206,7 +206,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,

@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -200,11 +200,11 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     particle_args = (pT, pPhases, unwrap(pτ)...)
     particle_args_reduced = (pT, unwrap(pτ)...)
 
-    # rock ratios for variational stokes
-    # RockRatios
-    ϕ = RockRatio(backend, ni)
-    # update_rock_ratio!(ϕ, phase_ratios, air_phase)
-    compute_rock_fraction!(ϕ, chain, xvi, di)
+    # # rock ratios for variational stokes
+    # # RockRatios
+    # ϕ = RockRatio(backend, ni)
+    # # update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    # compute_rock_fraction!(ϕ, chain, xvi, di)
 
     # ----------------------------------------------------
 
@@ -251,7 +251,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # Rheology
     args0 = (; ϕ = ϕ_m, T = thermal.Tc, P = stokes.P, dt = Inf, perturbation_C = perturbation_C)
     viscosity_cutoff = (1.0e17, 1.0e23)
-    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff; air_phase = air_phase)
+    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
@@ -327,8 +327,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         fig
     end
 
-    τxx_v = @zeros(ni .+ 1...)
-    τyy_v = @zeros(ni .+ 1...)
+    # τxx_v = @zeros(ni .+ 1...)
+    # τyy_v = @zeros(ni .+ 1...)
 
     # Time loop
     t, it = 0.0, 0
@@ -337,58 +337,54 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     local iters
     thermal.Told .= thermal.T
 
-    while it < 100 #000 # run only for 5 Myrs
-        if it > 1 && iters.iter > iterMax && iters.err_evo1[end] > pt_stokes.ϵ_rel * 5
-            iterMax += 10.0e3
-            iterMax = min(iterMax, 200.0e3)
-            println("Increasing maximum pseudo timesteps to $iterMax")
-        else
-            iterMax = 150.0e3
-        end
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-4)
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= Ttop
-        @views T_buffer[:, 1] .= Tbot
-        # clamp!(T_buffer, 273e0, 1223e0)
-        @views thermal.T[2:(end - 1), :] .= T_buffer
-        if it > 1  && rem(it, 5) == 0
-            # if mod(round(t/(1e3 * 3600 * 24 *365.25); digits=1), 1e3) == 0.0
-            println("Simulation eruption at t = $(round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 2)) Kyrs")
-            thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, 4, air_phase)
-            interval += 1
-            copyinn_x!(T_buffer, thermal.T)
-            @views T_buffer[:, end] .= Ttop
-            @views T_buffer[:, 1] .= Tbot
-            temperature2center!(thermal)
-            grid2particle!(pT, xvi, T_buffer, particles)
-        end
-        thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
-
+    while it < 5 #000 # run only for 5 Myrs
+      
         args = (; ϕ = ϕ_m, T = thermal.Tc, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc, perturbation_C = perturbation_C)
-        # args = (; ϕ=ϕ_m, T=thermal.Tc, P=stokes.P, dt=Inf)
+      
 
-        stress2grid!(stokes, pτ, xvi, xci, particles)
+        # t_stokes = @elapsed solve_VariationalStokes!(
+        #     stokes,
+        #     pt_stokes,
+        #     di,
+        #     flow_bcs,
+        #     ρg,
+        #     phase_ratios,
+        #     ϕ,
+        #     rheology,
+        #     args,
+        #     dt,
+        #     igg;
+        #     kwargs = (;
+        #         iterMax = 100.0e3,
+        #         nout = 2.0e3,
+        #         viscosity_cutoff = viscosity_cutoff,
+        #     )
+        # )
 
-        t_stokes = @elapsed solve_VariationalStokes!(
-            stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
-            ρg,
-            phase_ratios,
-            ϕ,
-            rheology,
-            args,
-            dt,
-            igg;
-            kwargs = (;
-                iterMax = 100.0e3,
-                nout = 2.0e3,
-                viscosity_cutoff = viscosity_cutoff,
-            )
-        )
+        t_stokes = @elapsed solve_DYREL!(
+                stokes,
+                ρg,
+                dyrel,
+                flow_bcs,
+                phase_ratios,
+                rheology,
+                args,
+                grid,
+                dt,
+                igg;
+                kwargs = (;
+                    verbose = false,
+                    iterMax = 50.0e3,
+                    nout    = 200,
+                    λ_relaxation = 1,
+                    # λ_relaxation = 1e-2,
+                    # λ_relaxation = 1.075,
+                    viscosity_relaxation = 1.0e-3,
+                    viscosity_cutoff = viscosity_cutoff,
+                )
+            );
 
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
@@ -440,28 +436,28 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
         # check if we need to inject particles
-        center2vertex!(τxx_v, stokes.τ.xx)
-        center2vertex!(τyy_v, stokes.τ.yy)
+        # center2vertex!(τxx_v, stokes.τ.xx)
+        # center2vertex!(τyy_v, stokes.τ.yy)
         inject_particles_phase!(
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
+            (T_buffer, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy),
             xvi
         )
 
-        # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        # # advect marker chain
+        # advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        # update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         compute_melt_fraction!(
             ϕ_m, phase_ratios, rheology, (T = thermal.Tc, P = stokes.P)
         )
 
-        # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        # update_rock_ratio!(ϕ, phase_ratios, air_phase)
-        compute_rock_fraction!(ϕ, chain, xvi, di)
+        # # update phase ratios
+        # update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        # # update_rock_ratio!(ϕ, phase_ratios, air_phase)
+        # compute_rock_fraction!(ϕ, chain, xvi, di)
 
         tensor_invariant!(stokes.τ)
 
@@ -471,6 +467,38 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         if it == 1
             stokes.EII_pl .= 0.0
         end
+
+        # if it > 1 && iters.iter > iterMax && iters.err_evo1[end] > pt_stokes.ϵ_rel * 5
+        #     iterMax += 10.0e3
+        #     iterMax = min(iterMax, 200.0e3)
+        #     println("Increasing maximum pseudo timesteps to $iterMax")
+        # else
+        #     iterMax = 150.0e3
+        # end
+
+        # interpolate fields from particle to grid vertices
+        particle2grid!(T_buffer, pT, xvi, particles)
+        @views T_buffer[:, end] .= Ttop
+        @views T_buffer[:, 1] .= Tbot
+        # clamp!(T_buffer, 273e0, 1223e0)
+        @views thermal.T[2:(end - 1), :] .= T_buffer
+        if it > 1  && rem(it, 5) == 0
+            # if mod(round(t/(1e3 * 3600 * 24 *365.25); digits=1), 1e3) == 0.0
+            println("Simulation eruption at t = $(round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 2)) Kyrs")
+            thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, 4, air_phase)
+            interval += 1
+            copyinn_x!(T_buffer, thermal.T)
+            @views T_buffer[:, end] .= Ttop
+            @views T_buffer[:, 1] .= Tbot
+            temperature2center!(thermal)
+            grid2particle!(pT, xvi, T_buffer, particles)
+        end
+        thermal_bcs!(thermal, thermal_bc)
+        temperature2center!(thermal)
+
+        # args = (; ϕ=ϕ_m, T=thermal.Tc, P=stokes.P, dt=Inf)
+
+        stress2grid!(stokes, pτ, xvi, xci, particles)
 
         if plotting
             # Data I/O and plotting ---------------------
@@ -621,7 +649,7 @@ const plotting = true
 do_vtk = true # set to true to generate VTK files for ParaView
 
 figdir = "Caldera2D_$(today())"
-n = 64
+n = 256
 nx, ny = n, n >>> 1
 
 li, origin, phases_GMG, T_GMG = setup2D(
@@ -643,5 +671,5 @@ igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
-extension = 1.0e-15
-main(li, origin, phases_GMG, T_GMG, igg, ; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, extension = extension, cutoff_visc = (1.0e17, 1.0e23));
+extension = 1.0e-15 * 0
+@time main(li, origin, phases_GMG, T_GMG, igg, ; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, extension = extension, cutoff_visc = (1.0e17, 1.0e23));

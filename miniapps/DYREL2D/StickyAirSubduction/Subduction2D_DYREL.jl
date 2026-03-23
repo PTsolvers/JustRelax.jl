@@ -160,7 +160,7 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
                 phase_ratios,
                 rheology,
                 args,
-                di,
+                grid,
                 dt,
                 igg;
                 kwargs = (;

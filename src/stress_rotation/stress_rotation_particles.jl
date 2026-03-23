@@ -2,8 +2,10 @@ using StaticArrays
 
 # Vorticity tensor
 
-@parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _di)
-    _dx, _dy = @dxi(_di, I...)
+@parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _di_vx, _di_vy)
+    i, j = I
+    _dx = @dx(_di_vy, i)
+    _dy = @dy(_di_vx, j)
     Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
     Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
 

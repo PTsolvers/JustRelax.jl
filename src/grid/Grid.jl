@@ -21,16 +21,18 @@ A struct representing the geometry of a topological object in nDim dimensions.
 - `nDim`: The number of dimensions of the topological object.
 - `T`: The type of the elements in the topological object.
 """
-struct Geometry{nDim, T}
-    ni::NTuple{nDim, Int64}                              # number of grid cells
-    li::NTuple{nDim, T}                                  # length of the grid
-    origin::NTuple{nDim, T}                              # origin of the grid
-    max_li::T                                           # maximum length of the grid
-    di::NTuple{nDim, T}                                  # grid spacing
-    xci::NTuple{nDim, LinRange{T, Int64}}                 # cell-centered grid
-    xvi::NTuple{nDim, LinRange{T, Int64}}                 # vertex-centered grid
-    grid_v::NTuple{nDim, NTuple{nDim, LinRange{T, Int64}}} # velocity grid
+struct Geometry{nDim, V, D, T}
+    ni::NTuple{nDim, Int64}               # number of grid cells
+    li::NTuple{nDim, T}                   # length of the grid
+    origin::NTuple{nDim, T}               # origin of the grid
+    max_li::T                             # maximum length of the grid
+    di::D                                 # grid spacing
+    _di::D                                # inverse grid spacing
+    xci::NTuple{nDim, V}                  # cell-centered grid
+    xvi::NTuple{nDim, V}                  # vertex-centered grid
+    grid_v::NTuple{nDim, NTuple{nDim, V}} # velocity grid
 
+    # Default uniform staggered grid constructor
     function Geometry(
             ni::NTuple{nDim, Integer}, li::NTuple{nDim, T}; origin = ntuple(_ -> 0.0, Val(nDim))
         ) where {nDim, T}
@@ -42,9 +44,54 @@ struct Geometry{nDim, T}
             geometry_nonMPI(ni, li, origin)
         end
 
-        return new{nDim, Float64}(ni, Li, origin, maxLi, di, xci, xvi, grid_v)
+        di = (; center = di, vertex = di, velocity = ntuple(i -> di, Val(nDim)))
+        _di = (; 
+            center   = map(x-> inv.(x), di.center),
+            vertex   = map(x-> inv.(x), di.vertex),
+            velocity = map(x-> map(y-> inv.(y), x), di.velocity)
+        )
+
+        return new{nDim, typeof(xci[1]), typeof(di), Float64}(ni, Li, origin, maxLi, di, _di, xci, xvi, grid_v)
     end
 end
+
+# Grid constructor given 1D vertex coordinates arrays
+function Geometry(xvi::Vararg{T, nDim}) where {nDim, T}
+   
+    ni        = length.(xvi) .- 1
+    xci       = ntuple(i -> [(xvi[i][j] + xvi[i][j + 1]) / 2 for j in 1:ni[i]], Val(nDim))
+    lims      = extrema.(xvi)
+    li        = ntuple(i -> lims[i][2] - lims[i][1], Val(nDim))
+    max_li    = reduce(max, li)
+    origin    = ntuple(i -> lims[i][1], Val(nDim))
+    di_vertex = diff.(xvi)
+    di_center = diff.(xci)
+    grid_v    = velocity_grids(xci, xvi, di_center)
+    di_vel    = ntuple(i -> diff.(grid_v[i]), Val(nDim))
+    di        = (; center = di_center, vertex = di_vertex, velocity = di_vel)
+    _di       = (;
+        center   = map(x -> inv.(x), di.center),
+        vertex   = map(x -> inv.(x), di.vertex),
+        velocity = map(x -> map(y -> inv.(y), x), di.velocity)
+    )
+
+    return Geometry(ni, li, origin, max_li, di, _di, xci, xvi, grid_v)
+end
+
+@inline function legacy_uniform_grid(
+        ni::NTuple{nDim, <:Integer}, di::NTuple{nDim, <:Real}
+    ) where {nDim}
+    ni_global = if ImplicitGlobalGrid.grid_is_initialized()
+        ntuple(i -> (nx_g, ny_g, nz_g)[i](), Val(nDim))
+    else
+        ni
+    end
+    li = ntuple(i -> Float64(di[i]) * ni_global[i], Val(nDim))
+    return Geometry(ni, li)
+end
+
+@inline legacy_uniform_grid(ni::NTuple{N, <:Integer}, di::NamedTuple) where {N} =
+    legacy_uniform_grid(ni, di.center)
 
 function geometry_MPI(ni::NTuple{nDim, Integer}, li::NTuple{nDim, T}, origin) where {nDim, T}
     f_g = (nx_g, ny_g, nz_g)
@@ -139,6 +186,21 @@ function velocity_grids(xci, xvi, di::NTuple{2, T}) where {T}
     grid_vy = xVy, xvi[2]
 
     return grid_vx, grid_vy
+end
+
+function velocity_grids(xci, xvi, di::NTuple{3, T}) where {T<:AbstractVector}
+    dxW, dyW, dzW = @dxi(di, 1, 1, 1)
+    dxE, dyE, dzE = @dxi(di, length.(di)...)
+
+    xghost = vcat(xci[1][1] - dxW, xci[1], xci[1][end] + dxE)
+    yghost = vcat(xci[2][1] - dyW, xci[2], xci[2][end] + dyE)
+    zghost = vcat(xci[3][1] - dzW, xci[3], xci[3][end] + dzE)
+
+    grid_vx = xvi[1], yghost, zghost
+    grid_vy = xghost, xvi[2], zghost
+    grid_vz = xghost, yghost, xvi[3]
+
+    return grid_vx, grid_vy, grid_vz
 end
 
 function velocity_grids(xci, xvi, di::NTuple{3, T}) where {T}

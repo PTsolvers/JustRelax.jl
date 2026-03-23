@@ -14,7 +14,7 @@ end
 function _solve_VS!(
         stokes::JustRelax.StokesArrays,
         pt_stokes,
-        di::NTuple{3, T},
+        grid::Geometry{3},
         flow_bcs::AbstractFlowBoundaryConditions,
         ρg,
         phase_ratios::JustPIC.PhaseRatios,
@@ -31,7 +31,7 @@ function _solve_VS!(
         viscosity_relaxation = 1.0e-2,
         viscosity_cutoff = (-Inf, Inf),
         kwargs...,
-    ) where {T, N}
+    ) where {N}
 
     ## UNPACK
 
@@ -39,7 +39,10 @@ function _solve_VS!(
     ϵ_rel = pt_stokes.ϵ_rel
     ϵ_abs = pt_stokes.ϵ_abs
     # geometry
-    _di = @. 1 / di
+    di = grid.di
+    _di = grid._di
+    di = di isa NamedTuple ? di.center : di
+    _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
 
@@ -229,4 +232,22 @@ function _solve_VS!(
         time = wtime0,
         av_time = av_time,
     )
+end
+
+function _solve_VS!(
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::Union{NTuple{3, <:Real}, NamedTuple},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        phase_ratios::JustPIC.PhaseRatios,
+        ϕ::JustRelax.RockRatio,
+        rheology::NTuple{N, AbstractMaterialParamsStruct},
+        args,
+        dt,
+        igg::IGG;
+        kwargs...,
+    ) where {N}
+    grid = JustRelax.legacy_uniform_grid(size(stokes.P), di)
+    return _solve_VS!(stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ, rheology, args, dt, igg; kwargs...)
 end

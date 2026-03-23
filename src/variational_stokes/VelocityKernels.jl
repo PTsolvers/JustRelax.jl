@@ -17,9 +17,20 @@ end
 Compute the components of the strain rate tensor `ε` from the velocity field `V` and its divergence `∇V`, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`.
 """
 @parallel_indices (i, j) function compute_strain_rate!(
-        εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, ϕ::JustRelax.RockRatio, _di
+        εxx::AbstractArray{T, 2},
+        εyy,
+        εxy,
+        ∇V,
+        Vx,
+        Vy,
+        ϕ::JustRelax.RockRatio,
+        _di_center,
+        _di_vx,
+        _di_vy,
     ) where {T}
-    _dx, _dy = @dxi(_di, i, j)
+    _dx, _dy = @dxi(_di_center, i, j)
+    _dy_vx = @dy(_di_vx, j)
+    _dx_vy = @dx(_di_vy, i)
 
     Vx1 = Vx[i, j]
     Vx2 = Vx[i, j + 1]
@@ -39,7 +50,7 @@ Compute the components of the strain rate tensor `ε` from the velocity field `V
         end
     end
     @inbounds if isvalid_v(ϕ, i, j)
-        εxy[i, j] = 0.5 * ((Vx2 - Vx1) * _dy + (Vy2 - Vy1) * _dx)
+        εxy[i, j] = 0.5 * ((Vx2 - Vx1) * _dy_vx + (Vy2 - Vy1) * _dx_vy)
     else
         εxy[i, j] = zero(T)
     end
@@ -161,13 +172,15 @@ Compute the velocity field `V` from the pressure `P`, stress components `τ`, an
         ρgy,
         ητ,
         ϕ::JustRelax.RockRatio,
-        _di,
+        _di_center,
+        _di_vertex,
     ) where {T}
-    _dx, _dy = @dxi(_di, i, j)
-    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
-    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    _dx_c, _dy_c = @dxi(_di_center, i, j)
+    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
     Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
@@ -211,13 +224,24 @@ end
 Compute the x-component of the velocity field `Vx` from the pressure `P`, stress components `τ`, and other parameters, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`.
 """
 @parallel_indices (i, j) function compute_Vx!(
-        Vx::AbstractArray{T, 2}, Rx, P, τxx, τxy, ηdτ, ρgx, ητ, ϕ::JustRelax.RockRatio, _di
+        Vx::AbstractArray{T, 2},
+        Rx,
+        P,
+        τxx,
+        τxy,
+        ηdτ,
+        ρgx,
+        ητ,
+        ϕ::JustRelax.RockRatio,
+        _di_center,
+        _di_vertex,
     ) where {T}
-    _dx, _dy = @dxi(_di, i, j)
-    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
-    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    _dx_c, _dy_c = @dxi(_di_center, i, j)
+    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
     Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
@@ -258,14 +282,16 @@ Compute the y-component of the velocity field `Vy` from the pressure `P`, stress
         ρgy,
         ητ,
         ϕ::JustRelax.RockRatio,
-        _di,
+        _di_center,
+        _di_vertex,
         dt,
     ) where {T}
-    _dx, _dy = @dxi(_di, i, j)
-    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
-    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    _dx_c, _dy_c = @dxi(_di_center, i, j)
+    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
     Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
@@ -286,7 +312,7 @@ Compute the y-component of the velocity field `Vy` from the pressure `P`, stress
                 ρg_S = ρgy[i, j] * ϕ.center[i, j]
                 ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
                 # Spatial derivatives
-                ∂ρg∂y = (ρg_N - ρg_S) * _dy
+                ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
                 # correction term
                 # ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
                 ρg_correction = Vyᵢⱼ * ∂ρg∂y * θ * dt
@@ -325,14 +351,16 @@ Compute the velocity field `V` with the timestep dt from the pressure `P`, stres
         ρgy,
         ητ,
         ϕ::JustRelax.RockRatio,
-        _di,
+        _di_center,
+        _di_vertex,
         dt,
     ) where {T}
-    _dx, _dy = @dxi(_di, i, j)
-    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
-    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
+    _dx_c, _dy_c = @dxi(_di_center, i, j)
+    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
     Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
@@ -364,7 +392,7 @@ Compute the velocity field `V` with the timestep dt from the pressure `P`, stres
             ρg_S = ρgy[i, j] * ϕ.center[i, j]
             ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
             # Spatial derivatives
-            ∂ρg∂y = (ρg_N - ρg_S) * _dy
+            ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
             # correction term
             ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
             Ry[i, j] =

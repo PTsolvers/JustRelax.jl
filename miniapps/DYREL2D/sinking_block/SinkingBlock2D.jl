@@ -140,7 +140,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
             phase_ratios,
             rheology,
             args,
-            di,
+            grid,
             dt,
             igg;
             kwargs = (;

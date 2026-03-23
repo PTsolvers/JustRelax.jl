@@ -25,7 +25,7 @@ solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kw
 function _solve!(
         stokes::JustRelax.StokesArrays,
         pt_stokes,
-        di::NTuple{3, T},
+        grid::Geometry{3},
         flow_bcs::AbstractFlowBoundaryConditions,
         ρg,
         K,
@@ -38,13 +38,16 @@ function _solve!(
         b_width = (4, 4, 4),
         verbose = true,
         kwargs...,
-    ) where {T}
+    )
 
     # solver related
     ϵ_rel = pt_stokes.ϵ_rel
     ϵ_abs = pt_stokes.ϵ_abs
     # geometry
-    _di = @. 1 / di
+    di = grid.di
+    _di = grid._di
+    di = di isa NamedTuple ? di.center : di
+    _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η) = stokes.viscosity
 
@@ -182,12 +185,28 @@ function _solve!(
     )
 end
 
+function _solve!(
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::Union{NTuple{3, <:Real}, NamedTuple},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        K,
+        G,
+        dt,
+        igg::IGG;
+        kwargs...,
+    )
+    grid = JustRelax.legacy_uniform_grid(size(stokes.P), di)
+    return _solve!(stokes, pt_stokes, grid, flow_bcs, ρg, K, G, dt, igg; kwargs...)
+end
+
 ## 3D VISCO-ELASTO-PLASTIC STOKES SOLVER WITH GeoParams.jl
 
 function _solve!(
         stokes::JustRelax.StokesArrays,
         pt_stokes,
-        di::NTuple{3, T},
+        grid::Geometry{3},
         flow_bcs::AbstractFlowBoundaryConditions,
         ρg,
         rheology::MaterialParams,
@@ -201,13 +220,16 @@ function _solve!(
         viscosity_cutoff = (-Inf, Inf),
         verbose = true,
         kwargs...,
-    ) where {T}
+    )
 
     # solver related
     ϵ_rel = pt_stokes.ϵ_rel
     ϵ_abs = pt_stokes.ϵ_abs
     # geometry
-    _di = @. 1 / di
+    di = grid.di
+    _di = grid._di
+    di = di isa NamedTuple ? di.center : di
+    _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
 
@@ -403,11 +425,27 @@ function _solve!(
     )
 end
 
+function _solve!(
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::Union{NTuple{3, <:Real}, NamedTuple},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        rheology::MaterialParams,
+        args,
+        dt,
+        igg::IGG;
+        kwargs...,
+    )
+    grid = JustRelax.legacy_uniform_grid(size(stokes.P), di)
+    return _solve!(stokes, pt_stokes, grid, flow_bcs, ρg, rheology, args, dt, igg; kwargs...)
+end
+
 # GeoParams and multiple phases
 function _solve!(
         stokes::JustRelax.StokesArrays,
         pt_stokes,
-        di::NTuple{3, T},
+        grid::Geometry{3},
         flow_bcs::AbstractFlowBoundaryConditions,
         ρg,
         phase_ratios::JustPIC.PhaseRatios,
@@ -423,7 +461,7 @@ function _solve!(
         λ_relaxation = 0.2,
         viscosity_cutoff = (-Inf, Inf),
         kwargs...,
-    ) where {T, N}
+    ) where {N}
 
     ## UNPACK
 
@@ -431,7 +469,10 @@ function _solve!(
     ϵ_rel = pt_stokes.ϵ_rel
     ϵ_abs = pt_stokes.ϵ_abs
     # geometry
-    _di = @. 1 / di
+    di = grid.di
+    _di = grid._di
+    di = di isa NamedTuple ? di.center : di
+    _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
 
@@ -619,4 +660,21 @@ function _solve!(
         time = wtime0,
         av_time = av_time,
     )
+end
+
+function _solve!(
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::Union{NTuple{3, <:Real}, NamedTuple},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        phase_ratios::JustPIC.PhaseRatios,
+        rheology::NTuple{N, AbstractMaterialParamsStruct},
+        args,
+        dt,
+        igg::IGG;
+        kwargs...,
+    ) where {N}
+    grid = JustRelax.legacy_uniform_grid(size(stokes.P), di)
+    return _solve!(stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, dt, igg; kwargs...)
 end

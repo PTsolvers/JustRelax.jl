@@ -380,7 +380,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             phase_ratios,
             rheology,
             args,
-            di,
+            grid,
             dt,
             igg;
             kwargs = (;
@@ -417,7 +417,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (
                 igg = igg,
                 phase = phase_ratios,

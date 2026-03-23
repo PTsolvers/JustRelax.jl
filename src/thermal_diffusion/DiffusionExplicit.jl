@@ -60,7 +60,7 @@ module ThermalDiffusion1D
             pt_thermal::JustRelax.PTThermalCoeffs,
             thermal_parameters::ThermalParameters{<:AbstractArray{_T, 1}},
             ni::NTuple{1, Integer},
-            di::NTuple{1, _T},
+            grid::Geometry{1},
             dt;
             iterMax = 10.0e3,
             nout = 500,
@@ -70,6 +70,10 @@ module ThermalDiffusion1D
         @parallel assign!(thermal.Told, thermal.T)
 
         # Compute some constant stuff
+        di = grid.di
+        _di = grid._di
+        di = di isa NamedTuple ? di.center : di
+        _di = _di isa NamedTuple ? _di.center : _di
         _dt = 1 / dt
         _dx = inv(@dx(di, 1))
         _sqrt_len_RT = 1.0 / sqrt(length(thermal.ResT))
@@ -171,15 +175,15 @@ module ThermalDiffusion2D
 
     ## KERNELS
 
-    @parallel function compute_flux!(qTx, qTy, T, κ, _di)
-        _dx, _dy = @dxi(_di, 1, 1)
+    @parallel function compute_flux!(qTx, qTy, T, κ, _di_vertex)
+        _dx, _dy = @dxi(_di_vertex, 1, 1)
         @all(qTx) = -@av_xi(κ) * @d_xi(T) * _dx
         @all(qTy) = -@av_yi(κ) * @d_yi(T) * _dy
         return nothing
     end
 
-    @parallel_indices (i, j) function compute_flux!(qTx, qTy, T, rheology, args, _di)
-        _dx, _dy = @dxi(_di, i, j)
+    @parallel_indices (i, j) function compute_flux!(qTx, qTy, T, rheology, args, _di_vertex)
+        _dx, _dy = @dxi(_di_vertex, i, j)
         i1, j1 = @add 1 i j # augment indices by 1
         nPx = size(args.P, 1)
 
@@ -201,9 +205,9 @@ module ThermalDiffusion2D
     end
 
     @parallel_indices (i, j) function compute_flux!(
-            qTx, qTy, T, phases, rheology, args, _di
+            qTx, qTy, T, phases, rheology, args, _di_vertex
         )
-        _dx, _dy = @dxi(_di, i, j)
+        _dx, _dy = @dxi(_di_vertex, i, j)
         i1, j1 = @add 1 i j # augment indices by 1
         nPx = size(args.P, 1)
 
@@ -237,9 +241,9 @@ module ThermalDiffusion2D
             rheology::NTuple{N, AbstractMaterialParamsStruct},
             phase_ratios,
             args,
-            _di,
+            _di_vertex,
         ) where {N}
-        _dx, _dy = @dxi(_di, i, j)
+        _dx, _dy = @dxi(_di_vertex, i, j)
         i1, j1 = @add 1 i j # augment indices by 1
         nPx = size(args.P, 1)
 
@@ -274,8 +278,9 @@ module ThermalDiffusion2D
         return nothing
     end
 
-    @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _di)
-        _dx, _dy = @dxi(_di, i, j)
+    @parallel_indices (i, j) function advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, _di_center, _di_vertex)
+        _dx_c, _dy_c = @dxi(_di_center, i, j)
+        _dx_v, _dy_v = @dxi(_di_vertex, i, j)
         if all((i, j) .≤ size(dT_dt))
             i1, j1 = @add 1 i j # augment indices by 1
             i2, j2 = @add 2 i j # augment indices by 2
@@ -285,18 +290,18 @@ module ThermalDiffusion2D
                 Vyᵢⱼ = 0.5 * (Vy[i1, j2] + Vy[i1, j1])
 
                 dT_dt[i, j] =
-                    -((qTx[i1, j] - qTx[i, j]) * _dx + (qTy[i, j1] - qTy[i, j]) * _dy) -
-                    (Vxᵢⱼ > 0) * Vxᵢⱼ * (T[i1, j1] - T[i, j1]) * _dx -
-                    (Vxᵢⱼ < 0) * Vxᵢⱼ * (T[i2, j1] - T[i1, j1]) * _dx -
-                    (Vyᵢⱼ > 0) * Vyᵢⱼ * (T[i1, j1] - T[i1, j]) * _dy -
-                    (Vyᵢⱼ < 0) * Vyᵢⱼ * (T[i1, j2] - T[i1, j1]) * _dy
+                    -((qTx[i1, j] - qTx[i, j]) * _dx_c + (qTy[i, j1] - qTy[i, j]) * _dy_c) -
+                    (Vxᵢⱼ > 0) * Vxᵢⱼ * (T[i1, j1] - T[i, j1]) * _dx_v -
+                    (Vxᵢⱼ < 0) * Vxᵢⱼ * (T[i2, j1] - T[i1, j1]) * _dx_v -
+                    (Vyᵢⱼ > 0) * Vyᵢⱼ * (T[i1, j1] - T[i1, j]) * _dy_v -
+                    (Vyᵢⱼ < 0) * Vyᵢⱼ * (T[i1, j2] - T[i1, j1]) * _dy_v
             end
         end
         return nothing
     end
 
-    @parallel function advect_T!(dT_dt, qTx, qTy, _di)
-        _dx, _dy = @dxi(_di, 1, 1)
+    @parallel function advect_T!(dT_dt, qTx, qTy, _di_center)
+        _dx, _dy = @dxi(_di_center, 1, 1)
         @all(dT_dt) = -(@d_xa(qTx) * _dx + @d_ya(qTy) * _dy)
         return nothing
     end
@@ -312,16 +317,17 @@ module ThermalDiffusion2D
             thermal::JustRelax.ThermalArrays{M},
             thermal_parameters::ThermalParameters{<:AbstractArray{_T, 2}},
             thermal_bc::NamedTuple,
-            di::NTuple{2, _T},
+            grid::Geometry{2},
             dt,
         ) where {_T, M <: AbstractArray{<:Any, 2}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
 
         @parallel assign!(thermal.Told, thermal.T)
-        @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.T, thermal_parameters.κ, _di)
-        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _di)
+        @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.T, thermal_parameters.κ, _di.vertex)
+        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _di.center)
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         thermal_bcs!(thermal_bc, thermal.T)
 
@@ -337,14 +343,15 @@ module ThermalDiffusion2D
             thermal_parameters::ThermalParameters{<:AbstractArray{_T, 2}},
             stokes,
             thermal_bc::TemperatureBoundaryConditions,
-            di::NTuple{2, _T},
+            grid::Geometry{2},
             dt,
         ) where {_T, M <: AbstractArray{<:Any, 2}}
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
 
         @parallel assign!(thermal.Told, thermal.T)
-        @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.T, thermal_parameters.κ, _di)
+        @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.T, thermal_parameters.κ, _di.vertex)
         @parallel advect_T!(
             thermal.dT_dt,
             thermal.qTx,
@@ -352,7 +359,8 @@ module ThermalDiffusion2D
             thermal.T,
             stokes.V.Vx,
             stokes.V.Vy,
-            _di,
+            _di.center,
+            _di.vertex,
         )
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         thermal_bcs!(thermal.T, thermal_bc)
@@ -372,21 +380,22 @@ module ThermalDiffusion2D
             thermal_bc::TemperatureBoundaryConditions,
             rheology,
             args::NamedTuple,
-            di::NTuple{2, _T},
+            grid::Geometry{2},
             dt;
             advection = true,
         ) where {_T, M <: AbstractArray{<:Any, 2}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
         nx, ny = size(thermal.T)
 
         # solve heat diffusion
         @parallel assign!(thermal.Told, thermal.T)
         @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
-            thermal.qTx, thermal.qTy, thermal.T, rheology, args, _di
+            thermal.qTx, thermal.qTy, thermal.T, rheology, args, _di.vertex
         )
-        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _di)
+        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _di.center)
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         thermal_bcs!(thermal.T, thermal_bc)
 
@@ -405,20 +414,21 @@ module ThermalDiffusion2D
             rheology::NTuple{N, AbstractMaterialParamsStruct},
             phase_ratios::JustPIC.PhaseRatios,
             args::NamedTuple,
-            di::NTuple{2, _T},
+            grid::Geometry{2},
             dt,
         ) where {_T, N, M <: AbstractArray{<:Any, 2}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
         nx, ny = size(thermal.T)
 
         # solve heat diffusion
         @parallel assign!(thermal.Told, thermal.T)
         @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
-            thermal.qTx, thermal.qTy, thermal.T, rheology, phase_ratios.center, args, _di
+            thermal.qTx, thermal.qTy, thermal.T, rheology, phase_ratios.center, args, _di.vertex
         )
-        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _di)
+        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, _di.center)
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         thermal_bcs!(thermal.T, thermal_bc)
 
@@ -435,17 +445,18 @@ module ThermalDiffusion2D
             stokes,
             rheology,
             args::NamedTuple,
-            di::NTuple{2, _T},
+            grid::Geometry{2},
             dt,
         ) where {_T, M <: AbstractArray{<:Any, 2}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
         nx, ny = size(thermal.T)
         # solve heat diffusion
         @parallel assign!(thermal.Told, thermal.T)
         @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
-            thermal.qTx, thermal.qTy, thermal.T, rheology, args, _di
+            thermal.qTx, thermal.qTy, thermal.T, rheology, args, _di.vertex
         )
         @parallel advect_T!(
             thermal.dT_dt,
@@ -454,7 +465,8 @@ module ThermalDiffusion2D
             thermal.T,
             stokes.V.Vx,
             stokes.V.Vy,
-            _di,
+            _di.center,
+            _di.vertex,
         )
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         thermal_bcs!(thermal.T, thermal_bc)
@@ -473,17 +485,18 @@ module ThermalDiffusion2D
             phases,
             rheology,
             args::NamedTuple,
-            di::NTuple{2, _T},
+            grid::Geometry{2},
             dt,
         ) where {_T, M <: AbstractArray{<:Any, 2}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
         nx, ny = size(thermal.T)
         # solve heat diffusion
         @parallel assign!(thermal.Told, thermal.T)
         @parallel (1:(nx - 1), 1:(ny - 1)) compute_flux!(
-            thermal.qTx, thermal.qTy, thermal.T, phases, rheology, args, _di
+            thermal.qTx, thermal.qTy, thermal.T, phases, rheology, args, _di.vertex
         )
         @parallel advect_T!(
             thermal.dT_dt,
@@ -492,7 +505,8 @@ module ThermalDiffusion2D
             thermal.T,
             stokes.V.Vx,
             stokes.V.Vy,
-            _di,
+            _di.center,
+            _di.vertex,
         )
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         thermal_bcs!(thermal.T, thermal_bc)
@@ -770,13 +784,16 @@ module ThermalDiffusion3D
             thermal::JustRelax.ThermalArrays{M},
             thermal_parameters::ThermalParameters{<:AbstractArray{_T, 3}},
             thermal_bc::NamedTuple,
-            di::NTuple{3, _T},
+            grid::Geometry{3},
             dt;
             b_width = (4, 4, 4),
         ) where {_T, M <: AbstractArray{<:Any, 3}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
+        di = di isa NamedTuple ? di.center : di
+        _di = _di isa NamedTuple ? _di.center : _di
 
         @parallel assign!(thermal.Told, thermal.T)
         @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, thermal_parameters.κ, _di)
@@ -797,13 +814,16 @@ module ThermalDiffusion3D
             thermal_parameters::ThermalParameters{<:AbstractArray{_T, 3}},
             thermal_bc::NamedTuple,
             stokes,
-            di::NTuple{3, _T},
+            grid::Geometry{3},
             dt;
             b_width = (4, 4, 4),
         ) where {_T, M <: AbstractArray{<:Any, 3}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
+        di = di isa NamedTuple ? di.center : di
+        _di = _di isa NamedTuple ? _di.center : _di
 
         # copy thermal array from previous time step
         @copy thermal.Told thermal.T
@@ -840,13 +860,16 @@ module ThermalDiffusion3D
             thermal_bc::TemperatureBoundaryConditions,
             rheology,
             args::NamedTuple,
-            di::NTuple{3, _T},
+            grid::Geometry{3},
             dt;
             b_width = (4, 4, 4),
         ) where {_T, M <: AbstractArray{<:Any, 3}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
+        di = di isa NamedTuple ? di.center : di
+        _di = _di isa NamedTuple ? _di.center : _di
         ni = size(thermal.T)
 
         ## SOLVE HEAT DIFFUSION
@@ -878,13 +901,16 @@ module ThermalDiffusion3D
             rheology::NTuple{N, AbstractMaterialParamsStruct},
             phase_ratios::JustPIC.PhaseRatios,
             args::NamedTuple,
-            di::NTuple{3, _T},
+            grid::Geometry{3},
             dt;
             b_width = (4, 4, 4),
         ) where {_T, N, M <: AbstractArray{<:Any, 3}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
+        di = di isa NamedTuple ? di.center : di
+        _di = _di isa NamedTuple ? _di.center : _di
         ni = size(thermal.T)
 
         ## SOLVE HEAT DIFFUSION
@@ -923,13 +949,16 @@ module ThermalDiffusion3D
             stokes,
             rheology,
             args::NamedTuple,
-            di::NTuple{3, _T},
+            grid::Geometry{3},
             dt;
             b_width = (4, 4, 4),
         ) where {_T, M <: AbstractArray{<:Any, 3}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
+        di = di isa NamedTuple ? di.center : di
+        _di = _di isa NamedTuple ? _di.center : _di
         ni = size(thermal.T)
 
         ## SOLVE HEAT DIFFUSION
@@ -975,13 +1004,16 @@ module ThermalDiffusion3D
             phases,
             rheology,
             args::NamedTuple,
-            di::NTuple{3, _T},
+            grid::Geometry{3},
             dt;
             b_width = (4, 4, 4),
         ) where {_T, M <: AbstractArray{<:Any, 3}}
 
         # Compute some constant stuff
-        _di = inv.(di)
+        di = grid.di
+        _di = grid._di
+        di = di isa NamedTuple ? di.center : di
+        _di = _di isa NamedTuple ? _di.center : _di
         ni = size(thermal.T)
 
         ## SOLVE HEAT DIFFUSION

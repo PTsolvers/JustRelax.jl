@@ -169,7 +169,7 @@ function main(li_dim, origin_dim, phases_GMG, igg; nx = 16, ny = 16, figdir = "f
                 phase_ratios,
                 rheology,
                 args,
-                di,
+                grid,
                 dt,
                 igg;
                 kwargs = (;

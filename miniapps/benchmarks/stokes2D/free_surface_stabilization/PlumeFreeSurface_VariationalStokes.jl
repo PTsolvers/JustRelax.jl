@@ -192,7 +192,7 @@ function main(igg, nx, ny)
         solve_VariationalStokes!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,

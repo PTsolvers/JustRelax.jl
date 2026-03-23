@@ -207,7 +207,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -233,7 +233,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,

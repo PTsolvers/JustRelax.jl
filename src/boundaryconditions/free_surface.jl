@@ -1,16 +1,28 @@
 function free_surface_bcs!(
+        stokes, bcs::AbstractFlowBoundaryConditions, η, rheology, phase_ratios, dt, _di_vx, _di_vy
+    )
+    return if bcs.free_surface
+        @parallel (@idx (size(stokes.V.Vy, 1) - 2)) FreeSurface_Vy!(
+            @velocity(stokes)...,
+            stokes.P,
+            stokes.P0,
+            stokes.τ_o.yy,
+            η,
+            rheology,
+            phase_ratios.center,
+            dt,
+            _di_vx,
+            _di_vy,
+        )
+    end
+end
+
+function free_surface_bcs!(
         stokes, bcs::AbstractFlowBoundaryConditions, η, rheology, phase_ratios, dt, di
     )
-    indices_range(::Any, Vy) = @idx (size(Vy, 1) - 2)
-    indices_range(::Any, ::Any, Vz) = @idx (size(Vz, 1) - 2, size(Vz, 2) - 2)
-
-    V = @velocity(stokes)
-    n = indices_range(V...)
-
     return if bcs.free_surface
-        # apply boundary conditions
-        @parallel n FreeSurface_Vy!(
-            V...,
+        @parallel (@idx (size(stokes.V.Vz, 1) - 2, size(stokes.V.Vz, 2) - 2)) FreeSurface_Vy!(
+            @velocity(stokes)...,
             stokes.P,
             stokes.P0,
             stokes.τ_o.yy,
@@ -33,9 +45,11 @@ end
         rheology,
         phase_ratios,
         dt::T,
-        di,
+        _di_vx,
+        _di_vy,
     ) where {T}
-    dx, dy = @dxi(di, i, size(P, 2))
+    dx = @dx(_di_vx, i)
+    dy = @dy(_di_vy, size(P, 2))
     phase = @inbounds phase_ratios[i, end]
     Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
     ν = 1.0e-2

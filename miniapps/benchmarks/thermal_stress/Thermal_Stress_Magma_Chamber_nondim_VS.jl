@@ -408,7 +408,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     solve_VariationalStokes!(
         stokes,
         pt_stokes,
-        di,
+        grid,
         flow_bcs,
         ρg,
         phase_ratios,
@@ -435,7 +435,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         solve_VariationalStokes!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -474,7 +474,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,

@@ -271,9 +271,9 @@ end
 ## 2D KERNELS
 
 @parallel_indices (i, j) function compute_flux!(
-        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _di
+        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _di_vertex
     ) where {_T}
-    _dx, _dy = @dxi(_di, i, j)
+    _dx, _dy = @dxi(_di_vertex, i, j)
     nx = size(θr_dτ, 1)
 
     d_xi(A) = _d_xi(A, _dx, i, j)
@@ -294,9 +294,9 @@ end
 end
 
 @parallel_indices (i, j) function compute_flux!(
-        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, rheology, phase, θr_dτ, _di, args
+        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, rheology, phase, θr_dτ, _di_vertex, args
     ) where {_T}
-    _dx, _dy = @dxi(_di, i, j)
+    _dx, _dy = @dxi(_di_vertex, i, j)
     nx = size(θr_dτ, 1)
 
     d_xi(A) = _d_xi(A, _dx, i, j)
@@ -348,10 +348,10 @@ end
         rheology::NTuple{N, AbstractMaterialParamsStruct},
         phase_ratios::CellArray{C1, C2, C3, C4},
         θr_dτ,
-        _di,
+        _di_vertex,
         args,
     ) where {_T, N, C1, C2, C3, C4}
-    _dx, _dy = @dxi(_di, i, j)
+    _dx, _dy = @dxi(_di_vertex, i, j)
     nx = size(θr_dτ, 1)
 
     d_xi(A) = _d_xi(A, _dx, i, j)
@@ -405,9 +405,9 @@ end
         dτ_ρ,
         dirichlet,
         _dt,
-        _di,
+        _di_center,
     ) where {_T}
-    _dx, _dy = @dxi(_di, i, j)
+    _dx, _dy = @dxi(_di_center, i, j)
     I1 = i + 1, j + 1
 
     if isdirichlet(dirichlet, I1...)
@@ -456,10 +456,10 @@ end
         dτ_ρ,
         dirichlet,
         _dt,
-        _di,
+        _di_center,
         args::NamedTuple,
     ) where {_T}
-    _dx, _dy = @dxi(_di, i, j)
+    _dx, _dy = @dxi(_di_center, i, j)
 
     I1 = i + 1, j + 1
 
@@ -516,9 +516,9 @@ end
         ρCp,
         dirichlet,
         _dt,
-        _di,
+        _di_center,
     ) where {_T}
-    _dx, _dy = @dxi(_di, i, j)
+    _dx, _dy = @dxi(_di_center, i, j)
     nx, ny = size(ρCp)
 
     d_xa(A) = _d_xa(A, _dx, i, j)
@@ -559,10 +559,10 @@ end
         phase,
         dirichlet,
         _dt,
-        _di,
+        _di_center,
         args,
     ) where {_T}
-    _dx, _dy = @dxi(_di, i, j)
+    _dx, _dy = @dxi(_di_center, i, j)
     nx, ny = size(args.P)
 
     i0 = clamp(i - 1, 1, nx)
@@ -693,9 +693,9 @@ end
 end
 
 @parallel_indices (i, j) function adiabatic_heating(
-        A, Vx, Vy, P, rheology, phases, _di
+        A, Vx, Vy, P, rheology, phases, _di_vertex
     )
-    _dx, _dy = @dxi(_di, i, j)
+    _dx, _dy = @dxi(_di_vertex, i, j)
     I = i, j
     I1 = i1, j1 = I .+ 1
     @inbounds begin
@@ -727,12 +727,20 @@ end
     return nothing
 end
 
-function adiabatic_heating!(thermal, stokes, rheology, phases, di)
+function adiabatic_heating!(thermal, stokes, rheology, phases, grid::Geometry{2})
     idx = @idx (size(stokes.P) .- 1)
-    _di = inv.(di)
     return @parallel idx adiabatic_heating(
-        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, _di
+        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, grid._di.vertex
     )
 end
 
+function adiabatic_heating!(thermal, stokes, rheology, phases, grid::Geometry{3})
+    idx = @idx (size(stokes.P) .- 1)
+    return @parallel idx adiabatic_heating(
+        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, grid._di.center
+    )
+end
+
+@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, ::Geometry{2}) = nothing
+@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, ::Geometry{3}) = nothing
 @inline adiabatic_heating!(thermal, ::Nothing, ::Vararg{Any, N}) where {N} = nothing

@@ -193,7 +193,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
             out = solve!(
                 stokes,
                 pt_stokes,
-                di,
+                grid,
                 flow_bcs,
                 ρg,
                 phase_ratios,

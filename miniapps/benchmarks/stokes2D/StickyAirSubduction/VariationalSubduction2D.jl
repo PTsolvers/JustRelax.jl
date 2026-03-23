@@ -168,7 +168,7 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
             solve_VariationalStokes!(
                 stokes,
                 pt_stokes,
-                di,
+                grid,
                 flow_bcs,
                 ρg,
                 phase_ratios,

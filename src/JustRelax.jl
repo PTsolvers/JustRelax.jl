@@ -195,7 +195,7 @@ export TemperatureBoundaryConditions,
 include("types/traits.jl")
 export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 
-include("topology/Topology.jl")
+include("grid/Grid.jl")
 export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g
 
 include("JustRelax_CPU.jl")

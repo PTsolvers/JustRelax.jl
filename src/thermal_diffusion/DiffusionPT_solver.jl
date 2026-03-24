@@ -220,7 +220,7 @@ function _heatdiffusion_PT!(
                 pt_thermal,
                 thermal_bc.dirichlet,
                 _dt,
-                _di.center,
+                _di.vertex,
                 ni,
                 args,
             )
@@ -247,7 +247,7 @@ function _heatdiffusion_PT!(
                     phases,
                     thermal_bc.dirichlet,
                     _dt,
-                    _di.center,
+                    _di.vertex,
                     args,
                 )
             end

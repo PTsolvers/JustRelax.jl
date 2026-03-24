@@ -183,11 +183,11 @@ module ThermalDiffusion2D
     end
 
     @parallel_indices (i, j) function compute_flux!(qTx, qTy, T, rheology, args, _di_vertex)
-        _dx, _dy = @dxi(_di_vertex, i, j)
         i1, j1 = @add 1 i j # augment indices by 1
         nPx = size(args.P, 1)
 
         @inbounds if all((i, j) .≤ size(qTx))
+            _dx = @dx(_di_vertex, i)
             Tx = (T[i1, j1] + T[i, j1]) * 0.5
             Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
             argsx = (; T = Tx, P = Pvertex)
@@ -195,6 +195,7 @@ module ThermalDiffusion2D
         end
 
         @inbounds if all((i, j) .≤ size(qTy))
+            _dy = @dy(_di_vertex, j)
             Ty = (T[i1, j1] + T[i1, j]) * 0.5
             Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
             argsy = (; T = Ty, P = Pvertex)
@@ -207,11 +208,11 @@ module ThermalDiffusion2D
     @parallel_indices (i, j) function compute_flux!(
             qTx, qTy, T, phases, rheology, args, _di_vertex
         )
-        _dx, _dy = @dxi(_di_vertex, i, j)
         i1, j1 = @add 1 i j # augment indices by 1
         nPx = size(args.P, 1)
 
         @inbounds if all((i, j) .≤ size(qTx))
+            _dx = @dx(_di_vertex, i)
             Tx = (T[i1, j1] + T[i, j1]) * 0.5
             Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
             argsx = (; T = Tx, P = Pvertex)
@@ -222,6 +223,7 @@ module ThermalDiffusion2D
         end
 
         @inbounds if all((i, j) .≤ size(qTy))
+            _dy = @dy(_di_vertex, j)
             Ty = (T[i1, j1] + T[i1, j]) * 0.5
             Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
             argsy = (; T = Ty, P = Pvertex)
@@ -243,11 +245,11 @@ module ThermalDiffusion2D
             args,
             _di_vertex,
         ) where {N}
-        _dx, _dy = @dxi(_di_vertex, i, j)
         i1, j1 = @add 1 i j # augment indices by 1
         nPx = size(args.P, 1)
 
         if all((i, j) .≤ size(qTx))
+            _dx = @dx(_di_vertex, i)
             Tx = (T[i1, j1] + T[i, j1]) * 0.5 - 273.0
             Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
             phase_ratios_vertex =
@@ -263,6 +265,7 @@ module ThermalDiffusion2D
         end
 
         if all((i, j) .≤ size(qTy))
+            _dy = @dy(_di_vertex, j)
             Ty = (T[i1, j1] + T[i1, j]) * 0.5 - 273.0
             Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
             phase_ratios_vertex =
@@ -553,12 +556,12 @@ module ThermalDiffusion3D
     @parallel_indices (i, j, k) function compute_flux!(
             qTx, qTy, qTz, T, rheology, args, _di
         )
-        _dx, _dy, _dz = @dxi(_di, i, j, k)
         i1, j1, k1 = (i, j, k) .+ 1  # augment indices by 1
         nx, ny, nz = size(args.P)
 
         @inbounds begin
             if all((i, j, k) .≤ size(qTx))
+                _dx = @dx(_di, i)
                 Tx = (T[i1, j1, k1] + T[i, j1, k1]) * 0.5
                 Pvertex = 0.0
                 for jj in 0:1, kk in 0:1
@@ -570,6 +573,7 @@ module ThermalDiffusion3D
             end
 
             if all((i, j, k) .≤ size(qTy))
+                _dy = @dy(_di, j)
                 Ty = (T[i1, j1, k1] + T[i1, j, k1]) * 0.5
                 Pvertex = 0.0
                 for kk in 0:1, ii in 0:1
@@ -581,6 +585,7 @@ module ThermalDiffusion3D
             end
 
             if all((i, j, k) .≤ size(qTz))
+                _dz = @dz(_di, k)
                 Tz = (T[i1, j1, k1] + T[i1, j1, k]) * 0.5
                 Pvertex = 0.0
                 for jj in 0:1, ii in 0:1
@@ -598,12 +603,12 @@ module ThermalDiffusion3D
     @parallel_indices (i, j, k) function compute_flux!(
             qTx, qTy, qTz, T, phases, rheology, args, _di
         )
-        _dx, _dy, _dz = @dxi(_di, i, j, k)
         i1, j1, k1 = (i, j, k) .+ 1  # augment indices by 1
         nx, ny, nz = size(args.P)
 
         @inbounds begin
             if all((i, j, k) .≤ size(qTx))
+                _dx = @dx(_di, i)
                 Tx = (T[i1, j1, k1] + T[i, j1, k1]) * 0.5
                 Pvertex = 0.0
                 for jj in 0:1, kk in 0:1
@@ -619,6 +624,7 @@ module ThermalDiffusion3D
             end
 
             if all((i, j, k) .≤ size(qTy))
+                _dy = @dy(_di, j)
                 Ty = (T[i1, j1, k1] + T[i1, j, k1]) * 0.5
                 Pvertex = 0.0
                 for kk in 0:1, ii in 0:1
@@ -634,6 +640,7 @@ module ThermalDiffusion3D
             end
 
             if all((i, j, k) .≤ size(qTz))
+                _dz = @dz(_di, k)
                 Tz = (T[i1, j1, k1] + T[i1, j1, k]) * 0.5
                 Pvertex = 0.0
                 for jj in 0:1, ii in 0:1
@@ -663,12 +670,12 @@ module ThermalDiffusion3D
             args,
             _di,
         ) where {N}
-        _dx, _dy, _dz = @dxi(_di, i, j, k)
         i1, j1, k1 = (i, j, k) .+ 1  # augment indices by 1
         nx, ny, nz = size(args.P)
 
         @inbounds begin
             if all((i, j, k) .≤ size(qTx))
+                _dx = @dx(_di, i)
                 Tx = (T[i1, j1, k1] + T[i, j1, k1]) * 0.5
                 Pvertex = 0.0
                 phase_ratios_vertex = new_empty_cell(phase_ratios)
@@ -688,6 +695,7 @@ module ThermalDiffusion3D
             end
 
             if all((i, j, k) .≤ size(qTy))
+                _dy = @dy(_di, j)
                 Ty = (T[i1, j1, k1] + T[i1, j, k1]) * 0.5
                 Pvertex = 0.0
                 phase_ratios_vertex = new_empty_cell(phase_ratios)
@@ -707,6 +715,7 @@ module ThermalDiffusion3D
             end
 
             if all((i, j, k) .≤ size(qTz))
+                _dz = @dz(_di, k)
                 Tz = (T[i1, j1, k1] + T[i1, j1, k]) * 0.5
                 Pvertex = 0.0
                 phase_ratios_vertex = new_empty_cell(phase_ratios)

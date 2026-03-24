@@ -217,7 +217,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # Time loop
     t, it = 0.0, 0
-    # while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
+    while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -273,104 +273,104 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                 verbose = true,
             ),
         )
-    #     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-    #         copyinn_x!(dst, src)
-    #     end
-    #     subgrid_characteristic_time!(
-    #         subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
-    #     )
-    #     centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
-    #     subgrid_diffusion!(
-    #         pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, xvi, di, dt
-    #     )
-    #     # ------------------------------
+        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+            copyinn_x!(dst, src)
+        end
+        subgrid_characteristic_time!(
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+        )
+        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+        subgrid_diffusion!(
+            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, xvi, di, dt
+        )
+        # ------------------------------
 
-    #     # Advection --------------------
-    #     # advect particles in space
-    #     advection_MQS!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
-    #     # advect particles in memory
-    #     move_particles!(particles, xvi, particle_args)
-    #     # check if we need to inject particles
-    #     inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
-    #     # update phase ratios
-    #     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        # Advection --------------------
+        # advect particles in space
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        # advect particles in memory
+        move_particles!(particles, xvi, particle_args)
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
 
-    #     @show it += 1
-    #     t += dt
+        @show it += 1
+        t += dt
 
-    #     # Data I/O and plotting ---------------------
-    #     if it == 1 || rem(it, 1) == 0
-    #         checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
+        # Data I/O and plotting ---------------------
+        if it == 1 || rem(it, 1) == 0
+            checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
-    #         if do_vtk
-    #             JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-    #             data_v = (;
-    #                 T = Array(thermal.T[2:(end - 1), :]),
-    #                 τxy = Array(stokes.τ.xy),
-    #                 εxy = Array(stokes.ε.xy),
-    #                 Vx = Array(Vx_v),
-    #                 Vy = Array(Vy_v),
-    #             )
-    #             data_c = (;
-    #                 P = Array(stokes.P),
-    #                 τxx = Array(stokes.τ.xx),
-    #                 τyy = Array(stokes.τ.yy),
-    #                 εxx = Array(stokes.ε.xx),
-    #                 εyy = Array(stokes.ε.yy),
-    #                 η = Array(stokes.viscosity.η_vep),
-    #             )
-    #             velocity_v = (
-    #                 Array(Vx_v),
-    #                 Array(Vy_v),
-    #             )
-    #             save_vtk(
-    #                 joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-    #                 xvi,
-    #                 xci,
-    #                 data_v,
-    #                 data_c,
-    #                 velocity_v,
-    #                 t = t
-    #             )
-    #         end
+            if do_vtk
+                JustRelax.velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                data_v = (;
+                    T = Array(thermal.T[2:(end - 1), :]),
+                    τxy = Array(stokes.τ.xy),
+                    εxy = Array(stokes.ε.xy),
+                    Vx = Array(Vx_v),
+                    Vy = Array(Vy_v),
+                )
+                data_c = (;
+                    P = Array(stokes.P),
+                    τxx = Array(stokes.τ.xx),
+                    τyy = Array(stokes.τ.yy),
+                    εxx = Array(stokes.ε.xx),
+                    εyy = Array(stokes.ε.yy),
+                    η = Array(stokes.viscosity.η_vep),
+                )
+                velocity_v = (
+                    Array(Vx_v),
+                    Array(Vy_v),
+                )
+                save_vtk(
+                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                    xvi,
+                    xci,
+                    data_v,
+                    data_c,
+                    velocity_v,
+                    t = t
+                )
+            end
 
-    #         # Make particles plottable
-    #         p = particles.coords
-    #         ppx, ppy = p
-    #         pxv = ppx.data[:] ./ 1.0e3
-    #         pyv = ppy.data[:] ./ 1.0e3
-    #         clr = pPhases.data[:]
-    #         clr = pT.data[:]
-    #         idxv = particles.index.data[:]
+            # Make particles plottable
+            p = particles.coords
+            ppx, ppy = p
+            pxv = ppx.data[:] ./ 1.0e3
+            pyv = ppy.data[:] ./ 1.0e3
+            clr = pPhases.data[:]
+            clr = pT.data[:]
+            idxv = particles.index.data[:]
 
-    #         # Make Makie figure
-    #         fig = Figure(size = (900, 900), title = "t = $t")
-    #         ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
-    #         ax2 = Axis(fig[2, 1], aspect = ar, title = "Vy [m/s]")
-    #         ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
-    #         ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
-    #         # Plot temperature
-    #         h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :batlow)
-    #         # Plot particles phase
-    #         h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]))
-    #         # Plot 2nd invariant of strain rate
-    #         h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
-    #         # Plot effective viscosity
-    #         h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
-    #         hidexdecorations!(ax1)
-    #         hidexdecorations!(ax2)
-    #         hidexdecorations!(ax3)
-    #         Colorbar(fig[1, 2], h1)
-    #         Colorbar(fig[2, 2], h2)
-    #         Colorbar(fig[1, 4], h3)
-    #         Colorbar(fig[2, 4], h4)
-    #         linkaxes!(ax1, ax2, ax3, ax4)
-    #         save(joinpath(figdir, "$(it).png"), fig)
-    #         fig
-    #     end
-    #     # ------------------------------
+            # Make Makie figure
+            fig = Figure(size = (900, 900), title = "t = $t")
+            ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
+            ax2 = Axis(fig[2, 1], aspect = ar, title = "Vy [m/s]")
+            ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
+            ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
+            # Plot temperature
+            h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :batlow)
+            # Plot particles phase
+            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]))
+            # Plot 2nd invariant of strain rate
+            h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
+            # Plot effective viscosity
+            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax2)
+            hidexdecorations!(ax3)
+            Colorbar(fig[1, 2], h1)
+            Colorbar(fig[2, 2], h2)
+            Colorbar(fig[1, 4], h3)
+            Colorbar(fig[2, 4], h4)
+            linkaxes!(ax1, ax2, ax3, ax4)
+            save(joinpath(figdir, "$(it).png"), fig)
+            fig
+        end
+        # ------------------------------
 
-    # end
+    end
 
     return nothing
 end

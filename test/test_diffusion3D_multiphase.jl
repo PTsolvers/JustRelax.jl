@@ -188,7 +188,7 @@ function diffusion_3D(;
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,

@@ -163,7 +163,7 @@ function Shearheating2D(; nx = 32, ny = 32)
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -197,7 +197,7 @@ function Shearheating2D(; nx = 32, ny = 32)
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,

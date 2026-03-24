@@ -179,7 +179,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (
                 phase = phase_ratios,
                 iterMax = 1.0e3,

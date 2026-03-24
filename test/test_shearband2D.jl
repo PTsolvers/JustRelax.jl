@@ -157,7 +157,7 @@ function ShearBand2D()
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,

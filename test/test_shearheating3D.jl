@@ -161,7 +161,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -196,7 +196,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (
                 igg = igg,
                 phase = phase_ratios,

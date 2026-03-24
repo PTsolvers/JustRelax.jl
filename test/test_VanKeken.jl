@@ -157,7 +157,7 @@ function VanKeken2D(ny = 32, nx = 32)
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,

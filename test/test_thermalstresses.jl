@@ -365,7 +365,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     solve!(
         stokes,
         pt_stokes,
-        di,
+        grid,
         flow_bcs,
         ρg,
         phase_ratios,
@@ -392,7 +392,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -430,7 +430,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,

@@ -64,13 +64,13 @@ function _solve!(
     wtime0 = 0.0
     while iter < 2 || (((err / err_it1) > ϵ_rel && err > ϵ_abs) && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di.center)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di.vertex)
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
                 @strain(stokes)...,
                 stokes.∇V,
                 @velocity(stokes)...,
-                _di.center,
+                _di.vertex,
                 _di.velocity[1],
                 _di.velocity[2],
             )
@@ -226,7 +226,7 @@ function _solve!(
     wtime0 = 0.0
     while iter < 2 || (((err / err_it1) > ϵ_rel && err > ϵ_abs) && iter ≤ iterMax)
         wtime0 += @elapsed begin
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di.center)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di.vertex)
 
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, ητ, K, G, dt, r, θ_dτ
@@ -236,7 +236,7 @@ function _solve!(
                 @strain(stokes)...,
                 stokes.∇V,
                 @velocity(stokes)...,
-                _di.center,
+                _di.vertex,
                 _di.velocity[1],
                 _di.velocity[2],
             )
@@ -416,7 +416,7 @@ function _solve!(
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di.center)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di.vertex)
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.R.RP, stokes.∇V, stokes.Q, η, Kb, G, dt, r, θ_dτ
             )
@@ -427,7 +427,7 @@ function _solve!(
                 @strain(stokes)...,
                 stokes.∇V,
                 @velocity(stokes)...,
-                _di.center,
+                _di.vertex,
                 _di.velocity[1],
                 _di.velocity[2],
             )
@@ -599,9 +599,8 @@ function _solve!(
 
     # unpack
 
-    di = grid.di
     _di = grid._di
-    _dt = inv.(dt)
+    _dt = inv(dt)
     (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokes
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
@@ -654,10 +653,10 @@ function _solve!(
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di.center)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di.vertex)
 
             if strain_increment
-                @parallel (@idx ni) compute_∇V!(stokes.∇U, @displacement(stokes), _di.center)
+                @parallel (@idx ni) compute_∇V!(stokes.∇U, @displacement(stokes), _di.vertex)
             end
 
             compute_P!(
@@ -695,7 +694,7 @@ function _solve!(
                     @strain(stokes)...,
                     stokes.∇V,
                     @velocity(stokes)...,
-                    _di.center,
+                    _di.vertex,
                     _di.velocity[1],
                     _di.velocity[2],
                 )
@@ -778,7 +777,7 @@ function _solve!(
                 )
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
-                free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, _di.velocity[1], _di.velocity[2])
+                # free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, _di.velocity[1], _di.velocity[2])
                 flow_bcs!(stokes, flow_bcs)
                 update_halo!(@velocity(stokes)...)
             end

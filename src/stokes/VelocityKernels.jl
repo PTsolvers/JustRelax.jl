@@ -8,11 +8,9 @@ end
 ## DEVIATORIC STRAIN RATE TENSOR
 
 @parallel_indices (i, j) function compute_strain_rate!(
-        εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, _di_center, _di_vx, _di_vy
+        εxx::AbstractArray{T, 2}, εyy, εxy, ∇V, Vx, Vy, _di_vertex, _di_vx, _di_vy
     ) where {T}
-    _dx, _dy = @dxi(_di_center, i, j)
-    _dy_vx = @dy(_di_vx, j)
-    _dx_vy = @dx(_di_vy, i)
+
 
     Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j)
     Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j)
@@ -20,6 +18,9 @@ end
     @inbounds begin
         # normal components are all located @ cell centers
         if all((i, j) .≤ size(εxx))
+
+            _dx, _dy = @dxi(_di_vertex, i, j)
+
             ∇Vij = ∇V[i, j] * inv(3)
             # Compute ε_xx
             εxx[i, j] = d_xi(Vx) - ∇Vij
@@ -29,6 +30,8 @@ end
 
         # Compute ε_xy
         if all((i, j) .≤ size(εxy))
+            _dy_vx = @dy(_di_vx, j)
+            _dx_vy = @dx(_di_vy, i)
             εxy[i, j] =
                 0.5 * (
                 _dy_vx * (Vx[i, j + 1] - Vx[i, j]) +
@@ -105,22 +108,22 @@ end
 @parallel_indices (i, j) function compute_V!(
         Vx::AbstractArray{T, 2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _di_center, _di_vertex
     ) where {T}
-    _dx_c, _dy_c = @dxi(_di_center, i, j)
-    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
-    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
-    Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
-    Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
-    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
 
     if all((i, j) .< size(Vx) .- 1)
+        _dx_c = @dx(_di_center, i)
+        _dy_v = @dy(_di_vertex, j)
+        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
         @inbounds Vx[i + 1, j + 1] +=
             (-d_xa(P) + d_xa(τxx) + d_yi(τxy) - av_xa(ρgx)) * ηdτ / av_xa(ητ)
     end
     if all((i, j) .< size(Vy) .- 1)
+        _dy_c = @dy(_di_center, j)
+        _dx_v = @dx(_di_vertex, i)
+        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+        Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
         @inbounds Vy[i + 1, j + 1] +=
             (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy)) * ηdτ / av_ya(ητ)
     end
@@ -131,12 +134,11 @@ end
 @parallel_indices (i, j) function compute_V!(
         Vx::AbstractArray{T, 2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _di_center, _di_vertex, dt
     ) where {T}
-    _dx_c, _dy_c = @dxi(_di_center, i, j)
-    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
-    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
-    Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
-    Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+
+    Base.@propagate_inbounds @inline d_xi(A, __dx) = _d_xi(A, __dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, __dy) = _d_yi(A, __dy, i, j)
+    Base.@propagate_inbounds @inline d_xa(A, __dx) = _d_xa(A, __dx, i, j)
+    Base.@propagate_inbounds @inline d_ya(A, __dy) = _d_ya(A, __dy, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
     Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
@@ -145,11 +147,17 @@ end
     nx, ny = size(ρgy)
 
     if all((i, j) .< size(Vx) .- 1)
+        _dx = @dx(_di_center, i)
+        _dy = @dy(_di_vertex, j)
+
         @inbounds Vx[i + 1, j + 1] +=
-            (-d_xa(P) + d_xa(τxx) + d_yi(τxy) - av_xa(ρgx)) * ηdτ / av_xa(ητ)
+            (-d_xa(P, _dx) + d_xa(τxx,_dx) + d_yi(τxy, _dy) - av_xa(ρgx)) * ηdτ / av_xa(ητ)
     end
 
     @inbounds if all((i, j) .< size(Vy) .- 1)
+        _dx = @dx(_di_vertex, i)
+        _dy = @dy(_di_center, j)
+
         θ = 1.0
         # Interpolated Vx into Vy node (includes density gradient)
         # Vertical velocity
@@ -159,12 +167,12 @@ end
         ρg_S = ρgy[i, j]
         ρg_N = ρgy[i, j_N]
         # Spatial derivatives
-        ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
+        ∂ρg∂y = (ρg_N - ρg_S) * _dy
         # correction term
         ρg_correction = Vyᵢⱼ * ∂ρg∂y * θ * dt
 
         Vy[i + 1, j + 1] +=
-            (-d_ya(P) + d_ya(τyy) + d_xi(τxy) - av_ya(ρgy) + ρg_correction) * ηdτ /
+            (-d_ya(P, _dy) + d_ya(τyy, _dy) + d_xi(τxy, _dx) - av_ya(ρgy) + ρg_correction) * ηdτ /
             av_ya(ητ)
     end
 
@@ -238,20 +246,22 @@ end
 @parallel_indices (i, j) function compute_Res!(
         Rx::AbstractArray{T, 2}, Ry, P, τxx, τyy, τxy, ρgx, ρgy, _di_center, _di_vertex
     ) where {T}
-    _dx_c, _dy_c = @dxi(_di_center, i, j)
-    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
-    Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
-    Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
-    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
 
     @inbounds begin
         if all((i, j) .≤ size(Rx))
+            _dx_c = @dx(_di_center, i)
+            _dy_v = @dy(_di_vertex, j)
+            Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+            Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
             Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
         end
         if all((i, j) .≤ size(Ry))
+            _dy_c = @dy(_di_center, j)
+            _dx_v = @dx(_di_vertex, i)
+            Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+            Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
             Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - av_ya(ρgy)
         end
     end
@@ -261,21 +271,23 @@ end
 @parallel_indices (i, j) function compute_Res!(
         Rx::AbstractArray{T, 2}, Ry, Vx, Vy, P, τxx, τyy, τxy, ρgx, ρgy, _di_center, _di_vertex, dt
     ) where {T}
-    _dx_c, _dy_c = @dxi(_di_center, i, j)
-    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
-    Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
-    Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
-    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
 
     nx, ny = size(ρgy)
     if all((i, j) .≤ size(Rx))
+        _dx_c = @dx(_di_center, i)
+        _dy_v = @dy(_di_vertex, j)
+        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
         @inbounds Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - av_xa(ρgx)
     end
 
     @inbounds if all((i, j) .≤ size(Ry))
+        _dy_c = @dy(_di_center, j)
+        _dx_v = @dx(_di_vertex, i)
+        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+        Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
         θ = 1.0
         # Vertical velocity
         Vyᵢⱼ = Vy[i + 1, j + 1]

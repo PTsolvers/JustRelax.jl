@@ -24,11 +24,11 @@ Compute the components of the strain rate tensor `ε` from the velocity field `V
         Vx,
         Vy,
         ϕ::JustRelax.RockRatio,
-        _di_center,
+        _di_vertex,
         _di_vx,
         _di_vy,
     ) where {T}
-    _dx, _dy = @dxi(_di_center, i, j)
+    _dx, _dy = @dxi(_di_vertex, i, j)
     _dy_vx = @dy(_di_vx, j)
     _dx_vy = @dx(_di_vy, i)
 
@@ -175,20 +175,16 @@ Compute the velocity field `V` from the pressure `P`, stress components `τ`, an
         _di_center,
         _di_vertex,
     ) where {T}
-    _dx_c, _dy_c = @dxi(_di_center, i, j)
-    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
-    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
-    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
     Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
-    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
 
     if all((i, j) .< size(Vx) .- 1)
+        _dx_c = @dx(_di_center, i)
+        _dy_v = @dy(_di_vertex, j)
+        Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
         if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j] =
                 R_Vx = (
@@ -203,6 +199,10 @@ Compute the velocity field `V` from the pressure `P`, stress components `τ`, an
     end
 
     if all((i, j) .< size(Vy) .- 1)
+        _dy_c = @dy(_di_center, j)
+        _dx_v = @dx(_di_vertex, i)
+        Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
+        Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
         if isvalid_vy(ϕ, i, j + 1)
             Ry[i, j] =
                 R_Vy =
@@ -236,20 +236,16 @@ Compute the x-component of the velocity field `Vx` from the pressure `P`, stress
         _di_center,
         _di_vertex,
     ) where {T}
-    _dx_c, _dy_c = @dxi(_di_center, i, j)
-    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
-    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
-    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
     Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
-    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
 
     if all((i, j) .< size(Vx) .- 1)
+        _dx_c = @dx(_di_center, i)
+        _dy_v = @dy(_di_vertex, j)
+        Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
         if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j] =
                 R_Vx = (
@@ -286,21 +282,17 @@ Compute the y-component of the velocity field `Vy` from the pressure `P`, stress
         _di_vertex,
         dt,
     ) where {T}
-    _dx_c, _dy_c = @dxi(_di_center, i, j)
-    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
-    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
-    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
     Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
-    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
 
     @inbounds begin
         if all((i, j) .< size(Vy) .- 1)
+            _dy_c = @dy(_di_center, j)
+            _dx_v = @dx(_di_vertex, i)
+            Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
+            Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
             if isvalid_vy(ϕ, i, j + 1)
                 θ = 1.0
                 # Interpolated Vx into Vy node (includes density gradient)
@@ -355,20 +347,16 @@ Compute the velocity field `V` with the timestep dt from the pressure `P`, stres
         _di_vertex,
         dt,
     ) where {T}
-    _dx_c, _dy_c = @dxi(_di_center, i, j)
-    _dx_v, _dy_v = @dxi(_di_vertex, i, j)
-    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
-    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
     Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
-    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
 
     if all((i, j) .< size(Vx) .- 1)
+        _dx_c = @dx(_di_center, i)
+        _dy_v = @dy(_di_vertex, j)
+        Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
         @inbounds if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j] =
                 R_Vx = @inbounds (
@@ -383,6 +371,10 @@ Compute the velocity field `V` with the timestep dt from the pressure `P`, stres
     end
 
     if all((i, j) .< size(Vy) .- 1)
+        _dy_c = @dy(_di_center, j)
+        _dx_v = @dx(_di_vertex, i)
+        Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
+        Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
         @inbounds if isvalid_vy(ϕ, i, j + 1)
             θ = 1.0
             # Vertical velocity

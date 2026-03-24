@@ -138,7 +138,7 @@ function _solve_DYREL!(
             stokes.∇V,
             @strain(stokes)...,
             @velocity(stokes)...,
-            _di.center,
+            _di.vertex,
             _di.velocity[1],
             _di.velocity[2],
         )
@@ -236,7 +236,7 @@ function _solve_DYREL!(
                 stokes.∇V,
                 @strain(stokes)...,
                 @velocity(stokes)...,
-                _di.center,
+                _di.vertex,
                 _di.velocity[1],
                 _di.velocity[2],
             )

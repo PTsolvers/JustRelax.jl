@@ -109,10 +109,10 @@ function _solve_VS!(
             compute_maxloc!(ητ, η; window = (1, 1))
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di.center)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di.vertex)
 
             if strain_increment
-                @parallel (@idx ni) compute_∇V!(stokes.∇U, @displacement(stokes), ϕ, _di.center)
+                @parallel (@idx ni) compute_∇V!(stokes.∇U, @displacement(stokes), ϕ, _di.vertex)
             end
 
             compute_P!(
@@ -138,7 +138,7 @@ function _solve_VS!(
                     stokes.∇U,
                     @displacement(stokes)...,
                     ϕ,
-                    _di.center,
+                    _di.vertex,
                     _di.velocity[1],
                     _di.velocity[2],
                 )
@@ -152,7 +152,7 @@ function _solve_VS!(
                     stokes.∇V,
                     @velocity(stokes)...,
                     ϕ,
-                    _di.center,
+                    _di.vertex,
                     _di.velocity[1],
                     _di.velocity[2],
                 )

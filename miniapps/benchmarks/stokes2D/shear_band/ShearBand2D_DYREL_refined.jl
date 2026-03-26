@@ -1,0 +1,270 @@
+# using CUDA
+
+using GeoParams, GLMakie, CellArrays
+using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil
+# @init_parallel_stencil(CUDA, Float64, 2)
+@init_parallel_stencil(Threads, Float64, 2)
+
+# const backend = CUDABackend
+const backend = CPUBackend
+
+using JustPIC, JustPIC._2D
+import JustPIC._2D.GridGeometryUtils as GGU
+
+const backend_JP = JustPIC.CPUBackend
+# const backend_JP = CUDABackend
+
+# HELPER FUNCTIONS ----------------------------------- ----------------------------
+solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
+
+# Initialize phases on the particles
+function init_phases!(phase_ratios, xci, xvi, circle)
+    ni = size(phase_ratios.center)
+
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
+        x, y = xc[i], yc[j]
+        p = GGU.Point(x, y)
+        if GGU.inside(p, circle)
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
+
+        else
+            @index phases[1, i, j] = 1.0
+            @index phases[2, i, j] = 0.0
+
+        end
+        return nothing
+    end
+
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
+    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
+    return nothing
+end
+
+
+# MAIN SCRIPT --------------------------------------------------------------------
+function main(xvi, igg; nx = 64, ny = 64, figdir = "model_figs")
+
+    # Physical domain ------------------------------------
+    grid = Geometry(xvi...)
+    (; xci, ni ) = grid # nodes at the center and vertices of the cells
+
+    # Physical properties using GeoParams ----------------
+    τ_y = 1.6          # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ = 30             # friction angle
+    C = τ_y            # Cohesion
+    η0 = 1.0           # viscosity
+    G0 = 1.0           # elastic shear modulus
+    Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
+    εbg = 1.0           # background strain-rate
+    η_reg = 1.5e-2 #1e-2 #8.0e-3          # regularisation "viscosity"
+    dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
+    el_bg = ConstantElasticity(; G = G0, Kb = 5)
+    el_inc = ConstantElasticity(; G = Gi, Kb = 5)
+    visc = LinearViscous(; η = η0)
+    pl = DruckerPrager_regularised(;
+        # non-regularized plasticity
+        C = C / cosd(ϕ),
+        ϕ = ϕ,
+        η_vp = η_reg,
+        Ψ = 0
+    )
+
+    rheology = (
+        # Low density phase
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 0.0),
+            Gravity = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((visc, el_bg, pl)),
+            Elasticity = el_bg,
+
+        ),
+        # High density phase
+        SetMaterialParams(;
+            Phase = 2,
+            Density = ConstantDensity(; ρ = 0.0),
+            Gravity = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((visc, el_inc, pl)),
+            Elasticity = el_inc,
+        ),
+    )
+
+    # perturbation array for the cohesion
+    perturbation_C = @zeros(ni...)
+
+    # Initialize phase ratios -------------------------------
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    radius = 0.1
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
+    init_phases!(phase_ratios, xci, xvi, circle)
+
+    # STOKES ---------------------------------------------
+    # Allocate arrays needed for every Stokes problem
+    stokes = StokesArrays(backend, ni)
+
+    # Buoyancy forces
+    ρg = @zeros(ni...), @zeros(ni...)
+    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+
+    # Rheology
+    compute_viscosity!(
+        stokes, phase_ratios, args, rheology, (-Inf, Inf)
+    )
+    # Boundary conditions
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true),
+        no_slip = (left = false, right = false, top = false, bot = false),
+    )
+    stokes.V.Vx .= PTArray(backend)([ (x - 0.5)* εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend)([-(y - 0.5)* εbg for _ in 1:(nx + 2), y in xvi[2]])
+    @views stokes.V.Vx[2:end-1, :] .= 0
+    @views stokes.V.Vy[:, 2:end-1] .= 0
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(@velocity(stokes)...)
+
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ=1e-6)
+
+    # IO -------------------------------------------------
+    take(figdir)
+
+    # Effective viscosity
+    Gc = @zeros(ni...)
+    Gv = @zeros(ni.+1...)
+    radi = 0.1
+    Gv[(xvi[1]).^2 .+ (xvi[2]').^2 .< radi^2 ] .= Gi
+    Gc[(xci[1]).^2 .+ (xci[2]').^2 .< radi^2 ] .= Gi
+
+    args2 = merge( args, (; Gc = Gc, Gv = Gv) )
+
+    # Time loop
+    t, it = 0.0, 0
+    tmax = 5
+    τII = Float64[]
+    sol = Float64[]
+    ttot = Float64[]
+    # while t < tmax
+    for _ in 1:15
+
+        # Stokes solver ----------------
+        iters = solve_DYREL!(
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            rheology,
+            args2,
+            grid,
+            dt,
+            igg;
+            kwargs = (;
+                verbose_DR = false,
+                iterMax = 50.0e3,
+                nout    = 10,
+                rel_drop = 0.1,
+                # λ_relaxation = 0,
+                λ_relaxation_DR = 1,
+                λ_relaxation_PH = 1,
+                viscosity_relaxation = 1,
+                viscosity_cutoff = (-Inf, Inf),
+            )
+        );
+
+        tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
+        push!(τII, maximum(stokes.τ.xx))
+
+        it += 1
+        t += dt
+
+        push!(sol, solution(εbg, t, G0, η0))
+        push!(ttot, t)
+
+        println("it = $it; t = $t \n")
+
+        # # visualisation
+        # aspect_ratio = 2 
+        # fig = Figure(size = (1600, 1600), title = "t = $t")
+        # ax1 = Axis(fig[1, 1], aspect = aspect_ratio, title = L"\tau_{II}", titlesize = 35)
+        # ax2 = Axis(fig[2, 1], aspect = aspect_ratio, title = L"E_{II}", titlesize = 35)
+        # ax3 = Axis(fig[1, 3], aspect = aspect_ratio, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
+        # ax4 = Axis(fig[2, 3], aspect = aspect_ratio)
+        # h1 = heatmap!(ax1, xci..., Array(stokes.ε_pl.II), colormap = :inferno)
+        # Colorbar(fig[1, 2], h1)
+        # # heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :inferno)
+        # # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
+        # # heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
+
+        # lines!(ax2, (iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_V), label="V")
+        # lines!(ax2, (iters.err_evo_it .- iters.err_evo_it[1])/ni[1], log10.(iters.err_evo_P), label="P")
+        # axislegend(ax2; position = :rt)
+
+        # h2 = heatmap!(ax3, xci..., Array(stokes.ε.II), colormap = :inferno)
+        # Colorbar(fig[1, 4], h2)
+
+        # # lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
+        # lines!(ax4, ttot, τII, color = :black)
+        # # lines!(ax4, ttot, sol, color = :red)
+        # hidexdecorations!(ax1)
+        # hidexdecorations!(ax3)
+        # display(fig)
+
+        # visualisation
+        th = 0:(pi / 50):(3 * pi)
+        xunit = @. radius * cos(th) + 0.5
+        yunit = @. radius * sin(th) + 0.5
+
+        fig = Figure(size = (1600, 1600), title = "t = $t")
+        ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
+        ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
+        ax3 = Axis(fig[1, 2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
+        ax4 = Axis(fig[2, 2], aspect = 1)
+        heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :lipari)
+        # h1 = heatmap!(ax1, xci..., Array((stokes.viscosity.η_vep)) , colormap=:batlow)
+        heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :lipari)
+        heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :lipari)
+        lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
+        lines!(ax4, ttot, τII, color = :black)
+        lines!(ax4, ttot, sol, color = :red)
+        hidexdecorations!(ax1)
+        hidexdecorations!(ax3)
+        # Colorbar(fig[1, 2], h1)
+        fig
+        save(joinpath(figdir, "$(it).png"), fig)
+
+        fig = Figure(size = (1600, 1600), title = "t = $t")
+        ax1 = Axis(fig[1, 1],aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
+        heatmap!(ax1, xci..., Array(log10.(stokes.ε.II)), colormap = :lipari)
+
+        for ui in xci[1]
+            hlines!(ax1, ui; xmin = 0, xmax = 1, color= :black)
+        end
+        for ui in xci[2]
+            vlines!(ax1, ui; ymin = 0, ymax = 1, color= :black)
+        end
+        fig
+        save(joinpath(figdir, "refined_stress_$(it).png"), fig)
+
+    end
+
+    return nothing
+end
+
+n  = 64
+nx = n
+ny = n
+figdir = "ShearBands2D_Duretz2020_DYREL_refined"
+igg = if !(JustRelax.MPI.Initialized())
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
+end
+
+M       = window_monitor(2, 50/2, 1e-1, 0.5)
+xv_ref  = solve_grid(0.0, 1.0, M, n) # refined grid
+xvi     = xv_ref, xv_ref
+
+@time main(xvi, igg; figdir = figdir, nx = nx, ny = ny);

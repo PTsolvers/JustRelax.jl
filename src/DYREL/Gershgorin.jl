@@ -8,7 +8,8 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv,
         η,
         ηv,
         γ_eff,
-        di,
+        di.center,
+        di.vertex,
         phase_ratios.vertex,
         phase_ratios.center,
         rheology,
@@ -18,18 +19,10 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv,
 end
 
 @parallel_indices (i, j) function _Gershgorin_Stokes2D_SchurComplement!(
-        Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di,
+        Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di_center, di_vertex,
         phase_vertex, phase_center, rheology, dt
     )
-    # Hoist common parameters
-    dx, dy = @dxi(di, i, j)
-    _dx = inv(dx)
-    _dy = inv(dy)
-    _dx2 = _dx * _dx
-    _dy2 = _dy * _dy
-    _dxdy = _dx * _dy
-    c43 = 4 / 3
-    c23 = 2 / 3
+    
 
     # @inbounds begin
     phase = phase_vertex[i + 1, j + 1]
@@ -47,6 +40,18 @@ end
     γW = γ_eff[i, j]
 
     if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
+
+        # Hoist common parameters
+        dx = @dx(di_center, i)
+        dy = @dy(di_vertex, j)
+        _dx = inv(dx)
+        _dy = inv(dy)
+        _dx2 = _dx * _dx
+        _dy2 = _dy * _dy
+        _dxdy = _dx * _dy
+        c43 = 4 / 3
+        c23 = 2 / 3
+        
         phase = phase_center[i + 1, j]
         GE = fn_ratio(get_shear_modulus, rheology, phase)
         ηE = η[i + 1, j]
@@ -80,7 +85,6 @@ end
         λmaxVx[i, j] = inv(Dx_ij) * (Cxx + Cxy)
     end
 
-
     # viscosity coefficients at surrounding points
     GS = GW # reuse cached value
     phase = phase_vertex[i, j + 1]
@@ -95,6 +99,17 @@ end
     γS = γW # reuse cached value
 
     if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
+        # Hoist common parameters
+        dx = @dx(di_vertex, i)
+        dy = @dy(di_center, j)
+        _dx = inv(dx)
+        _dy = inv(dy)
+        _dx2 = _dx * _dx
+        _dy2 = _dy * _dy
+        _dxdy = _dx * _dy
+        c43 = 4 / 3
+        c23 = 2 / 3
+
         phase = phase_center[i, j + 1]
         GN = fn_ratio(get_shear_modulus, rheology, phase)
 

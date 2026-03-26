@@ -52,6 +52,7 @@ function _solve_DYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         iterMax = 50.0e3,
+        total_iterMax = 50e3,
         nout = 100,
         rel_drop = 1.0e-2,
         b_width = (4, 4, 0),
@@ -126,7 +127,7 @@ function _solve_DYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    DYREL!(dyrel, stokes, rheology, phase_ratios, di_center, dt)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
@@ -330,7 +331,7 @@ function _solve_DYREL!(
                 @. cVy = 2 * √(λminV) * c_fact
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, di_center, dt)
+                Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, grid.di, dt)
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)
@@ -340,7 +341,7 @@ function _solve_DYREL!(
         # update pressure
         @. stokes.P += γ_eff .* stokes.R.RP
 
-        iter > 200.0e3 && break
+        iter > total_iterMax && break
     end
 
     # compute vorticity

@@ -81,6 +81,8 @@ function Geometry(xvi::Vararg{T, nDim}) where {nDim, T <: AbstractVector}
     return Geometry{nDim, typeof(xci[1]), typeof(di), Float64}(ni, li, origin, max_li, di, _di, xci, xvi, grid_v)
 end
 
+Geometry(xvi::NTuple{nDim, T}) where {nDim, T <: AbstractVector} = Geometry(xvi...)
+
 @inline function legacy_uniform_grid(
         ni::NTuple{nDim, <:Integer}, di::NTuple{nDim, <:Real}
     ) where {nDim}

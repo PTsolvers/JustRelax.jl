@@ -161,37 +161,44 @@ end
 function init_phases!(phases, particles, Lx, d, r, thick_air, CharDim)
     ni = size(phases)
 
-    @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx, CharDim)
+    d_air = nondimensionalize(thick_air * km, CharDim)
+    d_0km = nondimensionalize(0.0e0km, CharDim)
+    d_21km = nondimensionalize(21e0km, CharDim)
+    d_35km = nondimensionalize(35e0km, CharDim)
+    d_90km = nondimensionalize(90e0km, CharDim)
+
+    @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
         @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
 
             x = @index px[ip, i, j]
-            depth = -(@index py[ip, i, j]) - nondimensionalize(thick_air * km, CharDim)
-            if nondimensionalize(0.0e0km, CharDim) ≤ depth ≤ nondimensionalize(21km, CharDim)
+            depth = -(@index py[ip, i, j]) - d_air
+            if d_0km ≤ depth ≤ d_21km
                 @index phases[ip, i, j] = 1.0
 
-            elseif nondimensionalize(35km, CharDim) ≥ depth > nondimensionalize(21km, CharDim)
+            elseif d_35km ≥ depth > d_21km
                 @index phases[ip, i, j] = 2.0
 
-            elseif nondimensionalize(90km, CharDim) ≥ depth > nondimensionalize(35km, CharDim)
+            elseif d_90km ≥ depth > d_35km
                 @index phases[ip, i, j] = 3.0
 
-            elseif depth > nondimensionalize(90km, CharDim)
+            elseif depth > d_90km
                 @index phases[ip, i, j] = 3.0
 
-            elseif depth < nondimensionalize(0.0e0km, CharDim)
+            elseif depth < d_0km
                 @index phases[ip, i, j] = 5.0
 
             end
 
             # plume - rectangular
-            if ((x - Lx * 0.5)^2 ≤ r^2) && (((@index py[ip, i, j]) - d - nondimensionalize(thick_air * km, CharDim))^2 ≤ r^2)
+            if ((x - Lx * 0.5)^2 ≤ r^2) && (((@index py[ip, i, j]) - d - d_air)^2 ≤ r^2)
                 @index phases[ip, i, j] = 4.0
             end
         end
         return nothing
     end
 
-    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx, CharDim)
+    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
 end
+

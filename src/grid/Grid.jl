@@ -30,7 +30,7 @@ struct Geometry{nDim, V, D, T}
     _di::D                                # inverse grid spacing
     xci::NTuple{nDim, V}                  # cell-centered grid
     xvi::NTuple{nDim, V}                  # vertex-centered grid
-    grid_v::NTuple{nDim, NTuple{nDim, V}} # velocity grid
+    xi_vel::NTuple{nDim, NTuple{nDim, V}} # velocity grid
 end
 
 # Default uniform staggered grid constructor
@@ -39,7 +39,7 @@ function Geometry(
     ) where {nDim, T}
     isMPI = ImplicitGlobalGrid.grid_is_initialized()
 
-    Li, maxLi, di, xci, xvi, grid_v = if isMPI
+    Li, maxLi, di, xci, xvi, xi_vel = if isMPI
         geometry_MPI(ni, li, origin)
     else
         geometry_nonMPI(ni, li, origin)
@@ -52,14 +52,13 @@ function Geometry(
         velocity = map(x -> map(y -> inv.(y), x), di.velocity),
     )
 
-    return Geometry{nDim, typeof(xci[1]), typeof(di), Float64}(ni, Li, origin, maxLi, di, _di, xci, xvi, grid_v)
+    return Geometry{nDim, typeof(xci[1]), typeof(di), Float64}(ni, Li, origin, maxLi, di, _di, xci, xvi, xi_vel)
 end
 
 # Grid constructor given 1D vertex coordinates arrays
-function Geometry(xvi::Vararg{T, nDim}) where {nDim, T <: AbstractVector}
+function Geometry(TA, xvi::Vararg{T, nDim}) where {nDim, T <: AbstractVector}
 
     ni = length.(xvi) .- 1
-    xci = ntuple(i -> [(xvi[i][j] + xvi[i][j + 1]) / 2 for j in 1:ni[i]], Val(nDim))
     xci = ntuple(Val(nDim)) do i
         @views @. (xvi[i][1:(end - 1)] + xvi[i][2:end]) / 2
     end
@@ -69,16 +68,17 @@ function Geometry(xvi::Vararg{T, nDim}) where {nDim, T <: AbstractVector}
     origin = ntuple(i -> lims[i][1], Val(nDim))
     di_vertex = diff.(xvi)
     di_center = diff.(xci)
-    grid_v = velocity_grids(xci, xvi, di_center)
-    di_vel = ntuple(i -> diff.(grid_v[i]), Val(nDim))
-    di = (; center = di_center, vertex = di_vertex, velocity = di_vel)
+    xi_vel_cpu = velocity_grids(xci, xvi, di_center)
+    xi_vel = ntuple(i -> TA.(xi_vel_cpu[i]), Val(nDim))
+    di_vel = ntuple(i -> diff.(xi_vel[i]), Val(nDim))
+    di = (; center = TA.(di_center), vertex = TA.(di_vertex), velocity = di_vel)
     _di = (;
         center = map(x -> inv.(x), di.center),
         vertex = map(x -> inv.(x), di.vertex),
         velocity = map(x -> map(y -> inv.(y), x), di.velocity),
     )
 
-    return Geometry{nDim, typeof(xci[1]), typeof(di), Float64}(ni, li, origin, max_li, di, _di, xci, xvi, grid_v)
+    return Geometry{nDim, eltype(xi_vel[1]), typeof(di), Float64}(ni, li, origin, max_li, di, _di, TA.(xci), TA.(xvi), xi_vel)
 end
 
 Geometry(xvi::NTuple{nDim, T}) where {nDim, T <: AbstractVector} = Geometry(xvi...)
@@ -104,8 +104,8 @@ function geometry_MPI(ni::NTuple{nDim, Integer}, li::NTuple{nDim, T}, origin) wh
     Li = Float64.(li)
     di = Li ./ ni_g
     xci, xvi = lazy_grid_MPI(di, ni; origin = origin)
-    grid_v = velocity_grids(xci, xvi, di)
-    return Li, max(Li...), di, xci, xvi, grid_v
+    xi_vel = velocity_grids(xci, xvi, di)
+    return Li, max(Li...), di, xci, xvi, xi_vel
 end
 
 function geometry_nonMPI(
@@ -115,8 +115,8 @@ function geometry_nonMPI(
     di = Li ./ ni
 
     xci, xvi = lazy_grid(di, ni, Li; origin = origin)
-    grid_v = velocity_grids(xci, xvi, di)
-    return Li, max(Li...), di, xci, xvi, grid_v
+    xi_vel = velocity_grids(xci, xvi, di)
+    return Li, max(Li...), di, xci, xvi, xi_vel
 end
 
 function lazy_grid_MPI(
@@ -140,10 +140,9 @@ function lazy_grid_MPI(
     xvi = ntuple(Val(N)) do i
         # println("potato")
         Base.@_inline_meta
-        rank_origin = f_g[i](1, di[i], ni[i])
+        rank_origin = f_g[i](1, di[i], ni[i]) #- di[i]
         local_origin = rank_origin + origin[i]
-
-        rank_end = f_g[i](ni[i] + 1, di[i], ni[i])
+        rank_end = f_g[i](ni[i] + 1, di[i], ni[i]) #+ di[i]
         local_end = rank_end + origin[i]
 
         @inbounds LinRange(local_origin[i], local_end[i], ni[i] + 1)

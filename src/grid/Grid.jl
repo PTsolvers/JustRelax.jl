@@ -1,7 +1,20 @@
 include("Utils.jl")
 
 # MPI struct
+"""
+    IGG(me, dims, nprocs, coords, comm_cart)
 
+Container for the Cartesian MPI topology returned by `ImplicitGlobalGrid.init_global_grid`.
+
+This is typically created as:
+
+```julia
+igg = IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
+```
+
+and then passed around so code can access the current rank, Cartesian coordinates,
+and communicator associated with the distributed grid decomposition.
+"""
 struct IGG{T, M}
     me::T
     dims::Vector{T}
@@ -13,13 +26,12 @@ end
 # Staggered grid
 
 """
-    struct Geometry{nDim,T}
+    struct Geometry{nDim,V,D,T}
 
-A struct representing the geometry of a topological object in nDim dimensions.
+A staggered Cartesian grid in `nDim` dimensions.
 
-# Arguments
-- `nDim`: The number of dimensions of the topological object.
-- `T`: The type of the elements in the topological object.
+`Geometry` stores the domain size, origin, cell spacing, cell-centered coordinates,
+vertex coordinates, and the staggered velocity grids used throughout JustRelax.
 """
 struct Geometry{nDim, V, D, T}
     ni::NTuple{nDim, Int64}               # number of grid cells
@@ -34,6 +46,26 @@ struct Geometry{nDim, V, D, T}
 end
 
 # Default uniform staggered grid constructor
+"""
+    Geometry(ni, li; origin = ntuple(_ -> 0.0, Val(nDim)))
+
+Build a uniform staggered grid with `ni` cells and physical domain lengths `li`.
+
+When `ImplicitGlobalGrid` has been initialized, the grid spacing is computed from
+the global grid dimensions and the returned coordinates correspond to the local MPI
+subdomain. Otherwise a serial grid covering the full domain is created.
+
+# Arguments
+- `ni`: Number of local grid cells in each direction.
+- `li`: Physical domain length in each direction.
+
+# Keywords
+- `origin`: Lower-left or lower-front corner of the domain.
+
+# Returns
+- A [`Geometry`](@ref) with cell-centered coordinates `xci`, vertex coordinates `xvi`,
+  and staggered velocity coordinates `xi_vel`.
+"""
 function Geometry(
         ni::NTuple{nDim, Integer}, li::NTuple{nDim, T}; origin = ntuple(_ -> 0.0, Val(nDim))
     ) where {nDim, T}
@@ -56,6 +88,21 @@ function Geometry(
 end
 
 # Grid constructor given 1D vertex coordinates arrays
+"""
+    Geometry(TA, xvi::Vararg{<:AbstractVector, nDim})
+    Geometry(xvi::NTuple{nDim, <:AbstractVector})
+
+Build a staggered grid from explicit vertex coordinates along each dimension.
+
+This constructor is useful for refined or otherwise nonuniform meshes. Cell-centered
+coordinates, local spacings, and staggered velocity grids are derived from the supplied
+vertex coordinates. `TA` can be used to move the generated arrays to a target array type.
+
+# Arguments
+- `TA`: Array constructor used to materialize the coordinate arrays, for example `Array`
+  or a backend-specific array type.
+- `xvi`: One vertex-coordinate vector per dimension.
+"""
 function Geometry(TA, xvi::Vararg{T, nDim}) where {nDim, T <: AbstractVector}
 
     ni = length.(xvi) .- 1
@@ -83,6 +130,15 @@ end
 
 Geometry(xvi::NTuple{nDim, T}) where {nDim, T <: AbstractVector} = Geometry(xvi...)
 
+"""
+    legacy_uniform_grid(ni, di)
+
+Construct a uniform [`Geometry`](@ref) from grid sizes `ni` and cell spacings `di`.
+
+This helper preserves the older API used by some solver code. In MPI mode the physical
+domain lengths are reconstructed from the global grid dimensions, so the resulting
+geometry matches the full distributed domain rather than only the local chunk.
+"""
 @inline function legacy_uniform_grid(
         ni::NTuple{nDim, <:Integer}, di::NTuple{nDim, <:Real}
     ) where {nDim}
@@ -119,6 +175,14 @@ function geometry_nonMPI(
     return Li, max(Li...), di, xci, xvi, xi_vel
 end
 
+"""
+    lazy_grid_MPI(di, ni; origin = ntuple(_ -> zero(T1), Val(N)))
+
+Create local cell-centered and vertex coordinates for a uniform grid distributed with
+`ImplicitGlobalGrid`.
+
+The returned coordinates are shifted by `origin` and correspond to the local MPI rank.
+"""
 function lazy_grid_MPI(
         di::NTuple{N, T1}, ni; origin = ntuple(_ -> zero(T1), Val(N))
     ) where {N, T1}
@@ -151,6 +215,14 @@ function lazy_grid_MPI(
     return xci, xvi
 end
 
+"""
+    lazy_grid(di, ni, Li; origin = ntuple(_ -> zero(T1), Val(N)))
+
+Create cell-centered and vertex coordinates for a serial uniform grid.
+
+`di` gives the spacing in each direction, `ni` the number of cells, and `Li` the
+physical lengths of the domain.
+"""
 function lazy_grid(
         di::NTuple{N, T1}, ni, Li; origin = ntuple(_ -> zero(T1), Val(N))
     ) where {N, T1}
@@ -173,14 +245,18 @@ end
 # Velocity helper grids for the particle advection
 
 """
-    velocity_grids(xci, xvi, di::NTuple{N,T}) where {N,T}
+    velocity_grids(xci, xvi, di)
 
-Compute the velocity grids for N dimensionional problems.
+Build staggered velocity coordinates from cell-centered and vertex grids.
+
+For each velocity component, the coordinate along that component lives on vertices,
+while the transverse directions are extended with one ghost point on either side.
+Both uniform spacings and nonuniform spacing vectors are supported in 2D and 3D.
 
 # Arguments
-- `xci`: The x-coordinate of the cell centers.
-- `xvi`: The x-coordinate of the cell vertices.
-- `di`: A tuple containing the cell dimensions.
+- `xci`: Cell-centered coordinates in each direction.
+- `xvi`: Vertex coordinates in each direction.
+- `di`: Cell spacing as either scalars for a uniform grid or vectors for a nonuniform grid.
 """
 function velocity_grids(xci, xvi, di::NTuple{2, T}) where {T}
     dx, dy = @dxi(di, 1, 1)

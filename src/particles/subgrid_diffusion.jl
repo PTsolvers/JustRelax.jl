@@ -24,7 +24,6 @@ function subgrid_characteristic_time!(
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
-        xci,
         di,
     ) where {N}
     ni = size(stokes.P)

@@ -369,7 +369,6 @@ function JR2D.subgrid_characteristic_time!(
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
-        xci,
         di,
     )
     ni = size(stokes.P)
@@ -387,7 +386,6 @@ function JR2D.subgrid_characteristic_time!(
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
-        xci,
         di,
     ) where {N}
     ni = size(stokes.P)
@@ -462,16 +460,16 @@ function JR2D.update_rock_ratio!(
 end
 
 function JR2D.stress2grid!(
-        stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, xvi, xci, particles
+        stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, particles
     )
-    stress2grid!(stokes, τ_particles, xvi, xci, particles)
+    stress2grid!(stokes, τ_particles, particles)
     return nothing
 end
 
 function JR2D.rotate_stress!(
-        τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, xci, xvi, dt
+        τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, dt
     )
-    rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
+    rotate_stress!(τ_particles, stokes, particles, dt)
     return nothing
 end
 

@@ -479,16 +479,16 @@ function JR3D.update_rock_ratio!(
 end
 
 function JR3D.stress2grid!(
-        stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, xvi, xci, particles
+        stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, particles
     )
     stress2grid!(stokes, τ_particles, xvi, xci, particles)
     return nothing
 end
 
 function JR3D.rotate_stress!(
-        τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, xci, xvi, dt
+        τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, dt
     )
-    rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
+    rotate_stress!(τ_particles, stokes, particles, dt)
     return nothing
 end
 
@@ -502,17 +502,17 @@ function JR3D.update_phase_ratios_3D!(
     ) where {T <: AbstractMatrix, N, U}
 
     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
-    phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
+    phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays)
 
     # velocity nodes
-    phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, xci, :x)
-    phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, xci, :y)
-    phase_ratios_face_from_arrays!(phase_ratios.Vz, phase_arrays, xci, :z)
+    phase_ratios_face_from_arrays!(phase_ratios.Vx, phase_arrays, :x)
+    phase_ratios_face_from_arrays!(phase_ratios.Vy, phase_arrays, :y)
+    phase_ratios_face_from_arrays!(phase_ratios.Vz, phase_arrays, :z)
 
     # shear stress nodes
-    phase_ratios_midpoint_from_centers!(phase_ratios.xy, phase_arrays, xci, :xy)
-    phase_ratios_midpoint_from_centers!(phase_ratios.yz, phase_arrays, xci, :yz)
-    phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, xci, :xz)
+    phase_ratios_midpoint_from_centers!(phase_ratios.xy, phase_arrays, :xy)
+    phase_ratios_midpoint_from_centers!(phase_ratios.yz, phase_arrays, :yz)
+    phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, :xz)
     return nothing
 end
 

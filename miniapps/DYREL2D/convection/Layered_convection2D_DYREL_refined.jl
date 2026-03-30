@@ -1,20 +1,34 @@
-using CUDA
+const isGPU = false
+
+@static if isGPU
+    using CUDA
+end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
-# const backend_JR = CPUBackend
-const backend_JR = CUDABackend
+@static if isGPU
+    const backend_JR = CUDABackend
+else
+    const backend_JR = CPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-# @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
-@init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+@static if isGPU
+    @init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+end
 
 using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-# const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+
+const backend = @static if isGPU
+    const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 # Load script dependencies
 using GeoParams, GLMakie
@@ -145,8 +159,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     M         = tanh_monitor(α, κ, c; direction = :right)
     xv_ref    = solve_grid(grid0.xvi[2][1], grid0.xvi[2][end], M, ny) # refined grid
     grid      = Geometry(
-        TA(backend),
+        PTArray(backend_JR),
         collect(grid0.xvi[1]),
+        # collect(grid0.xvi[2]),
         xv_ref,
     )
     di_min = min(
@@ -165,7 +180,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 25, 30, 8
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
+        backend, nxcell, max_xcell, min_xcell, Array.(grid.xi_vel[1]), Array.(grid.xi_vel[2])
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # temperature
@@ -183,7 +198,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     r_anomaly = nondimensionalize(25km, CharDim) # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly, thick_air, CharDim)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -209,7 +224,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
         stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse(ρg[2] .* grid.di.vertex[2]', dims = 2), dims = 2), dims = 2))
-        # stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse(ρg[2] .* di[2], dims = 2), dims = 2), dims = 2))
     end
 
     # Rheology
@@ -262,7 +276,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    grid2particle!(pT, T_buffer, particles)
 
     local Vx_v, Vy_v
     if do_vtk
@@ -278,7 +292,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     while t < nondimensionalize(5.0e6yr, CharDim) # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
+        particle2grid!(T_buffer, pT, particles)
         @views thermal.T[2:(end - 1), :] .= T_buffer
         @views thermal.T[:, end] .= Ttop
         @views thermal.T[:, 1] .= Tbot
@@ -310,11 +324,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             )
         )
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di_min)
+        dt = compute_dt(stokes, di_min) / 2
         # ------------------------------
 
         # rotate stresses
-        rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
+        rotate_stress!(pτ, stokes, particles, dt)
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
@@ -323,22 +337,21 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), grid.xi_vel, dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
         inject_particles_phase!(
             particles,
             pPhases,
             particle_args_reduced,
             (T_buffer, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy),
-            xvi
         )
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         # interpolate stress back to the grid
-        stress2grid!(stokes, pτ, xvi, xci, particles)
+        stress2grid!(stokes, pτ, particles)
 
         # Thermal solver ---------------
         heatdiffusion_PT!(
@@ -361,11 +374,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             copyinn_x!(dst, src)
         end
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, xvi, dt
+            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt
         )
         # ------------------------------
       
@@ -429,7 +442,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             # Plot temperature
             h1 = heatmap!(ax1, Array.(xvi)..., Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))), colormap = :batlow)
             # Plot particles phase
-            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), colormap = :grayC)
+            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), colormap = :bilbao)
             # Plot 2nd invariant of strain rate
             h3 = heatmap!(ax3, Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim)))), colormap = :batlow)
             # Plot effective viscosity
@@ -454,12 +467,12 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 ar = 1 # aspect ratio
-n = 128
+n = 64
 nx = n * ar
 ny = n 
 
 # (Path)/folder where output data and figures are stored
-figdir = "Plume2D_x$n"
+figdir = "Plume2D_x$(n)_debug"
 do_vtk = true # set to true to generate VTK files for ParaView
 
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

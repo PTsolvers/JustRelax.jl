@@ -151,7 +151,7 @@ end
         _dy = @dy(_di_vertex, j)
 
         @inbounds Vx[i + 1, j + 1] +=
-            (-d_xa(P, _dx) + d_xa(τxx,_dx) + d_yi(τxy, _dy) - av_xa(ρgx)) * ηdτ / av_xa(ητ)
+            (-d_xa(P, _dx) + d_xa(τxx, _dx) + d_yi(τxy, _dy) - av_xa(ρgx)) * ηdτ / av_xa(ητ)
     end
 
     @inbounds if all((i, j) .< size(Vy) .- 1)

@@ -98,7 +98,8 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # temperature
     pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
@@ -224,10 +225,12 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
             copyinn_x!(dst, src)
         end
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
+        )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt)
+            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt
+        )
         # ------------------------------
 
         # Advection --------------------

@@ -240,10 +240,12 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             )
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
+        )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt)
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
+        )
         # ------------------------------
 
         # Advection --------------------
@@ -259,7 +261,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy))
+            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
+        )
 
         # advect marker chain
         advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)

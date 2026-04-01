@@ -52,7 +52,7 @@ function _solve_DYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         iterMax = 50.0e3,
-        total_iterMax = 50e3,
+        total_iterMax = 50.0e3,
         nout = 100,
         rel_drop = 1.0e-2,
         b_width = (4, 4, 0),

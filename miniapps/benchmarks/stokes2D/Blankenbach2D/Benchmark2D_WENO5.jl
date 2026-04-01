@@ -79,7 +79,8 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     phase_ratios = PhaseRatios(backend, length(rheology), ni)

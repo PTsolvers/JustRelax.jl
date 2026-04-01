@@ -105,7 +105,8 @@ function VanKeken2D(ny = 32, nx = 32)
     # Initialize particles -------------------------------
     nxcell, max_p, min_p = 40, 80, 20
     particles = init_particles(
-        backend, nxcell, max_p, min_p, grid.xi_vel...)
+        backend, nxcell, max_p, min_p, grid.xi_vel...
+    )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases,)

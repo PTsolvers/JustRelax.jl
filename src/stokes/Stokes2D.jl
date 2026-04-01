@@ -35,7 +35,7 @@ function _solve!(
     lx = grid.max_li
 
     # unpack
-    di  = grid.di
+    di = grid.di
     _di = grid._di
     (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokes
     ni = size(stokes.P)

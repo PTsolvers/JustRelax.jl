@@ -163,9 +163,9 @@ function init_phases!(phases, particles, Lx, d, r, thick_air, CharDim)
 
     d_air = nondimensionalize(thick_air * km, CharDim)
     d_0km = nondimensionalize(0.0e0km, CharDim)
-    d_21km = nondimensionalize(21e0km, CharDim)
-    d_35km = nondimensionalize(35e0km, CharDim)
-    d_90km = nondimensionalize(90e0km, CharDim)
+    d_21km = nondimensionalize(21.0e0km, CharDim)
+    d_35km = nondimensionalize(35.0e0km, CharDim)
+    d_90km = nondimensionalize(90.0e0km, CharDim)
 
     @parallel_indices (i, j) function init_phases!(phases, px, py, index, r, Lx)
         @inbounds for ip in cellaxes(phases)
@@ -201,4 +201,3 @@ function init_phases!(phases, particles, Lx, d, r, thick_air, CharDim)
 
     return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, r, Lx)
 end
-

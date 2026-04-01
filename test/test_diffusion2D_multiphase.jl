@@ -150,7 +150,8 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     init_phases!(pPhases, particles, center_perturbation..., r)

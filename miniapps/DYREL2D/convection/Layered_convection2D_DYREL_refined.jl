@@ -64,13 +64,13 @@ end
 # Initial thermal profile
 function init_T!(T, y, thick_air, CharDim)
 
-    ni = size(T) .- (2,0)
-    
+    ni = size(T) .- (2, 0)
+
     # non dim depths
     d_air = nondimensionalize(thick_air * km, CharDim)
-    d_0km = nondimensionalize(0e0km, CharDim)
-    d_35km = nondimensionalize(35e0km, CharDim)
-    d_110km = nondimensionalize(110e0km, CharDim)
+    d_0km = nondimensionalize(0.0e0km, CharDim)
+    d_35km = nondimensionalize(35.0e0km, CharDim)
+    d_110km = nondimensionalize(110.0e0km, CharDim)
 
     # non dim T and gradients
     T_273K = nondimensionalize(293.0e0K, CharDim)
@@ -87,7 +87,7 @@ function init_T!(T, y, thick_air, CharDim)
         if depth < d_0km
             T[i + 1, j] = T_273K
 
-        elseif d_0km ≤ depth <  d_35km
+        elseif d_0km ≤ depth < d_35km
             dTdZ = T_18K
 
             offset = T_273K
@@ -101,14 +101,14 @@ function init_T!(T, y, thick_air, CharDim)
         elseif depth ≥ d_110km
             dTdZ = T_0_5K
             offset = T_1492K
-            T[i + 1, j] = 0*(depth - d_110km) * dTdZ + offset
+            T[i + 1, j] = 0 * (depth - d_110km) * dTdZ + offset
         end
 
         return nothing
     end
 
     @parallel (@idx ni) init_T2!(T, y)
-    
+
     return nothing
 end
 
@@ -116,11 +116,11 @@ end
 # Thermal rectangular perturbation
 function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air, CharDim)
 
-    dTdZ_nd   = nondimensionalize((2047 - 2017)K / 50km, CharDim)
+    dTdZ_nd = nondimensionalize((2047 - 2017)K / 50km, CharDim)
     offset_nd = nondimensionalize(2017.0e0K, CharDim)
-    d_585km   = nondimensionalize(585km, CharDim)
-    ΔT        = nondimensionalize(100.0e0K, CharDim)
-    d_air     = nondimensionalize(thick_air * km, CharDim)
+    d_585km = nondimensionalize(585km, CharDim)
+    ΔT = nondimensionalize(100.0e0K, CharDim)
+    d_air = nondimensionalize(thick_air * km, CharDim)
 
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         if ((x[i] - xc)^2 ≤ r^2) && ((y[j] - yc - d_air)^2 ≤ r^2)
@@ -148,17 +148,17 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     )
     # Physical domain ------------------------------------
     thick_air = nondimensionalize(0.0e0km, CharDim)                 # thickness of sticky air layer
-    ly        = nondimensionalize(thickness, CharDim) + thick_air # domain length in y
-    lx        = ly * ar           # domain length in x
-    ni        = nx, ny            # number of cells
-    li        = lx, ly            # domain length in x- and y-
-    di        = @. li / ni        # grid step in x- and -y
-    origin    = 0.0, -ly      # origin coordinates (15km f sticky air layer)
-    grid0     = Geometry(ni, li; origin = origin)
-    α, κ, c   = 5, 20, -0.1
-    M         = tanh_monitor(α, κ, c; direction = :right)
-    xv_ref    = solve_grid(grid0.xvi[2][1], grid0.xvi[2][end], M, ny) # refined grid
-    grid      = Geometry(
+    ly = nondimensionalize(thickness, CharDim) + thick_air # domain length in y
+    lx = ly * ar           # domain length in x
+    ni = nx, ny            # number of cells
+    li = lx, ly            # domain length in x- and y-
+    di = @. li / ni        # grid step in x- and -y
+    origin = 0.0, -ly      # origin coordinates (15km f sticky air layer)
+    grid0 = Geometry(ni, li; origin = origin)
+    α, κ, c = 5, 20, -0.1
+    M = tanh_monitor(α, κ, c; direction = :right)
+    xv_ref = solve_grid(grid0.xvi[2][1], grid0.xvi[2][end], M, ny) # refined grid
+    grid = Geometry(
         PTArray(backend_JR),
         collect(grid0.xvi[1]),
         # collect(grid0.xvi[2]),
@@ -257,7 +257,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # Plot initial T and η profiles
     let
         Yv = [y for x in Array(xvi[1]), y in Array(xvi[2])][:]
-        Y  = [y for x in Array(xci[1]), y in Array(xci[2])][:]
+        Y = [y for x in Array(xci[1]), y in Array(xci[2])][:]
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
@@ -381,7 +381,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt
         )
         # ------------------------------
-      
+
         @show it += 1
         t += dt
 
@@ -469,7 +469,7 @@ end
 ar = 1 # aspect ratio
 n = 64
 nx = n * ar
-ny = n 
+ny = n
 
 # (Path)/folder where output data and figures are stored
 figdir = "Plume2D_x$(n)_refined"

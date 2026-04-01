@@ -258,7 +258,7 @@ Both uniform spacings and nonuniform spacing vectors are supported in 2D and 3D.
 - `xvi`: Vertex coordinates in each direction.
 - `di`: Cell spacing as either scalars for a uniform grid or vectors for a nonuniform grid.
 """
-function velocity_grids(xci, xvi, di::NTuple{2, Number}) 
+function velocity_grids(xci, xvi, di::NTuple{2, Number})
     dx, dy = @dxi(di, 1, 1)
     yVx = LinRange(xci[2][1] - dy, xci[2][end] + dy, length(xci[2]) + 2)
     xVy = LinRange(xci[1][1] - dx, xci[1][end] + dx, length(xci[1]) + 2)

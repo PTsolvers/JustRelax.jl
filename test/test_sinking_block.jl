@@ -134,7 +134,8 @@ function Sinking_Block2D()
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases,)

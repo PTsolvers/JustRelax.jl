@@ -64,7 +64,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     G0 = 1.0           # elastic shear modulus
     Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
     εbg = 1.0           # background strain-rate
-    η_reg = 1e-2 #8.0e-3          # regularisation "viscosity"
+    η_reg = 1.0e-2 #8.0e-3          # regularisation "viscosity"
     dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
     el_bg = ConstantElasticity(; G = G0, Kb = 5)
     el_inc = ConstantElasticity(; G = Gi, Kb = 5)
@@ -124,26 +124,26 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    stokes.V.Vx .= PTArray(backend)([ (x - 0.5)* εbg for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend)([-(y - 0.5)* εbg for _ in 1:(nx + 2), y in xvi[2]])
-    @views stokes.V.Vx[2:end-1, :] .= 0
-    @views stokes.V.Vy[:, 2:end-1] .= 0
+    stokes.V.Vx .= PTArray(backend)([ (x - 0.5) * εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend)([-(y - 0.5) * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    @views stokes.V.Vx[2:(end - 1), :] .= 0
+    @views stokes.V.Vy[:, 2:(end - 1)] .= 0
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-6)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6)
 
     # IO -------------------------------------------------
     take(figdir)
 
     # Effective viscosity
     Gc = @zeros(ni...)
-    Gv = @zeros(ni.+1...)
+    Gv = @zeros(ni .+ 1...)
     radi = 0.1
-    Gv[(xvi[1]).^2 .+ (xvi[2]').^2 .< radi^2 ] .= Gi
-    Gc[(xci[1]).^2 .+ (xci[2]').^2 .< radi^2 ] .= Gi
+    Gv[(xvi[1]) .^ 2 .+ (xvi[2]') .^ 2 .< radi^2] .= Gi
+    Gc[(xci[1]) .^ 2 .+ (xci[2]') .^ 2 .< radi^2] .= Gi
 
-    args2 = merge( args, (; Gc = Gc, Gv = Gv) )
+    args2 = merge(args, (; Gc = Gc, Gv = Gv))
 
     # Time loop
     t, it = 0.0, 0
@@ -169,15 +169,15 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             kwargs = (;
                 verbose = false,
                 iterMax = 50.0e3,
-                nout    = 10,
+                nout = 10,
                 rel_drop = 0.75,
                 # λ_relaxation = 0,
-                λ_relaxation_DR = 1/2,
+                λ_relaxation_DR = 1 / 2,
                 λ_relaxation_PH = 1,
                 viscosity_relaxation = 1,
                 viscosity_cutoff = (-Inf, Inf),
             )
-        );
+        )
 
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
@@ -192,7 +192,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         println("it = $it; t = $t \n")
 
         # # visualisation
-        # aspect_ratio = 2 
+        # aspect_ratio = 2
         # fig = Figure(size = (1600, 1600), title = "t = $t")
         # ax1 = Axis(fig[1, 1], aspect = aspect_ratio, title = L"\tau_{II}", titlesize = 35)
         # ax2 = Axis(fig[2, 1], aspect = aspect_ratio, title = L"E_{II}", titlesize = 35)
@@ -244,7 +244,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n  = 128
+n = 128
 nx = n
 ny = n
 figdir = "ShearBands2D_Duretz2020_DYREL"
@@ -255,8 +255,8 @@ else
 end
 @time main(igg; figdir = figdir, nx = nx, ny = ny);
 
-# 7.174e-07, Rp=1.402e-08] 
-# itPH = 98 iter = 025101 iter/nx = 196, err = 9.671e-07 norm[Rx=9.671e-07, Ry=6.793e-07, Rp=1.327e-08] 
-# it = 15; t = 3.75 
+# 7.174e-07, Rp=1.402e-08]
+# itPH = 98 iter = 025101 iter/nx = 196, err = 9.671e-07 norm[Rx=9.671e-07, Ry=6.793e-07, Rp=1.327e-08]
+# it = 15; t = 3.75
 
 # 170.963150 seconds (110.81 M allocations: 39.591 GiB, 4.11% gc time, 0.00% compilation time: 100% of which was recompilation)

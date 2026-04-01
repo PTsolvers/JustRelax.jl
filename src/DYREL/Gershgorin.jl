@@ -22,7 +22,7 @@ end
         Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di_center, di_vertex,
         phase_vertex, phase_center, rheology, dt
     )
-    
+
 
     # @inbounds begin
     phase = phase_vertex[i + 1, j + 1]
@@ -51,7 +51,7 @@ end
         _dxdy = _dx * _dy
         c43 = 4 / 3
         c23 = 2 / 3
-        
+
         phase = phase_center[i + 1, j]
         GE = fn_ratio(get_shear_modulus, rheology, phase)
         ηE = η[i + 1, j]

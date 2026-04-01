@@ -205,16 +205,19 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
             )
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
+        )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt)
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
+        )
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
         advection!(
-            particles, RungeKutta2(), @velocity(stokes), dt)
+            particles, RungeKutta2(), @velocity(stokes), dt
+        )
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles

@@ -84,7 +84,8 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
     max_xcell = 125
     min_xcell = 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
     grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, = init_cell_arrays(particles, Val(1))

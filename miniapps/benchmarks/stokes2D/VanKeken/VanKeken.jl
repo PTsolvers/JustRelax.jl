@@ -79,7 +79,8 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     # Initialize particles -------------------------------
     nxcell, max_p, min_p = 20, 30, 10
     particles = init_particles(
-        backend, nxcell, max_p, min_p, grid.xi_vel...)
+        backend, nxcell, max_p, min_p, grid.xi_vel...
+    )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases,)

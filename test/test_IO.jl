@@ -45,7 +45,8 @@ using WriteVTK, JLD2
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(
-            backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+            backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        )
         # temperature
         pT, pPhases = init_cell_arrays(particles, Val(2))
         time = 1.0
@@ -184,7 +185,8 @@ using WriteVTK, JLD2
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(
-            backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+            backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        )
         # temperature
         pT, pPhases = init_cell_arrays(particles, Val(2))
         time = 1.0

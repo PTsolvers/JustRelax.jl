@@ -67,7 +67,8 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     particle_args = pPhases, = init_cell_arrays(particles, Val(1))

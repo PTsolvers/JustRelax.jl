@@ -287,11 +287,11 @@ end
 
     d_xi(A, _dx) = _d_xi(A, _dx, i, j)
     d_yi(A, _dy) = _d_yi(A, _dy, i, j)
-    av_xa(A)     = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av_ya(A)     = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
+    av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
+    av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
 
     @inbounds if all((i, j) .≤ size(qTx))
-         _dx = @dx(_di_vertex, i)
+        _dx = @dx(_di_vertex, i)
         qx = qTx2[i, j] = -av_xa(K) * d_xi(T, _dx)
         qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
     end

@@ -162,7 +162,8 @@ function diffusion_3D(;
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 20, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     phase_ratios = PhaseRatios(backend, length(rheology), ni)

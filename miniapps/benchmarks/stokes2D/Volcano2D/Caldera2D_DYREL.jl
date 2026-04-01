@@ -168,7 +168,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     max_xcell = 150
     min_xcell = 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
@@ -335,12 +336,12 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     local iters
     thermal.Told .= thermal.T
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-4)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-4)
 
     while it < 5 #000 # run only for 5 Myrs
-      
+
         args = (; ϕ = ϕ_m, T = thermal.Tc, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc, perturbation_C = perturbation_C)
-      
+
 
         # t_stokes = @elapsed solve_VariationalStokes!(
         #     stokes,
@@ -362,27 +363,27 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         # )
 
         t_stokes = @elapsed solve_DYREL!(
-                stokes,
-                ρg,
-                dyrel,
-                flow_bcs,
-                phase_ratios,
-                rheology,
-                args,
-                grid,
-                dt,
-                igg;
-                kwargs = (;
-                    verbose = false,
-                    iterMax = 50.0e3,
-                    nout    = 200,
-                    λ_relaxation = 1,
-                    # λ_relaxation = 1e-2,
-                    # λ_relaxation = 1.075,
-                    viscosity_relaxation = 1.0e-3,
-                    viscosity_cutoff = viscosity_cutoff,
-                )
-            );
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            rheology,
+            args,
+            grid,
+            dt,
+            igg;
+            kwargs = (;
+                verbose = false,
+                iterMax = 50.0e3,
+                nout = 200,
+                λ_relaxation = 1,
+                # λ_relaxation = 1e-2,
+                # λ_relaxation = 1.075,
+                viscosity_relaxation = 1.0e-3,
+                viscosity_cutoff = viscosity_cutoff,
+            )
+        )
 
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, dt)
@@ -419,10 +420,12 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         vertex2center!(thermal.ΔTc, thermal.ΔT[2:(end - 1), :])
 
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
+        )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt)
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
+        )
         # ------------------------------
 
         # Advection --------------------
@@ -438,7 +441,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy))
+            (T_buffer, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy)
+        )
 
         # # advect marker chain
         # advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)

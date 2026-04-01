@@ -120,14 +120,14 @@ function main(igg; nx = 64, ny = 64, nz = 64)
 
     # Initialize phase ratios -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     radius = 0.1
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     pPhases, = init_cell_arrays(particles, Val(1))
     # Assign particles phases anomaly
     init_phases!(pPhases, particles, radius)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem

@@ -119,10 +119,7 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 60, 80, 40
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
-    )
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
     particle_args = (pT, pPhases)
@@ -131,7 +128,7 @@ function main(igg, nx, ny)
     A = 5.0e3    # Amplitude of the anomaly
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, A)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # RockRatios
@@ -212,13 +209,13 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
         @show it += 1

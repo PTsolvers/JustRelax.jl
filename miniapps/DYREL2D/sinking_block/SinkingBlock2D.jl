@@ -85,14 +85,12 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     dt = 1
     # ----------------------------------------------------
 
-    # velocity grids
     grid_vxi = velocity_grids(xci, xvi, di)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
-    )
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases,)
@@ -102,7 +100,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     r_anomaly = 50.0e3   # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -165,13 +163,13 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
 
         # Plotting ---------------------

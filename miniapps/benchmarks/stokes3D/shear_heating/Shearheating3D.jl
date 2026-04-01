@@ -60,9 +60,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
-    )
-    # velocity grids
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -75,7 +73,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
     r_anomaly = 3.0e3    # radius of perturbation
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -147,7 +145,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         save(joinpath(figdir, "initial_profile.png"), fig)
     end
 
-    grid2particle!(pT, xvi, thermal.T, particles)
+    grid2particle!(pT, thermal.T, particles)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
@@ -187,7 +185,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         # ------------------------------
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, xvi, particles)
+        particle2grid!(thermal.T, pT, particles)
         temperature2center!(thermal)
 
         compute_shear_heating!(
@@ -219,15 +217,15 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # interpolate fields from grid vertices to particles
         grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         @show it += 1
         t += dt

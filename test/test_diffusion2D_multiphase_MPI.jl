@@ -161,13 +161,12 @@ function diffusion_2D(figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
-    )
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     update_cell_halo!(particles.coords..., particle_args)
     update_cell_halo!(particles.index)
     # ----------------------------------------------------

@@ -77,10 +77,8 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 150, 175, 125
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
-    )
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     particle_args = pPhases, = init_cell_arrays(particles, Val(1))
@@ -89,7 +87,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
     phases_device = PTArray(backend_JR)(phases_GMG)
     init_phases!(pPhases, phases_device, particles, xvi)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     update_cell_halo!(particles.coords..., particle_args...)
     update_cell_halo!(particles.index)
@@ -219,17 +217,17 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
 
         update_cell_halo!(particles.coords..., particle_args...)
         update_cell_halo!(particles.index)
 
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         if igg.me == 0
             @show it += 1
             t += dt

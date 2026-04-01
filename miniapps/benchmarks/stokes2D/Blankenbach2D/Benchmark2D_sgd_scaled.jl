@@ -68,17 +68,14 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
-    )
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
     pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pT0, pPhases)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -161,7 +158,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    grid2particle!(pT, T_buffer, particles)
     pT0.data .= pT.data
 
     local Vx_v, Vy_v
@@ -231,23 +228,21 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             copyinn_x!(dst, src)
         end
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
-        )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, xvi, di, dt
-        )
+            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt)
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         # Nusselt number, Nu = ∫ ∂T/∂z dx ----
         Nu_it = sum(((abs.(thermal.T[2:(end - 1), end] - thermal.T[2:(end - 1), end - 1])) ./ di[2]) .* di[1])
@@ -266,7 +261,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         # -------------------------------------------
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
+        particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= 0.0
         @views T_buffer[:, 1] .= 1.0
         @views thermal.T[2:(end - 1), :] .= T_buffer

@@ -67,9 +67,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
-    )
-    # velocity grids
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     particle_args = pPhases, = init_cell_arrays(particles, Val(1))
@@ -78,7 +76,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     phases_device = PTArray(backend_JR)(phases_GMG)
     init_phases!(pPhases, phases_device, particles, xvi)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -158,13 +156,13 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         @show it += 1
         t += dt

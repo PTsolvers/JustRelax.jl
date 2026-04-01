@@ -226,9 +226,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     nxcell = 20
     max_xcell = 40
     min_xcell = 15
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
     grid_vxi = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -242,7 +241,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     anomaly = nondimensionalize((750 + 273)K, CharDim)               # thermal perturbation (in K)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, z_anomaly, r_anomaly, sticky_air, nondimensionalize(0.0km, CharDim), nondimensionalize(20km, CharDim))
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # Initialisation of thermal profile
     thermal = ThermalArrays(backend_JR, ni) # initialise thermal arrays and boundary conditions
@@ -336,7 +335,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     end
 
     dt₀ = similar(stokes.P)
-    grid2particle!(pT, xvi, thermal.T, particles)
+    grid2particle!(pT, thermal.T, particles)
 
     @copy stokes.P0 stokes.P
     @copy thermal.Told thermal.T
@@ -401,25 +400,23 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         )
         # subgrid diffusion
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
-        )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi, di, dt
-        )
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt)
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2grid!(thermal.T, pT, xvi, particles)
+        particle2grid!(thermal.T, pT, particles)
         @views thermal.T[:, :, end] .= Tsurf
         @views thermal.T[:, :, 1] .= Tbot
         thermal_bcs!(thermal, thermal_bc)

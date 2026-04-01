@@ -120,9 +120,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pPhases)
@@ -133,7 +131,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
     r_anomaly = 25.0e3   # radius of perturbation
     init_phases!(pPhases, particles, lx; d = abs(yc_anomaly), r = r_anomaly)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -270,13 +268,13 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         @show it += 1
         t += dt
 

@@ -84,9 +84,7 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
     max_xcell = 125
     min_xcell = 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
-    )
-    # velocity grids
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, = init_cell_arrays(particles, Val(1))
@@ -94,7 +92,7 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
     # Assign particles phases anomaly
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, xvi)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # marker chain
@@ -195,18 +193,18 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
 
         # advect marker chain
         advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         @show it += 1

@@ -143,8 +143,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     max_xcell = 150
     min_xcell = 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
-    )
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # velocity grids
     grid_vxi = velocity_grids(xci, xvi, di)
@@ -168,7 +167,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         fill_chain_from_vertices!(chain, PTArray(backend)(topo_y))
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
     end
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # particle fields for the stress rotation
     pτ = StressParticles(particles)
@@ -259,7 +258,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    grid2particle!(pT, T_buffer, particles)
 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
@@ -271,7 +270,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     while it < 2 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
+        particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= Ttop
         @views T_buffer[:, 1] .= Tbot
         @views thermal.T[2:(end - 1), :] .= T_buffer
@@ -284,7 +283,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         # args = (; T=thermal.Tc, P=stokes.P, dt=Inf, ΔTc=thermal.ΔTc)
         args = (; ϕ = ϕ_m, T = thermal.Tc, P = stokes.P, dt = Inf)
 
-        stress2grid!(stokes, pτ, xvi, xci, particles)
+        stress2grid!(stokes, pτ, particles)
 
         iters = solve_VariationalStokes!(
             stokes,
@@ -307,7 +306,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         )
 
         # rotate stresses
-        rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
+        rotate_stress!(pτ, stokes, particles, dt)
 
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
@@ -338,31 +337,27 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         vertex2center!(thermal.ΔTc, thermal.ΔT[2:(end - 1), :])
 
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
-        )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi, di, dt
-        )
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt)
         # ------------------------------
 
         # Advection --------------------
         copyinn_x!(T_buffer, thermal.T)
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ))
         center2vertex!(τxx_v, stokes.τ.xx)
         center2vertex!(τyy_v, stokes.τ.yy)
         inject_particles_phase!(
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
-            xvi
-        )
+            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy))
 
         # advect marker chain
         advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
@@ -373,7 +368,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         )
 
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         # update_rock_ratio!(ϕ, phase_ratios, air_phase)
         compute_rock_fraction!(ϕ, chain, xvi, di)
 

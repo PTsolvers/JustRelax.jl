@@ -119,11 +119,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 25, 30, 8
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
-    )
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
     particle_args = (pT, pPhases)
@@ -134,7 +131,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     r_anomaly = nondimensionalize(25km, CharDim) # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly, thick_air, CharDim)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -213,7 +210,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    grid2particle!(pT, T_buffer, particles)
 
     local Vx_v, Vy_v
     if do_vtk
@@ -229,7 +226,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     while t < nondimensionalize(5.0e6yr, CharDim) # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
+        particle2grid!(T_buffer, pT, particles)
         @views thermal.T[2:(end - 1), :] .= T_buffer
         @views thermal.T[:, end] .= Ttop
         @views thermal.T[:, 1] .= Tbot
@@ -284,23 +281,21 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             copyinn_x!(dst, src)
         end
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
-        )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, xvi, di, dt
-        )
+            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt)
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         @show it += 1
         t += dt

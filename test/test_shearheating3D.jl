@@ -81,9 +81,8 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 100, 150, 80
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -96,7 +95,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     r_anomaly = 3.0e3    # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -145,7 +144,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    grid2particle!(pT, xvi, thermal.T, particles)
+    grid2particle!(pT, thermal.T, particles)
     dt₀ = similar(stokes.P)
 
     # Time loop
@@ -154,7 +153,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     while it < 1
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, xvi, particles)
+        particle2grid!(thermal.T, pT, particles)
         temperature2center!(thermal)
 
         # Stokes solver ----------------
@@ -206,25 +205,22 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
             )
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
-        )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi, di, dt
-        )
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt)
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
         advection!(
-            particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt
-        )
+            particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         @show it += 1
         t += dt

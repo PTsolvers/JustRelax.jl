@@ -129,9 +129,7 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 15
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
-    )
-    # velocity grids
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     grid_vxi = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -140,7 +138,7 @@ function main(igg, nx, ny)
     # Elliptical temperature anomaly
     init_phases!(pPhases, particles)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # Initialize marker chain-------------------------------
     nxcell, max_xcell, min_xcell = 100, 150, 75
@@ -213,18 +211,18 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
 
         # advect marker chain
         advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         compute_rock_fraction!(ϕ, chain, xvi, di)
         # ------------------------------
 

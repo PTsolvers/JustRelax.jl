@@ -180,7 +180,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 25, 30, 8
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, Array.(grid.xi_vel[1]), Array.(grid.xi_vel[2])
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     # temperature
@@ -472,7 +472,7 @@ nx = n * ar
 ny = n 
 
 # (Path)/folder where output data and figures are stored
-figdir = "Plume2D_x$(n)_debug"
+figdir = "Plume2D_x$(n)_refined"
 do_vtk = true # set to true to generate VTK files for ParaView
 
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -482,4 +482,4 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);

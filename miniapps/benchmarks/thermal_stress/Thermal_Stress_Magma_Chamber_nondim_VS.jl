@@ -257,9 +257,8 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 50, 100, 15
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
     grid_vxi = grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -272,7 +271,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     anomaly = nondimensionalize((750 + 273)K, CharDim) # thermal perturbation (in K)
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, r_anomaly, sticky_air, nondimensionalize(0.0km, CharDim), nondimensionalize(20km, CharDim))
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # marker chain
     nxcell, min_xcell, max_xcell = 100, 75, 125
@@ -393,7 +392,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    grid2particle!(pT, T_buffer, particles)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
@@ -487,29 +486,27 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
             copyinn_x!(dst, src)
         end
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
-        )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, xvi, di, dt
-        )
+            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt)
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        # inject_particles_phase!(particles, pPhases, (), (), xvi)
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
+        # inject_particles_phase!(particles, pPhases, (), ())
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
 
         # advect marker chain
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         # Add thermal perturbation at regular intervals
@@ -519,7 +516,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
             pulse_timer = 0.0e0
             println("Kaboom! Thermal pulse added at t = $(dimensionalize(t, yr, CharDim).val) yrs")
         end
-        particle2grid!(T_buffer, pT, xvi, particles)
+        particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= Ttop
         @views T_buffer[:, 1] .= Tbot
         @views thermal.T[2:(end - 1), :] .= T_buffer

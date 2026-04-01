@@ -1,10 +1,10 @@
+pushfirst!(LOAD_PATH, dirname(@__DIR__))
+
 using JustRelax
 
 using Pkg
 using MPI
 using Test, ParallelTestRunner
-
-push!(LOAD_PATH, "..")
 
 function parse_flags!(args, flag; default = nothing, type = typeof(default))
     for f in args
@@ -78,7 +78,7 @@ function runtests(args)
         try
             @testset "$k" begin
                 n = 2
-                project = abspath(@__DIR__)
+                project = dirname(Base.active_project())
                 p = run(`$(mpiexec()) -n $n $(Base.julia_cmd()) --project=$project --startup-file=no $f`)
                 @test success(p)
             end

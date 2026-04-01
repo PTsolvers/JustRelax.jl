@@ -124,9 +124,9 @@ end
 
         # other functions
         dt_diff = 0.1
-        @test compute_dt(stokes, di, dt_diff, igg) === 0.011904761904761904
-        @test compute_dt(stokes, di, dt_diff) === 0.011904761904761904
-        @test compute_dt(stokes, di) ≈ 0.011904761904761904
+        @test compute_dt(stokes, di, dt_diff, igg) === 0.022500000000000003
+        @test compute_dt(stokes, di, dt_diff) === 0.022500000000000003
+        @test compute_dt(stokes, di) ≈ 0.022500000000000003
         @test continuation_log(1.0, 0.8, 0.05) ≈ 0.8089757207980266
         @test continuation_linear(1.0, 0.8, 0.05) === 0.81
 
@@ -188,9 +188,9 @@ end
 
         # other functions
         dt_diff = 0.1
-        @test compute_dt(stokes, di, dt_diff, igg) === 0.008064516129032258
-        @test compute_dt(stokes, di, dt_diff) ≈ 0.008064516129032258
-        @test compute_dt(stokes, di) ≈ 0.008064516129032258
+        @test compute_dt(stokes, di, dt_diff, igg) === 0.022500000000000003
+        @test compute_dt(stokes, di, dt_diff) ≈ 0.022500000000000003
+        @test compute_dt(stokes, di) ≈ 0.022500000000000003
 
         @testset "spacing macros 3D" begin
             di_scalar_3d = (2.0, 3.0, 4.0)

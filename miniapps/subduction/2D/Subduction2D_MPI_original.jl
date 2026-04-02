@@ -95,7 +95,6 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     pτ = StressParticles(particles)
     pτxx, pτyy = normal_stress(pτ)
     pτxy, = shear_stress(pτ)
-    pωxy, = shear_vorticity(pτ)
     particle_args = (pT, pPhases, unwrap(pτ)...)
     particle_args_reduced = (pT, unwrap(pτ)...)
 
@@ -229,8 +228,8 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
-        particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
-        particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
+        particle2centroid!(stokes.τ.xx, pτxx, particles)
+        particle2centroid!(stokes.τ.yy, pτyy, particles)
         particle2grid!(stokes.τ.xy, pτxy, particles)
 
         # Stokes solver ----------------

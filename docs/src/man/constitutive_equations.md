@@ -182,16 +182,16 @@ pτ = StressParticles(particles)
 3. During time stepping:
 ```julia
 # 1. interpolate stress back to the grid
-stress2grid!(stokes, pτ, xvi, xci, particles)
+stress2grid!(stokes, pτ, particles)
 # 2. solve Stokes equations....
 #
 # 3. rotate stresses
-rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
+rotate_stress!(pτ, stokes, particles, dt)
 # 4. advection step
     # advect particles in space
-advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+advection!(particles, RungeKutta2(), @velocity(stokes), dt)
     # advect particles in memory
-move_particles!(particles, xvi, particle_args)
+move_particles!(particles, particle_args)
     # check if we need to inject particles
     # need stresses on the vertices for injection purposes
 center2vertex!(τxx_v, stokes.τ.xx)
@@ -200,8 +200,7 @@ inject_particles_phase!(
         particles,
         pPhases,
         pτ,
-        (τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
-        xvi
+        (τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
 )
 ```
 

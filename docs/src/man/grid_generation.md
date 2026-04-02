@@ -78,6 +78,22 @@ grid = Geometry((nx, ny), (1.0e6, 3.0e5); origin = (0.0, -3.0e5))
 
 Here `grid.xci`, `grid.xvi`, and `grid.xi_vel` correspond to the local rank, while the spacing is computed from the global grid dimensions returned by `ImplicitGlobalGrid`.
 
+## Particle initialization
+
+Recent particle-related updates use the staggered velocity grids stored in `Geometry` directly:
+
+```julia
+using JustPIC, JustPIC._2D
+
+nxcell = 24
+max_xcell = 36
+min_xcell = 12
+
+particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+```
+
+This is the preferred setup in the current examples and tests. You only need `velocity_grids(xci, xvi, di)` explicitly if you want the staggered coordinates outside of `Geometry`.
+
 ## API reference
 
 ```@docs; canonical=false

@@ -204,9 +204,10 @@ function lazy_grid_MPI(
     xvi = ntuple(Val(N)) do i
         # println("potato")
         Base.@_inline_meta
-        rank_origin = f_g[i](1, di[i], ni[i]) #- di[i]
+        rank_origin = f_g[i](1, di[i], ni[i])
         local_origin = rank_origin + origin[i]
-        rank_end = f_g[i](ni[i] + 1, di[i], ni[i]) #+ di[i]
+
+        rank_end = f_g[i](ni[i] + 1, di[i], ni[i])
         local_end = rank_end + origin[i]
 
         @inbounds LinRange(local_origin[i], local_end[i], ni[i] + 1)

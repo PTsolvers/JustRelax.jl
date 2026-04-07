@@ -103,7 +103,7 @@ vertex coordinates. `TA` can be used to move the generated arrays to a target ar
   or a backend-specific array type.
 - `xvi`: One vertex-coordinate vector per dimension.
 """
-function Geometry(TA, xvi::Vararg{T, nDim}) where {nDim, T <: AbstractVector}
+function Geometry(TA::Type{A}, xvi::Vararg{T, nDim}) where {nDim, A<:AbstractArray, T <: AbstractVector}
 
     ni = length.(xvi) .- 1
     xci = ntuple(Val(nDim)) do i

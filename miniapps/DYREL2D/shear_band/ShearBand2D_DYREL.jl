@@ -125,7 +125,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # IO -------------------------------------------------
     take(figdir)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
 
     # Time loop
     t, it = 0.0, 0
@@ -137,7 +137,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
         # Stokes solver ----------------
         iters = solve_DYREL!(
-            stokes,
+             stokes,
             ρg,
             dyrel,
             flow_bcs,
@@ -204,7 +204,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 2
+n = 3
 nx = 32 * n
 ny = 32 * n
 figdir = "ShearBands2D_DYREL"

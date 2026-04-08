@@ -12,8 +12,8 @@ end
     ) where {T}
 
 
-    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j)
-    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j)
+    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j)
 
     @inbounds begin
         # normal components are all located @ cell centers
@@ -23,9 +23,9 @@ end
 
             ∇Vij = ∇V[i, j] * inv(3)
             # Compute ε_xx
-            εxx[i, j] = d_xi(Vx) - ∇Vij
+            εxx[i, j] = d_xi(Vx, _dx) - ∇Vij
             # Compute ε_yy
-            εyy[i, j] = d_yi(Vy) - ∇Vij
+            εyy[i, j] = d_yi(Vy, _dy) - ∇Vij
         end
 
         # Compute ε_xy

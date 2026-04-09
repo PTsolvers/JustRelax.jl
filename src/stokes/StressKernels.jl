@@ -400,7 +400,26 @@ end
     return nothing
 end
 
-## Stress invariants
+# Accumulate the volumetric plastic strain: EVol_pl += dt * ε_vol_pl
+# ε_vol_pl is a scalar field (= λ*(-dQ/dp)), distinct from the deviatoric
+function accumulate_vol!(EVol_pl::AbstractArray, ε_vol_pl::AbstractArray, dt)
+    _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+    return nothing
+end
+
+function _accumulate_vol!(EVol_pl::AbstractArray, ε_vol_pl::AbstractArray, dt)
+    ni = size(EVol_pl)
+    @parallel (@idx ni) accumulate_vol_kernel!(EVol_pl, ε_vol_pl, dt)
+    return nothing
+end
+
+@parallel_indices (I...) function accumulate_vol_kernel!(
+        EVol_pl, ε_vol_pl, dt
+    )
+    @inbounds EVol_pl[I...] += dt * ε_vol_pl[I...]
+    return nothing
+end
+
 @parallel_indices (I...) function tensor_invariant_center!(
         II, tensor::NTuple{N, T}
     ) where {N, T}
@@ -1255,4 +1274,348 @@ end
 
 Base.@propagate_inbounds @inline function harm_clamped(A, i0, j0, ic, jc)
     return 4 / (1 / A[i0, j0] + 1 / A[ic, jc] + 1 / A[i0, jc] + 1 / A[ic, j0])
+end
+
+# ============================================================
+# Tensile-cap plasticity helpers (Popov, Berlie & Kaus, GMD 2025)
+# https://doi.org/10.5194/gmd-18-7035-2025
+#
+# The composite yield surface combines a linear Drucker–Prager (DP) shear
+# failure envelope with a circular tensile cap so that both the yield surface
+# and the flow potential are globally C¹-continuous. No Jacobian or local
+# Newton iteration is required here: we reuse the existing pseudo-transient
+# (PT) Perzyna-type explicit update, replacing the plain DP yield function
+# with the smooth composite one and using the matching flow-potential gradient.
+#
+# Material parameters (all scalar):
+#   sinϕ, cosϕ  – DP friction angle (from GeoParams)
+#   sinψ         – DP dilation angle
+#   C            – DP cohesion
+#   pT           – tensile strength (positive, [Pa])
+#
+# Derived geometry (Eqs. 12–17 of the paper):
+#   k = sinϕ,  c = C*cosϕ              – DP slope and intercept
+#   kq = sinψ                           – DP dilatation slope
+#   Delimiter pressure p_d (smooth intersection of DP and cap):
+#        p_d = (c - pT*(1-k²) ) / (k*(1+1/k²))    ← simplified from paper
+#   Cap center  p_c  and radius Ry are computed so that the two segments
+#   join with a common tangent (C¹) at the delimiter point.
+#
+# Yield function (scalar, Eq. 18):
+#   In DP regime  (p ≤ p_d):  F = τII - k*p - c
+#   In tensile regime (p > p_d):  F = a * sqrt((p-pc)² + qc²*τII²/τII²) - Ry
+#     where `a` is a scaling coefficient so that outside the cap the function
+#     is globally continuous (see paper Fig. 2b).
+#
+# Flow potential gradient (Eqs. 20-21):
+#   DP regime:   ∂Q/∂τij = τij/(2τII),  ∂Q/∂p = -sinψ
+#   Tensile cap: ∂Q/∂τij = τij/(2τII) * (qc² * b / Rq),  ∂Q/∂p = (p-pqc)*b/Rq
+#     where Rq = sqrt((p-pqc)²+qc²*τII²) is the cap-flow-potential radius.
+# ============================================================
+
+"""
+    tensile_cap_params(sinϕ, cosϕ, sinψ, C, pT)
+
+Compute the geometric parameters of the smooth composite Drucker–Prager +
+circular tensile-cap yield surface from Popov et al. (2025, GMD).
+Formulas follow `get_yield_param` in the paper's reference Python script.
+
+Returns a named tuple with fields:
+  k, kf, c   – DP friction/dilation slopes and projected cohesion
+  a, b        – cap and flow-potential scaling coefficients
+  pd, τd      – delimiter pressure and shear stress (boundary of regimes)
+  py          – cap center pressure
+  Ry           – cap radius
+  pq          – flow-potential center pressure
+  Rf          – flow-potential radius
+  pdf, sdf    – flow-potential delimiter point coordinates
+"""
+@inline function tensile_cap_params(sinϕ::T, cosϕ::T, sinψ::T, C::T, pT::T) where {T}
+    k   = sinϕ              # DP friction coefficient  (= sin φ)
+    kf  = sinψ              # DP dilatation coefficient (= sin ψ)
+    c   = C * cosϕ          # projected cohesion intercept
+
+    # Cap scaling: a = sqrt(1 + k²)  (from paper / plot2D.py)
+    a    = sqrt(one(T) + k^2)
+    b    = sqrt(one(T) + kf^2)
+    cosa = inv(a)
+    sina = k * cosa          # = k/a
+
+    # Cap center (on the p-axis) and radius
+    py   = (pT + c * cosa) / (one(T) - sina)
+    Ry    = py - pT
+
+    # Delimiter: smooth C¹ junction of DP and cap
+    pd   = py - Ry * sina
+    τd   = c + k * pd        # shear stress at delimiter (on DP surface)
+
+    # Flow potential center and scaling  (b = sqrt(1 + kf²))
+    pq   = pd + kf * (c + k * pd)
+    Rf   = pq - pT           # flow-potential radius
+
+    # Delimiter point on the flow-potential curve
+    norm_pf = hypot(pd - pq, τd)
+    pdf     = pq + Rf * (pd - pq) / norm_pf
+    sdf     = Rf * τd / norm_pf
+
+    return (; k, kf, c, a, b, pd, τd, py, Ry, pq, Rf, pdf, sdf)
+end
+
+"""
+    composite_yield(τII, p, k, c, py, Ry, a, pd, τd)
+
+Evaluate the smooth composite yield function F(τII, p).
+  - F < 0 : elastic
+  - F ≥ 0 : yielding
+
+Regime selection (from plot2D.py):
+  Tensile-cap regime when: τII < (py - p)*τd / (py - pd)
+  DP regime otherwise:
+    F = τII - k*p - c
+  Tensile-cap regime:
+    F = a * (√(τII² + (p - py)²) - Ry)
+"""
+@inline function composite_yield(τII::T, p::T, k::T, c::T, py::T, Ry::T, a::T, pd::T, τd::T) where {T}
+    if τII < (py - p) * τd / (py - pd)
+        # Tensile-cap regime: circular cap scaled by a
+        return a * (hypot(τII, p - py) - Ry)
+    else
+        # Drucker–Prager regime
+        return τII - k * p - c
+    end
+end
+
+"""
+    composite_flow_gradient(τII, τij, p, k, kf, c, py, a, pd, τd, pq, b, Rf, pdf, sdf)
+
+Return `(dQdτij, dQdp)` – the deviatoric and volumetric components of the
+(non-associated) flow-potential gradient ∂Q/∂(τij, p) at the current stress state.
+
+Regime selection mirrors the yield surface (using flow-potential parameters):
+  Tensile-cap regime when: τII < (pq - p)*τd / (pq - pd)
+  DP regime:    ∂Q/∂τij = τij/(2τII),   ∂Q/∂p = -kf
+  Cap regime:   ∂Q/∂τij = b*τij/(Rq*2τII)*τII,   ∂Q/∂p = b*(p-pq)/Rq
+    where Rq = sqrt(τII² + (p-pq)²)
+"""
+@inline function composite_flow_gradient(
+        τII::T, τij::NTuple{N,T}, p::T,
+        k::T, kf::T, c::T, py::T, a::T, pd::T, τd::T, pq::T, b::T, Rf::T, pdf::T, sdf::T
+    ) where {T, N}
+    if τII < (pq - p) * τd / (pq - pd)
+        # Circular cap flow potential: Q = b*(sqrt(τII² + (p-pq)²) - Rf)
+        Rq     = hypot(τII, p - pq)
+        inv_Rq = inv(Rq)
+        dQdτij = ntuple(i -> 0.5 * b * τij[i] * inv_Rq, Val(N))
+        dQdp   = b * (p - pq) * inv_Rq
+    else
+        # DP flow potential: Q = τII - kf*p
+        dQdτij = ntuple(i -> τij[i] / (2 * τII), Val(N))
+        dQdp   = -kf
+    end
+    return dQdτij, dQdp
+end
+
+@inline function composite_flow_gradient(
+        τII::T, τij::T, p::T,
+        k::T, kf::T, c::T, py::T, a::T, pd::T, τd::T, pq::T, b::T, Rf::T, pdf::T, sdf::T
+    ) where {T}
+    if τII < (pq - p) * τd / (pq - pd)
+        Rq     = hypot(τII, p - pq)
+        dQdτij = 0.5 * b * τij / Rq
+        dQdp   = b * (p - pq) / Rq
+    else
+        dQdτij = τij / (2 * τII)
+        dQdp   = -kf
+    end
+    return dQdτij, dQdp
+end
+
+# ============================================================
+# 2D stress kernel with smooth tensile-cap plasticity
+# (Popov, Berlie & Kaus, GMD 2025) – pseudo-transient adaptation
+#
+# This is a drop-in replacement for update_stresses_center_vertex_ps! that
+# uses the smooth composite DP + tensile-cap yield surface instead of the
+# plain Drucker–Prager one. The PT update rule for the viscoplastic multiplier
+# λ is kept identical; no local Newton iterations or Jacobian are needed.
+#
+# Extra argument compared to the plain kernel:
+#   pT_center   – tensile strength field @ cell centers [Pa]
+#   pT_vertex   – tensile strength field @ vertices     [Pa]
+#
+# The volumetric plastic strain (pressure correction) is handled via the
+# flow-potential volumetric gradient dQ/dp, which naturally collapses to the
+# standard sinψ term in the DP regime.
+# ============================================================
+
+# 2D kernel
+@parallel_indices (I...) function update_stresses_center_vertex_ps_tensile!(
+        ε::NTuple{3},         # normal components @ centers; shear components @ vertices
+        ε_pl::NTuple{3},      # whole Voigt tensor @ centers
+        EII,                  # accumulated plastic strain rate @ centers
+        τ::NTuple{3},         # whole Voigt tensor @ centers
+        τshear_v::NTuple{1},  # shear tensor components @ vertices
+        τ_o::NTuple{3},
+        τshear_ov::NTuple{1}, # shear tensor components @ vertices
+        Pr,
+        Pr_c,
+        η,
+        λ,
+        λv,
+        τII,
+        η_vep,
+        relλ,
+        dt,
+        θ_dτ,
+        rheology,
+        phase_center,
+        phase_vertex,
+        pT_center,            # tensile strength @ cell centers [Pa]
+        pT_vertex,            # tensile strength @ vertices     [Pa]
+        pl_domain,            # plasticity regime @ centers: 0=elastic, 1=DP, 2=cap
+        ε_vol_pl,             # volumetric plastic strain rate @ centers (overwritten each iter)
+    )
+    τxyv     = τshear_v[1]
+    τxyv_old = τshear_ov[1]
+    ni       = size(Pr)
+    Ic       = clamped_indices(ni, I...)
+
+    # ─────────────────────────────────────────────────────────
+    ## vertex update
+    # ─────────────────────────────────────────────────────────
+    Pv_ij        = @inbounds av_clamped(Pr,   Ic...)
+    εxxv_ij      = @inbounds av_clamped(ε[1], Ic...)
+    εyyv_ij      = @inbounds av_clamped(ε[2], Ic...)
+    τxxv_ij      = @inbounds av_clamped(τ[1], Ic...)
+    τyyv_ij      = @inbounds av_clamped(τ[2], Ic...)
+    τxxv_old_ij  = @inbounds av_clamped(τ_o[1], Ic...)
+    τyyv_old_ij  = @inbounds av_clamped(τ_o[2], Ic...)
+    EIIv_ij      = @inbounds av_clamped(EII, Ic...)
+    pTv_ij       = @inbounds av_clamped(pT_vertex, Ic...)
+
+    phase = @inbounds phase_vertex[I...]
+    is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(rheology, EIIv_ij, phase)
+    _Gvdt  = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
+    Kv     = fn_ratio(get_bulk_modulus, rheology, phase)
+    ηv_ij  = @inbounds harm_clamped(η, Ic...)
+    dτ_rv  = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
+
+    # stress trial increments @ vertex
+    dτxxv = compute_stress_increment(τxxv_ij,    τxxv_old_ij,  ηv_ij, εxxv_ij,      _Gvdt, dτ_rv)
+    dτyyv = compute_stress_increment(τyyv_ij,    τyyv_old_ij,  ηv_ij, εyyv_ij,      _Gvdt, dτ_rv)
+    dτxyv = @inbounds compute_stress_increment(
+        τxyv[I...], τxyv_old[I...], ηv_ij, ε[3][I...], _Gvdt, dτ_rv
+    )
+    τijv     = τxxv_ij, τyyv_ij, τxyv[I...]
+    dτijv    = dτxxv, dτyyv, dτxyv
+    τijv_tr  = τijv .+ dτijv
+    τIIv_ij  = second_invariant(τijv_tr)
+
+    # tensile-cap parameters @ vertex
+    cp       = tensile_cap_params(sinϕv, cosϕv, sinψv, Cv, pTv_ij)
+
+    # composite yield function @ vertex
+    Fv = composite_yield(τIIv_ij, Pv_ij, cp.k, cp.c, cp.py, cp.Ry, cp.a, cp.pd, cp.τd)
+
+    @inbounds if is_pl && !iszero(τIIv_ij) && Fv > 0
+        dQdτijv, dQdpv = composite_flow_gradient(
+            τIIv_ij, τijv_tr, Pv_ij,
+            cp.k, cp.kf, cp.c, cp.py, cp.a, cp.pd, cp.τd, cp.pq, cp.b, cp.Rf, cp.pdf, cp.sdf
+        )
+        volumev = isinf(Kv) ? 0.0 : Kv * dt * (-dQdpv)  # volumetric plastic work
+        λv[I...] =
+            @muladd (1.0 - relλ) * λv[I...] +
+            relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
+        # only the xy-shear component is stored at the vertex; use its gradient
+        εij_plxyv = λv[I...] * dQdτijv[3]
+        τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_plxyv * dτ_rv
+        ε_pl[3][I...] = εij_plxyv
+    else
+        τxyv[I...] += dτxyv
+        ε_pl[3][I...] = 0.0
+    end
+
+    # ─────────────────────────────────────────────────────────
+    ## center update
+    # ─────────────────────────────────────────────────────────
+    if all(I .≤ ni)
+        pT_ij  = @inbounds pT_center[I...]
+        phase  = @inbounds phase_center[I...]
+        _Gdt   = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
+        is_pl, C, sinϕ, cosϕ, sinψ, η_reg = @inbounds plastic_params_phase(rheology, EII[I...], phase)
+        K      = fn_ratio(get_bulk_modulus, rheology, phase)
+        ηij    = η[I...]
+        dτ_r   = 1.0 / (θ_dτ + ηij * _Gdt + 1.0)
+
+        # cache visco-elastic tensors @ center
+        τij, τij_o, εij, εij_pl = cache_tensors(τ, τ_o, ε, ε_pl, I...)
+
+        # stress trial increments @ center
+        dτij    = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
+        τij_tr  = dτij .+ τij
+        τII_ij  = second_invariant(τij_tr)
+
+        # tensile-cap parameters @ center
+        cp = tensile_cap_params(sinϕ, cosϕ, sinψ, C, pT_ij)
+
+        # composite yield function @ center
+        F = @inbounds composite_yield(τII_ij, Pr[I...], cp.k, cp.c, cp.py, cp.Ry, cp.a, cp.pd, cp.τd)
+
+        # determine and record plasticity regime from trial stress state
+        @inbounds begin
+            is_active   = is_pl && !iszero(τII_ij) && F > 0
+            in_cap      = τII_ij < (cp.py - Pr[I...]) * cp.τd / (cp.py - cp.pd)
+            pl_domain[I...] = is_active ? (in_cap ? 2.0 : 1.0) : 0.0
+        end
+
+        τII_ij = @inbounds if is_pl && !iszero(τII_ij) && F > 0
+            # flow potential gradient @ center
+            dQdτij, dQdp = composite_flow_gradient(
+                τII_ij, τij_tr, Pr[I...],
+                cp.k, cp.kf, cp.c, cp.py, cp.a, cp.pd, cp.τd, cp.pq, cp.b, cp.Rf, cp.pdf, cp.sdf
+            )
+            volume = isinf(K) ? 0.0 : K * dt * (-dQdp)  # volumetric plastic work
+
+            # viscoplastic multiplier (Perzyna-type PT update)
+            λ[I...] =
+                @muladd (1.0 - relλ) * λ[I...] +
+                relλ * (max(F, 0.0) / (ηij * dτ_r + η_reg + volume))
+
+            εij_pl   = λ[I...] .* dQdτij
+            dτij     = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
+            τij      = dτij .+ τij
+
+            Base.@nexprs 3 i -> begin
+                @inbounds τ[i][I...] = τij[i]
+            end
+            Base.@nexprs 2 i -> begin
+                @inbounds ε_pl[i][I...] = εij_pl[i]
+            end
+            τII_ij = second_invariant(τij)
+        else
+            Base.@nexprs 3 i -> begin
+                @inbounds τ[i][I...] = dτij[i] .+ τij[i]
+            end
+            Base.@nexprs 2 i -> begin
+                @inbounds ε_pl[i][I...] = 0.0
+            end
+            τII_ij
+        end
+
+        @inbounds τII[I...] = τII_ij
+        @inbounds η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
+        # pressure correction: use volumetric flow-potential component
+        # In DP regime this reproduces the K*dt*λ*sinψ of the original kernel.
+        @inbounds begin
+            dQdτij_c, dQdp_c = composite_flow_gradient(
+                τII_ij, ntuple(i -> τ[i][I...], Val(3)), Pr[I...],
+                cp.k, cp.kf, cp.c, cp.py, cp.a, cp.pd, cp.τd, cp.pq, cp.b, cp.Rf, cp.pdf, cp.sdf
+            )
+            Pr_c[I...] = Pr[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * (-dQdp_c))
+            # volumetric plastic strain rate = λ * (-dQ/dp); zero when elastic
+            ε_vol_pl[I...] = pl_domain[I...] > 0 ? λ[I...] * (-dQdp_c) : 0.0
+        end
+    end
+
+    return nothing
 end

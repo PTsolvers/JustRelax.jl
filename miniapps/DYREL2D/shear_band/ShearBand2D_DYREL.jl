@@ -137,7 +137,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
         # Stokes solver ----------------
         iters = solve_DYREL!(
-             stokes,
+            stokes,
             ρg,
             dyrel,
             flow_bcs,

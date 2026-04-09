@@ -1,17 +1,28 @@
 ## RESIDUALS
 
 @parallel_indices (i, j) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, ϕ::JustRelax.RockRatio, _dx, _dy
+        Rx::AbstractArray{T, 2},
+        Ry,
+        P,
+        ΔPψ,
+        τxx,
+        τyy,
+        τxy,
+        ρgx,
+        ρgy,
+        ϕ::JustRelax.RockRatio,
+        _di_center,
+        _di_vertex,
     ) where {T}
-    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
-    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
     Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
 
     @inbounds begin
         if all((i, j) .≤ size(Rx))
+            _dx_c = @dx(_di_center, i)
+            _dy_v = @dy(_di_vertex, j)
+            Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+            Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
             Rx[i, j] = if isvalid_vx(ϕ, i + 1, j)
                 d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)
             else
@@ -19,6 +30,10 @@
             end
         end
         if all((i, j) .≤ size(Ry))
+            _dy_c = @dy(_di_center, j)
+            _dx_v = @dx(_di_vertex, i)
+            Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
+            Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
             Ry[i, j] = if isvalid_vy(ϕ, i, j + 1)
                 d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - d_ya(P, ϕ.center) - d_ya(ΔPψ, ϕ.center) - av_ya(ρgy, ϕ.center)
             else
@@ -30,21 +45,25 @@
 end
 
 @parallel_indices (i, j) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, Vx, Vy, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _dx, _dy, dt
+        Rx::AbstractArray{T, 2}, Ry, Vx, Vy, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _di_center, _di_vertex, dt
     ) where {T}
-    Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j)
-    Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j)
-    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j)
-    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j)
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
 
     nx, ny = size(ρgy)
     if all((i, j) .≤ size(Rx))
+        _dx_c = @dx(_di_center, i)
+        _dy_v = @dy(_di_vertex, j)
+        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
         @inbounds Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
     end
 
     @inbounds if all((i, j) .≤ size(Ry))
+        _dy_c = @dy(_di_center, j)
+        _dx_v = @dx(_di_vertex, i)
+        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+        Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
         θ = 1.0
         # Vertical velocity
         Vyᵢⱼ = Vy[i + 1, j + 1]
@@ -53,7 +72,7 @@ end
         ρg_S = ρgy[i, j]
         ρg_N = ρgy[i, j_N]
         # Spatial derivatives
-        ∂ρg∂y = (ρg_N - ρg_S) * _dy
+        ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
         # correction term
         ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
 
@@ -64,18 +83,31 @@ end
 end
 
 @parallel_indices (i, j) function compute_DR_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, P, P_num, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, Dx, Dy, ϕ::JustRelax.RockRatio, _dx, _dy
+        Rx::AbstractArray{T, 2},
+        Ry,
+        P,
+        P_num,
+        ΔPψ,
+        τxx,
+        τyy,
+        τxy,
+        ρgx,
+        ρgy,
+        Dx,
+        Dy,
+        ϕ::JustRelax.RockRatio,
+        _di_center,
+        _di_vertex,
     ) where {T}
-
-    Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j)
-    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j)
-    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j)
     Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
     Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
 
     @inbounds begin
         if all((i, j) .≤ size(Rx))
+            _dx_c = @dx(_di_center, i)
+            _dy_v = @dy(_di_vertex, j)
+            Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+            Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
             Rx[i, j] = if isvalid_vx(ϕ, i + 1, j)
                 (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(P_num, ϕ.center) - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
             else
@@ -83,6 +115,10 @@ end
             end
         end
         if all((i, j) .≤ size(Ry))
+            _dy_c = @dy(_di_center, j)
+            _dx_v = @dx(_di_vertex, i)
+            Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
+            Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
             Ry[i, j] = if isvalid_vy(ϕ, i, j + 1)
                 (d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - d_ya(P, ϕ.center) - d_ya(P_num, ϕ.center) - d_ya(ΔPψ, ϕ.center) - av_ya(ρgy, ϕ.center)) / Dy[i, j]
             else

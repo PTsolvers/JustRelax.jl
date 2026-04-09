@@ -131,7 +131,7 @@ function taylorGreen(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI 
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             K,

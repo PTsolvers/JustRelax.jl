@@ -359,12 +359,10 @@ function JR3D.subgrid_characteristic_time!(
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
-        xci,
-        di,
     )
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.Tc, stokes.P, di
+        dt₀, phases.center, rheology, thermal.Tc, stokes.P, particles.di.vertex
     )
     return nothing
 end
@@ -377,12 +375,10 @@ function JR3D.subgrid_characteristic_time!(
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
-        xci,
-        di,
     ) where {N}
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases, rheology, thermal.Tc, stokes.P, di
+        dt₀, phases, rheology, thermal.Tc, stokes.P, particles.di.vertex
     )
     return nothing
 end
@@ -471,11 +467,9 @@ end
 function JR3D.stress2grid!(
         stokes,
         τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
-        xvi,
-        xci,
         particles,
     )
-    stress2grid!(stokes, τ_particles, xvi, xci, particles)
+    stress2grid!(stokes, τ_particles, particles)
     return nothing
 end
 
@@ -483,11 +477,9 @@ function JR3D.rotate_stress!(
         τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
         stokes,
         particles,
-        xci,
-        xvi,
         dt,
     )
-    rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
+    rotate_stress!(τ_particles, stokes, particles, dt)
     return nothing
 end
 

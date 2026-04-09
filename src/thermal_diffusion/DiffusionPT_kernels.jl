@@ -4,27 +4,30 @@ isNotDirichlet(::Nothing, ::Vararg{Int, N}) where {N} = true
 ## 3D KERNELS
 
 @parallel_indices (I...) function compute_flux!(
-        qTx::AbstractArray{_T, 3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _dx, _dy, _dz
+        qTx::AbstractArray{_T, 3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _di
     ) where {_T}
-    d_xi(A) = _d_xi(A, _dx, I...)
-    d_yi(A) = _d_yi(A, _dy, I...)
-    d_zi(A) = _d_zi(A, _dz, I...)
+    d_xi(A, _dx) = _d_xi(A, _dx, I...)
+    d_yi(A, _dy) = _d_yi(A, _dy, I...)
+    d_zi(A, _dz) = _d_zi(A, _dz, I...)
     av_xy(A) = _av_xy(A, I...)
     av_xz(A) = _av_xz(A, I...)
     av_yz(A) = _av_yz(A, I...)
 
     if all(I .≤ size(qTx))
-        qx = qTx2[I...] = -av_yz(K) * d_xi(T)
+        _dx = @dx(_di, I[1])
+        qx = qTx2[I...] = -av_yz(K) * d_xi(T, _dx)
         qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
     end
 
     if all(I .≤ size(qTy))
-        qy = qTy2[I...] = -av_xz(K) * d_yi(T)
+        _dy = @dy(_di, I[2])
+        qy = qTy2[I...] = -av_xz(K) * d_yi(T, _dy)
         qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
     end
 
     if all(I .≤ size(qTz))
-        qz = qTz2[I...] = -av_xy(K) * d_zi(T)
+        _dz = @dz(_di, I[3])
+        qz = qTz2[I...] = -av_xy(K) * d_zi(T, _dz)
         qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
     end
 
@@ -42,16 +45,14 @@ end
         rheology,
         phase,
         θr_dτ,
-        _dx,
-        _dy,
-        _dz,
+        _di,
         args,
     ) where {_T}
     I = i, j, k
 
-    @inline d_xi(A) = _d_xi(A, _dx, I...)
-    @inline d_yi(A) = _d_yi(A, _dy, I...)
-    @inline d_zi(A) = _d_zi(A, _dz, I...)
+    @inline d_xi(A, _dx) = _d_xi(A, _dx, I...)
+    @inline d_yi(A, _dy) = _d_yi(A, _dy, I...)
+    @inline d_zi(A, _dz) = _d_zi(A, _dz, I...)
     @inline av_xy(A) = _av_xy(A, I...)
     @inline av_xz(A) = _av_xz(A, I...)
     @inline av_yz(A) = _av_yz(A, I...)
@@ -69,7 +70,8 @@ end
                 get_K(getindex_phase(phase, i, j, k), args_ijk)
         ) * 0.25
 
-        qx = qTx2[I...] = -K * d_xi(T)
+        _dx = @dx(_di, i)
+        qx = qTx2[I...] = -K * d_xi(T, _dx)
         qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
     end
 
@@ -84,7 +86,8 @@ end
                 get_K(getindex_phase(phase, i, j, k), args_ijk)
         ) * 0.25
 
-        qy = qTy2[I...] = -K * d_yi(T)
+        _dy = @dy(_di, j)
+        qy = qTy2[I...] = -K * d_yi(T, _dy)
         qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
     end
 
@@ -99,7 +102,8 @@ end
                 get_K(getindex_phase(phase, i, j, k), args_ijk)
         ) * 0.25
 
-        qz = qTz2[I...] = -K * d_zi(T)
+        _dz = @dz(_di, k)
+        qz = qTz2[I...] = -K * d_zi(T, _dz)
         qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
     end
 
@@ -118,10 +122,9 @@ end
         dτ_ρ,
         dirichlet,
         _dt,
-        _dx,
-        _dy,
-        _dz,
+        _di,
     ) where {_T}
+    _dx, _dy, _dz = @dxi(_di, I...)
     av(A) = _av(A, I...)
     d_xa(A) = _d_xa(A, _dx, I...)
     d_ya(A) = _d_ya(A, _dy, I...)
@@ -161,11 +164,13 @@ end
         dτ_ρ,
         dirichlet,
         _dt,
-        _dx,
-        _dy,
-        _dz,
+        _di,
         args,
     ) where {_T}
+    nx, ny, nz = size(args.P)
+    _dx = @dx(_di, min(i, nx))
+    _dy = @dy(_di, min(j, ny))
+    _dz = @dz(_di, min(k, nz))
 
     av(A) = _av(A, i, j, k)
     d_xa(A) = _d_xa(A, _dx, i, j, k)
@@ -209,10 +214,9 @@ end
         ρCp,
         dirichlet,
         _dt,
-        _dx,
-        _dy,
-        _dz,
+        _di,
     ) where {_T}
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
     d_xa(A) = _d_xa(A, _dx, i, j, k)
     d_ya(A) = _d_ya(A, _dy, i, j, k)
     d_za(A) = _d_za(A, _dz, i, j, k)
@@ -245,11 +249,13 @@ end
         phase,
         dirichlet,
         _dt,
-        _dx,
-        _dy,
-        _dz,
+        _di,
         args,
     ) where {_T}
+    nx, ny, nz = size(args.P)
+    _dx = @dx(_di, min(i, nx))
+    _dy = @dy(_di, min(j, ny))
+    _dz = @dz(_di, min(k, nz))
     d_xa(A) = _d_xa(A, _dx, i, j, k)
     d_ya(A) = _d_ya(A, _dy, i, j, k)
     d_za(A) = _d_za(A, _dz, i, j, k)
@@ -275,34 +281,37 @@ end
 ## 2D KERNELS
 
 @parallel_indices (i, j) function compute_flux!(
-        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _dx, _dy
+        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _di_vertex
     ) where {_T}
     nx = size(θr_dτ, 1)
 
-    d_xi(A) = _d_xi(A, _dx, i, j)
-    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xi(A, _dx) = _d_xi(A, _dx, i, j)
+    d_yi(A, _dy) = _d_yi(A, _dy, i, j)
     av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
     av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
 
     @inbounds if all((i, j) .≤ size(qTx))
-        qx = qTx2[i, j] = -av_xa(K) * d_xi(T)
+        _dx = @dx(_di_vertex, i)
+        qx = qTx2[i, j] = -av_xa(K) * d_xi(T, _dx)
         qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
     end
 
     @inbounds if all((i, j) .≤ size(qTy))
-        qy = qTy2[i, j] = -av_ya(K) * d_yi(T)
+        _dy = @dy(_di_vertex, j)
+        qy = qTy2[i, j] = -av_ya(K) * d_yi(T, _dy)
         qTy[i, j] = (qTy[i, j] * av_ya(θr_dτ) + qy) / (1.0 + av_ya(θr_dτ))
     end
     return nothing
 end
 
 @parallel_indices (i, j) function compute_flux!(
-        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, rheology, phase, θr_dτ, _dx, _dy, args
+        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, rheology, phase, θr_dτ, _di_vertex, args
     ) where {_T}
+
     nx = size(θr_dτ, 1)
 
-    d_xi(A) = _d_xi(A, _dx, i, j)
-    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xi(A, _dx) = _d_xi(A, _dx, i, j)
+    d_yi(A, _dy) = _d_yi(A, _dy, i, j)
     av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
     av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
 
@@ -318,7 +327,8 @@ end
         K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
         K = (K1 + K2) * 0.5
 
-        qx = qTx2[i, j] = -K * d_xi(T)
+        _dx = @dx(_di_vertex, i)
+        qx = qTx2[i, j] = -K * d_xi(T, _dx)
         qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
     end
 
@@ -334,7 +344,8 @@ end
         K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
         K = (K1 + K2) * 0.5
 
-        qy = qTy2[i, j] = -K * d_yi(T)
+        _dy = @dy(_di_vertex, j)
+        qy = qTy2[i, j] = -K * d_yi(T, _dy)
         qTy[i, j] = (qTy[i, j] * av_ya(θr_dτ) + qy) / (1.0 + av_ya(θr_dτ))
     end
 
@@ -350,16 +361,16 @@ end
         rheology::NTuple{N, AbstractMaterialParamsStruct},
         phase_ratios::CellArray{C1, C2, C3, C4},
         θr_dτ,
-        _dx,
-        _dy,
+        _di_vertex,
         args,
     ) where {_T, N, C1, C2, C3, C4}
     nx = size(θr_dτ, 1)
 
-    d_xi(A) = _d_xi(A, _dx, i, j)
-    d_yi(A) = _d_yi(A, _dy, i, j)
+    d_xi(A, _dx) = _d_xi(A, _dx, i, j)
+    d_yi(A, _dy) = _d_yi(A, _dy, i, j)
     av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
     av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
+
     compute_K(phase, args) = fn_ratio(compute_conductivity, rheology, phase, args)
 
     @inbounds if all((i, j) .≤ size(qTx))
@@ -373,7 +384,8 @@ end
         K2 = compute_K(phase_ij, args_ij)
         K = (K1 + K2) * 0.5
 
-        qx = qTx2[i, j] = -K * d_xi(T)
+        _dx = @dx(_di_vertex, i)
+        qx = qTx2[i, j] = -K * d_xi(T, _dx)
         qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
     end
 
@@ -389,7 +401,8 @@ end
         K2 = compute_K(phase_ij, args_ij)
         K = (K1 + K2) * 0.5
 
-        qy = qTy2[i, j] = -K * d_yi(T)
+        _dy = @dy(_di_vertex, j)
+        qy = qTy2[i, j] = -K * d_yi(T, _dy)
         qTy[i, j] = (qTy[i, j] * av_ya(θr_dτ) + qy) / (1.0 + av_ya(θr_dτ))
     end
 
@@ -407,9 +420,9 @@ end
         dτ_ρ,
         dirichlet,
         _dt,
-        _dx,
-        _dy,
+        _di_center,
     ) where {_T}
+    _dx, _dy = @dxi(_di_center, i, j)
     I1 = i + 1, j + 1
 
     if isdirichlet(dirichlet, I1...)
@@ -458,8 +471,7 @@ end
         dτ_ρ,
         dirichlet,
         _dt,
-        _dx,
-        _dy,
+        _di_vertex,
         args::NamedTuple,
     ) where {_T}
 
@@ -471,6 +483,9 @@ end
     else
 
         nx, ny = size(args.P)
+
+        _dx = @dx(_di_vertex, min(i, nx))
+        _dy = @dy(_di_vertex, min(j, ny))
 
         i0 = clamp(i - 1, 1, nx)
         i1 = clamp(i, 1, nx)
@@ -518,9 +533,9 @@ end
         ρCp,
         dirichlet,
         _dt,
-        _dx,
-        _dy,
+        _di_vertex,
     ) where {_T}
+    _dx, _dy = @dxi(_di_vertex, i, j)
     nx, ny = size(ρCp)
 
     d_xa(A) = _d_xa(A, _dx, i, j)
@@ -561,11 +576,12 @@ end
         phase,
         dirichlet,
         _dt,
-        _dx,
-        _dy,
+        _di_vertex,
         args,
     ) where {_T}
     nx, ny = size(args.P)
+    _dx = @dx(_di_vertex, min(i, nx))
+    _dy = @dy(_di_vertex, min(j, ny))
 
     i0 = clamp(i - 1, 1, nx)
     i1 = clamp(i, 1, nx)
@@ -616,7 +632,7 @@ function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, dirichlet, _dt,
         pt_thermal.dτ_ρ,
         dirichlet,
         _dt,
-        _di...,
+        _di,
     )
 end
 
@@ -635,14 +651,15 @@ function update_T(
         pt_thermal.dτ_ρ,
         dirichlet,
         _dt,
-        _di...,
+        _di,
         args,
     )
 end
 
 @parallel_indices (i, j, k) function adiabatic_heating(
-        A, Vx, Vy, Vz, P, rheology, phases, _dx, _dy, _dz
+        A, Vx, Vy, Vz, P, rheology, phases, _di
     )
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
     I = i, j, k
     I1 = i1, j1, k1 = I .+ 1
     @inbounds begin
@@ -694,8 +711,9 @@ end
 end
 
 @parallel_indices (i, j) function adiabatic_heating(
-        A, Vx, Vy, P, rheology, phases, _dx, _dy
+        A, Vx, Vy, P, rheology, phases, _di_vertex
     )
+    _dx, _dy = @dxi(_di_vertex, i, j)
     I = i, j
     I1 = i1, j1 = I .+ 1
     @inbounds begin
@@ -727,12 +745,20 @@ end
     return nothing
 end
 
-function adiabatic_heating!(thermal, stokes, rheology, phases, di)
+function adiabatic_heating!(thermal, stokes, rheology, phases, grid::Geometry{2})
     idx = @idx (size(stokes.P) .- 1)
-    _di = inv.(di)
     return @parallel idx adiabatic_heating(
-        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, _di...
+        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, grid._di.vertex
     )
 end
 
+function adiabatic_heating!(thermal, stokes, rheology, phases, grid::Geometry{3})
+    idx = @idx (size(stokes.P) .- 1)
+    return @parallel idx adiabatic_heating(
+        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, grid._di.center
+    )
+end
+
+@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, ::Geometry{2}) = nothing
+@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, ::Geometry{3}) = nothing
 @inline adiabatic_heating!(thermal, ::Nothing, ::Vararg{Any, N}) where {N} = nothing

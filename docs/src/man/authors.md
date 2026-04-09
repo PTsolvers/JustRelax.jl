@@ -17,9 +17,6 @@ provided substantial additions or modifications. Together, these two groups form
 The following people contributed major additions or modifications to [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) and
 are listed in alphabetical order:
 
-* Sidney Beeler
 * Lukas Fuchs
 * Boris Kaus
-* Patrick Sanan
-* Hendrik Ranocha
 * Ludovic Räss

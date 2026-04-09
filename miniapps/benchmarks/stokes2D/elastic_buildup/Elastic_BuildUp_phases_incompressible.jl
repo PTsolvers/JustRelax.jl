@@ -127,7 +127,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,

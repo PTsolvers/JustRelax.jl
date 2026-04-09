@@ -89,6 +89,7 @@ makedocs(;
         "User guide" => Any[
             "Installation" => "man/installation.md",
             "Backend" => "man/backend.md",
+            "Grid generation" => "man/grid_generation.md",
             "Equations" => Any[
                 "Governing equations" => "man/equations_basic.md",
                 "Constitutive equations" => "man/constitutive_equations.md",

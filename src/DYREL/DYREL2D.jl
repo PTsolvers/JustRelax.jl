@@ -44,7 +44,7 @@ function _solve_DYREL!(
         phase_ratios::JustPIC.PhaseRatios,
         rheology,
         args,
-        di::NTuple{2, T},
+        grid::Geometry{2},
         dt,
         igg::IGG;
         viscosity_cutoff = (-Inf, Inf),
@@ -52,6 +52,7 @@ function _solve_DYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         iterMax = 50.0e3,
+        total_iterMax = 50.0e3,
         nout = 100,
         rel_drop = 1.0e-2,
         b_width = (4, 4, 0),
@@ -59,7 +60,7 @@ function _solve_DYREL!(
         verbose_DR = true,
         linear_viscosity = false,
         kwargs...,
-    ) where {T}
+    )
 
     # unpack
     (;
@@ -84,7 +85,9 @@ function _solve_DYREL!(
         ηb,
     ) = dyrel
 
-    _di = inv.(di)
+    di = grid.di
+    _di = grid._di
+    di_center = di.center
     ni = size(stokes.P)
 
     # errors
@@ -124,19 +127,21 @@ function _solve_DYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
 
-        # compute divergence
-        @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
-
-        # compute deviatoric strain rate
-        @parallel (@idx ni .+ 1) compute_strain_rate!(
-            @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
+        # compute divergence and deviatoric strain rate in one pass
+        @parallel (@idx ni .+ 1) compute_∇V_strain_rate!(
+            stokes.∇V,
+            @strain(stokes)...,
+            @velocity(stokes)...,
+            _di.vertex,
+            _di.velocity[1],
+            _di.velocity[2],
         )
         vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
 
@@ -166,7 +171,8 @@ function _solve_DYREL!(
             stokes.ΔPψ,
             @stress(stokes)...,
             ρg...,
-            _di...,
+            _di.center,
+            _di.vertex,
         )
 
         # compute pressure residual
@@ -226,8 +232,17 @@ function _solve_DYREL!(
             copyto!(Rx0, stokes.R.Rx)
             copyto!(Ry0, stokes.R.Ry)
 
-            # Divergence
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di)
+            # Deviatoric strain rate and divergence
+            @parallel (@idx ni .+ 1) compute_∇V_strain_rate!(
+                stokes.∇V,
+                @strain(stokes)...,
+                @velocity(stokes)...,
+                _di.vertex,
+                _di.velocity[1],
+                _di.velocity[2],
+            )
+            vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
+
             compute_residual_P!(
                 stokes.R.RP,
                 stokes.P,
@@ -240,12 +255,6 @@ function _solve_DYREL!(
                 dt,
                 args,
             )
-
-            # Deviatoric strain rate
-            @parallel (@idx ni .+ 1) compute_strain_rate!(
-                @strain(stokes)..., stokes.∇V, @velocity(stokes)..., _di...
-            )
-            vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
 
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
@@ -277,7 +286,8 @@ function _solve_DYREL!(
                 ρg...,
                 Dx,
                 Dy,
-                _di...,
+                _di.center,
+                _di.vertex,
             )
 
             # Damping-pong
@@ -321,7 +331,7 @@ function _solve_DYREL!(
                 @. cVy = 2 * √(λminV) * c_fact
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, di, dt)
+                Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, grid.di, dt)
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)
@@ -331,12 +341,12 @@ function _solve_DYREL!(
         # update pressure
         @. stokes.P += γ_eff .* stokes.R.RP
 
-        iter > 200.0e3 && break
+        iter > total_iterMax && break
     end
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+        stokes.ω.xy, @velocity(stokes)..., _di.velocity[1], _di.velocity[2]
     )
 
     # Interpolate shear components to cell center arrays
@@ -355,6 +365,23 @@ function _solve_DYREL!(
 
     return (; err_evo_it, err_evo_V, err_evo_P)
 
+end
+
+function _solve_DYREL!(
+        stokes::JustRelax.StokesArrays,
+        ρg,
+        dyrel,
+        flow_bcs::AbstractFlowBoundaryConditions,
+        phase_ratios::JustPIC.PhaseRatios,
+        rheology,
+        args,
+        di::Union{NTuple{2, <:Real}, NamedTuple},
+        dt,
+        igg::IGG;
+        kwargs...,
+    )
+    grid = JustRelax.legacy_uniform_grid(size(stokes.P), di)
+    return _solve_DYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg; kwargs...)
 end
 
 # TODO: will be addressed in following PRs

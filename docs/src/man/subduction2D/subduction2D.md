@@ -57,10 +57,8 @@ For the rheology we will use the `rheology` object we created in the previous se
 nxcell          = 40 # initial number of particles per cell
 max_xcell       = 60 # maximum number of particles per cell
 min_xcell       = 20 # minimum number of particles per cell
-particles       = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
+particles       = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
 subgrid_arrays  = SubgridDiffusionCellArrays(particles)
-# velocity staggered grids
-grid_vxi        = velocity_grids(xci, xvi, di)
 ```
 
 We would like to advect two fields stored at the particles, the temperature `pT`, and the material phases of each particle `pPhases`, which we initialize as `CellArray` objects:
@@ -75,7 +73,7 @@ Now we assign the material phases from the arrays we computed with help of [Geop
 phases_device    = PTArray(backend)(phases_GMG)
 phase_ratios     = PhaseRatios(backend, length(rheology), ni);
 init_phases!(pPhases, phases_device, particles, xvi)
-update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+update_phase_ratios!(phase_ratios, particles, pPhases)
 ```
 
 ## Define temperature profile
@@ -134,7 +132,7 @@ dt₀         = similar(stokes.P)
 for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
     copyinn_x!(dst, src)
 end
-grid2particle!(pT, xvi, T_buffer, particles)
+grid2particle!(pT, T_buffer, particles)
 ```
 
 # Solving the problem
@@ -144,7 +142,7 @@ We will now advance the model in time, solving the Stokes and thermal equations,
 
 1. Interpolate fields from particle to grid vertices
 ```julia
-particle2grid!(T_buffer, pT, xvi, particles)
+particle2grid!(T_buffer, pT, particles)
 @views T_buffer[:, end]      .= Ttop
 @views T_buffer[:, 1]        .= Tbot
 @views thermal.T[2:end-1, :] .= T_buffer
@@ -203,24 +201,24 @@ heatdiffusion_PT!(
 )
 # Subgrid diffusion
 subgrid_characteristic_time!(
-    subgrid_arrays, particles, dt₀, phase_ratios, rheology_augmented, thermal, stokes, xci, di
+    subgrid_arrays, particles, dt₀, phase_ratios, rheology_augmented, thermal, stokes
 )
-centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
 subgrid_diffusion!(
-    pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi,  di, dt
+    pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
 )
 ```
 
 5. Particles advection
 ```julia
 # advect particles in space
-advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
 # advect particles in memory
-move_particles!(particles, xvi, particle_args)
+move_particles!(particles, particle_args)
 # check if we need to inject particles
-inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ))
 # update phase ratios
-update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+update_phase_ratios!(phase_ratios, particles, pPhases)
 ```
 
 6. **Optional:** Save checkpoint every 10 time steps

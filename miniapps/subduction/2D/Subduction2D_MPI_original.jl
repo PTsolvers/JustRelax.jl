@@ -84,26 +84,25 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
     grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT = init_cell_arrays(particles, Val(2))
 
     # particle fields for the stress rotation
-    pτ = pτxx, pτyy, pτxy = init_cell_arrays(particles, Val(3)) # stress
-    # pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
-    pω = pωxy, = init_cell_arrays(particles, Val(1)) # vorticity
-    particle_args = (pT, pPhases, pτ..., pω...)
-    particle_args_reduced = (pT, pτ..., pω...)
+    pτ = StressParticles(particles)
+    pτxx, pτyy = normal_stress(pτ)
+    pτxy, = shear_stress(pτ)
+    particle_args = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
 
     # Assign particles phases anomaly
     phases_device = PTArray(backend)(phases_GMG)
     phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, phases_device, particles, xvi)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     update_cell_halo!(particles.coords..., particle_args...)
     update_cell_halo!(particles.index)
@@ -205,7 +204,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    grid2particle!(pT, T_buffer, particles)
 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
@@ -220,7 +219,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     while it < 1000 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
+        particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= Ttop
         @views T_buffer[:, 1] .= Tbot
         @views thermal.T[2:(end - 1), :] .= T_buffer
@@ -229,16 +228,16 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
 
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
 
-        particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
-        particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
-        particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
+        particle2centroid!(stokes.τ.xx, pτxx, particles)
+        particle2centroid!(stokes.τ.yy, pτyy, particles)
+        particle2grid!(stokes.τ.xy, pτxy, particles)
 
         # Stokes solver ----------------
         t_stokes = @elapsed begin
             out = solve!(
                 stokes,
                 pt_stokes,
-                di,
+                grid,
                 flow_bcs,
                 ρg,
                 phase_ratios,
@@ -266,10 +265,10 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
 
         center2vertex!(τxx_v, stokes.τ.xx)
         center2vertex!(τyy_v, stokes.τ.yy)
-        centroid2particle!(pτxx, xci, stokes.τ.xx, particles)
-        centroid2particle!(pτyy, xci, stokes.τ.yy, particles)
-        grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
-        rotate_stress_particles!(pτ, pω, particles, dt)
+        centroid2particle!(pτxx, stokes.τ.xx, particles)
+        centroid2particle!(pτyy, stokes.τ.yy, particles)
+        grid2particle!(pτxy, stokes.τ.xy, particles)
+        rotate_stress!(pτ, stokes, particles, dt)
 
         if igg.me == 0
             println("Stokes solver time             ")
@@ -289,7 +288,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (
                 igg = igg,
                 phase = phase_ratios,
@@ -299,35 +298,34 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             )
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi, di, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
 
         update_cell_halo!(particles.coords..., particle_args...)
         update_cell_halo!(particles.index)
 
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ))
         inject_particles_phase!(
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
-            xvi
+            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
         )
 
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         if igg.me == 0
             @show it += 1
             t += dt

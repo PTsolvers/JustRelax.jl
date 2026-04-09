@@ -41,10 +41,16 @@ function metadata(src, dst, files...)
         mkpath(dst)
     end
     for f in vcat(collect(files), ["Manifest.toml", "Project.toml"])
-        !isfile(joinpath(f)) && continue
+        srcfile = if isfile(joinpath(src, f))
+            joinpath(src, f)
+        elseif isfile(joinpath(src, "test", f))
+            joinpath(src, "test", f)
+        else
+            continue
+        end
         newfile = joinpath(dst, basename(f))
         isfile(newfile) && rm(newfile)
-        cp(joinpath(src, f), newfile)
+        cp(srcfile, newfile)
     end
     return
 end

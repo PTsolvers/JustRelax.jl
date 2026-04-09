@@ -88,9 +88,7 @@ function Shearheating2D(; nx = 32, ny = 32)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 50, 75, 25
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pPhases)
@@ -101,7 +99,7 @@ function Shearheating2D(; nx = 32, ny = 32)
     r_anomaly = 3.0e3    # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -152,7 +150,7 @@ function Shearheating2D(; nx = 32, ny = 32)
     for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
         copyinn_x!(dst, src)
     end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    grid2particle!(pT, T_buffer, particles)
 
     # Time loop
     t, it = 0.0, 0
@@ -163,7 +161,7 @@ function Shearheating2D(; nx = 32, ny = 32)
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -197,7 +195,7 @@ function Shearheating2D(; nx = 32, ny = 32)
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,
@@ -210,21 +208,21 @@ function Shearheating2D(; nx = 32, ny = 32)
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # interpolate fields from grid vertices to particles
         for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
             copyinn_x!(dst, src)
         end
         grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
+        particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= 273.0 + 400
         @views thermal.T[2:(end - 1), :] .= T_buffer
         temperature2center!(thermal)

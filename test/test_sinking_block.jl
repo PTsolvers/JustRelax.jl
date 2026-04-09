@@ -134,7 +134,7 @@ function Sinking_Block2D()
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
@@ -145,7 +145,7 @@ function Sinking_Block2D()
     r_anomaly = 50.0e3   # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -174,7 +174,7 @@ function Sinking_Block2D()
     iters = solve!(
         stokes,
         pt_stokes,
-        di,
+        grid,
         flow_bcs,
         ρg,
         phase_ratios,

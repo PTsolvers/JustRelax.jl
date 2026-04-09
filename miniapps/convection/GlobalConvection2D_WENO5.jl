@@ -222,7 +222,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             rheology,
@@ -248,7 +248,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (
                 igg = igg,
                 iterMax = 10.0e3,

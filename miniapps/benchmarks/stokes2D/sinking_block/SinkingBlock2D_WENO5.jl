@@ -141,7 +141,6 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     dt = 1
     # ----------------------------------------------------
 
-    # velocity grids
     grid_vxi = velocity_grids(xci, xvi, di)
 
     # Rectangular density anomaly
@@ -150,7 +149,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     r_anomaly = 50.0e3   # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     # init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-    # update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    # update_phase_ratios!(phase_ratios, particles, pPhases)
 
     phases = @zeros(ni...)
     # phases = Float64.([argmax(p) for p in Array(phase_ratios.center)])
@@ -198,7 +197,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,

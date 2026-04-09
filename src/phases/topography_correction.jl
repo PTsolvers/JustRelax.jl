@@ -11,26 +11,33 @@ function update_phases_given_markerchain!(
         phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase, args::NTuple{N, Any}
     ) where {backend, N}
     (; coords, index) = particles
-    dy = di[2]
     return @parallel (1:size(index, 1)) _update_phases_given_markerchain!(
-        phase, coords, index, chain.coords, chain.cell_vertices, origin, dy, air_phase, args
+        phase,
+        coords,
+        index,
+        chain.coords,
+        chain.cell_vertices,
+        origin,
+        di,
+        air_phase,
+        args,
     )
 end
 
 @parallel_indices (icell) function _update_phases_given_markerchain!(
-        phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, args::NTuple{N, Any}
+        phase, coords, index, chain_coords, cell_vertices, origin, di, air_phase, args::NTuple{N, Any}
     ) where {N}
     _update_phases_given_markerchain_kernel!(
-        phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell, args
+        phase, coords, index, chain_coords, cell_vertices, origin, di, air_phase, icell, args
     )
     return nothing
 end
 
 function _update_phases_given_markerchain_kernel!(
-        phase, coords, index, chain_coords, cell_vertices, origin, dy, air_phase, icell, args::NTuple{N, Any}
+        phase, coords, index, chain_coords, cell_vertices, origin, di, air_phase, icell, args::NTuple{N, Any}
     ) where {N}
     chain_yi = @cell chain_coords[2][icell]
-    min_cell_j, max_cell_j = find_minmax_cell_indices(chain_yi, origin[2], dy)
+    min_cell_j, max_cell_j = find_minmax_cell_indices(chain_yi, origin[2], di)
     min_cell_j = max(1, min_cell_j - 10)
     max_cell_j = min(size(index, 2), max_cell_j + 10)
     cell_range = min_cell_j:max_cell_j
@@ -95,8 +102,9 @@ function extrema_CA(x::AbstractArray)
     return min_val, max_val
 end
 
-function find_minmax_cell_indices(chain_yi, origin_y, dy)
+function find_minmax_cell_indices(chain_yi, origin_y, di)
     ymin, ymax = extrema_CA(chain_yi)
+    dy = @dy(di, 1)
     min_cell_j = Int((ymin - origin_y) ÷ dy) + 1
     max_cell_j = Int((ymax - origin_y) ÷ dy) + 1
     return min_cell_j, max_cell_j

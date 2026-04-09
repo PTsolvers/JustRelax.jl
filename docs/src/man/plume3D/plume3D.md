@@ -45,10 +45,8 @@ For the rheology we will use the `rheology` object we created in the previous se
 nxcell         = 25
 max_xcell      = 35
 min_xcell      = 8
-particles      = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
+particles      = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
 subgrid_arrays = SubgridDiffusionCellArrays(particles)
-# velocity staggered grids
-grid_vxi       = velocity_grids(xci, xvi, di)
 ```
 
 We would like to advect two fields stored at the particles, the temperature `pT`, and the material phases of each particle `pPhases`, which we initialize as `CellArray` objects:
@@ -106,7 +104,7 @@ zc_anomaly = -610.0e3 # origin of thermal anomaly
 r_anomaly  = 50.0e3   # radius of perturbation
 init_phases!(pPhases, particles, lx, ly; d = abs(zc_anomaly), r = r_anomaly)
 phase_ratios = PhaseRatios(backend, length(rheology), ni)
-update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+update_phase_ratios!(phase_ratios, particles, pPhases)
 ```
 
 ## Define temperature profile
@@ -216,7 +214,7 @@ pt_thermal = PTThermalCoeffs(
 ## Just before solving the problem...
 ```julia
 dt₀         = similar(stokes.P)
-grid2particle!(pT, xvi, T_buffer, particles)
+grid2particle!(pT, T_buffer, particles)
 ```
 
 # Solving the problem
@@ -226,7 +224,7 @@ We will now advance the model in time, solving the Stokes and thermal equations,
 
 1. Interpolate fields from particle to grid vertices
 ```julia
-particle2grid!(T_buffer, pT, xvi, particles)
+particle2grid!(T_buffer, pT, particles)
 temperature2center!(thermal)
 ```
 2. Solve stokes
@@ -279,24 +277,24 @@ heatdiffusion_PT!(
 )
 # Subgrid diffusion
 subgrid_characteristic_time!(
-    subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+    subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
 )
-centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
 subgrid_diffusion!(
-    pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi,  di, dt
+    pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
 )
 ```
 
 5. Particles advection
 ```julia
 # advect particles in space
-advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+advection!(particles, RungeKutta2(), @velocity(stokes), dt)
 # advect particles in memory
-move_particles!(particles, xvi, particle_args)
+move_particles!(particles, particle_args)
 # check if we need to inject particles
-inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T, ), xvi)
+inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T, ))
 # update phase ratios
-update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+update_phase_ratios!(phase_ratios, particles, pPhases)
 ```
 
 6. **Optional:** Save data as VTK to visualize it later with [ParaView](https://www.paraview.org/)

@@ -32,8 +32,8 @@ using Test, Suppressor, JustRelax, JustRelax.JustRelax2D
             @test grid.xci[i][1] == origin[i] + di[i] / 2
         end
         # test velocity grids
-        @test grid.grid_v[1][2][1] == origin[2] - di[1] / 2
-        @test grid.grid_v[2][1][1] == origin[1] - di[2] / 2
+        @test grid.xi_vel[1][2][1] == origin[2] - di[1] / 2
+        @test grid.xi_vel[2][1][1] == origin[1] - di[2] / 2
         finalize_global_grid(; finalize_MPI = false)
     end
 end

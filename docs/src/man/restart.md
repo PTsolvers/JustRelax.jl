@@ -30,8 +30,6 @@ phases        = TA(backend)(Float64, data["phases"])
 phase_ratios  = TA(backend)(Float64, data["phase_ratios"])
 particle_args = TA(backend).(Float64, data["particle_args"])
 subgrid_arrays  = SubgridDiffusionCellArrays(particles)
-# velocity staggered grids
-grid_vxi        = velocity_grids(xci, xvi, di)
 ```
 
 ## Load Stokes and Thermal arrays from checkpoint file

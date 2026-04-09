@@ -492,8 +492,11 @@ end
     _compute_dt(@velocity(S), di, Inf, maximum_mpi)
 
 @inline function _compute_dt(V::NTuple, di, dt_diff, max_fun::F) where {F <: Function}
-    n = inv(length(V) + 0.1)
-    dt_adv = mapreduce(x -> x[1] * inv(max_fun(abs.(x[2]))), min, zip(di, V)) * n
+    # n = inv(length(V) + 0.1)
+    # dt_adv = mapreduce(x -> x[1] * inv(max_fun(abs.(x[2]))), min, zip(di, V)) * n
+
+    dt_adv = mapreduce(x -> x[1] * inv(max_fun(abs.(x[2]))), min, zip(di, V)) * 0.9
+
     return min(dt_diff, dt_adv)
 end
 

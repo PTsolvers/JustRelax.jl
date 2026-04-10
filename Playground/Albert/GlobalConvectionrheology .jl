@@ -21,13 +21,22 @@ function init_rheologies(CharDim; is_plastic = true)
     )
     # down to 660km
     A= 1.5e8
+    A= 2e-23
+    # disl_upper_mantle = DislocationCreep( # dry olivine
+    #     # A = 2.08e-23Pa^(-35 // 10) / s, # units are Pa^(-n) / s
+    #     # A = (10^9.2)MPa^(-35 // 10) / s,   # material specific rheological parameter
+    #     A = (A)MPa^(-35 // 10) / s,   # material specific rheological parameter
+    #     n = 3.5NoUnits,
+    #     E = 532.0e3J / mol,
+    #     V = 14.0e-6m^3 / mol,
+    #     r = 0.0NoUnits,
+    #     R = 8.3145J / mol / K,
+    # )
     disl_upper_mantle = DislocationCreep( # dry olivine
-        # A = 2.08e-23Pa^(-35 // 10) / s, # units are Pa^(-n) / s
-        # A = (10^9.2)MPa^(-35 // 10) / s,   # material specific rheological parameter
         A = (A)MPa^(-35 // 10) / s,   # material specific rheological parameter
         n = 3.5NoUnits,
-        E = 532.0e3J / mol,
-        V = 14.0e-6m^3 / mol,
+        E = 230.0e3J / mol,
+        V = 11.0e-6m^3 / mol,
         r = 0.0NoUnits,
         R = 8.3145J / mol / K,
     )
@@ -55,24 +64,32 @@ function init_rheologies(CharDim; is_plastic = true)
     )
 
 
-    A= 1.5e8
+    A= 10^9.2
     # down to 660km
     diff_upper_mantle = DiffusionCreep( # dry olivine
         n = 1.0NoUnits,                         # power-law exponent
         r = 0.0NoUnits,                         # exponent of water-fugacity
-        p = -3.0NoUnits,                        # grain size exponent
-        A = (A)MPa^(-1) * μm^3 * s^(-1),   # material specific rheological parameter
-        E = 300.0kJ / mol,                      # activation energy
-        V = 5.0e-6m^3 / mol,                   # activation Volume
+        p = -2.0NoUnits,                        # grain size exponent
+        A = (A)MPa^(-1) * μm^3 * s^(-1),        # material specific rheological parameter
+        E = 125.0kJ / mol,                      # activation energy
+        V = 7.0e-6m^3 / mol,                    # activation Volume
     )
+    # diff_upper_mantle = DiffusionCreep( # dry olivine
+    #     n = 1.0NoUnits,                         # power-law exponent
+    #     r = 0.0NoUnits,                         # exponent of water-fugacity
+    #     p = -3.0NoUnits,                        # grain size exponent
+    #     A = (A)MPa^(-1) * μm^3 * s^(-1),        # material specific rheological parameter
+    #     E = 300.0kJ / mol,                      # activation energy
+    #     V = 5.0e-6m^3 / mol,                    # activation Volume
+    # )
     # down to 2600km
     diff_pv_mantle = DiffusionCreep(
         n = 1.0NoUnits,                         # power-law exponent
         r = 0.0NoUnits,                         # exponent of water-fugacity
         p = -3.0NoUnits,                        # grain size exponent
-        A = (A)MPa^(-1) * μm^3 * s^(-1),   # material specific rheological parameter
+        A = (A)MPa^(-1) * μm^3 * s^(-1),        # material specific rheological parameter
         E = 370.0kJ / mol,                      # activation energy
-        V = 3.65e-6m^3 / mol,                     # activation Volume
+        V = 3.65e-6m^3 / mol,                   # activation Volume
     )
     # down to CMB
     diff_ppv_mantle = DiffusionCreep(
@@ -87,8 +104,8 @@ function init_rheologies(CharDim; is_plastic = true)
     # Elasticity
     el_upper_crust = SetConstantElasticity(;  G = 25.0e9Pa, ν = 0.4)
     el_lower_crust = SetConstantElasticity(;  G = 25.0e9Pa, ν = 0.4)
-    el_upper_mantle = SetConstantElasticity(; G = 85.0e9Pa, ν = 0.4)
-    el_lower_mantle = SetConstantElasticity(; G = 160.0e9Pa, ν = 0.4)
+    el_upper_mantle = SetConstantElasticity(; G = 60.0e9Pa, ν = 0.4)
+    el_lower_mantle = SetConstantElasticity(; G = 60.0e9Pa, ν = 0.4)
     β_upper_crust = inv(get_Kb(el_upper_crust))
     β_lower_crust = inv(get_Kb(el_lower_crust))
     β_upper_mantle = inv(get_Kb(el_upper_mantle))
@@ -154,39 +171,42 @@ function init_rheologies(CharDim; is_plastic = true)
         # Name              = "Down to 660",
         SetMaterialParams(;
             Phase = 3,
-            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_upper_mantle, T0 = 0.0e0C, α = 3.5e-5 / K),
+            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_upper_mantle, T0 = 0.0e0C, α = 5e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 1.25e3J / kg / K),
             Conductivity = K_mantle,
             RadioactiveHeat = ConstantRadioactiveHeat(0.0),
-            # CompositeRheology = CompositeRheology((disl_upper_mantle, diff_upper_mantle, el_upper_mantle, pl)),
-            CompositeRheology = CompositeRheology((diff_upper_mantle, el_upper_mantle, pl)),
+            CompositeRheology = CompositeRheology((disl_upper_mantle, diff_upper_mantle, el_upper_mantle, pl)),
+            # CompositeRheology = CompositeRheology((diff_upper_mantle, el_upper_mantle, pl)),
             Gravity = ConstantGravity(; g = g),
+            RadioactiveHeat = ConstantRadioactiveHeat(8.6e-12Watt / kg),
             Elasticity = el_upper_mantle,
             CharDim = CharDim,
         ),
         # Name              = "Down to 2700"
         SetMaterialParams(;
             Phase = 4,
-            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_upper_mantle, T0 = 0.0e0C, α = 3.5e-5 / K),
+            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_upper_mantle, T0 = 0.0e0C, α = 5e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 1.25e3J / kg / K),
             Conductivity = K_mantle,
             RadioactiveHeat = ConstantRadioactiveHeat(0.0),
-            # CompositeRheology = CompositeRheology((disl_pv_mantle, diff_pv_mantle, el_upper_mantle, pl)),
-            CompositeRheology = CompositeRheology(( diff_pv_mantle, el_upper_mantle, pl)),
+            CompositeRheology = CompositeRheology((disl_pv_mantle, diff_pv_mantle, el_upper_mantle, pl)),
+            # CompositeRheology = CompositeRheology(( diff_pv_mantle, el_upper_mantle, pl)),
             Gravity = ConstantGravity(; g = g),
+            RadioactiveHeat = ConstantRadioactiveHeat(8.6e-12Watt / kg),
             Elasticity = el_upper_mantle,
             CharDim = CharDim,
         ),
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase = 5,
-            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_lower_mantle, T0 = 0.0e0C, α = 3.5e-5 / K),
+            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_lower_mantle, T0 = 0.0e0C, α = 5e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 1.25e3J / kg / K),
             Conductivity = K_mantle,
             RadioactiveHeat = ConstantRadioactiveHeat(0.0),
-            # CompositeRheology = CompositeRheology((disl_ppv_mantle, diff_ppv_mantle, el_lower_mantle, pl)),
-            CompositeRheology = CompositeRheology(( diff_ppv_mantle, el_lower_mantle, pl)),
+            CompositeRheology = CompositeRheology((disl_ppv_mantle, diff_ppv_mantle, el_lower_mantle, pl)),
+            # CompositeRheology = CompositeRheology(( diff_ppv_mantle, el_lower_mantle, pl)),
             Gravity = ConstantGravity(; g = g),
+            RadioactiveHeat = ConstantRadioactiveHeat(8.6e-12Watt / kg),
             Elasticity = el_lower_mantle,
             CharDim = CharDim,
         ),

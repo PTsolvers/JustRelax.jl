@@ -36,7 +36,7 @@ using GeoParams, GLMakie
 using PoissonGrids
 
 # Load file with all the rheology configurations
-include("Layered_rheology.jl")
+include("GlobalConvectionrheology .jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -142,9 +142,9 @@ end
 function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = false)
 
     thickness = 2890 * km
-    η0 = 1.0e21
+    η0 = 9.8e21
     CharDim = GEO_units(;
-        length = thickness, viscosity = η0, temperature = 3.800e3K
+        length = thickness, viscosity = η0, temperature = 2.800e3K
     )
     # Physical domain ------------------------------------
     thick_air = nondimensionalize(0.0e0km, CharDim)                 # thickness of sticky air layer
@@ -224,10 +224,13 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         nondimensionalize(
             T_field(x, 
                 - @dimstrip(z, km, CharDim); 
-                Lx=@dimstrip(grid.li[1], km, CharDim),
-                Lz=@dimstrip(grid.li[2], km, CharDim), 
-                w_t=2.5,
-                w_b=2.5
+                Lx   = @dimstrip(grid.li[1], km, CharDim),
+                Lz   = @dimstrip(grid.li[2], km, CharDim), 
+                Ttop = 273.0,
+                Tbot = 2800.0,
+                Tm   = 1600.0,
+                w_t  = 2.5,
+                w_b  = 2.5
             )*K,
             CharDim
         )

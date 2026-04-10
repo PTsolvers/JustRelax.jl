@@ -136,6 +136,15 @@ function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air, CharDim)
     return nothing
 end
 
+# α  --> outer plateau height
+# d1 --> half-width of dip (top)
+# d2 --> half-width of dip (bottom)
+# w  --> sharpness
+# c --> shift of center
+function tanh_monitor2(α, c, d1, d2, w)
+    x ->( α + 0.5*α * (tanh((x - (c + d1))/w) - tanh((x - (c - d2))/w))) + 1
+end
+
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -155,8 +164,16 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     di = @. li / ni        # grid step in x- and -y
     origin = 0.0, -ly      # origin coordinates (15km f sticky air layer)
     grid0 = Geometry(ni, li; origin = origin)
-    α, κ, c = 5, 50, -0.2
-    M = tanh_monitor(α, κ, c; direction = :right)
+    # α, κ, c = 5, 50, -0.2
+    # M = tanh_monitor(α, κ, c; direction = :right)
+
+    # α  --> outer plateau height
+    # d1 --> half-width of dip (top)
+    # d2 --> half-width of dip (bottom)
+    # w  --> sharpness
+    # c --> shift of center
+    α, c, d1, d2, w = 5, -0.5, 0.4, 0.45, 1e-2
+    M = tanh_monitor2(α, c, d1, d2, w)
     xv_ref = solve_grid(grid0.xvi[2][1], grid0.xvi[2][end], M, ny) # refined grid
     grid = Geometry(
         PTArray(backend_JR),
@@ -164,10 +181,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # collect(grid0.xvi[2]),
         xv_ref,
     )
-    # di_min = min(
-    #     min(minimum.(grid.di.center)...),
-    #     min(minimum.(grid.di.vertex)...),
-    # )
     di_min = minimum.(grid.di.vertex)
 
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -400,8 +413,16 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # ------------------------------
 
         @show it += 1
-        t += dt
 
+        t += dt
+        
+        t_dim = Float16(dimensionalize(t, yr, CharDim).val / 1.0e3)
+        dt_dim = Float16(dimensionalize(dt, yr, CharDim).val / 1.0e3)
+        println("\n\n
+            t  = $t_dim [kyr]
+            dt = $dt_dim [kyr]\n\n"
+        )
+        
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, particles)
         @views thermal.T[2:(end - 1), :] .= T_buffer
@@ -458,21 +479,21 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             idxv = particles.index.data[:]
 
             # Make Makie figure
-            t_dim = Float16(dimensionalize(t, yr, CharDim).val / 1.0e3)
-            fig = Figure(size = (1600, 800).*2, title = "t = $t_dim [kyr]")
-            ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K] ; t=$t_dim [kyrs]")
+            t_dim = Float16(dimensionalize(t, yr, CharDim).val / 1.0e6)
+            fig = Figure(size = (1600, 800).*2, title = "t = $t_dim [Myr]")
+            ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K] ; t=$t_dim [Myr]")
             ax2 = Axis(fig[2, 1], aspect = ar, title = "phase")
             # ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
             ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1 = heatmap!(ax1, Array.(xvi)..., Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))), colormap = :batlow)
+            h1 = heatmap!(ax1, Array.(xvi)..., Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))), colormap = :glasgow)
             # Plot particles phase
-            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]))
+            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize=1)
             # Plot 2nd invariant of strain rate
-            h3 = heatmap!(ax3, Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim)))), colormap = :batlow)
+            h3 = heatmap!(ax3, Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim)))), colormap = :bamO)
             # Plot effective viscosity
-            h4 = heatmap!(ax4, Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim)))), colormap = :batlow)
+            h4 = heatmap!(ax4, Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim)))), colormap = :lipari)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -493,7 +514,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 ar = 4    # aspect ratio
-n  = 128 ÷ 1
+n  = 128 ÷ 2
 nx = n * ar
 ny = n
 
@@ -509,3 +530,9 @@ end
 
 # run main script
 main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+
+
+heatmap(Array.(xvi)..., Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim)))      , colormap = Reverse(:glasgow))
+heatmap(Array.(xvi)..., Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim)))      , colormap = :glasgow)
+heatmap(Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim))))         , colormap = :bamO)
+heatmap(Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim)))), colormap = :lipari)

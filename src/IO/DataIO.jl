@@ -50,7 +50,7 @@ function metadata(src, dst, files...)
         end
         newfile = joinpath(dst, basename(f))
         isfile(newfile) && rm(newfile)
-        cp(srcfile, newfile)
+        cp(srcfile, newfile, force = true)
     end
     return
 end

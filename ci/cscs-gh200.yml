@@ -13,7 +13,7 @@ unit_tests:
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.instantiate();'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(["Suppressor", "Test"]);'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="OpenSSL_jll", version="3.0.16");'
-    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="CUDA", version="5.8.2");'
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="CUDA", version="6");'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.status(); using CUDA; CUDA.versioninfo();'
     - echo "Running MPI tests (multiple ranks)"
     - echo "Running MPI test - test_diffusion2D_multiphase_MPI.jl"
@@ -43,7 +43,7 @@ ref_test:
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.instantiate();'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(["Suppressor", "Test"]);'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="OpenSSL_jll", version="3.0.16");'
-    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="CUDA", version="5.8.2");'
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(name="CUDA", version="6");'
     - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.status(); using CUDA; CUDA.versioninfo();'
     - echo "Running the reference test (multiple ranks)"
     - srun --uenv julia/25.5:v1 --view=juliaup julia --project=. test/test_shearband3D_MPI.jl

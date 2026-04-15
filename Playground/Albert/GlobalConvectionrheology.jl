@@ -171,7 +171,7 @@ function init_rheologies(CharDim; is_plastic = true)
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase = 5,
-            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_lower_mantle, T0 = 0.0e0C, α = 5e-5 / K),
+            Density = PT_Density(; ρ0 = 3325e0kg / m^3, β = β_lower_mantle, T0 = 0.0e0C, α = 5e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 1e3J / kg / K),
             Conductivity = K_mantle,
             CompositeRheology = CompositeRheology((diff_lower_mantle, el_lower_mantle, pl)),
@@ -315,7 +315,7 @@ function T_field(
     return background + perturbation
 end
 
-function phase_changes!(phases, particles, phase_upper_mantle, phase_lower_mantle)
+function phase_changes!(phases, particles, phase_upper_mantle, phase_lower_mantle, CharDim)
     ni = size(phases)
 
     d_660km = nondimensionalize(660.0e0km, CharDim)

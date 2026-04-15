@@ -393,7 +393,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
         # 660 phase changs
         phase_upper_mantle, phase_lower_mantle = 4e0,5e0
-        phase_changes!(pPhases, particles, phase_upper_mantle, phase_lower_mantle)
+        phase_changes!(pPhases, particles, phase_upper_mantle, phase_lower_mantle, CharDim)
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)

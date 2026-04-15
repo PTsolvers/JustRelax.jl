@@ -1,5 +1,5 @@
-const isGPU = true 
-# const isGPU = false
+# const isGPU = true 
+const isGPU = false
 
 @static if isGPU
     using CUDA
@@ -37,7 +37,7 @@ using GeoParams, GLMakie
 using PoissonGrids
 
 # Load file with all the rheology configurations
-include("GlobalConvectionrheology.jl")
+include("GlobalConvectionrheology_dims.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -63,23 +63,21 @@ end
 end
 
 # Initial thermal profile
-function init_T!(T, y, thick_air, CharDim)
+function init_T!(T, y, thick_air)
 
     ni = size(T) .- (2, 0)
 
-    # non dim depths
-    d_air = nondimensionalize(thick_air * km, CharDim)
-    d_0km = nondimensionalize(0.0e0km, CharDim)
-    d_35km = nondimensionalize(35.0e0km, CharDim)
-    d_110km = nondimensionalize(110.0e0km, CharDim)
+    d_air = thick_air
+    d_0km = 0.0e0
+    d_35km = 35.0e3
+    d_110km = 110.0e3
 
-    # non dim T and gradients
-    T_273K = nondimensionalize(293.0e0K, CharDim)
-    T_18K = nondimensionalize((923 - 273) / 35 * K / km, CharDim)
-    T_7K = nondimensionalize((1492 - 923) / 75 * K / km, CharDim)
-    T_0_5K = nondimensionalize((1837 - 1492) / 590 * K / km, CharDim)
-    T_923K = nondimensionalize(923.0e0K, CharDim)
-    T_1492K = nondimensionalize(1492.0e0K, CharDim)
+    T_273K = 293.0e0
+    T_18K = (923 - 273) / 35.0e3
+    T_7K = (1492 - 923) / 75.0e3
+    T_0_5K = (1837 - 1492) / 590.0e3
+    T_923K = 923.0e0
+    T_1492K = 1492.0e0
 
     @parallel_indices (i, j) function init_T2!(T, y)
         depth = -y[j] - d_air
@@ -115,19 +113,17 @@ end
 
 
 # Thermal rectangular perturbation
-function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air, CharDim)
+function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air)
 
-    dTdZ_nd = nondimensionalize((2047 - 2017)K / 50km, CharDim)
-    offset_nd = nondimensionalize(2017.0e0K, CharDim)
-    d_585km = nondimensionalize(585km, CharDim)
-    ΔT = nondimensionalize(100.0e0K, CharDim)
-    d_air = nondimensionalize(thick_air * km, CharDim)
+    dTdZ = (2047 - 2017) / 50.0e3
+    offset = 2017.0e0
+    d_585km = 585.0e3
+    d_air = thick_air
 
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         if ((x[i] - xc)^2 ≤ r^2) && ((y[j] - yc - d_air)^2 ≤ r^2)
-            depth = -y[j]# - d_air
-            # T[i + 1, j]  = (depth - d_585km) * dTdZ_nd + offset_nd
-            T[i + 1, j] *= 1.1
+            depth = -y[j] - d_air
+            T[i + 1, j] = (depth - d_585km) * dTdZ + offset
         end
         return nothing
     end
@@ -152,14 +148,10 @@ end
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = false)
 
-    thickness = 2890 * km
-    η0 = 9.8e21
-    CharDim = GEO_units(;
-        length = thickness, viscosity = η0, temperature = 2.800e3K
-    )
+    thickness = 2890.0e3
     # Physical domain ------------------------------------
-    thick_air = nondimensionalize(0.0e0km, CharDim)                 # thickness of sticky air layer
-    ly = nondimensionalize(thickness, CharDim) + thick_air # domain length in y
+    thick_air = 0.0e0                 # thickness of sticky air layer
+    ly = thickness + thick_air # domain length in y
     lx = ly * ar           # domain length in x
     ni = nx, ny            # number of cells
     li = lx, ly            # domain length in x- and y-
@@ -174,14 +166,14 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # d2 --> half-width of dip (bottom)
     # w  --> sharpness
     # c --> shift of center
-    α, c, d1, d2, w = 5, -0.5, 0.4, 0.45, 1e-2
-    M = tanh_monitor2(α, c, d1, d2, w)
-    xv_ref = solve_grid(grid0.xvi[2][1], grid0.xvi[2][end], M, ny) # refined grid
+    # α, c, d1, d2, w = 5, -0.5 * thickness, 0.4 * thickness, 0.45 * thickness, 1e-2 * thickness
+    # M = tanh_monitor2(α, c, d1, d2, w)
+    # xv_ref = solve_grid(grid0.xvi[2][1], grid0.xvi[2][end], M, ny) # refined grid
     grid = Geometry(
         PTArray(backend_JR),
         collect(grid0.xvi[1]),
-        # collect(grid0.xvi[2]),
-        xv_ref,
+        collect(grid0.xvi[2]),
+        # xv_ref,
     )
     di_min = minimum.(grid.di.vertex)
 
@@ -189,10 +181,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology = init_rheologies(CharDim; is_plastic = true)
+    rheology = init_rheologies(; is_plastic = true)
     κ = (4 / (rheology[4].HeatCapacity[1].Cp * rheology[4].Density[1].ρ0))
     dt = 0.5 * min(di_min...)^2 / κ / 2.01 # diffusive CFL timestep limiter
-    dt_max = nondimensionalize(100e3 * yr, CharDim)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -212,10 +203,10 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # Elliptical temperature anomaly
     xc_anomaly = lx / 2    # origin of thermal anomaly
-    yc_anomaly = nondimensionalize(-2800km, CharDim) # origin of thermal anomaly
-    r_anomaly = nondimensionalize(150km, CharDim) # radius of perturbation
+    yc_anomaly = -2800.0e3 # origin of thermal anomaly
+    r_anomaly = 150.0e3 # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly, thick_air, CharDim)
+    init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly, thick_air)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
@@ -230,31 +221,28 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         no_flux = (left = true, right = true, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
-    # init_T!(thermal.T, xvi[2], thick_air, CharDim)
-    # rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
-    # A = 0.01
-    # dTdz = (nondimensionalize(3273.0e0K, CharDim) - nondimensionalize(293.0e0K, CharDim)) / grid.li[2]
-    # thermal.T[2:end-1, :]  .= PTArray(backend_JR)([ -dTdz * y + nondimensionalize(293.0e0K, CharDim) for x in Array(grid.xvi[1]), y in Array(grid.xvi[2]) ]    )
+    # init_T!(thermal.T, xvi[2], thick_air)
+    # rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air)
+    # dTdz = (3273.0e0 - 293.0e0) / grid.li[2]
+    # thermal.T[2:end-1, :]  .= PTArray(backend_JR)([ -dTdz * y + 293.0e0 for x in Array(grid.xvi[1]), y in Array(grid.xvi[2]) ]    )
     # thermal.T[2:end-1, :] .+= PTArray(backend_JR)([A * sin(π*x/grid.li[1]) * sin(π*y/grid.li[1]) for x in Array(grid.xvi[1]), y in Array(grid.xvi[2]) ])
     thermal.T[2:end-1, :]  .= PTArray(backend_JR)([
-        nondimensionalize(
-            T_field(x, 
-                - @dimstrip(z, km, CharDim); 
-                Lx      = @dimstrip(grid.li[1], km, CharDim),
-                Lz      = @dimstrip(grid.li[2], km, CharDim), 
+        T_field(
+                x / 1.0e3, 
+                -z / 1.0e3; 
+                Lx      = grid.li[1] / 1.0e3,
+                Lz      = grid.li[2] / 1.0e3, 
                 A       = 150.0,      # perturbation amplitude in K
                 Ttop    = 273.0,
                 Tbot    = 2800.0,
-                Tm      = 1350.0 + 273,
+                Tm      = 1350.0,
                 delta_b = 250.0,
                 w_t     = 2.5,
                 w_b     = 5
-            )*K,
-            CharDim
         )
         for x in Array(grid.xvi[1]), z in Array(grid.xvi[2])
     ])
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
+    # thermal.T[2:end-1, :]  .*= @rand(ni.+1...) .* 0.05
     thermal_bcs!(thermal, thermal_bc)
     Ttop, Tbot = extrema(thermal.T)
     temperature2center!(thermal)
@@ -268,9 +256,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     end
 
     # Rheology
-    viscosity_cutoff = nondimensionalize((1.0e18Pa * s, 1.0e23Pa * s), CharDim)
-    stokes.ε.xx     .= nondimensionalize(1.0e-15 / s, CharDim)
-    stokes.ε.xx_v   .= nondimensionalize(1.0e-15 / s, CharDim)
+    viscosity_cutoff = (1.0e18, 1.0e23)
+    stokes.ε.xx .= 1.0e-15
+    stokes.ε.xx_v .= 1.0e-15
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     # ------------------------------
 
@@ -299,22 +287,22 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     let
         Yv = [y for x in Array(xvi[1]), y in Array(xvi[2])][:]
         Y = [y for x in Array(xci[1]), y in Array(xci[2])][:]
-        fig = Figure(size = (1200, 900), fontsize = 24)
+        fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
         scatter!(
             ax1, 
-            @dimstrip(Array(thermal.T[2:(end - 1), :][:]), C, CharDim), 
-            @dimstrip(Yv, km, CharDim)
+            Array(thermal.T[2:(end - 1), :][:]), 
+            Yv./1e3
         )
         scatter!(
             ax2, 
-            log10.(@dimstrip(Array(stokes.viscosity.η[:]), Pa*s, CharDim)), 
-            @dimstrip(Y, km, CharDim)
+            log10.(Array(stokes.viscosity.η[:])), 
+            Y./1e3
         )
         # ylims!(ax1, minimum(xvi[2]), 0)
         # ylims!(ax2, minimum(xvi[2]), 0)
-        # hideydecorations!(ax2)
+        hideydecorations!(ax2)
         save(joinpath(figdir, "initial_profile.png"), fig)
         fig
     end
@@ -338,8 +326,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1e-4)
 
-    tmax =  nondimensionalize(500e6yr, CharDim)
-    while t < tmax
+    while t < 10.0e6 * 365.25 * 24 * 3600
 
         solve_DYREL!(
             stokes,
@@ -356,11 +343,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                 verbose_PH           = true,
                 verbose_DR           = false,
                 iterMax              = 50.0e3,
-                nout                 = 50,
-                rel_drop             = 1e-2,
+                nout                 = 200,
+                rel_drop             = 0.1,
                 λ_relaxation_PH      = 1,
                 λ_relaxation_DR      = 1,
-                viscosity_relaxation = 1.0e-1,
+                viscosity_relaxation = 1.0e-2,
                 viscosity_cutoff     = viscosity_cutoff,
             )
         )
@@ -390,10 +377,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
-
-        # 660 phase changs
-        phase_upper_mantle, phase_lower_mantle = 4e0,5e0
-        phase_changes!(pPhases, particles, phase_upper_mantle, phase_lower_mantle)
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)
@@ -428,12 +411,13 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # ------------------------------
 
         @show it += 1
+
         t += dt
         
-        t_dim = round(dimensionalize(t, yr, CharDim).val / 1.0e6; digits=3)
-        dt_dim = round(dimensionalize(dt, yr, CharDim).val / 1.0e3; digits=3)
+        t_dim = Float16(t / (365.25 * 24 * 3600) / 1.0e3)
+        dt_dim = Float16(dt / (365.25 * 24 * 3600) / 1.0e3)
         println("\n\n
-            t  = $t_dim [Myr]
+            t  = $t_dim [kyr]
             dt = $dt_dim [kyr]\n\n"
         )
         
@@ -447,31 +431,31 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # ------------------------------
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 5) == 0
             checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
-                    τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
-                    εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
-                    Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
-                    Vy = Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),
+                    T = Array(thermal.T[2:(end - 1), :]),
+                    τxy = Array(stokes.τ.xy),
+                    εxy = Array(stokes.ε.xy),
+                    Vx = Array(Vx_v),
+                    Vy = Array(Vy_v),
                 )
                 data_c = (;
-                    P = Array(ustrip.(dimensionalize(stokes.P, MPa, CharDim))),
-                    τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa, CharDim))),
-                    τyy = Array(ustrip.(dimensionalize(stokes.τ.yy, MPa, CharDim))),
-                    τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
-                    εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1, CharDim))),
-                    εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1, CharDim))),
-                    εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim))),
-                    η = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep, Pa * s, CharDim))),
+                    P = Array(stokes.P),
+                    τxx = Array(stokes.τ.xx),
+                    τyy = Array(stokes.τ.yy),
+                    τII = Array(stokes.τ.II),
+                    εxx = Array(stokes.ε.xx),
+                    εyy = Array(stokes.ε.yy),
+                    εII = Array(stokes.ε.II),
+                    η = Array(stokes.viscosity.η_vep),
                 )
                 velocity_v = (
-                    Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
-                    Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),
+                    Array(Vx_v),
+                    Array(Vy_v),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -493,7 +477,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             idxv = particles.index.data[:]
 
             # Make Makie figure
-            t_dim = Float16(dimensionalize(t, yr, CharDim).val / 1.0e6)
+            t_dim = Float16(t / (365.25 * 24 * 3600) / 1.0e6)
             fig = Figure(size = (1600, 800).*2, title = "t = $t_dim [Myr]")
             ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K] ; t=$t_dim [Myr]")
             ax2 = Axis(fig[2, 1], aspect = ar, title = "phase")
@@ -501,13 +485,13 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1 = heatmap!(ax1, Array.(xvi)..., Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))), colormap = :glasgow)
+            h1 = heatmap!(ax1, Array.(xvi)..., Array(thermal.T[2:(end - 1), :]), colormap = :glasgow)
             # Plot particles phase
             h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize=1)
             # Plot 2nd invariant of strain rate
-            h3 = heatmap!(ax3, Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim)))), colormap = :bamO)
+            h3 = heatmap!(ax3, Array.(xci)..., Array(log10.(stokes.ε.II)), colormap = :bamO)
             # Plot effective viscosity
-            h4 = heatmap!(ax4, Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim)))), colormap = :lipari, colorrange = (log10(1e18), log10(1e23)))
+            h4 = heatmap!(ax4, Array.(xci)..., Array(log10.(stokes.viscosity.η)), colormap = :lipari)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -528,7 +512,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 ar = 4    # aspect ratio
-n  = 64 ÷ 1
+n  = 128 ÷ 1
 nx = n * ar
 ny = n
 
@@ -543,4 +527,65 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+
+
+
+# Adiff =  2.2e-10Pa^(-1) * s^(-1)
+# creep = DiffusionCreep( # dry olivine
+#     n = 1.0NoUnits,                         # power-law exponent
+#     r = 0.0NoUnits,                         # exponent of water-fugacity
+#     p = 0NoUnits,                           # grain size exponent
+#     A = Adiff,    # material specific rheological parameter
+#     E = 375.0e3J / mol,                      # activation energy
+#     V = 3.65e-6m^3 / mol,                   # activation Volume
+# )
+
+# disl = DislocationCreep(
+#     A = 1.1e-17Pa^(-35 // 10) / s,   # material specific rheological parameter
+#     n = 3.5NoUnits,
+#     E = 530.0e3J / mol,
+#     V = 13.0e-6m^3 / mol,
+#     r = 0.0NoUnits,
+#     R = 8.3145J / mol / K,
+# )
+
+# diff = DiffusionCreep(
+#     n = 1.0NoUnits,                         # power-law exponent
+#     r = 0.0NoUnits,                         # exponent of water-fugacity
+#     p = 0NoUnits,                           # grain size exponent
+#     A = Adiff,        # material specific rheological parameter
+#     E = 375e3J / mol,                      # activation energy
+#     V = 3.65e-6m^3 / mol,                   # activation Volume
+# )
+
+# T=thermal.T[2, :][:]
+# P=stokes.P[1,:][:]
+
+# P[end-42]
+# T[end-42]
+
+# εII = 1e-15
+# dt = 4
+# # P = 8.8e9
+# # T = 1150 + 273.15
+# args = (; P = P[end-42], T = T[end-42], dt = dt)
+
+# ηdisl  = compute_viscosity_εII(disl, εII, args)
+# ηdiff  = compute_viscosity_εII(diff, εII, args)
+
+# # Rheology
+# args = (; P = stokes.P, T = thermal.Tc, dt = Inf);
+# compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; relaxation=1)
+
+# dimensionalize(165, Pa*s, CharDim)
+
+# ratio_ij, AII, fn_viscosity, args_ij = ([0.0, 0.0, 0.0, 1.0, 0.0], 1.0e-15, GeoParams.compute_viscosity_εII, (P = 3.1172135391023838e10, T = 1654.4272264125677, dt = Inf, τII_old = 0.0))
+
+# # @edit JustRelax2D.compute_phase_viscosity(rheology, ratio_ij, AII, fn_viscosity, args_ij)
+# eta = JustRelax2D.compute_phase_viscosity(rheology, ratio_ij, AII, fn_viscosity, args_ij)
+
+# eta = JustRelax2D.compute_phase_viscosity(rheology, ratio_ij, AII, fn_viscosity, args_ij)
+
+# compute_viscosity_εII(rheology[4].CompositeRheology[1], 1e-15, args_ij)
+# @edit compute_viscosity_εII(rheology[4].CompositeRheology[1], 1e-15, args)

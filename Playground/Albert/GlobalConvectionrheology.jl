@@ -310,7 +310,7 @@ function T_field(
     background = (1.0 - s_t) * T_topBL + (s_t * s_b) * Tmid + (1.0 - s_b) * T_botBL
 
     # perturbation = A * sin(n * π * x / Lx) * sin(m * π * z / Lz)
-    perturbation = z > 2790 ? rand()*background * 0.1 : 0.0
+    perturbation = z > 2790 ? rand()*background * 0.01 : 0.0
 
     return background + perturbation
 end
@@ -327,15 +327,13 @@ function phase_changes!(phases, particles, phase_upper_mantle, phase_lower_mantl
 
             depth = -(@index py[ip, i, j])
 
-            if depth < d_660km
+            if depth > d_660km
                 @index phases[ip, i, j] = phase_lower_mantle
             end
             
-
-            if depth ≥ d_660km && @index(phases[ip, i, j]) == 5.0
+            if depth ≤ d_660km && @index(phases[ip, i, j]) == 5.0
                 @index phases[ip, i, j] = phase_upper_mantle
             end
-            
 
         end
         return nothing

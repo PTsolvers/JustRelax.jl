@@ -230,12 +230,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         no_flux = (left = true, right = true, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
-    # init_T!(thermal.T, xvi[2], thick_air, CharDim)
-    # rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
-    # A = 0.01
-    # dTdz = (nondimensionalize(3273.0e0K, CharDim) - nondimensionalize(293.0e0K, CharDim)) / grid.li[2]
-    # thermal.T[2:end-1, :]  .= PTArray(backend_JR)([ -dTdz * y + nondimensionalize(293.0e0K, CharDim) for x in Array(grid.xvi[1]), y in Array(grid.xvi[2]) ]    )
-    # thermal.T[2:end-1, :] .+= PTArray(backend_JR)([A * sin(π*x/grid.li[1]) * sin(π*y/grid.li[1]) for x in Array(grid.xvi[1]), y in Array(grid.xvi[2]) ])
+    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
     thermal.T[2:end-1, :]  .= PTArray(backend_JR)([
         nondimensionalize(
             T_field(x, 
@@ -244,8 +239,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                 Lz      = @dimstrip(grid.li[2], km, CharDim), 
                 A       = 150.0,      # perturbation amplitude in K
                 Ttop    = 273.0,
-                Tbot    = 2800.0,
-                Tm      = 1350.0 + 273,
+                Tbot    = 2800.0 + 273,
+                Tm      = 1400.0 + 273,
                 delta_b = 250.0,
                 w_t     = 2.5,
                 w_b     = 5
@@ -254,7 +249,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         )
         for x in Array(grid.xvi[1]), z in Array(grid.xvi[2])
     ])
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
+    # rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
     thermal_bcs!(thermal, thermal_bc)
     Ttop, Tbot = extrema(thermal.T)
     temperature2center!(thermal)
@@ -467,7 +462,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                     εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1, CharDim))),
                     εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1, CharDim))),
                     εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim))),
-                    η = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep, Pa * s, CharDim))),
+                    εII_pl = Array(ustrip.(dimensionalize(stokes.ε_pl.II, s^-1, CharDim))),
+                    η = Array(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim))),
+                    ηvep = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep, Pa * s, CharDim))),
                 )
                 velocity_v = (
                     Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),

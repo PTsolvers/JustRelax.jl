@@ -1,0 +1,27 @@
+% Parameters extracted from Playground/Albert/ConvectionRheology.ipynb
+% Phase map from get_phase(z):
+% 1 upper crust (z > -20 km)
+% 2 lower crust (-40 km < z <= -20 km)
+% 3 upper mantle (-660 km < z <= -40 km)
+% 4 lower mantle (z <= -660 km)
+\begin{table}[htbp]
+\centering
+\caption{Creep-law parameters (transposed by phase).}
+\label{tab:convection-rheology-params}
+\small
+\begin{tabular}{llcccc}
+\hline
+Parameter & Units & Upper crust & Lower crust & Upper mantle & Lower mantle \\
+\hline
+Depth & km & 20 & 40 & 660 & 2890 \\
+$A_{\mathrm{disl}}$ & Pa$^{-n}$ s$^{-1}$ & $5.0\cdot10^{-18}$ & $2.0\cdot10^{-23}$ & $1.1\cdot10^{-17}$ & -- \\
+$n_{\mathrm{disl}}$ & -- & 2.3 & 3.2 & 3.5 & -- \\
+$E_{\mathrm{disl}}$ & J mol$^{-1}$ & $154\cdot10^{3}$ & $238\cdot10^{3}$ & $530\cdot10^{3}$ & -- \\
+$V_{\mathrm{disl}}$ & m$^3$ mol$^{-1}$ & $8.0\cdot10^{-6}$ & $8.0\cdot10^{-6}$ & $8.0\cdot10^{-6}$ & -- \\
+$A_{\mathrm{diff}}$ & Pa$^{-1}$ s$^{-1}$ & -- & -- & $2.2\cdot10^{-10}$ & $2.2\cdot10^{-13}$ \\
+$n_{\mathrm{diff}}$ & -- & -- & -- & 1.0 & 1.0 \\
+$E_{\mathrm{diff}}$ & J mol$^{-1}$ & -- & -- & $375\cdot10^{3}$ & $300\cdot10^{3}$ \\
+$V_{\mathrm{diff}}$ & m$^3$ mol$^{-1}$ & -- & -- & $4.0\cdot10^{-6}$ & $2.0\cdot10^{-6}$ \\
+\hline
+\end{tabular}
+\end{table}

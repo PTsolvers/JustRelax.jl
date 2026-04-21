@@ -5,6 +5,15 @@
 
 # update_pt_thermal_arrays!(::Vararg{Any,N}) where {N} = nothing
 
+"""
+    update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)
+
+Recompute the pseudo-transient thermal coefficient arrays stored in
+`pt_thermal` from phase-weighted material properties.
+
+This helper is used by the pseudo-transient thermal solver when the local phase
+mixture changes over time.
+"""
 function update_pt_thermal_arrays!(
         pt_thermal, phase_ratios::JustPIC.PhaseRatios, rheology, args, _dt
     )
@@ -113,6 +122,14 @@ end
 
 # α
 
+"""
+    compute_α(rheology, phase)
+
+Return the thermal expansivity `α` used by the adiabatic heating kernels.
+
+`phase` can be a single phase index, `nothing`, or a phase-ratio vector. In the
+latter case the result is phase-weighted.
+"""
 function compute_α(rheology, phase::SArray)
     return fn_ratio(get_α, rheology, phase)
 end

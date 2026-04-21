@@ -621,6 +621,16 @@ end
     return nothing
 end
 
+"""
+    update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, dirichlet, _dt, _di, ni)
+    update_T(::Nothing, b_width, thermal, rheology, phase, pt_thermal, dirichlet, _dt, _di, ni, args)
+
+Launch the pseudo-transient temperature update kernel over the active thermal
+domain.
+
+These wrappers select the appropriate kernel overload depending on whether the
+solver works with precomputed `ρCp` fields or rheology-derived properties.
+"""
 function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, dirichlet, _dt, _di, ni)
     return @parallel update_range(ni...) update_T!(
         thermal.T,
@@ -657,7 +667,7 @@ function update_T(
 end
 
 @parallel_indices (i, j, k) function adiabatic_heating(
-        A, Vx, Vy, Vz, P, rheology, phases, _di
+        A, Vx, Vy, Vz, P, P0, rheology, phases, _di, _dt
     )
     _dx, _dy, _dz = @dxi(_di, i, j, k)
     I = i, j, k
@@ -674,46 +684,19 @@ end
                 compute_α(rheology, getindex_phase(phases, i1, j1, k1)) +
                 compute_α(rheology, getindex_phase(phases, I1...))
         ) * 0.125
-        # cache P around T node
-        P111 = P[I...]
-        P112 = P[i, j, k1]
-        P121 = P[i, j1, k]
-        P122 = P[i, j1, k1]
-        P211 = P[i1, j, k]
-        P212 = P[i1, j, k1]
-        P221 = P[i1, j1, k]
-        P222 = P[i1, j1, k1]
-        # P averages
-        Px_L = (P111 + P121 + P112 + P122) * 0.25
-        Px_R = (P211 + P221 + P212 + P222) * 0.25
-        Py_F = (P111 + P211 + P112 + P212) * 0.25
-        Py_B = (P121 + P221 + P122 + P222) * 0.25
-        Pz_B = (P111 + P211 + P121 + P221) * 0.25
-        Pz_T = (P112 + P212 + P122 + P222) * 0.25
-        # Vx average
-        Vx_av =
-            0.25 *
-            (Vx[I1...] + Vx[i1, j1, k1 + 1] + Vx[i1, j1 + 1, k1] + Vx[i1, j1 + 1, k1 + 1])
-        # Vy average
-        Vy_av =
-            0.25 *
-            (Vy[I1...] + Vy[i1 + 1, j1, k1] + Vy[i1, j1, k1 + 1] + Vy[i1 + 1, j1, k1 + 1])
-        # Vz average
-        Vz_av =
-            0.25 *
-            (Vz[I1...] + Vz[i1 + 1, j1, k1] + Vz[i1, j1 + 1, k1] + Vz[i1 + 1, j1 + 1, k1])
-        dPdx = Vx_av * (Px_R - Px_L) * _dx
-        dPdy = Vy_av * (Py_B - Py_F) * _dy
-        dPdz = Vz_av * (Pz_T - Pz_B) * _dz
-        A[I...] = (dPdx + dPdy + dPdz) * α
+        # average P and P0 @ T node
+        Pv = (P[I...] + P[i, j, k1] + P[i, j1, k] + P[i, j1, k1] + P[i1, j, k] + P[i1, j, k1] + P[i1, j1, k] + P[i1, j1, k1]) / 8
+        P0v = (P0[I...] + P0[i, j, k1] + P0[i, j1, k] + P0[i, j1, k1] + P0[i1, j, k] + P0[i1, j, k1] + P0[i1, j1, k] + P0[i1, j1, k1]) / 8
+        # Adiabtic heating term
+        A[I...] = (Pv - P0v) * α * _dt
     end
     return nothing
 end
 
 @parallel_indices (i, j) function adiabatic_heating(
-        A, Vx, Vy, P, rheology, phases, _di_vertex
+        A, Vx, Vy, P, P0, rheology, phases, _di, _dt
     )
-    _dx, _dy = @dxi(_di_vertex, i, j)
+    _dx, _dy = @dxi(_di, i, j)
     I = i, j
     I1 = i1, j1 = I .+ 1
     @inbounds begin
@@ -724,41 +707,39 @@ end
                 compute_α(rheology, getindex_phase(phases, i1, j)) +
                 compute_α(rheology, getindex_phase(phases, I1...))
         ) * 0.25
-        # cache P around T node
-        P11 = P[I...]
-        P12 = P[i, j1]
-        P21 = P[i1, j]
-        P22 = P[i1, j1]
-        # P averages
-        Px_L = (P11 + P12) * 0.5
-        Px_R = (P21 + P22) * 0.5
-        Py_T = (P12 + P22) * 0.5
-        Py_B = (P11 + P21) * 0.5
-        # Vx average
-        Vx_av = (Vx[I1...] + Vx[i1, j1 + 1]) * 0.5
-        # Vy average
-        Vy_av = (Vy[I1...] + Vy[i1 + 1, j1]) * 0.5
-        dPdx = (Px_R - Px_L) * _dx
-        dPdy = (Py_T - Py_B) * _dy
-        A[i1, j] = (Vx_av * dPdx + Vy_av * dPdy) * α
+        # average P and P0 @ T node
+        Pv = (P[I...] + P[i, j1] + P[i1, j] + P[i1, j1]) * 0.25
+        P0v = (P0[I...] + P0[i, j1] + P0[i1, j] + P0[i1, j1]) * 0.25
+        # Adiabtic heating term
+        A[i1, j] = (Pv - P0v) * α * _dt
     end
     return nothing
 end
 
-function adiabatic_heating!(thermal, stokes, rheology, phases, grid::Geometry{2})
+"""
+    adiabatic_heating!(thermal, stokes, rheology, phases, _dt, grid)
+
+Fill `thermal.adiabatic` with the adiabatic heating term inferred from the
+pressure change between `stokes.P0` and `stokes.P`.
+
+The kernels average the local thermal expansivity over the temperature nodes and
+scale the pressure increment by `inv(dt)`, passed here as `_dt`. When `stokes`
+is `nothing`, the no-op overloads leave the field unchanged.
+"""
+function adiabatic_heating!(thermal, stokes, rheology, phases, _dt, grid::Geometry{2})
     idx = @idx (size(stokes.P) .- 1)
     return @parallel idx adiabatic_heating(
-        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, grid._di.vertex
+        thermal.adiabatic, @velocity(stokes)..., stokes.P, stokes.P0, rheology, phases, grid._di.center, _dt
     )
 end
 
-function adiabatic_heating!(thermal, stokes, rheology, phases, grid::Geometry{3})
+function adiabatic_heating!(thermal, stokes, rheology, phases, _dt, grid::Geometry{3})
     idx = @idx (size(stokes.P) .- 1)
     return @parallel idx adiabatic_heating(
-        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, grid._di.center
+        thermal.adiabatic, @velocity(stokes)..., stokes.P, stokes.P0, rheology, phases, grid._di.center, _dt
     )
 end
 
-@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, ::Geometry{2}) = nothing
-@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, ::Geometry{3}) = nothing
+@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, _dt, ::Geometry{2}) = nothing
+@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, _dt, ::Geometry{3}) = nothing
 @inline adiabatic_heating!(thermal, ::Nothing, ::Vararg{Any, N}) where {N} = nothing

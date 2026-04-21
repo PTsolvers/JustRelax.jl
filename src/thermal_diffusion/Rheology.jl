@@ -4,8 +4,11 @@
 """
     compute_diffusivity(rheology, args)
 
-Compute the thermal diffusivity for the thermal diffusion solver using the rheology model `rheology` and the arguments `args` (e.g., temperature, pressure, phase, etc.).
-This is the JustRelax wrapper that calls the GeoParams.jl functions.
+Return thermal diffusivity as `k / (ρ * Cp)` for the thermodynamic state in
+`args`.
+
+This is the JustRelax wrapper around the GeoParams conductivity, heat-capacity,
+and density accessors.
 """
 @inline function compute_diffusivity(rheology, args)
     return compute_conductivity(rheology, args) *
@@ -15,8 +18,8 @@ end
 """
     compute_diffusivity(rheology, phase::Union{Nothing, Int}, args)
 
-Compute the thermal diffusivity for the thermal diffusion solver using the rheology model `rheology`, the phase index `phase`, and the arguments `args` (e.g., temperature, pressure, etc.).
-This is the JustRelax wrapper that calls the GeoParams.jl functions.
+Return thermal diffusivity for a single material phase, or for the default
+material when `phase === nothing`.
 """
 @inline function compute_diffusivity(rheology, phase::Union{Nothing, Int}, args)
     return compute_conductivity(rheology, phase, args) * inv(
@@ -27,8 +30,7 @@ end
 """
     compute_diffusivity(rheology, ρ, args)
 
-Computes the thermal diffusivity based on the rheology and the density with given arguments.
-This is the JustRelax wrapper that calls the GeoParams.jl functions.
+Return thermal diffusivity using an externally supplied density `ρ`.
 """
 @inline function compute_diffusivity(rheology, ρ, args)
     return compute_conductivity(rheology, args) *
@@ -38,8 +40,8 @@ end
 """
     compute_diffusivity(rheology, ρ, phase::Union{Nothing, Int}, args)
 
-Computes the thermal diffusivity based on the rheology, the density, and the phase with given arguments.
-This is the JustRelax wrapper that calls the GeoParams.jl functions.
+Return thermal diffusivity using an externally supplied density `ρ` and a
+single material phase.
 """
 @inline function compute_diffusivity(rheology, ρ, phase::Union{Nothing, Int}, args)
     return compute_conductivity(rheology, phase, args) *
@@ -49,8 +51,8 @@ end
 """
     compute_diffusivity(rheology, phase_ratios::SArray, args)
 
-Compute the thermal diffusivity for the thermal diffusion solver using the rheology model `rheology`, the phase ratios `phase_ratios`, and the arguments `args`.
-This is the JustRelax wrapper that calls the GeoParams.jl functions based on the phase ratios.
+Return phase-weighted thermal diffusivity for a multi-material rheology and a
+vector of phase ratios.
 """
 @inline function compute_diffusivity(
         rheology::NTuple{N, AbstractMaterialParamsStruct}, phase_ratios::SArray, args
@@ -65,8 +67,8 @@ end
 """
     compute_ρCp(rheology, args)
 
-Compute the product of density and heat capacity for the thermal diffusion solver using the rheology model `rheology` and the arguments `args`.
-This is the calls the GeoParams.jl functions internally.
+Return the volumetric heat capacity `ρ * Cp` for the thermodynamic state in
+`args`.
 """
 @inline function compute_ρCp(rheology, args)
     return compute_heatcapacity(rheology, args) * compute_density(rheology, args)
@@ -75,8 +77,8 @@ end
 """
     compute_ρCp(rheology, phase::Union{Nothing, Int}, args)
 
-Compute the product of density and heat capacity for the thermal diffusion solver using the rheology model `rheology`, the phase index `phase`, and the arguments `args`.
-This is the calls the GeoParams.jl functions internally based on the phase (Integer) or the phase (Nothing).
+Return volumetric heat capacity for a single material phase, or for the default
+material when `phase === nothing`.
 """
 @inline function compute_ρCp(rheology, phase::Union{Nothing, Int}, args)
     return compute_phase(compute_heatcapacity, rheology, phase, args) *
@@ -84,10 +86,9 @@ This is the calls the GeoParams.jl functions internally based on the phase (Inte
 end
 
 """
-    compute_ρCp(rheology, ρ, args)
+    compute_ρCp(rheology, phase_ratios::SArray, args)
 
-Compute the product of density and heat capacity for the thermal diffusion solver using the rheology model `rheology`, the density `ρ`, and the arguments `args`.
-This is the calls the GeoParams.jl functions internally based on the phase ratios.
+Return phase-weighted volumetric heat capacity for a multi-material rheology.
 """
 @inline function compute_ρCp(rheology, phase_ratios::SArray, args)
     return fn_ratio(compute_heatcapacity, rheology, phase_ratios, args) *
@@ -95,10 +96,9 @@ This is the calls the GeoParams.jl functions internally based on the phase ratio
 end
 
 """
-    compute_ρCp(rheology, ρ, phase::Union{Nothing, Int}, args)
+    compute_ρCp(rheology, ρ, args)
 
-Compute the product of density and heat capacity for the thermal diffusion solver using the rheology model `rheology`, the density `ρ`, the phase index `phase`, and the arguments `args`.
-This is the calls the GeoParams.jl functions internally with a given density.
+Return volumetric heat capacity using an externally supplied density `ρ`.
 """
 @inline function compute_ρCp(rheology, ρ, args)
     return compute_heatcapacity(rheology, args) * ρ
@@ -107,8 +107,8 @@ end
 """
     compute_ρCp(rheology, ρ, phase::Union{Nothing, Int}, args)
 
-Compute the product of density and heat capacity for the thermal diffusion solver using the rheology model `rheology`, the density `ρ`, the phase index `phase`, and the arguments `args`.
-This is the calls the GeoParams.jl functions internally with a given density and phase.
+Return volumetric heat capacity using an externally supplied density `ρ` and a
+single material phase.
 """
 @inline function compute_ρCp(rheology, ρ, phase::Union{Nothing, Int}, args)
     return compute_phase(compute_heatcapacity, rheology, phase, args) * ρ
@@ -116,8 +116,8 @@ end
 """
     compute_ρCp(rheology, ρ, phase_ratios::SArray, args)
 
-Compute the product of density and heat capacity for the thermal diffusion solver using the rheology model `rheology`, the density `ρ`, the phase ratios `phase_ratios`, and the arguments `args`.
-This is the calls the GeoParams.jl functions internally with a given density and phase ratios.
+Return phase-weighted volumetric heat capacity using an externally supplied
+density `ρ`.
 """
 @inline function compute_ρCp(rheology, ρ, phase_ratios::SArray, args)
     return fn_ratio(compute_heatcapacity, rheology, phase_ratios, args) * ρ

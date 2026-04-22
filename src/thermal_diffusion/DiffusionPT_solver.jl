@@ -167,7 +167,7 @@ function _heatdiffusion_PT!(
     !isnothing(phase) && update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
 
     # compute constant part of the adiabatic heating term
-    adiabatic_heating!(thermal, stokes, rheology, phases, grid)
+    adiabatic_heating!(thermal, stokes, rheology, phases, _dt,  grid)
 
     # errors
     iter_count = Int64[]

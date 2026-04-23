@@ -1,78 +1,131 @@
-# from "Fingerprinting secondary mantle plumes", Cloetingh et al. 2022
-
+include("thermal_profile.jl")
 function init_rheologies(CharDim; is_plastic = true)
 
     # Dislocation and Diffusion creep
     disl_upper_crust = DislocationCreep(
-        A = 5.e-18Pa^(-23 // 10) / s,
+        A = 1.97e-17Pa^(-23 // 10) / s,
+        # A = 5.e-18Pa^(-23 // 10) / s,
         n = 2.3NoUnits,
         E = 154.0e3J / mol,
         V = 8.0e-6m^3 / mol,
         r = 0.0NoUnits,
         R = 8.3145J / mol / K,
-        Apparatus = Invariant,
+        # Apparatus = Invariant,
     )
-    disl_lower_crust = DislocationCreep(
-        A = 2e-23Pa^(-32 // 10) / s,
+    # disl_lower_crust = DislocationCreep(
+    #     A = 4.8e-22Pa^(-32 // 10) / s,
+    #     # A = 2e-22Pa^(-32 // 10) / s,
+    #     n = 3.2NoUnits,
+    #     E = 238.0e3J / mol,
+    #     V = 8.0e-6m^3 / mol,
+    #     r = 0.0NoUnits,
+    #     R = 8.3145J / mol / K,
+    #     Apparatus = Invariant,
+    # )
+    disl_lower_crust = DislocationCreep( # plagioclase
+        A = 3.27e-4MPa^(-16 // 5) / s,
         n = 3.2NoUnits,
+        E = 238.0e3J / mol,
+        V = 0*8.0e-6m^3 / mol,
+        r = 0.0NoUnits,
+        R = 8.3145J / mol / K,
+        # Apparatus = Invariant,
+    )
+
+
+    diff_upper_crust = DislocationCreep(
+        A = 1.97e-17Pa^(-1) / s,
+        n = 1e0NoUnits,
+        E = 154.0e3J / mol,
+        V = 8.0e-6m^3 / mol,
+        r = 0.0NoUnits,
+        R = 8.3145J / mol / K,
+        # Apparatus = Invariant,
+    )
+    diff_lower_crust = DislocationCreep( # plagioclase
+        A = 3.27e-4MPa^(-1) / s,
+        n = 1e0NoUnits,
         E = 238.0e3J / mol,
         V = 8.0e-6m^3 / mol,
         r = 0.0NoUnits,
         R = 8.3145J / mol / K,
-        Apparatus = Invariant,
+        # Apparatus = Invariant,
     )
+
+
     disl_litho = DislocationCreep( # dry olivine
-        A = 1.1e-17Pa^(-35 // 10) / s,
+        A = 1.1e-18Pa^(-35 // 10) / s,
         n = 3.5NoUnits,
         E = 530.0e3J / mol,
-        V = 8.0e-6m^3 / mol,
+        V = 4.0e-6m^3 / mol,
         r = 0.0NoUnits,
         R = 8.3145J / mol / K,
         Apparatus = Invariant,
+        # A = 1e-17Pa^(-35 // 10) / s,
+        # n = 3.5NoUnits,
+        # E = 530.0e3J / mol,
+        # V = 4.0e-6m^3 / mol,
+        # r = 0.0NoUnits,
+        # R = 8.3145J / mol / K,
+        # Apparatus = Invariant,
     )
     disl_upper_mantle = DislocationCreep( # dry olivine
-        A = 1.1e-17Pa^(-35 // 10) / s,
+        A = 1.1e-18Pa^(-35 // 10) / s,
         n = 3.5NoUnits,
         E = 530.0e3J / mol,
-        V = 8.0e-6m^3 / mol,
+        V = 4.0e-6m^3 / mol,
         r = 0.0NoUnits,
         R = 8.3145J / mol / K,
-        Apparatus = Invariant,
+        # Apparatus = Invariant,
+        # A = 1e-17Pa^(-35 // 10) / s,
+        # E = 530.0e3J / mol,
+        # V = 4.0e-6m^3 / mol,
+        # n = 3.5NoUnits,
+        # r = 0.0NoUnits,
+        # R = 8.3145J / mol / K,
     )
     
     # down to 660km
     diff_litho = DiffusionCreep(
-        A = 2.2e-10Pa^(-1) * s^(-1),       # material specific rheological parameter
+        A = 1.1e-10Pa^(-1) * s^(-1),       # material specific rheological parameter
         E = 375e3J / mol,                  # activation energy
         V = 4e-6m^3 / mol,                 # activation Volume
         n = 1.0NoUnits,                    # power-law exponent
         r = 0.0NoUnits,                    # exponent of water-fugacity
         p = 0NoUnits,                      # grain size exponent
-        Apparatus = Invariant,
+        # Apparatus = Invariant,
+        # A = 1e-17Pa^(-1) / s,
+        # E = 530.0e3J / mol,
+        # V = 4.0e-6m^3 / mol,
+        # n = 1.0NoUnits,                    # power-law exponent
+        # r = 0.0NoUnits,                    # exponent of water-fugacity
+        # p = 0NoUnits,                      # grain size exponent
+        # # Apparatus = Invariant,
     )
     diff_upper_mantle = DiffusionCreep(
-        A = 2.2e-10Pa^(-1) * s^(-1),       # material specific rheological parameter
+        A = 1.1e-10Pa^(-1) * s^(-1),       # material specific rheological parameter
         E = 375e3J / mol,                  # activation energy
         V = 4e-6m^3 / mol,                 # activation Volume
         n = 1.0NoUnits,                    # power-law exponent
         r = 0.0NoUnits,                    # exponent of water-fugacity
         p = 0NoUnits,                      # grain size exponent
-        Apparatus = Invariant,
+        # Apparatus = Invariant,
     )
     diff_lower_mantle = DiffusionCreep(
+        # A = 2.2e-12Pa^(-1) * s^(-1),       # material specific rheological parameter
         A = 2.2e-13Pa^(-1) * s^(-1),       # material specific rheological parameter
         E = 300e3J / mol,                  # activation energy
         V = 2e-6m^3 / mol,                 # activation Volume
         n = 1.0NoUnits,                    # power-law exponent
         r = 0.0NoUnits,                    # exponent of water-fugacity
         p = 0NoUnits,                      # grain size exponent
-        Apparatus = Invariant,
+        # Apparatus = Invariant,
     )
 
     # Elasticity
-    el_upper_crust  = SetConstantElasticity(; G = 50.0e9Pa,  ν = 0.36)
-    el_lower_crust  = SetConstantElasticity(; G = 50.0e9Pa,  ν = 0.36)
-    el_upper_mantle = SetConstantElasticity(; G = 120.0e9Pa, ν = 0.36)
+    el_upper_crust  = SetConstantElasticity(; G = 30.0e9Pa,  ν = 0.36)
+    el_lower_crust  = SetConstantElasticity(; G = 30.0e9Pa,  ν = 0.36)
+    el_upper_mantle = SetConstantElasticity(; G = 90.0e9Pa,  ν = 0.36)
     el_lower_mantle = SetConstantElasticity(; G = 200.0e9Pa, ν = 0.36)
     β_upper_crust   = inv(get_Kb(el_upper_crust)*Pa)
     β_lower_crust   = inv(get_Kb(el_lower_crust)*Pa)
@@ -80,8 +133,8 @@ function init_rheologies(CharDim; is_plastic = true)
     β_lower_mantle  = inv(get_Kb(el_lower_mantle)*Pa)
 
     # Physical properties using GeoParams ----------------
-    η_reg    = 1.0e18 * Pa * s
-    cohesion = 5.0e6 * Pa
+    η_reg    = 1.0e17 * Pa * s
+    cohesion = 3.0e6 * Pa
     friction = 5e0
     pl_crust = if is_plastic
         DruckerPrager_regularised(; C = cohesion, ϕ = friction, η_vp = η_reg, Ψ = 0.0) # non-regularized plasticity
@@ -116,68 +169,66 @@ function init_rheologies(CharDim; is_plastic = true)
         # Name              = "UpperCrust",
         SetMaterialParams(;
             Phase = 1,
-            Density = PT_Density(; ρ0 = 2.82e3kg / m^3, β = β_upper_crust, T0 = 0.0e0C, α = 3e-5 / K),
+            Density = PT_Density(; ρ0 = 3e3kg / m^3, β = β_upper_crust, T0 = 20.0e0C, α = 3e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 7.5e2J / kg / K),
             Conductivity = K_crust,
-            CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
+            CompositeRheology = CompositeRheology((disl_upper_crust, diff_upper_crust, el_upper_crust, pl_crust)),
             # CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
             Elasticity = el_upper_crust,
-            RadioactiveHeat = ConstantRadioactiveHeat(0.0),
+            RadioactiveHeat = ConstantRadioactiveHeat(1e-6Watt / kg),
             Gravity = ConstantGravity(; g = g),
+            ShearHeat =  ConstantShearheating(0),
             CharDim = CharDim,
         ),
         # Name              = "LowerCrust",
         SetMaterialParams(;
             Phase = 2,
-            Density = PT_Density(; ρ0 = 2.85e3kg / m^3, β = β_lower_crust, T0 = 0.0e0C, α = 3e-5 / K),
+            Density = PT_Density(; ρ0 = 3e3kg / m^3, β = β_lower_crust, T0 = 20.0e0C, α = 3e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 7.5e2J / kg / K),
             Conductivity = K_crust,
-            RadioactiveHeat = ConstantRadioactiveHeat(0.0),
-            CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
-            # CompositeRheology = CompositeRheology((disl_lower_crust, el_lower_crust, pl_crust)),
+            RadioactiveHeat = ConstantRadioactiveHeat(1e-6Watt / kg),
+            CompositeRheology = CompositeRheology((disl_lower_crust, diff_lower_crust, el_lower_crust, pl_crust)),
             Gravity = ConstantGravity(; g = g),
+            ShearHeat =  ConstantShearheating(0),
             Elasticity = el_lower_crust,
             CharDim = CharDim,
         ),
         # Name              = "Down to 660",
         SetMaterialParams(;
             Phase = 3,
-            Density = PT_Density(; ρ0 = 3.24e3kg / m^3, β = β_upper_mantle, T0 = 0.0e0C, α = 3e-5 / K),
-            HeatCapacity = ConstantHeatCapacity(; Cp = 1e3J / kg / K),
+            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_upper_mantle, T0 = 20.0e0C, α = 3.5e-5 / K),
+            HeatCapacity = ConstantHeatCapacity(; Cp = 1.2e3J / kg / K),
             Conductivity = K_mantle,
-            # CompositeRheology = CompositeRheology(( diff_litho, el_upper_mantle, pl)),
-            # CompositeRheology = CompositeRheology(( diff_litho, pl)),
             CompositeRheology = CompositeRheology((disl_litho, diff_litho, el_upper_mantle, pl)),
-            # CompositeRheology = CompositeRheology((disl_litho, diff_litho, el_upper_mantle, pl)),
             Gravity = ConstantGravity(; g = g),
             RadioactiveHeat = ConstantRadioactiveHeat(8.6e-12Watt / kg),
+            ShearHeat =  ConstantShearheating(0),
             Elasticity = el_upper_mantle,
             CharDim = CharDim,
         ),
         # Name              = "Down to 2700"
         SetMaterialParams(;
             Phase = 4,
-            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_upper_mantle, T0 = 0.0e0C, α = 3e-5 / K),
-            HeatCapacity = ConstantHeatCapacity(; Cp = 1e3J / kg / K),
+            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_upper_mantle, T0 = 20.0e0C, α = 3.5e-5 / K),
+            HeatCapacity = ConstantHeatCapacity(; Cp = 1.2e3J / kg / K),
             Conductivity = K_mantle,
-            # CompositeRheology = CompositeRheology((diff_upper_mantle, el_upper_mantle, pl)),
-            CompositeRheology = CompositeRheology((disl_upper_mantle, diff_upper_mantle, el_upper_mantle, pl)),
-            # CompositeRheology = CompositeRheology((disl_upper_mantle, diff_upper_mantle, el_upper_mantle, pl)),
+            # CompositeRheology = CompositeRheology((disl_upper_mantle, diff_upper_mantle, el_upper_mantle, pl)),\
+            CompositeRheology = CompositeRheology((disl_litho, diff_litho, el_upper_mantle, pl)),
             Gravity = ConstantGravity(; g = g),
             RadioactiveHeat = ConstantRadioactiveHeat(8.6e-12Watt / kg),
+            ShearHeat =  ConstantShearheating(0),
             Elasticity = el_upper_mantle,
             CharDim = CharDim,
         ),
-        # Name              = "StickyAir",
         SetMaterialParams(;
             Phase = 5,
-            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_lower_mantle, T0 = 0.0e0C, α = 3e-5 / K),
-            HeatCapacity = ConstantHeatCapacity(; Cp = 1e3J / kg / K),
+            Density = PT_Density(; ρ0 = 3300e0kg / m^3, β = β_lower_mantle, T0 = 20.0e0C, α = 3.5e-5 / K),
+            HeatCapacity = ConstantHeatCapacity(; Cp = 1.2e3J / kg / K),
             Conductivity = K_mantle,
             CompositeRheology = CompositeRheology((diff_lower_mantle, el_lower_mantle, pl)),
-            # CompositeRheology = CompositeRheology((diff_lower_mantle, el_lower_mantle, pl)),
             Gravity = ConstantGravity(; g = g),
             RadioactiveHeat = ConstantRadioactiveHeat(8.6e-12Watt / kg),
+            ShearHeat =  ConstantShearheating(0),
             Elasticity = el_lower_mantle,
             CharDim = CharDim,
         ),
@@ -192,7 +243,8 @@ function init_phases!(phases, particles, Lx, d, r, thick_air, CharDim)
     d_21km = nondimensionalize(21.0e0km, CharDim)
     d_35km = nondimensionalize(35.0e0km, CharDim)
     d_90km = nondimensionalize(90.0e0km, CharDim)
-    d_120km = nondimensionalize(120.0e0km, CharDim)
+    d_120km = nondimensionalize(70.0e0km, CharDim)
+    # d_120km = nondimensionalize(120.0e0km, CharDim)
     d_660km = nondimensionalize(660.0e0km, CharDim)
     d_2700km = nondimensionalize(2790.0e0km, CharDim)
 
@@ -209,10 +261,10 @@ function init_phases!(phases, particles, Lx, d, r, thick_air, CharDim)
             elseif d_35km ≥ depth > d_21km
                 @index phases[ip, i, j] = 2.0
 
-            elseif d_90km ≥ depth > d_35km
+            elseif d_120km ≥ depth > d_35km
                 @index phases[ip, i, j] = 3.0
 
-            elseif d_660km ≥ depth > d_90km
+            elseif d_660km ≥ depth > d_120km
                 @index phases[ip, i, j] = 4.0
 
             else#if depth < d_2700km
@@ -310,28 +362,37 @@ function T_field(
     background = (1.0 - s_t) * T_topBL + (s_t * s_b) * Tmid + (1.0 - s_b) * T_botBL
 
     # perturbation = A * sin(n * π * x / Lx) * sin(m * π * z / Lz)
-    perturbation = z > 2790 ? rand()*background * 0.05 : 0.0
+    perturbation = z > 2790 ? rand()*background * 0.01 : 0.0
 
-    return background + perturbation
+    return background + perturbation *0
 end
 
-function phase_changes!(phases, particles, phase_upper_mantle, phase_lower_mantle, CharDim)
+function phase_changes!(phases, pP, pT, particles, phase_upper_mantle, phase_lower_mantle, CharDim)
     ni = size(phases)
 
     d_660km = nondimensionalize(660.0e0km, CharDim)
 
-    @parallel_indices (i, j) function _phase_changes!(phases, py, index, phase_upper_mantle, phase_lower_mantle)
+    γ  = nondimensionalize(-2MPa/K, CharDim)
+    P0 = nondimensionalize(23.5GPa, CharDim)
+    T0 = nondimensionalize(1350C, CharDim)
+
+    @parallel_indices (i, j) function _phase_changes!(phases, pP, PT, P0, T0, py, index, phase_upper_mantle, phase_lower_mantle)
         @inbounds for ip in cellaxes(phases)
             # quick escape
             @index(index[ip, i, j]) == 0 && continue
 
             depth = -(@index py[ip, i, j])
+            P = @index pP[ip, i, j] # particles pressure
+            T = @index pT[ip, i, j] # particles pressure
+            Peq = P0 + γ * (T - T0)
 
-            if depth > d_660km
+            # if depth > d_660km
+            if P > Peq
                 @index phases[ip, i, j] = phase_lower_mantle
             end
             
-            if depth ≤ d_660km && @index(phases[ip, i, j]) == 5.0
+            # if depth ≤ d_660km && @index(phases[ip, i, j]) == 5.0
+            if P ≤ Peq && @index(phases[ip, i, j]) == 5.0
                 @index phases[ip, i, j] = phase_upper_mantle
             end
 
@@ -339,5 +400,5 @@ function phase_changes!(phases, particles, phase_upper_mantle, phase_lower_mantl
         return nothing
     end
 
-    return @parallel (@idx ni) _phase_changes!(phases, particles.coords[end], particles.index, phase_upper_mantle, phase_lower_mantle)
+    return @parallel (@idx ni) _phase_changes!(phases, pP, pT, P0, T0, particles.coords[end], particles.index, phase_upper_mantle, phase_lower_mantle)
 end

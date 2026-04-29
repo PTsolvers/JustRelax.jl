@@ -5,7 +5,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-using Test#, Suppressor
+using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
@@ -174,7 +174,7 @@ function ShearBand2D()
             dt,
             igg;
             kwargs = (;
-                # verbose_PH = false,
+                verbose_PH = false,
                 verbose_DR = false,
                 iterMax = 50.0e3,
                 nout = 50,
@@ -208,12 +208,12 @@ function ShearBand2D()
 end
 
 @testset "ShearBand2D" begin
-    # @suppress begin
+    @suppress begin
         iters, τII, sol, extrema_τII = ShearBand2D()
         @test iters.err_evo_tot[end] < 1.0e-6
         @test extrema_τII[1] ≈ 1.544 atol = 1.0e-3
         @test extrema_τII[2] ≈ 1.639 atol = 1.0e-3
         @test τII[end] ≈ 1.6388 atol = 1.0e-4
         @test sol[end] ≈ 1.8358 atol = 1.0e-4
-    # end
+    end
 end

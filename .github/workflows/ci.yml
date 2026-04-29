@@ -51,11 +51,11 @@ jobs:
             version: 'pre'
             allow_failure: true
           - os: ubuntu-latest
-            arch: x86
+            arch: x64
             version: 'pre'
             allow_failure: true
           - os: windows-latest
-            arch: x86
+            arch: x64
             version: 'pre'
             allow_failure: true
 

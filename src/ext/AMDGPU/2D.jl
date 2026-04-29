@@ -41,6 +41,7 @@ __init__() = @init_parallel_stencil(AMDGPU, Float64, 2)
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 include("../../variational_stokes/Stokes2D.jl")
+include("../../DYREL/DYREL2D.jl")
 
 # Types
 function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
@@ -167,7 +168,6 @@ function JR2D.compute_principal_stresses(backend::Type{AMDGPUBackend}, stokes::J
     compute_principal_stresses!(stokes, σ)
     return σ
 end
-
 
 function JR2D.compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress{<:ROCArray})
     ni = size(stokes.P)

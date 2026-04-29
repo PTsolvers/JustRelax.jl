@@ -47,6 +47,14 @@ function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where 
     return StokesArrays(ni)
 end
 
+function JR2D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return DYREL(ni)
+end
+
+function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, CFL = 0.99, c_fat = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, CFL = CFL, c_fat = c_fat, γfact = γfact)
+end
+
 function JR2D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Number}) where {N}
     return ThermalArrays(ni...)
 end

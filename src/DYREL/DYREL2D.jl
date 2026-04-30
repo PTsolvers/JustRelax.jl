@@ -118,6 +118,7 @@ function _solve_DYREL!(
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
+    err_evo_tot = Float64[]
     err_evo_V = Float64[]
     err_evo_P = Float64[]
     err_evo_it = Float64[]
@@ -314,6 +315,7 @@ function _solve_DYREL!(
                 )
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
+                push!(err_evo_tot, err)
                 push!(err_evo_V, errVx / errVx00)
                 push!(err_evo_P, errPt / errPt0)
                 push!(err_evo_it, iter)
@@ -363,7 +365,7 @@ function _solve_DYREL!(
     stokes.τ_o.yy_v .= stokes.τ.yy_v
 
 
-    return (; err_evo_it, err_evo_V, err_evo_P)
+    return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
 
 end
 

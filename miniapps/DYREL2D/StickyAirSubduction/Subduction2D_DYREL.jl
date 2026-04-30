@@ -143,7 +143,7 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
     # Time loop
     t, it = 0.0, 0
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt)
     local out
     while it < 10 # run only for 5 Myrs
 

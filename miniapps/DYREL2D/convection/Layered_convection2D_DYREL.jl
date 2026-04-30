@@ -222,7 +222,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # Time loop
     t, it = 0.0, 0
 
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, di, dt)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt)
 
     while t < nondimensionalize(5.0e6yr, CharDim) # run only for 5 Myrs
 

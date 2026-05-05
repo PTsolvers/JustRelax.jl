@@ -37,8 +37,7 @@ using GeoParams, GLMakie
 using PoissonGrids
 
 # Load file with all the rheology configurations
-include("thermal_profile.jl")
-include("GlobalConvectionrheology.jl")
+include("Regional2D_Rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -75,7 +74,7 @@ function init_T!(T, y, thick_air, CharDim)
     d_110km = nondimensionalize(110.0e0km, CharDim)
 
     # non dim T and gradients
-    T_273K = nondimensionalize(293.0e0K, CharDim)
+    T_273K = nondimensionalize(273.0e0K, CharDim)
     T_18K = nondimensionalize((923 - 273) / 35 * K / km, CharDim)
     T_7K = nondimensionalize((1492 - 923) / 75 * K / km, CharDim)
     T_0_5K = nondimensionalize((1837 - 1492) / 590 * K / km, CharDim)
@@ -103,7 +102,7 @@ function init_T!(T, y, thick_air, CharDim)
         elseif depth ≥ d_110km
             dTdZ = T_0_5K
             offset = T_1492K
-            T[i + 1, j] = 0 * (depth - d_110km) * dTdZ + offset
+            T[i + 1, j] = (depth - d_110km) * dTdZ + offset
         end
 
         return nothing
@@ -124,18 +123,17 @@ function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air, CharDim)
     ΔT = nondimensionalize(100.0e0K, CharDim)
     d_air = nondimensionalize(thick_air * km, CharDim)
 
-    @parallel_indices (i, j) function _rectangular_perturbation!(T, ΔT, xc, yc, r, x, y)
-        if (x[i] - xc)^2  + (y[j] - yc - d_air)^2 ≤ r^2
-        # if ((x[i] - xc)^2 ≤ r^2) && ((y[j] - yc - d_air)^2 ≤ r^2)
+    @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
+        if ((x[i] - xc)^2 ≤ r^2) && ((y[j] - yc - d_air)^2 ≤ r^2)
             depth = -y[j]# - d_air
             # T[i + 1, j]  = (depth - d_585km) * dTdZ_nd + offset_nd
-            T[i + 1, j] += ΔT
+            T[i + 1, j] *= 1.1
         end
         return nothing
     end
 
     nx, ny = size(T)
-    @parallel (1:(nx - 2), 1:ny) _rectangular_perturbation!(T, ΔT, xc, yc, r, xvi...)
+    @parallel (1:(nx - 2), 1:ny) _rectangular_perturbation!(T, xc, yc, r, xvi...)
 
     return nothing
 end
@@ -154,10 +152,10 @@ end
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = false)
 
-    thickness = 2890 * km
+    thickness = 700 * km
     η0 = 9.8e21
     CharDim = GEO_units(;
-        length = thickness, viscosity = η0, temperature = 2.800e3K
+        length = thickness, viscosity = η0, temperature = 1600K
     )
     # Physical domain ------------------------------------
     thick_air = nondimensionalize(0.0e0km, CharDim)                 # thickness of sticky air layer
@@ -191,14 +189,15 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology = init_rheologies(CharDim; is_plastic = true)
+    # rheology = init_rheologies(CharDim; is_plastic = true)
+    rheology = init_rheologies2(CharDim; is_plastic = true)
     κ = (4 / (rheology[4].HeatCapacity[1].Cp * rheology[4].Density[1].ρ0))
     dt = 0.5 * min(di_min...)^2 / κ / 2.01 # diffusive CFL timestep limiter
     dt_max = nondimensionalize(100e3 * yr, CharDim)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 30, 75, 10
+    nxcell, max_xcell, min_xcell = 50, 75, 20
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
@@ -214,9 +213,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # Elliptical temperature anomaly
     xc_anomaly = lx / 2    # origin of thermal anomaly
-    # yc_anomaly = nondimensionalize(-2890km, CharDim) # origin of thermal anomaly
-    yc_anomaly = nondimensionalize(-2500km, CharDim) # origin of thermal anomaly
-    r_anomaly = nondimensionalize(100km, CharDim) # radius of perturbation
+    yc_anomaly = nondimensionalize(-600km, CharDim) # origin of thermal anomaly
+    r_anomaly = nondimensionalize(25km, CharDim) # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly, thick_air, CharDim)
     update_phase_ratios!(phase_ratios, particles, pPhases)
@@ -233,41 +231,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         no_flux = (left = true, right = true, top = false, bot = false),
     )
     # initialize thermal profile - Half space cooling
-    # rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
-    thermal.T[2:end-1, :]  .= PTArray(backend_JR)([
-        nondimensionalize(
-            T_field(x, 
-                - @dimstrip(z, km, CharDim); 
-                Lx      = @dimstrip(grid.li[1], km, CharDim),
-                Lz      = @dimstrip(grid.li[2], km, CharDim), 
-                A       = 150.0,      # perturbation amplitude in K
-                Ttop    = 273.0,
-                Tbot    = 2800.0 + 273,
-                Tm      = 1400.0 + 273,
-                delta_t = 90.0,
-                delta_b = 200.0,
-                w_t     = 2.5,
-                w_b     = 5
-            )*K,
-            CharDim
-        )
-        for x in Array(grid.xvi[1]), z in Array(grid.xvi[2])
-    ])
-
-    # thermal.T[2:end-1, :] .= PTArray(backend_JR)([
-    #     nondimensionalize(
-    #         thermal_profile(
-    #             -@dimstrip(z, m, CharDim),
-    #             delta_top   = 90e3,  # top thermal boundary layer thickness [m]
-    #             delta_bot   = 100e3, # bottom thermal boundary layer thickness [m]
-    #         )*K, 
-    #         CharDim
-    #     )
-    #     for _ in Array(grid.xvi[1]), z in Array(grid.xvi[2])]
-    # )
-
+    init_T!(thermal.T, grid.xvi[2], thick_air, CharDim)
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
-
     thermal_bcs!(thermal, thermal_bc)
     Ttop, Tbot = extrema(thermal.T)
     temperature2center!(thermal)
@@ -275,15 +240,13 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    for _ in 1:25
+    for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
         stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse(ρg[2] .* grid.di.vertex[2]', dims = 2), dims = 2), dims = 2))
     end
 
     # Rheology
-    viscosity_cutoff = nondimensionalize((1.0e16Pa * s, 1.0e24Pa * s), CharDim)
-    stokes.ε.xx     .= nondimensionalize(1.0e-20 / s, CharDim)
-    stokes.ε.xx_v   .= nondimensionalize(1.0e-20 / s, CharDim)
+    viscosity_cutoff = nondimensionalize((1.0e17Pa * s, 1.0e24Pa * s), CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     # ------------------------------
 
@@ -292,6 +255,12 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         backend_JR, rheology, phase_ratios, args, dt, ni, minimum.(grid.di.vertex), li; ϵ = 1.0e-6, CFL = 0.9 / √2.1
     )
 
+    ε_bg      = 1e-15 * 0.5
+    εbg       = nondimensionalize(ε_bg / s, CharDim)  # background strain rate 
+    @views stokes.V.Vx[:, 2:(end - 1)] .= PTArray(backend_JR)([ εbg * (x-li[1]/2) for x in Array(xvi[1]), y in Array(xci[2])])
+    @views stokes.V.Vy[2:(end - 1), :] .= PTArray(backend_JR)([-εbg * y for x in Array(xci[1]), y in Array(xvi[2])])
+    update_halo!(@velocity(stokes)...)
+
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
@@ -299,6 +268,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
+    
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
@@ -350,8 +320,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     t, it = 0.0, 0
 
     dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1e-4)
+    tmax =  nondimensionalize(500e6yr, CharDim)
 
-    tmax =  nondimensionalize(5000e6yr, CharDim)
     while t < tmax
 
         solve_DYREL!(
@@ -366,14 +336,14 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             dt,
             igg;
             kwargs = (;
-                verbose_PH           = false,
-                verbose_DR           = false,
+                verbose_PH           = true,
+                verbose_DR           = true,
                 iterMax              = 50.0e3,
-                nout                 = 50,
-                rel_drop             = 1e-2,
+                nout                 = 200,
+                rel_drop             = 1e-1,
                 λ_relaxation_PH      = 1,
                 λ_relaxation_DR      = 1,
-                viscosity_relaxation = 1.0e-1,
+                viscosity_relaxation = 1e-3,
                 viscosity_cutoff     = viscosity_cutoff,
             )
         )
@@ -386,7 +356,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         )
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di_min) 
-        # dt = compute_dt(stokes, di_min, dt_max)
         # ------------------------------
 
         # rotate stresses
@@ -412,10 +381,10 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        # 660 phase changs
-        phase_upper_mantle, phase_lower_mantle = 4e0,5e0
-        centroid2particle!(pP, stokes.P, particles)
-        phase_changes!(pPhases, pP, pT, particles, phase_upper_mantle, phase_lower_mantle, CharDim)
+        # # 660 phase changs
+        # phase_upper_mantle, phase_lower_mantle = 4e0,5e0
+        # centroid2particle!(pP, stokes.P, particles)
+        # phase_changes!(pPhases, pP, pT, particles, phase_upper_mantle, phase_lower_mantle, CharDim)
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)
@@ -490,7 +459,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                     εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1, CharDim))),
                     εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1, CharDim))),
                     εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim))),
-                    ρ = Array(ustrip.(dimensionalize(ρg[2], kg/m^3 * m / s^2, CharDim))) ./ 9.81,
                     εII_pl = Array(ustrip.(dimensionalize(stokes.ε_pl.II, s^-1, CharDim))),
                     η = Array(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim))),
                     ηvep = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep, Pa * s, CharDim))),
@@ -520,7 +488,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
             # Make Makie figure
             t_dim = Float16(dimensionalize(t, yr, CharDim).val / 1.0e6)
-            fig = Figure(size = (1600, 800).*2, title = "t = $t_dim [Myr]")
+            fig = Figure(size = (1400, 1400).*1, title = "t = $t_dim [Myr]")
             ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K] ; t=$t_dim [Myr]")
             ax2 = Axis(fig[2, 1], aspect = ar, title = "phase")
             # ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
@@ -533,7 +501,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             # Plot 2nd invariant of strain rate
             h3 = heatmap!(ax3, Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim)))), colormap = :bamO)
             # Plot effective viscosity
-            h4 = heatmap!(ax4, Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim)))), colormap = :lipari, colorrange = (log10(1e17), log10(1e24)))
+            h4 = heatmap!(ax4, Array.(xci)..., Array(log10.(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim)))), colormap = :lipari, colorrange = (log10(1e18), log10(1e23)))
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
@@ -553,13 +521,12 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
-ar = 4    # aspect ratio
-n  = 64 * 2 
-nx = n * ar
-ny = n
+ar = 1    # aspect ratio
+nx = ny = 128
 
 # (Path)/folder where output data and figures are stored
-figdir = "Convection2D_nx$(nx)"
+figdir = "RegionalPlume_2D_extension_n$(nx)"
+# figdir = "RegionalPlume_2D_n$(nx)"
 do_vtk = true # set to true to generate VTK files for ParaView
 
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -570,31 +537,3 @@ end
 
 # run main script
 main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
-
-# compute_ρg!(ρg[2], phase_ratios, rheology, args)
-# stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse(ρg[2] .* grid.di.vertex[2]', dims = 2), dims = 2), dims = 2))
-# ρ = Array(ustrip.(dimensionalize(ρg[2], kg/m^3 * m / s^2, CharDim))) ./ 9.81
-
-# T = Array(ustrip.(dimensionalize(thermal.Tc, C, CharDim)))
-# P = Array(ustrip.(dimensionalize(stokes.P, Pa, CharDim)))
-
-
-# # Density = PT_Density(; ρ0 = 3330e0kg / m^3, β = β_lower_mantle, T0 = 0.0e0C, α = 3.5e-5 / K),
-# el_upper_crust  = SetConstantElasticity(; G = 25.0e9Pa, ν = 0.25)
-# el_lower_crust  = SetConstantElasticity(; G = 25.0e9Pa, ν = 0.25)
-# el_upper_mantle = SetConstantElasticity(; G = 67.0e9Pa, ν = 0.25)
-# el_lower_mantle = SetConstantElasticity(; G = 67.0e9Pa, ν = 0.25)
-# β_upper_crust   = inv(get_Kb(el_upper_crust))
-# β_lower_crust   = inv(get_Kb(el_lower_crust))
-# β_upper_mantle  = inv(get_Kb(el_upper_mantle))
-# β_lower_mantle  = inv(get_Kb(el_lower_mantle))
-
-# Ti = T[1,1]
-# Pi = P[1,1]
-# ρi = ρ[1,1]
-
-# 3300 * (1 - 3.5e-5 * Ti + β_lower_mantle * Pi) 
-# 3300 * (1 - 3.5e-5 * Ti) *(β_lower_mantle * Pi) 
-
-# r = rheology[4].Density[1]
-# @dimstrip r.ρ0 kg/m^3 CharDim

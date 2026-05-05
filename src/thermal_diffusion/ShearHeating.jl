@@ -59,6 +59,6 @@ end
     _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
     τij, τij_o, εij = cache_tensors(τ, τ_old, ε, I...)
     εij_el = @. 0.5 * ((τij - τij_o) * _Gdt)
-    shear_heating[I...] = compute_shearheating(rheology, phase, τij, εij, εij_el)
+    shear_heating[I...] = compute_shearheating(rheology, phase, abs.(τij), abs.(εij), abs.(εij_el))
     return nothing
 end

@@ -9,7 +9,7 @@ Average the function `fn` over the material phases in `rheology` using the phase
     return quote
         Base.@_inline_meta
         x = 0.0
-        Base.@nexprs $N i -> x += iszero(ratio[i]) ? 0.0 : fn(rheology[i]) * ratio[i]
+        Base.@nexprs $N i -> x += iszero(ratio[i]) || isnan(ratio[i]) ? 0.0 : fn(rheology[i]) * ratio[i]
         return x
     end
 end
@@ -23,7 +23,7 @@ end
         Base.@nexprs $N i -> x += begin
             r = ratio[i]
             isone(r) && return fn(rheology[i], args) * r
-            iszero(r) ? 0.0 : fn(rheology[i], args) * r
+            iszero(r) || isnan(ratio[i]) ? 0.0 : fn(rheology[i], args) * r
         end
         return x
     end

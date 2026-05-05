@@ -34,7 +34,7 @@ end
 using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
 
 # Load file with all the rheology configurations
-include("Blankenbach_Rheology_scaled.jl")
+include("Rheology_scaled.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -407,7 +407,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     Tmean = @zeros(ny + 1)
     Emean = @zeros(ny)
 
-    f = open(joinpath(figdir,"SurfaceTemp.txt"),"w")
+    # f = open(joinpath(figdir,"SurfaceTemp.txt"),"w")
 
     # for j = ny-1:ny 
     # # for i in 2:nx-1
@@ -445,13 +445,13 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-figdir = "ThermalConvection_1"
+figdir = "Playground/Lukas/ThermalConvection_1"
 do_vtk = true # set to true to generate VTK files for ParaView
 ar = 4 # aspect ratio
 n = 50
 nx = n * ar
 ny = n
-nit = 2
+nit = 100
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

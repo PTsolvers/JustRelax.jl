@@ -32,7 +32,11 @@ function thermal_bcs!(T::AbstractArray, bcs::TemperatureBoundaryConditions)
     n = bc_index(T)
 
     # no flux boundary conditions
-    do_bc(bcs.no_flux) && (@parallel (@idx n) free_slip!(T, bcs.no_flux))
+    if ndims(T) == 2
+        @parallel (@idx n) thermal_ghosts_2D!(T, bcs.no_flux)
+    else
+        do_bc(bcs.no_flux) && (@parallel (@idx n) free_slip!(T, bcs.no_flux))
+    end
 
     return nothing
 end

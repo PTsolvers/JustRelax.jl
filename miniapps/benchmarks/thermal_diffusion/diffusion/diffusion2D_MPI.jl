@@ -12,11 +12,11 @@ using CairoMakie
 
 @parallel_indices (i, j) function init_T!(T, z, lz)
     if z[j] ≥ 0.0
-        T[i, j] = 300.0
+        T[i + 1, j + 1] = 300.0
     elseif z[j] == -lz
-        T[i, j] = 3500.0
+        T[i + 1, j + 1] = 3500.0
     else
-        T[i, j] = z[j] * (1900.0 - 1600.0) / (-lz) + 1600.0
+        T[i + 1, j + 1] = z[j] * (1900.0 - 1600.0) / (-lz) + 1600.0
     end
     return nothing
 end
@@ -25,12 +25,12 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
         if (((x[i] - xc))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i + 1, j] += δT
+            T[i + 1, j + 1] += δT
         end
         return nothing
     end
-    nx, ny = size(T)
-    return @parallel (1:(nx - 2), 1:ny) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    return @parallel (@idx ni) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 function diffusion_2D(
@@ -67,7 +67,7 @@ function diffusion_2D(
     )
     # fields needed to compute density on the fly
     P = @zeros(ni...)
-    args = (; P = P, T = @zeros(ni .+ 1...))
+    args = (; P = P, T = @zeros(ni...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal = ThermalArrays(backend_JR, ni)
@@ -82,13 +82,13 @@ function diffusion_2D(
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2], ly)
+    @parallel (@idx ni) init_T!(thermal.T, xci[2], ly)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
     r = 10.0e3 # thermal perturbation radius
     center_perturbation = lx / 2, -ly / 2
-    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
+    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
     temperature2center!(thermal)
 
     # global array
@@ -121,7 +121,7 @@ function diffusion_2D(
 
         temperature2center!(thermal)
 
-        @views T_nohalo .= Array(thermal.Tc[2:(end - 2), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array((@view thermal.T[2:(end - 1), 2:(end - 1)])[2:(end - 2), 2:(end - 1)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         if igg.me == 0

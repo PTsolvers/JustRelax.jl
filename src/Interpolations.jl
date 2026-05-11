@@ -72,6 +72,7 @@ function temperature2center!(::CPUBackendTrait, thermal::JustRelax.ThermalArrays
 end
 
 function _temperature2center!(thermal::JustRelax.ThermalArrays)
+    ndims(thermal.T) == 2 && return nothing
     @parallel (@idx size(thermal.Tc)...) temperature2center_kernel!(thermal.Tc, thermal.T)
     return nothing
 end
@@ -79,13 +80,7 @@ end
 @parallel_indices (i, j) function temperature2center_kernel!(
         T_center::T, T_vertex::T
     ) where {T <: AbstractArray{_T, 2} where {_T <: Real}}
-    T_center[i, j] =
-        (
-        T_vertex[i + 1, j] +
-            T_vertex[i + 2, j] +
-            T_vertex[i + 1, j + 1] +
-            T_vertex[i + 2, j + 1]
-    ) * 0.25
+    T_center[i, j] = T_vertex[i + 1, j + 1]
     return nothing
 end
 

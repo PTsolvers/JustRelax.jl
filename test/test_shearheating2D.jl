@@ -122,11 +122,11 @@ function Shearheating2D(; nx = 32, ny = 32)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
@@ -147,9 +147,8 @@ function Shearheating2D(; nx = 32, ny = 32)
 
     T_buffer = @zeros(ni .+ 1)
     Told_buffer = similar(T_buffer)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
+    center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
     grid2particle!(pT, T_buffer, particles)
 
     # Time loop
@@ -212,9 +211,8 @@ function Shearheating2D(; nx = 32, ny = 32)
         # advect particles in memory
         move_particles!(particles, particle_args)
         # interpolate fields from grid vertices to particles
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
+        center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
         grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
@@ -224,7 +222,7 @@ function Shearheating2D(; nx = 32, ny = 32)
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= 273.0 + 400
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_buffer)
         temperature2center!(thermal)
 
         @show it += 1

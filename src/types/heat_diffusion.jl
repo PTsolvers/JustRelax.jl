@@ -1,6 +1,6 @@
-struct ThermalArrays{_T}
-    T::_T  # Temperature @ grid nodes
-    Tc::_T # Temperature @ cell centers
+struct ThermalArrays{_T, _Tc}
+    T::_T  # Temperature; in 2D this is cell-centered with ghost nodes
+    Tc::_Tc # Temperature @ cell centers; in 2D this aliases the physical interior of T
     Told::_T
     ΔT::_T
     ΔTc::_T

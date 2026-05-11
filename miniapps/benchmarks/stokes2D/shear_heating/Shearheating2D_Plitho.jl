@@ -101,11 +101,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
@@ -126,9 +126,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     T_buffer = @zeros(ni .+ 1)
     Told_buffer = similar(T_buffer)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
+    center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
     grid2particle!(pT, T_buffer, particles)
 
     # IO -----------------------------------------------
@@ -147,7 +146,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:(end - 1), :][:]), Yv ./ 1.0e3)
+        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), Yv ./ 1.0e3)
         scatter!(ax2, Array(log10.(stokes.viscosity.η[:])), Y ./ 1.0e3)
         ylims!(ax1, minimum(xvi[2]) ./ 1.0e3, 0)
         ylims!(ax2, minimum(xvi[2]) ./ 1.0e3, 0)
@@ -199,7 +198,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= 273.0 + 400
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_buffer)
         temperature2center!(thermal)
 
         compute_shear_heating!(
@@ -235,9 +234,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # advect particles in memory
         move_particles!(particles, particle_args)
         # interpolate fields from grid vertices to particles
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
+        center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
         grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
@@ -254,7 +252,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(thermal.T[2:(end - 1), :]),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
                     Vx = Array(Vx_v),
@@ -298,7 +296,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :] .- 273.0), colormap = :batlow)
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), 2:(end - 1)] .- 273.0), colormap = :batlow)
             # Plot particles phase
             h2 = heatmap!(ax2, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.shear_heating), colormap = :batlow)
             # Plot 2nd invariant of strain rate

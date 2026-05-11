@@ -27,11 +27,11 @@ using GeoParams
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j) function init_T!(T, z)
     if z[j] == maximum(z)
-        T[i, j] = 300.0
+        T[i + 1, j + 1] = 300.0
     elseif z[j] == minimum(z)
-        T[i, j] = 3500.0
+        T[i + 1, j + 1] = 3500.0
     else
-        T[i, j] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
+        T[i + 1, j + 1] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
     end
     return nothing
 end
@@ -40,13 +40,13 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
         if (((x[i] - xc))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i + 1, j] += δT
+            T[i + 1, j + 1] += δT
         end
         return nothing
     end
 
-    nx, ny = size(T)
-    return @parallel (1:(nx - 2), 1:ny) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    return @parallel (@idx ni) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -75,7 +75,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
     )
     # fields needed to compute density on the fly
     P = @zeros(ni...)
-    args = (; P = P, T = @zeros(ni .+ 1...))
+    args = (; P = P, T = @zeros(ni...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal = ThermalArrays(backend_JR, ni)
@@ -90,14 +90,14 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
+    @parallel (@idx ni) init_T!(thermal.T, xci[2])
+    thermal_bcs!(thermal, thermal_bc)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
     r = 10.0e3 # thermal perturbation radius
     center_perturbation = lx / 2, -ly / 2
-    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
-    temperature2center!(thermal)
+    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
 
     # Time loop
     t = 0.0
@@ -132,7 +132,7 @@ end
         thermal = diffusion_2D(; nx = nx, ny = ny)
 
         nx_T, ny_T = size(thermal.T)
-        @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1827.004536698498  atol = 1.0e-1
-        @test Array(thermal.Tc)[nx >>> 1, nx >>> 1] ≈ 1828.3169386441218 atol = 1.0e-1
+        @test Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1817.9448461176817 atol = 1.0e-1
+        @test Array(thermal.T)[(nx >>> 1) + 1, (ny >>> 1) + 1] ≈ 1827.4674313638786 atol = 1.0e-1
     end
 end

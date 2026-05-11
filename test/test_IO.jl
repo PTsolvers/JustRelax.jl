@@ -38,10 +38,10 @@ using WriteVTK, JLD2
         stokes = StokesArrays(backend_JR, ni)
 
         thermal = ThermalArrays(backend_JR, 4, 4)
-        @test size(thermal.Tc) === (4, 4)
+        @test size((@view thermal.T[2:(end - 1), 2:(end - 1)])) === (4, 4)
 
         thermal = ThermalArrays(backend_JR, ni)
-        @test size(thermal.Tc) === (4, 4)
+        @test size((@view thermal.T[2:(end - 1), 2:(end - 1)])) === (4, 4)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(

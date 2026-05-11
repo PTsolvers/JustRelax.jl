@@ -83,6 +83,20 @@ end
     return nothing
 end
 
+@parallel_indices (i) function thermal_ghosts_2D!(T::_T, bc) where {_T <: AbstractArray{<:Any, 2}}
+    @inbounds begin
+        if i ≤ size(T, 1)
+            T[i, 1] = bc.bot ? T[i, 2] : 2 * T[i, 2] - T[i, 3]
+            T[i, end] = bc.top ? T[i, end - 1] : 2 * T[i, end - 1] - T[i, end - 2]
+        end
+        if i ≤ size(T, 2)
+            T[1, i] = bc.left ? T[2, i] : 2 * T[2, i] - T[3, i]
+            T[end, i] = bc.right ? T[end - 1, i] : 2 * T[end - 1, i] - T[end - 2, i]
+        end
+    end
+    return nothing
+end
+
 @parallel_indices (i, j) function free_slip!(T::_T, bc) where {_T <: AbstractArray{<:Any, 3}}
     nx, ny, nz = size(T)
     @inbounds begin

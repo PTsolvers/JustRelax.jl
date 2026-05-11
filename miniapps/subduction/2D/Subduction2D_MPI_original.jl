@@ -119,23 +119,23 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     Ttop = 20 + 273
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
-    @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
+    @views thermal.T[2:(end - 1), 2:(end - 1)] .= PTArray(backend)(T_GMG)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
     )
     thermal_bcs!(thermal, thermal_bc)
-    @views thermal.T[:, end] .= Ttop
-    @views thermal.T[:, 1] .= Tbot
+    @views thermal.T[:, end - 1] .= Ttop
+    @views thermal.T[:, 2] .= Tbot
     temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
 
     # Rheology
-    args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
+    args0 = (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
@@ -201,9 +201,8 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     T_buffer = @zeros(ni .+ 1)
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
+    center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
     grid2particle!(pT, T_buffer, particles)
 
     τxx_v = @zeros(ni .+ 1...)
@@ -222,11 +221,11 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
         particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= Ttop
         @views T_buffer[:, 1] .= Tbot
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_buffer)
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
 
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
 
         particle2centroid!(stokes.τ.xx, pτxx, particles)
         particle2centroid!(stokes.τ.yy, pτyy, particles)
@@ -301,8 +300,10 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+        center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
         subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -354,7 +355,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             gather!(Vxv_nohalo, Vxv_v)
             gather!(Vyv_nohalo, Vyv_v)
         end
-        @views T_nohalo .= Array(thermal.Tc[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array((@view thermal.T[2:(end - 1), 2:(end - 1)])[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         # Data I/O and plotting ---------------------

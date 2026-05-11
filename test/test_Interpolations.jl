@@ -50,7 +50,7 @@ end
         stokes.τ.xy_c .= 1
         temperature2center!(thermal)
 
-        @test thermal.Tc[1, 1] == 100
+        @test (@view thermal.T[2:(end - 1), 2:(end - 1)])[1, 1] == 100
 
         thermal.ΔT .= thermal.T .- thermal.Told
         vertex2center!(thermal.ΔTc, thermal.ΔT)

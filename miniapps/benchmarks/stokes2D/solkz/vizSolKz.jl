@@ -39,7 +39,7 @@ function Li_error(geometry, stokes; order = 2)
     Li(A, B; order = 2) = norm(A .- B, order)
 
     L2_vx = Li(stokes.V.Vx[:, 2:(end - 1)], PTArray(backend)(solk.vx); order = order) * gridsize
-    L2_vy = Li(stokes.V.Vy[2:(end - 1), :], PTArray(backend)(solk.vy); order = order) * gridsize
+    L2_vy = Li(stokes.V.Vy[2:(end - 1), 2:(end - 1)], PTArray(backend)(solk.vy); order = order) * gridsize
     L2_p = Li(stokes.P, PTArray(backend)(solk.p); order = order) * gridsize
 
     return L2_vx, L2_vy, L2_p
@@ -75,7 +75,7 @@ function plot_solkz(geometry, ρ, stokes; cmap = :vik)
     # Velocity-y
     ax1 = Axis(f[2, 3]; aspect = 1)
     h1 = heatmap!(
-        ax1, geometry.xvi[2], geometry.xci[1], stokes.V.Vy[2:(end - 1), :]; colormap = cmap
+        ax1, geometry.xvi[2], geometry.xci[1], stokes.V.Vy[2:(end - 1), 2:(end - 1)]; colormap = cmap
     )
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
@@ -186,7 +186,7 @@ function plot_solKz_error(geometry, stokes; cmap = :vik)
         ax1,
         geometry.xvi[1],
         geometry.xci[2],
-        log10.(err1(Array(stokes.V.Vx[2:(end - 1), 2:(end - 1)]), solk.vx[2:(end - 1), :]));
+        log10.(err1(Array(stokes.V.Vx[2:(end - 1), 2:(end - 1)]), solk.vx[2:(end - 1), 2:(end - 1)]));
         colormap = :batlow,
     )
     xlims!(ax1, (0, 1))
@@ -206,7 +206,7 @@ function plot_solKz_error(geometry, stokes; cmap = :vik)
         ax1,
         geometry.xci[1],
         geometry.xvi[2],
-        Array(stokes.V.Vy[2:(end - 1), :]);
+        Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]);
         colormap = cmap,
     )
     xlims!(ax1, (0, 1))

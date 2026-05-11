@@ -77,7 +77,7 @@ end
         stokes.V.Vy .= @fill(10)
         thermal.T .= @fill(100)
         stokes.P .= @fill(100.0)
-        thermal.Tc .= @fill(100.0)
+        (@view thermal.T[2:(end - 1), 2:(end - 1)]) .= @fill(100.0)
 
         # Utils
         args = (P = stokes.P, T = thermal.T)
@@ -89,9 +89,9 @@ end
 
         # A = @zeros(ni...)
         # B = @zeros(ni...)
-        # @parallel (@idx ni) multi_copy!((A, B), (stokes.P, thermal.Tc))
+        # @parallel (@idx ni) multi_copy!((A, B), (stokes.P, (@view thermal.T[2:(end - 1), 2:(end - 1)])))
         # @test A == stokes.P
-        # @test B == thermal.Tc
+        # @test B == (@view thermal.T[2:(end - 1), 2:(end - 1)])
 
         # A .= 0.0e0
         # @parallel (@idx ni) assign!(A, stokes.P)

@@ -19,7 +19,7 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
             depth = abs(y[j])
             dTdZ = (2047 - 2017) / 50.0e3
             offset = 2017
-            T[i + 1, j] = (depth - 585.0e3) * dTdZ + offset
+            T[i + 1, j + 1] = (depth - 585.0e3) * dTdZ + offset
         end
         return nothing
     end

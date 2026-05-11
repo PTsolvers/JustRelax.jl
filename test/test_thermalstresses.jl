@@ -107,12 +107,12 @@ end
     depth = y[j]
 
     if depth ≥ 0.0e0
-        T[i + 1, j] = offset
+        T[i + 1, j + 1] = offset
 
     else # if top ≤ (depth) < bottom
         dTdZ = dTdz
         offset = offset
-        T[i + 1, j] = abs(depth) * dTdZ + offset
+        T[i + 1, j + 1] = abs(depth) * dTdZ + offset
 
     end
 
@@ -125,15 +125,15 @@ function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi, 
         )
         depth = -y[j] #- sticky_air
         if ((x[i] - xc_anomaly)^2 + (depth[j] + yc_anomaly)^2 ≤ r_anomaly^2)
-            # T[i + 1, j] *= δT / 100 + 1
-            T[i + 1, j] = δT
+            # T[i + 1, j + 1] *= δT / 100 + 1
+            T[i + 1, j + 1] = δT
         end
         return nothing
     end
 
-    nx, ny = size(T)
+    ni = size(T) .- 2
 
-    return @parallel (1:(nx - 2), 1:ny) _circular_perturbation!(
+    return @parallel (@idx ni) _circular_perturbation!(
         T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi..., sticky_air
     )
 end
@@ -295,7 +295,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-2, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
-    args = (; T = thermal.Tc, P = stokes.P, dt = dt)
+    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = dt)
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.8 / √2.1
     )
@@ -321,18 +321,18 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
 
     ϕ = @zeros(ni...)
     compute_melt_fraction!(
-        ϕ, phase_ratios, rheology, (T = thermal.Tc, P = stokes.P)
+        ϕ, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
     )
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+        compute_ρg!(ρg[2], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
         # @parallel init_P!(stokes.P, ρg[2], xci[2])
         stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
     end
 
     # Arguments for functions
-    args = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
+    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -350,16 +350,15 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     T_buffer = @zeros(ni .+ 1)
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
+    center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
     grid2particle!(pT, T_buffer, particles)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
 
     # Stokes solver -----------------
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
+    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
     solve!(
         stokes,
         pt_stokes,
@@ -384,7 +383,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     while it < 1
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
+        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
 
         # Stokes solver -----------------
         solve!(
@@ -437,19 +436,19 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
                 verbose = true,
             )
         )
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
+        center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+    center2vertex!(Told_buffer, @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
         subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt
+            pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------
         compute_melt_fraction!(
-            ϕ, phase_ratios, rheology, (T = thermal.Tc, P = stokes.P)
+            ϕ, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
         )
         # Advection --------------------
         # advect particles in space
@@ -464,11 +463,11 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
         particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= Ttop
         @views T_buffer[:, 1] .= Tbot
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_buffer)
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
         thermal.ΔT .= thermal.T .- thermal.Told
-        vertex2center!(thermal.ΔTc, thermal.ΔT[2:(end - 1), :])
+        vertex2center!(thermal.ΔTc, thermal.ΔT[2:(end - 1), 2:(end - 1)])
 
         @show it += 1
         t += dt

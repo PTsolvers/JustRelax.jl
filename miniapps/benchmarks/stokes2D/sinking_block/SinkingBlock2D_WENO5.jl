@@ -41,7 +41,7 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
             depth = abs(y[j])
             dTdZ = (2047 - 2017) / 50.0e3
             offset = 2017
-            T[i + 1, j] = (depth - 585.0e3) * dTdZ + offset
+            T[i + 1, j + 1] = (depth - 585.0e3) * dTdZ + offset
         end
         return nothing
     end
@@ -153,7 +153,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 
     phases = @zeros(ni...)
     # phases = Float64.([argmax(p) for p in Array(phase_ratios.center)])
-    weno = WENO5(backend_JR, Val(2), ni .+ 1) # ni.+1 for Temp
+    weno = WENO5(backend_JR, Val(2), ni) # ni.+1 for Temp
     weno_c = WENO5(backend_JR, Val(2), ni) # ni.+1 for Temp
     init_phases!(phases, xc_anomaly, abs(yc_anomaly), r_anomaly, xci[1], xci[2])
 
@@ -215,8 +215,8 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         dt = compute_dt(stokes, di, igg)
         # ------------------------------
 
-        Vx_v = @zeros(ni .+ 1...)
-        Vy_v = @zeros(ni .+ 1...)
+        Vx_v = @zeros(ni...)
+        Vy_v = @zeros(ni...)
         Vx_c = @zeros(ni...)
         Vy_c = @zeros(ni...)
         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)

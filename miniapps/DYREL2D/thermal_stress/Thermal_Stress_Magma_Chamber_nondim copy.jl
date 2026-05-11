@@ -1,17 +1,16 @@
-using CUDA
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
-const backend_JR = CUDABackend
+const backend_JR = CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
 using JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 using Printf, Statistics, LinearAlgebra, GeoParams, GLMakie
 
@@ -78,29 +77,6 @@ function init_phases!(phases, particles, xc_anomaly, yc_anomaly, r_anomaly, stic
     )
 end
 
-function heat_chamber_particles!(pT, phases, particles, T_chamber)
-    ni = size(phases)
-
-    @parallel_indices (i, j) function _heat_chamber_particles!(
-            pT, phases, index, T_chamber
-        )
-        @inbounds for ip in cellaxes(phases)
-            # quick escape
-            @index(index[ip, i, j]) == 0 && continue
-
-            # thermal anomaly
-            if @index(phases[ip, i, j]) == 2.0
-                @index pT[ip, i, j] = T_chamber
-            end
-        end
-        return nothing
-    end
-
-    @parallel (@idx ni) _heat_chamber_particles!(pT, phases, particles.index, T_chamber)
-
-    return nothing
-end
-
 # Initial thermal profile
 @parallel_indices (i, j) function init_T!(T, y, sticky_air, top, bottom, dTdz, offset)
     depth = y[j]
@@ -137,7 +113,6 @@ function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi, 
     )
 end
 
-
 function linear_creep_models()
     creep_rock = LinearViscous(; η = 1.0e23 * Pa * s)
     creep_magma = LinearViscous(; η = 1.0e18 * Pa * s)
@@ -148,23 +123,21 @@ end
 function nonlinear_creep_models()
     creep_rock = DislocationCreep(; A = 1.67e-24Pa^(-(35 // 10)) / s, n = 3.5, E = 1.87e5J / mol, V = 0 * 6.0e-6m^3 / mol, r = 0.0, R = 8.3145J / mol / K)
     creep_magma = DislocationCreep(; A = 1.67e-24Pa^(-(35 // 10)) / s, n = 3.5, E = 1.87e5J / mol, V = 0 * 6.0e-6m^3 / mol, r = 0.0, R = 8.3145J / mol / K)
-    creep_air = LinearViscous(; η = 1.0e18 * Pa * s)
+    creep_air = LinearViscous(; η = 1.0e19 * Pa * s)
     return creep_rock, creep_magma, creep_air
 end
 
 function init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressible = false, steady_state = true)
     # plasticity setup
     do_DP = true          # do_DP=false: Von Mises, do_DP=true: Drucker-Prager (friction angle)
-    η_reg = 1.0e20Pa * s  # regularisation "viscosity" for Drucker-Prager
+    η_reg = 1.0e19Pa * s  # regularisation "viscosity" for Drucker-Prager
     Coh = 10.0MPa         # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
     ϕ = 30.0 * do_DP      # friction angle
-    G0 = 6.0e11Pa         # elastic shear modulus
-    G_magma = 6.0e11Pa    # elastic shear modulus perturbation
+    G0 = 30GPa            # elastic shear modulus
+    G_magma = 30GPa       # elastic shear modulus perturbation
 
     soft_C = NonLinearSoftening(; ξ₀ = ustrip(Coh), Δ = ustrip(Coh) / 2) # softening law
-
-    pl = DruckerPrager_regularised(; C = Coh, ϕ = ϕ, η_vp = η_reg, Ψ = 0.0, softening_C = soft_C)  # plasticity
-
+    pl = DruckerPrager_regularised(; C = Coh, ϕ = ϕ, η_vp = η_reg, Ψ = 0.0, softening_C = soft_C)        # plasticity
     if is_compressible == true
         el = SetConstantElasticity(; G = G0, ν = 0.25)           # elastic spring
         el_magma = SetConstantElasticity(; G = G_magma, ν = 0.25) # elastic spring
@@ -226,8 +199,8 @@ function init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressi
 
 end
 
-# function main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = false)
-function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx = nx, ny = ny, do_vtk = false)
+function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = false)
+
     # Characteristic lengths
     CharDim = GEO_units(; length = 14km, viscosity = 1.0e21Pa * s, temperature = 450C)
 
@@ -243,7 +216,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     origin = 0.0e0, -ly + sticky_air  # origin coordinates of the domain
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid                                           # nodes at the center and vertices of the cells
-    εbg = nondimensionalize(εbg_0 / s, CharDim)                     # background strain rate
+    εbg = nondimensionalize(0.0 / s, CharDim)                     # background strain rate
     #---------------------------------------------------------------------------------------
 
     # Physical Parameters
@@ -252,14 +225,13 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     creep_rock, creep_magma, creep_air = nonlinear_creep_models()
     rheology = init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressible = true)
     rheology_inc = init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressible = false)
-    viscosity_cutoff = nondimensionalize((1.0e16Pa * s, 1.0e24Pa * s), CharDim)
+    cutoff_visc = nondimensionalize((1.0e16Pa * s, 1.0e24Pa * s), CharDim)
     dt = dt_max = nondimensionalize(1.0e3 * yr, CharDim)         # diffusive CFL timestep limiter
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 50, 100, 15
+    nxcell, max_xcell, min_xcell = 20, 40, 15
     particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    grid_vxi = grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
     particle_args = (pT, pPhases)
@@ -272,16 +244,6 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, r_anomaly, sticky_air, nondimensionalize(0.0km, CharDim), nondimensionalize(20km, CharDim))
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, pPhases)
-
-    # marker chain
-    nxcell, min_xcell, max_xcell = 100, 75, 125
-    initial_elevation = 0.0e0
-    chain = init_markerchain(backend, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
-
-    # RockRatios
-    air_phase = 3
-    ϕ_R = RockRatio(backend_JR, ni)
-    compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
     # Initialisation of thermal profile
     thermal = ThermalArrays(backend_JR, ni) # initialise thermal arrays and boundary conditions
@@ -305,7 +267,6 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni) # initialise stokes arrays with the defined regime
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-2, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = dt)
@@ -332,6 +293,11 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
 
+    ϕ = @zeros(ni...)
+    compute_melt_fraction!(
+        ϕ, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
+    )
+
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
@@ -344,7 +310,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
     # IO ------------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -395,66 +361,70 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
-    # Ttop = thermal.T[1, end]
-    # Tbot = thermal.T[1, 1]
 
-    pulse_recurrence_time = nondimensionalize(25.0e3 * yr, CharDim)
-    pulse_timer = 0.0e0
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt)
 
     # Stokes solver -----------------
     args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
-    solve_VariationalStokes!(
+
+    # Stokes solver -----------------
+    solve_DYREL!(
         stokes,
-        pt_stokes,
-        grid,
-        flow_bcs,
         ρg,
+        dyrel,
+        flow_bcs,
         phase_ratios,
-        ϕ_R,
-        rheology,
+        rheology_inc,
         args,
+        grid,
         dt,
         igg;
         kwargs = (;
-            iterMax = 100.0e3,
-            free_surface = true,
-            nout = 2.5e3,
-            viscosity_cutoff = viscosity_cutoff,
-            relaxation = 1.0e-3,
-            λ_relaxation = 1.0e0,
+            verbose_PH = true,
+            verbose_DR = false,
+            iterMax = 75.0e3,
+            nout = 200,
+            rel_drop = 1e-2,
+            λ_relaxation_PH = 1,
+            λ_relaxation_DR = 1,
+            viscosity_relaxation = 1.0e-3,
+            viscosity_cutoff = cutoff_visc,
         )
     )
 
-    while it < 500
+    while it < 150
 
         # Update buoyancy and viscosity -
         args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
 
-        solve_VariationalStokes!(
+        # Stokes solver -----------------
+        solve_DYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
-            ϕ_R,
             rheology,
             args,
+            grid,
             dt,
             igg;
             kwargs = (;
+                verbose_PH = true,
+                verbose_DR = false,
                 iterMax = 100.0e3,
-                free_surface = true,
-                nout = 2.5e3,
-                viscosity_cutoff = viscosity_cutoff,
-                relaxation = 1.0e-3,
-                λ_relaxation = 1.0e0,
+                nout = 50,
+                rel_drop = 1e-2,
+                λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
+                viscosity_relaxation = 1.0e-2,
+                viscosity_cutoff = cutoff_visc,
             )
         )
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
-        dt = compute_dt(stokes, di, dt_max, igg) * 0.95
-        # --------------------------------
+        dt = compute_dt(stokes, di, dt_max, igg)
+        # # --------------------------------
 
         compute_shear_heating!(
             thermal,
@@ -492,6 +462,9 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
             pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------
+        compute_melt_fraction!(
+            ϕ, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
+        )
 
         # Advection --------------------
         # advect particles in space
@@ -499,24 +472,10 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        # inject_particles_phase!(particles, pPhases, (), ())
         inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
-
-        # advect marker chain
-        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
-
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
-        compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
-        # Add thermal perturbation at regular intervals
-        if pulse_timer > pulse_recurrence_time
-            # add thermal perturbation
-            heat_chamber_particles!(pT, pPhases, particles, anomaly)
-            pulse_timer = 0.0e0
-            println("Kaboom! Thermal pulse added at t = $(dimensionalize(t, yr, CharDim).val) yrs")
-        end
         particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= Ttop
         @views T_buffer[:, 1] .= Tbot
@@ -526,10 +485,8 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         thermal.ΔT .= thermal.T .- thermal.Told
         vertex2center!(thermal.ΔTc, thermal.ΔT[2:(end - 1), 2:(end - 1)])
 
-
         @show it += 1
         t += dt
-        pulse_timer += dt
 
         #  # # Plotting -------------------------------------------------------
         if it == 1 || rem(it, 1) == 0
@@ -571,7 +528,6 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
                         velocity_v,
                         t = t_Kyrs
                     )
-                    save_marker_chain(joinpath(vtk_dir, "chain_" * lpad("$it", 6, "0")), xvi[1], Array(chain.h_vertices))
                 end
 
                 # Make Makie figure
@@ -709,7 +665,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
                     ax4,
                     ustrip.(dimensionalize(xci[1], km, CharDim)),
                     ustrip.(dimensionalize(xci[2], km, CharDim)),
-                    (@dimstrip(Array(thermal.T), C, CharDim) .- @dimstrip(Array(thermal.Told), C, CharDim))[2:(end - 1), 2:(end - 1)],
+                    (@dimstrip(thermal.T, C, CharDim) .- @dimstrip(thermal.Told, C, CharDim))[2:(end - 1), 2:(end - 1)],
                     colormap = :roma,
                 )
                 # Plot 2nd invariant of strain rate
@@ -791,18 +747,17 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     return nothing
 end
 
-
-εbg_0 = 0.0e0
-linear_rheology = false
-n = 100
+figdir = "Thermal_stresses_around_cooling_magma_NonLinear"
+do_vtk = true # set to true to generate VTK files for ParaView
+n = 64
 ar = 1
 nx = n * ar
 ny = n
-# figdir = "Thermal_stresses_cooling_magma_linear_viscosity_Nx_$(nx)_Ny_$(ny)_εbg_$(εbg_0)"
-figdir = "VS_ThermalStresses_LinearViscosity__εbg_$(εbg_0)"
-local igg
-if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
 end
+
 # run main script
-main2D(igg; εbg_0 = εbg_0, linear_rheology = linear_rheology, figdir = figdir, nx = nx, ny = ny, do_vtk = true);
+main2D(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

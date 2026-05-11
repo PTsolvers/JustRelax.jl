@@ -104,11 +104,11 @@ function thermal_anomaly!(Temp, Ω_T, phase_ratios, T_chamber, T_air, conduit_ph
         # if conduit_ratio_ij > 0.5 || magma_ratio_ij > 0.5
         if conduit_ratio_ij > 0.5 || anomaly_ratio_ij > 0.5
             # if isone(conduit_ratio_ij) || isone(magma_ratio_ij)
-            Ω_T[i + 1, j] = Temp[i + 1, j] = T_chamber
+            Ω_T[i + 1, j + 1] = Temp[i + 1, j + 1] = T_chamber
         elseif magma_ratio_ij > 0.5
-            Ω_T[i + 1, j] = Temp[i + 1, j] = T_chamber - 100.0e0
+            Ω_T[i + 1, j + 1] = Temp[i + 1, j + 1] = T_chamber - 100.0e0
         elseif air_ratio_ij > 0.5
-            Ω_T[i + 1, j] = Temp[i + 1, j] = T_air
+            Ω_T[i + 1, j + 1] = Temp[i + 1, j + 1] = T_air
         end
 
         return nothing
@@ -214,7 +214,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend, ni)
-    @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
+    @views thermal.T[2:(end - 1), 2:(end - 1)] .= PTArray(backend)(T_GMG)
 
     # Add thermal anomaly BC's
     T_chamber = 1223.0e0
@@ -236,7 +236,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
     for _ in 1:5
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+        compute_ρg!(ρg[2], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
         @parallel init_P!(stokes.P, ρg[end], xvi[2])
     end
     # stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
@@ -244,10 +244,10 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # Melt fraction
     ϕ_m = @zeros(ni...)
     compute_melt_fraction!(
-        ϕ_m, phase_ratios, rheology, (T = thermal.Tc, P = stokes.P)
+        ϕ_m, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
     )
     # Rheology
-    args0 = (; ϕ = ϕ_m, T = thermal.Tc, P = stokes.P, dt = Inf)
+    args0 = (; ϕ = ϕ_m, T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e17, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
@@ -296,9 +296,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     T_buffer = @zeros(ni .+ 1)
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
+    center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
     grid2particle!(pT, T_buffer, particles)
 
     ## Plot initial T and P profile
@@ -310,7 +309,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         ax2 = Axis(fig[1, 2]; aspect = 2 / 3, title = "Density")
         scatter!(
             ax1,
-            Array(thermal.T[2:(end - 1), :][:]),
+            Array(thermal.T[2:(end - 1), 2:(end - 1)][:]),
             Yv ./ 1.0e3,
         )
         # lines!(
@@ -351,13 +350,13 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         @views T_buffer[:, end] .= Ttop
         @views T_buffer[:, 1] .= Tbot
         # clamp!(T_buffer, 273e0, 1223e0)
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_buffer)
         if it > 1  && rem(it, 5) == 0
             # if mod(round(t/(1e3 * 3600 * 24 *365.25); digits=1), 1e3) == 0.0
             println("Simulation eruption at t = $(round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 2)) Kyrs")
             thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, 4, air_phase)
             interval += 1
-            copyinn_x!(T_buffer, thermal.T)
+            center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
             @views T_buffer[:, end] .= Ttop
             @views T_buffer[:, 1] .= Tbot
             temperature2center!(thermal)
@@ -366,8 +365,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
 
-        args = (; ϕ = ϕ_m, T = thermal.Tc, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
-        # args = (; ϕ=ϕ_m, T=thermal.Tc, P=stokes.P, dt=Inf)
+        args = (; ϕ = ϕ_m, T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
+        # args = (; ϕ=ϕ_m, T=(@view thermal.T[2:(end - 1), 2:(end - 1)]), P=stokes.P, dt=Inf)
 
         stress2grid!(stokes, pτ, particles)
 
@@ -426,19 +425,21 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             )
         )
         thermal.ΔT .= thermal.T .- thermal.Told
-        vertex2center!(thermal.ΔTc, thermal.ΔT[2:(end - 1), :])
+        vertex2center!(thermal.ΔTc, thermal.ΔT[2:(end - 1), 2:(end - 1)])
 
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+        center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
         subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
         # Advection --------------------
-        copyinn_x!(T_buffer, thermal.T)
+        center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
         # advect particles in space
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
@@ -458,7 +459,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         # update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         compute_melt_fraction!(
-            ϕ_m, phase_ratios, rheology, (T = thermal.Tc, P = stokes.P)
+            ϕ_m, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
         )
 
         # update phase ratios
@@ -546,7 +547,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                 ax5 = Axis(fig[3, 1], aspect = ar, title = "EII_pl")
                 ax6 = Axis(fig[3, 3], aspect = ar, title = "Melt fraction ϕ")
                 # Plot temperature
-                h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :] .- 273), colormap = :batlow)
+                h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), 2:(end - 1)] .- 273), colormap = :batlow)
                 # Plot particles phase
 
                 h2 = heatmap!(ax2, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, uconvert.(u"cm/yr", Array(stokes.V.Vy)u"m/s"), colormap = :batlow)
@@ -587,7 +588,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                     ax2 = Axis(fig[1, 2]; aspect = 2 / 3, title = "Pressure")
                     scatter!(
                         ax1,
-                        Array(thermal.T[2:(end - 1), :][:] .- 273.15),
+                        Array(thermal.T[2:(end - 1), 2:(end - 1)][:] .- 273.15),
                         Yv ./ 1.0e3,
                     )
                     lines!(

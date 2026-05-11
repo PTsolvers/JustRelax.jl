@@ -149,7 +149,7 @@ function main(igg, nx, ny)
 
     # Buoyancy forces & rheology
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))

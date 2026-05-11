@@ -57,7 +57,7 @@ end
 
     dTdZ = (1273 - 273) / 1000.0e3
     offset = 273.0e0
-    T[i + 1, j] = (depth) * dTdZ + offset
+    T[i + 1, j + 1] = (depth) * dTdZ + offset
     return nothing
 end
 
@@ -65,12 +65,12 @@ end
 function rectangular_perturbation!(T, xc, yc, r, xvi)
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         if ((x[i] - xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            T[i + 1, j] += 20.0
+            T[i + 1, j + 1] += 20.0
         end
         return nothing
     end
-    nx, ny = size(T)
-    @parallel (1:(nx - 2), 1:ny) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
     return nothing
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
@@ -121,19 +121,18 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         no_flux = (left = true, right = true, top = false, bot = false),
     )
     # initialize thermal profile
-    nTx, nTy = size(thermal.T)
-    @parallel (1:(nTx - 2), 1:nTy) init_T!(thermal.T, xvi[2])
+    @parallel (@idx ni) init_T!(thermal.T, xci[2])
     # Elliptical temperature anomaly
     xc_anomaly = 0.0    # origin of thermal anomaly
     yc_anomaly = -600.0e3  # origin of thermal anomaly
     r_anomaly = 100.0e3    # radius of perturbation
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
+    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci)
     thermal_bcs!(thermal, thermal_bc)
     thermal.Told .= thermal.T
     temperature2center!(thermal)
     # ----------------------------------------------------
 
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
 
     # Buoyancy forces  & viscosity ----------------------
     ρg = @zeros(ni...), @zeros(ni...)
@@ -158,9 +157,8 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     T_buffer = @zeros(ni .+ 1)
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
+    center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
     grid2particle!(pT, T_buffer, particles)
     pT0.data .= pT.data
 
@@ -179,7 +177,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         @show it
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
         # ------------------------------
 
         # Stokes solver ----------------
@@ -221,15 +219,15 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
                 verbose = true,
             )
         )
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
+        center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+    center2vertex!(Told_buffer, @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
         subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt
+            pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -265,7 +263,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= 273.0
         @views T_buffer[:, 1] .= 1273.0
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_buffer)
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
         temperature2center!(thermal)
 
@@ -291,8 +289,8 @@ end
         igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
         Urms, Nu_top, iters = main2D(igg; nx = nx, ny = ny)
-        @test Urms[end] ≈ 0.55 rtol = 1.0e-1
-        @test Nu_top[end] ≈ 1.0312 rtol = 1.0e-2
+        @test Urms[end] ≈ 0.418 rtol = 1.0e-1
+        @test Nu_top[end] ≈ 0.9947 rtol = 1.0e-2
         @test iters.err_evo1[end] < 1.0e-4
     end
 end

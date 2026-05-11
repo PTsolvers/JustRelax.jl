@@ -64,7 +64,7 @@ end
     Tᵢ = Tp + dTdz * (zᵢ)
     time = 100.0e6 * yr
     Ths = Tmin + (Tm - Tmin) * erf((zᵢ) * 0.5 / (κ * time)^0.5)
-    T[i, j] = min(Tᵢ, Ths)
+    T[i + 1, j + 1] = min(Tᵢ, Ths)
     return
 end
 
@@ -72,13 +72,13 @@ function circular_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _circular_perturbation!(T, δT, xc, yc, r, x, y)
         if (((x[i] - xc))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i + 1, j] *= δT / 100 + 1
+            T[i + 1, j + 1] *= δT / 100 + 1
         end
         return nothing
     end
 
-    nx, ny = size(T)
-    return @parallel (1:(nx - 2), 1:ny) _circular_perturbation!(T, δT, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    return @parallel (@idx ni) _circular_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 function random_perturbation!(T, δT, xbox, ybox, xvi)
@@ -86,12 +86,12 @@ function random_perturbation!(T, δT, xbox, ybox, xvi)
     @parallel_indices (i, j) function _random_perturbation!(T, δT, xbox, ybox, x, y)
         @inbounds if (xbox[1] ≤ x[i] ≤ xbox[2]) && (abs(ybox[1]) ≤ abs(y[j]) ≤ abs(ybox[2]))
             δTi = δT * (rand() - 0.5) # random perturbation within ±δT [%]
-            T[i, j] *= δTi / 100 + 1
+            T[i + 1, j + 1] *= δTi / 100 + 1
         end
         return nothing
     end
 
-    return @parallel (@idx size(T)) _random_perturbation!(T, δT, xbox, ybox, xvi...)
+    return @parallel (@idx (size(T) .- 2)) _random_perturbation!(T, δT, xbox, ybox, xvi...)
 end
 
 # --------------------------------------------------------------------------------
@@ -162,21 +162,21 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
     Tp = 1900
     Tm = Tp + adiabat * 2890
     Tmin, Tmax = 300.0, 3.5e3
-    @parallel init_T!(thermal.T, xvi[2], κ, Tm, Tp, Tmin, Tmax)
+    @parallel (@idx ni) init_T!(thermal.T, xci[2], κ, Tm, Tp, Tmin, Tmax)
     thermal_bcs!(thermal, thermal_bc)
     # Temperature anomaly
     if thermal_perturbation == :random
         δT = 5.0               # thermal perturbation (in %)
-        random_perturbation!(thermal.T, δT, (lx * 1 / 8, lx * 7 / 8), (-2000.0e3, -2600.0e3), xvi)
+        random_perturbation!(thermal.T, δT, (lx * 1 / 8, lx * 7 / 8), (-2000.0e3, -2600.0e3), xci)
 
     elseif thermal_perturbation == :circular
         δT = 10.0              # thermal perturbation (in %)
         xc, yc = 0.5 * lx, -0.75 * ly  # center of the thermal anomaly
         r = 150.0e3             # radius of perturbation
-        circular_perturbation!(thermal.T, δT, xc, yc, r, xvi)
+        circular_perturbation!(thermal.T, δT, xc, yc, r, xci)
     end
-    @views thermal.T[:, 1] .= Tmax
-    @views thermal.T[:, end] .= Tmin
+    @views thermal.T[:, 2] .= Tmax
+    @views thermal.T[:, end - 1] .= Tmin
     update_halo!(thermal.T)
     temperature2center!(thermal)
     # ----------------------------------------------------
@@ -187,7 +187,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
     pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, CFL = 0.8 / √2.1)
 
     # Buoyancy forces
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
         compute_ρg!(ρg[2], rheology, args)
@@ -223,7 +223,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
     while it < 5
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
 
         # ------------------------------
         iters = solve!(
@@ -263,10 +263,10 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
         )
 
         # Weno advection
-        T_WENO .= @views thermal.T[2:(end - 1), :]
+        center2vertex!(T_WENO, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
         WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
-        @views thermal.T[2:(end - 1), :] .= T_WENO
+        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_WENO)
         # ------------------------------
 
         it += 1

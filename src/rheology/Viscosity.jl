@@ -504,58 +504,49 @@ end
 
 ## HELPER FUNCTIONS
 
-@inline function local_viscosity_args(args, I::Vararg{Integer, N}) where {N}
-    local_args0 = getindex_NamedTuple(args, I...)
-    local_args = merge(local_args0, (; dt = Inf, τII_old = 0.0))
-    return local_args
-end
-
-@inline function local_viscosity_args_vertex(args, i, j)
-    k = keys(args)
-    v = values(args)
-    sz = size.(v)
-    sz_min = reduce(min, Base.IteratorsMD.flatten(sz))
-
-    vᵢ = ntuple(Val(length(v))) do I
-        vᵢ = if v[I] isa AbstractArray
-
-            vᵢ = if all(sz[I] .> sz_min) # ghost node case
-                il = i     # left
-                ir = i + 1 # right
-                jb = j     # bottom
-                jt = j + 1 # top
-                # average values at cell centers surrounding vertex
-                v11 = getindex(v[I], il, jb)
-                v12 = getindex(v[I], ir, jb)
-                v21 = getindex(v[I], il, jt)
-                v22 = getindex(v[I], ir, jt)
-                @. 0.25 * (v11 + v12 + v21 + v22)
-
-            else
-                # clamp indices
-                nx, ny = size(v[I])
-                il = max(i - 1, 1)  # left
-                ir = min(i, nx)     # right
-                jb = max(j - 1, 1)  # bottom
-                jt = min(j, ny)     # top
-                # average values at cell centers surrounding vertex
-                v11 = getindex(v[I], il, jb)
-                v12 = getindex(v[I], ir, jb)
-                v21 = getindex(v[I], il, jt)
-                v22 = getindex(v[I], ir, jt)
-                @. 0.25 * (v11 + v12 + v21 + v22)
-            end
-        else
-            v[I]
-        end
-    end
+@inline local_viscosity_args(args, I::Vararg{Integer, N}) where {N} = local_viscosity_args(I...; args...)
     
-    # create local args
-    local_args = (; zip(keys(args), vᵢ)..., dt = Inf, τII_old = 0.0)
+@inline function local_viscosity_args(I::Vararg{Integer, N}; T=0e0, args0...) where {N}
+    args = (; args0...)
+    v = getindex.(values(args), I...)
+    T_ijk = if T isa AbstractArray 
+        T[I.+1...]
+    else
+        T
+    end
+    local_args = (; T=T_ijk, zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
     return local_args
 end
 
-@inline function local_viscosity_args_vertex(args, i, j, k)
+@inline local_viscosity_args_vertex(args, I::Vararg{Integer, N}) where {N} = local_viscosity_args_vertex(I...; args...)
+
+@inline function local_viscosity_args_vertex(i, j; T=0e0, args0...)
+    args = (; args0...) 
+    # clamp indices
+    nx, ny = size(args[1])
+    il = max(i - 1, 1)  # left
+    ir = min(i, nx)   # right
+    jb = max(j - 1, 1)  # bottom
+    jt = min(j, ny)   # top
+    # average values at cell centers surrounding vertex
+    v11 = getindex.(values(args), il, jb)
+    v12 = getindex.(values(args), ir, jb)
+    v21 = getindex.(values(args), il, jt)
+    v22 = getindex.(values(args), ir, jt)
+    v = @. 0.25 * (v11 + v12 + v21 + v22)
+    # average T from surrounding cell centers
+    T_vertex = if T isa AbstractArray 
+        0.25 * (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1])
+    else
+        T
+    end
+    # create local args
+    local_args = (; T=T_vertex, zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
+    return local_args
+end
+
+@inline function local_viscosity_args_vertex(i, j, k; T=0e0, args0...)
+    args = (; args0...)
     # clamp indices
     nx, ny, nz = size(args[1])
     il = max(i - 1, 1)  # left
@@ -575,6 +566,14 @@ end
     v222 = getindex.(values(args), ir, jt, kb)
     v = @. 0.125 * (v111 + v121 + v211 + v221 + v112 + v122 + v212 + v222)
     # create local args
+    T_vertex = if T isa AbstractArray 
+        0.125 * (
+            T[i, j, k] + T[i + 1, j, k] + T[i, j + 1, k] + T[i + 1, j + 1, k] +
+            T[i, j, k] + T[i + 1, j, k + 1] + T[i, j + 1, k + 1] + T[i + 1, j + 1, k + 1]
+        )
+    else
+        T
+    end
     local_args = (; zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
     return local_args
 end

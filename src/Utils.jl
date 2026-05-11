@@ -13,6 +13,24 @@ end
 @inline _idx(args::NTuple{N, Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
 @inline _idx(args::Vararg{Int, N}) where {N} = ntuple(i -> 1:args[i], Val(N))
 
+# broadcast getindex() to NamedTuples
+@inline function getindex_NamedTuple(args::NamedTuple, I::Vararg{Integer, N}) where {N}
+    k = keys(args)
+    v = values(args)
+    sz = size.(v)
+    sz_min = reduce(min, Base.IteratorsMD.flatten(sz))
+
+    vᵢⱼₖ = ntuple(Val(length(v))) do i
+        if v[i] isa AbstractArray
+            offsets = sz[i] .> sz_min
+            getindex(v[i],  I.+offsets...)
+        else
+            v[i]
+        end
+    end
+    return (; zip(k, vᵢⱼₖ)...)
+end
+
 """
     copy(B, A)
 

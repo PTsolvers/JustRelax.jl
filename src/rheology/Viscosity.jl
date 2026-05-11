@@ -505,26 +505,53 @@ end
 ## HELPER FUNCTIONS
 
 @inline function local_viscosity_args(args, I::Vararg{Integer, N}) where {N}
-    v = getindex.(values(args), I...)
-    local_args = (; zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
+    local_args0 = getindex_NamedTuple(args, I...)
+    local_args = merge(local_args0, (; dt = Inf, τII_old = 0.0))
     return local_args
 end
 
 @inline function local_viscosity_args_vertex(args, i, j)
-    # clamp indices
-    nx, ny = size(args[1])
-    il = max(i - 1, 1)  # left
-    ir = min(i, nx)   # right
-    jb = max(j - 1, 1)  # bottom
-    jt = min(j, ny)   # top
-    # average values at cell centers surrounding vertex
-    v11 = getindex.(values(args), il, jb)
-    v12 = getindex.(values(args), ir, jb)
-    v21 = getindex.(values(args), il, jt)
-    v22 = getindex.(values(args), ir, jt)
-    v = @. 0.25 * (v11 + v12 + v21 + v22)
+    k = keys(args)
+    v = values(args)
+    sz = size.(v)
+    sz_min = reduce(min, Base.IteratorsMD.flatten(sz))
+
+    vᵢ = ntuple(Val(length(v))) do I
+        vᵢ = if v[I] isa AbstractArray
+
+            vᵢ = if all(sz[I] .> sz_min) # ghost node case
+                il = i     # left
+                ir = i + 1 # right
+                jb = j     # bottom
+                jt = j + 1 # top
+                # average values at cell centers surrounding vertex
+                v11 = getindex(v[I], il, jb)
+                v12 = getindex(v[I], ir, jb)
+                v21 = getindex(v[I], il, jt)
+                v22 = getindex(v[I], ir, jt)
+                @. 0.25 * (v11 + v12 + v21 + v22)
+
+            else
+                # clamp indices
+                nx, ny = size(v[I])
+                il = max(i - 1, 1)  # left
+                ir = min(i, nx)     # right
+                jb = max(j - 1, 1)  # bottom
+                jt = min(j, ny)     # top
+                # average values at cell centers surrounding vertex
+                v11 = getindex(v[I], il, jb)
+                v12 = getindex(v[I], ir, jb)
+                v21 = getindex(v[I], il, jt)
+                v22 = getindex(v[I], ir, jt)
+                @. 0.25 * (v11 + v12 + v21 + v22)
+            end
+        else
+            v[I]
+        end
+    end
+    
     # create local args
-    local_args = (; zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
+    local_args = (; zip(keys(args), vᵢ)..., dt = Inf, τII_old = 0.0)
     return local_args
 end
 

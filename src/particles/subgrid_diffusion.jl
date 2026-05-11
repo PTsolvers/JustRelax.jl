@@ -11,7 +11,7 @@ function subgrid_characteristic_time!(
     )
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end
@@ -36,7 +36,7 @@ end
 @parallel_indices (I...) function subgrid_characteristic_time!(
         dt₀, phase_ratios, rheology, T, P, di
     )
-    Pᵢ, Tᵢ = P[I...], T[I...]
+    Pᵢ, Tᵢ = P[I...], T[I .+ 1...]
     argsᵢ = (; P = Pᵢ, T = Tᵢ)
     phaseᵢ = @cell phase_ratios[I...]
 

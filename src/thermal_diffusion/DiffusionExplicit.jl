@@ -217,7 +217,7 @@ module ThermalDiffusion2D
             Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
             argsx = (; T = Tx, P = Pvertex)
             qTx[i, j] =
-                -compute_diffusivity(rheology, phases[i, j], ntuple_idx(argsx, i, j)) *
+                -compute_diffusivity(rheology, phases[i, j], getindex_NamedTuple(argsx, i, j)) *
                 (T[i1, j1] - T[i, j1]) *
                 _dx
         end
@@ -228,7 +228,7 @@ module ThermalDiffusion2D
             Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
             argsy = (; T = Ty, P = Pvertex)
             qTy[i, j] =
-                -compute_diffusivity(rheology, phases[i, j], ntuple_idx(argsy, i, j)) *
+                -compute_diffusivity(rheology, phases[i, j], getindex_NamedTuple(argsy, i, j)) *
                 (T[i1, j1] - T[i1, j]) *
                 _dy
         end
@@ -617,7 +617,7 @@ module ThermalDiffusion3D
                 argsx = (; T = Tx, P = Pvertex * 0.25)
                 qTx[i, j, k] =
                     -compute_diffusivity(
-                    rheology, phases[i, j, k], ntuple_idx(argsx, i, j, k)
+                    rheology, phases[i, j, k], getindex_NamedTuple(argsx, i, j, k)
                 ) *
                     (T[i1, j1, k1] - T[i, j1, k1]) *
                     _dx
@@ -633,7 +633,7 @@ module ThermalDiffusion3D
                 argsy = (; T = Ty, P = Pvertex * 0.25)
                 qTy[i, j, k] =
                     -compute_diffusivity(
-                    rheology, phases[i, j, k], ntuple_idx(argsy, i, j, k)
+                    rheology, phases[i, j, k], getindex_NamedTuple(argsy, i, j, k)
                 ) *
                     (T[i1, j1, k1] - T[i1, j, k1]) *
                     _dy
@@ -649,7 +649,7 @@ module ThermalDiffusion3D
                 argsz = (; T = Tz, P = Pvertex * 0.25)
                 qTz[i, j, k] =
                     -compute_diffusivity(
-                    rheology, phases[i, j, k], ntuple_idx(argsz, i, j, k)
+                    rheology, phases[i, j, k], getindex_NamedTuple(argsz, i, j, k)
                 ) *
                     (T[i1, j1, k1] - T[i1, j1, k]) *
                     _dz

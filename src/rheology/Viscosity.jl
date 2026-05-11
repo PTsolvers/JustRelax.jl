@@ -408,10 +408,6 @@ end
 
         # compute and update stress viscosity
         ηi = compute_phase_viscosity(rheology, ratio_ij, AII, fn_viscosity, args_ij)
-        if I == (5,128-42)
-            # @show I,ηi,AII
-            # @show ratio_ij, AII, fn_viscosity, args_ij
-        end
         ηi = continuation_linear(ηi, η[I...], ν)
         η[I...] = clamp(ηi, cutoff...)
     end
@@ -569,7 +565,7 @@ end
         # Early exit: if single phase dominates (ratio ≈ 1), skip harmonic mean
         Base.@nexprs $N i -> begin
             if ratio[i] > 0.999  # faster than ≈ comparison
-                return 1 * fn_viscosity(rheology[i].CompositeRheology[1], AII, args)
+                return fn_viscosity(rheology[i].CompositeRheology[1], AII, args)
             end
         end
 

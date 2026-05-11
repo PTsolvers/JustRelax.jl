@@ -88,7 +88,7 @@ end
 
 @parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
 
-    args_ij = ntuple_idx(args, I...)
+    args_ij = getindex_NamedTuple(args, I...)
     H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij)
 
     return nothing

@@ -87,7 +87,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
-    # TEMPERATURE PROFILE --------------------------------
+    # TEMPERATURE PROFILE --------------------------------z
     thermal = ThermalArrays(backend_JR, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
@@ -101,11 +101,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
@@ -124,11 +124,10 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    T_buffer = @zeros(ni .+ 1)
-    Told_buffer = similar(T_buffer)
-    center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
-    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
-    grid2particle!(pT, T_buffer, particles)
+    Tvertex     = @zeros(ni .+ 1...)
+    T_buffer    = thermal.T[2:(end - 1), 2:(end - 1)]
+    Told_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
 
     # IO -----------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -141,12 +140,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # Plot initial T and η profiles
     let
-        Yv = [y for x in xvi[1], y in xvi[2]][:]
         Y = [y for x in xci[1], y in xci[2]][:]
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), Yv ./ 1.0e3)
+        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), Y ./ 1.0e3)
         scatter!(ax2, Array(log10.(stokes.viscosity.η[:])), Y ./ 1.0e3)
         ylims!(ax1, minimum(xvi[2]) ./ 1.0e3, 0)
         ylims!(ax2, minimum(xvi[2]) ./ 1.0e3, 0)
@@ -163,7 +161,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # Time loop
     t, it = 0.0, 0
-    while it < 1
+    while it < 10
 
         # Stokes solver ----------------
         solve!(
@@ -186,12 +184,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
-
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, particles)
-        @views T_buffer[:, end] .= 273.0 + 400
-        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_buffer)
-        temperature2center!(thermal)
 
         compute_shear_heating!(
             thermal,
@@ -221,16 +213,18 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # ------------------------------
 
         # Advection --------------------
+        # interpolate fields from grid vertices to particles
+        centroid2particle!(pT, T_buffer, particles)
         # advect particles in space
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # interpolate fields from grid vertices to particles
-        center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
-    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
-        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
+        # interpolate fields from particle to grid vertices
+        particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        center2vertex!(Tvertex, thermal.T)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (Tvertex,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
@@ -244,11 +238,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
+                    T   = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
-                    Vx = Array(Vx_v),
-                    Vy = Array(Vy_v),
+                    Vx  = Array(Vx_v),
+                    Vy  = Array(Vy_v),
                 )
                 data_c = (;
                     P = Array(stokes.P),
@@ -256,7 +250,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                     τyy = Array(stokes.τ.yy),
                     εxx = Array(stokes.ε.xx),
                     εyy = Array(stokes.ε.yy),
-                    η = Array(stokes.viscosity.η_vep),
+                    η   = Array(stokes.viscosity.η_vep),
                 )
                 velocity_v = (
                     Array(Vx_v),

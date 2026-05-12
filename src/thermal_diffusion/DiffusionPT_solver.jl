@@ -56,11 +56,23 @@ function _heatdiffusion_PT!(
         wtime0 += @elapsed begin
             if length(ni) == 2
                 @parallel flux_range(ni...) compute_flux!(
-                    @qT(thermal)..., @qT2(thermal)..., thermal.T, K, pt_thermal.θr_dτ, _di.center
+                    @qT(thermal)...,
+                    @qT2(thermal)...,
+                    thermal.T,
+                    K,
+                    pt_thermal.θr_dτ,
+                    _di.center,
+                    thermal_bc.constant_flux,
                 )
             else
                 @parallel flux_range(ni...) compute_flux!(
-                    @qT(thermal)..., @qT2(thermal)..., thermal.T, K, pt_thermal.θr_dτ, _di.center
+                    @qT(thermal)...,
+                    @qT2(thermal)...,
+                    thermal.T,
+                    K,
+                    pt_thermal.θr_dτ,
+                    _di.center,
+                    thermal_bc.constant_flux,
                 )
             end
             update_T(
@@ -198,6 +210,7 @@ function _heatdiffusion_PT!(
                     pt_thermal.θr_dτ,
                     _di.center,
                     args,
+                    thermal_bc.constant_flux,
                 )
             else
                 @parallel flux_range(ni...) compute_flux!(
@@ -209,6 +222,7 @@ function _heatdiffusion_PT!(
                     pt_thermal.θr_dτ,
                     _di.center,
                     args,
+                    thermal_bc.constant_flux,
                 )
             end
             update_T(

@@ -16,6 +16,25 @@ else
 end
 
 @testset "Boundary Conditions 3D" begin
+    @testset "TemperatureBoundaryConditions" begin
+        T = reshape(collect(Float64, 1:(6 * 7 * 8)), 6, 7, 8)
+        T0 = copy(T)
+        thermal_bcs!(
+            T,
+            TemperatureBoundaryConditions(;
+                no_flux = (left = false, right = false, front = false, back = false, top = false, bot = false),
+                constant_value = (left = true, right = true, front = true, back = true, top = true, bot = true),
+            ),
+        )
+
+        @test @views T[2:(end - 1), 2:(end - 1), 1] == 2 .- T0[2:(end - 1), 2:(end - 1), 2]
+        @test @views T[2:(end - 1), 2:(end - 1), end] == 2 .- T0[2:(end - 1), 2:(end - 1), end - 1]
+        @test @views T[1, 2:(end - 1), 2:(end - 1)] == 2 .- T0[2, 2:(end - 1), 2:(end - 1)]
+        @test @views T[end, 2:(end - 1), 2:(end - 1)] == 2 .- T0[end - 1, 2:(end - 1), 2:(end - 1)]
+        @test @views T[2:(end - 1), 1, 2:(end - 1)] == 2 .- T0[2:(end - 1), 2, 2:(end - 1)]
+        @test @views T[2:(end - 1), end, 2:(end - 1)] == 2 .- T0[2:(end - 1), end - 1, 2:(end - 1)]
+    end
+
     @testset "VelocityBoundaryConditions" begin
         if backend === CPUBackend
             # test incompatible boundary conditions

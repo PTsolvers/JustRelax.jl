@@ -4,7 +4,7 @@ isNotDirichlet(::Nothing, ::Vararg{Int, N}) where {N} = true
 ## 3D KERNELS
 
 @parallel_indices (I...) function compute_flux!(
-        qTx::AbstractArray{_T, 3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _di
+        qTx::AbstractArray{_T, 3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _di, bc_flux
     ) where {_T}
     d_xi(A, _dx) = _d_xi(A, _dx, I...)
     d_yi(A, _dy) = _d_yi(A, _dy, I...)
@@ -14,21 +14,39 @@ isNotDirichlet(::Nothing, ::Vararg{Int, N}) where {N} = true
     av_yz(A) = _av_yz(A, I...)
 
     if all(I .≤ size(qTx))
-        _dx = @dx(_di, I[1])
-        qx = qTx2[I...] = -av_yz(K) * d_xi(T, _dx)
-        qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
+        if I[1] == 1 && !isa(bc_flux.left, Bool)
+            qTx[I...] = bc_flux.left
+        elseif I[1] == size(qTx, 1) && !isa(bc_flux.right, Bool)
+            qTx[I...] = bc_flux.right
+        else
+            _dx = @dx(_di, I[1])
+            qx = qTx2[I...] = -av_yz(K) * d_xi(T, _dx)
+            qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
+        end
     end
 
     if all(I .≤ size(qTy))
-        _dy = @dy(_di, I[2])
-        qy = qTy2[I...] = -av_xz(K) * d_yi(T, _dy)
-        qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
+        if I[2] == 1 && !isa(bc_flux.front, Bool)
+            qTy[I...] = bc_flux.front
+        elseif I[2] == size(qTy, 2) && !isa(bc_flux.back, Bool)
+            qTy[I...] = bc_flux.back
+        else
+            _dy = @dy(_di, I[2])
+            qy = qTy2[I...] = -av_xz(K) * d_yi(T, _dy)
+            qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
+        end
     end
 
     if all(I .≤ size(qTz))
-        _dz = @dz(_di, I[3])
-        qz = qTz2[I...] = -av_xy(K) * d_zi(T, _dz)
-        qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
+        if I[3] == 1 && !isa(bc_flux.bot, Bool)
+            qTz[I...] = bc_flux.bot
+        elseif I[3] == size(qTz, 3) && !isa(bc_flux.top, Bool)
+            qTz[I...] = bc_flux.top
+        else
+            _dz = @dz(_di, I[3])
+            qz = qTz2[I...] = -av_xy(K) * d_zi(T, _dz)
+            qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
+        end
     end
 
     return nothing
@@ -47,6 +65,7 @@ end
         θr_dτ,
         _di,
         args,
+        bc_flux,
     ) where {_T}
     I = i, j, k
 
@@ -60,51 +79,69 @@ end
     get_K(idx, args) = compute_phase(compute_conductivity, rheology, idx, args)
 
     @inbounds if all(I .≤ size(qTx))
-        T_ijk = (T[(I .+ 1)...] + T[i, j + 1, k + 1]) * 0.5
-        args_ijk = (; T = T_ijk, P = av_yz(args.P))
-        K =
-            (
-            get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
-                get_K(getindex_phase(phase, i, j, k + 1), args_ijk) +
-                get_K(getindex_phase(phase, i, j + 1, k + 1), args_ijk) +
-                get_K(getindex_phase(phase, i, j, k), args_ijk)
-        ) * 0.25
+        if i == 1 && !isa(bc_flux.left, Bool)
+            qTx[I...] = bc_flux.left
+        elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
+            qTx[I...] = bc_flux.right
+        else
+            T_ijk = (T[(I .+ 1)...] + T[i, j + 1, k + 1]) * 0.5
+            args_ijk = (; T = T_ijk, P = av_yz(args.P))
+            K =
+                (
+                get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
+                    get_K(getindex_phase(phase, i, j, k + 1), args_ijk) +
+                    get_K(getindex_phase(phase, i, j + 1, k + 1), args_ijk) +
+                    get_K(getindex_phase(phase, i, j, k), args_ijk)
+            ) * 0.25
 
-        _dx = @dx(_di, i)
-        qx = qTx2[I...] = -K * d_xi(T, _dx)
-        qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
+            _dx = @dx(_di, i)
+            qx = qTx2[I...] = -K * d_xi(T, _dx)
+            qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
+        end
     end
 
     @inbounds if all(I .≤ size(qTy))
-        T_ijk = (T[(I .+ 1)...] + T[i + 1, j, k + 1]) * 0.5
-        args_ijk = (; T = T_ijk, P = av_xz(args.P))
-        K =
-            (
-            get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
-                get_K(getindex_phase(phase, i, j, k + 1), args_ijk) +
-                get_K(getindex_phase(phase, i + 1, j, k + 1), args_ijk) +
-                get_K(getindex_phase(phase, i, j, k), args_ijk)
-        ) * 0.25
+        if j == 1 && !isa(bc_flux.front, Bool)
+            qTy[I...] = bc_flux.front
+        elseif j == size(qTy, 2) && !isa(bc_flux.back, Bool)
+            qTy[I...] = bc_flux.back
+        else
+            T_ijk = (T[(I .+ 1)...] + T[i + 1, j, k + 1]) * 0.5
+            args_ijk = (; T = T_ijk, P = av_xz(args.P))
+            K =
+                (
+                get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
+                    get_K(getindex_phase(phase, i, j, k + 1), args_ijk) +
+                    get_K(getindex_phase(phase, i + 1, j, k + 1), args_ijk) +
+                    get_K(getindex_phase(phase, i, j, k), args_ijk)
+            ) * 0.25
 
-        _dy = @dy(_di, j)
-        qy = qTy2[I...] = -K * d_yi(T, _dy)
-        qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
+            _dy = @dy(_di, j)
+            qy = qTy2[I...] = -K * d_yi(T, _dy)
+            qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
+        end
     end
 
     @inbounds if all(I .≤ size(qTz))
-        T_ijk = (T[(I .+ 1)...] + T[i + 1, j + 1, k]) * 0.5
-        args_ijk = (; T = T_ijk, P = av_xy(args.P))
-        K =
-            (
-            get_K(getindex_phase(phase, i + 1, j + 1, k), args_ijk) +
-                get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
-                get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
-                get_K(getindex_phase(phase, i, j, k), args_ijk)
-        ) * 0.25
+        if k == 1 && !isa(bc_flux.bot, Bool)
+            qTz[I...] = bc_flux.bot
+        elseif k == size(qTz, 3) && !isa(bc_flux.top, Bool)
+            qTz[I...] = bc_flux.top
+        else
+            T_ijk = (T[(I .+ 1)...] + T[i + 1, j + 1, k]) * 0.5
+            args_ijk = (; T = T_ijk, P = av_xy(args.P))
+            K =
+                (
+                get_K(getindex_phase(phase, i + 1, j + 1, k), args_ijk) +
+                    get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
+                    get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
+                    get_K(getindex_phase(phase, i, j, k), args_ijk)
+            ) * 0.25
 
-        _dz = @dz(_di, k)
-        qz = qTz2[I...] = -K * d_zi(T, _dz)
-        qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
+            _dz = @dz(_di, k)
+            qz = qTz2[I...] = -K * d_zi(T, _dz)
+            qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
+        end
     end
 
     return nothing
@@ -281,80 +318,114 @@ end
 ## 2D KERNELS
 
 @parallel_indices (i, j) function compute_flux!(
-        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _di_center
+        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _di_center, bc_flux
     ) where {_T}
     nx, ny = size(θr_dτ)
 
     @inbounds if all((i, j) .≤ size(qTx))
-        _dx = @dx(_di_center, clamp(i, 1, nx))
-        iL = clamp(i - 1, 1, nx)
-        iR = clamp(i, 1, nx)
-        Kx = (K[iL, j] + K[iR, j]) * 0.5
-        θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
-        qx = qTx2[i, j] = -Kx * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
-        qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
+        if i == 1 && !isa(bc_flux.left, Bool)
+            qTx[i, j] = bc_flux.left
+        elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
+            qTx[i, j] = bc_flux.right
+        else
+            _dx = @dx(_di_center, clamp(i, 1, nx))
+            iL = clamp(i - 1, 1, nx)
+            iR = clamp(i, 1, nx)
+            Kx = (K[iL, j] + K[iR, j]) * 0.5
+            θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
+            qx = qTx2[i, j] = -Kx * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
+            qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
+        end
     end
 
     @inbounds if all((i, j) .≤ size(qTy))
-        _dy = @dy(_di_center, clamp(j, 1, ny))
-        jB = clamp(j - 1, 1, ny)
-        jT = clamp(j, 1, ny)
-        Ky = (K[i, jB] + K[i, jT]) * 0.5
-        θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
-        qy = qTy2[i, j] = -Ky * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
-        qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
+        if j == 1 && !isa(bc_flux.bot, Bool)
+            qTy[i, j] = bc_flux.bot
+        elseif j == size(qTy, 2) && !isa(bc_flux.top, Bool)
+            qTy[i, j] = bc_flux.top
+        else
+            _dy = @dy(_di_center, clamp(j, 1, ny))
+            jB = clamp(j - 1, 1, ny)
+            jT = clamp(j, 1, ny)
+            Ky = (K[i, jB] + K[i, jT]) * 0.5
+            θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
+            qy = qTy2[i, j] = -Ky * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
+            qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
+        end
     end
     return nothing
 end
 
 @parallel_indices (i, j) function compute_flux!(
-        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, rheology, phase, θr_dτ, _di_center, args
+        qTx::AbstractArray{_T, 2},
+        qTy,
+        qTx2,
+        qTy2,
+        T,
+        rheology,
+        phase,
+        θr_dτ,
+        _di_center,
+        args,
+        bc_flux,
     ) where {_T}
 
     nx, ny = size(θr_dτ)
 
     if all((i, j) .≤ size(qTx))
-        iL = clamp(i - 1, 1, nx)
-        iR = clamp(i, 1, nx)
-        T_ij = (T[i, j + 1] + T[i + 1, j + 1]) * 0.5
+        if i == 1 && !isa(bc_flux.left, Bool)
+            qTx[i, j] = bc_flux.left
+        elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
+            qTx[i, j] = bc_flux.right
+        else
+            iL = clamp(i - 1, 1, nx)
+            iR = clamp(i, 1, nx)
+            T_ij = (T[i, j + 1] + T[i + 1, j + 1]) * 0.5
 
-        ii, jj = iL, j
-        phase_ij = getindex_phase(phase, ii, jj)
-        args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
-        K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+            ii, jj = iL, j
+            phase_ij = getindex_phase(phase, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
-        ii, jj = iR, j
-        phase_ij = getindex_phase(phase, ii, jj)
-        args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
-        K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
-        K = (K1 + K2) * 0.5
-        θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
+            ii, jj = iR, j
+            phase_ij = getindex_phase(phase, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+            K = (K1 + K2) * 0.5
+            θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
 
-        _dx = @dx(_di_center, clamp(i, 1, nx))
-        qx = qTx2[i, j] = -K * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
-        qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
+            _dx = @dx(_di_center, clamp(i, 1, nx))
+            qx = qTx2[i, j] = -K * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
+            qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
+        end
     end
 
     if all((i, j) .≤ size(qTy))
-        jB = clamp(j - 1, 1, ny)
-        jT = clamp(j, 1, ny)
-        T_ij = (T[i + 1, j] + T[i + 1, j + 1]) * 0.5
+        if j == 1 && !isa(bc_flux.bot, Bool)
+            qTy[i, j] = bc_flux.bot
+        elseif j == size(qTy, 2) && !isa(bc_flux.top, Bool)
+            qTy[i, j] = bc_flux.top
+        else
+            jB = clamp(j - 1, 1, ny)
+            jT = clamp(j, 1, ny)
+            T_ij = (T[i + 1, j] + T[i + 1, j + 1]) * 0.5
 
-        ii, jj = i, jB
-        phase_ij = getindex_phase(phase, ii, jj)
-        args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
-        K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+            ii, jj = i, jB
+            phase_ij = getindex_phase(phase, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
-        ii, jj = i, jT
-        phase_ij = getindex_phase(phase, ii, jj)
-        args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
-        K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
-        K = (K1 + K2) * 0.5
-        θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
+            ii, jj = i, jT
+            phase_ij = getindex_phase(phase, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+            K = (K1 + K2) * 0.5
+            θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
 
-        _dy = @dy(_di_center, clamp(j, 1, ny))
-        qy = qTy2[i, j] = -K * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
-        qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
+            _dy = @dy(_di_center, clamp(j, 1, ny))
+            qy = qTy2[i, j] = -K * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
+            qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
+        end
     end
 
     return nothing
@@ -371,53 +442,66 @@ end
         θr_dτ,
         _di_center,
         args,
+        bc_flux,
     ) where {_T, N, C1, C2, C3, C4}
     nx, ny = size(θr_dτ)
 
     compute_K(phase, args) = fn_ratio(compute_conductivity, rheology, phase, args)
 
     @inbounds if all((i, j) .≤ size(qTx))
-        iL = clamp(i - 1, 1, nx)
-        iR = clamp(i, 1, nx)
-        T_ij = (T[i, j + 1] + T[i + 1, j + 1]) * 0.5
+        if i == 1 && !isa(bc_flux.left, Bool)
+            qTx[i, j] = bc_flux.left
+        elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
+            qTx[i, j] = bc_flux.right
+        else
+            iL = clamp(i - 1, 1, nx)
+            iR = clamp(i, 1, nx)
+            T_ij = (T[i, j + 1] + T[i + 1, j + 1]) * 0.5
 
-        ii, jj = iL, j
-        phase_ij = getindex_phase(phase_ratios, ii, jj)
-        args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
-        K1 = compute_K(phase_ij, args_ij)
+            ii, jj = iL, j
+            phase_ij = getindex_phase(phase_ratios, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_K(phase_ij, args_ij)
 
-        ii, jj = iR, j
-        phase_ij = getindex_phase(phase_ratios, ii, jj)
-        args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
-        K2 = compute_K(phase_ij, args_ij)
-        K = (K1 + K2) * 0.5
-        θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
+            ii, jj = iR, j
+            phase_ij = getindex_phase(phase_ratios, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_K(phase_ij, args_ij)
+            K = (K1 + K2) * 0.5
+            θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
 
-        _dx = @dx(_di_center, clamp(i, 1, nx))
-        qx = qTx2[i, j] = -K * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
-        qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
+            _dx = @dx(_di_center, clamp(i, 1, nx))
+            qx = qTx2[i, j] = -K * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
+            qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
+        end
     end
 
     @inbounds if all((i, j) .≤ size(qTy))
-        jB = clamp(j - 1, 1, ny)
-        jT = clamp(j, 1, ny)
-        T_ij = (T[i + 1, j] + T[i + 1, j + 1]) * 0.5
+        if j == 1 && !isa(bc_flux.bot, Bool)
+            qTy[i, j] = bc_flux.bot
+        elseif j == size(qTy, 2) && !isa(bc_flux.top, Bool)
+            qTy[i, j] = bc_flux.top
+        else
+            jB = clamp(j - 1, 1, ny)
+            jT = clamp(j, 1, ny)
+            T_ij = (T[i + 1, j] + T[i + 1, j + 1]) * 0.5
 
-        ii, jj = i, jB
-        phase_ij = getindex_phase(phase_ratios, ii, jj)
-        args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
-        K1 = compute_K(phase_ij, args_ij)
+            ii, jj = i, jB
+            phase_ij = getindex_phase(phase_ratios, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_K(phase_ij, args_ij)
 
-        ii, jj = i, jT
-        phase_ij = getindex_phase(phase_ratios, ii, jj)
-        args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
-        K2 = compute_K(phase_ij, args_ij)
-        K = (K1 + K2) * 0.5
-        θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
+            ii, jj = i, jT
+            phase_ij = getindex_phase(phase_ratios, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_K(phase_ij, args_ij)
+            K = (K1 + K2) * 0.5
+            θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
 
-        _dy = @dy(_di_center, clamp(j, 1, ny))
-        qy = qTy2[i, j] = -K * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
-        qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
+            _dy = @dy(_di_center, clamp(j, 1, ny))
+            qy = qTy2[i, j] = -K * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
+            qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
+        end
     end
 
     return nothing
@@ -669,18 +753,20 @@ end
     )
     _dx, _dy = @dxi(_di_center, i, j)
     nx, ny = size(P)
-    @inbounds begin
-        α = compute_α(rheology, getindex_phase(phases, i, j))
-        iW = max(i - 1, 1)
-        iE = min(i + 1, nx)
-        jS = max(j - 1, 1)
-        jN = min(j + 1, ny)
-        dPdx = (P[iE, j] - P[iW, j]) * _dx / (iE - iW + (iE == iW))
-        dPdy = (P[i, jN] - P[i, jS]) * _dy / (jN - jS + (jN == jS))
-        Vx_av = (Vx[i, j + 1] + Vx[i + 1, j + 1]) * 0.5
-        Vy_av = (Vy[i + 1, j] + Vy[i + 1, j + 1]) * 0.5
-        A[i, j] = (Vx_av * dPdx + Vy_av * dPdy) * α
-    end
+    α = compute_α(rheology, getindex_phase(phases, i, j))
+    iW = max(i - 1, 1)
+    iE = min(i + 1, nx)
+    jS = max(j - 1, 1)
+    jN = min(j + 1, ny)
+
+    _dx_left = @dxi(_di_center, iW, j)
+    dPdx = ((P[iE, j] - P[i, j]) * _dx_left - (P[i, j] - P[iW, j]) * _dx) / (_dx_left * _dx) 
+    _dy_bottom = @dxi(_di_center, i, jS)
+    dPdy = ((P[i, jN] - P[i, j]) * _dy_bottom - (P[i, j] - P[i, jS]) * _dy) / (_dy_bottom * _dy) 
+    Vx_av = (Vx[i, j + 1] + Vx[i + 1, j + 1]) * 0.5
+    Vy_av = (Vy[i + 1, j] + Vy[i + 1, j + 1]) * 0.5
+    A[i, j] = (Vx_av * dPdx + Vy_av * dPdy) * α
+
     return nothing
 end
 

@@ -169,13 +169,13 @@ end
 end
 
 function compute_viscosity_εII!(η::AbstractArray, ν, εII::AbstractArray, args, rheology, cutoff)
-    ni = size(stokes.viscosity.η)
+    ni = size(η)
     @parallel (@idx ni) compute_viscosity_kernel!(η, ν, εII, args, rheology, cutoff, compute_viscosity_εII)
     return nothing
 end
 
 function compute_viscosity_τII!(η::AbstractArray, ν, εII::AbstractArray, args, rheology, cutoff)
-    ni = size(stokes.viscosity.η)
+    ni = size(η)
     @parallel (@idx ni) compute_viscosity_kernel!(η, ν, εII, args, rheology, cutoff, compute_viscosity_τII)
     return nothing
 end
@@ -345,7 +345,7 @@ function _compute_viscosity!(
         local_viscosity_args,
     )
     # skip for 3D for now, may change in the future
-    length(size(phase_ratios.center)) == 3 && return
+    length(ni) == 3 && return
 
     @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
         stokes.viscosity.ηv,
@@ -503,18 +503,20 @@ end
 end
 
 ## HELPER FUNCTIONS
+getindex_or_scalar(A::AbstractArray, I::Vararg{Integer, N}) where {N} = A[I...]
+getindex_or_scalar(A::Number, I::Vararg{Integer, N}) where {N} = A
 
 @inline local_viscosity_args(args, I::Vararg{Integer, N}) where {N} = local_viscosity_args(I...; args...)
     
 @inline function local_viscosity_args(I::Vararg{Integer, N}; T=0e0, args0...) where {N}
     args = (; args0...)
-    v = getindex.(values(args), I...)
-    T_ijk = if T isa AbstractArray 
-        T[I.+1...]
-    else
-        T
-    end
-    local_args = (; T=T_ijk, zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
+    v = getindex_or_scalar.(values(args), I...)
+    T_ijk = getindex_or_scalar(T, I .+ 1...)
+    # local_args = (; T=T_ijk, zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
+    local_args = merge(
+            (; zip(keys(args), v)...),
+            (; T=T_ijk, dt = Inf, τII_old = 0.0)
+    )
     return local_args
 end
 
@@ -529,19 +531,18 @@ end
     jb = max(j - 1, 1)  # bottom
     jt = min(j, ny)   # top
     # average values at cell centers surrounding vertex
-    v11 = getindex.(values(args), il, jb)
-    v12 = getindex.(values(args), ir, jb)
-    v21 = getindex.(values(args), il, jt)
-    v22 = getindex.(values(args), ir, jt)
+    v11 = getindex_or_scalar.(values(args), il, jb)
+    v12 = getindex_or_scalar.(values(args), ir, jb)
+    v21 = getindex_or_scalar.(values(args), il, jt)
+    v22 = getindex_or_scalar.(values(args), ir, jt)
     v = @. 0.25 * (v11 + v12 + v21 + v22)
     # average T from surrounding cell centers
-    T_vertex = if T isa AbstractArray 
-        0.25 * (T[i, j] + T[i + 1, j] + T[i, j + 1] + T[i + 1, j + 1])
-    else
-        T
-    end
+    T_vertex = average_or_scalar(T, i, j)
     # create local args
-    local_args = (; T=T_vertex, zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
+    local_args = merge(
+            (; zip(keys(args), v)...),
+            (; T=T_vertex, dt = Inf, τII_old = 0.0)
+    )
     return local_args
 end
 
@@ -556,27 +557,37 @@ end
     kf = max(k - 1, 1)  # front
     kb = min(k, nz)   # back
     # average values at cell centers surrounding vertex
-    v111 = getindex.(values(args), il, jb, kf)
-    v121 = getindex.(values(args), ir, jb, kf)
-    v211 = getindex.(values(args), il, jt, kf)
-    v221 = getindex.(values(args), ir, jt, kf)
-    v112 = getindex.(values(args), il, jb, kb)
-    v122 = getindex.(values(args), ir, jb, kb)
-    v212 = getindex.(values(args), il, jt, kb)
-    v222 = getindex.(values(args), ir, jt, kb)
+    v111 = getindex_or_scalar.(values(args), il, jb, kf)
+    v121 = getindex_or_scalar.(values(args), ir, jb, kf)
+    v211 = getindex_or_scalar.(values(args), il, jt, kf)
+    v221 = getindex_or_scalar.(values(args), ir, jt, kf)
+    v112 = getindex_or_scalar.(values(args), il, jb, kb)
+    v122 = getindex_or_scalar.(values(args), ir, jb, kb)
+    v212 = getindex_or_scalar.(values(args), il, jt, kb)
+    v222 = getindex_or_scalar.(values(args), ir, jt, kb)
     v = @. 0.125 * (v111 + v121 + v211 + v221 + v112 + v122 + v212 + v222)
     # create local args
-    T_vertex = if T isa AbstractArray 
-        0.125 * (
-            T[i, j, k] + T[i + 1, j, k] + T[i, j + 1, k] + T[i + 1, j + 1, k] +
-            T[i, j, k] + T[i + 1, j, k + 1] + T[i, j + 1, k + 1] + T[i + 1, j + 1, k + 1]
-        )
-    else
-        T
-    end
-    local_args = (; zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
+    T_vertex = average_or_scalar(T, i, j, k)
+    local_args = merge(
+            (; zip(keys(args), v)...),
+            (; T=T_vertex, dt = Inf, τII_old = 0.0)
+    )
     return local_args
 end
+
+@inline function average_or_scalar(A::AbstractArray, i, j)
+    0.25 * (A[i, j] + A[i + 1, j] + A[i, j + 1] + A[i + 1, j + 1])
+end
+
+@inline function average_or_scalar(A::AbstractArray, i, j, k)
+    0.125 * (
+        A[i, j, k] + A[i + 1, j, k] + A[i, j + 1, k] + A[i + 1, j + 1, k] +
+        A[i, j, k] + A[i + 1, j, k + 1] + A[i, j + 1, k + 1] + A[i + 1, j + 1, k + 1]
+    )
+end
+
+@inline average_or_scalar(A::Number, I::Vararg{Integer, N}) where {N} = A
+
 
 @inline function local_args(args, I::Vararg{Integer, N}) where {N}
     v = getindex.(values(args), I...)

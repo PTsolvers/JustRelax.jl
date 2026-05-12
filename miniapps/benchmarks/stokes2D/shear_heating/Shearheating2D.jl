@@ -89,14 +89,17 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # TEMPERATURE PROFILE --------------------------------z
     thermal = ThermalArrays(backend_JR, ni)
+
+    Tbot = Ttop = 273.0 + 400
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
 
     # Initialize constant temperature
     thermal.T .= 273.0 + 400
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
+    # temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
@@ -232,7 +235,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 10) == 0
+        if it == 1 || rem(it, 1) == 0
             checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
             if do_vtk

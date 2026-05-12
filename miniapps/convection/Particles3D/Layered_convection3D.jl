@@ -183,7 +183,8 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
         fig
     end
 
-    grid2particle!(pT, thermal.T, particles)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
     dt₀ = similar(stokes.P)
 
     local Vx_v, Vy_v, Vz_v
@@ -198,7 +199,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, particles)
+        particle2centroid!(T_buffer, pT, particles)
         temperature2center!(thermal)
         # ------------------------------
 

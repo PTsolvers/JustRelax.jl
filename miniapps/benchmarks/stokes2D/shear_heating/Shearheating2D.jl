@@ -216,13 +216,13 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # ------------------------------
 
         # Advection --------------------
-        # interpolate fields from grid vertices to particles
+        # interpolate fields from centroids to particles
         centroid2particle!(pT, T_buffer, particles)
         # advect particles in space
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # interpolate fields from particle to grid vertices
+        # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         center2vertex!(Tvertex, thermal.T)

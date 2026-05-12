@@ -144,7 +144,8 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    grid2particle!(pT, thermal.T, particles)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
     dt₀ = similar(stokes.P)
 
     # Time loop
@@ -152,8 +153,8 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     local iters, thermal
     while it < 1
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, particles)
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles)
         temperature2center!(thermal)
 
         # Stokes solver ----------------

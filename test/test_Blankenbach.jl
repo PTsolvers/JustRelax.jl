@@ -132,7 +132,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     temperature2center!(thermal)
     # ----------------------------------------------------
 
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
 
     # Buoyancy forces  & viscosity ----------------------
     ρg = @zeros(ni...), @zeros(ni...)
@@ -154,12 +154,11 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    T_buffer = @zeros(ni .+ 1)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
-    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
-    grid2particle!(pT, T_buffer, particles)
+        @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
     pT0.data .= pT.data
 
     local Vx_v, Vy_v, iters
@@ -177,7 +176,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         @show it
 
         # Update buoyancy and viscosity -
-        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
         # ------------------------------
 
         # Stokes solver ----------------
@@ -219,13 +218,12 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
                 verbose = true,
             )
         )
-        center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
-    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
+        @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-    center2vertex!(Told_buffer, @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+        @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
         subgrid_diffusion!(
             pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
@@ -259,11 +257,8 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         push!(trms, t)
         # -------------------------------------------
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, particles)
-        @views T_buffer[:, end] .= 273.0
-        @views T_buffer[:, 1] .= 1273.0
-        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_buffer)
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles)
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
         temperature2center!(thermal)
 

@@ -79,8 +79,10 @@ function diffusion_2D(
     ρCp = @. Cp * ρ
 
     pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li)
+    Ttop, Tbot = 300.0, 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
     @parallel (@idx ni) init_T!(thermal.T, xci[2], ly)
 

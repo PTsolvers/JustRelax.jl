@@ -146,7 +146,10 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         save(joinpath(figdir, "initial_profile.png"), fig)
     end
 
-    grid2particle!(pT, thermal.T, particles)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    Told_buffer = similar(T_buffer)
+    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
@@ -185,8 +188,8 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, particles)
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles)
         temperature2center!(thermal)
 
         compute_shear_heating!(
@@ -221,10 +224,10 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # interpolate fields from grid vertices to particles
-        grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles)
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 

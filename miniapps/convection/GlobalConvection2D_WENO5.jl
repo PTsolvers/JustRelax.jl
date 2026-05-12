@@ -137,15 +137,18 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend, ni)
-    thermal_bc = TemperatureBoundaryConditions(;
-        no_flux = (left = true, right = true, top = false, bot = false),
-    )
     # initialize thermal profile - Half space cooling
     adiabat = 0.3 # adiabatic gradient
     Tp = 1900
     Tm = Tp + adiabat * 2890
     Tmin, Tmax = 300.0, 3.5e3
     @parallel (@idx ni) init_T!(thermal.T, xci[2], κ, Tm, Tp, Tmin, Tmax)
+    Ttop = thermal.T[1, end]
+    Tbot = thermal.T[1, 1]
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
+    )
     thermal_bcs!(thermal, thermal_bc)
     # Temperature anomaly
     if thermal_perturbation == :random

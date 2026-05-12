@@ -295,7 +295,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-2, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = dt)
+    args = (; T = thermal.T, P = stokes.P, dt = dt)
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.8 / √2.1
     )
@@ -332,7 +332,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     end
 
     # Arguments for functions
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -347,18 +347,17 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = @zeros(ni .+ 1)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
-    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
-    grid2particle!(pT, T_buffer, particles)
+    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
 
     # Stokes solver -----------------
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
     solve!(
         stokes,
         pt_stokes,
@@ -383,7 +382,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     while it < 1
 
         # Update buoyancy and viscosity -
-        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
 
         # Stokes solver -----------------
         solve!(
@@ -436,13 +435,12 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
                 verbose = true,
             )
         )
-        center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
-    center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
+    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-    center2vertex!(Told_buffer, @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+    @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
         subgrid_diffusion!(
             pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
@@ -460,10 +458,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2grid!(T_buffer, pT, particles)
-        @views T_buffer[:, end] .= Ttop
-        @views T_buffer[:, 1] .= Tbot
-        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_buffer)
+        particle2centroid!(T_buffer, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
         thermal.ΔT .= thermal.T .- thermal.Told

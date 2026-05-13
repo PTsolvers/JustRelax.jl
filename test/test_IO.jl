@@ -108,7 +108,7 @@ using WriteVTK, JLD2
             Vy = Array(Vy_v),
         )
         data_c = (;
-            T = Array(thermal.T[2:end-1, 2:end-1]),
+            T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
             P = Array(stokes.P),
             η = Array(stokes.viscosity.η),
         )

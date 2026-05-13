@@ -760,9 +760,9 @@ end
     jN = min(j + 1, ny)
 
     _dx_left = @dxi(_di_center, iW, j)
-    dPdx = ((P[iE, j] - P[i, j]) * _dx_left - (P[i, j] - P[iW, j]) * _dx) / (_dx_left * _dx) 
+    dPdx = ((P[iE, j] - P[i, j]) * _dx_left - (P[i, j] - P[iW, j]) * _dx) / (_dx_left * _dx)
     _dy_bottom = @dxi(_di_center, i, jS)
-    dPdy = ((P[i, jN] - P[i, j]) * _dy_bottom - (P[i, j] - P[i, jS]) * _dy) / (_dy_bottom * _dy) 
+    dPdy = ((P[i, jN] - P[i, j]) * _dy_bottom - (P[i, j] - P[i, jS]) * _dy) / (_dy_bottom * _dy)
     Vx_av = (Vx[i, j + 1] + Vx[i + 1, j + 1]) * 0.5
     Vy_av = (Vy[i + 1, j] + Vy[i + 1, j + 1]) * 0.5
     A[i, j] = (Vx_av * dPdx + Vy_av * dPdy) * α

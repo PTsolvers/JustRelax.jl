@@ -86,7 +86,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
     )
-    @parallel (1:nx+2, 1:ny) init_T!(thermal.T, xci[2])
+    @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2])
     thermal_bcs!(thermal, thermal_bc)
 
     pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)

@@ -507,23 +507,23 @@ getindex_or_scalar(A::AbstractArray, I::Vararg{Integer, N}) where {N} = A[I...]
 getindex_or_scalar(A::Number, I::Vararg{Integer, N}) where {N} = A
 
 @inline local_viscosity_args(args, I::Vararg{Integer, N}) where {N} = local_viscosity_args(I...; args...)
-    
-@inline function local_viscosity_args(I::Vararg{Integer, N}; T=0e0, args0...) where {N}
+
+@inline function local_viscosity_args(I::Vararg{Integer, N}; T = 0.0e0, args0...) where {N}
     args = (; args0...)
     v = getindex_or_scalar.(values(args), I...)
     T_ijk = getindex_or_scalar(T, I .+ 1...)
     # local_args = (; T=T_ijk, zip(keys(args), v)..., dt = Inf, τII_old = 0.0)
     local_args = merge(
-            (; zip(keys(args), v)...),
-            (; T=T_ijk, dt = Inf, τII_old = 0.0)
+        (; zip(keys(args), v)...),
+        (; T = T_ijk, dt = Inf, τII_old = 0.0)
     )
     return local_args
 end
 
 @inline local_viscosity_args_vertex(args, I::Vararg{Integer, N}) where {N} = local_viscosity_args_vertex(I...; args...)
 
-@inline function local_viscosity_args_vertex(i, j; T=0e0, args0...)
-    args = (; args0...) 
+@inline function local_viscosity_args_vertex(i, j; T = 0.0e0, args0...)
+    args = (; args0...)
     # clamp indices
     nx, ny = size(args[1])
     il = max(i - 1, 1)  # left
@@ -540,13 +540,13 @@ end
     T_vertex = average_or_scalar(T, i, j)
     # create local args
     local_args = merge(
-            (; zip(keys(args), v)...),
-            (; T=T_vertex, dt = Inf, τII_old = 0.0)
+        (; zip(keys(args), v)...),
+        (; T = T_vertex, dt = Inf, τII_old = 0.0)
     )
     return local_args
 end
 
-@inline function local_viscosity_args_vertex(i, j, k; T=0e0, args0...)
+@inline function local_viscosity_args_vertex(i, j, k; T = 0.0e0, args0...)
     args = (; args0...)
     # clamp indices
     nx, ny, nz = size(args[1])
@@ -569,20 +569,20 @@ end
     # create local args
     T_vertex = average_or_scalar(T, i, j, k)
     local_args = merge(
-            (; zip(keys(args), v)...),
-            (; T=T_vertex, dt = Inf, τII_old = 0.0)
+        (; zip(keys(args), v)...),
+        (; T = T_vertex, dt = Inf, τII_old = 0.0)
     )
     return local_args
 end
 
 @inline function average_or_scalar(A::AbstractArray, i, j)
-    0.25 * (A[i, j] + A[i + 1, j] + A[i, j + 1] + A[i + 1, j + 1])
+    return 0.25 * (A[i, j] + A[i + 1, j] + A[i, j + 1] + A[i + 1, j + 1])
 end
 
 @inline function average_or_scalar(A::AbstractArray, i, j, k)
-    0.125 * (
+    return 0.125 * (
         A[i, j, k] + A[i + 1, j, k] + A[i, j + 1, k] + A[i + 1, j + 1, k] +
-        A[i, j, k] + A[i + 1, j, k + 1] + A[i, j + 1, k + 1] + A[i + 1, j + 1, k + 1]
+            A[i, j, k] + A[i + 1, j, k + 1] + A[i, j + 1, k + 1] + A[i + 1, j + 1, k + 1]
     )
 end
 

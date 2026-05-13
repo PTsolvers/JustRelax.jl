@@ -281,12 +281,12 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     # dTdz = nondimensionalize((450-20+273)K, CharDim) / (nondimensionalize(12.5km, CharDim))
     T1D = @. (∇Tz * (xci[2]) + Ttop) * (xci[2] < 0.0e0)
     T1D[xci[2] .≥ 0.0e0] .= Ttop
-    thermal.T[:, 2:end-1] .+= PTArray(backend_JR)(T1D')
+    thermal.T[:, 2:(end - 1)] .+= PTArray(backend_JR)(T1D')
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air
     )
     thermal_bcs!(thermal, thermal_bc)
-    
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni) # initialise stokes arrays with the defined regime
@@ -339,7 +339,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
 
     # Time loop
     t, it = 0.0, 0
-   
+
     T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)

@@ -117,9 +117,9 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend_JR, ni)
-    @parallel (@idx (nx+2, ny)) init_T!(thermal.T, xci[2])
+    @parallel (@idx (nx + 2, ny)) init_T!(thermal.T, xci[2])
     Tbot = -xvi[2][1] * (1273 - 273) / 1000.0e3 + 273.0e0
-    Ttop = 273e0
+    Ttop = 273.0e0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
@@ -244,7 +244,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
         # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----
         Nu_it = (ly / (1000.0 * lx)) *
-        sum(((abs.(thermal.T[2:(end - 1), end] - thermal.T[2:(end - 1), end - 1])) ./ di[2]) .* di[1])
+            sum(((abs.(thermal.T[2:(end - 1), end] - thermal.T[2:(end - 1), end - 1])) ./ di[2]) .* di[1])
         push!(Nu_top, Nu_it)
         # -------------------------------------------
 

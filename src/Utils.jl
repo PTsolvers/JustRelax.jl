@@ -23,7 +23,7 @@ end
     vᵢⱼₖ = ntuple(Val(length(v))) do i
         if v[i] isa AbstractArray
             offsets = sz[i] .> sz_min
-            getindex(v[i],  I .+ offsets...)
+            getindex(v[i], I .+ offsets...)
         else
             v[i]
         end

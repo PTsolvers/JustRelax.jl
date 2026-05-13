@@ -12,8 +12,6 @@ using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
-using ImplicitGlobalGrid
-using MPI: MPI
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
@@ -135,7 +133,7 @@ function diffusion_2D(igg, figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3,
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
     )
-    @parallel (1:nx+2, 1:ny) init_T!(thermal.T, xci[2], ly)
+    @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2], ly)
     thermal_bcs!(thermal, thermal_bc)
     update_halo!(thermal.T)
 
@@ -157,8 +155,6 @@ function diffusion_2D(igg, figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3,
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
     update_phase_ratios!(phase_ratios, particles, pPhases)
-    update_cell_halo!(particles.coords..., pPhases)
-    update_cell_halo!(particles.index)
     # ----------------------------------------------------
 
     @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
@@ -208,28 +204,29 @@ function diffusion_2D(igg, figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3,
 
         @views T_nohalo .= Array(thermal.T[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
-
-        # if igg.me == 0
-        #     fig, = heatmap(T_v, colorrange=(1500,2000))
-        #     save(joinpath(figdir,"temperature_it_$it.png"), fig)
-        # end
     end
 
     return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), thermal
 end
-if CSCS_CI != true
-    @suppress begin
-        if backend_JR == CPUBackend
-            figdir = "MPI_Diffusion2D"
-            n = 32
-            igg = IGG(init_global_grid((n, n)..., 1; init_MPI = true, select_device = false)...) #init MPI
-            diffusion_2D(igg, figdir; nx = n, ny = n)
-        else
-            println("This test is only for CPU CI yet")
+
+function run_diffusion2D_multiphase_MPI()
+    if CSCS_CI != true
+        @suppress begin
+            if backend_JR == CPUBackend
+                figdir = "MPI_Diffusion2D"
+                n = 32
+                igg = IGG(init_global_grid((n, n)..., 1; init_MPI = true, select_device = false)...) #init MPI
+                diffusion_2D(igg, figdir; nx = n, ny = n)
+            else
+                println("This test is only for CPU CI yet")
+            end
         end
+    else
+        n = 32
+        igg = IGG(init_global_grid((n, n)..., 1; init_MPI = true, select_device = false)...) #init MPI
+        diffusion_2D(igg, "MPI_Diffusion2D"; nx = n, ny = n)
     end
-else
-    n = 32
-    igg = IGG(init_global_grid((n, n)..., 1; init_MPI = true, select_device = false)...) #init MPI
-    diffusion_2D(igg, "MPI_Diffusion2D"; nx = n, ny = n)
+    return nothing
 end
+
+run_diffusion2D_multiphase_MPI()

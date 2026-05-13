@@ -41,7 +41,7 @@ end
 
 function thermal_bcs!(T::AbstractArray, bcs::TemperatureBoundaryConditions)
     n = bc_index(T)
-    
+
     # no flux boundary conditions
     do_bc(bcs.constant_value) && (@parallel (@idx n) dirichlet_boundary!(T, bcs.constant_value))
     do_bc(bcs.no_flux) && (@parallel (@idx n) free_slip!(T, bcs.no_flux))

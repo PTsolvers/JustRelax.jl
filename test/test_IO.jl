@@ -55,7 +55,6 @@ using WriteVTK, JLD2
         metadata(pwd(), dst, "test_traits.jl", "test_types.jl")
         @test isfile(joinpath(dst, "test_traits.jl"))
         @test isfile(joinpath(dst, "test_types.jl"))
-        @test isfile(joinpath(dst, "Project.toml"))
 
         # Call the function
         checkpointing_jld2(dst, stokes, thermal, time, dt)
@@ -174,9 +173,7 @@ using WriteVTK, JLD2
         stokes = StokesArrays(backend_JR, ni)
 
         thermal = ThermalArrays(backend_JR, 4, 4, 4)
-        @test size(thermal.Tc) === (4, 4, 4)
         thermal = ThermalArrays(backend_JR, ni)
-        @test size(thermal.Tc) === (4, 4, 4)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(

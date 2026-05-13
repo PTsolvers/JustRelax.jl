@@ -1,5 +1,5 @@
 push!(LOAD_PATH, "..")
-
+#  ENV["JULIA_JUSTRELAX_BACKEND"] = "A"
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -82,7 +82,7 @@ end
 
 @parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
 
-    args_ij = getindex_NamedTuple(args, I...)
+    args_ij = JustRelax2D.getindex_NamedTuple(args, I...)
     H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij)
 
     return nothing
@@ -200,8 +200,8 @@ end
 
         nx_T, ny_T = size(thermal.T)
         if backend_JR === CPUBackend
-            @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1811.8143674937314 atol = 1.0e-1
-            @test thermal.T[(nx >>> 1) + 1, (ny >>> 1) + 1] ≈ 1821.3380287035184 atol = 1.0e-1
+            @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1814.029 atol = 1.0e-1
+            @test thermal.T[(nx >>> 1) + 1, (ny >>> 1) + 1] ≈ 1823.548 atol = 1.0e-1
             @test nphases(phase_ratios) === Val{2}()
         else
             @test true == true

@@ -82,20 +82,10 @@ end
         # Utils
         args = (P = stokes.P, T = thermal.T)
         tuple_args = (args.P, args.T)
-        @test detect_args_size(tuple_args) == (7, 5)
+        @test detect_args_size(tuple_args) == (6, 6)
 
         @test _tuple(stokes.τ) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
         @test _tuple(stokes.V) === (stokes.V.Vx, stokes.V.Vy)
-
-        # A = @zeros(ni...)
-        # B = @zeros(ni...)
-        # @parallel (@idx ni) multi_copy!((A, B), (stokes.P, (@view thermal.T[2:(end - 1), 2:(end - 1)])))
-        # @test A == stokes.P
-        # @test B == (@view thermal.T[2:(end - 1), 2:(end - 1)])
-
-        # A .= 0.0e0
-        # @parallel (@idx ni) assign!(A, stokes.P)
-        # @test A == stokes.P
 
         @test JustRelax2D.tupleize(1) === (1,)
         @test JustRelax2D.tupleize((1, 2)) === (1, 2)

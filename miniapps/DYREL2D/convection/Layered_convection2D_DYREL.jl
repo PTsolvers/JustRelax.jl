@@ -144,7 +144,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
     particle_args = (pT, pPhases)

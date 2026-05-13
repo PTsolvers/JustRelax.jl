@@ -258,7 +258,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 50, 100, 15
     particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     grid_vxi = grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -487,7 +487,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
-        subgrid_diffusion!(
+        subgrid_diffusion_centroid!(
             pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------

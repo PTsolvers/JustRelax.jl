@@ -38,7 +38,6 @@ end
 # Load script dependencies
 using Printf, Statistics, LinearAlgebra, CellArrays, StaticArrays
 
-
 # -----------------------------------------------------------------------------------------
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 function copyinn_x!(A, B)
@@ -256,7 +255,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 60, 80, 30
     particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
     particle_args = (pT, pPhases)
@@ -272,23 +271,22 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
 
     # Initialisation of thermal profile
     thermal = ThermalArrays(backend_JR, ni) # initialise thermal arrays and boundary conditions
-    thermal_bc = TemperatureBoundaryConditions(;
-        no_flux = (left = true, right = true, top = false, bot = false),
-    )
     Ttop = nondimensionalize((20 + 273)K, CharDim)
     Tbot = nondimensionalize((450 + 273)K, CharDim)
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
+    )
     ∇Tz = (Ttop - Tbot) / (L - sticky_air)
     # dTdz = nondimensionalize((450-20+273)K, CharDim) / (nondimensionalize(12.5km, CharDim))
-    T1D = @. (∇Tz * (xvi[2]) + Ttop) * (xvi[2] < 0.0e0)
-    T1D[xvi[2] .≥ 0.0e0] .= Ttop
-    thermal.T .+= PTArray(backend_JR)(T1D')
-
+    T1D = @. (∇Tz * (xci[2]) + Ttop) * (xci[2] < 0.0e0)
+    T1D[xci[2] .≥ 0.0e0] .= Ttop
+    thermal.T[:, 2:end-1] .+= PTArray(backend_JR)(T1D')
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air
     )
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
-
+    
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni) # initialise stokes arrays with the defined regime
@@ -341,12 +339,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
 
     # Time loop
     t, it = 0.0, 0
-    local Vx_v, Vy_v
-    if do_vtk
-        Vx_v = @zeros(ni .+ 1...)
-        Vy_v = @zeros(ni .+ 1...)
-    end
-
+   
     T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
@@ -357,7 +350,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     P_init = deepcopy(stokes.P)
 
     # Stokes solver -----------------
-    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
     solve!(
         stokes,
         pt_stokes,
@@ -382,7 +375,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     while it < 1
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
 
         # Stokes solver -----------------
         solve!(
@@ -435,13 +428,13 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
                 verbose = true,
             )
         )
-    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
+        @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
+        @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-    @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
-        subgrid_diffusion!(
+        subgrid_diffusion_centroid!(
             pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------
@@ -460,15 +453,13 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
 
         particle2centroid!(T_buffer, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
         thermal.ΔT .= thermal.T .- thermal.Told
-        vertex2center!(thermal.ΔTc, thermal.ΔT[2:(end - 1), 2:(end - 1)])
 
         @show it += 1
         t += dt
     end
 
-    finalize_global_grid()
+    # finalize_global_grid()
 
     return ϕ, stokes, thermal
 end
@@ -482,10 +473,10 @@ end
             igg
         end
 
-        ϕ, stokes, thermal = main2D(igg; nx = 32, ny = 32)
+        ϕ, stokes, thermal = main2D(igg; nx = nx, ny = ny)
 
         nx_T, ny_T = size(thermal.T)
-        @test  Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1.4134 rtol = 1.0e-2
-        @test  Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.0819 rtol = 1.0e-2
+        @test Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1.4134 rtol = 1.0e-2
+        @test Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.098 rtol = 1.0e-2
     end
 end

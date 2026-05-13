@@ -92,7 +92,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT = init_cell_arrays(particles, Val(2))
@@ -272,7 +272,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
-        subgrid_diffusion!(
+        subgrid_diffusion_centroid!(
             pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------

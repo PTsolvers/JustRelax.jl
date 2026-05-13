@@ -231,7 +231,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 15
     particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
     particle_args = (pT, pPhases)
@@ -457,7 +457,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
-        subgrid_diffusion!(
+        subgrid_diffusion_centroid!(
             pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------

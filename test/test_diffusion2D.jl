@@ -26,13 +26,7 @@ using GeoParams
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j) function init_T!(T, z)
-    if z[j] == maximum(z)
-        T[i + 1, j + 1] = 300.0
-    elseif z[j] == minimum(z)
-        T[i + 1, j + 1] = 3500.0
-    else
-        T[i + 1, j + 1] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
-    end
+    T[i, j + 1] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
     return nothing
 end
 
@@ -86,12 +80,16 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
     K = @fill(K0, ni...)
     ρCp = @. Cp * ρ
 
-    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)
+    Ttop = 300.0
+    Tbot = 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
     )
-    @parallel (@idx ni) init_T!(thermal.T, xci[2])
+    @parallel (1:nx+2, 1:ny) init_T!(thermal.T, xci[2])
     thermal_bcs!(thermal, thermal_bc)
+
+    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation

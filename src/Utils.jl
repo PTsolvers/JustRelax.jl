@@ -18,12 +18,12 @@ end
     k = keys(args)
     v = values(args)
     sz = size.(v)
-    sz_min = reduce(min, Base.IteratorsMD.flatten(sz))
+    sz_min = reduce(min, filter(!isempty, sz))
 
     vᵢⱼₖ = ntuple(Val(length(v))) do i
         if v[i] isa AbstractArray
             offsets = sz[i] .> sz_min
-            getindex(v[i],  I.+offsets...)
+            getindex(v[i],  I .+ offsets...)
         else
             v[i]
         end

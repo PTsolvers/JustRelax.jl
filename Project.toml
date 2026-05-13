@@ -48,9 +48,23 @@ MPI = "0.20"
 Makie = "0.24"
 MuladdMacro = "0.2"
 ParallelStencil = "0.14.2, 0.15, 0.16"
+ParallelTestRunner = "2"
 Reexport = "1.2.2"
+SpecialFunctions = "2"
 StaticArrays = "1"
 Statistics = "1"
+Suppressor = "0.2"
 TOML = "1.0.3"
 WriteVTK = "1.21"
 julia = "1.9, 1.10, 1.11"
+
+[extras]
+GeophysicalModelGenerator = "3700c31b-fa53-48a6-808a-ef22d5a84742"
+ParallelTestRunner = "d3525ed8-44d0-4b2c-a655-542cee43accc"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["GeophysicalModelGenerator", "ParallelTestRunner", "Pkg", "SpecialFunctions", "Suppressor", "Test"]

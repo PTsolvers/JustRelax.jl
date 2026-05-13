@@ -10,14 +10,8 @@ using GeoParams
 
 using CairoMakie
 
-@parallel_indices (i, j) function init_T!(T, z, lz)
-    if z[j] ≥ 0.0
-        T[i + 1, j + 1] = 300.0
-    elseif z[j] == -lz
-        T[i + 1, j + 1] = 3500.0
-    else
-        T[i + 1, j + 1] = z[j] * (1900.0 - 1600.0) / (-lz) + 1600.0
-    end
+@parallel_indices (i, j) function init_T!(T, z, ly)
+    T[i, j + 1] = -z[j] * (1900.0 - 1600.0) / ly + 1600.0
     return nothing
 end
 
@@ -34,14 +28,15 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 end
 
 function diffusion_2D(
-        figdir;
-        nx = 32,
-        ny = 32,
-        lx = 100.0e3,
-        ly = 100.0e3,
-        ρ0 = 3.3e3,
-        Cp0 = 1.2e3,
-        K0 = 3.0
+    igg,
+    figdir;
+    nx = 32,
+    ny = 32,
+    lx = 100.0e3,
+    ly = 100.0e3,
+    ρ0 = 3.3e3,
+    Cp0 = 1.2e3,
+    K0 = 3.0
     )
     kyr = 1.0e3 * 3600 * 24 * 365.25
     Myr = 1.0e3 * kyr
@@ -53,7 +48,6 @@ function diffusion_2D(
     li = lx, ly  # domain length in x- and y-
     di = @. li / ni # grid step in x- and -y
     origin = 0.0, -ly
-    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device = false)...) #init MPI
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -84,7 +78,7 @@ function diffusion_2D(
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
-    @parallel (@idx ni) init_T!(thermal.T, xci[2], ly)
+    @parallel (1:nx+2, 1:ny) init_T!(thermal.T, xci[2], ly)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
@@ -123,7 +117,7 @@ function diffusion_2D(
 
         temperature2center!(thermal)
 
-        @views T_nohalo .= Array((@view thermal.T[2:(end - 1), 2:(end - 1)])[2:(end - 2), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array(thermal.T[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         if igg.me == 0
@@ -140,4 +134,6 @@ end
 
 figdir = "MPI_Diffusion2D"
 n = 32
-diffusion_2D(figdir; nx = n, ny = n)
+igg = IGG(init_global_grid(n, n, 1; init_MPI = true, select_device = false)...) #init MPI
+  
+diffusion_2D(igg, figdir; nx = n, ny = n)

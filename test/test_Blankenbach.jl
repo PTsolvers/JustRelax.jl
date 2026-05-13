@@ -40,7 +40,6 @@ using Printf, LinearAlgebra, CellArrays
 include("../miniapps/benchmarks/stokes2D/Blankenbach2D/Blankenbach_Rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
 function copyinn_x!(A, B)
 
     @parallel function f_x(A, B)
@@ -57,9 +56,10 @@ end
 
     dTdZ = (1273 - 273) / 1000.0e3
     offset = 273.0e0
-    T[i + 1, j + 1] = (depth) * dTdZ + offset
+    T[i, j + 1] = (depth) * dTdZ + offset
     return nothing
 end
+
 
 # Thermal rectangular perturbation
 function rectangular_perturbation!(T, xc, yc, r, xvi)
@@ -79,12 +79,12 @@ end
 function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
     # Physical domain ------------------------------------
-    ly = 1000.0e3               # domain length in y
+    ly = 1000.0e3             # domain length in y
     lx = ly                   # domain length in x
     ni = nx, ny               # number of cells
     li = lx, ly               # domain length in x- and y-
     di = @. li / ni           # grid step in x- and -y
-    origin = 0.0, -ly             # origin coordinates
+    origin = 0.0, -ly         # origin coordinates
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
@@ -100,7 +100,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pT0, pPhases)
@@ -117,11 +117,14 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend_JR, ni)
+    @parallel (@idx (nx+2, ny)) init_T!(thermal.T, xci[2])
+    Tbot = -xvi[2][1] * (1273 - 273) / 1000.0e3 + 273.0e0
+    Ttop = 273e0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
     )
     # initialize thermal profile
-    @parallel (@idx ni) init_T!(thermal.T, xci[2])
     # Elliptical temperature anomaly
     xc_anomaly = 0.0    # origin of thermal anomaly
     yc_anomaly = -600.0e3  # origin of thermal anomaly
@@ -157,7 +160,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-        @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
+    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, T_buffer, particles)
     pT0.data .= pT.data
 
@@ -224,7 +227,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
-        subgrid_diffusion!(
+        subgrid_diffusion_centroid!(
             pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------
@@ -241,7 +244,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
         # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----
         Nu_it = (ly / (1000.0 * lx)) *
-            sum(((abs.(thermal.T[2:(end - 1), end] - thermal.T[2:(end - 1), end - 1])) ./ di[2]) .* di[1])
+        sum(((abs.(thermal.T[2:(end - 1), end] - thermal.T[2:(end - 1), end - 1])) ./ di[2]) .* di[1])
         push!(Nu_top, Nu_it)
         # -------------------------------------------
 
@@ -260,7 +263,6 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-        temperature2center!(thermal)
 
         it += 1
         t += dt

@@ -145,7 +145,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # velocity grids
     grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
@@ -191,34 +191,36 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend, ni)
-    @views thermal.T[2:(end - 1), 2:(end - 1)] .= PTArray(backend)(T_GMG[1:ni[1], 1:ni[2]])
-
+    T_GMG_center = @zeros(ni...)
+    vertex2center!(T_GMG_center, PTArray(backend)(T_GMG))
+    @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_GMG_center
     # Add thermal anomaly BC's
     T_chamber = 1223.0e0
     T_air = 273.0e0
+    Ttop = T_air
+    Tbot = thermal.T[:, 2]
     Ω_T = @zeros(size(thermal.T)...)
     thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, air_phase)
     JustRelax.DirichletBoundaryCondition(Ω_T)
 
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (; left = true, right = true, top = false, bot = false),
+        constant_value = (; left = true, right = true, top = false, bot = T_air),
         dirichlet = (; mask = Ω_T)
     )
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
-    Ttop = thermal.T[2:(end - 1), end]
-    Tbot = thermal.T[2:(end - 1), 1]
+    @views thermal.T[:, 1] .= thermal.T[:, 2]
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
+    compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
 
     # Melt fraction
     ϕ_m = @zeros(ni...)
     compute_melt_fraction!(
-        ϕ_m, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
+        ϕ_m, phase_ratios, rheology, (T = thermal.T, P = stokes.P)
     )
     # Rheology
     args0 = (T = thermal.T, P = stokes.P, dt = Inf)
@@ -329,15 +331,13 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                 verbose = true,
             )
         )
-        thermal.ΔT .= thermal.T .- thermal.Told
-        vertex2center!(thermal.ΔTc, thermal.ΔT[2:(end - 1), 2:(end - 1)])
-
+        @views T_buffer .= thermal.T[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
-        subgrid_diffusion!(
+        subgrid_diffusion_centroid!(
             pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------
@@ -400,6 +400,6 @@ end
         igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
         iters = main(li, origin, phases_GMG, T_GMG, igg; nx = nx, ny = ny)
-        @test passed = iters.err_evo1[end] < 1.0e-2
+        @test passed = iters.err_evo1[end] < 1.0e-4
     end
 end

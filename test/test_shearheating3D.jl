@@ -209,7 +209,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        subgrid_diffusion!(
+        subgrid_diffusion_centroid!(
             pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------

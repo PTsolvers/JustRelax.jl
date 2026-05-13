@@ -112,8 +112,8 @@ function Shearheating2D(; nx = 32, ny = 32)
     thermal = ThermalArrays(backend_JR, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = true, right = true, top = 273.0 + 400, bot = 273.0 + 400),
     )
-
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
     thermal_bcs!(thermal, thermal_bc)
@@ -122,7 +122,7 @@ function Shearheating2D(; nx = 32, ny = 32)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology

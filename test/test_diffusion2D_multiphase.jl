@@ -37,13 +37,7 @@ end
 distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
 
 @parallel_indices (i, j) function init_T!(T, z)
-    if z[j] == maximum(z)
-        T[i + 1, j + 1] = 300.0
-    elseif z[j] == minimum(z)
-        T[i + 1, j + 1] = 3500.0
-    else
-        T[i + 1, j + 1] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
-    end
+    T[i, j + 1] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
     return nothing
 end
 
@@ -135,17 +129,20 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal = ThermalArrays(backend_JR, ni)
+    Ttop = 300.0
+    Tbot = 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
     )
-    @parallel (@idx ni) init_T!(thermal.T, xci[2])
+    @parallel (1:nx+2, 1:ny) init_T!(thermal.T, xci[2])
+    thermal_bcs!(thermal, thermal_bc)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
     r = 10.0e3 # thermal perturbation radius
     center_perturbation = lx / 2, -ly / 2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
-    temperature2center!(thermal)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1
@@ -162,7 +159,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
 
     # PT coefficients for thermal diffusion
-    args = (; P = P, T = (@view thermal.T[2:(end - 1), 2:(end - 1)]))
+    args = (; P = P, T = thermal.T)
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √2
     )
@@ -203,8 +200,8 @@ end
 
         nx_T, ny_T = size(thermal.T)
         if backend_JR === CPUBackend
-            @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1814.0161101068586 atol = 1.0e-1
-            @test thermal.T[(nx >>> 1) + 1, (ny >>> 1) + 1] ≈ 1823.5555186209745 atol = 1.0e-1
+            @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1811.8143674937314 atol = 1.0e-1
+            @test thermal.T[(nx >>> 1) + 1, (ny >>> 1) + 1] ≈ 1821.3380287035184 atol = 1.0e-1
             @test nphases(phase_ratios) === Val{2}()
         else
             @test true == true

@@ -311,6 +311,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                   T     = Array(thermal.T[2:end-1, 2:end-1]), 
                     τxx = Array(stokes.τ.xx),
                     τyy = Array(stokes.τ.yy),
                     εxx = Array(stokes.ε.xx),

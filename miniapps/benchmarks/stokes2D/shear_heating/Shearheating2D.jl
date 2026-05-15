@@ -99,7 +99,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # Initialize constant temperature
     thermal.T .= 273.0 + 400
     thermal_bcs!(thermal, thermal_bc)
-    # temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces

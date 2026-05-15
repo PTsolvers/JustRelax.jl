@@ -148,11 +148,10 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     )
     thermal_bcs!(thermal, thermal_bc)
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci, thick_air)
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
@@ -219,11 +218,10 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
-        temperature2center!(thermal)
 
         # Update buoyancy and viscosity -
-        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
+        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         compute_viscosity!(
             stokes, phase_ratios, args, rheology, viscosity_cutoff
         )

@@ -143,8 +143,7 @@ To initialize the thermal profile we use [ParallelStencil.jl](https://github.com
     return nothing
 end
 
-@parallel (@idx size(thermal.T))  init_T!(thermal.T,  xvi[2]) # cell vertices
-@parallel (@idx size(thermal.Tc)) init_T!(thermal.Tc, xci[2]) # cell centers
+@parallel (@idx ni) init_T!((@view thermal.T[2:end-1, 2:end-1]), xci[2]) # physical cell centers
 ```
 
 and we define a rectangular thermal anomaly at $x \in [0, 0.05]$, $y \in [\frac{1}{3} - 0.05, \frac{1}{3} + 0.05]$
@@ -171,7 +170,7 @@ We initialize the buoyancy forces and viscosity
 ```julia
 ρg               = @zeros(ni...), @zeros(ni...)
 η                = @ones(ni...)
-args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+args             = (; T = thermal.T, P = stokes.P, dt = Inf)
 compute_ρg!(ρg[2], phase_ratios, rheology, args)
 compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
 ```
@@ -320,11 +319,10 @@ particle2grid!(T_buffer, pT, particles)
 @views T_buffer[:, 1]        .= 1.0
 @views thermal.T[2:end-1, :] .= T_buffer
 flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-temperature2center!(thermal)
 ```
 6. Update buoyancy forces and viscosity
 ```julia
-args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+args = (; T = thermal.T, P = stokes.P,  dt=Inf)
 compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
 compute_ρg!(ρg[2], phase_ratios, rheology, args)
 ```

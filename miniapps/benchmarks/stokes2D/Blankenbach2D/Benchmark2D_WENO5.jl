@@ -111,7 +111,6 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci)
     thermal_bcs!(thermal, thermal_bc)
     thermal.Told .= thermal.T
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Rayleigh number
@@ -120,7 +119,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         (κ * rheology[1].CompositeRheology[1].elements[1].η)
     @show Ra
 
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
 
     # Buoyancy forces  & viscosity ----------------------
     ρg = @zeros(ni...), @zeros(ni...)
@@ -189,7 +188,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         @show it
 
         # Update buoyancy and viscosity -
-        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
         compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
         # ------------------------------
@@ -239,7 +238,6 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_WENO)
         @views thermal.T[2:(end - 1), end] .= 273.0
         @views thermal.T[2:(end - 1), 1] .= 1273.0
-        temperature2center!(thermal)
         # ------------------------------
 
         # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----

@@ -263,7 +263,6 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air
     )
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -271,7 +270,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-2, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = dt)
+    args = (; T = thermal.T, P = stokes.P, dt = dt)
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.8 / √2.1
     )
@@ -297,19 +296,19 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
 
     ϕ = @zeros(ni...)
     compute_melt_fraction!(
-        ϕ, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
+        ϕ, phase_ratios, rheology, (T = thermal.T, P = stokes.P)
     )
 
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
+        compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         # @parallel init_P!(stokes.P, ρg[2], xci[2])
         stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
     end
 
     # Arguments for functions
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -364,7 +363,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     P_init = deepcopy(stokes.P)
 
     # Stokes solver -----------------
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
     solve!(
         stokes,
         pt_stokes,
@@ -389,7 +388,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     while it < 150
 
         # Update buoyancy and viscosity -
-        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf, ΔTc = thermal.ΔTc)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
 
         # Stokes solver -----------------
         solve!(
@@ -453,7 +452,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
         )
         # ------------------------------
         compute_melt_fraction!(
-            ϕ, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
+            ϕ, phase_ratios, rheology, (T = thermal.T, P = stokes.P)
         )
 
         # Advection --------------------
@@ -468,9 +467,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
 
         particle2centroid!(T_buffer, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
         thermal.ΔT .= thermal.T .- thermal.Told
-        vertex2center!(thermal.ΔTc, thermal.ΔT[2:(end - 1), 2:(end - 1)])
 
         @show it += 1
         t += dt

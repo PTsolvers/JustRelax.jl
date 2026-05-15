@@ -177,7 +177,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     thermal_bcs!(thermal, thermal_bc)
 
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci, thick_air, CharDim)
-    temperature2center!(thermal)
     # ----------------------------------------------------
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     args = (; T = thermal.T, P = stokes.P)
@@ -258,7 +257,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # @views thermal.T[:, end - 1] .= Ttop
         # @views thermal.T[:, 2] .= Tbot
         thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
         # ------------------------------
 
         solve_DYREL!(

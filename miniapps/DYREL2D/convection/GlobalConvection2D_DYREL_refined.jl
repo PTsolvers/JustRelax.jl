@@ -236,9 +236,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # thermal.T[2:end-1, :]  .*= @rand(ni.+1...) .* 0.05
     thermal_bcs!(thermal, thermal_bc)
     Ttop, Tbot = extrema(thermal.T)
-    temperature2center!(thermal)
     # ----------------------------------------------------
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:5
@@ -405,7 +404,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         @views thermal.T[:, end] .= Ttop
         @views thermal.T[:, 1] .= Tbot
         thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
         # ------------------------------
 
         # Data I/O and plotting ---------------------

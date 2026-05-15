@@ -164,7 +164,6 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
     @views thermal.T[:, 2] .= Tmax
     @views thermal.T[:, end - 1] .= Tmin
     update_halo!(thermal.T)
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -173,7 +172,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.8 / √2.1)
 
     # Buoyancy forces
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
         compute_ρg!(ρg[2], rheology, args)
@@ -214,8 +213,8 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 4.5e3
 
         # Update buoyancy and viscosity -
-        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = Inf)
-        compute_ρg!(ρg[end], rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
+        compute_ρg!(ρg[end], rheology, (T = thermal.T, P = stokes.P))
         compute_viscosity!(
             stokes, args, rheology, viscosity_cutoff
         )

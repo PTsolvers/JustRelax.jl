@@ -85,7 +85,6 @@ function diffusion_2D(
     r = 10.0e3 # thermal perturbation radius
     center_perturbation = lx / 2, -ly / 2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
-    temperature2center!(thermal)
 
     # global array
     nx_v = (nx - 2) * igg.dims[1]
@@ -115,7 +114,6 @@ function diffusion_2D(
             )
         )
 
-        temperature2center!(thermal)
 
         @views T_nohalo .= Array(thermal.T[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)

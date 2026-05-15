@@ -152,7 +152,7 @@ function diffusion_3D(;
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion
-    args = (; P = P, T = thermal.Tc)
+    args = (; P = P, T = thermal.T)
     pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
 
     t = 0.0

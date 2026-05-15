@@ -175,7 +175,6 @@ thermal_bc = TemperatureBoundaryConditions(;
     no_flux = (left = true, right = true, top = false, bot = false, front = true, back = true),
 )
 thermal_bcs!(thermal, thermal_bc)
-temperature2center!(thermal)
 ```
 
 ## Instantiate Stokes arrays
@@ -189,7 +188,7 @@ pt_stokes = PTStokesCoeffs(li, di; ϵ_rel=1e-4, Re=3π, r=1e0, CFL = 0.98 / √3
 ## Initialize buoyancy forces and lithostatic pressure
 ```julia
 ρg        = ntuple(_ -> @zeros(ni...), Val(3))
-compute_ρg!(ρg[end], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
 stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
 ```
 
@@ -225,7 +224,6 @@ We will now advance the model in time, solving the Stokes and thermal equations,
 1. Interpolate fields from particle to grid vertices
 ```julia
 particle2grid!(T_buffer, pT, particles)
-temperature2center!(thermal)
 ```
 2. Solve stokes
 ```julia
@@ -307,7 +305,7 @@ data_v = (;
     T = Array(thermal.T),
 )
 data_c = (;
-    Tc = Array(thermal.Tc),
+    T = Array(@view thermal.T[2:end-1, 2:end-1, 2:end-1]),
     P = Array(stokes.P),
     η = Array(log10.(stokes.viscosity.η_vep)),
 )

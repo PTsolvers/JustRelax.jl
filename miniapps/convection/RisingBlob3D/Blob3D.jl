@@ -269,7 +269,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         thermal.T, anomaly, x_anomaly, y_anomaly, z_anomaly, r_anomaly, xvi, sticky_air
     )
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -277,7 +276,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
-    args = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1), 2:(end - 1)]))
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √3.1
     )
@@ -293,7 +292,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     # Buoyancy force & viscosity
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         @parallel init_P!(stokes.P, ρg[3], xci[3], sticky_air)
     end
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -353,8 +352,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     while it < 25
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
+        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
         # Stokes solver -----------------
@@ -422,9 +421,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # @views thermal.T[:, :, end] .= Tsurf
         # @views thermal.T[:, :, 1] .= Tbot
         thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
         # thermal.ΔT .= thermal.T .- thermal.Told
-        # vertex2center!(thermal.ΔTc, thermal.ΔT)
 
         @show it += 1
         t += dt

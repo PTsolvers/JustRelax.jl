@@ -153,17 +153,16 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
     thermal_bcs!(thermal, thermal_bc)
 
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci)
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
+        compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
 
-    args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
     # Rheology
     viscosity_cutoff = (1.0e16, 1.0e24)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
@@ -215,8 +214,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # Update buoyancy and viscosity -
-        args = (; T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
+        args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         compute_viscosity!(
             stokes, phase_ratios, args, rheology, viscosity_cutoff
         )

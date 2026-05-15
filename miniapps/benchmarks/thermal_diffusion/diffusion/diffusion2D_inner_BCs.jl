@@ -128,7 +128,6 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     center_perturbation = lx / 2, -ly / 2
     mask = @zeros(size(thermal.T)...)
     elliptical_perturbation!(thermal.T, mask, Ω_T, center_perturbation..., r, xci)
-    temperature2center!(thermal)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1
@@ -144,7 +143,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
 
     # PT coefficients for thermal diffusion
-    args = (; P = P, T = (@view thermal.T[2:(end - 1), 2:(end - 1)]))
+    args = (; P = P, T = thermal.T)
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.97 / √2
     )

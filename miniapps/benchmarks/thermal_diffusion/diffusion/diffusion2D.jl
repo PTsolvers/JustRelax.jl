@@ -84,7 +84,6 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
     r = 10.0e3 # thermal perturbation radius
     center_perturbation = lx / 2, -ly / 2
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
-    temperature2center!(thermal)
 
     # Time loop
     t = 0.0

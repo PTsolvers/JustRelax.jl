@@ -230,10 +230,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         fig
     end
 
-    Tvertex     = @zeros(ni .+ 1)
-    center2vertex!(Tvertex,thermal.T)
-    T_buffer    = thermal.T[2:(end - 1), 2:(end - 1)]
-    Told_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer    = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    Told_buffer = similar(T_buffer)
     dt₀         = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)
 
@@ -302,13 +300,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                 verbose = true,
             ),
         )
-        # center2vertex!(T_buffer, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
-        # center2vertex!(Told_buffer, @view(thermal.Told[2:(end - 1), 2:(end - 1)]))
+        @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        # center2vertex!(Told_buffer, @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
         subgrid_diffusion_centroid!(
             pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )

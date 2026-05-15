@@ -40,15 +40,6 @@ include("Layered_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
-function copyinn_x!(A, B)
-    @parallel function f_x(A, B)
-        @all(A) = @inn_x(B)
-        return nothing
-    end
-
-    return @parallel f_x(A, B)
-end
-
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
 macro all_j(A)
@@ -218,9 +209,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
     # A = 0.01
     # dTdz = (nondimensionalize(3273.0e0K, CharDim) - nondimensionalize(293.0e0K, CharDim)) / grid.li[2]
-    # thermal.T[2:end-1, :]  .= PTArray(backend_JR)([ -dTdz * y + nondimensionalize(293.0e0K, CharDim) for x in Array(grid.xvi[1]), y in Array(grid.xvi[2]) ]    )
-    # thermal.T[2:end-1, :] .+= PTArray(backend_JR)([A * sin(π*x/grid.li[1]) * sin(π*y/grid.li[1]) for x in Array(grid.xvi[1]), y in Array(grid.xvi[2]) ])
-    thermal.T[2:end-1, :]  .= PTArray(backend_JR)([
+    # thermal.T[2:end-1, 2:end-1]  .= PTArray(backend_JR)([ -dTdz * y + nondimensionalize(293.0e0K, CharDim) for x in Array(grid.xci[1]), y in Array(grid.xci[2]) ]    )
+    # thermal.T[2:end-1, 2:end-1] .+= PTArray(backend_JR)([A * sin(π*x/grid.li[1]) * sin(π*y/grid.li[1]) for x in Array(grid.xci[1]), y in Array(grid.xci[2]) ])
+    thermal.T[2:end-1, 2:end-1] .= PTArray(backend_JR)([
         nondimensionalize(
             T_field(x, 
                 - @dimstrip(z, km, CharDim); 
@@ -231,9 +222,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             )*K,
             CharDim
         )
-        for x in Array(grid.xvi[1]), z in Array(grid.xvi[2])
+        for x in Array(grid.xci[1]), z in Array(grid.xci[2])
     ])
-    # thermal.T[2:end-1, :]  .*= @rand(ni.+1...) .* 0.05
+    # thermal.T[2:end-1, 2:end-1]  .*= @rand(ni...) .* 0.05
     thermal_bcs!(thermal, thermal_bc)
     Ttop, Tbot = extrema(thermal.T)
     # ----------------------------------------------------
@@ -274,12 +265,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # Plot initial T and η profiles
     let
-        Yv = [y for x in Array(xvi[1]), y in Array(xvi[2])][:]
         Y = [y for x in Array(xci[1]), y in Array(xci[2])][:]
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:(end - 1), :][:]), Yv)
+        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), Y)
         scatter!(
             ax2, 
             log10.(@dimstrip(Array(stokes.viscosity.η[:]), Pa*s, CharDim)), 
@@ -292,13 +282,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         fig
     end
 
-    T_buffer = @zeros(ni .+ 1)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, T_buffer, particles)
+    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
 
     local Vx_v, Vy_v
     if do_vtk
@@ -383,26 +371,23 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                 verbose = true,
             ),
         )
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
+        @views T_buffer .= thermal.T[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt
+            pT, T_buffer, thermal.ΔT[2:(end - 1), 2:(end - 1)], subgrid_arrays, particles, dt
         )
         # ------------------------------
 
         @show it += 1
         t += dt
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, particles)
-        @views thermal.T[2:(end - 1), :] .= T_buffer
-        @views thermal.T[:, end] .= Ttop
-        @views thermal.T[:, 1] .= Tbot
+        # interpolate fields from particles to cell centers
+        particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[:, end - 1] .= Ttop
+        @views thermal.T[:, 2] .= Tbot
         thermal_bcs!(thermal, thermal_bc)
         # ------------------------------
 
@@ -413,7 +398,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
+                    T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1)], C, CharDim))),
                     τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
                     εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                     Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
@@ -461,7 +446,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1 = heatmap!(ax1, Array.(xvi)..., Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))), colormap = :batlow)
+            h1 = heatmap!(ax1, Array.(xci)..., Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1)], C, CharDim))), colormap = :batlow)
             # Plot particles phase
             h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]))
             # Plot 2nd invariant of strain rate

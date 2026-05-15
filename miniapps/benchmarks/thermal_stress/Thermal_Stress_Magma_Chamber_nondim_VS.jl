@@ -365,7 +365,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         scatter!(
             ax1,
             ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), 2:(end - 1)])), C, CharDim))[:],
-            ustrip.(dimensionalize(Yv, km, CharDim)),
+            ustrip.(dimensionalize(Y, km, CharDim)),
         )
         scatter!(
             ax2,
@@ -760,7 +760,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
 
                     scatter!(
                         ax1, ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), 2:(end - 1)])), C, CharDim))[:],
-                        ustrip.(dimensionalize(Yv, km, CharDim))
+                        ustrip.(dimensionalize(Y, km, CharDim))
                     )
                     lines!(
                         ax2, ustrip.(dimensionalize((Array((stokes.P))), MPa, CharDim))[:],

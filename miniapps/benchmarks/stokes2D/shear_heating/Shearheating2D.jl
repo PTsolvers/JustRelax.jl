@@ -126,9 +126,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    Tvertex     = @zeros(ni .+ 1...)
-    T_buffer    = thermal.T[2:(end - 1), 2:(end - 1)]
-    Told_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer    = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    Told_buffer = similar(T_buffer)
+    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, T_buffer, particles)
 
     # IO -----------------------------------------------
@@ -216,6 +216,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
         # Advection --------------------
         # interpolate fields from centroids to particles
+        @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
         centroid2particle!(pT, T_buffer, particles)
         # advect particles in space
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
@@ -223,10 +224,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         move_particles!(particles, particle_args)
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
-        center2vertex!(Tvertex, thermal.T)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (Tvertex,))
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 

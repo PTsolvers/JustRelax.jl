@@ -187,13 +187,6 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
         #     nout    = 1e2,
         #     verbose = true,
         # )
-        # subgrid_characteristic_time!(
-        #     subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
-        # )
-        # centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        # subgrid_diffusion!(
-        #     pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
-        # )
         # ------------------------------
 
         # Advection --------------------

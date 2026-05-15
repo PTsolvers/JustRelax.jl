@@ -307,7 +307,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         scatter!(
             ax1,
             Array(thermal.T[2:(end - 1), 2:(end - 1)][:]),
-            Yv ./ 1.0e3,
+            Y ./ 1.0e3,
         )
         # lines!(
         scatter!(
@@ -597,7 +597,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                     scatter!(
                         ax1,
                         Array(thermal.T[2:(end - 1), 2:(end - 1)][:] .- 273.15),
-                        Yv ./ 1.0e3,
+                        Y ./ 1.0e3,
                     )
                     lines!(
                         ax2,

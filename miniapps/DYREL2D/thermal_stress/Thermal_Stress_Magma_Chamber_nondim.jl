@@ -331,7 +331,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
         scatter!(
             ax1,
             ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), 2:(end - 1)])), C, CharDim))[:],
-            ustrip.(dimensionalize(Yv, km, CharDim)),
+            ustrip.(dimensionalize(Y, km, CharDim)),
         )
         scatter!(
             ax2,
@@ -716,7 +716,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
 
                     scatter!(
                         ax1, ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), 2:(end - 1)])), C, CharDim))[:],
-                        ustrip.(dimensionalize(Yv, km, CharDim))
+                        ustrip.(dimensionalize(Y, km, CharDim))
                     )
                     lines!(
                         ax2, ustrip.(dimensionalize((Array((stokes.P))), MPa, CharDim))[:],

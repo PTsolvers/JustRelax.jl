@@ -146,7 +146,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), (1 .- Yv))
+        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), (1 .- Y))
         scatter!(ax2, Array(log10.(η[:])), (1 .- Y))
         ylims!(ax1, maximum(xvi[2]), 0)
         ylims!(ax2, maximum(xvi[2]), 0)

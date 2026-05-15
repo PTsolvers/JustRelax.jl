@@ -209,19 +209,6 @@ xv_ref = solve_grid(0.0, 1.0, M, n) # refined grid
 xv_uni = collect(LinRange(0, 1, n + 1))
 xvi = xv_ref, xv_uni
 
-# fig = Figure(size=(1200, 1200), fontsize=20)
-# ax  = Axis(fig[1,1]; xlabel = "x", ylabel = "Δx")
-# for ui in xvi[1]
-#     hlines!(ax, ui; xmin = 0, xmax = 1, color= :black)
-# end
-# for ui in xvi[2]
-#     vlines!(ax, ui; ymin = 0, ymax = 1, color= :black)
-# end
-
-# xlims!(ax, (0,1))
-# ylims!(ax, (0,1))
-# fig
-
 main(xvi, igg; figdir = figdir, nx = nx, ny = ny);
 
 

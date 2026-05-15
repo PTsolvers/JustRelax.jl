@@ -40,7 +40,7 @@ else
 end
 
 @parallel_indices (i, j, k) function init_T!(T, z, lz)
-    T[i, j, k+1] = z[k] * (1900.0 - 1600.0) / (-lz) + 1600.0
+    T[i, j, k + 1] = z[k] * (1900.0 - 1600.0) / (-lz) + 1600.0
     return nothing
 end
 
@@ -144,7 +144,7 @@ function diffusion_3D(;
     K = @fill(K0, ni...)
     ρCp = @. Cp * ρ
 
-   # Boundary conditions
+    # Boundary conditions
     Ttop = 300.0
     Tbot = 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
@@ -152,7 +152,7 @@ function diffusion_3D(;
         constant_value = (left = true, right = true, top = Ttop, bot = Tbot, front = true, back = true),
     )
 
-    @parallel (1:(nx + 2), 1:(ny+2), 1:nz) init_T!(thermal.T, xci[3], lz)
+    @parallel (1:(nx + 2), 1:(ny + 2), 1:nz) init_T!(thermal.T, xci[3], lz)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation

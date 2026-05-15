@@ -244,7 +244,7 @@ end
 
         # Initialize iters and thermal to ensure they are defined
         iters, thermal = Shearheating3D(igg; nx = nx, ny = ny, nz = nz)
-        
+
         # Ensure iters is defined before running the test
         @test iters != nothing && iters.err_evo1[end] < 1.0e-4
         @test any(x -> x < 0, thermal.shear_heating) == false

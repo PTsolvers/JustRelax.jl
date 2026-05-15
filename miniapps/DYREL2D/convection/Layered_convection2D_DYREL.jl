@@ -1,7 +1,7 @@
-using CUDA
+# using CUDA
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
-const backend_JR = CUDABackend
+const backend_JR =  JustRelax.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -10,7 +10,7 @@ using JustPIC, JustPIC._2D
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
 using GeoParams, GLMakie

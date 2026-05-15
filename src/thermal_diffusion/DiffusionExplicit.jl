@@ -233,27 +233,27 @@ end
     i1, j1 = @add 1 i j # augment indices by 1
     nPx = size(args.P, 1)
 
-        @inbounds if all((i, j) .≤ size(qTx))
-            _dx = @dx(_di_vertex, i)
-            Tx = (T[i1, j1] + T[i, j1]) * 0.5
-            Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
-            argsx = (; T = Tx, P = Pvertex)
-            qTx[i, j] =
-                -compute_diffusivity(rheology, phases[i, j], getindex_NamedTuple(argsx, i, j)) *
-                (T[i1, j1] - T[i, j1]) *
-                _dx
-        end
+    @inbounds if all((i, j) .≤ size(qTx))
+        _dx = @dx(_di_vertex, i)
+        Tx = (T[i1, j1] + T[i, j1]) * 0.5
+        Pvertex = (args.P[clamp(i - 1, 1, nPx), j1] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
+        argsx = (; T = Tx, P = Pvertex)
+        qTx[i, j] =
+            -compute_diffusivity(rheology, phases[i, j], getindex_NamedTuple(argsx, i, j)) *
+            (T[i1, j1] - T[i, j1]) *
+            _dx
+    end
 
-        @inbounds if all((i, j) .≤ size(qTy))
-            _dy = @dy(_di_vertex, j)
-            Ty = (T[i1, j1] + T[i1, j]) * 0.5
-            Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
-            argsy = (; T = Ty, P = Pvertex)
-            qTy[i, j] =
-                -compute_diffusivity(rheology, phases[i, j], getindex_NamedTuple(argsy, i, j)) *
-                (T[i1, j1] - T[i1, j]) *
-                _dy
-        end
+    @inbounds if all((i, j) .≤ size(qTy))
+        _dy = @dy(_di_vertex, j)
+        Ty = (T[i1, j1] + T[i1, j]) * 0.5
+        Pvertex = (args.P[clamp(i, 1, nPx), j] + args.P[clamp(i - 1, 1, nPx), j]) * 0.5
+        argsy = (; T = Ty, P = Pvertex)
+        qTy[i, j] =
+            -compute_diffusivity(rheology, phases[i, j], getindex_NamedTuple(argsy, i, j)) *
+            (T[i1, j1] - T[i1, j]) *
+            _dy
+    end
 
     return nothing
 end
@@ -356,9 +356,9 @@ function JustRelax.solve!(
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_bcs!(thermal_bc, thermal.T)
 
-        @. thermal.ΔT = thermal.T - thermal.Told
-        return nothing
-    end
+    @. thermal.ΔT = thermal.T - thermal.Told
+    return nothing
+end
 
 # upwind advection
 function JustRelax.solve!(
@@ -390,9 +390,9 @@ function JustRelax.solve!(
 
     # thermal_bcs!(thermal_bc, thermal.T)
 
-        @. thermal.ΔT = thermal.T - thermal.Told
-        return nothing
-    end
+    @. thermal.ΔT = thermal.T - thermal.Told
+    return nothing
+end
 
 # GEOPARAMS VERSION
 
@@ -422,9 +422,9 @@ function JustRelax.solve!(
 
     # thermal_bcs!(thermal_bc, thermal.T)
 
-        @. thermal.ΔT = thermal.T - thermal.Told
-        return nothing
-    end
+    @. thermal.ΔT = thermal.T - thermal.Told
+    return nothing
+end
 
 # with multiple material phases
 function JustRelax.solve!(
@@ -451,9 +451,9 @@ function JustRelax.solve!(
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_bcs!(thermal.T, thermal_bc)
 
-        @. thermal.ΔT = thermal.T - thermal.Told
-        return nothing
-    end
+    @. thermal.ΔT = thermal.T - thermal.Told
+    return nothing
+end
 
 # Upwind advection
 function JustRelax.solve!(
@@ -488,9 +488,9 @@ function JustRelax.solve!(
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_bcs!(thermal.T, thermal_bc)
 
-        @. thermal.ΔT = thermal.T - thermal.Told
-        return nothing
-    end
+    @. thermal.ΔT = thermal.T - thermal.Told
+    return nothing
+end
 
 # Upwind advection
 function JustRelax.solve!(
@@ -526,9 +526,9 @@ function JustRelax.solve!(
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_bcs!(thermal.T, thermal_bc)
 
-        @. thermal.ΔT = thermal.T - thermal.Told
-        return nothing
-    end
+    @. thermal.ΔT = thermal.T - thermal.Told
+    return nothing
+end
 
 end
 
@@ -620,55 +620,55 @@ end
     i1, j1, k1 = (i, j, k) .+ 1  # augment indices by 1
     nx, ny, nz = size(args.P)
 
-        @inbounds begin
-            if all((i, j, k) .≤ size(qTx))
-                _dx = @dx(_di, i)
-                Tx = (T[i1, j1, k1] + T[i, j1, k1]) * 0.5
-                Pvertex = 0.0
-                for jj in 0:1, kk in 0:1
-                    Pvertex += args.P[i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)]
-                end
-                argsx = (; T = Tx, P = Pvertex * 0.25)
-                qTx[i, j, k] =
-                    -compute_diffusivity(
-                    rheology, phases[i, j, k], getindex_NamedTuple(argsx, i, j, k)
-                ) *
-                    (T[i1, j1, k1] - T[i, j1, k1]) *
-                    _dx
+    @inbounds begin
+        if all((i, j, k) .≤ size(qTx))
+            _dx = @dx(_di, i)
+            Tx = (T[i1, j1, k1] + T[i, j1, k1]) * 0.5
+            Pvertex = 0.0
+            for jj in 0:1, kk in 0:1
+                Pvertex += args.P[i, clamp(j + jj, 1, ny), clamp(k + kk, 1, nz)]
             end
-
-            if all((i, j, k) .≤ size(qTy))
-                _dy = @dy(_di, j)
-                Ty = (T[i1, j1, k1] + T[i1, j, k1]) * 0.5
-                Pvertex = 0.0
-                for kk in 0:1, ii in 0:1
-                    args.P[clamp(i + ii, 1, nx), j, clamp(k + kk, 1, nz)]
-                end
-                argsy = (; T = Ty, P = Pvertex * 0.25)
-                qTy[i, j, k] =
-                    -compute_diffusivity(
-                    rheology, phases[i, j, k], getindex_NamedTuple(argsy, i, j, k)
-                ) *
-                    (T[i1, j1, k1] - T[i1, j, k1]) *
-                    _dy
-            end
-
-            if all((i, j, k) .≤ size(qTz))
-                _dz = @dz(_di, k)
-                Tz = (T[i1, j1, k1] + T[i1, j1, k]) * 0.5
-                Pvertex = 0.0
-                for jj in 0:1, ii in 0:1
-                    args.P[clamp(i + ii, 1, nx), clamp(j + jj, 1, ny), k]
-                end
-                argsz = (; T = Tz, P = Pvertex * 0.25)
-                qTz[i, j, k] =
-                    -compute_diffusivity(
-                    rheology, phases[i, j, k], getindex_NamedTuple(argsz, i, j, k)
-                ) *
-                    (T[i1, j1, k1] - T[i1, j1, k]) *
-                    _dz
-            end
+            argsx = (; T = Tx, P = Pvertex * 0.25)
+            qTx[i, j, k] =
+                -compute_diffusivity(
+                rheology, phases[i, j, k], getindex_NamedTuple(argsx, i, j, k)
+            ) *
+                (T[i1, j1, k1] - T[i, j1, k1]) *
+                _dx
         end
+
+        if all((i, j, k) .≤ size(qTy))
+            _dy = @dy(_di, j)
+            Ty = (T[i1, j1, k1] + T[i1, j, k1]) * 0.5
+            Pvertex = 0.0
+            for kk in 0:1, ii in 0:1
+                args.P[clamp(i + ii, 1, nx), j, clamp(k + kk, 1, nz)]
+            end
+            argsy = (; T = Ty, P = Pvertex * 0.25)
+            qTy[i, j, k] =
+                -compute_diffusivity(
+                rheology, phases[i, j, k], getindex_NamedTuple(argsy, i, j, k)
+            ) *
+                (T[i1, j1, k1] - T[i1, j, k1]) *
+                _dy
+        end
+
+        if all((i, j, k) .≤ size(qTz))
+            _dz = @dz(_di, k)
+            Tz = (T[i1, j1, k1] + T[i1, j1, k]) * 0.5
+            Pvertex = 0.0
+            for jj in 0:1, ii in 0:1
+                args.P[clamp(i + ii, 1, nx), clamp(j + jj, 1, ny), k]
+            end
+            argsz = (; T = Tz, P = Pvertex * 0.25)
+            qTz[i, j, k] =
+                -compute_diffusivity(
+                rheology, phases[i, j, k], getindex_NamedTuple(argsz, i, j, k)
+            ) *
+                (T[i1, j1, k1] - T[i1, j1, k]) *
+                _dz
+        end
+    end
 
     return nothing
 end
@@ -818,16 +818,16 @@ function JustRelax.solve!(
     di = di isa NamedTuple ? di.center : di
     _di = _di isa NamedTuple ? _di.center : _di
 
-        @parallel assign!(thermal.Told, thermal.T)
-        @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, thermal_parameters.κ, _di)
-        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _di)
-        @hide_communication b_width begin # communication/computation overlap
-            @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-            update_halo!(thermal.T)
-        end
-        thermal_bcs!(thermal.T, thermal_bc)
-        return nothing
+    @parallel assign!(thermal.Told, thermal.T)
+    @parallel compute_flux!(thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, thermal_parameters.κ, _di)
+    @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _di)
+    @hide_communication b_width begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        update_halo!(thermal.T)
     end
+    thermal_bcs!(thermal.T, thermal_bc)
+    return nothing
+end
 
 # upwind advection
 function JustRelax.solve!(
@@ -846,31 +846,31 @@ function JustRelax.solve!(
     di = di isa NamedTuple ? di.center : di
     _di = _di isa NamedTuple ? _di.center : _di
 
-        # copy thermal array from previous time step
-        @copy thermal.Told thermal.T
-        # compute flux
-        @parallel compute_flux!(
-            thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, thermal_parameters.κ, _di
+    # copy thermal array from previous time step
+    @copy thermal.Told thermal.T
+    # compute flux
+    @parallel compute_flux!(
+        thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, thermal_parameters.κ, _di
+    )
+    # compute upwind advection
+    @hide_communication b_width begin # communication/computation overlap
+        @parallel advect_T!(
+            thermal.dT_dt,
+            thermal.qTx,
+            thermal.qTy,
+            thermal.qTz,
+            thermal.T,
+            stokes.V.Vx,
+            stokes.V.Vy,
+            stokes.V.Vz,
+            _di,
         )
-        # compute upwind advection
-        @hide_communication b_width begin # communication/computation overlap
-            @parallel advect_T!(
-                thermal.dT_dt,
-                thermal.qTx,
-                thermal.qTy,
-                thermal.qTz,
-                thermal.T,
-                stokes.V.Vx,
-                stokes.V.Vy,
-                stokes.V.Vz,
-                _di,
-            )
-            update_halo!(thermal.T)
-        end
-        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-        thermal_bcs!(thermal.T, thermal_bc)
-        return nothing
+        update_halo!(thermal.T)
     end
+    @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+    thermal_bcs!(thermal.T, thermal_bc)
+    return nothing
+end
 
 # GEOPARAMS VERSION
 
@@ -891,25 +891,25 @@ function JustRelax.solve!(
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(thermal.T)
 
-        ## SOLVE HEAT DIFFUSION
-        # copy thermal array from previous time step
-        @copy thermal.Told thermal.T
-        # compute flux
-        @parallel (@idx ni .- 1) compute_flux!(
-            thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, rheology, args, _di
-        )
-        # compute upwind advection
-        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _di)
-        # update thermal array
-        @hide_communication b_width begin # communication/computation overlap
-            @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-            update_halo!(thermal.T)
-        end
-        # apply boundary conditions
-        thermal_bcs!(thermal.T, thermal_bc)
-        @. thermal.ΔT = thermal.T - thermal.Told
-        return nothing
+    ## SOLVE HEAT DIFFUSION
+    # copy thermal array from previous time step
+    @copy thermal.Told thermal.T
+    # compute flux
+    @parallel (@idx ni .- 1) compute_flux!(
+        thermal.qTx, thermal.qTy, thermal.qTz, thermal.T, rheology, args, _di
+    )
+    # compute upwind advection
+    @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _di)
+    # update thermal array
+    @hide_communication b_width begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        update_halo!(thermal.T)
     end
+    # apply boundary conditions
+    thermal_bcs!(thermal.T, thermal_bc)
+    @. thermal.ΔT = thermal.T - thermal.Told
+    return nothing
+end
 
 # with multiple material phases - no advection
 function JustRelax.solve!(
@@ -930,32 +930,32 @@ function JustRelax.solve!(
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(thermal.T)
 
-        ## SOLVE HEAT DIFFUSION
-        # copy thermal array from previous time step
-        @copy thermal.Told thermal.T
-        # compute flux
-        @parallel (@idx ni .- 1) compute_flux!(
-            thermal.qTx,
-            thermal.qTy,
-            thermal.qTz,
-            thermal.T,
-            rheology,
-            phase_ratios.center,
-            args,
-            _di,
-        )
-        # compute upwind advection
-        @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _di)
-        # update thermal array
-        @hide_communication b_width begin # communication/computation overlap
-            @parallel update_T!(thermal.T, thermal.dT_dt, dt)
-            update_halo!(thermal.T)
-        end
-        # apply boundary conditions
-        thermal_bcs!(thermal.T, thermal_bc)
-        @. thermal.ΔT = thermal.T - thermal.Told
-        return nothing
+    ## SOLVE HEAT DIFFUSION
+    # copy thermal array from previous time step
+    @copy thermal.Told thermal.T
+    # compute flux
+    @parallel (@idx ni .- 1) compute_flux!(
+        thermal.qTx,
+        thermal.qTy,
+        thermal.qTz,
+        thermal.T,
+        rheology,
+        phase_ratios.center,
+        args,
+        _di,
+    )
+    # compute upwind advection
+    @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _di)
+    # update thermal array
+    @hide_communication b_width begin # communication/computation overlap
+        @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        update_halo!(thermal.T)
     end
+    # apply boundary conditions
+    thermal_bcs!(thermal.T, thermal_bc)
+    @. thermal.ΔT = thermal.T - thermal.Told
+    return nothing
+end
 
 # upwind advection
 function JustRelax.solve!(
@@ -1005,9 +1005,9 @@ function JustRelax.solve!(
     end
     thermal_bcs!(thermal.T, thermal_bc)
 
-        @. thermal.ΔT = thermal.T - thermal.Told
-        return nothing
-    end
+    @. thermal.ΔT = thermal.T - thermal.Told
+    return nothing
+end
 
 # upwind advection
 function JustRelax.solve!(
@@ -1058,8 +1058,8 @@ function JustRelax.solve!(
     end
     thermal_bcs!(thermal.T, thermal_bc)
 
-        @. thermal.ΔT = thermal.T - thermal.Told
-        return nothing
-    end
+    @. thermal.ΔT = thermal.T - thermal.Told
+    return nothing
+end
 
 end

@@ -1,6 +1,6 @@
 push!(LOAD_PATH, "..")
 
- ENV["JULIA_JUSTRELAX_BACKEND"] =1
+ENV["JULIA_JUSTRELAX_BACKEND"] = 1
 
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
@@ -39,7 +39,7 @@ else
 end
 
 @parallel_indices (i, j, k) function init_T!(T, z)
-    T[i, j, k+1] = z[k] * (1900.0 - 1600.0) / minimum(z) + 1600.0
+    T[i, j, k + 1] = z[k] * (1900.0 - 1600.0) / minimum(z) + 1600.0
     return nothing
 end
 
@@ -151,7 +151,7 @@ function diffusion_3D(;
         constant_value = (left = true, right = true, top = Ttop, bot = Tbot, front = true, back = true),
     )
 
-    @parallel (1:(nx + 2), 1:(ny+2), 1:nz) init_T!(thermal.T, xci[3])
+    @parallel (1:(nx + 2), 1:(ny + 2), 1:nz) init_T!(thermal.T, xci[3])
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation

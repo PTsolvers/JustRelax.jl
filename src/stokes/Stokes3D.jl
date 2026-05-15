@@ -280,6 +280,7 @@ function _solve!(
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
+                args
             )
             @parallel (@idx ni) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
@@ -551,6 +552,8 @@ function _solve!(
                 @strain(stokes),
                 @plastic_strain(stokes),
                 stokes.EII_pl,
+                stokes.ε_vol_pl,
+                stokes.EVol_pl,
                 @tensor_center(stokes.τ),
                 (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy),
                 @tensor_center(stokes.τ_o),

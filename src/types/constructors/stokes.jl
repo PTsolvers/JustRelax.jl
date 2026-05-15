@@ -288,9 +288,9 @@ function StokesArrays(ni::NTuple{N, Integer}) where {N}
     τ_o = SymmetricTensor(ni...)
     ε = SymmetricTensor(ni...)
     ε_pl = SymmetricTensor(ni...)
-    EII_pl    = @zeros(ni...)
-    EVol_pl   = @zeros(ni...)  # accumulated volumetric plastic strain
-    ε_vol_pl  = @zeros(ni...)  # volumetric plastic strain rate (current step)
+    EII_pl = @zeros(ni...)
+    EVol_pl = @zeros(ni...)  # accumulated volumetric plastic strain
+    ε_vol_pl = @zeros(ni...)  # volumetric plastic strain rate (current step)
     viscosity = Viscosity(ni)
     R = Residual(ni...)
     Δε = SymmetricTensor(ni...)

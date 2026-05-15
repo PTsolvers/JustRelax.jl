@@ -22,7 +22,7 @@ end
 end
 
 """
-    TemperatureBoundaryConditions(; no_flux, constant_flux, constant_value, dirichlet)
+    TemperatureBoundaryConditions(; no_flux, constant_flux, constant_value, periodic, dirichlet)
 
 Create thermal boundary conditions for 2D or 3D temperature fields.
 
@@ -37,6 +37,7 @@ The face values have the following meaning:
   ghost value `Tghost = 2 * value - Tinterior`.
 - `constant_flux`: numeric values prescribe heat fluxes in the pseudo-transient
   diffusion flux kernels.
+- `periodic`: `true` copies the opposite interior temperature into the ghost layer.
 - `false`: leaves that boundary inactive for the corresponding condition.
 
 `dirichlet` accepts the mask-based Dirichlet forms supported by `Dirichlet`, for
@@ -53,27 +54,31 @@ TemperatureBoundaryConditions(;
 TemperatureBoundaryConditions(;
     no_flux = (left = true, right = true, front = true, back = true, top = false, bot = false),
     constant_flux = (top = 0.0, bot = 0.03),
+    periodic = (left = false, right = false, front = false, back = false, top = false, bot = false),
 )
 ```
 """
-struct TemperatureBoundaryConditions{T1, T2, T3, D, nD} <: AbstractBoundaryConditions
+struct TemperatureBoundaryConditions{T1, T2, T3, T4, D, nD} <: AbstractBoundaryConditions
     no_flux::T1
     constant_flux::T2
     constant_value::T3
+    periodic::T4
     dirichlet::D
     function TemperatureBoundaryConditions(;
             no_flux::T1 = (left = true, right = false, top = false, bot = false),
             constant_flux::T2 = (left = false, right = false, top = false, bot = false),
             constant_value::T3 = (left = false, right = false, top = false, bot = false),
+            periodic::T4 = (left = false, right = false, top = false, bot = false),
             dirichlet = (; constant = nothing, mask = nothing),
-        ) where {T1, T2, T3}
+        ) where {T1, T2, T3, T4}
         D = Dirichlet(dirichlet)
-        nD = maximum(length, (no_flux, constant_flux, constant_value)) > 4 ? 3 : 2
+        nD = maximum(length, (no_flux, constant_flux, constant_value, periodic)) > 4 ? 3 : 2
         no_flux = _thermal_bc_tuple(no_flux, Val(nD))
         constant_flux = _thermal_bc_tuple(constant_flux, Val(nD))
         constant_value = _thermal_bc_tuple(constant_value, Val(nD))
-        return new{typeof(no_flux), typeof(constant_flux), typeof(constant_value), typeof(D), nD}(
-            no_flux, constant_flux, constant_value, D
+        periodic = _thermal_bc_tuple(periodic, Val(nD))
+        return new{typeof(no_flux), typeof(constant_flux), typeof(constant_value), typeof(periodic), typeof(D), nD}(
+            no_flux, constant_flux, constant_value, periodic, D
         )
     end
 end

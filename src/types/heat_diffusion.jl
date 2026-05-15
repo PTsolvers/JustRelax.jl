@@ -1,9 +1,7 @@
-struct ThermalArrays{_T, _Tc}
-    T::_T  # Temperature; in 2D this is cell-centered with ghost nodes
-    Tc::_Tc # Temperature @ cell centers; in 2D this aliases the physical interior of T
+struct ThermalArrays{_T}
+    T::_T  # Temperature at cell centers with ghost nodes
     Told::_T
     ΔT::_T
-    ΔTc::_T
     adiabatic::_T # adiabatic term α (u ⋅ ∇P)
     dT_dt::_T
     qTx::_T

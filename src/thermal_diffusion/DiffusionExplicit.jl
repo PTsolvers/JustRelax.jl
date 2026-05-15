@@ -335,8 +335,6 @@ module ThermalDiffusion2D
         thermal_bcs!(thermal_bc, thermal.T)
 
         @. thermal.ΔT = thermal.T - thermal.Told
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -371,8 +369,6 @@ module ThermalDiffusion2D
         # thermal_bcs!(thermal_bc, thermal.T)
 
         @. thermal.ΔT = thermal.T - thermal.Told
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -405,8 +401,6 @@ module ThermalDiffusion2D
         # thermal_bcs!(thermal_bc, thermal.T)
 
         @. thermal.ΔT = thermal.T - thermal.Told
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -436,8 +430,6 @@ module ThermalDiffusion2D
         thermal_bcs!(thermal.T, thermal_bc)
 
         @. thermal.ΔT = thermal.T - thermal.Told
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -475,8 +467,6 @@ module ThermalDiffusion2D
         thermal_bcs!(thermal.T, thermal_bc)
 
         @. thermal.ΔT = thermal.T - thermal.Told
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -515,8 +505,6 @@ module ThermalDiffusion2D
         thermal_bcs!(thermal.T, thermal_bc)
 
         @. thermal.ΔT = thermal.T - thermal.Told
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -812,8 +800,6 @@ module ThermalDiffusion3D
             update_halo!(thermal.T)
         end
         thermal_bcs!(thermal.T, thermal_bc)
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -857,8 +843,6 @@ module ThermalDiffusion3D
         end
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
         thermal_bcs!(thermal.T, thermal_bc)
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -898,8 +882,6 @@ module ThermalDiffusion3D
         # apply boundary conditions
         thermal_bcs!(thermal.T, thermal_bc)
         @. thermal.ΔT = thermal.T - thermal.Told
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -946,8 +928,6 @@ module ThermalDiffusion3D
         # apply boundary conditions
         thermal_bcs!(thermal.T, thermal_bc)
         @. thermal.ΔT = thermal.T - thermal.Told
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -1000,8 +980,6 @@ module ThermalDiffusion3D
         thermal_bcs!(thermal.T, thermal_bc)
 
         @. thermal.ΔT = thermal.T - thermal.Told
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 
@@ -1055,8 +1033,6 @@ module ThermalDiffusion3D
         thermal_bcs!(thermal.T, thermal_bc)
 
         @. thermal.ΔT = thermal.T - thermal.Told
-        @parallel (@idx size(thermal.Tc)...) temperature2center!(thermal.Tc, thermal.T)
-
         return nothing
     end
 

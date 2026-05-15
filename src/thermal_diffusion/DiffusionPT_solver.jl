@@ -31,9 +31,9 @@ function _heatdiffusion_PT!(
     _di = grid._di
     _dt = inv(dt)
 
-    _sq_len_RT = inv(sqrt((nx_g() + 1) * (ny_g() + 1) * (nz_g() + (nz_g() > 1))))
     ϵ = pt_thermal.ϵ
     ni = size(thermal.H)
+    _sq_len_RT = inv(sqrt(prod(ni)))
     @copy thermal.Told thermal.T
 
     # errors
@@ -125,8 +125,6 @@ function _heatdiffusion_PT!(
     end
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
-    length(ni) == 3 && temperature2center!(thermal)
-
     return (iter_count = iter_count, norm_ResT = norm_ResT)
 end
 
@@ -141,7 +139,7 @@ function _heatdiffusion_PT!(
         kwargs...,
     ) where {N}
     grid = JustRelax.legacy_uniform_grid(size(thermal.H), di)
-    return _heatdiffusion_PT!(thermal, pt_thermal, thermal_bc, K, ρCp, dt, grid; kwargs...)
+    return _heatdiffusion_PT!(thermal, pt_thermal, thermal_bc, K, ρCp, dt, grid; kwargs.data...)
 end
 
 """
@@ -172,9 +170,9 @@ function _heatdiffusion_PT!(
     di = grid.di
     _di = grid._di
     _dt = inv(dt)
-    _sq_len_RT = inv(sqrt((nx_g() + 1) * (ny_g() + 1) * (nz_g() + (nz_g() > 1))))
     ϵ = pt_thermal.ϵ
     ni = size(thermal.H)
+    _sq_len_RT = inv(sqrt(prod(ni)))
     @copy thermal.Told thermal.T
     !isnothing(phase) && update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
 
@@ -283,8 +281,6 @@ function _heatdiffusion_PT!(
     end
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
-    length(ni) == 3 && temperature2center!(thermal)
-
     return (iter_count = iter_count, norm_ResT = norm_ResT)
 end
 
@@ -303,10 +299,10 @@ function _heatdiffusion_PT!(
 end
 
 @inline flux_range(nx, ny) = @idx (nx + 1, ny + 1)
-@inline flux_range(nx, ny, nz) = @idx (nx, ny, nz)
+@inline flux_range(nx, ny, nz) = @idx (nx + 1, ny + 1, nz + 1)
 
 @inline update_range(nx, ny) = @idx (nx, ny)
-@inline update_range(nx, ny, nz) = residual_range(nx, ny, nz)
+@inline update_range(nx, ny, nz) = @idx (nx, ny, nz)
 
 @inline residual_range(nx, ny) = update_range(nx, ny)
-@inline residual_range(nx, ny, nz) = @idx (nx - 1, ny - 1, nz - 1)
+@inline residual_range(nx, ny, nz) = update_range(nx, ny, nz)

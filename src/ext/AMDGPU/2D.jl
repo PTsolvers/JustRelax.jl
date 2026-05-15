@@ -41,10 +41,19 @@ __init__() = @init_parallel_stencil(AMDGPU, Float64, 2)
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 include("../../variational_stokes/Stokes2D.jl")
+include("../../DYREL/DYREL2D.jl")
 
 # Types
 function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
+end
+
+function JR2D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return DYREL(ni)
+end
+
+function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, CFL = 0.99, c_fat = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, CFL = CFL, c_fat = c_fat, γfact = γfact)
 end
 
 function JR2D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Number}) where {N}
@@ -148,6 +157,24 @@ function JR2D.update_thermal_coeffs!(
     )
     return nothing
 end
+
+function JR2D.PrincipalStress(backend::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return PrincipalStress(ni)
+end
+
+function JR2D.compute_principal_stresses(backend::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays)
+    ni = size(stokes.P)
+    σ = JR2D.PrincipalStress(backend, ni)
+    compute_principal_stresses!(stokes, σ)
+    return σ
+end
+
+function JR2D.compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress{<:ROCArray})
+    ni = size(stokes.P)
+    @parallel (@idx ni) principal_stresses_eigen!(σ, @stress_center(stokes)...)
+    return nothing
+end
+
 
 # Boundary conditions
 function JR2D.flow_bcs!(

@@ -662,6 +662,16 @@ end
     return nothing
 end
 
+"""
+    update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, dirichlet, _dt, _di, ni)
+    update_T(::Nothing, b_width, thermal, rheology, phase, pt_thermal, dirichlet, _dt, _di, ni, args)
+
+Launch the pseudo-transient temperature update kernel over the active thermal
+domain.
+
+These wrappers select the appropriate kernel overload depending on whether the
+solver works with precomputed `ρCp` fields or rheology-derived properties.
+"""
 function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, dirichlet, _dt, _di, ni)
     return @parallel update_range(ni...) update_T!(
         thermal.T,
@@ -698,70 +708,78 @@ function update_T(
 end
 
 @parallel_indices (i, j, k) function adiabatic_heating(
-        A, Vx, Vy, Vz, P, rheology, phases, _di
+        A, Vx, Vy, Vz, P, P0, rheology, phases, _di, _dt
     )
     _dx, _dy, _dz = @dxi(_di, i, j, k)
     nx, ny, nz = size(P)
     @inbounds begin
-        α = compute_α(rheology, getindex_phase(phases, i, j, k))
-        iW = max(i - 1, 1)
-        iE = min(i + 1, nx)
-        jS = max(j - 1, 1)
-        jN = min(j + 1, ny)
-        kB = max(k - 1, 1)
-        kT = min(k + 1, nz)
-
-        _dx_left = @dx(_di, iW)
-        dPdx = ((P[iE, j, k] - P[i, j, k]) * _dx_left - (P[i, j, k] - P[iW, j, k]) * _dx) / (_dx_left * _dx)
-        _dy_front = @dy(_di, jS)
-        dPdy = ((P[i, jN, k] - P[i, j, k]) * _dy_front - (P[i, j, k] - P[i, jS, k]) * _dy) / (_dy_front * _dy)
-        _dz_bottom = @dz(_di, kB)
-        dPdz = ((P[i, j, kT] - P[i, j, k]) * _dz_bottom - (P[i, j, k] - P[i, j, kB]) * _dz) / (_dz_bottom * _dz)
-
-        Vx_av = (Vx[i, j + 1, k + 1] + Vx[i + 1, j + 1, k + 1]) * 0.5
-        Vy_av = (Vy[i + 1, j, k + 1] + Vy[i + 1, j + 1, k + 1]) * 0.5
-        Vz_av = (Vz[i + 1, j + 1, k] + Vz[i + 1, j + 1, k + 1]) * 0.5
-        A[i, j, k] = (Vx_av * dPdx + Vy_av * dPdy + Vz_av * dPdz) * α
+        α =
+            (
+            compute_α(rheology, getindex_phase(phases, I...)) +
+                compute_α(rheology, getindex_phase(phases, i, j1, k)) +
+                compute_α(rheology, getindex_phase(phases, i1, j, k)) +
+                compute_α(rheology, getindex_phase(phases, i1, j1, k)) +
+                compute_α(rheology, getindex_phase(phases, i, j1, k1)) +
+                compute_α(rheology, getindex_phase(phases, i1, j, k1)) +
+                compute_α(rheology, getindex_phase(phases, i1, j1, k1)) +
+                compute_α(rheology, getindex_phase(phases, I1...))
+        ) * 0.125
+        # average P and P0 @ T node
+        Pv = (P[I...] + P[i, j, k1] + P[i, j1, k] + P[i, j1, k1] + P[i1, j, k] + P[i1, j, k1] + P[i1, j1, k] + P[i1, j1, k1]) / 8
+        P0v = (P0[I...] + P0[i, j, k1] + P0[i, j1, k] + P0[i, j1, k1] + P0[i1, j, k] + P0[i1, j, k1] + P0[i1, j1, k] + P0[i1, j1, k1]) / 8
+        # Adiabtic heating term
+        A[I...] = (Pv - P0v) * α * _dt
     end
     return nothing
 end
 
 @parallel_indices (i, j) function adiabatic_heating(
-        A, Vx, Vy, P, rheology, phases, _di_center
+        A, Vx, Vy, P, P0, rheology, phases, _di, _dt
     )
-    _dx, _dy = @dxi(_di_center, i, j)
-    nx, ny = size(P)
-    α = compute_α(rheology, getindex_phase(phases, i, j))
-    iW = max(i - 1, 1)
-    iE = min(i + 1, nx)
-    jS = max(j - 1, 1)
-    jN = min(j + 1, ny)
-
-    _dx_left = @dxi(_di_center, iW, j)
-    dPdx = ((P[iE, j] - P[i, j]) * _dx_left - (P[i, j] - P[iW, j]) * _dx) / (_dx_left * _dx)
-    _dy_bottom = @dxi(_di_center, i, jS)
-    dPdy = ((P[i, jN] - P[i, j]) * _dy_bottom - (P[i, j] - P[i, jS]) * _dy) / (_dy_bottom * _dy)
-    Vx_av = (Vx[i, j + 1] + Vx[i + 1, j + 1]) * 0.5
-    Vy_av = (Vy[i + 1, j] + Vy[i + 1, j + 1]) * 0.5
-    A[i, j] = (Vx_av * dPdx + Vy_av * dPdy) * α
-
+    _dx, _dy = @dxi(_di, i, j)
+    I = i, j
+    I1 = i1, j1 = I .+ 1
+    @inbounds begin
+        α =
+            (
+            compute_α(rheology, getindex_phase(phases, I...)) +
+                compute_α(rheology, getindex_phase(phases, i, j1)) +
+                compute_α(rheology, getindex_phase(phases, i1, j)) +
+                compute_α(rheology, getindex_phase(phases, I1...))
+        ) * 0.25
+        # average P and P0 @ T node
+        Pv = (P[I...] + P[i, j1] + P[i1, j] + P[i1, j1]) * 0.25
+        P0v = (P0[I...] + P0[i, j1] + P0[i1, j] + P0[i1, j1]) * 0.25
+        # Adiabtic heating term
+        A[i1, j] = (Pv - P0v) * α * _dt
+    end
     return nothing
 end
 
-function adiabatic_heating!(thermal, stokes, rheology, phases, grid::Geometry{2})
-    idx = @idx size(stokes.P)
+"""
+    adiabatic_heating!(thermal, stokes, rheology, phases, _dt, grid)
+
+Fill `thermal.adiabatic` with the adiabatic heating term inferred from the
+pressure change between `stokes.P0` and `stokes.P`.
+
+The kernels average the local thermal expansivity over the temperature nodes and
+scale the pressure increment by `inv(dt)`, passed here as `_dt`. When `stokes`
+is `nothing`, the no-op overloads leave the field unchanged.
+"""
+function adiabatic_heating!(thermal, stokes, rheology, phases, _dt, grid::Geometry{2})
+    idx = @idx (size(stokes.P) .- 1)
     return @parallel idx adiabatic_heating(
-        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, grid._di.center
+        thermal.adiabatic, @velocity(stokes)..., stokes.P, stokes.P0, rheology, phases, grid._di.center, _dt
     )
 end
 
-function adiabatic_heating!(thermal, stokes, rheology, phases, grid::Geometry{3})
-    idx = @idx size(stokes.P)
+function adiabatic_heating!(thermal, stokes, rheology, phases, _dt, grid::Geometry{3})
+    idx = @idx (size(stokes.P) .- 1)
     return @parallel idx adiabatic_heating(
-        thermal.adiabatic, @velocity(stokes)..., stokes.P, rheology, phases, grid._di.center
+        thermal.adiabatic, @velocity(stokes)..., stokes.P, stokes.P0, rheology, phases, grid._di.center, _dt
     )
 end
 
-@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, ::Geometry{2}) = nothing
-@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, ::Geometry{3}) = nothing
+@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, _dt, ::Geometry{2}) = nothing
+@inline adiabatic_heating!(thermal, ::Nothing, rheology, phases, _dt, ::Geometry{3}) = nothing
 @inline adiabatic_heating!(thermal, ::Nothing, ::Vararg{Any, N}) where {N} = nothing

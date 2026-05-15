@@ -246,7 +246,7 @@ let
         nx = N   # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
         ny = N
         init_mpi = JustRelax.MPI.Initialized() ? false : true
-        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi, select_device = false)...)
 
         main(igg; nx = nx, ny = ny)
     end

@@ -1,3 +1,13 @@
+"""
+    PTThermalCoeffs(K, ρCp, dt, di, li; ϵ = 1.0e-8, CFL = 0.9 / √3)
+
+Construct pseudo-transient thermal coefficients from conductivity and volumetric
+heat-capacity arrays.
+
+`di` and `li` are the grid spacing and domain-length tuples used to estimate the
+local pseudo-time step and relaxation factor stored in the returned
+`JustRelax.PTThermalCoeffs`.
+"""
 function PTThermalCoeffs(
         ::Type{CPUBackend}, K, ρCp, dt, di::NTuple, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / √3
     )
@@ -16,6 +26,15 @@ function PTThermalCoeffs(K, ρCp, dt, di, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / �
 end
 
 # with phase ratios
+"""
+    PTThermalCoeffs(rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-8, CFL = 0.9 / √3)
+
+Construct pseudo-transient thermal coefficients from a multi-phase rheology.
+
+The coefficient arrays are evaluated on the thermal grid of size `ni` using the
+phase ratios in `phase_ratios.center` together with the thermodynamic state
+stored in `args`.
+"""
 function PTThermalCoeffs(
         ::Type{CPUBackend},
         rheology,
@@ -46,6 +65,15 @@ function PTThermalCoeffs(
 end
 
 # without phase ratios
+"""
+    PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ = 1.0e-8, CFL = 0.9 / √3)
+
+Construct pseudo-transient thermal coefficients from a single rheology state.
+
+This method evaluates conductivity and `ρCp` from `rheology` and the cellwise
+fields in `args`, then stores the resulting relaxation arrays in a
+`JustRelax.PTThermalCoeffs` object.
+"""
 function PTThermalCoeffs(
         ::Type{CPUBackend},
         rheology::MaterialParams,
@@ -122,6 +150,16 @@ function _compute_pt_thermal_arrays!(
     return nothing
 end
 
+"""
+    update_thermal_coeffs!(pt_thermal, rheology, phase_ratios, args, dt)
+    update_thermal_coeffs!(pt_thermal, rheology, args, dt)
+
+Refresh the pseudo-transient coefficient arrays stored in `pt_thermal`.
+
+Use this when conductivity or volumetric heat capacity changes during the solve,
+for example because temperature, pressure, or phase ratios evolve. The update is
+performed in place on `pt_thermal.θr_dτ` and `pt_thermal.dτ_ρ`.
+"""
 function update_thermal_coeffs!(
         pt_thermal::JustRelax.PTThermalCoeffs, rheology, phase_ratios, args, dt
     )

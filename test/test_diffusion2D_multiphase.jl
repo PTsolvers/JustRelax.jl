@@ -80,14 +80,6 @@ function init_phases!(phases, particles, xc, yc, r)
     return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
 end
 
-@parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
-
-    args_ij = JustRelax2D.getindex_NamedTuple(args, I...)
-    H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij)
-
-    return nothing
-end
-
 lx = 100.0e3
 ly = 100.0e3
 Cp0 = 1.2e3
@@ -159,8 +151,6 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
-
-    @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
 
     # PT coefficients for thermal diffusion
     args = (; P = P, T = thermal.T)

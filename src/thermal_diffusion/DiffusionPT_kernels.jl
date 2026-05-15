@@ -235,6 +235,7 @@ end
                         (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz
                 ) +
                     Told[I1...] * ρCp * _dt +
+                    compute_density_ratio(phase_ratios, rheology, args_ijk) * fn_ratio(compute_radioactive_heat, rheology, phase_ijk, args_ijk) +
                     H[i, j, k] +
                     shear_heating[i, j, k] +
                     adiabatic[i, j, k] * T_ijk
@@ -309,6 +310,7 @@ end
                 (qTy2[i, j + 1, k] - qTy2[i, j, k]) * _dy +
                 (qTz2[i, j, k + 1] - qTz2[i, j, k]) * _dz
         ) +
+            compute_density_ratio(phase_ratios, rheology, args_ijk) * fn_ratio(compute_radioactive_heat, rheology, phase_ijk, args_ijk) +
             H[i, j, k] +
             shear_heating[i, j, k] +
             adiabatic[i, j, k] * T_ijk
@@ -582,6 +584,7 @@ end
             dτ_ρ[i, j] * (
                 -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) +
                     Told[I1...] * ρCp * _dt +
+                    compute_density_ratio(phase_ratios, rheology, args_ij) * fn_ratio(compute_radioactive_heat, rheology, phase_ijk, args_ij) +
                     H[i, j] +
                     shear_heating[i, j] +
                     adiabatic[i, j] * T[I1...]

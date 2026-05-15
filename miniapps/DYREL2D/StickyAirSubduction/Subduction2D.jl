@@ -144,7 +144,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # Time loop
     t, it = 0.0, 0
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, γfact = 100)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6, γfact = 100)
 
     while it < 1 # run only for 5 Myrs
 

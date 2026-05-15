@@ -88,6 +88,10 @@ end
     return nothing
 end
 
+lx = 100.0e3
+ly = 100.0e3
+Cp0 = 1.2e3
+K0 = 3.0
 function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e3, K0 = 3.0)
 
     kyr = 1.0e3 * 3600 * 24 * 365.25

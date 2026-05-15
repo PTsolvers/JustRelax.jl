@@ -132,7 +132,6 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci)
     thermal_bcs!(thermal, thermal_bc)
     thermal.Told .= thermal.T
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     args = (; T = thermal.T, P = stokes.P, dt = Inf)

@@ -117,7 +117,6 @@ function Shearheating2D(; nx = 32, ny = 32)
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
@@ -219,7 +218,6 @@ function Shearheating2D(; nx = 32, ny = 32)
 
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
-        temperature2center!(thermal)
 
         @show it += 1
         t += dt

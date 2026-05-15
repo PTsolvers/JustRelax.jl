@@ -99,7 +99,6 @@ const BackendArray = PTArray(backend)
     @test parent(@view(thermal.T[2:(end - 1), 2:(end - 1)])) === thermal.T
     @test size(thermal.Told) == (nx + 2, ny + 2)
     @test size(thermal.ΔT) == (nx + 2, ny + 2)
-    @test size(thermal.ΔTc) == ni
     @test size(thermal.adiabatic) == ni
     @test size(thermal.dT_dt) == ni
     @test size(thermal.qTx) == (nx + 1, ny)
@@ -113,7 +112,6 @@ const BackendArray = PTArray(backend)
     @test typeof(thermal.T) <: BackendArray
     @test typeof(thermal.Told) <: BackendArray
     @test typeof(thermal.ΔT) <: BackendArray
-    @test typeof(thermal.ΔTc) <: BackendArray
     @test typeof(thermal.adiabatic) <: BackendArray
     @test typeof(thermal.dT_dt) <: BackendArray
     @test typeof(thermal.qTx) <: BackendArray
@@ -224,26 +222,24 @@ end
     @test JR3.compute_principal_stresses!(stokes, σ) == nothing
 
     thermal = JR3.ThermalArrays(backend, ni)
-    @test size(thermal.T) == (nx + 1, ny + 1, nz + 1)
-    @test size(thermal.Tc) == ni
-    @test size(thermal.Told) == (nx + 1, ny + 1, nz + 1)
-    @test size(thermal.ΔT) == (nx + 1, ny + 1, nz + 1)
-    @test size(thermal.ΔTc) == ni
-    @test size(thermal.adiabatic) == (nx - 1, ny - 1, nz - 1)
-    @test size(thermal.dT_dt) == (nx - 1, ny - 1, nz - 1)
-    @test size(thermal.qTx) == (nx, ny - 1, nz - 1)
-    @test size(thermal.qTy) == (nx - 1, ny, nz - 1)
-    @test size(thermal.qTz) == (nx - 1, ny - 1, nz)
-    @test size(thermal.qTx2) == (nx, ny - 1, nz - 1)
-    @test size(thermal.qTy2) == (nx - 1, ny, nz - 1)
-    @test size(thermal.qTz2) == (nx - 1, ny - 1, nz)
-    @test size(thermal.ResT) == (nx - 1, ny - 1, nz - 1)
+    @test size(thermal.T) == (nx + 2, ny + 2, nz + 2)
+    @test size(@view(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)])) == ni
+    @test parent(@view(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)])) === thermal.T
+    @test size(thermal.Told) == (nx + 2, ny + 2, nz + 2)
+    @test size(thermal.ΔT) == (nx + 2, ny + 2, nz + 2)
+    @test size(thermal.adiabatic) == ni
+    @test size(thermal.dT_dt) == ni
+    @test size(thermal.qTx) == (nx + 1, ny, nz)
+    @test size(thermal.qTy) == (nx, ny + 1, nz)
+    @test size(thermal.qTz) == (nx, ny, nz + 1)
+    @test size(thermal.qTx2) == (nx + 1, ny, nz)
+    @test size(thermal.qTy2) == (nx, ny + 1, nz)
+    @test size(thermal.qTz2) == (nx, ny, nz + 1)
+    @test size(thermal.ResT) == ni
 
     @test typeof(thermal.T) <: BackendArray
-    @test typeof(thermal.Tc) <: BackendArray
     @test typeof(thermal.Told) <: BackendArray
     @test typeof(thermal.ΔT) <: BackendArray
-    @test typeof(thermal.ΔTc) <: BackendArray
     @test typeof(thermal.adiabatic) <: BackendArray
     @test typeof(thermal.dT_dt) <: BackendArray
     @test typeof(thermal.qTx) <: BackendArray

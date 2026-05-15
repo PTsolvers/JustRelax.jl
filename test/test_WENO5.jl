@@ -178,7 +178,6 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
     @views thermal.T[:, 2] .= Tmax
     @views thermal.T[:, end - 1] .= Tmin
     update_halo!(thermal.T)
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------

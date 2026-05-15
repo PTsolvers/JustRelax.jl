@@ -319,18 +319,18 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
 
     ϕ = @zeros(ni...)
     compute_melt_fraction!(
-        ϕ, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
+        ϕ, phase_ratios, rheology, (T = thermal.T, P = stokes.P)
     )
     # Buoyancy force
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P))
+        compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         # @parallel init_P!(stokes.P, ρg[2], xci[2])
         stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
     end
 
     # Arguments for functions
-    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -439,7 +439,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
         )
         # ------------------------------
         compute_melt_fraction!(
-            ϕ, phase_ratios, rheology, (T = (@view thermal.T[2:(end - 1), 2:(end - 1)]), P = stokes.P)
+            ϕ, phase_ratios, rheology, (T = thermal.T, P = stokes.P)
         )
         # Advection --------------------
         # advect particles in space

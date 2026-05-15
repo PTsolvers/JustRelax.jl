@@ -32,6 +32,21 @@ end
             @test @views T[2:(end - 1), end] == 2 .- T0[2:(end - 1), end - 1]
             @test @views T[1, 2:(end - 1)] == 2 .- T0[2, 2:(end - 1)]
             @test @views T[end, 2:(end - 1)] == 2 .- T0[end - 1, 2:(end - 1)]
+
+            T = reshape(collect(Float64, 1:(6 * 7)), 6, 7)
+            T0 = copy(T)
+            thermal_bcs!(
+                T,
+                TemperatureBoundaryConditions(;
+                    no_flux = (left = false, right = false, top = false, bot = false),
+                    periodic = (left = true, right = true, top = true, bot = true),
+                ),
+            )
+
+            @test @views T[2:(end - 1), 1] == T0[2:(end - 1), end - 1]
+            @test @views T[2:(end - 1), end] == T0[2:(end - 1), 2]
+            @test @views T[1, 2:(end - 1)] == T0[end - 1, 2:(end - 1)]
+            @test @views T[end, 2:(end - 1)] == T0[2, 2:(end - 1)]
         end
 
         @testset "VelocityBoundaryConditions" begin

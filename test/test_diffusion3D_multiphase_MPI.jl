@@ -8,11 +8,11 @@ end
 
 const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"]) : false
 
-using Test, Suppressor, GeoParams
+using Suppressor
+using Test, GeoParams
 using JustRelax, JustRelax.JustRelax3D
 using JustRelax
 using ParallelStencil
-
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 3)
@@ -40,13 +40,7 @@ else
 end
 
 @parallel_indices (i, j, k) function init_T!(T, z, lz)
-    if z[k] ≥ 0.0
-        T[i, j, k] = 300.0
-    elseif z[k] == -lz
-        T[i, j, k] = 3500.0
-    else
-        T[i, j, k] = z[k] * (1900.0 - 1600.0) / (-lz) + 1600.0
-    end
+    T[i, j, k+1] = z[k] * (1900.0 - 1600.0) / (-lz) + 1600.0
     return nothing
 end
 
@@ -150,12 +144,15 @@ function diffusion_3D(;
     K = @fill(K0, ni...)
     ρCp = @. Cp * ρ
 
-    # Boundary conditions
+   # Boundary conditions
+    Ttop = 300.0
+    Tbot = 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false, front = true, back = true),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot, front = true, back = true),
     )
 
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3], lz)
+    @parallel (1:(nx + 2), 1:(ny+2), 1:nz) init_T!(thermal.T, xci[3], lz)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
@@ -173,12 +170,10 @@ function diffusion_3D(;
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
     update_phase_ratios!(phase_ratios, particles, pPhases)
-    update_cell_halo!(particles.coords..., particle_args)
-    update_cell_halo!(particles.index)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion
-    args = (; P = P, T = thermal.Tc)
+    args = (; P = P, T = thermal.T)
     pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
 
     t = 0.0
@@ -186,11 +181,11 @@ function diffusion_3D(;
     nt = Int(ceil(ttot / dt))
 
     # Visualization global arrays
-    nx_v = ((nx + 1) - 2) * igg.dims[1]
-    ny_v = ((ny + 1) - 2) * igg.dims[2]
-    nz_v = ((nz + 1) - 2) * igg.dims[3]
+    nx_v = nx * igg.dims[1]
+    ny_v = ny * igg.dims[2]
+    nz_v = nz * igg.dims[3]
     T_v = zeros(nx_v, ny_v, nz_v)             # plotting is done on the CPU
-    T_nohalo = zeros((nx + 1) - 2, (ny + 1) - 2, (nz + 1) - 2) # plotting is done on the CPU
+    T_nohalo = zeros(ni...) # plotting is done on the CPU
 
     # Physical time loop
     while it < 10
@@ -222,6 +217,7 @@ function diffusion_3D(;
 
     return thermal
 end
+
 if CSCS_CI != true
     @suppress begin
         if backend_JR == CPUBackend

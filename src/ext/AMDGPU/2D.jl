@@ -261,15 +261,6 @@ function JR2D.compute_melt_fraction!(
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
-# Interpolations
-function JR2D.temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
-function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
 function JR2D.shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
     _shear2center!(A)
     return nothing

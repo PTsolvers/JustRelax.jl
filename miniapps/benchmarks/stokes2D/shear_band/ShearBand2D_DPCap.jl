@@ -12,28 +12,28 @@ const backend_JP = JustPIC.CPUBackend
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 @inline function tensile_cap_params(sinϕ::T, cosϕ::T, sinψ::T, C::T, pT::T) where {T}
-    ps  = -pT               # tensile limit on tension-positive axis
-    k   = sinϕ
-    kf  = sinψ
-    c   = C * cosϕ
+    ps = -pT               # tensile limit on tension-positive axis
+    k = sinϕ
+    kf = sinψ
+    c = C * cosϕ
 
-    a    = sqrt(one(T) + k * k)
+    a = sqrt(one(T) + k * k)
     cosa = inv(a)
     sina = k * cosa
 
-    py   = (ps + c * cosa) / (one(T) - sina)
-    R    = py - ps
+    py = (ps + c * cosa) / (one(T) - sina)
+    R = py - ps
 
-    pd   = py - R * sina
-    sd   = c + k * pd
+    pd = py - R * sina
+    sd = c + k * pd
 
-    pf   = pd + kf * (c + k * pd)
-    b    = sqrt(one(T) + kf * kf)
-    Rf   = pf - ps
+    pf = pd + kf * (c + k * pd)
+    b = sqrt(one(T) + kf * kf)
+    Rf = pf - ps
 
     norm_pf = hypot(pd - pf, sd)
-    pdf     = pf + Rf * (pd - pf) / norm_pf
-    sdf     = Rf * sd / norm_pf
+    pdf = pf + Rf * (pd - pf) / norm_pf
+    sdf = Rf * sd / norm_pf
 
     return (; k, kf, c, a, b, pd, sd, py, R, pf, Rf, pdf, sdf)
 end
@@ -45,7 +45,7 @@ function draw_yield_surface!(ax, cp, xmax, xc, yc)
     vlines!(ax, 0; color = :black, linewidth = 1)
     lines!(ax, [py, pd], [0.0, sd]; color = :red, linestyle = :dash, linewidth = 1.5)
     lines!(ax, [pd, xmax], [sd, c + k * xmax]; color = :red, linewidth = 2)
-    lines!(ax, xc, yc; color = :red, linewidth = 2)
+    return lines!(ax, xc, yc; color = :red, linewidth = 2)
 end
 
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -115,7 +115,7 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
     visc = LinearViscous(; η = η0)
 
     # Enable softening safely across a larger strain interval to avoid overshoot
-    soft_C  = LinearSoftening((C/2, C), (0e0, 2e0))
+    soft_C = LinearSoftening((C / 2, C), (0.0e0, 2.0e0))
 
     # Cap plasticity. mode1 = DP, mode2 = Cap
     pl = DruckerPragerCap(;
@@ -162,7 +162,7 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-        for _ in 1:5
+    for _ in 1:5
         compute_ρg!(ρg, phase_ratios, rheology, (T = zeros(ni...), P = stokes.P))
         @parallel init_P!(stokes.P, ρg[end], xvi[2])
     end
@@ -223,7 +223,7 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
         ax5 = Axis(fig[1, 3], aspect = 1, title = L"E_{Vol}^{II}", titlesize = 35)
         ax6 = Axis(fig[2, 3], aspect = 1, title = "Stress over time", titlesize = 35)
         # Plot Pressure to show negative excursions
-        heatmap!(ax1, xci..., Array(stokes.P), colormap = :vik, colorrange=(-1.0, 1.0))
+        heatmap!(ax1, xci..., Array(stokes.P), colormap = :vik, colorrange = (-1.0, 1.0))
         heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
         heatmap!(ax5, xci..., Array(stokes.EVol_pl), colormap = :batlow)
@@ -233,7 +233,7 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
         # ax4 plotting
         cp = tensile_cap_params(sind(ϕ), cosd(ϕ), sind(ψ), C / cosd(ϕ), abs(pl.pT.val))
         xc_array = range(-abs(pl.pT.val), cp.pd; length = 100)
-        yc_array = sqrt.(max.(0.0, cp.R^2 .- (collect(xc_array) .- cp.py).^2))
+        yc_array = sqrt.(max.(0.0, cp.R^2 .- (collect(xc_array) .- cp.py) .^ 2))
 
         P_pts = vec(Array(stokes.P))
         τII_pts = vec(Array(stokes.τ.II))
@@ -241,8 +241,8 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
         draw_yield_surface!(ax4, cp, max(xmax_plot, 2.0), xc_array, yc_array)
         scatter!(ax4, P_pts, τII_pts; color = (:blue, 0.5), markersize = 3)
 
-        lines!(ax6, ttot, τII, color = :black, label="Numerical")
-        lines!(ax6, ttot, sol, color = :red, label="Analytical")
+        lines!(ax6, ttot, τII, color = :black, label = "Numerical")
+        lines!(ax6, ttot, sol, color = :red, label = "Analytical")
         axislegend(ax6, position = :rb)
 
         hidexdecorations!(ax1)

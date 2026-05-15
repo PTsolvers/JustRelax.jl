@@ -260,9 +260,9 @@ let
         end
     else
         n = 32 #+ 2
-        nx = n ÷ 2
-        ny = n ÷ 2
-        nz = n ÷ 2
+        nx = n #÷ 2
+        ny = n #÷ 2
+        nz = n #÷ 2
         init_mpi = JustRelax.MPI.Initialized() ? false : true
         igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi, select_device = false)...)
         main(igg; nx = nx, ny = ny, nz = nz)

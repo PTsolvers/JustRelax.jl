@@ -253,6 +253,13 @@ function accumulate_tensor!(::AMDGPUBackendTrait, II, A::JustRelax.SymmetricTens
     return _accumulate_tensor!(II, A, dt)
 end
 
+function JR3D.accumulate_vol!(::AMDGPUBackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+end
+
+function accumulate_vol!(::AMDGPUBackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+end
 ## Buoyancy forces
 function JR3D.compute_ρg!(ρg::Union{ROCArray, NTuple{N, ROCArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)

@@ -351,3 +351,163 @@ end
     ϕ = v.softening_ϕ(EII, v.ϕ.val)
     return sincosd(ϕ)
 end
+
+@inline function soften_cohesion(
+        v::DruckerPragerCap{T, U, U1, U2, S1, NoSoftening, S3}, ::T
+    ) where {T, U, U1, U2, S1, S3}
+    return v.C.val
+end
+
+@inline function soften_cohesion(
+        v::DruckerPragerCap{T, U, U1, U2, S1, S2, S3}, EII::T
+    ) where {T, U, U1, U2, S1, S2, S3}
+    return v.softening_C(EII, v.C.val)
+end
+
+@inline function soften_friction_angle(
+        v::DruckerPragerCap{T, U, U1, U2, NoSoftening, S2, S3}, ::T
+    ) where {T, U, U1, U2, S2, S3}
+    return (v.sinϕ.val, v.cosϕ.val)
+end
+
+@inline function soften_friction_angle(
+        v::DruckerPragerCap{T, U, U1, U2, S1, S2, S3}, EII::T
+    ) where {T, U, U1, U2, S1, S2, S3}
+    ϕ = v.softening_ϕ(EII, v.ϕ.val)
+    return sincosd(ϕ)
+end
+
+
+# Yield function F — via GeoParams
+
+# F for a single plastic primitive
+@inline _yieldfunction_primitive(v::AbstractPlasticity, args::NamedTuple) =
+    GeoParams.compute_yieldfunction(v; args...)
+
+# Search the elements tuple of one composite rheology for the plastic primitive
+@generated function _yieldfunction_elements(elements::Tuple, args::NamedTuple)
+    N = length(elements.parameters)
+    return quote
+        Base.@inline
+        Base.@nexprs $N i -> begin
+            vᵢ = elements[i]
+            isplastic(vᵢ) && return _yieldfunction_primitive(vᵢ, args)
+        end
+        # non-plastic phase: F = τII so weighted F is not artificially damped
+        return get(args, :τII, 0.0)
+    end
+end
+
+# Phase-weighted F (skips zero-weight phases)
+@generated function _yieldfunction_weighted(
+        rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, ratio,
+    ) where {N}
+    return quote
+        Base.@inline
+        v_phases = Base.@ntuple $N i -> begin
+            r = ratio[i]
+            iszero(r) ? zero(get(args, :τII, 0.0)) :
+                r * _yieldfunction_elements(rheology[i].CompositeRheology[1].elements, args)
+        end
+        return sum(v_phases)
+    end
+end
+
+# Public API
+@inline compute_yieldfunction_phase(
+    rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, phase::Integer,
+) where {N} = _yieldfunction_elements(rheology[phase].CompositeRheology[1].elements, args)
+
+@inline compute_yieldfunction_phase(
+    rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, ratio::NTuple{N},
+) where {N} = _yieldfunction_weighted(rheology, args, ratio)
+
+@inline compute_yieldfunction_phase(
+    rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, ratio::SVector{N},
+) where {N} = _yieldfunction_weighted(rheology, args, ratio)
+
+@inline compute_yieldfunction_phase(rheology, phase::Integer; kwargs...) =
+    compute_yieldfunction_phase(rheology, (; kwargs...), phase)
+@inline compute_yieldfunction_phase(rheology, ratio::NTuple{N}; kwargs...) where {N} =
+    compute_yieldfunction_phase(rheology, (; kwargs...), ratio)
+@inline compute_yieldfunction_phase(rheology, ratio::SVector{N}; kwargs...) where {N} =
+    compute_yieldfunction_phase(rheology, (; kwargs...), ratio)
+
+
+# Plastic gradients (∂Q/∂τ, ∂Q/∂P, ∂F/∂P) — via GeoParams
+#
+# GeoParams' ∂Q∂τ returns the engineering-convention gradient (full τ/τII on
+# shear slots). The stress kernels store the plastic strain rate as a tensor
+# (ε_pl_xy = γ_pl_xy/2), so we halve the shear slots here once for all phases.
+# ∂F/∂P is also returned so the volume term in the plastic multiplier
+# denominator can be K·dt·dFdP·dQdP.
+
+@inline _zero_plastic_grad(τij::NTuple{N, T}, P) where {N, T} =
+    ntuple(_ -> zero(T), Val(N)), zero(P), zero(P)
+
+# Plastic gradients for a single primitive: halves shear slots of ∂Q∂τ for tensor convention
+@inline function _plastic_grad_primitive(v::AbstractPlasticity, τij::NTuple{N, T}, args::NamedTuple) where {N, T}
+    P = get(args, :P, zero(T))
+    g = GeoParams.∂Q∂τ(v, τij; args...)
+    n_normal = N == 6 ? 3 : 2                                  # 3 normals in 3D, 2 in 2D
+    dQdτ = ntuple(i -> i ≤ n_normal ? g[i] : 0.5 * g[i], Val(N))
+    return dQdτ, GeoParams.∂Q∂P(v, P; args...), GeoParams.∂F∂P(v, P; args...)
+end
+
+@generated function _plastic_grad_elements(elements::Tuple, τij, args::NamedTuple)
+    N = length(elements.parameters)
+    return quote
+        Base.@inline
+        P = get(args, :P, zero(eltype(τij)))
+        Base.@nexprs $N i -> begin
+            vᵢ = elements[i]
+            isplastic(vᵢ) && return _plastic_grad_primitive(vᵢ, τij, args)
+        end
+        return _zero_plastic_grad(τij, P)
+    end
+end
+
+# Element-wise muladd of two tuples required to make it typestable for the function below
+@inline _muladd_ntuple(r, a::NTuple{M, T}, b::NTuple{M, T}) where {M, T} =
+    ntuple(j -> muladd(r, a[j], b[j]), Val(M))
+
+@generated function _plastic_grad_weighted(
+        rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, ratio, τij::NTuple{M, T},
+    ) where {N, M, T}
+    return quote
+        Base.@inline
+        dQdτ = ntuple(_ -> zero(T), Val(M))
+        P = get(args, :P, zero(T))
+        dQdP = zero(P)
+        dFdP = zero(P)
+        Base.@nexprs $N i -> begin
+            r = ratio[i]
+            if !iszero(r)
+                dQdτ_i, dQdP_i, dFdP_i = _plastic_grad_elements(rheology[i].CompositeRheology[1].elements, τij, args)
+                dQdτ = _muladd_ntuple(r, dQdτ_i, dQdτ)
+                dQdP = muladd(r, dQdP_i, dQdP)
+                dFdP = muladd(r, dFdP_i, dFdP)
+            end
+        end
+        return dQdτ, dQdP, dFdP
+    end
+end
+
+@inline compute_plastic_gradients_phase(
+    rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, phase::Integer, τij,
+) where {N} = _plastic_grad_elements(rheology[phase].CompositeRheology[1].elements, τij, args)
+
+@inline compute_plastic_gradients_phase(
+    rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, ratio::NTuple{N}, τij,
+) where {N} = _plastic_grad_weighted(rheology, args, ratio, τij)
+
+@inline compute_plastic_gradients_phase(
+    rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, ratio::SVector{N}, τij,
+) where {N} = _plastic_grad_weighted(rheology, args, ratio, τij)
+
+@inline compute_plastic_gradients_phase(rheology, phase::Integer, τij; kwargs...) =
+    compute_plastic_gradients_phase(rheology, (; kwargs...), phase, τij)
+@inline compute_plastic_gradients_phase(rheology, ratio::NTuple{N}, τij; kwargs...) where {N} =
+    compute_plastic_gradients_phase(rheology, (; kwargs...), ratio, τij)
+@inline compute_plastic_gradients_phase(rheology, ratio::SVector{N}, τij; kwargs...) where {N} =
+    compute_plastic_gradients_phase(rheology, (; kwargs...), ratio, τij)

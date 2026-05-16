@@ -471,23 +471,26 @@ end
 @inline _muladd_ntuple(r, a::NTuple{M, T}, b::NTuple{M, T}) where {M, T} =
     ntuple(j -> muladd(r, a[j], b[j]), Val(M))
 
-@inline function _plastic_grad_weighted(
+@generated function _plastic_grad_weighted(
         rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, ratio, τij::NTuple{M, T},
     ) where {N, M, T}
-    dQdτ = ntuple(_ -> zero(T), Val(M))
-    P = get(args, :P, zero(T))
-    dQdP = zero(P)
-    dFdP = zero(P)
-    @inbounds for i in 1:N
-        r = ratio[i]
-        if !iszero(r)
-            dQdτ_i, dQdP_i, dFdP_i = _plastic_grad_elements(rheology[i].CompositeRheology[1].elements, τij, args)
-            dQdτ = _muladd_ntuple(r, dQdτ_i, dQdτ)
-            dQdP = muladd(r, dQdP_i, dQdP)
-            dFdP = muladd(r, dFdP_i, dFdP)
+    return quote
+        Base.@inline
+        dQdτ = ntuple(_ -> zero(T), Val(M))
+        P = get(args, :P, zero(T))
+        dQdP = zero(P)
+        dFdP = zero(P)
+        Base.@nexprs $N i -> begin
+            r = ratio[i]
+            if !iszero(r)
+                dQdτ_i, dQdP_i, dFdP_i = _plastic_grad_elements(rheology[i].CompositeRheology[1].elements, τij, args)
+                dQdτ = _muladd_ntuple(r, dQdτ_i, dQdτ)
+                dQdP = muladd(r, dQdP_i, dQdP)
+                dFdP = muladd(r, dFdP_i, dFdP)
+            end
         end
+        return dQdτ, dQdP, dFdP
     end
-    return dQdτ, dQdP, dFdP
 end
 
 @inline compute_plastic_gradients_phase(

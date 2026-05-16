@@ -440,7 +440,7 @@ end
 # shear slots). The stress kernels store the plastic strain rate as a tensor
 # (ε_pl_xy = γ_pl_xy/2), so we halve the shear slots here once for all phases.
 # ∂F/∂P is also returned so the volume term in the plastic multiplier
-# denominator can be K·dt·dFdP·dQdP — consistent across DP cone and DPCap modes.
+# denominator can be K·dt·dFdP·dQdP.
 
 @inline _zero_plastic_grad(τij::NTuple{N, T}, P) where {N, T} =
     ntuple(_ -> zero(T), Val(N)), zero(P), zero(P)

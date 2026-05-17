@@ -162,7 +162,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
 
-    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = thermal.ΔT)
     # Rheology
     viscosity_cutoff = (1.0e16, 1.0e24)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
@@ -214,7 +214,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+        args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = thermal.ΔT)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         compute_viscosity!(
             stokes, phase_ratios, args, rheology, viscosity_cutoff

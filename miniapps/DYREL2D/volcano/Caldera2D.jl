@@ -353,7 +353,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         end
         thermal_bcs!(thermal, thermal_bc)
 
-        args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+        args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT)
         # args = (; ϕ=ϕ_m, T = thermal.T, P=stokes.P, dt=Inf)
 
         stress2grid!(stokes, pτ, particles)

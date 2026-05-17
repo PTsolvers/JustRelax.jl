@@ -235,7 +235,7 @@ end
                         (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz
                 ) +
                     Told[I1...] * ρCp * _dt +
-                    compute_density_ratio(phase_ratios, rheology, args_ijk) * fn_ratio(compute_radioactive_heat, rheology, phase_ijk, args_ijk) +
+                    compute_density_ratio(phase_ijk, rheology, args_ijk) * fn_ratio(compute_radioactive_heat, rheology, phase_ijk, args_ijk) +
                     H[i, j, k] +
                     shear_heating[i, j, k] +
                     adiabatic[i, j, k] * T_ijk
@@ -310,7 +310,7 @@ end
                 (qTy2[i, j + 1, k] - qTy2[i, j, k]) * _dy +
                 (qTz2[i, j, k + 1] - qTz2[i, j, k]) * _dz
         ) +
-            compute_density_ratio(phase_ratios, rheology, args_ijk) * fn_ratio(compute_radioactive_heat, rheology, phase_ijk, args_ijk) +
+            compute_density_ratio(phase_ijk, rheology, args_ijk) * fn_ratio(compute_radioactive_heat, rheology, phase_ijk, args_ijk) +
             H[i, j, k] +
             shear_heating[i, j, k] +
             adiabatic[i, j, k] * T_ijk
@@ -577,14 +577,15 @@ end
 
         T_ij = T[i + 1, j + 1]
         args_ij = (; getindex_NamedTuple(args, i, j)..., T = T_ij)
-        ρCp = compute_ρCp(rheology, getindex_phase(phase, i, j), args_ij)
+        phase_ij = getindex_phase(phase, i, j)
+        ρCp = compute_ρCp(rheology, phase_ij, args_ij)
 
         T[I1...] =
             (
             dτ_ρ[i, j] * (
                 -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) +
                     Told[I1...] * ρCp * _dt +
-                    compute_density_ratio(phase_ratios, rheology, args_ij) * fn_ratio(compute_radioactive_heat, rheology, phase_ijk, args_ij) +
+                    compute_density_ratio(phase_ij, rheology, args_ij) * fn_ratio(compute_radioactive_heat, rheology, phase_ij, args_ij) +
                     H[i, j] +
                     shear_heating[i, j] +
                     adiabatic[i, j] * T[I1...]
@@ -644,12 +645,14 @@ end
 
     T_ij = T[i + 1, j + 1]
     args_ij = (; getindex_NamedTuple(args, i, j)..., T = T_ij)
-    ρCp = compute_ρCp(rheology, getindex_phase(phase, i, j), args_ij)
+    phase_ij = getindex_phase(phase, i, j)
+    ρCp = compute_ρCp(rheology, phase_ij, args_ij)
 
     I1 = i + 1, j + 1
     ResT[i, j] = if isNotDirichlet(dirichlet.mask, I1...)
         -ρCp * (T[I1...] - Told[I1...]) * _dt -
             ((qTx2[i + 1, j] - qTx2[i, j]) * _dx + (qTy2[i, j + 1] - qTy2[i, j]) * _dy) +
+            compute_density_ratio(phase_ij, rheology, args_ij) * fn_ratio(compute_radioactive_heat, rheology, phase_ij, args_ij) +
             H[i, j] +
             shear_heating[i, j] +
             adiabatic[i, j] * T[I1...]

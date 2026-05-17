@@ -119,8 +119,7 @@ function diffusion_3D(;
                 verbose = false,
             ),
         )
-        temperature2center!(thermal)
-        @views T_nohalo .= Array(thermal.Tc[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         if igg.me == 0

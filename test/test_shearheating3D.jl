@@ -108,22 +108,22 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     thermal = ThermalArrays(backend_JR, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = true, bot = true, front = true, back = true),
-        # no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
+        constant_value = (left = true, right = true, top = 273.0 + 400, bot = 273.0 + 400, front = true, back = true),
     )
 
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
-    compute_ρg!(ρg[3], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    T = thermal.T
+    compute_ρg!(ρg[3], phase_ratios, rheology, (T = T, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[3], xci[3])
 
     # Rheology
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = T, P = stokes.P, dt = Inf)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
@@ -144,7 +144,8 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    grid2particle!(pT, thermal.T, particles)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
     dt₀ = similar(stokes.P)
 
     # Time loop
@@ -152,9 +153,8 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     local iters, thermal
     while it < 1
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, particles)
-        temperature2center!(thermal)
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles)
 
         # Stokes solver ----------------
         iters = solve!(
@@ -208,7 +208,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        subgrid_diffusion!(
+        subgrid_diffusion_centroid!(
             pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
@@ -244,19 +244,6 @@ end
 
         # Initialize iters and thermal to ensure they are defined
         iters, thermal = Shearheating3D(igg; nx = nx, ny = ny, nz = nz)
-        # iters = nothing
-        # thermal = nothing
-
-        # try
-        #     iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
-        # catch e
-        #     @warn e
-        #     try
-        #         iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
-        #     catch e2
-        #         @warn e2
-        #     end
-        # end
 
         # Ensure iters is defined before running the test
         @test iters != nothing && iters.err_evo1[end] < 1.0e-4

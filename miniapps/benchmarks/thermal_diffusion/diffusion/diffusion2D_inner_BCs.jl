@@ -24,11 +24,11 @@ distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
 
 @parallel_indices (i, j) function init_T!(T, z)
     if z[j] == maximum(z)
-        T[i, j] = 300.0
+        T[i + 1, j + 1] = 300.0
     elseif z[j] == minimum(z)
-        T[i, j] = 3500.0
+        T[i + 1, j + 1] = 3500.0
     else
-        T[i, j] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
+        T[i + 1, j + 1] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
     end
     return nothing
 end
@@ -37,13 +37,13 @@ function elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, x, y)
         if (((x[i] - xc))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i + 1, j] += Ω_T
+            T[i + 1, j + 1] += Ω_T
             mask[i, j] = 1
         end
         return nothing
     end
-    nx, ny = size(T)
-    return @parallel (1:(nx - 2), 1:ny) _elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    return @parallel (@idx ni) _elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, xvi...)
 end
 
 function init_phases!(phases, particles, xc, yc, r)
@@ -70,14 +70,6 @@ function init_phases!(phases, particles, xc, yc, r)
     end
 
     return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
-end
-
-@parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
-
-    args_ij = ntuple_idx(args, I...)
-    H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij)
-
-    return nothing
 end
 
 function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e3, K0 = 3.0)
@@ -120,15 +112,14 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal = ThermalArrays(backend_JR, ni)
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
+    @parallel (@idx ni) init_T!(thermal.T, xci[2])
 
     # Add thermal perturbation
     Ω_T = 1050.0e0 # inner BCs temperature
     r = 10.0e3   # thermal perturbation radius
     center_perturbation = lx / 2, -ly / 2
     mask = @zeros(size(thermal.T)...)
-    elliptical_perturbation!(thermal.T, mask, Ω_T, center_perturbation..., r, xvi)
-    temperature2center!(thermal)
+    elliptical_perturbation!(thermal.T, mask, Ω_T, center_perturbation..., r, xci)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1
@@ -141,16 +132,15 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
-    @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
-
     # PT coefficients for thermal diffusion
-    args = (; P = P, T = thermal.Tc)
+    args = (; P = P, T = thermal.T)
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.97 / √2
     )
 
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = 300.0, bot = 3500.0),
         dirichlet = (constant = Ω_T, mask = mask)
     )
 

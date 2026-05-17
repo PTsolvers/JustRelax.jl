@@ -91,7 +91,6 @@ function ShearBand2D()
     el_bg = ConstantElasticity(; G = G0, Kb = 4)
     el_inc = ConstantElasticity(; G = Gi, Kb = 4)
     visc = LinearViscous(; η = η0)
-    # soft_C  = LinearSoftening((C/2, C), (0e0, 2e0))
     soft_C = NonLinearSoftening(; ξ₀ = C, Δ = C / 2)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
@@ -132,7 +131,7 @@ function ShearBand2D()
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
 
     # Rheology
     compute_viscosity!(

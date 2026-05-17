@@ -269,7 +269,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         thermal.T, anomaly, x_anomaly, y_anomaly, z_anomaly, r_anomaly, xvi, sticky_air
     )
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -277,7 +276,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
-    args = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = thermal.ΔT)
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √3.1
     )
@@ -293,7 +292,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     # Buoyancy force & viscosity
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         @parallel init_P!(stokes.P, ρg[3], xci[3], sticky_air)
     end
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -342,7 +341,9 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     end
 
     dt₀ = similar(stokes.P)
-    grid2particle!(pT, thermal.T, particles)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    Told_buffer = similar(T_buffer)
+    centroid2particle!(pT, T_buffer, particles)
 
     @copy stokes.P0 stokes.P
     @copy thermal.Told thermal.T
@@ -351,8 +352,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     while it < 25
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
+        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
         # Stokes solver -----------------
@@ -400,8 +401,9 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
+        @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+        subgrid_diffusion_centroid!(
+            pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -411,17 +413,15 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2grid!(thermal.T, pT, particles)
+        particle2centroid!(T_buffer, pT, particles)
         # @views thermal.T[:, :, end] .= Tsurf
         # @views thermal.T[:, :, 1] .= Tbot
         thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
         # thermal.ΔT .= thermal.T .- thermal.Told
-        # vertex2center!(thermal.ΔTc, thermal.ΔT)
 
         @show it += 1
         t += dt

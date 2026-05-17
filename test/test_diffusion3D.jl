@@ -29,13 +29,7 @@ end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 @parallel_indices (i, j, k) function init_T!(T, z)
-    if z[k] == maximum(z)
-        T[i, j, k] = 300.0
-    elseif z[k] == minimum(z)
-        T[i, j, k] = 3500.0
-    else
-        T[i, j, k] = z[k] * (1900.0 - 1600.0) / minimum(z) + 1600.0
-    end
+    T[i, j, k + 1] = z[k] * (1900.0 - 1600.0) / minimum(z) + 1600.0
     return nothing
 end
 
@@ -89,7 +83,7 @@ function diffusion_3D(;
 
     # fields needed to compute density on the fly
     P = @zeros(ni...)
-    args = (; P = P, T = @zeros(ni .+ 1...))
+    args = (; P = P, T = @zeros(ni .+ 2...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
@@ -102,12 +96,15 @@ function diffusion_3D(;
     ρCp = @. Cp * ρ
 
     # Boundary conditions
+    Ttop = 300.0
+    Tbot = 3500.0
     pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.95 / √3.1)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false, front = true, back = true),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot, front = true, back = true),
     )
 
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])
+    @parallel (1:(nx + 2), 1:(ny + 2), 1:nz) init_T!(thermal.T, xci[3])
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
@@ -117,7 +114,6 @@ function diffusion_3D(;
 
     t = 0.0
     it = 0
-    nt = Int(ceil(ttot / dt))
 
     # Physical time loop
     while it < 10
@@ -151,8 +147,8 @@ end
         nz = 32
         thermal = diffusion_3D(; nx = nx, ny = ny, nz = nz)
         if backend == CPUBackend
-            @test thermal.T[Int(ceil(nx / 2)), Int(ceil(ny / 2)), Int(ceil(nz / 2))] ≈ 1824.614400703972 rtol = 1.0e-3
-            @test thermal.Tc[Int(ceil(nx / 2)), Int(ceil(ny / 2)), Int(ceil(nz / 2))] ≈ 1827.002299288895 rtol = 1.0e-3
+            @test thermal.T[Int(ceil(nx / 2)), Int(ceil(ny / 2)), Int(ceil(nz / 2))] ≈ 1831.9030160251664 rtol = 1.0e-3
+            @test (@view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)])[Int(ceil(nx / 2)), Int(ceil(ny / 2)), Int(ceil(nz / 2))] ≈ 1836.4686150797922 rtol = 1.0e-3
         else
             @test true == true
         end

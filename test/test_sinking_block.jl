@@ -6,7 +6,6 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -43,7 +42,7 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
             depth = abs(y[j])
             dTdZ = (2047 - 2017) / 50.0e3
             offset = 2017
-            T[i + 1, j] = (depth - 585.0e3) * dTdZ + offset
+            T[i + 1, j + 1] = (depth - 585.0e3) * dTdZ + offset
         end
         return nothing
     end
@@ -153,12 +152,12 @@ function Sinking_Block2D()
     pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-5, CFL = 0.95 / √2.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni...), P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni .+ 2...), P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     # ----------------------------------------------------
 
     # Viscosity
-    args = (; T = @ones(ni...), P = stokes.P, dt = Inf)
+    args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = Inf)
     η_cutoff = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
     # ----------------------------------------------------

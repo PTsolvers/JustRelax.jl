@@ -92,16 +92,15 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
-    compute_ρg!(ρg[3], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[3], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[3], xci[3])
 
     # Rheology
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
@@ -146,7 +145,10 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         save(joinpath(figdir, "initial_profile.png"), fig)
     end
 
-    grid2particle!(pT, thermal.T, particles)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    Told_buffer = similar(T_buffer)
+    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
@@ -158,7 +160,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
     t, it = 0.0, 0
     while it < 10
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
         compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
         compute_ρg!(ρg[3], phase_ratios, rheology, args)
         # ------------------------------
@@ -185,9 +187,8 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, particles)
-        temperature2center!(thermal)
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles)
 
         compute_shear_heating!(
             thermal,
@@ -221,10 +222,10 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # interpolate fields from grid vertices to particles
-        grid2particle_flip!(pT, xvi, thermal.T, thermal.Told, particles)
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
@@ -246,7 +247,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
                     Vz = Array(Vz_v),
                 )
                 data_c = (;
-                    Tc = Array(thermal.Tc),
+                    T = Array(@view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
                     P = Array(stokes.P),
                     η = Array(stokes.viscosity.η_vep),
                 )

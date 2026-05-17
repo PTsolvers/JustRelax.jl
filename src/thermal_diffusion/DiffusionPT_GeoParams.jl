@@ -55,7 +55,7 @@ end
 @inline Base.@propagate_inbounds function getindex_phase(
         phase::AbstractArray, I::Vararg{Int, N}
     ) where {N}
-    return phase[I...]
+    return @cell phase[I...]
 end
 
 @inline getindex_phase(::Nothing, I::Vararg{Int, N}) where {N} = nothing

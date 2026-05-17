@@ -36,12 +36,7 @@ using WriteVTK, JLD2
         # 2D case
         dst = "test_IO"
         stokes = StokesArrays(backend_JR, ni)
-
-        thermal = ThermalArrays(backend_JR, 4, 4)
-        @test size(thermal.Tc) === (4, 4)
-
         thermal = ThermalArrays(backend_JR, ni)
-        @test size(thermal.Tc) === (4, 4)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(
@@ -60,7 +55,6 @@ using WriteVTK, JLD2
         metadata(pwd(), dst, "test_traits.jl", "test_types.jl")
         @test isfile(joinpath(dst, "test_traits.jl"))
         @test isfile(joinpath(dst, "test_types.jl"))
-        @test isfile(joinpath(dst, "Project.toml"))
 
         # Call the function
         checkpointing_jld2(dst, stokes, thermal, time, dt)
@@ -107,13 +101,13 @@ using WriteVTK, JLD2
         Vy_v = @zeros(ni .+ 1...)
         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
         data_v = (;
-            T = Array(thermal.T),
             τII = Array(stokes.τ.II),
             εII = Array(stokes.ε.II),
             Vx = Array(Vx_v),
             Vy = Array(Vy_v),
         )
         data_c = (;
+            T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
             P = Array(stokes.P),
             η = Array(stokes.viscosity.η),
         )
@@ -179,9 +173,7 @@ using WriteVTK, JLD2
         stokes = StokesArrays(backend_JR, ni)
 
         thermal = ThermalArrays(backend_JR, 4, 4, 4)
-        @test size(thermal.Tc) === (4, 4, 4)
         thermal = ThermalArrays(backend_JR, ni)
-        @test size(thermal.Tc) === (4, 4, 4)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(

@@ -48,13 +48,13 @@ end
         thermal.T .= 100
         thermal.Told .= 50
         stokes.τ.xy_c .= 1
-        temperature2center!(thermal)
 
-        @test thermal.Tc[1, 1] == 100
+        @test (@view thermal.T[2:(end - 1), 2:(end - 1)])[1, 1] == 100
 
         thermal.ΔT .= thermal.T .- thermal.Told
-        vertex2center!(thermal.ΔTc, thermal.ΔT)
-        @test thermal.ΔTc[1, 1] == 50
+        ΔTc = @zeros(ni...)
+        vertex2center!(ΔTc, thermal.ΔT)
+        @test ΔTc[1, 1] == 50
 
         center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
         @test stokes.τ.xy[2, 2] == 1

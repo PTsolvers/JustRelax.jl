@@ -28,7 +28,7 @@ end
 
 # Initial thermal profile
 @parallel_indices (i, j) function init_T!(T, y)
-    T[i, j] = 1 - y[j]
+    T[i + 1, j + 1] = 1 - y[j]
     return nothing
 end
 
@@ -36,12 +36,12 @@ end
 function rectangular_perturbation!(T, xc, yc, r, xvi)
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         if ((x[i] - xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            T[i + 1, j] += 0.2
+            T[i + 1, j + 1] += 0.2
         end
         return nothing
     end
-    nx, ny = size(T)
-    @parallel (1:(nx - 2), 1:ny) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
     return nothing
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
@@ -70,7 +70,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pT0, pPhases)
@@ -87,26 +87,28 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend_JR, ni)
+    # initialize thermal profile
+    @parallel (@idx ni) init_T!(thermal.T, xci[2])
+    Ttop = thermal.T[1, end]
+    Tbot = thermal.T[1, 1]
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
-    # initialize thermal profile
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
     # Elliptical temperature anomaly
     xc_anomaly = 0.0    # origin of thermal anomaly
     yc_anomaly = 1 / 3  # origin of thermal anomaly
     r_anomaly = 0.1 / 2    # radius of perturbation
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
+    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci)
     thermal_bcs!(thermal, thermal_bc)
     thermal.Told .= thermal.T
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Rayleigh number ------------------------------------
     Ra = rheology[1].Gravity[1].g
     println("Ra = $Ra")
 
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
 
     # Buoyancy forces  & viscosity ----------------------
     ρg = @zeros(ni...), @zeros(ni...)
@@ -144,7 +146,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:(end - 1), :][:]), (1 .- Yv))
+        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), (1 .- Y))
         scatter!(ax2, Array(log10.(η[:])), (1 .- Y))
         ylims!(ax1, maximum(xvi[2]), 0)
         ylims!(ax2, maximum(xvi[2]), 0)
@@ -153,13 +155,11 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         fig
     end
 
-    T_buffer = @zeros(ni .+ 1)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, T_buffer, particles)
+    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
     pT0.data .= pT.data
 
     local Vx_v, Vy_v
@@ -180,7 +180,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     while it ≤ nit
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
         compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
         # ------------------------------
@@ -225,15 +225,14 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             )
         )
         # subgrid diffusion
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
+        @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, dt
+        @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
+        subgrid_diffusion_centroid!(
+            pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -263,13 +262,9 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         push!(trms, t)
         # -------------------------------------------
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, particles)
-        @views T_buffer[:, end] .= 0.0
-        @views T_buffer[:, 1] .= 1.0
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles)
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-        temperature2center!(thermal)
         @show extrema(thermal.T)
         any(isnan.(thermal.T)) && break
 
@@ -279,7 +274,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
+                    T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1)], C, CharDim))),
                     τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
                     εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                     Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
@@ -325,7 +320,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             ax3 = Axis(fig[1, 3], aspect = ar, title = "Vx [m/s]")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "T [K]")
             #
-            h1 = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:(end - 1), :]), colormap = :lajolla, colorrange = (0, 1))
+            h1 = heatmap!(ax1, xci[1], xci[2], Array(thermal.T[2:(end - 1), 2:(end - 1)]), colormap = :lajolla, colorrange = (0, 1))
             #
             h2 = heatmap!(ax2, xvi[1], xvi[2], Array(stokes.V.Vy), colormap = :batlow)
             #
@@ -354,8 +349,8 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             cmap = ([:white, :white, :white, :white])
             fig3 = Figure(size = (900, 900), title = "t = $t")
             ax = Axis(fig3[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
-            h1 = heatmap!(ax, xvi..., thermal.T[2:(end - 1), :], colormap = :lipari, colorrange = (0, 1))
-            contour!(ax, xvi..., thermal.T[2:(end - 1), :], linewidth = 5, levels = 0.2:0.2:0.8, colormap = cmap)
+            h1 = heatmap!(ax, xci..., thermal.T[2:(end - 1), 2:(end - 1)], colormap = :lipari, colorrange = (0, 1))
+            contour!(ax, xci..., thermal.T[2:(end - 1), 2:(end - 1)], linewidth = 5, levels = 0.2:0.2:0.8, colormap = cmap)
             Colorbar(fig3[1, 2], h1)
             save(joinpath(figdir, "Temp.png"), fig3)
             fig3

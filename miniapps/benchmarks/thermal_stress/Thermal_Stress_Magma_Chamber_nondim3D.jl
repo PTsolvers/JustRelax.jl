@@ -77,16 +77,15 @@ end
 
 # Initial thermal profile
 @parallel_indices (i, j, k) function init_T!(T, y, sticky_air, top, bottom, dTdz, offset)
-    I = i, j, k
     depth = -y[k] - sticky_air
 
     if depth < top
-        T[I...] = offset
+        T[i + 1, j + 1, k + 1] = offset
 
     elseif top ≤ (depth) < bottom
         dTdZ = dTdz
         offset = offset
-        T[I...] = (depth) * dTdZ + offset
+        T[i + 1, j + 1, k + 1] = (depth) * dTdZ + offset
 
     end
 
@@ -101,7 +100,6 @@ function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, zc_anomaly, r_an
         )
         depth = -z[k] - sticky_air
         @inbounds if ((x[i] - xc_anomaly)^2 + (y[j] - yc_anomaly)^2 + (depth + zc_anomaly)^2 ≤ r_anomaly^2)
-            # T[i, j, k] *= δT / 100 + 1
             T[i, j, k] = δT
         end
         return nothing
@@ -248,9 +246,9 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, front = true, back = true, top = false, bot = false),
     )
-    @parallel (@idx ni .+ 1) init_T!(
+    @parallel (@idx ni) init_T!(
         thermal.T,
-        xvi[3],
+        xci[3],
         sticky_air,
         nondimensionalize(0.0e0km, CharDim),
         nondimensionalize(15km, CharDim),
@@ -268,7 +266,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
-    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1), 2:(end - 1)]))
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = thermal.ΔT)
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.8 / √3.1
     )
@@ -346,7 +344,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     while it < 25
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1), 2:(end - 1)]))
+        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT)
         compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
@@ -511,4 +509,4 @@ else
 end
 
 # run main script
-main3D(igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+# main3D(igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

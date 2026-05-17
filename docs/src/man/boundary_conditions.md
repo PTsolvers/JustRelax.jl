@@ -88,7 +88,11 @@ Supported thermal boundary conditions:
 
     $q_T = q_\Gamma$ at the boundary $\Gamma$
 
-4. Mask-based Dirichlet values inside the domain
+4. Periodic temperature
+
+    $T(\Gamma_i) = T(\Gamma_j)$ across paired boundaries
+
+5. Mask-based Dirichlet values inside the domain
 
     $T = f(x_i)$ at selected points in $\Omega$
 
@@ -110,9 +114,10 @@ thermal_bc = TemperatureBoundaryConditions(;
 )
 ```
 
-Faces omitted from `no_flux`, `constant_flux`, or `constant_value` are treated as
-inactive for that condition. The dimensionality is inferred from the longest tuple
-you provide, so a tuple with `front` or `back` creates a 3D boundary-condition set.
+Faces omitted from `no_flux`, `constant_flux`, `constant_value`, or `periodic`
+are treated as inactive for that condition. The dimensionality is inferred from
+the longest tuple you provide, so a tuple with `front` or `back` creates a 3D
+boundary-condition set.
 
 ## No-Flux Boundaries
 
@@ -145,6 +150,38 @@ thermal_bcs!(thermal, thermal_bc)
 
 If `no_flux` and `constant_value` are both active on the same face, `thermal_bcs!`
 applies `constant_value` first and `no_flux` second.
+
+## Periodic Boundaries
+
+Use `periodic` to copy the opposite interior temperature into the ghost layer.
+For example, this applies periodic temperature boundaries on the left and right
+sides of a 2D domain:
+
+```julia
+thermal_bc = TemperatureBoundaryConditions(;
+    periodic = (left = true, right = true, top = false, bot = false),
+)
+
+thermal_bcs!(thermal, thermal_bc)
+```
+
+In 3D, include `front` and `back` when those faces should also be periodic:
+
+```julia
+thermal_bc = TemperatureBoundaryConditions(;
+    periodic = (
+        left = true,
+        right = true,
+        front = true,
+        back = true,
+        top = false,
+        bot = false,
+    ),
+)
+```
+
+If multiple ghost-cell conditions are active on the same face, `thermal_bcs!`
+applies `constant_value` first, `no_flux` second, and `periodic` last.
 
 ## Constant-Flux Boundaries
 

@@ -124,7 +124,6 @@ function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi, 
         )
         depth = -y[j] #- sticky_air
         if ((x[i] - xc_anomaly)^2 + (depth[j] + yc_anomaly)^2 ≤ r_anomaly^2)
-            # T[i + 1, j + 1] *= δT / 100 + 1
             T[i + 1, j + 1] = δT
         end
         return nothing
@@ -286,16 +285,16 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     # Initialisation of thermal profile
     thermal = ThermalArrays(backend_JR, ni) # initialise thermal arrays and boundary conditions
     Ttop = nondimensionalize((20 + 273)K, CharDim)
-    Tbot = nondimensionalize((450 + 273)K, CharDim)
+    Tbot = nondimensionalize(438.5625C, CharDim)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
     ∇Tz = (Ttop - Tbot) / (L - sticky_air)
     # dTdz = nondimensionalize((450-20+273)K, CharDim) / (nondimensionalize(12.5km, CharDim))
-    T1D = @. (∇Tz * (xvi[2]) + Ttop) * (xvi[2] < 0.0e0)
-    T1D[xvi[2] .≥ 0.0e0] .= Ttop
-    thermal.T .+= PTArray(backend_JR)(T1D')
+    T1D = @. (∇Tz * (xci[2]) + Ttop) * (xci[2] < 0.0e0)
+    T1D[xci[2] .≥ 0.0e0] .= Ttop
+    thermal.T[:, 2:end-1] .+= PTArray(backend_JR)(T1D')
 
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air
@@ -336,12 +335,11 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        # @parallel init_P!(stokes.P, ρg[2], xci[2])
         stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
     end
 
     # Arguments for functions
-    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = thermal.ΔT)
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
@@ -401,7 +399,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     pulse_timer = 0.0e0
 
     # Stokes solver -----------------
-    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT)
     solve_VariationalStokes!(
         stokes,
         pt_stokes,
@@ -427,7 +425,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     while it < 500
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT)
 
         solve_VariationalStokes!(
             stokes,
@@ -798,4 +796,4 @@ if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 end
 # run main script
-main2D(igg; εbg_0 = εbg_0, linear_rheology = linear_rheology, figdir = figdir, nx = nx, ny = ny, do_vtk = true);
+# main2D(igg; εbg_0 = εbg_0, linear_rheology = linear_rheology, figdir = figdir, nx = nx, ny = ny, do_vtk = true);

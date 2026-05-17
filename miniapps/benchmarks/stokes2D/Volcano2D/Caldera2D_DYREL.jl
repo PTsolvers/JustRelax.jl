@@ -335,7 +335,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     while it < 5 #000 # run only for 5 Myrs
 
-        args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf, ΔTc = (@view thermal.ΔT[2:(end - 1), 2:(end - 1)]), perturbation_C = perturbation_C)
+        args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT, perturbation_C = perturbation_C)
 
 
         # t_stokes = @elapsed solve_VariationalStokes!(

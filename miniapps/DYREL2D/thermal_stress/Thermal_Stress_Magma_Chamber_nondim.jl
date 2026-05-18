@@ -305,7 +305,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     end
 
     # Arguments for functions
-    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = thermal.ΔT)
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = thermal.ΔT)
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -350,7 +350,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
     @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
@@ -362,7 +362,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt)
 
     # Stokes solver -----------------
-    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
 
     # Stokes solver -----------------
     solve_DYREL!(
@@ -392,7 +392,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     while it < 150
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
 
         # Stokes solver -----------------
         solve_DYREL!(

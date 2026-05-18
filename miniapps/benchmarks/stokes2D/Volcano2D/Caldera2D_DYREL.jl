@@ -198,13 +198,6 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     pτ = StressParticles(particles)
     particle_args = (pT, pPhases, unwrap(pτ)...)
     particle_args_reduced = (pT, unwrap(pτ)...)
-
-    # # rock ratios for variational stokes
-    # # RockRatios
-    # ϕ = RockRatio(backend, ni)
-    # # update_rock_ratio!(ϕ, phase_ratios, air_phase)
-    # compute_rock_fraction!(ϕ, chain, xvi, di)
-
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -215,8 +208,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend, ni)
-    @views thermal.T[2:(end - 1), 2:(end - 1)] .= PTArray(backend)(T_GMG[1:ni[1], 1:ni[2]])
-
+    vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
     # Add thermal anomaly BC's
     T_chamber = 1223.0e0
     T_air = 273.0e0
@@ -226,7 +218,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (; left = true, right = true, top = false, bot = false),
-        # dirichlet    = (; mask = Ω_T)
+        constant_value = (; left = true, right = true, top = T_air, bot = T_GMG[1,1]),
     )
     thermal_bcs!(thermal, thermal_bc)
     # ----------------------------------------------------
@@ -235,9 +227,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
     for _ in 1:5
         compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        @parallel init_P!(stokes.P, ρg[end], xvi[2])
+        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
     end
-    # stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
 
     # Melt fraction
     ϕ_m = @zeros(ni...)
@@ -291,7 +282,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
     @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
@@ -335,27 +326,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     while it < 5 #000 # run only for 5 Myrs
 
-        args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT, perturbation_C = perturbation_C)
-
-
-        # t_stokes = @elapsed solve_VariationalStokes!(
-        #     stokes,
-        #     pt_stokes,
-        #     di,
-        #     flow_bcs,
-        #     ρg,
-        #     phase_ratios,
-        #     ϕ,
-        #     rheology,
-        #     args,
-        #     dt,
-        #     igg;
-        #     kwargs = (;
-        #         iterMax = 100.0e3,
-        #         nout = 2.0e3,
-        #         viscosity_cutoff = viscosity_cutoff,
-        #     )
-        # )
+        args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT, perturbation_C = perturbation_C)
 
         t_stokes = @elapsed solve_DYREL!(
             stokes,
@@ -656,4 +627,4 @@ else
     igg
 end
 extension = 1.0e-15 * 0
-@time main(li, origin, phases_GMG, T_GMG, igg, ; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, extension = extension, cutoff_visc = (1.0e17, 1.0e23));
+# @time main(li, origin, phases_GMG, T_GMG, igg, ; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, extension = extension, cutoff_visc = (1.0e17, 1.0e23));

@@ -155,7 +155,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         fig
     end
 
-    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
     @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]

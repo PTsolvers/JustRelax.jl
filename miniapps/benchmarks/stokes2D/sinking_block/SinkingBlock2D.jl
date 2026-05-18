@@ -125,12 +125,12 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-5, ϵ_rel = 1.0e-5, CFL = 0.95 / √2.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni...), P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni .+ 2...), P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     # ----------------------------------------------------
 
     # Viscosity
-    args = (; dt = dt, ΔTc = @zeros(ni...))
+    args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = dt)
     η_cutoff = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
     # ----------------------------------------------------
@@ -145,7 +145,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     it = 0 # iteration counter
     while it < 50
         # Stokes solver ----------------
-        args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+        args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = dt, ΔT = @zeros(ni.+2...))
         solve!(
             stokes,
             pt_stokes,

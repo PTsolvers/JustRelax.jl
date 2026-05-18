@@ -290,7 +290,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
     @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
@@ -353,7 +353,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         end
         thermal_bcs!(thermal, thermal_bc)
 
-        args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT)
+        args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
         # args = (; ϕ=ϕ_m, T = thermal.T, P=stokes.P, dt=Inf)
 
         stress2grid!(stokes, pτ, particles)

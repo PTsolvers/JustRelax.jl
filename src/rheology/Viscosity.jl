@@ -527,9 +527,9 @@ end
     # clamp indices
     nx, ny = size(args[1])
     il = max(i - 1, 1)  # left
-    ir = min(i, nx)   # right
+    ir = min(i, nx)     # right
     jb = max(j - 1, 1)  # bottom
-    jt = min(j, ny)   # top
+    jt = min(j, ny)     # top
     # average values at cell centers surrounding vertex
     v11 = getindex_or_scalar.(values(args), il, jb)
     v12 = getindex_or_scalar.(values(args), ir, jb)
@@ -551,9 +551,9 @@ end
     # clamp indices
     nx, ny, nz = size(args[1])
     il = max(i - 1, 1)  # left
-    ir = min(i, nx)   # right
+    ir = min(i, nx)     # right
     jb = max(j - 1, 1)  # bottom
-    jt = min(j, ny)   # top
+    jt = min(j, ny)     # top
     kf = max(k - 1, 1)  # front
     kb = min(k, nz)   # back
     # average values at cell centers surrounding vertex

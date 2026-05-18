@@ -14,13 +14,13 @@
 #     dt,
 #     r,
 #     θ_dτ;
-#     ΔTc=nothing,
+#     ΔT=nothing,
 #     melt_fraction=nothing,
 #     kwargs...,
 # ) where {N}
 #     ni = size(P)
 #     @parallel (@idx ni) compute_P_kernel!(
-#         P, P0, RP, ∇V, Q, η, rheology, phase_ratio.center, ϕ, dt, r, θ_dτ, ΔTc, melt_fraction
+#         P, P0, RP, ∇V, Q, η, rheology, phase_ratio.center, ϕ, dt, r, θ_dτ, ΔT, melt_fraction
 #     )
 #     return nothing
 # end
@@ -92,7 +92,7 @@
 #     dt,
 #     r,
 #     θ_dτ,
-#     ΔTc,
+#     ΔT,
 #     ::Nothing,
 # ) where {N}
 #     if isvalid_c(ϕ, I...)
@@ -100,7 +100,7 @@
 #         K = fn_ratio(get_bulk_modulus, rheology, phase_ratio_I)
 #         α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
 #         RP[I...], P[I...] = _compute_P!(
-#             P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
+#             P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I...], α, η[I...], K, dt, r, θ_dτ
 #         )
 #     else
 #         RP[I...] = P[I...] = zero(eltype(P))
@@ -121,7 +121,7 @@
 #     dt,
 #     r,
 #     θ_dτ,
-#     ΔTc,
+#     ΔT,
 #     ::Nothing,
 # ) where {N}
 #     if isvalid_c(ϕ, I...)
@@ -129,7 +129,7 @@
 #         K = fn_ratio(get_bulk_modulus, rheology, phase_ratio_I)
 #         α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
 #         RP[I...], P[I...] = _compute_P!(
-#             P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
+#             P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I...], α, η[I...], K, dt, r, θ_dτ
 #         )
 #     else
 #         RP[I...] = P[I...] = zero(eltype(P))
@@ -150,14 +150,14 @@
 #     dt,
 #     r,
 #     θ_dτ,
-#     ΔTc,
+#     ΔT,
 #     melt_fraction,
 # ) where {N}
 #     if isvalid_c(ϕ, I...)
 #         K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
 #         α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
 #         RP[I...], P[I...] = _compute_P!(
-#             P[I...], P0[I...], ∇V[I...], Q[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
+#             P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I...], α, η[I...], K, dt, r, θ_dτ
 #         )
 #     else
 #         RP[I...] = P[I...] = zero(eltype(P))
@@ -177,7 +177,7 @@
 # #     dt,
 # #     r,
 # #     θ_dτ,
-# #     ΔTc,
+# #     ΔT,
 # #     ::Nothing,
 # # ) where {N,C<:JustRelax.CellArray}
 # #     if isvalid_c(ϕ, I...)
@@ -185,7 +185,7 @@
 # #         K = fn_ratio(get_bulk_modulus, rheology, phase_ratio_I)
 # #         α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
 # #         RP[I...], P[I...] = _compute_P!(
-# #             P[I...], P0[I...], ∇V[I...], ΔTc[I...], α, η[I...], K, dt, r, θ_dτ
+# #             P[I...], P0[I...], ∇V[I...], ΔT[I...], α, η[I...], K, dt, r, θ_dτ
 # #         )
 # #     else
 # #         RP[I...] = P[I...] = zero(eltype(P))

@@ -339,7 +339,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     end
 
     # Arguments for functions
-    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = thermal.ΔT)
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = thermal.ΔT)
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
@@ -384,7 +384,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
     @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
@@ -399,7 +399,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     pulse_timer = 0.0e0
 
     # Stokes solver -----------------
-    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
     solve_VariationalStokes!(
         stokes,
         pt_stokes,
@@ -425,7 +425,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     while it < 500
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔTc = thermal.ΔT)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
 
         solve_VariationalStokes!(
             stokes,

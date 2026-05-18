@@ -22,6 +22,11 @@ distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
     return nothing
 end
 
+@parallel_indices (i, j) function init_T!(T, z, ly)
+    T[i, j + 1] = -z[j] * (1900.0 - 1600.0) / ly + 1600.0
+    return nothing
+end
+
 function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)

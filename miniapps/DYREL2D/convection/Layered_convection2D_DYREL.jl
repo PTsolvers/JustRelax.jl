@@ -230,7 +230,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         fig
     end
 
-    T_buffer    = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer    = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀         = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)

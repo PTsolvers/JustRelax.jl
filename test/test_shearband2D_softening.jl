@@ -131,7 +131,7 @@ function ShearBand2D()
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, ΔT = @zeros(ni...))
 
     # Rheology
     compute_viscosity!(

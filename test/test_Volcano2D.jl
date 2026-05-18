@@ -255,7 +255,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     local iters
 
 
-    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
     @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
@@ -277,7 +277,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         end
         thermal_bcs!(thermal, thermal_bc)
 
-        # args = (; T = thermal.T, P=stokes.P, dt=Inf, ΔTc=@view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+        # args = (; T = thermal.T, P=stokes.P, dt=Inf, ΔT=@view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
         args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf)
 
         stress2grid!(stokes, pτ, particles)
@@ -330,7 +330,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                 verbose = true,
             )
         )
-        @views T_buffer .= thermal.T[2:(end - 1), 2:(end - 1)]
+        T_buffer .= thermal.T[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )

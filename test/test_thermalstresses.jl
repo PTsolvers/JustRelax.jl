@@ -330,7 +330,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     end
 
     # Arguments for functions
-    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔTc = @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -340,7 +340,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     # Time loop
     t, it = 0.0, 0
 
-    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
     @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]

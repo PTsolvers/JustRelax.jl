@@ -66,26 +66,25 @@ function ShearBand2D()
     init_mpi = JustRelax.MPI.Initialized() ? false : true
     igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
-
     # Physical domain ------------------------------------
     ly = 1.0e0          # domain length in y
     lx = ly             # domain length in x
     ni = nx, ny         # number of cells
     li = lx, ly         # domain length in x- and y-
     di = @. li / ni     # grid step in x- and -y
-    origin = 0.0, 0.0       # origin coordinates
+    origin = 0.0, 0.0   # origin coordinates
     grid = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid           # nodes at the center and vertices of the cells
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # Physical properties using GeoParams ----------------
-    τ_y = 1.6            # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ = 30             # friction angle
-    C = τ_y            # Cohesion
+    τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ = 30              # friction angle
+    C = τ_y             # Cohesion
     η0 = 1.0            # viscosity
     G0 = 1.0            # elastic shear modulus
     Gi = G0 / 2         # elastic shear modulus perturbation
-    εbg = 1.0            # background strain-rate
-    η_reg = 1.0e-2         # regularisation "viscosity"
+    εbg = 1.0           # background strain-rate
+    η_reg = 1.0e-2      # regularisation "viscosity"
     dt = η0 / G0 / 4.0  # assumes Maxwell time of 4
     el_bg = ConstantElasticity(; G = G0, Kb = 5)
     el_inc = ConstantElasticity(; G = Gi, Kb = 5)
@@ -131,7 +130,7 @@ function ShearBand2D()
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
 
     # Rheology
     compute_viscosity!(
@@ -208,12 +207,12 @@ function ShearBand2D()
 end
 
 @testset "ShearBand2D" begin
-    @suppress begin
+    # @suppress begin
         iters, τII, sol, extrema_τII = ShearBand2D()
         @test iters.err_evo_tot[end] < 1.0e-6
         @test extrema_τII[1] ≈ 1.544 atol = 1.0e-3
         @test extrema_τII[2] ≈ 1.639 atol = 1.0e-3
         @test τII[end] ≈ 1.6388 atol = 1.0e-4
         @test sol[end] ≈ 1.8358 atol = 1.0e-4
-    end
+    # end
 end

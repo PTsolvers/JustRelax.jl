@@ -235,7 +235,7 @@ end
                         (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz
                 ) +
                     Told[I1...] * ρCp * _dt +
-                    fn_ratio(compute_radioactive_heat, rheology, phase_ijk, args_ijk) +
+                    compute_radioactive_heating(rheology, phase_ijk) +
                     H[i, j, k] +
                     shear_heating[i, j, k] +
                     adiabatic[i, j, k] * T_ijk
@@ -310,10 +310,10 @@ end
                 (qTy2[i, j + 1, k] - qTy2[i, j, k]) * _dy +
                 (qTz2[i, j, k + 1] - qTz2[i, j, k]) * _dz
         ) +
-            fn_ratio(compute_radioactive_heat, rheology, phase_ijk, args_ijk) +
-            H[i, j, k] +
-            shear_heating[i, j, k] +
-            adiabatic[i, j, k] * T_ijk
+        compute_radioactive_heating(rheology, phase_ijk) +
+        H[i, j, k] +
+        shear_heating[i, j, k] +
+        adiabatic[i, j, k] * T_ijk
     else
         zero(_T)
     end
@@ -585,7 +585,7 @@ end
             dτ_ρ[i, j] * (
                 -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) +
                     Told[I1...] * ρCp * _dt +
-                    fn_ratio(compute_radioactive_heat, rheology, phase_ij, args_ij) +
+                    compute_radioactive_heating(rheology, phase_ij) +
                     H[i, j] +
                     shear_heating[i, j] +
                     adiabatic[i, j] * T[I1...]
@@ -652,7 +652,7 @@ end
     ResT[i, j] = if isNotDirichlet(dirichlet.mask, I1...)
         -ρCp * (T[I1...] - Told[I1...]) * _dt -
             ((qTx2[i + 1, j] - qTx2[i, j]) * _dx + (qTy2[i, j + 1] - qTy2[i, j]) * _dy) +
-            fn_ratio(compute_radioactive_heat, rheology, phase_ij, args_ij) +
+            compute_radioactive_heating(rheology, phase_ij) +
             H[i, j] +
             shear_heating[i, j] +
             adiabatic[i, j] * T[I1...]

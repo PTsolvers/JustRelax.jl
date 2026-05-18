@@ -414,6 +414,24 @@ end
 end
 
 # Public API
+"""
+    compute_yieldfunction_phase(rheology, phase; P, τII, EII, …)
+    compute_yieldfunction_phase(rheology, ratio; P, τII, EII, …)
+
+Evaluate the plastic yield function `F` of the `CompositeRheology` for a single phase or
+for a phase-weighted mixture at a given stress state.
+
+`rheology` is the tuple of `MaterialParams` for all phases. The second positional argument
+selects the phase:
+- `phase::Integer` picks the rheology of a single phase.
+- `ratio::NTuple{N}` / `ratio::SVector{N}` provides per-phase volume fractions; phases with
+  zero weight are skipped and the remaining contributions are summed (linear blend of `F`).
+
+Keyword arguments are forwarded to `GeoParams.compute_yieldfunction` of the plastic
+primitive (typically `P`, `τII`, `EII`). For composite rheologies without a plastic
+element, `F = τII` is returned so a weighted sum is not artificially driven to zero by
+elastic-only phases.
+"""
 @inline compute_yieldfunction_phase(
     rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, phase::Integer,
 ) where {N} = _yieldfunction_elements(rheology[phase].CompositeRheology[1].elements, args)
@@ -493,6 +511,28 @@ end
     end
 end
 
+"""
+    compute_plastic_gradients_phase(rheology, phase, τij; P, τII, EII, …) -> (dQdτ, dQdP, dFdP)
+    compute_plastic_gradients_phase(rheology, ratio, τij; P, τII, EII, …) -> (dQdτ, dQdP, dFdP)
+
+Return the plastic flow gradients required by the return-mapping update:
+- `dQdτ::NTuple` — gradient of the plastic potential `Q` with respect to the deviatoric
+  stress tensor `τij`, in **tensor convention** (shear slots already halved, i.e.
+  `ε_pl_xy = λ * dQdτ[xy]` directly without a factor of 1/2).
+- `dQdP` — scalar gradient of `Q` with respect to pressure (drives volumetric plastic
+  strain rate `ε_vol_pl = -λ · dQdP`).
+- `dFdP` — scalar gradient of the yield function `F` with respect to pressure; combined
+  with `dQdP` it enters the volume-closure term `K·dt·dFdP·dQdP` of the λ denominator.
+
+`τij` is the deviatoric stress at which to evaluate the gradients (typically the trial
+stress). The slot ordering matches `@stress(stokes)`:
+- 2D: `(xx, yy, xy)`
+- 3D: `(xx, yy, zz, yz, xz, xy)`
+
+The second positional argument selects the phase the same way as
+[`compute_yieldfunction_phase`](@ref) (single `phase::Integer` or per-phase `ratio`).
+For composite rheologies without a plastic element, all three return values are zero.
+"""
 @inline compute_plastic_gradients_phase(
     rheology::NTuple{N, AbstractMaterialParamsStruct}, args::NamedTuple, phase::Integer, τij,
 ) where {N} = _plastic_grad_elements(rheology[phase].CompositeRheology[1].elements, τij, args)

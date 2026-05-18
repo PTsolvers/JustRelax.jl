@@ -402,8 +402,18 @@ end
     return nothing
 end
 
-# Accumulate the volumetric plastic strain: EVol_pl += dt * ε_vol_pl
-# ε_vol_pl is a scalar field (= λ*(-dQ/dp)), distinct from the deviatoric
+"""
+    accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+
+Accumulate the volumetric plastic strain over a time step:
+`EVol_pl[I] += dt * ε_vol_pl[I]`.
+
+`ε_vol_pl` is the volumetric plastic strain *rate* at cell centers
+(`= λ · (-dQ/dP)`, set inside the stress kernel), and is the volumetric counterpart of the
+deviatoric `ε_pl`. `EVol_pl` is the running invariant accumulated through time and is
+distinct from `EII_pl` (which integrates the second invariant of the deviatoric plastic
+strain rate via [`accumulate_tensor!`](@ref)).
+"""
 function accumulate_vol!(EVol_pl::AbstractArray, ε_vol_pl::AbstractArray, dt)
     _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
     return nothing

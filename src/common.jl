@@ -85,6 +85,7 @@ export update_phases_given_markerchain!
 include("rheology/GeoParams.jl")
 
 include("rheology/StressUpdate.jl")
+export compute_yieldfunction_phase, compute_plastic_gradients_phase
 
 include("stokes/StressKernels.jl")
 export tensor_invariant!, accumulate_tensor!, accumulate_vol!

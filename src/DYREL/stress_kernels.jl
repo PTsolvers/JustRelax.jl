@@ -7,7 +7,7 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt
         (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),  # vertices
         stokes.τ.II,
         (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),            # staggered grid
-        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy_c), # centers
+        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy),   # centers
         stokes.EII_pl,                                      # accumulated plastic strain rate @ centers
         stokes.ε_vol_pl,                                    # volumetric plastic strain rate @ centers
         stokes.P,
@@ -58,10 +58,11 @@ end
         EIIv = av_clamped(EII_pl, Ic...)
         ratio = phase_ratios_vertex[I...]
         # compute local stress
-        τxx_I, τyy_I, τxy_I, _, _, _, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
+        τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
 
         # update arrays
         τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
+        ε_pl[3][I...] = εxy_pl
         λv[I...] = λ_I
 
         ## CENTER CALCULATION
@@ -79,7 +80,7 @@ end
                 compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
             # update arrays
             τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
-            ε_pl[1][I...], ε_pl[2][I...], ε_pl[3][I...] = εxx_pl, εyy_pl, εxy_pl
+            ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
             ε_vol_pl[I...] = ε_vol_pl_I
             τII[I...] = τII_I
             η_vep[I...] = ηvep_I
@@ -194,7 +195,7 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.Roc
         (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),  # vertices
         stokes.τ.II,
         (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),            # staggered grid
-        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy_c), # centers
+        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy), # centers
         stokes.EII_pl,                                      # accumulated plastic strain rate @ centers
         stokes.ε_vol_pl,                                    # volumetric plastic strain rate @ centers
         stokes.P,
@@ -246,10 +247,11 @@ end
             ratio = phase_ratios_vertex[I...]
 
             # compute local stress
-            τxx_I, τyy_I, τxy_I, _, _, _, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij)
+            τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij)
 
             # update arrays
             τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
+            ε_pl[3][I...] = εxy_pl
             λv[I...] = λ_I
 
         else
@@ -274,7 +276,7 @@ end
                     compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
                 # update arrays
                 τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
-                ε_pl[1][I...], ε_pl[2][I...], ε_pl[3][I...] = εxx_pl, εyy_pl, εxy_pl
+                ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
                 ε_vol_pl[I...] = ε_vol_pl_I
                 τII[I...] = τII_I
                 η_vep[I...] = ηvep_I

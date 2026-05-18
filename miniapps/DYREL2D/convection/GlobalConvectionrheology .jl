@@ -20,7 +20,7 @@ function init_rheologies(CharDim; is_plastic = true)
         R = 8.3145J / mol / K,
     )
     # down to 660km
-    A= 1.5e8
+    A = 1.5e8
     disl_upper_mantle = DislocationCreep( # dry olivine
         # A = 2.08e-23Pa^(-35 // 10) / s, # units are Pa^(-n) / s
         # A = (10^9.2)MPa^(-35 // 10) / s,   # material specific rheological parameter
@@ -55,7 +55,7 @@ function init_rheologies(CharDim; is_plastic = true)
     )
 
 
-    A= 1.5e8
+    A = 1.5e8
     # down to 660km
     diff_upper_mantle = DiffusionCreep( # dry olivine
         n = 1.0NoUnits,                         # power-law exponent
@@ -85,8 +85,8 @@ function init_rheologies(CharDim; is_plastic = true)
     )
 
     # Elasticity
-    el_upper_crust = SetConstantElasticity(;  G = 25.0e9Pa, ν = 0.4)
-    el_lower_crust = SetConstantElasticity(;  G = 25.0e9Pa, ν = 0.4)
+    el_upper_crust = SetConstantElasticity(; G = 25.0e9Pa, ν = 0.4)
+    el_lower_crust = SetConstantElasticity(; G = 25.0e9Pa, ν = 0.4)
     el_upper_mantle = SetConstantElasticity(; G = 85.0e9Pa, ν = 0.4)
     el_lower_mantle = SetConstantElasticity(; G = 160.0e9Pa, ν = 0.4)
     β_upper_crust = inv(get_Kb(el_upper_crust))
@@ -130,7 +130,7 @@ function init_rheologies(CharDim; is_plastic = true)
         # Name              = "UpperCrust",
         SetMaterialParams(;
             Phase = 1,
-            Density = PT_Density(; ρ0 = 2.75e3kg / m^3, β = β_upper_crust, T0 = 0.0e0C, α = 3e-5 / K),
+            Density = PT_Density(; ρ0 = 2.75e3kg / m^3, β = β_upper_crust, T0 = 0.0e0C, α = 3.0e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 7.5e2J / kg / K),
             Conductivity = K_crust,
             CompositeRheology = CompositeRheology((disl_upper_crust, el_upper_crust, pl_crust)),
@@ -142,7 +142,7 @@ function init_rheologies(CharDim; is_plastic = true)
         # Name              = "LowerCrust",
         SetMaterialParams(;
             Phase = 2,
-            Density = PT_Density(; ρ0 = 2.85e3kg / m^3, β = β_lower_crust, T0 = 0.0e0C, α = 3e-5 / K),
+            Density = PT_Density(; ρ0 = 2.85e3kg / m^3, β = β_lower_crust, T0 = 0.0e0C, α = 3.0e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 7.5e2J / kg / K),
             Conductivity = K_crust,
             RadioactiveHeat = ConstantRadioactiveHeat(0.0),
@@ -172,7 +172,7 @@ function init_rheologies(CharDim; is_plastic = true)
             Conductivity = K_mantle,
             RadioactiveHeat = ConstantRadioactiveHeat(0.0),
             # CompositeRheology = CompositeRheology((disl_pv_mantle, diff_pv_mantle, el_upper_mantle, pl)),
-            CompositeRheology = CompositeRheology(( diff_pv_mantle, el_upper_mantle, pl)),
+            CompositeRheology = CompositeRheology((diff_pv_mantle, el_upper_mantle, pl)),
             Gravity = ConstantGravity(; g = g),
             Elasticity = el_upper_mantle,
             CharDim = CharDim,
@@ -185,7 +185,7 @@ function init_rheologies(CharDim; is_plastic = true)
             Conductivity = K_mantle,
             RadioactiveHeat = ConstantRadioactiveHeat(0.0),
             # CompositeRheology = CompositeRheology((disl_ppv_mantle, diff_ppv_mantle, el_lower_mantle, pl)),
-            CompositeRheology = CompositeRheology(( diff_ppv_mantle, el_lower_mantle, pl)),
+            CompositeRheology = CompositeRheology((diff_ppv_mantle, el_lower_mantle, pl)),
             Gravity = ConstantGravity(; g = g),
             Elasticity = el_lower_mantle,
             CharDim = CharDim,
@@ -222,7 +222,7 @@ function init_phases!(phases, particles, Lx, d, r, thick_air, CharDim)
             elseif d_2700km > depth > d_660km
                 @index phases[ip, i, j] = 4.0
 
-            else#if depth < d_2700km
+            else #if depth < d_2700km
                 @index phases[ip, i, j] = 5.0
 
             end
@@ -253,31 +253,31 @@ end
 S(ξ) = 0.5 * (1.0 + tanh(ξ))
 
 # Interior adiabat
-function T_ad(z; Tm=1600.0, zm=100.0, gamma=0.35)
+function T_ad(z; Tm = 1600.0, zm = 100.0, gamma = 0.35)
     return Tm + gamma * (z - zm)
 end
 
 # Smooth 1D background profile
 function T_bg(
-    z;
-    Lz=2890.0,
-    Ttop=273.0,
-    Tbot=3800.0,
-    Tm=1600.0,
-    zm=100.0,
-    gamma=0.35,
-    delta_t=120.0,
-    delta_b=150.0,
-    w_t=20.0,
-    w_b=25.0,
-)
+        z;
+        Lz = 2890.0,
+        Ttop = 273.0,
+        Tbot = 3800.0,
+        Tm = 1600.0,
+        zm = 100.0,
+        gamma = 0.35,
+        delta_t = 120.0,
+        delta_b = 150.0,
+        w_t = 20.0,
+        w_b = 25.0,
+    )
     # Smooth switches
     s_t = S((z - delta_t) / w_t)
     s_b = S(((Lz - delta_b) - z) / w_b)
 
     # Matching temperatures on adiabat
-    Tad_topmatch = T_ad(delta_t; Tm=Tm, zm=zm, gamma=gamma)
-    Tad_botmatch = T_ad(Lz - delta_b; Tm=Tm, zm=zm, gamma=gamma)
+    Tad_topmatch = T_ad(delta_t; Tm = Tm, zm = zm, gamma = gamma)
+    Tad_botmatch = T_ad(Lz - delta_b; Tm = Tm, zm = zm, gamma = gamma)
 
     # Top conductive branch
     T_topBL = Ttop + (Tad_topmatch - Ttop) * (z / delta_t)
@@ -286,44 +286,43 @@ function T_bg(
     T_botBL = Tad_botmatch + (Tbot - Tad_botmatch) * ((z - (Lz - delta_b)) / delta_b)
 
     # Smoothly blended profile
-    return (1.0 - s_t) * T_topBL + (s_t * s_b) * T_ad(z; Tm=Tm, zm=zm, gamma=gamma) + (1.0 - s_b) * T_botBL
+    return (1.0 - s_t) * T_topBL + (s_t * s_b) * T_ad(z; Tm = Tm, zm = zm, gamma = gamma) + (1.0 - s_b) * T_botBL
 end
 
 # Full 2D temperature field
 function T_field(
-    x, z;
-    Lx=5780.0,
-    Lz=2890.0,
-    A=5.0,      # perturbation amplitude in K
-    n=1,
-    m=1,
-    Ttop=273.0,
-    Tbot=3800.0,
-    Tm=1600.0 + 200,
-    zm=100.0,
-    gamma=0.35,
-    delta_t=110.0,
-    delta_b=100.0,
-    w_t=20.0,
-    w_b=25.0,
-)
+        x, z;
+        Lx = 5780.0,
+        Lz = 2890.0,
+        A = 5.0,      # perturbation amplitude in K
+        n = 1,
+        m = 1,
+        Ttop = 273.0,
+        Tbot = 3800.0,
+        Tm = 1600.0 + 200,
+        zm = 100.0,
+        gamma = 0.35,
+        delta_t = 110.0,
+        delta_b = 100.0,
+        w_t = 20.0,
+        w_b = 25.0,
+    )
     background = T_bg(
         z;
-        Lz=Lz,
-        Ttop=Ttop,
-        Tbot=Tbot,
-        Tm=Tm,
-        zm=zm,
-        gamma=gamma,
-        delta_t=delta_t,
-        delta_b=delta_b,
-        w_t=w_t,
-        w_b=w_b,
+        Lz = Lz,
+        Ttop = Ttop,
+        Tbot = Tbot,
+        Tm = Tm,
+        zm = zm,
+        gamma = gamma,
+        delta_t = delta_t,
+        delta_b = delta_b,
+        w_t = w_t,
+        w_b = w_b,
     )
 
     # perturbation = A * sin(n * π * x / Lx) * sin(m * π * z / Lz)
-    perturbation = z > 2790 ? rand()*background * 0.05 : 0.0
+    perturbation = z > 2790 ? rand() * background * 0.05 : 0.0
 
     return background + perturbation
 end
-

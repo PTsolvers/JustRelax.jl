@@ -1,7 +1,7 @@
 # using CUDA
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
-const backend_JR =  JustRelax.CPUBackend
+const backend_JR = JustRelax.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -230,9 +230,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         fig
     end
 
-    T_buffer    = thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
-    dt₀         = similar(stokes.P)
+    dt₀ = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)
 
     local Vx_v, Vy_v

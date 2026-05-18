@@ -256,7 +256,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     # dTdz = nondimensionalize((450-20+273)K, CharDim) / (nondimensionalize(12.5km, CharDim))
     T1D = @. (∇Tz * (xci[2]) + Ttop) * (xci[2] < 0.0e0)
     T1D[xci[2] .≥ 0.0e0] .= Ttop
-    thermal.T[:, 2:end-1] .+= PTArray(backend_JR)(T1D')
+    thermal.T[:, 2:(end - 1)] .+= PTArray(backend_JR)(T1D')
 
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air

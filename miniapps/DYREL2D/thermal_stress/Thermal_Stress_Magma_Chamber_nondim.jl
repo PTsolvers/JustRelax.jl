@@ -256,7 +256,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     # dTdz = nondimensionalize((450-20+273)K, CharDim) / (nondimensionalize(12.5km, CharDim))
     T1D = @. (∇Tz * (xci[2]) + Ttop) * (xci[2] < 0.0e0)
     T1D[xci[2] .≥ 0.0e0] .= Ttop
-    thermal.T[:, 2:end-1] .+= PTArray(backend_JR)(T1D')
+    thermal.T[:, 2:(end - 1)] .+= PTArray(backend_JR)(T1D')
 
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air
@@ -381,7 +381,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
             verbose_DR = false,
             iterMax = 75.0e3,
             nout = 200,
-            rel_drop = 1e-2,
+            rel_drop = 1.0e-2,
             λ_relaxation_PH = 1,
             λ_relaxation_DR = 1,
             viscosity_relaxation = 1.0e-3,
@@ -411,7 +411,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                 verbose_DR = false,
                 iterMax = 100.0e3,
                 nout = 50,
-                rel_drop = 1e-2,
+                rel_drop = 1.0e-2,
                 λ_relaxation_PH = 1,
                 λ_relaxation_DR = 1,
                 viscosity_relaxation = 1.0e-2,

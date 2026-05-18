@@ -294,7 +294,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     # dTdz = nondimensionalize((450-20+273)K, CharDim) / (nondimensionalize(12.5km, CharDim))
     T1D = @. (∇Tz * (xci[2]) + Ttop) * (xci[2] < 0.0e0)
     T1D[xci[2] .≥ 0.0e0] .= Ttop
-    thermal.T[:, 2:end-1] .+= PTArray(backend_JR)(T1D')
+    thermal.T[:, 2:(end - 1)] .+= PTArray(backend_JR)(T1D')
 
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air

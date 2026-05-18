@@ -145,7 +145,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     it = 0 # iteration counter
     while it < 50
         # Stokes solver ----------------
-        args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = dt, ΔT = @zeros(ni.+2...))
+        args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = dt, ΔT = @zeros(ni .+ 2...))
         solve!(
             stokes,
             pt_stokes,

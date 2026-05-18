@@ -28,15 +28,15 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 end
 
 function diffusion_2D(
-    igg,
-    figdir;
-    nx = 32,
-    ny = 32,
-    lx = 100.0e3,
-    ly = 100.0e3,
-    ρ0 = 3.3e3,
-    Cp0 = 1.2e3,
-    K0 = 3.0
+        igg,
+        figdir;
+        nx = 32,
+        ny = 32,
+        lx = 100.0e3,
+        ly = 100.0e3,
+        ρ0 = 3.3e3,
+        Cp0 = 1.2e3,
+        K0 = 3.0
     )
     kyr = 1.0e3 * 3600 * 24 * 365.25
     Myr = 1.0e3 * kyr
@@ -78,7 +78,7 @@ function diffusion_2D(
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
-    @parallel (1:nx+2, 1:ny) init_T!(thermal.T, xci[2], ly)
+    @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2], ly)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
@@ -133,5 +133,5 @@ end
 figdir = "MPI_Diffusion2D"
 n = 32
 igg = IGG(init_global_grid(n, n, 1; init_MPI = true, select_device = false)...) #init MPI
-  
+
 diffusion_2D(igg, figdir; nx = n, ny = n)

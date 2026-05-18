@@ -135,7 +135,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     thickness = 2890 * km
     η0 = 1.0e21
     CharDim = GEO_units(;
-        length = thickness, viscosity = η0, temperature = 3.800e3K
+        length = thickness, viscosity = η0, temperature = 3.8e3K
     )
     # Physical domain ------------------------------------
     thick_air = nondimensionalize(0.0e0km, CharDim)                 # thickness of sticky air layer
@@ -211,19 +211,22 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # dTdz = (nondimensionalize(3273.0e0K, CharDim) - nondimensionalize(293.0e0K, CharDim)) / grid.li[2]
     # thermal.T[2:end-1, 2:end-1]  .= PTArray(backend_JR)([ -dTdz * y + nondimensionalize(293.0e0K, CharDim) for x in Array(grid.xci[1]), y in Array(grid.xci[2]) ]    )
     # thermal.T[2:end-1, 2:end-1] .+= PTArray(backend_JR)([A * sin(π*x/grid.li[1]) * sin(π*y/grid.li[1]) for x in Array(grid.xci[1]), y in Array(grid.xci[2]) ])
-    thermal.T[2:end-1, 2:end-1] .= PTArray(backend_JR)([
-        nondimensionalize(
-            T_field(x, 
-                - @dimstrip(z, km, CharDim); 
-                Lx=@dimstrip(grid.li[1], km, CharDim),
-                Lz=@dimstrip(grid.li[2], km, CharDim), 
-                w_t=2.5,
-                w_b=2.5
-            )*K,
-            CharDim
-        )
-        for x in Array(grid.xci[1]), z in Array(grid.xci[2])
-    ])
+    thermal.T[2:(end - 1), 2:(end - 1)] .= PTArray(backend_JR)(
+        [
+            nondimensionalize(
+                    T_field(
+                        x,
+                        - @dimstrip(z, km, CharDim);
+                        Lx = @dimstrip(grid.li[1], km, CharDim),
+                        Lz = @dimstrip(grid.li[2], km, CharDim),
+                        w_t = 2.5,
+                        w_b = 2.5
+                    ) * K,
+                    CharDim
+                )
+                for x in Array(grid.xci[1]), z in Array(grid.xci[2])
+        ]
+    )
     # thermal.T[2:end-1, 2:end-1]  .*= @rand(ni...) .* 0.05
     thermal_bcs!(thermal, thermal_bc)
     Ttop, Tbot = extrema(thermal.T)
@@ -271,8 +274,8 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
         scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), Y)
         scatter!(
-            ax2, 
-            log10.(@dimstrip(Array(stokes.viscosity.η[:]), Pa*s, CharDim)), 
+            ax2,
+            log10.(@dimstrip(Array(stokes.viscosity.η[:]), Pa * s, CharDim)),
             @dimstrip(Y, km, CharDim)
         )
         # ylims!(ax1, minimum(xvi[2]), 0)
@@ -297,9 +300,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # Time loop
     t, it = 0.0, 0
 
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1e-4)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-4)
 
-    while t < nondimensionalize(10e6yr, CharDim) # run only for 5 Myrs
+    while t < nondimensionalize(10.0e6yr, CharDim) # run only for 5 Myrs
 
         solve_DYREL!(
             stokes,
@@ -325,7 +328,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             )
         )
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di_min) 
+        dt = compute_dt(stokes, di_min)
         # ------------------------------
 
         # rotate stresses
@@ -439,7 +442,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
             # Make Makie figure
             t_dim = Float16(dimensionalize(t, yr, CharDim).val / 1.0e3)
-            fig = Figure(size = (1600, 800).*2, title = "t = $t_dim [kyr]")
+            fig = Figure(size = (1600, 800) .* 2, title = "t = $t_dim [kyr]")
             ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K] ; t=$t_dim [kyrs]")
             ax2 = Axis(fig[2, 1], aspect = ar, title = "phase")
             # ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
@@ -456,10 +459,10 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
-            Colorbar(fig[1, 2], h1, height = 3e2)
-            Colorbar(fig[2, 2], h2, height = 3e2)
-            Colorbar(fig[1, 4], h3, height = 3e2)
-            Colorbar(fig[2, 4], h4, height = 3e2)
+            Colorbar(fig[1, 2], h1, height = 3.0e2)
+            Colorbar(fig[2, 2], h2, height = 3.0e2)
+            Colorbar(fig[1, 4], h3, height = 3.0e2)
+            Colorbar(fig[2, 4], h4, height = 3.0e2)
             linkaxes!(ax1, ax2, ax3, ax4)
             fig
             save(joinpath(figdir, "$(it).png"), fig)
@@ -473,7 +476,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 ar = 4    # aspect ratio
-n  = 128 ÷ 1
+n = 128 ÷ 1
 nx = n * ar
 ny = n
 

@@ -218,7 +218,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (; left = true, right = true, top = false, bot = false),
-        constant_value = (; left = true, right = true, top = T_air, bot = T_GMG[1,1]),
+        constant_value = (; left = true, right = true, top = T_air, bot = T_GMG[1, 1]),
     )
     thermal_bcs!(thermal, thermal_bc)
     # ----------------------------------------------------
@@ -227,7 +227,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
     for _ in 1:5
         compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
+        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
     end
 
     # Melt fraction

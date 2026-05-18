@@ -126,7 +126,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    T_buffer    = thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, T_buffer, particles)
@@ -239,11 +239,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T   = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
-                    Vx  = Array(Vx_v),
-                    Vy  = Array(Vy_v),
+                    Vx = Array(Vx_v),
+                    Vy = Array(Vy_v),
                 )
                 data_c = (;
                     P = Array(stokes.P),
@@ -251,7 +251,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                     τyy = Array(stokes.τ.yy),
                     εxx = Array(stokes.ε.xx),
                     εyy = Array(stokes.ε.yy),
-                    η   = Array(stokes.viscosity.η_vep),
+                    η = Array(stokes.viscosity.η_vep),
                 )
                 velocity_v = (
                     Array(Vx_v),

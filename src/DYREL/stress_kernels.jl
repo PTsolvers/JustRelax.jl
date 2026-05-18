@@ -169,7 +169,7 @@ end
     end
 
     # Effective viscoelastic-plastic viscosity
-    η_vep = τII / (2 * εII)
+    η_vep = τII * 0.5 * inv(second_invariant(εij))
 
     return τij..., εij_pl..., τII, λ, ΔPψ, η_vep, ε_vol_pl
 end

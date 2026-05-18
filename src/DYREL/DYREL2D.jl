@@ -189,7 +189,7 @@ function _solve_DYREL!(
             dt,
             args,
         )
-        @. stokes.R.RP += stokes.ε_vol_pl  # volumetric plastic source: ∇V = ε_vol_el + ε_vol_pl
+
         # Residual check
         errVx = norm_mpi(stokes.R.Rx) / √((nx_g() - 2) * (ny_g() - 1))
         errVy = norm_mpi(stokes.R.Ry) / √((nx_g() - 1) * (ny_g() - 2))
@@ -264,7 +264,6 @@ function _solve_DYREL!(
                 dt,
                 args,
             )
-            @. stokes.R.RP += stokes.ε_vol_pl  # volumetric plastic source
 
             if !linear_viscosity
                 update_viscosity_τII!(

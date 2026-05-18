@@ -476,7 +476,7 @@ end
     ) where {N, M, T}
     return quote
         Base.@inline
-        dQdτ = ntuple(_ -> zero(T), Val(M))
+        dQdτ = Base.@ntuple $M _ -> zero(T)
         P = get(args, :P, zero(T))
         dQdP = zero(P)
         dFdP = zero(P)

@@ -202,9 +202,9 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
     # ----------------------------------------------------
 
     # WENO arrays
-    T_WENO = @zeros(ni .+ 1)
-    Vx_v = @zeros(ni .+ 1...)
-    Vy_v = @zeros(ni .+ 1...)
+    T_WENO = @zeros(ni)
+    Vx_c = @. (stokes.V.Vx[1:end-1, 2:end-1] + stokes.V.Vx[2:end, 2:end-1]) / 2
+    Vy_c = @. (stokes.V.Vy[2:end-1, 1:end-1] + stokes.V.Vy[2:end-1, 2:end]) / 2
 
     # Time loop
     t, it = 0.0, 0
@@ -260,10 +260,11 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
         )
         igg.me == 0 && println("...thermal solver finished")
         # Weno advection
-        center2vertex!(T_WENO, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
-        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_WENO)
+        T_WENO .= @view(thermal.T[2:(end - 1), 2:(end - 1)])
+        @. Vx_c = (stokes.V.Vx[1:end-1, 2:end-1] + stokes.V.Vx[2:end, 2:end-1]) / 2
+        @. Vy_c = (stokes.V.Vy[2:end-1, 1:end-1] + stokes.V.Vy[2:end-1, 2:end]) / 2
+        WENO_advection!(T_WENO, (Vx_c, Vy_c), weno, di, dt)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_WENO
         # ------------------------------
 
         it += 1

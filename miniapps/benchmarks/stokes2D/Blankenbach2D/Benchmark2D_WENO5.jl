@@ -73,13 +73,13 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     # ----------------------------------------------------
 
     # Weno model -----------------------------------------
-    weno = WENO5(backend, Val(2), (nx, ny) .+ 1) # ni.+1 for Temp
+    weno = WENO5(backend_JR, Val(2), (nx, ny) .+ 1) # ni.+1 for Temp
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
@@ -98,8 +98,8 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     thermal = ThermalArrays(backend_JR, ni)
     # initialize thermal profile
     @parallel (@idx ni) init_T!(thermal.T, xci[2])
-    Ttop = thermal.T[1, end]
-    Tbot = thermal.T[1, 1]
+    Ttop = thermal.T[2, end-1]
+    Tbot = thermal.T[2, 2]
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
@@ -166,11 +166,6 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         fig
     end
 
-    local Vx_v, Vy_v
-    if do_vtk
-        Vx_v = @zeros(ni .+ 1...)
-        Vy_v = @zeros(ni .+ 1...)
-    end
     # Time loop
     t, it = 0.0, 1
     Urms = Float64[]
@@ -178,11 +173,12 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     trms = Float64[]
 
     # Buffer arrays to compute velocity rms
-    Vx_v = @zeros(ni .+ 1...)
-    Vy_v = @zeros(ni .+ 1...)
-
+    Vx_c = @. (stokes.V.Vx[1:end-1, 2:end-1] + stokes.V.Vx[2:end, 2:end-1]) / 2
+    Vy_c = @. (stokes.V.Vy[2:end-1, 1:end-1] + stokes.V.Vy[2:end-1, 2:end]) / 2
+    Vx_v = @zeros(ni.+1)
+    Vy_v = @zeros(ni.+1)
     # WENO arrays
-    T_WENO = @zeros(ni .+ 1)
+    T_WENO = @zeros(ni)
 
     while it ≤ nit
         @show it
@@ -232,12 +228,12 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
                 verbose = true,
             )
         )
-        center2vertex!(T_WENO, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
-        velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
-        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
-        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_WENO)
-        @views thermal.T[2:(end - 1), end] .= 273.0
-        @views thermal.T[2:(end - 1), 1] .= 1273.0
+        T_WENO .= @view(thermal.T[2:(end - 1), 2:(end - 1)])
+        @. Vx_c = (stokes.V.Vx[1:end-1, 2:end-1] + stokes.V.Vx[2:end, 2:end-1]) / 2
+        @. Vy_c = (stokes.V.Vy[2:end-1, 1:end-1] + stokes.V.Vy[2:end-1, 2:end]) / 2
+        WENO_advection!(T_WENO, (Vx_c, Vy_c), weno, di, dt)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_WENO
+        thermal_bcs!(thermal, thermal_bc)
         # ------------------------------
 
         # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----
@@ -385,4 +381,4 @@ else
 end
 
 # run main script
-# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, do_vtk = do_vtk);
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, do_vtk = do_vtk);

@@ -206,9 +206,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
     end
 
     # WENO arrays
-    T_WENO = @zeros(ni .+ 1)
-    Vx_v = @zeros(ni .+ 1...)
-    Vy_v = @zeros(ni .+ 1...)
+    T_WENO = @zeros(ni)
+    Vx_c = @. (stokes.V.Vx[1:end-1, 2:end-1] + stokes.V.Vx[2:end, 2:end-1]) / 2
+    Vy_c = @. (stokes.V.Vy[2:end-1, 1:end-1] + stokes.V.Vy[2:end-1, 2:end]) / 2
     # Time loop
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
@@ -260,12 +260,11 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
                 verbose = true,
             ),
         )
-        center2vertex!(T_WENO, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
-
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
-
-        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_WENO)
+        T_WENO .= @view(thermal.T[2:(end - 1), 2:(end - 1)])
+        @. Vx_c = (stokes.V.Vx[1:end-1, 2:end-1] + stokes.V.Vx[2:end, 2:end-1]) / 2
+        @. Vy_c = (stokes.V.Vy[2:end-1, 1:end-1] + stokes.V.Vy[2:end-1, 2:end]) / 2
+        WENO_advection!(T_WENO, (Vx_c, Vy_c), weno, di, dt)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_WENO
         # ------------------------------
 
         # Advection --------------------
@@ -285,7 +284,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
             # Make Makie figure
             fig = Figure(size = (900, 900), title = "t = $t")
             ax1 = Axis(fig[1, 1])
-            h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(T_WENO), colormap = :batlow)
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(T_WENO), colormap = :batlow)
             Colorbar(fig[1, 2], h1)
             save(joinpath(figdir, "$(it).png"), fig)
             fig

@@ -160,7 +160,7 @@ function ShearBand2D_DPCap_DYREL()
                 verbose_DR = false,
                 iterMax = 50.0e3,
                 nout = 10,
-                rel_drop = 1e-2,
+                rel_drop = 1.0e-2,
                 λ_relaxation_PH = 1.0,
                 λ_relaxation_DR = 0.2,
                 viscosity_relaxation = 1,

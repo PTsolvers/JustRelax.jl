@@ -110,15 +110,15 @@ end
         @test sp isa JustRelax.StressParticles
         nrm = JustRelax.normal_stress(sp)
         shr = JustRelax.shear_stress(sp)
-        vor = JustRelax.shear_vorticity(sp)
+        vorticity = JustRelax.shear_vorticity(sp)
         @test length(nrm) == 2
         @test length(shr) == 1
-        @test length(vor) == 1
+        @test length(vorticity) == 1
         flat = JustRelax.unwrap(sp)
         @test length(flat) == 4
         @test flat[1] === nrm[1] && flat[2] === nrm[2]
         @test flat[3] === shr[1]
-        @test flat[4] === vor[1]
+        @test flat[4] === vorticity[1]
 
         # Stokes
         @test JustRelax2D.@unpack(stokes.V) === (stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)

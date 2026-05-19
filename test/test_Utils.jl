@@ -5,6 +5,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
 end
 using Test
 using Statistics
+using GeoParams
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 import JustRelax.JustRelax2D:
     detect_args_size,
@@ -87,15 +88,19 @@ end
         @test _tuple(stokes.τ) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
         @test _tuple(stokes.V) === (stokes.V.Vx, stokes.V.Vy)
 
-        # A = @zeros(ni...)
-        # B = @zeros(ni...)
-        # @parallel (@idx ni) multi_copy!((A, B), (stokes.P, thermal.Tc))
-        # @test A == stokes.P
-        # @test B == thermal.Tc
+        # multi_copy!/assign! kernels — CPU-only (these tuple-of-arrays kernels are
+        # known not to compile on GPU backends)
+        if backend_JR === CPUBackend
+            A = @zeros(ni...)
+            B = @zeros(ni...)
+            @parallel (@idx ni) JustRelax2D.multi_copy!((A, B), (stokes.P, thermal.Tc))
+            @test A == stokes.P
+            @test B == thermal.Tc
 
-        # A .= 0.0e0
-        # @parallel (@idx ni) assign!(A, stokes.P)
-        # @test A == stokes.P
+            A .= 0.0e0
+            @parallel JustRelax2D.assign!(A, stokes.P)
+            @test A == stokes.P
+        end
 
         @test JustRelax2D.tupleize(1) === (1,)
         @test JustRelax2D.tupleize((1, 2)) === (1, 2)
@@ -317,5 +322,159 @@ end
         JustRelax.__init__(devnull)
         JustRelax.versioninfo(devnull)
         JustRelax.versioninfo(devnull; verbose = true)
+
+        # exercise the banner path that __init__ skips on non-TTY stdout
+        buf = IOBuffer()
+        JustRelax._print_banner(buf)
+        banner = String(take!(buf))
+        @test occursin("Version:", banner)
+        @test occursin("Latest commit:", banner)
+        @test occursin("Commit date:", banner)
+
+        # _installation_method branches via synthetic depots / dirs
+        mktempdir() do tmp
+            depot = tmp
+            mkpath(joinpath(depot, "packages"))
+            mkpath(joinpath(depot, "dev"))
+
+            dev_pkg = joinpath(depot, "dev", "JustRelax")
+            mkpath(dev_pkg)
+            @test JustRelax._installation_method(dev_pkg, [depot]).label ==
+                "Pkg.develop() or dev mode"
+
+            registry_pkg = joinpath(depot, "packages", "JustRelax", "abc123")
+            mkpath(registry_pkg)
+            @test JustRelax._installation_method(registry_pkg, [depot]).label ==
+                "Pkg.add() from registry"
+
+            git_pkg = joinpath(tmp, "git_clone")
+            mkpath(joinpath(git_pkg, ".git"))
+            info = JustRelax._installation_method(git_pkg, [depot])
+            @test info.label == "Git clone"
+            @test info.is_git
+
+            custom_pkg = joinpath(tmp, "custom")
+            mkpath(custom_pkg)
+            @test JustRelax._installation_method(custom_pkg, [depot]).label ==
+                "Custom location"
+        end
+    end
+
+    @testset "nothing conversions" begin
+        # type_conversions.jl Nothing fallbacks
+        @test Array(nothing) === nothing
+        @test Base.copy(nothing) === nothing
+        @test JustRelax._convert_to_backend(CPUBackend, nothing) === nothing
+    end
+
+    @testset "compute_maxloc!" begin
+        # 2D: a 5×5 array with a hotspot at (3,3); window=(1,1) propagates the max
+        # to a 3×3 neighborhood. (3D path is exercised via the 3D Stokes solvers.)
+        A2 = zeros(5, 5)
+        A2[3, 3] = 7.0
+        B2 = similar(A2)
+        JustRelax2D.compute_maxloc!(B2, A2; window = (1, 1))
+        @test maximum(B2) == 7.0
+        @test all(B2[i, j] == 7.0 for i in 2:4, j in 2:4)
+        @test B2[1, 1] == 0.0 && B2[5, 5] == 0.0
+    end
+
+    @testset "yield function & plastic gradients" begin
+        # Build a minimal regularised Drucker-Prager rheology and exercise the helpers
+        pl = GeoParams.DruckerPrager_regularised(; C = 1.0, ϕ = 30.0, η_vp = 1.0e-3, Ψ = 0.0)
+        elastic = GeoParams.ConstantElasticity(; G = 1.0, Kb = 1.0)
+        visc = GeoParams.LinearViscous(; η = 1.0)
+        mat = GeoParams.SetMaterialParams(;
+            Phase = 1,
+            Density = GeoParams.ConstantDensity(; ρ = 0.0),
+            Gravity = GeoParams.ConstantGravity(; g = 0.0),
+            CompositeRheology = GeoParams.CompositeRheology((visc, elastic, pl)),
+            Elasticity = elastic,
+        )
+        rheology = (mat,)
+
+        # Above the yield envelope: F > 0
+        args = (; P = 0.0, τII = 5.0, EII = 0.0)
+        F_above = JustRelax2D.compute_yieldfunction_phase(rheology, 1; args...)
+        @test F_above > 0.0
+        # Below the yield envelope: F < 0
+        args_below = (; P = 0.0, τII = 0.1, EII = 0.0)
+        F_below = JustRelax2D.compute_yieldfunction_phase(rheology, 1; args_below...)
+        @test F_below < 0.0
+
+        # Phase-weighted (NTuple ratio) matches single-phase value when ratio = (1,)
+        F_ratio = JustRelax2D.compute_yieldfunction_phase(rheology, (1.0,); args...)
+        @test F_ratio == F_above
+
+        # plastic gradients: shear slots are halved relative to GeoParams convention
+        τij2 = (1.0, -1.0, 0.5)            # 2D
+        dQdτ, dQdP, dFdP = JustRelax2D.compute_plastic_gradients_phase(
+            rheology, 1, τij2; args...,
+        )
+        @test length(dQdτ) == 3
+
+        # 3D
+        τij3 = (1.0, -1.0, 0.0, 0.5, 0.5, 0.5)
+        dQdτ3, _, _ = JustRelax2D.compute_plastic_gradients_phase(
+            rheology, 1, τij3; args...,
+        )
+        @test length(dQdτ3) == 6
+    end
+
+    @testset "compute_dτ_pl" begin
+        # Directly exercise the plastic correction kernel
+        τij = (1.0, 2.0, 0.5)        # τxx, τyy, τxy
+        dτij = (0.1, 0.2, 0.05)
+        τy = 1.0
+        τII_trial = 2.5
+        ηij = 1.0e21
+        λ0 = 0.0
+        η_reg = 1.0e18
+        dτ_r = 1.0e-22
+        volume = 0.0
+        dτ_pl, λ, λdQdτ = JustRelax2D.compute_dτ_pl(
+            τij, dτij, τy, τII_trial, ηij, λ0, η_reg, dτ_r, volume,
+        )
+        @test λ > 0.0
+        @test length(λdQdτ) == 3
+        @test length(dτ_pl) == 3
+        # No-yield path: F < 0 ⇒ λ collapses to ν·λ0 = 0
+        dτ_pl2, λ2, _ = JustRelax2D.compute_dτ_pl(
+            τij, dτij, 10.0, 0.5, ηij, λ0, η_reg, dτ_r, volume,
+        )
+        @test λ2 == 0.0
+
+        # isyielding flips when τII_trial crosses τy
+        @test JustRelax2D.isyielding(1, 2.0, 1.0) == 1
+        @test JustRelax2D.isyielding(1, 0.5, 1.0) == 0
+        @test JustRelax2D.isyielding(0, 2.0, 1.0) == 0
+
+        # compute_dτ_r
+        @test JustRelax2D.compute_dτ_r(1.0, 1.0, 1.0) ≈ 1 / 3
+    end
+
+    @testset "geometry_nonMPI" begin
+        # direct invocation of the non-MPI path; tests still run with IGG initialized,
+        # but the helper itself does not consult the global grid.
+        ni2 = (4, 4)
+        li2 = (1.0, 1.0)
+        Li, maxLi, di, xci, xvi, xi_vel = JustRelax.geometry_nonMPI(
+            ni2, li2, (0.0, 0.0),
+        )
+        @test Li == (1.0, 1.0)
+        @test maxLi == 1.0
+        @test di == (0.25, 0.25)
+        @test length(xci[1]) == 4 && length(xvi[1]) == 5
+        @test length(xi_vel) == 2
+
+        ni3 = (4, 4, 4)
+        li3 = (1.0, 2.0, 3.0)
+        Li, maxLi, di, xci, xvi, xi_vel = JustRelax.geometry_nonMPI(
+            ni3, li3, (0.0, 0.0, 0.0),
+        )
+        @test Li == (1.0, 2.0, 3.0)
+        @test maxLi == 3.0
+        @test di == (0.25, 0.5, 0.75)
+        @test length(xi_vel) == 3
     end
 end

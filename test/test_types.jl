@@ -234,9 +234,9 @@ end
     @test JR3.compute_principal_stresses!(stokes, σ) === nothing
     # eigenvector component magnitudes equal absolute eigenvalues; their sum
     # equals the trace |λ₁|+|λ₂|+|λ₃| ≥ trace = 6 here (all eigenvalues > 0)
-    λ1 = sqrt(sum(σ.σ1[i, 1, 1, 1]^2 for i in 1:3))
-    λ2 = sqrt(sum(σ.σ2[i, 1, 1, 1]^2 for i in 1:3))
-    λ3 = sqrt(sum(σ.σ3[i, 1, 1, 1]^2 for i in 1:3))
+    λ1 = sqrt(sum(Array(σ.σ1)[i, 1, 1, 1]^2 for i in 1:3))
+    λ2 = sqrt(sum(Array(σ.σ2)[i, 1, 1, 1]^2 for i in 1:3))
+    λ3 = sqrt(sum(Array(σ.σ3)[i, 1, 1, 1]^2 for i in 1:3))
     @test isapprox(λ1 + λ2 + λ3, 6.0; atol = 1.0e-6)
 
     thermal = JR3.ThermalArrays(backend, ni)

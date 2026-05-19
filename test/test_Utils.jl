@@ -105,6 +105,21 @@ end
         @test JustRelax2D.tupleize(1) === (1,)
         @test JustRelax2D.tupleize((1, 2)) === (1, 2)
 
+        # StressParticles accessors (2D)
+        sp = StressParticles(particles)
+        @test sp isa JustRelax.StressParticles
+        nrm = JustRelax.normal_stress(sp)
+        shr = JustRelax.shear_stress(sp)
+        vor = JustRelax.shear_vorticity(sp)
+        @test length(nrm) == 2
+        @test length(shr) == 1
+        @test length(vor) == 1
+        flat = JustRelax.unwrap(sp)
+        @test length(flat) == 4
+        @test flat[1] === nrm[1] && flat[2] === nrm[2]
+        @test flat[3] === shr[1]
+        @test flat[4] === vor[1]
+
         # Stokes
         @test JustRelax2D.@unpack(stokes.V) === (stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
         @test @velocity(stokes) === (stokes.V.Vx, stokes.V.Vy)

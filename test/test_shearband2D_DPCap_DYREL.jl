@@ -181,11 +181,11 @@ function ShearBand2D_DPCap_DYREL()
     return (;
         iters,
         τII_max = maximum(Array(stokes.τ.II)),
-        εpl_max = maximum(Array(stokes.ε_pl.II)),
+        ε_pl_max = maximum(Array(stokes.ε_pl.II)),
         Pmin = minimum(Array(stokes.P)),
         Pmax = maximum(Array(stokes.P)),
         EVol_max = maximum(abs, Array(stokes.EVol_pl)),
-        εvol_extrema = extrema(Array(stokes.ε_vol_pl)),
+        ε_vol_extrema = extrema(Array(stokes.ε_vol_pl)),
     )
 end
 
@@ -195,20 +195,13 @@ end
 
         # Outer (Powell–Hestenes) loop reached the requested tolerance
         @test out.iters.err_evo_tot[end] < 1.0e-5
-
-        # τII stays bounded by the yield envelope
         @test isfinite(out.τII_max)
         @test out.τII_max < 2.0
-
-        # Plasticity engaged in the inclusion (also catches the vertex-ε_pl-storage
-        # bug class where ε_pl.xy at vertex isn't written by DYREL)
-        @test out.εpl_max > 0.0
-
-        # Volumetric plastic strain accumulator updated through accumulate_vol!
+        @test out.ε_pl_max > 0.0
+        # Volumetric plastic strain accumulator
         @test out.EVol_max > 0.0
-
         # ε_vol_pl = -λ * dQ/dP; with ψ > 0, dQ/dP < 0, so ε_vol_pl ≥ 0 (dilation)
-        @test out.εvol_extrema[1] ≥ 0.0
-        @test out.εvol_extrema[2] > 0.0
+        @test out.ε_vol_extrema[1] ≥ 0.0
+        @test out.ε_vol_extrema[2] > 0.0
     end
 end

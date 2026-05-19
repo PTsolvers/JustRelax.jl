@@ -175,11 +175,11 @@ function ShearBand2D_DPCap()
     return (;
         iters,
         τII_max = maximum(Array(stokes.τ.II)),
-        εpl_max = maximum(Array(stokes.ε_pl.II)),
+        ε_pl_max = maximum(Array(stokes.ε_pl.II)),
         Pmin = minimum(Array(stokes.P)),
         Pmax = maximum(Array(stokes.P)),
         EVol_max = maximum(abs, Array(stokes.EVol_pl)),
-        εvol_extrema = extrema(Array(stokes.ε_vol_pl)),
+        ε_vol_extrema = extrema(Array(stokes.ε_vol_pl)),
     )
 end
 
@@ -187,24 +187,16 @@ end
     @suppress begin
         out = ShearBand2D_DPCap()
 
-        # Velocity / pressure residuals reached the requested tolerance
         @test out.iters.norm_Rx[end] < 1.0e-5
         @test out.iters.norm_Ry[end] < 1.0e-5
         @test out.iters.norm_∇V[end] < 1.0e-5
-
-        # τII stays bounded by the yield envelope (cohesion=τ_y/cosϕ ≈ 1.85)
         @test isfinite(out.τII_max)
         @test out.τII_max < 2.0
-
-        # Plasticity engaged in the inclusion — exercises compute_yieldfunction_phase
-        # and compute_plastic_gradients_phase paths
-        @test out.εpl_max > 0.0
-
-        # Volumetric plastic strain accumulator updated through new accumulate_vol!
+        @test out.ε_pl_max > 0.0
+        # Volumetric plastic strain accumulator
         @test out.EVol_max > 0.0
-
         # ε_vol_pl = -λ * dQ/dP; with ψ > 0, dQ/dP < 0, so ε_vol_pl ≥ 0 (dilation)
-        @test out.εvol_extrema[1] ≥ 0.0
-        @test out.εvol_extrema[2] > 0.0
+        @test out.ε_vol_extrema[1] ≥ 0.0
+        @test out.ε_vol_extrema[2] > 0.0
     end
 end

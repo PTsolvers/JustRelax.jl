@@ -41,7 +41,7 @@ function elliptical_perturbation!(T, δT, xc, yc, zc, r, xci)
         end
         return nothing
     end
-    ni = size(T .- 2)
+    ni = size(T) .- 2
     return @parallel (@idx ni) _elliptical_perturbation!(T, xci...)
 end
 

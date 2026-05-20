@@ -36,13 +36,13 @@ end
 function elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi)
 
     @parallel_indices (i, j, k) function _elliptical_perturbation!(T, x, y, z)
-        @inbounds if (((x[i] - xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
-            T[i, j, k] += δT
+        if (((x[i] - xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
+            T[(i, j, k) .+ 1...] += δT
         end
         return nothing
     end
-
-    return @parallel _elliptical_perturbation!(T, xvi...)
+    ni = size(T .- 2)
+    return @parallel (@idx ni) _elliptical_perturbation!(T, xvi...)
 end
 
 function diffusion_3D(;

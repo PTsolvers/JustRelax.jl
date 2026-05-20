@@ -384,7 +384,7 @@ end
 @inline _yieldfunction_primitive(v::AbstractPlasticity, args::NamedTuple) =
     GeoParams.compute_yieldfunction(v; args...)
 
-# Search the elements tuple of one composite rheology for the plastic primitive
+# Search the elements tuple of one composite rheology for the plastic primitive.
 @generated function _yieldfunction_elements(elements::Tuple, args::NamedTuple)
     N = length(elements.parameters)
     return quote
@@ -394,7 +394,7 @@ end
             isplastic(vᵢ) && return _yieldfunction_primitive(vᵢ, args)
         end
         # non-plastic phase: F = τII so weighted F is not artificially damped
-        return get(args, :τII, 0.0)
+        return args.τII
     end
 end
 
@@ -406,7 +406,7 @@ end
         Base.@inline
         v_phases = Base.@ntuple $N i -> begin
             r = ratio[i]
-            iszero(r) ? zero(get(args, :τII, 0.0)) :
+            iszero(r) ? zero(args.τII) :
                 r * _yieldfunction_elements(rheology[i].CompositeRheology[1].elements, args)
         end
         return sum(v_phases)
@@ -465,23 +465,21 @@ elastic-only phases.
 
 # Plastic gradients for a single primitive: halves shear slots of ∂Q∂τ for tensor convention
 @inline function _plastic_grad_primitive(v::AbstractPlasticity, τij::NTuple{N, T}, args::NamedTuple) where {N, T}
-    P = get(args, :P, zero(T))
     g = GeoParams.∂Q∂τ(v, τij; args...)
     n_normal = N == 6 ? 3 : 2                                  # 3 normals in 3D, 2 in 2D
     dQdτ = ntuple(i -> i ≤ n_normal ? g[i] : 0.5 * g[i], Val(N))
-    return dQdτ, GeoParams.∂Q∂P(v, P; args...), GeoParams.∂F∂P(v, P; args...)
+    return dQdτ, GeoParams.∂Q∂P(v, args.P; args...), GeoParams.∂F∂P(v, args.P; args...)
 end
 
 @generated function _plastic_grad_elements(elements::Tuple, τij, args::NamedTuple)
     N = length(elements.parameters)
     return quote
         Base.@inline
-        P = get(args, :P, zero(eltype(τij)))
         Base.@nexprs $N i -> begin
             vᵢ = elements[i]
             isplastic(vᵢ) && return _plastic_grad_primitive(vᵢ, τij, args)
         end
-        return _zero_plastic_grad(τij, P)
+        return _zero_plastic_grad(τij, args.P)
     end
 end
 
@@ -495,9 +493,8 @@ end
     return quote
         Base.@inline
         dQdτ = Base.@ntuple $M _ -> zero(T)
-        P = get(args, :P, zero(T))
-        dQdP = zero(P)
-        dFdP = zero(P)
+        dQdP = zero(args.P)
+        dFdP = zero(args.P)
         Base.@nexprs $N i -> begin
             r = ratio[i]
             if !iszero(r)

@@ -349,7 +349,6 @@ function _solve_DYREL!(
 
     # absorb plastic pressure correction into P (mirrors APT: stokes.P .= θ = P + ΔPψ)
     @. stokes.P += stokes.ΔPψ
-    stokes.ΔPψ .= 0
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(

@@ -146,15 +146,16 @@ end
     dQdτ, dQdP, dFdP = _plastic_grad_elements(elements, τij, args)
     # dQdτ is already in tensor convention (shear slots halved inside _plastic_grad_primitive)
 
-    λ = if ispl && F ≥ 0
+    λ, ε_vol_pl = if ispl && F ≥ 0
         λ_new = F / (η_ve + η_reg + Kb * dt * dFdP * dQdP)
         λ_relaxation * λ_new + (1 - λ_relaxation) * λ
+        # Volumetric plastic strain rate
+        ε_vol_pl = -λ * dQdP
+        λ_new, ε_vol_pl
     else
-        0.0
+        0.0, 0.0
     end
 
-    # Volumetric plastic strain rate
-    ε_vol_pl = -λ * dQdP
     # Update stress and plastic strain rate
     τij, τII, εij_pl, ΔPψ = if λ > 0
         εij_pl = @. λ * dQdτ
@@ -247,7 +248,7 @@ end
             ratio = phase_ratios_vertex[I...]
 
             # compute local stress
-            τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij)
+            τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, _, _, _ = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij)
 
             # update arrays
             τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I

@@ -289,3 +289,24 @@ end
     JR3.displacement2velocity!(stokes, 5)
     @test all(stokes.V.Vx .== 2.0)
 end
+
+@testset "Type constructor: integer-only validation" begin
+    @test_throws ArgumentError JustRelax.Velocity(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Velocity(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Displacement(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Displacement(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Vorticity((10.0, 10.0))
+    @test_throws ArgumentError JustRelax.Vorticity((10.0, 10.0, 10.0))
+    @test_throws ArgumentError JustRelax.Viscosity((10.0, 10.0))
+    @test_throws ArgumentError JustRelax.Viscosity((10.0, 10.0, 10.0))
+    @test_throws ArgumentError JustRelax.SymmetricTensor(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.SymmetricTensor(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Residual(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Residual(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.ThermalArrays(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.ThermalArrays(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.StokesArrays(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.StokesArrays(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.RockRatio(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.RockRatio(10.0, 10.0, 10.0)
+end

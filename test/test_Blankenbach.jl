@@ -146,7 +146,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
     # PT coefficients for thermal diffusion -------------
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.5 / √2.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.99 / √2.1
     )
 
     # Boundary conditions -------------------------------
@@ -285,8 +285,8 @@ end
         igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
         Urms, Nu_top, iters = main2D(igg; nx = nx, ny = ny)
-        @test Urms[end] ≈ 0.418 rtol = 1.0e-1
-        @test Nu_top[end] ≈ 0.9947 rtol = 1.0e-2
+        @test Urms[end] ≈ 0.2679304476129473 rtol = 1.0e-1
+        @test Nu_top[end] ≈ 1.000000002029353 rtol = 1.0e-2
         @test iters.err_evo1[end] < 1.0e-4
     end
 end

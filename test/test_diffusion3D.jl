@@ -83,7 +83,6 @@ function diffusion_3D(;
 
     # fields needed to compute density on the fly
     P = @zeros(ni...)
-    args = (; P = P, T = @zeros(ni .+ 2...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
@@ -117,6 +116,7 @@ function diffusion_3D(;
 
     # Physical time loop
     while it < 10
+        args = (; P = P, T = thermal.T)
         heatdiffusion_PT!(
             thermal,
             pt_thermal,

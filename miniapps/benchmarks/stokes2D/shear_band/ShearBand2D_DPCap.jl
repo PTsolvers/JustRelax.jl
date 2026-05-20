@@ -163,7 +163,7 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:5
-        compute_ρg!(ρg, phase_ratios, rheology, (T = zeros(ni...), P = stokes.P))
+        compute_ρg!(ρg, phase_ratios, rheology, (T = @zeros(ni...), P = stokes.P))
         @parallel init_P!(stokes.P, ρg[end], xvi[2])
     end
 

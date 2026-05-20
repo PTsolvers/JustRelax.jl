@@ -46,6 +46,19 @@ function JR3D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where 
     return StokesArrays(ni)
 end
 
+function JR3D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) where {N}
+    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+end
+
+function JR3D.DYREL(::Type{AMDGPUBackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
+    return DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+end
+
+function JR3D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel=ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
+
 function JR3D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Number}) where {N}
     return ThermalArrays(ni...)
 end
@@ -61,6 +74,10 @@ function JR3D.WENO5(
 end
 
 function JR3D.RockRatio(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return RockRatio(ni...)
+end
+
+function JR3D.RockRatio(::Type{AMDGPUBackend}, ni::Vararg{Integer, N}) where {N}
     return RockRatio(ni...)
 end
 

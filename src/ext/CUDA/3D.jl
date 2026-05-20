@@ -38,6 +38,19 @@ function JR3D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N
     return StokesArrays(ni)
 end
 
+function JR3D.DYREL(::Type{CUDABackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) where {N}
+    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+end
+
+function JR3D.DYREL(::Type{CUDABackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
+    return DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+end
+
+function JR3D.DYREL(::Type{CUDABackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
+
 function JR3D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N, Number}) where {N}
     return ThermalArrays(ni...)
 end
@@ -51,6 +64,10 @@ function JR3D.WENO5(::Type{CUDABackend}, method::Val{T}, ni::NTuple{N, Integer})
 end
 
 function JR3D.RockRatio(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
+    return RockRatio(ni...)
+end
+
+function JR3D.RockRatio(::Type{CUDABackend}, ni::Vararg{Integer, N}) where {N}
     return RockRatio(ni...)
 end
 

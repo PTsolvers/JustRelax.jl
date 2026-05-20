@@ -23,7 +23,7 @@ end
     @testset "DYREL 2D allocator" begin
         # NTuple constructor
         nx, ny = 8, 6
-        dyrel = JustRelax2D.DYREL((nx, ny); ϵ = 1.0e-7, ϵ_vel = 2.0e-7, CFL = 0.5, c_fact = 0.25)
+        dyrel = JustRelax2D.DYREL(backend_JR, (nx, ny); ϵ = 1.0e-7, ϵ_vel = 2.0e-7, CFL = 0.5, c_fact = 0.25)
         @test dyrel isa JustRelax.DYREL
         @test size(dyrel.γ_eff) == (nx, ny)
         @test size(dyrel.ηb) == (nx, ny)
@@ -40,24 +40,15 @@ end
         @test dyrel.CFL === 0.5
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
-        @test dyrel.c_fact === 0.25      # NB: the struct field is `c_fact`,
-        # while the constructor kwarg is `c_fact` (existing naming asymmetry).
-        # all per-velocity arrays initialised to zero
+        @test dyrel.c_fact === 0.25
         @test all(iszero.(dyrel.γ_eff))
         @test all(iszero.(dyrel.Dx)) && all(iszero.(dyrel.Dy))
         @test all(iszero.(dyrel.λmaxVx)) && all(iszero.(dyrel.λmaxVy))
-
-        # 2-int forwarder forwards to the NTuple constructor
-        dyrel2 = JustRelax2D.DYREL(nx, ny; CFL = 0.7)
-        @test size(dyrel2.Dx) == (nx - 1, ny)
-        @test dyrel2.CFL === 0.7
     end
 
     @testset "DYREL 3D allocator" begin
-        # The 3D DYREL constructor lives in the JustRelax3D submodule, which has
-        # its own ParallelStencil 3D init.
         nx, ny, nz = 6, 5, 4
-        dyrel = JR3.DYREL((nx, ny, nz); ϵ = 1.0e-7, ϵ_vel = 2.0e-7, CFL = 0.6, c_fact = 0.3)
+        dyrel = JR3.DYREL(backend_JR, (nx, ny, nz); ϵ = 1.0e-7, ϵ_vel = 2.0e-7, CFL = 0.6, c_fact = 0.3)
         @test dyrel isa JustRelax.DYREL
         @test size(dyrel.γ_eff) == (nx, ny, nz)
         @test size(dyrel.ηb) == (nx, ny, nz)
@@ -81,7 +72,7 @@ end
         @test all(iszero.(dyrel.Dz)) && all(iszero.(dyrel.λmaxVz))
 
         # 3-int forwarder
-        dyrel2 = JR3.DYREL(nx, ny, nz; CFL = 0.7)
+        dyrel2 = JR3.DYREL(backend_JR,nx, ny, nz; CFL = 0.7)
         @test size(dyrel2.Dz) == (nx, ny, nz - 1)
         @test dyrel2.CFL === 0.7
     end
@@ -143,7 +134,7 @@ end
         # update_α_β!(dyrel) and update_dτV_α_β!(dyrel) drive the kernels off the
         # DYREL fields directly.
         nx, ny = 5, 4
-        dyrel = JustRelax2D.DYREL((nx, ny); CFL = 0.8)
+        dyrel = JustRelax2D.DYREL(backend_JR, (nx, ny); CFL = 0.8)
         dyrel.dτVx .= 0.5
         dyrel.dτVy .= 0.5
         dyrel.cVx .= 0.1

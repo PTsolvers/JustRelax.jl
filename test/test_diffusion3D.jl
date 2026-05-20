@@ -33,7 +33,7 @@ end
     return nothing
 end
 
-function elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi)
+function elliptical_perturbation!(T, δT, xc, yc, zc, r, xci)
 
     @parallel_indices (i, j, k) function _elliptical_perturbation!(T, x, y, z)
         if (((x[i] - xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
@@ -42,7 +42,7 @@ function elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi)
         return nothing
     end
     ni = size(T .- 2)
-    return @parallel (@idx ni) _elliptical_perturbation!(T, xvi...)
+    return @parallel (@idx ni) _elliptical_perturbation!(T, xci...)
 end
 
 function diffusion_3D(;
@@ -109,7 +109,7 @@ function diffusion_3D(;
     δT = 100.0e0 # thermal perturbation
     r = 10.0e3 # thermal perturbation radius
     center_perturbation = lx / 2, ly / 2, -lz / 2
-    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
+    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
 
     t = 0.0
     it = 0

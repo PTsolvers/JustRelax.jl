@@ -98,7 +98,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     thermal = ThermalArrays(backend_JR, ni)
     # initialize thermal profile
     @parallel (@idx ni) init_T!(thermal.T, xci[2])
-    Ttop = thermal.T[2, end-1]
+    Ttop = thermal.T[2, end - 1]
     Tbot = thermal.T[2, 2]
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
@@ -173,10 +173,10 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     trms = Float64[]
 
     # Buffer arrays to compute velocity rms
-    Vx_c = @. (stokes.V.Vx[1:end-1, 2:end-1] + stokes.V.Vx[2:end, 2:end-1]) / 2
-    Vy_c = @. (stokes.V.Vy[2:end-1, 1:end-1] + stokes.V.Vy[2:end-1, 2:end]) / 2
-    Vx_v = @zeros(ni.+1)
-    Vy_v = @zeros(ni.+1)
+    Vx_c = @. (stokes.V.Vx[1:(end - 1), 2:(end - 1)] + stokes.V.Vx[2:end, 2:(end - 1)]) / 2
+    Vy_c = @. (stokes.V.Vy[2:(end - 1), 1:(end - 1)] + stokes.V.Vy[2:(end - 1), 2:end]) / 2
+    Vx_v = @zeros(ni .+ 1)
+    Vy_v = @zeros(ni .+ 1)
     # WENO arrays
     T_WENO = @zeros(ni)
 
@@ -229,8 +229,8 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             )
         )
         T_WENO .= @view(thermal.T[2:(end - 1), 2:(end - 1)])
-        @. Vx_c = (stokes.V.Vx[1:end-1, 2:end-1] + stokes.V.Vx[2:end, 2:end-1]) / 2
-        @. Vy_c = (stokes.V.Vy[2:end-1, 1:end-1] + stokes.V.Vy[2:end-1, 2:end]) / 2
+        @. Vx_c = (stokes.V.Vx[1:(end - 1), 2:(end - 1)] + stokes.V.Vx[2:end, 2:(end - 1)]) / 2
+        @. Vy_c = (stokes.V.Vy[2:(end - 1), 1:(end - 1)] + stokes.V.Vy[2:(end - 1), 2:end]) / 2
         WENO_advection!(T_WENO, (Vx_c, Vy_c), weno, di, dt)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_WENO
         thermal_bcs!(thermal, thermal_bc)

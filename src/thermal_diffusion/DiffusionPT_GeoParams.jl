@@ -144,8 +144,8 @@ end
 
 function compute_radioactive_heating(rheology, phase::Union{Int, Nothing})
     if isempty(rheology.RadioactiveHeat)
-        return 0e0
-    else 
+        return 0.0e0
+    else
         compute_phase(compute_radioactive_heat, rheology, phase)
     end
 end

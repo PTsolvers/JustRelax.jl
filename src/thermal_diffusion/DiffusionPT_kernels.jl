@@ -310,10 +310,10 @@ end
                 (qTy2[i, j + 1, k] - qTy2[i, j, k]) * _dy +
                 (qTz2[i, j, k + 1] - qTz2[i, j, k]) * _dz
         ) +
-        compute_radioactive_heating(rheology, phase_ijk) +
-        H[i, j, k] +
-        shear_heating[i, j, k] +
-        adiabatic[i, j, k] * T_ijk
+            compute_radioactive_heating(rheology, phase_ijk) +
+            H[i, j, k] +
+            shear_heating[i, j, k] +
+            adiabatic[i, j, k] * T_ijk
     else
         zero(_T)
     end

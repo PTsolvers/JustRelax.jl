@@ -126,17 +126,17 @@ end
 
         # rock-side cell: no air ⇒ rock-ratio = 1, air-ratio = 0
         if backend_JR == CPUBackend
-        @test JustRelax2D.compute_rock_ratio(pr.center, air_phase, 1, 1) ≈ 1.0
-        @test JustRelax2D.compute_air_ratio(pr.center, air_phase, 1, 1) ≈ 0.0
-        # air-side cell: pure air ⇒ rock-ratio = 0, air-ratio = 1
-        @test JustRelax2D.compute_rock_ratio(pr.center, air_phase, 4, 1) ≈ 0.0
-        @test JustRelax2D.compute_air_ratio(pr.center, air_phase, 4, 1) ≈ 1.0
+            @test JustRelax2D.compute_rock_ratio(pr.center, air_phase, 1, 1) ≈ 1.0
+            @test JustRelax2D.compute_air_ratio(pr.center, air_phase, 1, 1) ≈ 0.0
+            # air-side cell: pure air ⇒ rock-ratio = 0, air-ratio = 1
+            @test JustRelax2D.compute_rock_ratio(pr.center, air_phase, 4, 1) ≈ 0.0
+            @test JustRelax2D.compute_air_ratio(pr.center, air_phase, 4, 1) ≈ 1.0
 
-        # out-of-range air_phase index → both helpers return 1.0 (fallback)
-        @test JustRelax2D.compute_rock_ratio(pr.center, 0, 1, 1) == 1.0
-        @test JustRelax2D.compute_rock_ratio(pr.center, 99, 1, 1) == 1.0
-        @test JustRelax2D.compute_air_ratio(pr.center, 0, 1, 1) == 1.0
-        @test JustRelax2D.compute_air_ratio(pr.center, 99, 1, 1) == 1.0
+            # out-of-range air_phase index → both helpers return 1.0 (fallback)
+            @test JustRelax2D.compute_rock_ratio(pr.center, 0, 1, 1) == 1.0
+            @test JustRelax2D.compute_rock_ratio(pr.center, 99, 1, 1) == 1.0
+            @test JustRelax2D.compute_air_ratio(pr.center, 0, 1, 1) == 1.0
+            @test JustRelax2D.compute_air_ratio(pr.center, 99, 1, 1) == 1.0
         else
             println("Skipping compute_rock_ratio / compute_air_ratio tests for backend $env_backend")
             @test true

@@ -72,7 +72,7 @@ end
         @test all(iszero.(dyrel.Dz)) && all(iszero.(dyrel.λmaxVz))
 
         # 3-int forwarder
-        dyrel2 = JR3.DYREL(backend_JR,nx, ny, nz; CFL = 0.7)
+        dyrel2 = JR3.DYREL(backend_JR, nx, ny, nz; CFL = 0.7)
         @test size(dyrel2.Dz) == (nx, ny, nz - 1)
         @test dyrel2.CFL === 0.7
     end

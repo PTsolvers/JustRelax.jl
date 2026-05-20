@@ -105,8 +105,8 @@ end
         τ_xy = @inbounds @index xy[ip, I...]
 
         tmp = τ_xy * ω_xy * 2
-        @inbounds @index xx[ip, I...] = muladd(dt, cte, τ_xx)
-        @inbounds @index yy[ip, I...] = muladd(dt, cte, τ_yy)
+        @inbounds @index xx[ip, I...] = muladd(dt, tmp, τ_xx)
+        @inbounds @index yy[ip, I...] = muladd(dt, tmp, τ_yy)
         @inbounds @index xy[ip, I...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
     end
 

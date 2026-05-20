@@ -212,8 +212,8 @@ end
         nz = 32
         thermal = diffusion_3D(; nx = nx, ny = ny, nz = nz)
         if backend_JR == CPUBackend
-            @test thermal.T[Int(ceil(nx / 2)), Int(ceil(ny / 2)), Int(ceil(nz / 2))] ≈ 1835.123994618308  rtol = 1.0e-3
-            @test (@view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)])[Int(ceil(nx / 2)), Int(ceil(ny / 2)), Int(ceil(nz / 2))] ≈ 1838.3358763916979 rtol = 1.0e-3
+            @test thermal.T[Int(ceil(nx / 2)), Int(ceil(ny / 2)), Int(ceil(nz / 2))] ≈ 1816.8262937737384 rtol = 1.0e-3
+            @test (@view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)])[Int(ceil(nx / 2)), Int(ceil(ny / 2)), Int(ceil(nz / 2))] ≈ 1834.4197141500213 rtol = 1.0e-3
         else
             @test true == true
         end

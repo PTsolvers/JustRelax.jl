@@ -541,6 +541,7 @@ function _solve!(
     shear2center!(stokes.Δε)
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
@@ -707,6 +708,8 @@ function _solve!(
                     @strain_increment(stokes),
                     @plastic_strain(stokes),
                     stokes.EII_pl,
+                    stokes.ε_vol_pl,
+                    stokes.EVol_pl,
                     @tensor_center(stokes.τ),
                     (stokes.τ.xy,),
                     @tensor_center(stokes.τ_o),
@@ -723,16 +726,15 @@ function _solve!(
                     θ_dτ,
                     rheology,
                     phase_ratios.center,
-                    phase_ratios.vertex,
-                    phase_ratios.xy,
-                    phase_ratios.yz,
-                    phase_ratios.xz
+                    phase_ratios.vertex
                 )
             else
                 @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
                     @strain(stokes),
                     @plastic_strain(stokes),
                     stokes.EII_pl,
+                    stokes.ε_vol_pl,
+                    stokes.EVol_pl,
                     @tensor_center(stokes.τ),
                     (stokes.τ.xy,),
                     @tensor_center(stokes.τ_o),
@@ -848,6 +850,7 @@ function _solve!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))

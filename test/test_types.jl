@@ -221,6 +221,22 @@ end
     @test size(σ.σ3) == (3, ni...)
     @test JR3.compute_principal_stresses!(stokes, σ) == nothing
 
+    # exercise the Householder branch of hessenberg_3x3 (non-zero α) and the
+    # iteration body of hessenberg_eigen_3x3 by feeding non-trivial off-diagonals
+    stokes.τ.xx .= 1.0
+    stokes.τ.yy .= 2.0
+    stokes.τ.zz .= 3.0
+    stokes.τ.xy_c .= 0.5
+    stokes.τ.xz_c .= 0.25
+    stokes.τ.yz_c .= 0.75
+    @test JR3.compute_principal_stresses!(stokes, σ) === nothing
+    # eigenvector component magnitudes equal absolute eigenvalues; their sum
+    # equals the trace |λ₁|+|λ₂|+|λ₃| ≥ trace = 6 here (all eigenvalues > 0)
+    λ1 = sqrt(sum(Array(σ.σ1)[i, 1, 1, 1]^2 for i in 1:3))
+    λ2 = sqrt(sum(Array(σ.σ2)[i, 1, 1, 1]^2 for i in 1:3))
+    λ3 = sqrt(sum(Array(σ.σ3)[i, 1, 1, 1]^2 for i in 1:3))
+    @test isapprox(λ1 + λ2 + λ3, 6.0; atol = 1.0e-6)
+
     thermal = JR3.ThermalArrays(backend, ni)
     @test size(thermal.T) == (nx + 2, ny + 2, nz + 2)
     @test size(@view(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)])) == ni
@@ -268,4 +284,25 @@ end
 
     JR3.displacement2velocity!(stokes, 5)
     @test all(stokes.V.Vx .== 2.0)
+end
+
+@testset "Type constructor: integer-only validation" begin
+    @test_throws ArgumentError JustRelax.Velocity(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Velocity(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Displacement(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Displacement(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Vorticity((10.0, 10.0))
+    @test_throws ArgumentError JustRelax.Vorticity((10.0, 10.0, 10.0))
+    @test_throws ArgumentError JustRelax.Viscosity((10.0, 10.0))
+    @test_throws ArgumentError JustRelax.Viscosity((10.0, 10.0, 10.0))
+    @test_throws ArgumentError JustRelax.SymmetricTensor(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.SymmetricTensor(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Residual(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.Residual(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.ThermalArrays(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.ThermalArrays(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.StokesArrays(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.StokesArrays(10.0, 10.0, 10.0)
+    @test_throws ArgumentError JustRelax.RockRatio(10.0, 10.0)
+    @test_throws ArgumentError JustRelax.RockRatio(10.0, 10.0, 10.0)
 end

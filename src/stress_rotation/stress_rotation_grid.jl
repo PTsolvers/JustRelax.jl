@@ -209,7 +209,7 @@ end
 
 Base.@propagate_inbounds function cross_derivatives(Vx, Vy, Vz, _di, i, j, k)
     _dx, _dy, _dz = @dxi(_di, i, j, k)
-    i1, j1, k2 = @add 1 i j k
+    i1, j1, k1 = @add 1 i j k
     i2, j2, k2 = @add 2 i j k
     # cross derivatives @ cell centers
     ∂Vx∂y =
@@ -230,8 +230,8 @@ Base.@propagate_inbounds function cross_derivatives(Vx, Vy, Vz, _di, i, j, k)
         0.25 *
         _dx *
         (
-        Vy[i1, j, ki] - Vy[i, j, ki] + Vy[i2, j, ki] - Vy[i1, j, ki] + Vy[i1, j1, ki] -
-            Vy[i, j1, ki] + Vy[i2, j1, ki] - Vy[i1, j1, ki]
+        Vy[i1, j, k1] - Vy[i, j, k1] + Vy[i2, j, k1] - Vy[i1, j, k1] + Vy[i1, j1, k1] -
+            Vy[i, j1, k1] + Vy[i2, j1, k1] - Vy[i1, j1, k1]
     )
     ∂Vy∂z =
         0.25 *
@@ -245,7 +245,7 @@ Base.@propagate_inbounds function cross_derivatives(Vx, Vy, Vz, _di, i, j, k)
         _dx *
         (
         Vz[i1, j, k] - Vz[i, j, k] + Vz[i2, j, k] - Vz[i1, j, k] + Vz[i1, j1, k1] -
-            Vz[i, j1, 1k] + Vz[i2, j1, k1] - Vz[i1, j1, 1k]
+            Vz[i, j1, k1] + Vz[i2, j1, k1] - Vz[i1, j1, k1]
     )
     ∂Vz∂y =
         0.25 *

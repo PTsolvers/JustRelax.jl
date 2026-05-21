@@ -1,6 +1,5 @@
 push!(LOAD_PATH, "..")
 
-ENV["JULIA_JUSTRELAX_BACKEND"] = "1"
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"

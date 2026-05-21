@@ -143,7 +143,7 @@ To initialize the thermal profile we use [ParallelStencil.jl](https://github.com
     return nothing
 end
 
-@parallel (@idx ni) init_T!((@view thermal.T[2:end-1, 2:end-1]), xci[2]) # physical cell centers
+@parallel (@idx ni) init_T!((thermal.T[2:end-1, 2:end-1]), xci[2]) # physical cell centers
 ```
 
 and we define a rectangular thermal anomaly at $x \in [0, 0.05]$, $y \in [\frac{1}{3} - 0.05, \frac{1}{3} + 0.05]$

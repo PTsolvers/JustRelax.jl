@@ -627,4 +627,4 @@ else
     igg
 end
 extension = 1.0e-15 * 0
-# @time main(li, origin, phases_GMG, T_GMG, igg, ; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, extension = extension, cutoff_visc = (1.0e17, 1.0e23));
+main(li, origin, phases_GMG, T_GMG, igg, ; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, extension = extension, cutoff_visc = (1.0e17, 1.0e23));

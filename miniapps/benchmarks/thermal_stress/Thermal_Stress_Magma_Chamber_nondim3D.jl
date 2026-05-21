@@ -509,4 +509,4 @@ else
 end
 
 # run main script
-# main3D(igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+main3D(igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);

@@ -4,7 +4,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 const backend_JR = JustRelax.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC, JustPIC._2D
 # Threads is the default backend,
@@ -251,9 +251,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
         thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
-        # vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_buffer)
-        # @views thermal.T[:, end - 1] .= Ttop
-        # @views thermal.T[:, 2] .= Tbot
         thermal_bcs!(thermal, thermal_bc)
         # ------------------------------
 

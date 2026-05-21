@@ -274,7 +274,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
                     εxy = Array(stokes.ε.xy),
                 )
                 data_c = (;
-                    T = Array(@view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
                     P = Array(stokes.P),
                     τxx = Array(stokes.τ.xx),
                     τyy = Array(stokes.τ.yy),

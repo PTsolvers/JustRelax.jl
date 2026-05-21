@@ -796,4 +796,4 @@ if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 end
 # run main script
-# main2D(igg; εbg_0 = εbg_0, linear_rheology = linear_rheology, figdir = figdir, nx = nx, ny = ny, do_vtk = true);
+main2D(igg; εbg_0 = εbg_0, linear_rheology = linear_rheology, figdir = figdir, nx = nx, ny = ny, do_vtk = true);

@@ -255,7 +255,7 @@ end
         @test JustRelax2D.correct_phase_ratio(3, SA[0.3, 0.2, 0.5]) ≈ SA[0.6, 0.4, 0.0]
 
         # local_viscosity_args / local_args — extract value at index I and inject (dt=Inf, τII_old=0)
-        T = reshape(collect(1.0:30.0), 3+2, 4+2)
+        T = reshape(collect(1.0:30.0), 3 + 2, 4 + 2)
         P = reshape(collect(101.0:112.0), 3, 4)
         args = (; T = T, P = P)
         la = JustRelax2D.local_viscosity_args(args, 2, 3)
@@ -269,12 +269,12 @@ end
         # local_viscosity_args_vertex (2D): averages four cell-center neighbors
         la_v = JustRelax2D.local_viscosity_args_vertex(args, 2, 3)
         # Clamped indices: il=max(1,1)=1, ir=min(2,3)=2, jb=max(2,1)=2, jt=min(3,4)=3
-        expected_T = 0.25 * (T[(1, 2).+1...] + T[(2, 2).+1...] + T[(1, 3).+1...] + T[(2, 3).+1...])
+        expected_T = 0.25 * (T[(1, 2) .+ 1...] + T[(2, 2) .+ 1...] + T[(1, 3) .+ 1...] + T[(2, 3) .+ 1...])
         @test la_v.T ≈ expected_T
         @test la_v.dt === Inf
 
         # local_viscosity_args_vertex (3D): averages eight cell-center neighbors
-        T3 = reshape(collect(1.0:125.0), (3, 3, 3).+2...)
+        T3 = reshape(collect(1.0:125.0), (3, 3, 3) .+ 2...)
         P3 = reshape(collect(101.0:127.0), 3, 3, 3)
         args3 = (; T = T3, P = P3)
         la3 = JustRelax2D.local_viscosity_args_vertex(args3, 2, 2, 2)

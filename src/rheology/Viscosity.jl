@@ -582,7 +582,7 @@ end
 @inline function average_or_scalar(A::AbstractArray, i, j, k)
     return 0.125 * (
         A[i, j, k] + A[i + 1, j, k] + A[i, j + 1, k] + A[i + 1, j + 1, k] +
-        A[i, j, k +1 ] + A[i + 1, j, k + 1] + A[i, j + 1, k + 1] + A[i + 1, j + 1, k + 1]
+            A[i, j, k + 1] + A[i + 1, j, k + 1] + A[i, j + 1, k + 1] + A[i + 1, j + 1, k + 1]
     )
 end
 

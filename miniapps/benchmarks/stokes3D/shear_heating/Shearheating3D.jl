@@ -239,7 +239,6 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(T_buffer),
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
                     Vx = Array(Vx_v),

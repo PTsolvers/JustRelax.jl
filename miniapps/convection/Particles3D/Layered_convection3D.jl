@@ -270,7 +270,6 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(thermal.T),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
                 )

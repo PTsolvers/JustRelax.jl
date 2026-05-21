@@ -488,7 +488,6 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 if do_vtk
                     data_v = (;
-                        T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1)], C, CharDim))),
                         τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
                         εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                         Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
@@ -496,6 +495,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                     )
                     data_c = (;
                         P = Array(ustrip.(dimensionalize(stokes.P, MPa, CharDim))),
+                        T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1)], C, CharDim))),
                         τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa, CharDim))),
                         τyy = Array(ustrip.(dimensionalize(stokes.τ.yy, MPa, CharDim))),
                         τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),

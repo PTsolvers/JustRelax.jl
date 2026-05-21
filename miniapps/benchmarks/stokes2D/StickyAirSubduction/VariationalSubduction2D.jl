@@ -222,6 +222,7 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     η = Array(η_vep),
                 )
                 velocity_v = (

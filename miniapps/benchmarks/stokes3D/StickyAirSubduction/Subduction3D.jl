@@ -174,11 +174,11 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
             if do_vtk
                 # velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
-                    T = zeros(ni .+ 1...),
                     phase_vertex = [argmax(p) for p in Array(phase_ratios.center)],
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                    T = Array(@view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
                     εxx = Array(stokes.ε.xx),

@@ -218,6 +218,7 @@ function main(li_dim, origin_dim, phases_GMG, igg; nx = 16, ny = 16, figdir = "f
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     η = Array(η_vep),
                 )
                 velocity_v = (

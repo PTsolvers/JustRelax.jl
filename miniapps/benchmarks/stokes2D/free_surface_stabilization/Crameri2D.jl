@@ -235,6 +235,7 @@ function main(igg, nx, ny)
                 stress_II = Array(stokes.τ.II),
                 strain_rate_II = Array(stokes.ε.II),
                 P = Array(stokes.P),
+                T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                 visc_eff = Array(η_vep),
             )
             velocity_v = (

@@ -214,6 +214,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
                 )
                 data_c = (;
                     P = dimensionalize_and_strip(Array(stokes.P), Pa, CharDim),
+                    T = dimensionalize_and_strip(Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]), C, CharDim),
                     τII = dimensionalize_and_strip(Array(stokes.τ.II), Pa, CharDim),
                     εII = dimensionalize_and_strip(Array(stokes.ε.II), s^-1, CharDim),
                     η = dimensionalize_and_strip(Array(stokes.viscosity.η), Pa * s, CharDim),

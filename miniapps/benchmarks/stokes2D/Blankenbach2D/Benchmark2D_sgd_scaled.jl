@@ -274,13 +274,13 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1)], C, CharDim))),
                     τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
                     εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                     Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
                     Vy = Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),
                 )
                 data_c = (;
+                    T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1)], C, CharDim))),
                     P = Array(ustrip.(dimensionalize(stokes.P, MPa, CharDim))),
                     τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa, CharDim))),
                     τyy = Array(ustrip.(dimensionalize(stokes.τ.yy, MPa, CharDim))),

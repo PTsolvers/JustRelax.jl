@@ -311,12 +311,12 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = ustrip(dimensionalize(Array(T_buffer), C, CharDim)),
                     τII = ustrip(dimensionalize(Array(stokes.τ.II), Pa, CharDim)),
                     εII = ustrip(dimensionalize(Array(stokes.ε.II), s^-1, CharDim)),
                 )
                 data_c = (;
                     P = ustrip(dimensionalize(Array(stokes.P), Pa, CharDim)),
+                    T = ustrip(dimensionalize(Array(T_buffer), C, CharDim)),
                     η_vep = ustrip(dimensionalize(Array(η_vep), Pa * s, CharDim)),
                     η = ustrip(dimensionalize(Array(η), Pa * s, CharDim)),
                 )

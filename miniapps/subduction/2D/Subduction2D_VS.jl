@@ -277,7 +277,6 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(T_buffer),
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
                     Vx = Array(Vx_v),
@@ -285,6 +284,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                    T = Array(T_buffer),
                     η_vep = Array(η_vep),
                     η = Array(η),
                 )

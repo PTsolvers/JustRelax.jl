@@ -208,6 +208,7 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     η = Array(η_vep),
                 )
                 velocity_v = (

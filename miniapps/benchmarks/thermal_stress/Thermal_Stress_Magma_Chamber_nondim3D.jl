@@ -437,7 +437,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                     data_v = (;
-                        T = Array(ustrip.(dimensionalize(thermal.T, C, CharDim))),
                         τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
                         εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                         Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
@@ -446,6 +445,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                     )
                     data_c = (;
                         P = Array(ustrip.(dimensionalize(stokes.P, MPa, CharDim))),
+                        T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)], C, CharDim))),
                         τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa, CharDim))),
                         τyy = Array(ustrip.(dimensionalize(stokes.τ.yy, MPa, CharDim))),
                         τzz = Array(ustrip.(dimensionalize(stokes.τ.zz, MPa, CharDim))),

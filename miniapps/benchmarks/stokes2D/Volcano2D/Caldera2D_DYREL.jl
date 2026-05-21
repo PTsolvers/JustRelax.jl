@@ -470,13 +470,13 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                     data_v = (;
-                        T = Array(T_buffer),
                         stress_xy = Array(stokes.τ.xy),
                         strain_rate_xy = Array(stokes.ε.xy),
                         phase_vertices = [argmax(p) for p in Array(phase_ratios.vertex)],
                     )
                     data_c = (;
                         P = Array(stokes.P),
+                        T = Array(T_buffer),
                         viscosity = Array(η_eff),
                         phases = [argmax(p) for p in Array(phase_ratios.center)],
                         Melt_fraction = Array(ϕ_m),

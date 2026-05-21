@@ -392,7 +392,7 @@ function JR3D.subgrid_characteristic_time!(
     )
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end
@@ -408,7 +408,7 @@ function JR3D.subgrid_characteristic_time!(
     ) where {N}
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end

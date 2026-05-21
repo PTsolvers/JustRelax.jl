@@ -7,27 +7,21 @@ using CairoMakie
 const backend = CPUBackend
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
-@parallel_indices (i, j, k) function init_T!(T, z)
-    if z[k] == maximum(z)
-        T[i, j, k] = 300.0
-    elseif z[k] == minimum(z)
-        T[i, j, k] = 3500.0
-    else
-        T[i, j, k] = z[k] * (1900.0 - 1600.0) / minimum(z) + 1600.0
-    end
+@parallel_indices (i, j, k) function init_T!(T, z, lz)
+    T[i, j, k + 1] = z[k] * (1900.0 - 1600.0) / (-lz) + 1600.0
     return nothing
 end
 
-function elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi)
+function elliptical_perturbation!(T, δT, xc, yc, zc, r, xci)
 
     @parallel_indices (i, j, k) function _elliptical_perturbation!(T, x, y, z)
-        @inbounds if (((x[i] - xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
-            T[i, j, k] += δT
+        if (((x[i] - xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
+            T[(i, j, k) .+ 1...] += δT
         end
         return nothing
     end
-
-    return @parallel _elliptical_perturbation!(T, xvi...)
+    ni = size(T) .- 2
+    return @parallel (@idx ni) _elliptical_perturbation!(T, xci...)
 end
 
 function diffusion_3D(;
@@ -68,7 +62,6 @@ function diffusion_3D(;
 
     # fields needed to compute density on the fly
     P = @zeros(ni...)
-    args = (; P = P, T = @zeros(ni .+ 1...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
@@ -82,30 +75,33 @@ function diffusion_3D(;
 
     # Boundary conditions
     pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.95 / √3.1)
+    Ttop = 300.0
+    Tbot = 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false, front = true, back = true),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot, front = true, back = true),
     )
 
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3])
+    @parallel (1:(nx + 2), 1:(ny + 2), 1:nz) init_T!(thermal.T, xci[3], lz)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
     r = 10.0e3 # thermal perturbation radius
     center_perturbation = lx / 2, ly / 2, -lz / 2
-    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
+    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
 
     # Visualization global arrays
-    nx_v = (nx - 2) * igg.dims[1]
-    ny_v = (ny - 2) * igg.dims[2]
-    nz_v = (nz - 2) * igg.dims[3]
-    T_v = zeros(nx_v, ny_v, nz_v)             # plotting is done on the CPU
-    T_nohalo = zeros(nx - 2, ny - 2, nz - 2) # plotting is done on the CPU
+    ni_v = ni * igg.dims
+    T_v = zeros(ni_v...)
+    # local array without halo
+    T_nohalo = zeros(ni...)
 
     t = 0.0
     it = 0
 
     # Physical time loop
     while it < 10
+        args = (; P = P, T = thermal.T)
         heatdiffusion_PT!(
             thermal,
             pt_thermal,

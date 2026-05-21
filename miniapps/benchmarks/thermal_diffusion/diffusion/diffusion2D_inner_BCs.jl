@@ -22,28 +22,21 @@ end
 
 distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
 
-@parallel_indices (i, j) function init_T!(T, z)
-    if z[j] == maximum(z)
-        T[i + 1, j + 1] = 300.0
-    elseif z[j] == minimum(z)
-        T[i + 1, j + 1] = 3500.0
-    else
-        T[i + 1, j + 1] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
-    end
+@parallel_indices (i, j) function init_T!(T, z, ly)
+    T[i, j + 1] = -z[j] * (1900.0 - 1600.0) / ly + 1600.0
     return nothing
 end
 
-function elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, xvi)
+function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
-    @parallel_indices (i, j) function _elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, x, y)
+    @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
         if (((x[i] - xc))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i + 1, j + 1] += Ω_T
-            mask[i, j] = 1
+            T[i + 1, j + 1] += δT
         end
         return nothing
     end
     ni = size(T) .- 2
-    return @parallel (@idx ni) _elliptical_perturbation!(T, mask, Ω_T, xc, yc, r, xvi...)
+    return @parallel (@idx ni) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 function init_phases!(phases, particles, xc, yc, r)
@@ -108,11 +101,10 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
 
     # fields needed to compute density on the fly
     P = @zeros(ni...)
-    args = (; P = P)
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal = ThermalArrays(backend_JR, ni)
-    @parallel (@idx ni) init_T!(thermal.T, xci[2])
+    @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2], ly)
 
     # Add thermal perturbation
     Ω_T = 1050.0e0 # inner BCs temperature
@@ -149,6 +141,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     it = 0
     nt = Int(ceil(ttot / dt))
     while it < nt
+        args = (; P = P, T = thermal.T)
         heatdiffusion_PT!(
             thermal,
             pt_thermal,

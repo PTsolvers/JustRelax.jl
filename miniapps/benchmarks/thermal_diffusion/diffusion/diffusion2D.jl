@@ -77,7 +77,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
-    @parallel (@idx ni) init_T!(thermal.T, xci[2])
+    @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2])
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation

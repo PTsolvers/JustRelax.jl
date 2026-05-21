@@ -61,7 +61,6 @@ function diffusion_2D(
     )
     # fields needed to compute density on the fly
     P = @zeros(ni...)
-    args = (; P = P, T = @zeros(ni...))
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal = ThermalArrays(backend_JR, ni)
@@ -87,10 +86,11 @@ function diffusion_2D(
     elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
 
     # global array
-    nx_v = (nx - 2) * igg.dims[1]
-    ny_v = (ny - 2) * igg.dims[2]
+    nx_v = nx * igg.dims[1]
+    ny_v = ny * igg.dims[2]
     T_v = zeros(nx_v, ny_v)
-    T_nohalo = zeros(nx - 2, ny - 2)
+    # local array without halo
+    T_nohalo = zeros(nx, ny)
 
     # Time loop
     t = 0.0
@@ -100,6 +100,7 @@ function diffusion_2D(
     # ---------------------------------------------------
 
     while it < 10
+        args = (; P = P, T = thermal.T)
         heatdiffusion_PT!(
             thermal,
             pt_thermal,

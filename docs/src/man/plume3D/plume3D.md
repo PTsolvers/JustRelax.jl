@@ -305,7 +305,7 @@ data_v = (;
     T = Array(thermal.T),
 )
 data_c = (;
-    T = Array(@view thermal.T[2:end-1, 2:end-1, 2:end-1]),
+    T = Array(thermal.T[2:end-1, 2:end-1, 2:end-1]),
     P = Array(stokes.P),
     η = Array(log10.(stokes.viscosity.η_vep)),
 )

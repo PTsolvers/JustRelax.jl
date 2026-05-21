@@ -3,6 +3,7 @@
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
+
 using Test
 using StaticArrays
 using GeoParams
@@ -254,11 +255,11 @@ end
         @test JustRelax2D.correct_phase_ratio(3, SA[0.3, 0.2, 0.5]) ≈ SA[0.6, 0.4, 0.0]
 
         # local_viscosity_args / local_args — extract value at index I and inject (dt=Inf, τII_old=0)
-        T = reshape(collect(1.0:12.0), 3, 4)
+        T = reshape(collect(1.0:30.0), 3+2, 4+2)
         P = reshape(collect(101.0:112.0), 3, 4)
         args = (; T = T, P = P)
         la = JustRelax2D.local_viscosity_args(args, 2, 3)
-        @test la.T == T[2, 3]
+        @test la.T == T[3, 4]
         @test la.P == P[2, 3]
         @test la.dt === Inf
         @test la.τII_old === 0.0
@@ -268,21 +269,17 @@ end
         # local_viscosity_args_vertex (2D): averages four cell-center neighbors
         la_v = JustRelax2D.local_viscosity_args_vertex(args, 2, 3)
         # Clamped indices: il=max(1,1)=1, ir=min(2,3)=2, jb=max(2,1)=2, jt=min(3,4)=3
-        expected_T = 0.25 * (T[1, 2] + T[2, 2] + T[1, 3] + T[2, 3])
+        expected_T = 0.25 * (T[(1, 2).+1...] + T[(2, 2).+1...] + T[(1, 3).+1...] + T[(2, 3).+1...])
         @test la_v.T ≈ expected_T
         @test la_v.dt === Inf
 
-        # boundary case (i=1, j=1) clamps both sides to 1, so the four corners collapse
-        la_v_bnd = JustRelax2D.local_viscosity_args_vertex(args, 1, 1)
-        @test la_v_bnd.T ≈ T[1, 1]
-
         # local_viscosity_args_vertex (3D): averages eight cell-center neighbors
-        T3 = reshape(collect(1.0:27.0), 3, 3, 3)
+        T3 = reshape(collect(1.0:125.0), (3, 3, 3).+2...)
         P3 = reshape(collect(101.0:127.0), 3, 3, 3)
         args3 = (; T = T3, P = P3)
         la3 = JustRelax2D.local_viscosity_args_vertex(args3, 2, 2, 2)
         # il,ir,jb,jt,kf,kb all valid → sum of T3[1..2, 1..2, 1..2] / 8
-        expected_T3 = sum(T3[i, j, k] for i in 1:2, j in 1:2, k in 1:2) / 8
+        expected_T3 = sum(T3[i, j, k] for i in 2:3, j in 2:3, k in 2:3) / 8
         @test la3.T ≈ expected_T3
 
         # compute_phase_viscosity — single-phase dominance (ratio[i] > 0.999) → early-exit

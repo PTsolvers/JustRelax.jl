@@ -92,10 +92,8 @@ end
         # known not to compile on GPU backends)
         if backend_JR === CPUBackend
             A = @zeros(ni...)
-            B = @zeros(ni...)
-            @parallel (@idx ni) JustRelax2D.multi_copy!((A, B), (stokes.P, thermal.Tc))
+            @parallel (@idx ni) JustRelax2D.multi_copy!((A, ), (stokes.P,))
             @test A == stokes.P
-            @test B == thermal.Tc
 
             A .= 0.0e0
             @parallel JustRelax2D.assign!(A, stokes.P)

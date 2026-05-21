@@ -126,7 +126,7 @@ function ShearBand2D_DPCap()
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
 
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni.+2...), P = stokes.P, dt = dt)
 
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 

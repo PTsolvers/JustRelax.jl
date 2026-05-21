@@ -260,10 +260,10 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
         )
 
         # Weno advection
-        center2vertex!(T_WENO, @view(thermal.T[2:(end - 1), 2:(end - 1)]))
+        center2vertex!(T_WENO, thermal.T[2:(end - 1), 2:(end - 1)])
         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
         WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
-        vertex2center!(@view(thermal.T[2:(end - 1), 2:(end - 1)]), T_WENO)
+        vertex2center!(thermal.T[2:(end - 1), 2:(end - 1)], T_WENO)
         # ------------------------------
 
         it += 1

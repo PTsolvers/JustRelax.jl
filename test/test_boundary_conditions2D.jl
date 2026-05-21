@@ -216,5 +216,71 @@ end
 
             @test JustRelax.apply_dirichlet(A, bc2, 1, 1) == A[1, 1]
         end
+
+        @testset "Dirichlet factory + ConstantArray" begin
+            ni = 10, 10
+
+            # 4 dispatch paths of `Dirichlet(constant, mask)`
+            bc_empty = JustRelax.Dirichlet(nothing, nothing)
+            @test bc_empty isa JustRelax.DirichletBoundaryCondition{Nothing, Nothing}
+
+            mask_arr = zeros(ni...); mask_arr[3:5, 3:5] .= 7
+            bc_mask = JustRelax.Dirichlet(nothing, mask_arr)
+            @test bc_mask isa JustRelax.DirichletBoundaryCondition
+
+            bc_const = JustRelax.Dirichlet(3.0, mask_arr)
+            @test bc_const isa JustRelax.ConstantDirichletBoundaryCondition
+
+            # kwarg form
+            bc_kw = JustRelax.Dirichlet(; constant = nothing, mask = nothing)
+            @test bc_kw isa JustRelax.DirichletBoundaryCondition{Nothing, Nothing}
+
+            bc_nt = JustRelax.Dirichlet((; constant = 2.5, mask = mask_arr))
+            @test bc_nt isa JustRelax.ConstantDirichletBoundaryCondition
+
+            # ConstantArray
+            ca = JustRelax.ConstantArray(4.2)
+            @test ca[1, 1] === 4.2
+            @test ca[7, 9, 3] === 4.2
+
+            JustRelax.ConstantArray(4.2)[1, 1] = 0.0
+            io = IOBuffer()
+            show(io, MIME"text/plain"(), ca)
+            @test occursin("ConstantArray", String(take!(io)))
+            io = IOBuffer()
+            show(io, ca)
+            @test occursin("ConstantArray", String(take!(io)))
+        end
+
+        @testset "apply_dirichlet!/isdirichlet Nothing branches" begin
+            ni = 6, 6
+            A = rand(ni...)
+            A_copy = copy(A)
+            bc_empty = JustRelax.DirichletBoundaryCondition()
+
+            # mutating: no-op (array unchanged)
+            JustRelax.apply_dirichlet!(A, bc_empty)
+            @test A == A_copy
+            JustRelax.apply_dirichlet!(A, bc_empty, 2, 2)
+            @test A == A_copy
+
+            # non-mutating: returns A or A[inds...]
+            @test JustRelax.apply_dirichlet(A, bc_empty) === A
+            @test JustRelax.apply_dirichlet(A, bc_empty, 3, 3) == A[3, 3]
+
+            # isdirichlet false for the all-nothing BC
+            @test JustRelax.isdirichlet(bc_empty, 1, 1) === false
+
+            # The mutating apply_dirichlet! with a real (array-backed) BC
+            value = zeros(ni...); value[2:4, 2:4] .= 9
+            bc = JustRelax.DirichletBoundaryCondition(value)
+            B = zeros(ni...)
+            JustRelax.apply_dirichlet!(B, bc)
+            @test all(B[2:4, 2:4] .== 9)
+            # indexed apply_dirichlet! variant
+            B2 = zeros(ni...)
+            JustRelax.apply_dirichlet!(B2, bc, 3, 3)
+            @test B2[3, 3] == 9
+        end
     end
 end

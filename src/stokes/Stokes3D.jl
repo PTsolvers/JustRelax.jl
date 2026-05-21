@@ -280,6 +280,7 @@ function _solve!(
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
+                args
             )
             @parallel (@idx ni) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
@@ -408,6 +409,7 @@ function _solve!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
@@ -550,6 +552,8 @@ function _solve!(
                 @strain(stokes),
                 @plastic_strain(stokes),
                 stokes.EII_pl,
+                stokes.ε_vol_pl,
+                stokes.EVol_pl,
                 @tensor_center(stokes.τ),
                 (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy),
                 @tensor_center(stokes.τ_o),
@@ -645,6 +649,7 @@ function _solve!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))

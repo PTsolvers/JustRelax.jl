@@ -42,12 +42,28 @@ function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N
     return StokesArrays(ni)
 end
 
-function JR2D.DYREL(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
-    return DYREL(ni)
+function JR2D.DYREL(::Type{CUDABackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) where {N}
+    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
 end
 
-function JR2D.DYREL(::Type{CUDABackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, CFL = 0.99, c_fat = 0.5, γfact = 20.0)
-    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, CFL = CFL, c_fat = c_fat, γfact = γfact)
+function JR2D.DYREL(::Type{CUDABackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
+function JR2D.update_α_β!(βVx::CuArray, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
+    return update_α_β!(βVx, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
+end
+
+function JR2D.update_α_β!(dyrel::JustRelax.DYREL{<:CuArray})
+    return update_α_β!(dyrel)
+end
+
+function JR2D.update_dτV_α_β!(dτVx::CuArray, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
+    return update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
+end
+
+function JR2D.update_dτV_α_β!(dyrel::JustRelax.DYREL{<:CuArray})
+    return update_dτV_α_β!(dyrel)
 end
 
 function JR2D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N, Number}) where {N}
@@ -253,6 +269,14 @@ end
 
 function accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
     return _accumulate_tensor!(II, A, dt)
+end
+
+function JR2D.accumulate_vol!(::CUDABackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+end
+
+function accumulate_vol!(::CUDABackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
 end
 
 ## Buoyancy forces

@@ -38,7 +38,7 @@ end
 end
 
 @inline function compute_phase(fn::F, rheology, phase::Int) where {F}
-    return fn(rheology, phase, args)
+    return fn(rheology, phase)
 end
 
 @inline function compute_phase(fn::F, rheology, phase::SVector, args) where {F}

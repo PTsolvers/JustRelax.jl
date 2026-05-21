@@ -71,14 +71,23 @@ struct TemperatureBoundaryConditions{T1, T2, T3, T4, D, nD} <: AbstractBoundaryC
             periodic::T4 = (left = false, right = false, top = false, bot = false),
             dirichlet = (; constant = nothing, mask = nothing),
         ) where {T1, T2, T3, T4}
+        
+        @inline get_dimension(::NTuple{4, Bool}) = 2
+        @inline get_dimension(::NTuple{6, Bool}) = 3
+        
         D = Dirichlet(dirichlet)
-        nD = maximum(length, (no_flux, constant_flux, constant_value, periodic)) > 4 ? 3 : 2
-        no_flux = _thermal_bc_tuple(no_flux, Val(nD))
-        constant_flux = _thermal_bc_tuple(constant_flux, Val(nD))
-        constant_value = _thermal_bc_tuple(constant_value, Val(nD))
-        periodic = _thermal_bc_tuple(periodic, Val(nD))
-        return new{typeof(no_flux), typeof(constant_flux), typeof(constant_value), typeof(periodic), typeof(D), nD}(
-            no_flux, constant_flux, constant_value, periodic, D
+        nD = get_dimension(values(no_flux))
+
+        # expand to 3D 
+        dummy = (; front=false, back=false)
+
+        no_flux_exp = merge(dummy, no_flux)
+        constant_flux_exp = merge(dummy, constant_flux)
+        constant_value_exp = merge(dummy, constant_value)
+        periodic_exp = merge(dummy, periodic)
+
+        return new{typeof(no_flux_exp), typeof(constant_flux_exp), typeof(constant_value_exp), typeof(periodic_exp), typeof(D), nD}(
+            no_flux_exp, constant_flux_exp, constant_value_exp, periodic_exp, D
         )
     end
 end

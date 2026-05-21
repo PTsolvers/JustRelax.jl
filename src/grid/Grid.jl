@@ -128,7 +128,7 @@ function Geometry(TA::Type{A}, xvi::Vararg{T, nDim}) where {nDim, A <: AbstractA
     return Geometry{nDim, eltype(xi_vel[1]), typeof(di), Float64}(ni, li, origin, max_li, di, _di, TA.(xci), TA.(xvi), xi_vel)
 end
 
-Geometry(xvi::NTuple{nDim, T}) where {nDim, T <: AbstractVector} = Geometry(xvi...)
+Geometry(xvi::NTuple{nDim, T}) where {nDim, T <: AbstractVector} = Geometry(Array, xvi...)
 
 """
     legacy_uniform_grid(ni, di)

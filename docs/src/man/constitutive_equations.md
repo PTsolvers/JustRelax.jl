@@ -157,7 +157,7 @@ The effective viscosity is computed internally during the Stokes solver. However
 
 ```julia
 # Rheology
-args             = (T=T, P=P, dt = dt) # or (T=thermal.Tc, P=stokes.P, dt=dt)
+args             = (T=T, P=P, dt = dt)
 viscosity_cutoff = (1e18, 1e23)
 compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 ```

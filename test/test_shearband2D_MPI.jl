@@ -64,25 +64,25 @@ end
 function main(igg; nx = 64, ny = 64)
 
     # Physical domain ------------------------------------
-    ly = 1.0e0          # domain length in y
-    lx = ly           # domain length in x
-    ni = nx, ny       # number of cells
-    li = lx, ly       # domain length in x- and y-
+    ly = 1.0e0                    # domain length in y
+    lx = ly                       # domain length in x
+    ni = nx, ny                   # number of cells
+    li = lx, ly                   # domain length in x- and y-
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    origin = 0.0, 0.0     # origin coordinates
+    origin = 0.0, 0.0             # origin coordinates
     grid = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    (; xci, xvi) = grid           # nodes at the center and vertices of the cells
     dt = Inf
 
     # Physical properties using GeoParams ----------------
-    τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ = 30            # friction angle
-    C = τ_y           # Cohesion
-    η0 = 1.0           # viscosity
-    G0 = 1.0           # elastic shear modulus
+    τ_y = 1.6              # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ = 30                 # friction angle
+    C = τ_y                # Cohesion
+    η0 = 1.0               # viscosity
+    G0 = 1.0               # elastic shear modulus
     Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
-    εbg = 1.0           # background strain-rate
-    η_reg = 8.0e-3          # regularisation "viscosity"
+    εbg = 1.0              # background strain-rate
+    η_reg = 8.0e-3         # regularisation "viscosity"
     dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
     el_bg = ConstantElasticity(; G = G0, Kb = 4)
     el_inc = ConstantElasticity(; G = Gi, Kb = 4)
@@ -125,7 +125,7 @@ function main(igg; nx = 64, ny = 64)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
 
     # Rheology
     compute_viscosity!(

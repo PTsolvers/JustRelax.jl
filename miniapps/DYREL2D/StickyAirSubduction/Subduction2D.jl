@@ -107,11 +107,11 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
 
     # Rheology
-    args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
+    args0 = (T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
@@ -148,7 +148,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     while it < 1 # run only for 5 Myrs
 
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
         stokes.V.Vx .= 0.0
         stokes.V.Vy .= 0.0
         # Stokes solver ----------------

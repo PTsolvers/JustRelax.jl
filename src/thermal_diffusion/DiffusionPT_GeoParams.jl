@@ -55,7 +55,7 @@ end
 @inline Base.@propagate_inbounds function getindex_phase(
         phase::AbstractArray, I::Vararg{Int, N}
     ) where {N}
-    return phase[I...]
+    return @cell phase[I...]
 end
 
 @inline getindex_phase(::Nothing, I::Vararg{Int, N}) where {N} = nothing
@@ -136,4 +136,16 @@ end
 
 function compute_α(rheology, phase::Union{Int, Nothing})
     return compute_phase(get_α, rheology, phase)
+end
+
+function compute_radioactive_heating(rheology, phase::SArray)
+    return fn_ratio(compute_radioactive_heat, rheology, phase)
+end
+
+function compute_radioactive_heating(rheology, phase::Union{Int, Nothing})
+    if isempty(rheology.RadioactiveHeat)
+        return 0.0e0
+    else
+        compute_phase(compute_radioactive_heat, rheology, phase)
+    end
 end

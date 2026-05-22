@@ -1,5 +1,4 @@
 push!(LOAD_PATH, "..")
-
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -37,13 +36,7 @@ end
 distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
 
 @parallel_indices (i, j) function init_T!(T, z)
-    if z[j] == maximum(z)
-        T[i, j] = 300.0
-    elseif z[j] == minimum(z)
-        T[i, j] = 3500.0
-    else
-        T[i, j] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
-    end
+    T[i, j + 1] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
     return nothing
 end
 
@@ -51,13 +44,13 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
         if (((x[i] - xc))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i + 1, j] += δT
+            T[i + 1, j + 1] += δT
         end
         return nothing
     end
 
-    nx, ny = size(T)
-    return @parallel (1:(nx - 2), 1:ny) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    return @parallel (@idx ni) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 function init_phases!(phases, particles, xc, yc, r)
@@ -86,14 +79,10 @@ function init_phases!(phases, particles, xc, yc, r)
     return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
 end
 
-@parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
-
-    args_ij = ntuple_idx(args, I...)
-    H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij)
-
-    return nothing
-end
-
+lx = 100.0e3
+ly = 100.0e3
+Cp0 = 1.2e3
+K0 = 3.0
 function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e3, K0 = 3.0)
 
     kyr = 1.0e3 * 3600 * 24 * 365.25
@@ -135,17 +124,20 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
 
     ## Allocate arrays needed for every Thermal Diffusion
     thermal = ThermalArrays(backend_JR, ni)
+    Ttop = 300.0
+    Tbot = 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
     )
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
+    @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2])
+    thermal_bcs!(thermal, thermal_bc)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
     r = 10.0e3 # thermal perturbation radius
     center_perturbation = lx / 2, -ly / 2
-    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
-    temperature2center!(thermal)
+    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1
@@ -159,10 +151,8 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
-    @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
-
     # PT coefficients for thermal diffusion
-    args = (; P = P, T = thermal.Tc)
+    args = (; P = P, T = thermal.T)
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √2
     )
@@ -203,8 +193,8 @@ end
 
         nx_T, ny_T = size(thermal.T)
         if backend_JR === CPUBackend
-            @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1822.7216793271318 atol = 1.0e-1
-            @test thermal.Tc[nx >>> 1, nx >>> 1] ≈ 1824.3532934301472 atol = 1.0e-1
+            @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1814.029 atol = 1.0e-1
+            @test thermal.T[(nx >>> 1) + 1, (ny >>> 1) + 1] ≈ 1823.548 atol = 1.0e-1
             @test nphases(phase_ratios) === Val{2}()
         else
             @test true == true

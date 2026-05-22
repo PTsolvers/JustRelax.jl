@@ -78,12 +78,12 @@ end
         stokes.V.Vy .= @fill(10)
         thermal.T .= @fill(100)
         stokes.P .= @fill(100.0)
-        thermal.Tc .= @fill(100.0)
+        (@view thermal.T[2:(end - 1), 2:(end - 1)]) .= @fill(100.0)
 
         # Utils
         args = (P = stokes.P, T = thermal.T)
         tuple_args = (args.P, args.T)
-        @test detect_args_size(tuple_args) == (7, 5)
+        @test detect_args_size(tuple_args) == (6, 6)
 
         @test _tuple(stokes.τ) === (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
         @test _tuple(stokes.V) === (stokes.V.Vx, stokes.V.Vy)
@@ -92,10 +92,8 @@ end
         # known not to compile on GPU backends)
         if backend_JR === CPUBackend
             A = @zeros(ni...)
-            B = @zeros(ni...)
-            @parallel (@idx ni) JustRelax2D.multi_copy!((A, B), (stokes.P, thermal.Tc))
+            @parallel (@idx ni) JustRelax2D.multi_copy!((A,), (stokes.P,))
             @test A == stokes.P
-            @test B == thermal.Tc
 
             A .= 0.0e0
             @parallel JustRelax2D.assign!(A, stokes.P)

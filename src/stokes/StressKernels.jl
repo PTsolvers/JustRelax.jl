@@ -293,7 +293,7 @@ end
 
     # get plastic parameters (if any...)
     is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(
-        rheology, EII[I...], 1, ntuple_idx(args, I...)
+        rheology, EII[I...], 1, getindex_NamedTuple(args, I...)
     )
 
     # plastic volumetric change K * dt * sinϕ * sinψ

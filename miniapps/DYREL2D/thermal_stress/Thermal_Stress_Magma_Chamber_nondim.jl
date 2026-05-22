@@ -12,7 +12,7 @@ using JustPIC._2D
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie
+using Printf, Statistics, LinearAlgebra, GeoParams, GLMakie
 
 # -----------------------------------------------------------------------------------------
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -122,18 +122,18 @@ end
 function nonlinear_creep_models()
     creep_rock = DislocationCreep(; A = 1.67e-24Pa^(-(35 // 10)) / s, n = 3.5, E = 1.87e5J / mol, V = 0 * 6.0e-6m^3 / mol, r = 0.0, R = 8.3145J / mol / K)
     creep_magma = DislocationCreep(; A = 1.67e-24Pa^(-(35 // 10)) / s, n = 3.5, E = 1.87e5J / mol, V = 0 * 6.0e-6m^3 / mol, r = 0.0, R = 8.3145J / mol / K)
-    creep_air = LinearViscous(; η = 1.0e18 * Pa * s)
+    creep_air = LinearViscous(; η = 1.0e19 * Pa * s)
     return creep_rock, creep_magma, creep_air
 end
 
 function init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressible = false, steady_state = true)
     # plasticity setup
     do_DP = true          # do_DP=false: Von Mises, do_DP=true: Drucker-Prager (friction angle)
-    η_reg = 1.0e20Pa * s  # regularisation "viscosity" for Drucker-Prager
-    Coh = 10.0MPa       # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ = 30.0 * do_DP  # friction angle
-    G0 = 6.0e11Pa      # elastic shear modulus
-    G_magma = 6.0e11Pa      # elastic shear modulus perturbation
+    η_reg = 1.0e19Pa * s  # regularisation "viscosity" for Drucker-Prager
+    Coh = 10.0MPa         # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ = 30.0 * do_DP      # friction angle
+    G0 = 30GPa            # elastic shear modulus
+    G_magma = 30GPa       # elastic shear modulus perturbation
 
     soft_C = NonLinearSoftening(; ξ₀ = ustrip(Coh), Δ = ustrip(Coh) / 2) # softening law
     pl = DruckerPrager_regularised(; C = Coh, ϕ = ϕ, η_vp = η_reg, Ψ = 0.0, softening_C = soft_C)        # plasticity
@@ -266,7 +266,6 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni) # initialise stokes arrays with the defined regime
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-2, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     args = (; T = thermal.T, P = stokes.P, dt = dt)
@@ -360,26 +359,33 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
 
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt)
+
     # Stokes solver -----------------
     args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
-    solve!(
+
+    # Stokes solver -----------------
+    solve_DYREL!(
         stokes,
-        pt_stokes,
-        grid,
-        flow_bcs,
         ρg,
+        dyrel,
+        flow_bcs,
         phase_ratios,
         rheology_inc,
         args,
+        grid,
         dt,
         igg;
         kwargs = (;
-            iterMax = 100.0e3,
-            free_surface = true,
-            nout = 5.0e3,
+            verbose_PH = true,
+            verbose_DR = false,
+            iterMax = 75.0e3,
+            nout = 200,
+            rel_drop = 1.0e-2,
+            λ_relaxation_PH = 1,
+            λ_relaxation_DR = 1,
+            viscosity_relaxation = 1.0e-3,
             viscosity_cutoff = cutoff_visc,
-            relaxation = 1.0e-3,
-            λ_relaxation = 1.0e0,
         )
     )
 
@@ -389,24 +395,27 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
         args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
 
         # Stokes solver -----------------
-        solve!(
+        solve_DYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
             rheology,
             args,
+            grid,
             dt,
             igg;
             kwargs = (;
+                verbose_PH = true,
+                verbose_DR = false,
                 iterMax = 100.0e3,
-                free_surface = true,
-                nout = 5.0e3,
+                nout = 50,
+                rel_drop = 1.0e-2,
+                λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
+                viscosity_relaxation = 1.0e-2,
                 viscosity_cutoff = cutoff_visc,
-                relaxation = 1.0e-3,
-                λ_relaxation = 1.0e0,
             )
         )
         tensor_invariant!(stokes.ε)

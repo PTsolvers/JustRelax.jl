@@ -124,7 +124,7 @@ function ShearBand2D_DPCap_DYREL()
     stokes = StokesArrays(backend_JR, ni)
 
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
 
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 

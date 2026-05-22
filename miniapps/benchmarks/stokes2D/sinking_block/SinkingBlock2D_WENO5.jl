@@ -41,7 +41,7 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
             depth = abs(y[j])
             dTdZ = (2047 - 2017) / 50.0e3
             offset = 2017
-            T[i + 1, j] = (depth - 585.0e3) * dTdZ + offset
+            T[i + 1, j + 1] = (depth - 585.0e3) * dTdZ + offset
         end
         return nothing
     end
@@ -153,8 +153,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
 
     phases = @zeros(ni...)
     # phases = Float64.([argmax(p) for p in Array(phase_ratios.center)])
-    weno = WENO5(backend_JR, Val(2), ni .+ 1) # ni.+1 for Temp
-    weno_c = WENO5(backend_JR, Val(2), ni) # ni.+1 for Temp
+    weno = WENO5(backend_JR, Val(2), ni) # ni.+1 for Temp
     init_phases!(phases, xc_anomaly, abs(yc_anomaly), r_anomaly, xci[1], xci[2])
 
     phases_blob = @zeros(ni...) # for plotting purposes
@@ -178,7 +177,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     # ----------------------------------------------------
 
     # Viscosity
-    args = (; dt = dt, ΔTc = @zeros(ni...))
+    args = (; dt = dt, ΔT = @zeros(ni...))
     η_cutoff = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
     # ----------------------------------------------------
@@ -193,7 +192,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     it = 0 # iteration counter
     while it < 50
         # Stokes solver ----------------
-        args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+        args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔT = @zeros(ni...))
         solve!(
             stokes,
             pt_stokes,
@@ -215,18 +214,17 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         dt = compute_dt(stokes, di, igg)
         # ------------------------------
 
-        Vx_v = @zeros(ni .+ 1...)
-        Vy_v = @zeros(ni .+ 1...)
         Vx_c = @zeros(ni...)
         Vy_c = @zeros(ni...)
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
         velocity2center!(Vx_c, Vy_c, @velocity(stokes)...)
         velocity = @. √(Vx_v^2 + Vy_v^2)
 
         # Advection ---------------------
         WENO_advection!(phases, (Vx_c, Vy_c), weno_c, di, dt)
         WENO_advection!(phases_blob, (Vx_c, Vy_c), weno_c, di, dt)
-        WENO_advection!(phases_bg, (Vx_c, Vy_c), weno_c, di, dt)
+WENO_advection!(phases, (Vx_c, Vy_c), weno, di, dt)
+WENO_advection!(phases_blob, (Vx_c, Vy_c), weno, di, dt)
+WENO_advection!(phases_bg, (Vx_c, Vy_c), weno, di, dt)
 
         # update phase ratios
         update_phase_ratios_2D!(phase_ratios, (phases_bg, phases_blob), xci, xvi)

@@ -308,15 +308,6 @@ function JR3D.compute_melt_fraction!(
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
-# Interpolations
-function JR3D.temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
-function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
 function JR3D.shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
     _shear2center!(A)
     return nothing
@@ -327,8 +318,10 @@ function shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
     return nothing
 end
 
-function JR3D.vertex2center!(center::T, vertex::T) where {T <: ROCArray}
-    return vertex2center!(center, vertex)
+function JR3D.vertex2center!(
+        center::T, vertex::T; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false
+    ) where {T <: ROCArray}
+    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z)
 end
 
 function JR3D.center2vertex!(vertex::T, center::T) where {T <: ROCArray}
@@ -403,7 +396,7 @@ function JR3D.subgrid_characteristic_time!(
     )
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end
@@ -419,7 +412,7 @@ function JR3D.subgrid_characteristic_time!(
     ) where {N}
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end

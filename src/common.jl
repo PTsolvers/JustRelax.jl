@@ -72,7 +72,7 @@ export subgrid_characteristic_time!
 
 include("Interpolations.jl")
 export vertex2center!,
-    center2vertex!, temperature2center!, velocity2vertex!, velocity2center!, shear2center!
+    center2vertex!, velocity2vertex!, velocity2center!, shear2center!
 
 include("advection/weno5.jl")
 export WENO_advection!

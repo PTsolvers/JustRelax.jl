@@ -135,7 +135,7 @@ function main(igg; nx = 64, ny = 64, nz = 64)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-5, Re = 3.0e0, r = 0.7, CFL = 0.9 / √3.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
     # Rheology
     cutoff_visc = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -260,9 +260,9 @@ let
         end
     else
         n = 32 #+ 2
-        nx = n ÷ 2
-        ny = n ÷ 2
-        nz = n ÷ 2
+        nx = n #÷ 2
+        ny = n #÷ 2
+        nz = n #÷ 2
         init_mpi = JustRelax.MPI.Initialized() ? false : true
         igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi, select_device = false)...)
         main(igg; nx = nx, ny = ny, nz = nz)

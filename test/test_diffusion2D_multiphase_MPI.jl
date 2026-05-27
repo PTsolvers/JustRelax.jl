@@ -38,14 +38,8 @@ end
 
 distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
 
-@parallel_indices (i, j) function init_T!(T, z, lz)
-    if z[j] ≥ 0.0
-        T[i, j] = 300.0
-    elseif z[j] == -lz
-        T[i, j] = 3500.0
-    else
-        T[i, j] = z[j] * (1900.0 - 1600.0) / (-lz) + 1600.0
-    end
+@parallel_indices (i, j) function init_T!(T, z, ly)
+    T[i, j + 1] = -z[j] * (1900.0 - 1600.0) / ly + 1600.0
     return nothing
 end
 
@@ -53,13 +47,13 @@ function elliptical_perturbation!(T, δT, xc, yc, r, xvi)
 
     @parallel_indices (i, j) function _elliptical_perturbation!(T, δT, xc, yc, r, x, y)
         if (((x[i] - xc))^2 + ((y[j] - yc))^2) ≤ r^2
-            T[i + 1, j] += δT
+            T[i + 1, j + 1] += δT
         end
         return nothing
     end
 
-    nx, ny = size(T)
-    return @parallel (1:(nx - 2), 1:ny) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    return @parallel (@idx ni) _elliptical_perturbation!(T, δT, xc, yc, r, xvi...)
 end
 
 function init_phases!(phases, particles, xc, yc, r)
@@ -87,36 +81,16 @@ function init_phases!(phases, particles, xc, yc, r)
     return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
 end
 
-@parallel_indices (I...) function compute_temperature_source_terms!(H, rheology, phase_ratios, args)
-
-    args_ij = ntuple_idx(args, I...)
-    H[I...] = fn_ratio(compute_radioactive_heat, rheology, phase_ratios[I...], args_ij)
-
-    return nothing
-end
-
-function diffusion_2D(figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e3, K0 = 3.0, select_device = true)
+function diffusion_2D(igg, figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e3, K0 = 3.0)
     kyr = 1.0e3 * 3600 * 24 * 365.25
     Myr = 1.0e3 * kyr
     ttot = 1 * Myr # total simulation time
     dt = 50 * kyr # physical time step
 
-    # init_mpi = JustRelax.MPI.Initialized() ? false : true
-    # igg    = IGG(init_global_grid(nx, ny, 1; select_device=false, init_MPI = init_mpi)...)
-
-    # # Physical domain
-    # ni           = (nx, ny)
-    # li           = (lx, ly)  # domain length in x- and y-
-    # di           = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    # grid         = Geometry(ni, li; origin = (0, -ly))
-    # (; xci, xvi) = grid # nodes at the center and vertices of the cells
-
     # Physical domain
     ni = nx, ny
     li = lx, ly  # domain length in x- and y-
-    di = @. li / ni # grid step in x- and -y
     origin = 0.0, -ly
-    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true, select_device = select_device)...) #init MPI
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -143,39 +117,40 @@ function diffusion_2D(figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 
     P = @zeros(ni...)
     args = (; P = P)
 
-    ## Allocate arrays needed for every Thermal Diffusion
+    # Allocate arrays needed for every Thermal Diffusion
     thermal = ThermalArrays(backend_JR, ni)
+    Ttop = 300.0
+    Tbot = 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
     )
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2], ly)
+    @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2], ly)
+    thermal_bcs!(thermal, thermal_bc)
+    update_halo!(thermal.T)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
     r = 10.0e3 # thermal perturbation radius
     center_perturbation = lx / 2, -ly / 2
-    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
-    temperature2center!(thermal)
+    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
 
     update_halo!(thermal.T)
+    thermal_bcs!(thermal, thermal_bc)
+
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 40, 40, 1
+    nxcell, max_xcell, min_xcell = 24, 40, 1
     particles = init_particles(
         backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     pPhases, = init_cell_arrays(particles, Val(1))
-    particle_args = (pPhases)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
     update_phase_ratios!(phase_ratios, particles, pPhases)
-    update_cell_halo!(particles.coords..., particle_args)
-    update_cell_halo!(particles.index)
     # ----------------------------------------------------
 
-    @parallel (@idx ni) compute_temperature_source_terms!(thermal.H, rheology, phase_ratios.center, args)
-
     # PT coefficients for thermal diffusion
-    args = (; P = P, T = thermal.Tc)
+    args = (; P = P, T = thermal.T)
     pt_thermal = PTThermalCoeffs(
         backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.65 / √2
     )
@@ -186,10 +161,11 @@ function diffusion_2D(figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 
     nt = Int(ceil(ttot / dt))
 
     # global array
-    nx_v = ((nx + 2) - 2) * igg.dims[1]
-    ny_v = ((ny + 1) - 2) * igg.dims[2]
+    nx_v = nx * igg.dims[1]
+    ny_v = ny * igg.dims[2]
     T_v = zeros(nx_v, ny_v)
-    T_nohalo = zeros((nx + 2) - 2, (ny + 1) - 2)
+    # local array without halo
+    T_nohalo = zeros(nx, ny)
 
     # Time loop
     ## IO -----------------------------------------------
@@ -216,27 +192,31 @@ function diffusion_2D(figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 
         it += 1
         t += dt
 
-        @views T_nohalo .= Array(thermal.T[2:(end - 2), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array(thermal.T[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
-
-        # if igg.me == 0
-        #     fig, = heatmap(T_v, colorrange=(1500,2000))
-        #     save(joinpath(figdir,"temperature_it_$it.png"), fig)
-        # end
     end
 
     return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), thermal
 end
-if CSCS_CI != true
-    @suppress begin
-        if backend_JR == CPUBackend
-            figdir = "MPI_Diffusion2D"
-            n = 32
-            diffusion_2D(figdir; nx = n, ny = n)
-        else
-            println("This test is only for CPU CI yet")
+
+function run_diffusion2D_multiphase_MPI()
+    if CSCS_CI != true
+        @suppress begin
+            if backend_JR == CPUBackend
+                figdir = "MPI_Diffusion2D"
+                n = 32
+                igg = IGG(init_global_grid((n, n)..., 1; init_MPI = true, select_device = false)...) #init MPI
+                diffusion_2D(igg, figdir; nx = n, ny = n)
+            else
+                println("This test is only for CPU CI yet")
+            end
         end
+    else
+        n = 32
+        igg = IGG(init_global_grid((n, n)..., 1; init_MPI = true, select_device = false)...) #init MPI
+        diffusion_2D(igg, "MPI_Diffusion2D"; nx = n, ny = n)
     end
-else
-    diffusion_2D("MPI_Diffusion2D"; nx = 32, ny = 32, select_device = false)
+    return nothing
 end
+
+run_diffusion2D_multiphase_MPI()

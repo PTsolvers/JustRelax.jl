@@ -168,6 +168,8 @@ struct StokesArrays{A, B, C, D, E, F, T}
     ε::B
     ε_pl::B
     EII_pl::T
+    EVol_pl::T    # accumulated volumetric plastic strain @ cell centers
+    ε_vol_pl::T   # volumetric plastic strain rate @ cell centers
     viscosity::D
     τ_o::Union{B, Nothing}
     R::C

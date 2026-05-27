@@ -1,5 +1,7 @@
 # BOUNDARY CONDITIONS KERNELS
 include("free_slip.jl")
+include("constant_value.jl")
+include("periodic.jl")
 include("free_surface.jl")
 include("no_slip.jl")
 include("pure_shear.jl")
@@ -14,12 +16,25 @@ include("pure_shear.jl")
     return n, n
 end
 
-@inline do_bc(bc) = reduce(|, values(bc))
+@inline do_bc(bc) = any(!=(false), values(bc))
 
 """
-    thermal_bcs!(T, bcs::TemperatureBoundaryConditions)
+    thermal_bcs!(thermal, bcs::TemperatureBoundaryConditions)
+    thermal_bcs!(T::AbstractArray, bcs::TemperatureBoundaryConditions)
 
-Apply the prescribed heat boundary conditions `bc` on the `T`
+Apply thermal ghost-cell boundary conditions to a temperature field.
+
+`thermal_bcs!` applies the scalar temperature conditions stored in `bcs`:
+
+- `constant_value` faces are applied first using `Tghost = 2 * value - Tinterior`.
+- `no_flux` faces are applied next by copying the adjacent interior temperature.
+- `periodic` faces are applied last by copying the opposite interior temperature
+  into the ghost layer.
+
+Faces set to `false` are ignored. If multiple conditions are active on the same
+face, the later condition wins. Prescribed `constant_flux` values are not applied
+here; they are consumed by the pseudo-transient heat-diffusion `compute_flux!`
+kernels.
 """
 thermal_bcs!(thermal, bcs) = thermal_bcs!(backend(thermal), thermal, bcs)
 function thermal_bcs!(
@@ -31,8 +46,9 @@ end
 function thermal_bcs!(T::AbstractArray, bcs::TemperatureBoundaryConditions)
     n = bc_index(T)
 
-    # no flux boundary conditions
+    do_bc(bcs.constant_value) && (@parallel (@idx n) dirichlet_boundary!(T, bcs.constant_value))
     do_bc(bcs.no_flux) && (@parallel (@idx n) free_slip!(T, bcs.no_flux))
+    do_bc(bcs.periodic) && (@parallel (@idx n) periodic_boundary!(T, bcs.periodic))
 
     return nothing
 end

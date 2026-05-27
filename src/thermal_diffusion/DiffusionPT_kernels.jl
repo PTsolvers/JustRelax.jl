@@ -4,31 +4,57 @@ isNotDirichlet(::Nothing, ::Vararg{Int, N}) where {N} = true
 ## 3D KERNELS
 
 @parallel_indices (I...) function compute_flux!(
-        qTx::AbstractArray{_T, 3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _di
+        qTx::AbstractArray{_T, 3}, qTy, qTz, qTx2, qTy2, qTz2, T, K, θr_dτ, _di, bc_flux
     ) where {_T}
-    d_xi(A, _dx) = _d_xi(A, _dx, I...)
-    d_yi(A, _dy) = _d_yi(A, _dy, I...)
-    d_zi(A, _dz) = _d_zi(A, _dz, I...)
-    av_xy(A) = _av_xy(A, I...)
-    av_xz(A) = _av_xz(A, I...)
-    av_yz(A) = _av_yz(A, I...)
+    i, j, k = I
+    nx, ny, nz = size(θr_dτ)
 
     if all(I .≤ size(qTx))
-        _dx = @dx(_di, I[1])
-        qx = qTx2[I...] = -av_yz(K) * d_xi(T, _dx)
-        qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
+        if i == 1 && !isa(bc_flux.left, Bool)
+            qTx[I...] = bc_flux.left
+        elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
+            qTx[I...] = bc_flux.right
+        else
+            iL = clamp(i - 1, 1, nx)
+            iR = clamp(i, 1, nx)
+            Kx = (K[iL, j, k] + K[iR, j, k]) * 0.5
+            θx = (θr_dτ[iL, j, k] + θr_dτ[iR, j, k]) * 0.5
+            _dx = @dx(_di, clamp(i, 1, nx))
+            qx = qTx2[I...] = -Kx * (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) * _dx
+            qTx[I...] = (qTx[I...] * θx + qx) / (1.0 + θx)
+        end
     end
 
     if all(I .≤ size(qTy))
-        _dy = @dy(_di, I[2])
-        qy = qTy2[I...] = -av_xz(K) * d_yi(T, _dy)
-        qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
+        if j == 1 && !isa(bc_flux.front, Bool)
+            qTy[I...] = bc_flux.front
+        elseif j == size(qTy, 2) && !isa(bc_flux.back, Bool)
+            qTy[I...] = bc_flux.back
+        else
+            jF = clamp(j - 1, 1, ny)
+            jB = clamp(j, 1, ny)
+            Ky = (K[i, jF, k] + K[i, jB, k]) * 0.5
+            θy = (θr_dτ[i, jF, k] + θr_dτ[i, jB, k]) * 0.5
+            _dy = @dy(_di, clamp(j, 1, ny))
+            qy = qTy2[I...] = -Ky * (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) * _dy
+            qTy[I...] = (qTy[I...] * θy + qy) / (1.0 + θy)
+        end
     end
 
     if all(I .≤ size(qTz))
-        _dz = @dz(_di, I[3])
-        qz = qTz2[I...] = -av_xy(K) * d_zi(T, _dz)
-        qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
+        if k == 1 && !isa(bc_flux.bot, Bool)
+            qTz[I...] = bc_flux.bot
+        elseif k == size(qTz, 3) && !isa(bc_flux.top, Bool)
+            qTz[I...] = bc_flux.top
+        else
+            kB = clamp(k - 1, 1, nz)
+            kT = clamp(k, 1, nz)
+            Kz = (K[i, j, kB] + K[i, j, kT]) * 0.5
+            θz = (θr_dτ[i, j, kB] + θr_dτ[i, j, kT]) * 0.5
+            _dz = @dz(_di, clamp(k, 1, nz))
+            qz = qTz2[I...] = -Kz * (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) * _dz
+            qTz[I...] = (qTz[I...] * θz + qz) / (1.0 + θz)
+        end
     end
 
     return nothing
@@ -47,64 +73,83 @@ end
         θr_dτ,
         _di,
         args,
+        bc_flux,
     ) where {_T}
     I = i, j, k
 
-    @inline d_xi(A, _dx) = _d_xi(A, _dx, I...)
-    @inline d_yi(A, _dy) = _d_yi(A, _dy, I...)
-    @inline d_zi(A, _dz) = _d_zi(A, _dz, I...)
-    @inline av_xy(A) = _av_xy(A, I...)
-    @inline av_xz(A) = _av_xz(A, I...)
-    @inline av_yz(A) = _av_yz(A, I...)
-
     get_K(idx, args) = compute_phase(compute_conductivity, rheology, idx, args)
+    nx, ny, nz = size(θr_dτ)
 
     @inbounds if all(I .≤ size(qTx))
-        T_ijk = (T[(I .+ 1)...] + T[i, j + 1, k + 1]) * 0.5
-        args_ijk = (; T = T_ijk, P = av_yz(args.P))
-        K =
-            (
-            get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
-                get_K(getindex_phase(phase, i, j, k + 1), args_ijk) +
-                get_K(getindex_phase(phase, i, j + 1, k + 1), args_ijk) +
-                get_K(getindex_phase(phase, i, j, k), args_ijk)
-        ) * 0.25
+        if i == 1 && !isa(bc_flux.left, Bool)
+            qTx[I...] = bc_flux.left
+        elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
+            qTx[I...] = bc_flux.right
+        else
+            iL = clamp(i - 1, 1, nx)
+            iR = clamp(i, 1, nx)
+            T_ijk = (T[i, j + 1, k + 1] + T[i + 1, j + 1, k + 1]) * 0.5
 
-        _dx = @dx(_di, i)
-        qx = qTx2[I...] = -K * d_xi(T, _dx)
-        qTx[I...] = (qTx[I...] * av_yz(θr_dτ) + qx) / (1.0 + av_yz(θr_dτ))
+            args_L = (; getindex_NamedTuple(args, iL, j, k)..., T = T_ijk)
+            args_R = (; getindex_NamedTuple(args, iR, j, k)..., T = T_ijk)
+            K = (
+                get_K(getindex_phase(phase, iL, j, k), args_L) +
+                    get_K(getindex_phase(phase, iR, j, k), args_R)
+            ) * 0.5
+            θx = (θr_dτ[iL, j, k] + θr_dτ[iR, j, k]) * 0.5
+
+            _dx = @dx(_di, clamp(i, 1, nx))
+            qx = qTx2[I...] = -K * (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) * _dx
+            qTx[I...] = (qTx[I...] * θx + qx) / (1.0 + θx)
+        end
     end
 
     @inbounds if all(I .≤ size(qTy))
-        T_ijk = (T[(I .+ 1)...] + T[i + 1, j, k + 1]) * 0.5
-        args_ijk = (; T = T_ijk, P = av_xz(args.P))
-        K =
-            (
-            get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
-                get_K(getindex_phase(phase, i, j, k + 1), args_ijk) +
-                get_K(getindex_phase(phase, i + 1, j, k + 1), args_ijk) +
-                get_K(getindex_phase(phase, i, j, k), args_ijk)
-        ) * 0.25
+        if j == 1 && !isa(bc_flux.front, Bool)
+            qTy[I...] = bc_flux.front
+        elseif j == size(qTy, 2) && !isa(bc_flux.back, Bool)
+            qTy[I...] = bc_flux.back
+        else
+            jF = clamp(j - 1, 1, ny)
+            jB = clamp(j, 1, ny)
+            T_ijk = (T[i + 1, j, k + 1] + T[i + 1, j + 1, k + 1]) * 0.5
 
-        _dy = @dy(_di, j)
-        qy = qTy2[I...] = -K * d_yi(T, _dy)
-        qTy[I...] = (qTy[I...] * av_xz(θr_dτ) + qy) / (1.0 + av_xz(θr_dτ))
+            args_F = (; getindex_NamedTuple(args, i, jF, k)..., T = T_ijk)
+            args_B = (; getindex_NamedTuple(args, i, jB, k)..., T = T_ijk)
+            K = (
+                get_K(getindex_phase(phase, i, jF, k), args_F) +
+                    get_K(getindex_phase(phase, i, jB, k), args_B)
+            ) * 0.5
+            θy = (θr_dτ[i, jF, k] + θr_dτ[i, jB, k]) * 0.5
+
+            _dy = @dy(_di, clamp(j, 1, ny))
+            qy = qTy2[I...] = -K * (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) * _dy
+            qTy[I...] = (qTy[I...] * θy + qy) / (1.0 + θy)
+        end
     end
 
     @inbounds if all(I .≤ size(qTz))
-        T_ijk = (T[(I .+ 1)...] + T[i + 1, j + 1, k]) * 0.5
-        args_ijk = (; T = T_ijk, P = av_xy(args.P))
-        K =
-            (
-            get_K(getindex_phase(phase, i + 1, j + 1, k), args_ijk) +
-                get_K(getindex_phase(phase, i, j + 1, k), args_ijk) +
-                get_K(getindex_phase(phase, i + 1, j, k), args_ijk) +
-                get_K(getindex_phase(phase, i, j, k), args_ijk)
-        ) * 0.25
+        if k == 1 && !isa(bc_flux.bot, Bool)
+            qTz[I...] = bc_flux.bot
+        elseif k == size(qTz, 3) && !isa(bc_flux.top, Bool)
+            qTz[I...] = bc_flux.top
+        else
+            kB = clamp(k - 1, 1, nz)
+            kT = clamp(k, 1, nz)
+            T_ijk = (T[i + 1, j + 1, k] + T[i + 1, j + 1, k + 1]) * 0.5
 
-        _dz = @dz(_di, k)
-        qz = qTz2[I...] = -K * d_zi(T, _dz)
-        qTz[I...] = (qTz[I...] * av_xy(θr_dτ) + qz) / (1.0 + av_xy(θr_dτ))
+            args_B = (; getindex_NamedTuple(args, i, j, kB)..., T = T_ijk)
+            args_T = (; getindex_NamedTuple(args, i, j, kT)..., T = T_ijk)
+            K = (
+                get_K(getindex_phase(phase, i, j, kB), args_B) +
+                    get_K(getindex_phase(phase, i, j, kT), args_T)
+            ) * 0.5
+            θz = (θr_dτ[i, j, kB] + θr_dτ[i, j, kT]) * 0.5
+
+            _dz = @dz(_di, clamp(k, 1, nz))
+            qz = qTz2[I...] = -K * (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) * _dz
+            qTz[I...] = (qTz[I...] * θz + qz) / (1.0 + θz)
+        end
     end
 
     return nothing
@@ -124,11 +169,8 @@ end
         _dt,
         _di,
     ) where {_T}
+    i, j, k = I
     _dx, _dy, _dz = @dxi(_di, I...)
-    av(A) = _av(A, I...)
-    d_xa(A) = _d_xa(A, _dx, I...)
-    d_ya(A) = _d_ya(A, _dy, I...)
-    d_za(A) = _d_za(A, _dz, I...)
 
     I1 = I .+ 1
 
@@ -138,13 +180,17 @@ end
     else
         T[I1...] =
             (
-            av(dτ_ρ) * (
-                -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
-                    Told[I1...] * av(ρCp) * _dt +
-                    av(H) +
-                    av(shear_heating)
+            dτ_ρ[I...] * (
+                -(
+                    (qTx[i + 1, j, k] - qTx[I...]) * _dx +
+                        (qTy[i, j + 1, k] - qTy[I...]) * _dy +
+                        (qTz[i, j, k + 1] - qTz[I...]) * _dz
+                ) +
+                    Told[I1...] * ρCp[I...] * _dt +
+                    H[I...] +
+                    shear_heating[I...]
             ) + T[I1...]
-        ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
+        ) / (one(_T) + dτ_ρ[I...] * ρCp[I...] * _dt)
     end
 
     return nothing
@@ -167,15 +213,7 @@ end
         _di,
         args,
     ) where {_T}
-    nx, ny, nz = size(args.P)
-    _dx = @dx(_di, min(i, nx))
-    _dy = @dy(_di, min(j, ny))
-    _dz = @dz(_di, min(k, nz))
-
-    av(A) = _av(A, i, j, k)
-    d_xa(A) = _d_xa(A, _dx, i, j, k)
-    d_ya(A) = _d_ya(A, _dy, i, j, k)
-    d_za(A) = _d_za(A, _dz, i, j, k)
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
 
     I1 = i + 1, j + 1, k + 1
 
@@ -184,21 +222,26 @@ end
 
     else
         T_ijk = T[I1...]
-        args_ijk = (; T = T_ijk, P = av(args.P))
+        args_ijk = (; getindex_NamedTuple(args, i, j, k)..., T = T_ijk)
         phase_ijk = getindex_phase(phase, i, j, k)
         ρCp = compute_ρCp(rheology, phase_ijk, args_ijk)
         ρ = compute_density(rheology, phase_ijk, args_ijk)
 
         T[I1...] =
             (
-            av(dτ_ρ) * (
-                -(d_xa(qTx) + d_ya(qTy) + d_za(qTz)) +
+            dτ_ρ[i, j, k] * (
+                -(
+                    (qTx[i + 1, j, k] - qTx[i, j, k]) * _dx +
+                        (qTy[i, j + 1, k] - qTy[i, j, k]) * _dy +
+                        (qTz[i, j, k + 1] - qTz[i, j, k]) * _dz
+                ) +
                     Told[I1...] * ρCp * _dt +
-                    ρ * av(H) +
-                    av(shear_heating) +
+                    compute_radioactive_heating(rheology, phase_ijk) +
+                    H[i, j, k] +
+                    shear_heating[i, j, k] +
                     adiabatic[i, j, k] * T_ijk
             ) + T_ijk
-        ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
+        ) / (one(_T) + dτ_ρ[i, j, k] * ρCp * _dt)
     end
     return nothing
 end
@@ -218,17 +261,18 @@ end
         _di,
     ) where {_T}
     _dx, _dy, _dz = @dxi(_di, i, j, k)
-    d_xa(A) = _d_xa(A, _dx, i, j, k)
-    d_ya(A) = _d_ya(A, _dy, i, j, k)
-    d_za(A) = _d_za(A, _dz, i, j, k)
-    av(A) = _av(A, i, j, k)
 
     I1 = i + 1, j + 1, k + 1
 
     ResT[i, j, k] = if isNotDirichlet(dirichlet.mask, I1...)
-        -av(ρCp) * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
-            av(H) +
-            av(shear_heating)
+        -ρCp[i, j, k] * (T[I1...] - Told[I1...]) * _dt -
+            (
+            (qTx2[i + 1, j, k] - qTx2[i, j, k]) * _dx +
+                (qTy2[i, j + 1, k] - qTy2[i, j, k]) * _dy +
+                (qTz2[i, j, k + 1] - qTz2[i, j, k]) * _dz
+        ) +
+            H[i, j, k] +
+            shear_heating[i, j, k]
     else
         zero(_T)
     end
@@ -253,25 +297,23 @@ end
         _di,
         args,
     ) where {_T}
-    nx, ny, nz = size(args.P)
-    _dx = @dx(_di, min(i, nx))
-    _dy = @dy(_di, min(j, ny))
-    _dz = @dz(_di, min(k, nz))
-    d_xa(A) = _d_xa(A, _dx, i, j, k)
-    d_ya(A) = _d_ya(A, _dy, i, j, k)
-    d_za(A) = _d_za(A, _dz, i, j, k)
-    av(A) = _av(A, i, j, k)
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
 
     I = i + 1, j + 1, k + 1
     T_ijk = T[I...]
-    args_ijk = (; T = T_ijk, P = av(args.P))
+    args_ijk = (; getindex_NamedTuple(args, i, j, k)..., T = T_ijk)
     phase_ijk = getindex_phase(phase, i, j, k)
 
     ResT[i, j, k] = if isNotDirichlet(dirichlet.mask, I...)
         -compute_ρCp(rheology, phase_ijk, args_ijk) * (T_ijk - Told[I...]) * _dt -
-            (d_xa(qTx2) + d_ya(qTy2) + d_za(qTz2)) +
-            av(H) * compute_density(rheology, phase_ijk, args_ijk) +
-            av(shear_heating) +
+            (
+            (qTx2[i + 1, j, k] - qTx2[i, j, k]) * _dx +
+                (qTy2[i, j + 1, k] - qTy2[i, j, k]) * _dy +
+                (qTz2[i, j, k + 1] - qTz2[i, j, k]) * _dz
+        ) +
+            compute_radioactive_heating(rheology, phase_ijk) +
+            H[i, j, k] +
+            shear_heating[i, j, k] +
             adiabatic[i, j, k] * T_ijk
     else
         zero(_T)
@@ -282,72 +324,114 @@ end
 ## 2D KERNELS
 
 @parallel_indices (i, j) function compute_flux!(
-        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _di_vertex
+        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _di_center, bc_flux
     ) where {_T}
-    nx = size(θr_dτ, 1)
-
-    d_xi(A, _dx) = _d_xi(A, _dx, i, j)
-    d_yi(A, _dy) = _d_yi(A, _dy, i, j)
-    av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
+    nx, ny = size(θr_dτ)
 
     @inbounds if all((i, j) .≤ size(qTx))
-        _dx = @dx(_di_vertex, i)
-        qx = qTx2[i, j] = -av_xa(K) * d_xi(T, _dx)
-        qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
+        if i == 1 && !isa(bc_flux.left, Bool)
+            qTx[i, j] = bc_flux.left
+        elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
+            qTx[i, j] = bc_flux.right
+        else
+            _dx = @dx(_di_center, clamp(i, 1, nx))
+            iL = clamp(i - 1, 1, nx)
+            iR = clamp(i, 1, nx)
+            Kx = (K[iL, j] + K[iR, j]) * 0.5
+            θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
+            qx = qTx2[i, j] = -Kx * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
+            qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
+        end
     end
 
     @inbounds if all((i, j) .≤ size(qTy))
-        _dy = @dy(_di_vertex, j)
-        qy = qTy2[i, j] = -av_ya(K) * d_yi(T, _dy)
-        qTy[i, j] = (qTy[i, j] * av_ya(θr_dτ) + qy) / (1.0 + av_ya(θr_dτ))
+        if j == 1 && !isa(bc_flux.bot, Bool)
+            qTy[i, j] = bc_flux.bot
+        elseif j == size(qTy, 2) && !isa(bc_flux.top, Bool)
+            qTy[i, j] = bc_flux.top
+        else
+            _dy = @dy(_di_center, clamp(j, 1, ny))
+            jB = clamp(j - 1, 1, ny)
+            jT = clamp(j, 1, ny)
+            Ky = (K[i, jB] + K[i, jT]) * 0.5
+            θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
+            qy = qTy2[i, j] = -Ky * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
+            qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
+        end
     end
     return nothing
 end
 
 @parallel_indices (i, j) function compute_flux!(
-        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, rheology, phase, θr_dτ, _di_vertex, args
+        qTx::AbstractArray{_T, 2},
+        qTy,
+        qTx2,
+        qTy2,
+        T,
+        rheology,
+        phase,
+        θr_dτ,
+        _di_center,
+        args,
+        bc_flux,
     ) where {_T}
 
-    nx = size(θr_dτ, 1)
-
-    d_xi(A, _dx) = _d_xi(A, _dx, i, j)
-    d_yi(A, _dy) = _d_yi(A, _dy, i, j)
-    av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
+    nx, ny = size(θr_dτ)
 
     if all((i, j) .≤ size(qTx))
-        ii, jj = clamp(i - 1, 1, nx), j + 1
-        phase_ij = getindex_phase(phase, ii, jj)
-        args_ij = ntuple_idx(args, ii, jj)
-        K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+        if i == 1 && !isa(bc_flux.left, Bool)
+            qTx[i, j] = bc_flux.left
+        elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
+            qTx[i, j] = bc_flux.right
+        else
+            iL = clamp(i - 1, 1, nx)
+            iR = clamp(i, 1, nx)
+            T_ij = (T[i, j + 1] + T[i + 1, j + 1]) * 0.5
 
-        ii, jj = clamp(i - 1, 1, nx), j
-        phase_ij = getindex_phase(phase, ii, jj)
-        args_ij = ntuple_idx(args, ii, jj)
-        K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
-        K = (K1 + K2) * 0.5
+            ii, jj = iL, j
+            phase_ij = getindex_phase(phase, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
-        _dx = @dx(_di_vertex, i)
-        qx = qTx2[i, j] = -K * d_xi(T, _dx)
-        qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
+            ii, jj = iR, j
+            phase_ij = getindex_phase(phase, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+            K = (K1 + K2) * 0.5
+            θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
+
+            _dx = @dx(_di_center, clamp(i, 1, nx))
+            qx = qTx2[i, j] = -K * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
+            qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
+        end
     end
 
     if all((i, j) .≤ size(qTy))
-        ii, jj = min(i, nx), j
-        phase_ij = getindex_phase(phase, ii, jj)
-        args_ij = ntuple_idx(args, ii, jj)
-        K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+        if j == 1 && !isa(bc_flux.bot, Bool)
+            qTy[i, j] = bc_flux.bot
+        elseif j == size(qTy, 2) && !isa(bc_flux.top, Bool)
+            qTy[i, j] = bc_flux.top
+        else
+            jB = clamp(j - 1, 1, ny)
+            jT = clamp(j, 1, ny)
+            T_ij = (T[i + 1, j] + T[i + 1, j + 1]) * 0.5
 
-        ii, jj = max(i - 1, 1), j
-        phase_ij = getindex_phase(phase, ii, jj)
-        args_ij = ntuple_idx(args, ii, jj)
-        K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
-        K = (K1 + K2) * 0.5
+            ii, jj = i, jB
+            phase_ij = getindex_phase(phase, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
-        _dy = @dy(_di_vertex, j)
-        qy = qTy2[i, j] = -K * d_yi(T, _dy)
-        qTy[i, j] = (qTy[i, j] * av_ya(θr_dτ) + qy) / (1.0 + av_ya(θr_dτ))
+            ii, jj = i, jT
+            phase_ij = getindex_phase(phase, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
+            K = (K1 + K2) * 0.5
+            θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
+
+            _dy = @dy(_di_center, clamp(j, 1, ny))
+            qy = qTy2[i, j] = -K * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
+            qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
+        end
     end
 
     return nothing
@@ -362,49 +446,68 @@ end
         rheology::NTuple{N, AbstractMaterialParamsStruct},
         phase_ratios::CellArray{C1, C2, C3, C4},
         θr_dτ,
-        _di_vertex,
+        _di_center,
         args,
+        bc_flux,
     ) where {_T, N, C1, C2, C3, C4}
-    nx = size(θr_dτ, 1)
-
-    d_xi(A, _dx) = _d_xi(A, _dx, i, j)
-    d_yi(A, _dy) = _d_yi(A, _dy, i, j)
-    av_xa(A) = (A[clamp(i - 1, 1, nx), j + 1] + A[clamp(i - 1, 1, nx), j]) * 0.5
-    av_ya(A) = (A[clamp(i, 1, nx), j] + A[clamp(i - 1, 1, nx), j]) * 0.5
+    nx, ny = size(θr_dτ)
 
     compute_K(phase, args) = fn_ratio(compute_conductivity, rheology, phase, args)
 
     @inbounds if all((i, j) .≤ size(qTx))
-        ii, jj = clamp(i - 1, 1, nx), j + 1
-        phase_ij = getindex_phase(phase_ratios, ii, jj)
-        args_ij = ntuple_idx(args, ii, jj)
-        K1 = compute_K(phase_ij, args_ij)
+        if i == 1 && !isa(bc_flux.left, Bool)
+            qTx[i, j] = bc_flux.left
+        elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
+            qTx[i, j] = bc_flux.right
+        else
+            iL = clamp(i - 1, 1, nx)
+            iR = clamp(i, 1, nx)
+            T_ij = (T[i, j + 1] + T[i + 1, j + 1]) * 0.5
 
-        ii, jj = clamp(i - 1, 1, nx), j
-        phase_ij = getindex_phase(phase_ratios, ii, jj)
-        K2 = compute_K(phase_ij, args_ij)
-        K = (K1 + K2) * 0.5
+            ii, jj = iL, j
+            phase_ij = getindex_phase(phase_ratios, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_K(phase_ij, args_ij)
 
-        _dx = @dx(_di_vertex, i)
-        qx = qTx2[i, j] = -K * d_xi(T, _dx)
-        qTx[i, j] = (qTx[i, j] * av_xa(θr_dτ) + qx) / (1.0 + av_xa(θr_dτ))
+            ii, jj = iR, j
+            phase_ij = getindex_phase(phase_ratios, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_K(phase_ij, args_ij)
+            K = (K1 + K2) * 0.5
+            θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
+
+            _dx = @dx(_di_center, clamp(i, 1, nx))
+            qx = qTx2[i, j] = -K * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
+            qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
+        end
     end
 
     @inbounds if all((i, j) .≤ size(qTy))
-        ii, jj = min(i, nx), j
-        phase_ij = getindex_phase(phase_ratios, ii, jj)
-        args_ij = ntuple_idx(args, ii, jj)
-        K1 = compute_K(phase_ij, args_ij)
+        if j == 1 && !isa(bc_flux.bot, Bool)
+            qTy[i, j] = bc_flux.bot
+        elseif j == size(qTy, 2) && !isa(bc_flux.top, Bool)
+            qTy[i, j] = bc_flux.top
+        else
+            jB = clamp(j - 1, 1, ny)
+            jT = clamp(j, 1, ny)
+            T_ij = (T[i + 1, j] + T[i + 1, j + 1]) * 0.5
 
-        ii, jj = clamp(i - 1, 1, nx), j
-        phase_ij = getindex_phase(phase_ratios, ii, jj)
-        args_ij = ntuple_idx(args, ii, jj)
-        K2 = compute_K(phase_ij, args_ij)
-        K = (K1 + K2) * 0.5
+            ii, jj = i, jB
+            phase_ij = getindex_phase(phase_ratios, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_K(phase_ij, args_ij)
 
-        _dy = @dy(_di_vertex, j)
-        qy = qTy2[i, j] = -K * d_yi(T, _dy)
-        qTy[i, j] = (qTy[i, j] * av_ya(θr_dτ) + qy) / (1.0 + av_ya(θr_dτ))
+            ii, jj = i, jT
+            phase_ij = getindex_phase(phase_ratios, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_K(phase_ij, args_ij)
+            K = (K1 + K2) * 0.5
+            θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
+
+            _dy = @dy(_di_center, clamp(j, 1, ny))
+            qy = qTy2[i, j] = -K * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
+            qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
+        end
     end
 
     return nothing
@@ -430,30 +533,15 @@ end
         apply_dirichlet!(T, dirichlet, I1...)
 
     else
-        nx, ny = size(ρCp)
-
-        d_xa(A) = _d_xa(A, _dx, i, j)
-        d_ya(A) = _d_ya(A, _dy, i, j)
-        #! format: off
-        function av(A)
-            (
-                A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
-                A[clamp(i - 1, 1, nx), j] +
-                A[i, clamp(j - 1, 1, ny)] +
-                A[i, j]
-            ) * 0.25
-        end
-        #! format: on
-
         T[I1...] =
             (
-            av(dτ_ρ) * (
-                -(d_xa(qTx) + d_ya(qTy)) +
-                    Told[I1...] * av(ρCp) * _dt +
-                    av(H) +
-                    av(shear_heating)
+            dτ_ρ[i, j] * (
+                -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) +
+                    Told[I1...] * ρCp[i, j] * _dt +
+                    H[i, j] +
+                    shear_heating[i, j]
             ) + T[I1...]
-        ) / (one(_T) + av(dτ_ρ) * av(ρCp) * _dt)
+        ) / (one(_T) + dτ_ρ[i, j] * ρCp[i, j] * _dt)
     end
 
     return nothing
@@ -485,19 +573,14 @@ end
 
         nx, ny = size(args.P)
 
-        _dx = @dx(_di_vertex, min(i, nx))
-        _dy = @dy(_di_vertex, min(j, ny))
-
-        i0 = clamp(i - 1, 1, nx)
-        i1 = clamp(i, 1, nx)
-        j0 = clamp(j - 1, 1, ny)
-        j1 = clamp(j, 1, ny)
-
-        d_xa(A) = _d_xa(A, _dx, i, j)
-        d_ya(A) = _d_ya(A, _dy, i, j)
-        av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
+        _dx = @dx(_di_vertex, i)
+        _dy = @dy(_di_vertex, j)
 
         T_ij = T[i + 1, j + 1]
+        args_ij = (; getindex_NamedTuple(args, i, j)..., T = T_ij)
+        phase_ij = getindex_phase(phase, i, j)
+        ρCp = compute_ρCp(rheology, phase_ij, args_ij)
+
         args_ij = (; T = T_ij, P = av(args.P))
 
         ρCp =
@@ -517,14 +600,15 @@ end
         
         T[I1...] =
             (
-            av(dτ_ρ) * (
-                -(d_xa(qTx) + d_ya(qTy)) +
+            dτ_ρ[i, j] * (
+                -((qTx[i + 1, j] - qTx[i, j]) * _dx + (qTy[i, j + 1] - qTy[i, j]) * _dy) +
                     Told[I1...] * ρCp * _dt +
-                    av(H) * ρ +
-                    av(shear_heating) +
+                    compute_radioactive_heating(rheology, phase_ij) +
+                    H[i, j] +
+                    shear_heating[i, j] +
                     adiabatic[i, j] * T[I1...]
             ) + T[I1...]
-        ) / (one(_T) + av(dτ_ρ) * ρCp * _dt)
+        ) / (one(_T) + dτ_ρ[i, j] * ρCp * _dt)
     end
 
     return nothing
@@ -544,26 +628,13 @@ end
         _di_vertex,
     ) where {_T}
     _dx, _dy = @dxi(_di_vertex, i, j)
-    nx, ny = size(ρCp)
-
-    d_xa(A) = _d_xa(A, _dx, i, j)
-    d_ya(A) = _d_ya(A, _dy, i, j)
-    #! format: off
-    function av(A)
-        (
-            A[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] +
-            A[clamp(i - 1, 1, nx), clamp(j, 1, ny)] +
-            A[clamp(i, 1, nx), clamp(j - 1, 1, ny)] +
-            A[clamp(i, 1, nx), clamp(j, 1, ny)]
-        ) * 0.25
-    end
-    #! format: on
 
     I1 = i + 1, j + 1
     ResT[i, j] = if isNotDirichlet(dirichlet.mask, I1...)
-        -av(ρCp) * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
-            av(H) +
-            av(shear_heating)
+        -ρCp[i, j] * (T[I1...] - Told[I1...]) * _dt -
+            ((qTx2[i + 1, j] - qTx2[i, j]) * _dx + (qTy2[i, j + 1] - qTy2[i, j]) * _dy) +
+            H[i, j] +
+            shear_heating[i, j]
     else
         zero(_T)
     end
@@ -587,40 +658,21 @@ end
         _di_vertex,
         args,
     ) where {_T}
-    nx, ny = size(args.P)
-    _dx = @dx(_di_vertex, min(i, nx))
-    _dy = @dy(_di_vertex, min(j, ny))
-
-    i0 = clamp(i - 1, 1, nx)
-    i1 = clamp(i, 1, nx)
-    j0 = clamp(j - 1, 1, ny)
-    j1 = clamp(j, 1, ny)
-
-    d_xa(A) = _d_xa(A, _dx, i, j)
-    d_ya(A) = _d_ya(A, _dy, i, j)
-    av(A) = (A[i0, j0] + A[i0, j1] + A[i1, j0] + A[i1, j1]) * 0.25
+    _dx = @dx(_di_vertex, i)
+    _dy = @dy(_di_vertex, j)
 
     T_ij = T[i + 1, j + 1]
-    args_ij = (; T = T_ij, P = av(args.P))
+    args_ij = (; getindex_NamedTuple(args, i, j)..., T = T_ij)
+    phase_ij = getindex_phase(phase, i, j)
+    ρCp = compute_ρCp(rheology, phase_ij, args_ij)
 
-    ρCp =
-        (
-        compute_ρCp(rheology, getindex_phase(phase, i0, j0), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, i0, j1), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, i1, j0), args_ij) +
-        compute_ρCp(rheology, getindex_phase(phase, i1, j1), args_ij)
-    ) * 0.25
-    ρ = (
-        compute_density(rheology, getindex_phase(phase, i0, j0), args_ij) +
-        compute_density(rheology, getindex_phase(phase, i0, j1), args_ij) +
-        compute_density(rheology, getindex_phase(phase, i1, j0), args_ij) +
-        compute_density(rheology, getindex_phase(phase, i1, j1), args_ij)
-    ) * 0.25
     I1 = i + 1, j + 1
     ResT[i, j] = if isNotDirichlet(dirichlet.mask, I1...)
-        -ρCp * (T[I1...] - Told[I1...]) * _dt - (d_xa(qTx2) + d_ya(qTy2)) +
-            av(H) * ρ +
-            av(shear_heating) +
+        -ρCp * (T[I1...] - Told[I1...]) * _dt -
+            ((qTx2[i + 1, j] - qTx2[i, j]) * _dx + (qTy2[i, j + 1] - qTy2[i, j]) * _dy) +
+            compute_radioactive_heating(rheology, phase_ij) +
+            H[i, j] +
+            shear_heating[i, j] +
             adiabatic[i, j] * T[I1...]
     else
         zero(_T)
@@ -634,6 +686,16 @@ end
     return nothing
 end
 
+"""
+    update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, dirichlet, _dt, _di, ni)
+    update_T(::Nothing, b_width, thermal, rheology, phase, pt_thermal, dirichlet, _dt, _di, ni, args)
+
+Launch the pseudo-transient temperature update kernel over the active thermal
+domain.
+
+These wrappers select the appropriate kernel overload depending on whether the
+solver works with precomputed `ρCp` fields or rheology-derived properties.
+"""
 function update_T(::Nothing, b_width, thermal, ρCp, pt_thermal, dirichlet, _dt, _di, ni)
     return @parallel update_range(ni...) update_T!(
         thermal.T,
@@ -673,8 +735,7 @@ end
         A, Vx, Vy, Vz, P, P0, rheology, phases, _di, _dt
     )
     _dx, _dy, _dz = @dxi(_di, i, j, k)
-    I = i, j, k
-    I1 = i1, j1, k1 = I .+ 1
+    nx, ny, nz = size(P)
     @inbounds begin
         α =
             (
@@ -688,7 +749,7 @@ end
                 compute_α(rheology, getindex_phase(phases, I1...))
         ) * 0.125
         # average P and P0 @ T node
-        Pv  = (P[I...] + P[i, j, k1] + P[i, j1, k] + P[i, j1, k1] + P[i1, j, k] + P[i1, j, k1] + P[i1, j1, k] + P[i1, j1, k1]) / 8
+        Pv = (P[I...] + P[i, j, k1] + P[i, j1, k] + P[i, j1, k1] + P[i1, j, k] + P[i1, j, k1] + P[i1, j1, k] + P[i1, j1, k1]) / 8
         P0v = (P0[I...] + P0[i, j, k1] + P0[i, j1, k] + P0[i, j1, k1] + P0[i1, j, k] + P0[i1, j, k1] + P0[i1, j1, k] + P0[i1, j1, k1]) / 8
         # Adiabtic heating term
         A[I...] = (Pv - P0v) * α * _dt
@@ -711,7 +772,7 @@ end
             compute_α(rheology, getindex_phase(phases, I1...))
         ) * 0.25
         # average P and P0 @ T node
-        Pv  = (P[I...] + P[i, j1] + P[i1, j] + P[i1, j1]) * 0.25
+        Pv = (P[I...] + P[i, j1] + P[i1, j] + P[i1, j1]) * 0.25
         P0v = (P0[I...] + P0[i, j1] + P0[i1, j] + P0[i1, j1]) * 0.25
         # Adiabtic heating term
         A[i1, j] = (Pv - P0v) * α * _dt
@@ -719,6 +780,16 @@ end
     return nothing
 end
 
+"""
+    adiabatic_heating!(thermal, stokes, rheology, phases, _dt, grid)
+
+Fill `thermal.adiabatic` with the adiabatic heating term inferred from the
+pressure change between `stokes.P0` and `stokes.P`.
+
+The kernels average the local thermal expansivity over the temperature nodes and
+scale the pressure increment by `inv(dt)`, passed here as `_dt`. When `stokes`
+is `nothing`, the no-op overloads leave the field unchanged.
+"""
 function adiabatic_heating!(thermal, stokes, rheology, phases, _dt, grid::Geometry{2})
     idx = @idx (size(stokes.P) .- 1)
     return @parallel idx adiabatic_heating(

@@ -31,7 +31,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Subduction2D_rheology.jl")
@@ -106,11 +106,11 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
 
     # Rheology
-    args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
+    args0 = (T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
@@ -143,11 +143,11 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
     # Time loop
     t, it = 0.0, 0
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt)
     local out
     while it < 10 # run only for 5 Myrs
 
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
 
         # Stokes solver ----------------
         t_stokes = @elapsed begin
@@ -208,6 +208,7 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     η = Array(η_vep),
                 )
                 velocity_v = (

@@ -88,15 +88,14 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend_JR, ni)
-    temperature2center!(thermal)
     # ----------------------------------------------------
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
-    compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel (@idx ni) init_P!(stokes.P, ρg[3], xci[3])
     # stokes.P        .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
     # Rheology
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e24)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
@@ -175,11 +174,11 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
             if do_vtk
                 # velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
-                    T = zeros(ni .+ 1...),
                     phase_vertex = [argmax(p) for p in Array(phase_ratios.center)],
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                    T = Array(@view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
                     εxx = Array(stokes.ε.xx),

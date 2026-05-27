@@ -42,12 +42,28 @@ function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N
     return StokesArrays(ni)
 end
 
-function JR2D.DYREL(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
-    return DYREL(ni)
+function JR2D.DYREL(::Type{CUDABackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) where {N}
+    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
 end
 
-function JR2D.DYREL(::Type{CUDABackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, CFL = 0.99, c_fat = 0.5, γfact = 20.0)
-    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, CFL = CFL, c_fat = c_fat, γfact = γfact)
+function JR2D.DYREL(::Type{CUDABackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
+function JR2D.update_α_β!(βVx::CuArray, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
+    return update_α_β!(βVx, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
+end
+
+function JR2D.update_α_β!(dyrel::JustRelax.DYREL{<:CuArray})
+    return update_α_β!(dyrel)
+end
+
+function JR2D.update_dτV_α_β!(dτVx::CuArray, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
+    return update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
+end
+
+function JR2D.update_dτV_α_β!(dyrel::JustRelax.DYREL{<:CuArray})
+    return update_dτV_α_β!(dyrel)
 end
 
 function JR2D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N, Number}) where {N}
@@ -255,6 +271,14 @@ function accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor
     return _accumulate_tensor!(II, A, dt)
 end
 
+function JR2D.accumulate_vol!(::CUDABackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+end
+
+function accumulate_vol!(::CUDABackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+end
+
 ## Buoyancy forces
 function JR2D.compute_ρg!(ρg::Union{CuArray, NTuple{N, CuArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
@@ -277,15 +301,6 @@ function JR2D.compute_melt_fraction!(
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
-# Interpolations
-function JR2D.temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
-function temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
 function JR2D.shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
     _shear2center!(A)
     return nothing
@@ -296,8 +311,10 @@ function shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
     return nothing
 end
 
-function JR2D.vertex2center!(center::T, vertex::T) where {T <: CuArray}
-    return vertex2center!(center, vertex)
+function JR2D.vertex2center!(
+        center::T, vertex::T; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false
+    ) where {T <: CuArray}
+    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z)
 end
 
 function JR2D.center2vertex!(vertex::T, center::T) where {T <: CuArray}
@@ -372,7 +389,7 @@ function JR2D.subgrid_characteristic_time!(
     )
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end
@@ -388,7 +405,7 @@ function JR2D.subgrid_characteristic_time!(
     ) where {N}
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end

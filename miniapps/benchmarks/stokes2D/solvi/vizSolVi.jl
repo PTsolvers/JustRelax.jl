@@ -70,7 +70,7 @@ function Li_error(geometry, stokes, Δη, εbg, rc, ; order = 2)
     Li(A, B; order = 2) = norm(A .- B, order)
 
     L2_vx = Li(stokes.V.Vx[:, 2:(end - 1)], PTArray(backend)(sol.vx); order = order) * gridsize
-    L2_vy = Li(stokes.V.Vy[2:(end - 1), :], PTArray(backend)(sol.vy); order = order) * gridsize
+    L2_vy = Li(stokes.V.Vy[2:(end - 1), 2:(end - 1)], PTArray(backend)(sol.vy); order = order) * gridsize
     L2_p = Li(stokes.P, PTArray(backend)(sol.p); order = order) * gridsize
 
     return L2_vx, L2_vy, L2_p
@@ -205,7 +205,7 @@ function plot_solVi_error(geometry, stokes, Δη, εbg, rc)
         ax1,
         geometry.xvi[1],
         geometry.xci[2],
-        log10.(err2(Array(stokes.V.Vy[2:(end - 1), :]), sol.vy));
+        log10.(err2(Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]), sol.vy));
         colormap = :batlow,
     )
     lines!(ax1, ix, iy; linewidth = 3, color = :black)

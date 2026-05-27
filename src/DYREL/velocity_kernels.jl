@@ -17,10 +17,8 @@
     @inbounds begin
         vx_s = Vx[i, j]
         vx_n = Vx[i, j + 1]
-        vx_ne = Vx[i + 1, j + 1]
         vy_w = Vy[i, j]
         vy_e = Vy[i + 1, j]
-        vy_ne = Vy[i + 1, j + 1]
 
         if i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
             _dy_vx = @dy(_di_vx, j)
@@ -32,6 +30,8 @@
         end
 
         if i ≤ size(∇V, 1) && j ≤ size(∇V, 2)
+            vx_ne = Vx[i + 1, j + 1]
+            vy_ne = Vy[i + 1, j + 1]
             _dx, _dy = @dxi(_di_vertex, i, j)
 
             dVx_dx = (vx_ne - vx_n) * _dx

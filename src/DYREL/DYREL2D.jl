@@ -118,6 +118,7 @@ function _solve_DYREL!(
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
+    err_evo_tot = Float64[]
     err_evo_V = Float64[]
     err_evo_P = Float64[]
     err_evo_it = Float64[]
@@ -188,6 +189,7 @@ function _solve_DYREL!(
             dt,
             args,
         )
+
         # Residual check
         errVx = norm_mpi(stokes.R.Rx) / √((nx_g() - 2) * (ny_g() - 1))
         errVy = norm_mpi(stokes.R.Ry) / √((nx_g() - 1) * (ny_g() - 2))
@@ -243,6 +245,13 @@ function _solve_DYREL!(
             )
             vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
 
+            # Deviatoric stress
+            compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
+            # update_halo!(stokes.λv)
+            # update_halo!(stokes.τ.xx_v)
+            # update_halo!(stokes.τ.yy_v)
+            # update_halo!(stokes.τ.xy)
+
             compute_residual_P!(
                 stokes.R.RP,
                 stokes.P,
@@ -255,13 +264,6 @@ function _solve_DYREL!(
                 dt,
                 args,
             )
-
-            # Deviatoric stress
-            compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
-            # update_halo!(stokes.λv)
-            # update_halo!(stokes.τ.xx_v)
-            # update_halo!(stokes.τ.yy_v)
-            # update_halo!(stokes.τ.xy)
 
             if !linear_viscosity
                 update_viscosity_τII!(
@@ -314,6 +316,7 @@ function _solve_DYREL!(
                 )
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
+                push!(err_evo_tot, err)
                 push!(err_evo_V, errVx / errVx00)
                 push!(err_evo_P, errPt / errPt0)
                 push!(err_evo_it, iter)
@@ -344,6 +347,9 @@ function _solve_DYREL!(
         iter > total_iterMax && break
     end
 
+    # absorb plastic pressure correction into P (mirrors APT: stokes.P .= θ = P + ΔPψ)
+    @. stokes.P += stokes.ΔPψ
+
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.xy, @velocity(stokes)..., _di.velocity[1], _di.velocity[2]
@@ -356,6 +362,7 @@ function _solve_DYREL!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
@@ -363,7 +370,7 @@ function _solve_DYREL!(
     stokes.τ_o.yy_v .= stokes.τ.yy_v
 
 
-    return (; err_evo_it, err_evo_V, err_evo_P)
+    return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
 
 end
 

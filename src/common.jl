@@ -72,7 +72,7 @@ export subgrid_characteristic_time!
 
 include("Interpolations.jl")
 export vertex2center!,
-    center2vertex!, temperature2center!, velocity2vertex!, velocity2center!, shear2center!
+    center2vertex!, velocity2vertex!, velocity2center!, shear2center!
 
 include("advection/weno5.jl")
 export WENO_advection!
@@ -85,9 +85,10 @@ export update_phases_given_markerchain!
 include("rheology/GeoParams.jl")
 
 include("rheology/StressUpdate.jl")
+export compute_yieldfunction_phase, compute_plastic_gradients_phase
 
 include("stokes/StressKernels.jl")
-export tensor_invariant!, accumulate_tensor!
+export tensor_invariant!, accumulate_tensor!, accumulate_vol!
 
 include("stokes/PrincipalStresses.jl")
 export compute_principal_stresses, compute_principal_stresses!, PrincipalStress

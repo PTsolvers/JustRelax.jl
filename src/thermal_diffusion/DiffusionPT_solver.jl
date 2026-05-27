@@ -1,3 +1,13 @@
+"""
+    heatdiffusion_PT!(thermal, args...; kwargs...)
+
+Dispatch pseudo-transient thermal diffusion to the backend associated with
+`thermal`.
+
+See the `_heatdiffusion_PT!` methods below for the supported argument groups:
+constant `K` and `ρCp` fields, or rheology-driven properties with optional phase
+ratios and Stokes fields for adiabatic heating.
+"""
 function heatdiffusion_PT!(thermal, args...; kwargs)
     return heatdiffusion_PT!(backend(thermal), thermal, args...; kwargs = kwargs)
 end
@@ -7,9 +17,19 @@ function heatdiffusion_PT!(::CPUBackendTrait, thermal, args...; kwargs)
 end
 
 """
-    heatdiffusion_PT!(thermal, pt_thermal, K, ρCp, dt, grid; iterMax, nout, verbose)
+    _heatdiffusion_PT!(thermal, pt_thermal, thermal_bc, K, ρCp, dt, grid;
+        igg, b_width, iterMax, nout, verbose)
 
-Heat diffusion solver using Pseudo-Transient iterations. Both `K` and `ρCp` are n-dimensional arrays.
+Solve the heat equation with pseudo-transient iterations using precomputed,
+cell-centered material properties.
+
+`K` is the thermal conductivity field and `ρCp` is the volumetric heat-capacity
+field on the thermal grid. `pt_thermal` supplies the pseudo-transient
+coefficients, `thermal_bc` applies the temperature boundary conditions after
+each update, and `grid` provides metric terms and halo layout.
+
+Returns a named tuple containing the iteration numbers and residual norms
+sampled every `nout` iterations.
 """
 function _heatdiffusion_PT!(
         thermal::JustRelax.ThermalArrays,
@@ -31,9 +51,9 @@ function _heatdiffusion_PT!(
     _di = grid._di
     _dt = inv(dt)
 
-    _sq_len_RT = inv(sqrt((nx_g() + 1) * (ny_g() + 1) * (nz_g() + (nz_g() > 1))))
     ϵ = pt_thermal.ϵ
-    ni = size(thermal.Tc)
+    ni = size(thermal.H)
+    _sq_len_RT = inv(sqrt(prod(ni)))
     @copy thermal.Told thermal.T
 
     # errors
@@ -56,11 +76,23 @@ function _heatdiffusion_PT!(
         wtime0 += @elapsed begin
             if length(ni) == 2
                 @parallel flux_range(ni...) compute_flux!(
-                    @qT(thermal)..., @qT2(thermal)..., thermal.T, K, pt_thermal.θr_dτ, _di.vertex
+                    @qT(thermal)...,
+                    @qT2(thermal)...,
+                    thermal.T,
+                    K,
+                    pt_thermal.θr_dτ,
+                    _di.center,
+                    thermal_bc.constant_flux,
                 )
             else
                 @parallel flux_range(ni...) compute_flux!(
-                    @qT(thermal)..., @qT2(thermal)..., thermal.T, K, pt_thermal.θr_dτ, _di.center
+                    @qT(thermal)...,
+                    @qT2(thermal)...,
+                    thermal.T,
+                    K,
+                    pt_thermal.θr_dτ,
+                    _di.center,
+                    thermal_bc.constant_flux,
                 )
             end
             update_T(
@@ -113,8 +145,6 @@ function _heatdiffusion_PT!(
     end
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
-    temperature2center!(thermal)
-
     return (iter_count = iter_count, norm_ResT = norm_ResT)
 end
 
@@ -128,14 +158,25 @@ function _heatdiffusion_PT!(
         di::Union{NTuple{N, <:Real}, NamedTuple};
         kwargs...,
     ) where {N}
-    grid = JustRelax.legacy_uniform_grid(size(thermal.Tc), di)
-    return _heatdiffusion_PT!(thermal, pt_thermal, thermal_bc, K, ρCp, dt, grid; kwargs...)
+    grid = JustRelax.legacy_uniform_grid(size(thermal.H), di)
+    return _heatdiffusion_PT!(thermal, pt_thermal, thermal_bc, K, ρCp, dt, grid; kwargs.data...)
 end
 
 """
-    heatdiffusion_PT!(thermal, pt_thermal, rheology, dt, grid; iterMax, nout, verbose)
+    _heatdiffusion_PT!(thermal, pt_thermal, thermal_bc, rheology, args, dt, grid;
+        igg, phase, stokes, b_width, iterMax, nout, verbose)
 
-Heat diffusion solver using Pseudo-Transient iterations.
+Solve the heat equation with pseudo-transient iterations using thermal
+properties derived from `rheology`.
+
+`args` is a named tuple of thermodynamic fields sampled at thermal-cell centers,
+typically including `T` and `P`. When `phase` is provided, pseudo-transient
+coefficients are recomputed from the local phase ratios each iteration. When
+`stokes` is provided, `thermal.adiabatic` is refreshed before the iteration loop
+to include the adiabatic heating contribution.
+
+Returns a named tuple containing the sampled iteration counts and residual
+history.
 """
 function _heatdiffusion_PT!(
         thermal::JustRelax.ThermalArrays,
@@ -160,14 +201,14 @@ function _heatdiffusion_PT!(
     di = grid.di
     _di = grid._di
     _dt = inv(dt)
-    _sq_len_RT = inv(sqrt((nx_g() + 1) * (ny_g() + 1) * (nz_g() + (nz_g() > 1))))
     ϵ = pt_thermal.ϵ
-    ni = size(thermal.Tc)
+    ni = size(thermal.H)
+    _sq_len_RT = inv(sqrt(prod(ni)))
     @copy thermal.Told thermal.T
     !isnothing(phase) && update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
 
     # compute constant part of the adiabatic heating term
-    adiabatic_heating!(thermal, stokes, rheology, phases, _dt,  grid)
+    adiabatic_heating!(thermal, stokes, rheology, phases, _dt, grid)
 
     # errors
     iter_count = Int64[]
@@ -196,8 +237,9 @@ function _heatdiffusion_PT!(
                     rheology,
                     phases,
                     pt_thermal.θr_dτ,
-                    _di.vertex,
+                    _di.center,
                     args,
+                    thermal_bc.constant_flux,
                 )
             else
                 @parallel flux_range(ni...) compute_flux!(
@@ -209,6 +251,7 @@ function _heatdiffusion_PT!(
                     pt_thermal.θr_dτ,
                     _di.center,
                     args,
+                    thermal_bc.constant_flux,
                 )
             end
             update_T(
@@ -220,7 +263,7 @@ function _heatdiffusion_PT!(
                 pt_thermal,
                 thermal_bc.dirichlet,
                 _dt,
-                _di.vertex,
+                _di.center,
                 ni,
                 args,
             )
@@ -247,7 +290,7 @@ function _heatdiffusion_PT!(
                     phases,
                     thermal_bc.dirichlet,
                     _dt,
-                    _di.vertex,
+                    _di.center,
                     args,
                 )
             end
@@ -269,8 +312,6 @@ function _heatdiffusion_PT!(
     end
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
-    temperature2center!(thermal)
-
     return (iter_count = iter_count, norm_ResT = norm_ResT)
 end
 
@@ -284,15 +325,15 @@ function _heatdiffusion_PT!(
         di::Union{NTuple{N, <:Real}, NamedTuple};
         kwargs...,
     ) where {N}
-    grid = JustRelax.legacy_uniform_grid(size(thermal.Tc), di)
+    grid = JustRelax.legacy_uniform_grid(size(thermal.H), di)
     return _heatdiffusion_PT!(thermal, pt_thermal, thermal_bc, rheology, args, dt, grid; kwargs...)
 end
 
-@inline flux_range(nx, ny) = @idx (nx + 3, ny + 1)
-@inline flux_range(nx, ny, nz) = @idx (nx, ny, nz)
+@inline flux_range(nx, ny) = @idx (nx + 1, ny + 1)
+@inline flux_range(nx, ny, nz) = @idx (nx + 1, ny + 1, nz + 1)
 
-@inline update_range(nx, ny) = @idx (nx + 1, ny - 1)
-@inline update_range(nx, ny, nz) = residual_range(nx, ny, nz)
+@inline update_range(nx, ny) = @idx (nx, ny)
+@inline update_range(nx, ny, nz) = @idx (nx, ny, nz)
 
 @inline residual_range(nx, ny) = update_range(nx, ny)
-@inline residual_range(nx, ny, nz) = @idx (nx - 1, ny - 1, nz - 1)
+@inline residual_range(nx, ny, nz) = update_range(nx, ny, nz)

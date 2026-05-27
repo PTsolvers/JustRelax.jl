@@ -5,6 +5,15 @@
 
 # update_pt_thermal_arrays!(::Vararg{Any,N}) where {N} = nothing
 
+"""
+    update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)
+
+Recompute the pseudo-transient thermal coefficient arrays stored in
+`pt_thermal` from phase-weighted material properties.
+
+This helper is used by the pseudo-transient thermal solver when the local phase
+mixture changes over time.
+"""
 function update_pt_thermal_arrays!(
         pt_thermal, phase_ratios::JustPIC.PhaseRatios, rheology, args, _dt
     )
@@ -29,7 +38,7 @@ end
 end
 
 @inline function compute_phase(fn::F, rheology, phase::Int) where {F}
-    return fn(rheology, phase, args)
+    return fn(rheology, phase)
 end
 
 @inline function compute_phase(fn::F, rheology, phase::SVector, args) where {F}
@@ -46,7 +55,7 @@ end
 @inline Base.@propagate_inbounds function getindex_phase(
         phase::AbstractArray, I::Vararg{Int, N}
     ) where {N}
-    return phase[I...]
+    return @cell phase[I...]
 end
 
 @inline getindex_phase(::Nothing, I::Vararg{Int, N}) where {N} = nothing
@@ -113,10 +122,30 @@ end
 
 # α
 
+"""
+    compute_α(rheology, phase)
+
+Return the thermal expansivity `α` used by the adiabatic heating kernels.
+
+`phase` can be a single phase index, `nothing`, or a phase-ratio vector. In the
+latter case the result is phase-weighted.
+"""
 function compute_α(rheology, phase::SArray)
     return fn_ratio(get_α, rheology, phase)
 end
 
 function compute_α(rheology, phase::Union{Int, Nothing})
     return compute_phase(get_α, rheology, phase)
+end
+
+function compute_radioactive_heating(rheology, phase::SArray)
+    return fn_ratio(compute_radioactive_heat, rheology, phase)
+end
+
+function compute_radioactive_heating(rheology, phase::Union{Int, Nothing})
+    if isempty(rheology.RadioactiveHeat)
+        return 0.0e0
+    else
+        compute_phase(compute_radioactive_heat, rheology, phase)
+    end
 end

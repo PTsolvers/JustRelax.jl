@@ -17,7 +17,7 @@ end
 
 using JustPIC, JustPIC._2D
 const backend = @static if isCUDA
-    JustPIC.CUDABackend
+    CUDABackend
 else
     JustPIC.CPUBackend
 end

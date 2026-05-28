@@ -3,10 +3,10 @@
 @inline get_phase(x::JustPIC.PhaseRatios) = x.center
 @inline get_phase(x) = x
 
+@inline get_phase_fluxes(x) = x, x
 @inline get_phase_fluxes(x::JustPIC.PhaseRatios) = get_phase_fluxes(x, dims_ratios(x))
 @inline get_phase_fluxes(x::JustPIC.PhaseRatios, ::Val{2}) = x.Vx, x.Vy
 @inline get_phase_fluxes(x::JustPIC.PhaseRatios, ::Val{3}) = x.Vx, x.Vy, x.Vz
-@inline get_phase_fluxes(x, ::Val{0}) = x
 
 @inline dims_ratios(x::JustPIC.PhaseRatios) = Val(length(size(x.center)))
 @inline dims_ratios(x) = Val(0)

@@ -1,6 +1,5 @@
 push!(LOAD_PATH, "..")
 
-ENV["JULIA_JUSTRELAX_BACKEND"] = "1"
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -474,6 +473,6 @@ end
 
         nx_T, ny_T = size(thermal.T)
         @test Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1.4134 rtol = 1.0e-2
-        @test Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.098 rtol = 1.0e-2
+        @test Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.0987 rtol = 1.0e-2
     end
 end

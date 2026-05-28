@@ -206,7 +206,6 @@ function _heatdiffusion_PT!(
     ni = size(thermal.H)
     _sq_len_RT = inv(sqrt(prod(ni)))
     @copy thermal.Told thermal.T
-    # !isnothing(phase) && update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
 
     # compute constant part of the adiabatic heating term
     adiabatic_heating!(thermal, stokes, rheology, phases, _dt)

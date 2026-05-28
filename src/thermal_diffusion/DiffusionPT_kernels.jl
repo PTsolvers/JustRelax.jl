@@ -368,7 +368,8 @@ end
         qTy2,
         T,
         rheology,
-        phase,
+        phase_ratios_qx,
+        phase_ratios_qy,
         θr_dτ,
         _di_center,
         args,
@@ -388,12 +389,12 @@ end
             T_ij = (T[i, j + 1] + T[i + 1, j + 1]) * 0.5
 
             ii, jj = iL, j
-            phase_ij = getindex_phase(phase, ii, jj)
+            phase_ij = getindex_phase(phase_ratios_qx, ii, jj)
             args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
             K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
             ii, jj = iR, j
-            phase_ij = getindex_phase(phase, ii, jj)
+            phase_ij = getindex_phase(phase_ratios_qy, ii, jj)
             args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
             K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
             K = (K1 + K2) * 0.5
@@ -416,12 +417,12 @@ end
             T_ij = (T[i + 1, j] + T[i + 1, j + 1]) * 0.5
 
             ii, jj = i, jB
-            phase_ij = getindex_phase(phase, ii, jj)
+            phase_ij = getindex_phase(phase_ratios_qy, ii, jj)
             args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
             K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
             ii, jj = i, jT
-            phase_ij = getindex_phase(phase, ii, jj)
+            phase_ij = getindex_phase(phase_ratios_qy, ii, jj)
             args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
             K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
             K = (K1 + K2) * 0.5

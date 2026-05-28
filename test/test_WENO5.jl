@@ -271,7 +271,6 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
 
     end
 
-
     finalize_global_grid(; finalize_MPI = true)
 
     return iters

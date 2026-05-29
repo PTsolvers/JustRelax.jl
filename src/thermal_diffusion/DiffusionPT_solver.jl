@@ -195,7 +195,7 @@ function _heatdiffusion_PT!(
         verbose = true,
         kwargs...,
     )
-    
+
     # Compute some constant stuff
     di = grid.di
     _di = grid._di
@@ -232,7 +232,7 @@ function _heatdiffusion_PT!(
         wtime0 += @elapsed begin
             !isnothing(phase) &&
                 update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
-            
+
             @parallel flux_range(ni...) compute_flux!(
                 @qT(thermal)...,
                 @qT2(thermal)...,

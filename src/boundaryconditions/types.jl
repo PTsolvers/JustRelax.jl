@@ -71,15 +71,15 @@ struct TemperatureBoundaryConditions{T1, T2, T3, T4, D, nD} <: AbstractBoundaryC
             periodic::T4 = (left = false, right = false, top = false, bot = false),
             dirichlet = (; constant = nothing, mask = nothing),
         ) where {T1, T2, T3, T4}
-        
+
         @inline get_dimension(::NTuple{4, Bool}) = 2
         @inline get_dimension(::NTuple{6, Bool}) = 3
-        
+
         D = Dirichlet(dirichlet)
         nD = get_dimension(values(no_flux))
 
-        # expand to 3D 
-        dummy = (; front=false, back=false)
+        # expand to 3D
+        dummy = (; front = false, back = false)
 
         no_flux_exp = merge(dummy, no_flux)
         constant_flux_exp = merge(dummy, constant_flux)

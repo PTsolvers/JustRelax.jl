@@ -3,15 +3,10 @@
 @inline get_phase(x::JustPIC.PhaseRatios) = x.center
 @inline get_phase(x) = x
 
-@inline get_phase_fluxes(x) = x, x
-@inline get_phase_fluxes(x::JustPIC.PhaseRatios) = get_phase_fluxes(x, dims_ratios(x))
-@inline get_phase_fluxes(x::JustPIC.PhaseRatios, ::Val{2}) = x.Vx, x.Vy
-@inline get_phase_fluxes(x::JustPIC.PhaseRatios, ::Val{3}) = x.Vx, x.Vy, x.Vz
-
-@inline dims_ratios(x::JustPIC.PhaseRatios) = Val(length(size(x.center)))
-@inline dims_ratios(x) = Val(0)
-
-# update_pt_thermal_arrays!(::Vararg{Any,N}) where {N} = nothing
+@inline get_phase_fluxes(x::JustPIC.PhaseRatios, ::NTuple{2}) = x.Vx, x.Vy
+@inline get_phase_fluxes(x, ::NTuple{2}) = x, x
+@inline get_phase_fluxes(x::JustPIC.PhaseRatios, ::NTuple{3}) = x.Vx, x.Vy, x.Vz
+@inline get_phase_fluxes(x, ::NTuple{3}) = x, x, x
 
 """
     update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)

@@ -195,9 +195,7 @@ function _heatdiffusion_PT!(
         verbose = true,
         kwargs...,
     )
-    phases = get_phase(phase)
-    phase_flux = get_phase_fluxes(phase)
-
+    
     # Compute some constant stuff
     di = grid.di
     _di = grid._di
@@ -206,6 +204,10 @@ function _heatdiffusion_PT!(
     ni = size(thermal.H)
     _sq_len_RT = inv(sqrt(prod(ni)))
     @copy thermal.Told thermal.T
+
+    phases = get_phase(phase)
+    phase_flux = get_phase_fluxes(phase, ni)
+
 
     # compute constant part of the adiabatic heating term
     adiabatic_heating!(thermal, stokes, rheology, phases, _dt)

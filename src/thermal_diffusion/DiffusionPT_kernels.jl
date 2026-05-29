@@ -69,7 +69,9 @@ end
         qTz2,
         T,
         rheology,
-        phase,
+        phase_ratios_qx,
+        phase_ratios_qy,
+        phase_ratios_qz,
         θr_dτ,
         _di,
         args,
@@ -93,8 +95,8 @@ end
             args_L = (; getindex_NamedTuple(args, iL, j, k)..., T = T_ijk)
             args_R = (; getindex_NamedTuple(args, iR, j, k)..., T = T_ijk)
             K = (
-                get_K(getindex_phase(phase, iL, j, k), args_L) +
-                    get_K(getindex_phase(phase, iR, j, k), args_R)
+                get_K(getindex_phase(phase_ratios_qx, iL, j, k), args_L) +
+                    get_K(getindex_phase(phase_ratios_qx, iR, j, k), args_R)
             ) * 0.5
             θx = (θr_dτ[iL, j, k] + θr_dτ[iR, j, k]) * 0.5
 
@@ -117,8 +119,8 @@ end
             args_F = (; getindex_NamedTuple(args, i, jF, k)..., T = T_ijk)
             args_B = (; getindex_NamedTuple(args, i, jB, k)..., T = T_ijk)
             K = (
-                get_K(getindex_phase(phase, i, jF, k), args_F) +
-                    get_K(getindex_phase(phase, i, jB, k), args_B)
+                get_K(getindex_phase(phase_ratios_qy, i, jF, k), args_F) +
+                    get_K(getindex_phase(phase_ratios_qy, i, jB, k), args_B)
             ) * 0.5
             θy = (θr_dτ[i, jF, k] + θr_dτ[i, jB, k]) * 0.5
 
@@ -141,8 +143,8 @@ end
             args_B = (; getindex_NamedTuple(args, i, j, kB)..., T = T_ijk)
             args_T = (; getindex_NamedTuple(args, i, j, kT)..., T = T_ijk)
             K = (
-                get_K(getindex_phase(phase, i, j, kB), args_B) +
-                    get_K(getindex_phase(phase, i, j, kT), args_T)
+                get_K(getindex_phase(phase_ratios_qz, i, j, kB), args_B) +
+                    get_K(getindex_phase(phase_ratios_qz, i, j, kT), args_T)
             ) * 0.5
             θz = (θr_dτ[i, j, kB] + θr_dτ[i, j, kT]) * 0.5
 

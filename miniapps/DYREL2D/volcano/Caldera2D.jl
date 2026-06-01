@@ -213,19 +213,29 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
+    Ttop = 20 + 273
+    Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
-    @views thermal.T[2:(end - 1), 2:(end - 1)] .= PTArray(backend)(T_GMG[1:ni[1], 1:ni[2]])
+    vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
+    )
+    thermal_bcs!(thermal, thermal_bc)
+    # ----------------------------------------------------
 
+    # TEMPERATURE PROFILE --------------------------------
+    thermal = ThermalArrays(backend, ni)
+    vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
+    T_air = 273.0e0
+    Tbot = maximum(T_GMG)
     # Add thermal anomaly BC's
     T_chamber = 1223.0e0
-    T_air = 273.0e0
     Ω_T = @zeros(size(thermal.T)...)
     thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, 4, air_phase)
-    # JustRelax.DirichletBoundaryCondition(Ω_T)
-
     thermal_bc = TemperatureBoundaryConditions(;
-        no_flux = (; left = true, right = true, top = false, bot = false),
-        # dirichlet    = (; mask = Ω_T)
+        no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = T_air, bot = Tbot),
     )
     thermal_bcs!(thermal, thermal_bc)
     # ----------------------------------------------------

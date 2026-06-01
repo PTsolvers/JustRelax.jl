@@ -110,7 +110,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     Ttop = 20 + 273
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
-    vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x=true, ghost_y=true)
+    vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),

@@ -342,7 +342,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     dt₀ = similar(stokes.P)
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    Told_buffer = similar(T_buffer)
     centroid2particle!(pT, T_buffer, particles)
 
     @copy stokes.P0 stokes.P
@@ -401,9 +400,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1), 2:(end - 1)]
         subgrid_diffusion_centroid!(
-            pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 

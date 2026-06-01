@@ -352,9 +352,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     end
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, T_buffer, particles)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
@@ -439,14 +437,12 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                 verbose = true,
             )
         )
-        @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
         subgrid_diffusion_centroid!(
-            pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
         compute_melt_fraction!(

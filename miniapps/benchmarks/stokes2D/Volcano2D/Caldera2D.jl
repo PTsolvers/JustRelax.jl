@@ -290,9 +290,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     end
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    Told_buffer .= T_buffer
     centroid2particle!(pT, T_buffer, particles)
 
     ## Plot initial T and P profile
@@ -410,9 +408,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
         subgrid_diffusion_centroid!(
-            pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 

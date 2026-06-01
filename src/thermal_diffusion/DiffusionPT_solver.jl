@@ -195,7 +195,6 @@ function _heatdiffusion_PT!(
         verbose = true,
         kwargs...,
     )
-    phases = get_phase(phase)
 
     # Compute some constant stuff
     di = grid.di
@@ -205,10 +204,13 @@ function _heatdiffusion_PT!(
     ni = size(thermal.H)
     _sq_len_RT = inv(sqrt(prod(ni)))
     @copy thermal.Told thermal.T
-    !isnothing(phase) && update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
+
+    phases = get_phase(phase)
+    phase_flux = get_phase_fluxes(phase, ni)
+
 
     # compute constant part of the adiabatic heating term
-    adiabatic_heating!(thermal, stokes, rheology, phases, _dt, grid)
+    adiabatic_heating!(thermal, stokes, rheology, phases, _dt)
 
     # errors
     iter_count = Int64[]
@@ -228,32 +230,20 @@ function _heatdiffusion_PT!(
 
     while err > ϵ && iter < iterMax
         wtime0 += @elapsed begin
-            update_thermal_coeffs!(pt_thermal, rheology, phase, args, dt)
-            if length(ni) == 2
-                @parallel flux_range(ni...) compute_flux!(
-                    @qT(thermal)...,
-                    @qT2(thermal)...,
-                    thermal.T,
-                    rheology,
-                    phases,
-                    pt_thermal.θr_dτ,
-                    _di.center,
-                    args,
-                    thermal_bc.constant_flux,
-                )
-            else
-                @parallel flux_range(ni...) compute_flux!(
-                    @qT(thermal)...,
-                    @qT2(thermal)...,
-                    thermal.T,
-                    rheology,
-                    phases,
-                    pt_thermal.θr_dτ,
-                    _di.center,
-                    args,
-                    thermal_bc.constant_flux,
-                )
-            end
+            !isnothing(phase) &&
+                update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
+
+            @parallel flux_range(ni...) compute_flux!(
+                @qT(thermal)...,
+                @qT2(thermal)...,
+                thermal.T,
+                rheology,
+                phase_flux...,
+                pt_thermal.θr_dτ,
+                grid._di.center,
+                args,
+                thermal_bc.constant_flux,
+            )
             update_T(
                 nothing,
                 b_width,
@@ -263,15 +253,14 @@ function _heatdiffusion_PT!(
                 pt_thermal,
                 thermal_bc.dirichlet,
                 _dt,
-                _di.center,
+                _di.vertex,
                 ni,
                 args,
             )
             thermal_bcs!(thermal, thermal_bc)
             update_halo!(thermal.T)
 
-            !isnothing(phase) &&
-                update_pt_thermal_arrays!(pt_thermal, phase, rheology, args, _dt)
+
         end
 
         iter += 1
@@ -290,7 +279,7 @@ function _heatdiffusion_PT!(
                     phases,
                     thermal_bc.dirichlet,
                     _dt,
-                    _di.center,
+                    _di.vertex,
                     args,
                 )
             end
@@ -332,8 +321,5 @@ end
 @inline flux_range(nx, ny) = @idx (nx + 1, ny + 1)
 @inline flux_range(nx, ny, nz) = @idx (nx + 1, ny + 1, nz + 1)
 
-@inline update_range(nx, ny) = @idx (nx, ny)
-@inline update_range(nx, ny, nz) = @idx (nx, ny, nz)
-
-@inline residual_range(nx, ny) = update_range(nx, ny)
-@inline residual_range(nx, ny, nz) = update_range(nx, ny, nz)
+@inline residual_range(nx, ny) = @idx (nx, ny)
+@inline residual_range(nx, ny, nz) = @idx (nx, ny, nz)

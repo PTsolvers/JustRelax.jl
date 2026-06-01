@@ -341,9 +341,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     t, it = 0.0, 0
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    Told_buffer = similar(T_buffer)
     dt₀ = similar(stokes.P)
-    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, T_buffer, particles)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
@@ -428,14 +426,12 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
                 verbose = true,
             )
         )
-        @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
-        @views Told_buffer .= thermal.ΔT[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, Told_buffer, subgrid_arrays, particles, dt
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
         compute_melt_fraction!(
@@ -477,6 +473,6 @@ end
 
         nx_T, ny_T = size(thermal.T)
         @test Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1.4134 rtol = 1.0e-2
-        @test Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.098 rtol = 1.0e-2
+        @test Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.0987 rtol = 1.0e-2
     end
 end

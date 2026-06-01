@@ -21,7 +21,6 @@ else
     CPUBackend
 end
 
-
 using GeoParams
 
 # HELPER FUNCTIONS ---------------------------------------------------------------

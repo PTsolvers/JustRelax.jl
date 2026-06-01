@@ -82,13 +82,12 @@ We need to copy the thermal field from the [GeophysicalModelGenerator.jl](https:
 Ttop             = 20 + 273
 Tbot             = maximum(T_GMG)
 thermal          = ThermalArrays(backend, ni)
-@views thermal.T[2:end-1, :] .= PTArray(backend)(T_GMG)
+vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
 thermal_bc       = TemperatureBoundaryConditions(;
     no_flux      = (left = true, right = true, top = false, bot = false),
+    constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
 )
 thermal_bcs!(thermal, thermal_bc)
-@views thermal.T[:, end] .= Ttop
-@views thermal.T[:, 1]   .= Tbot
 ```
 
 ## Instantiate Stokes arrays

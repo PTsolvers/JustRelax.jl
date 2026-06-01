@@ -222,9 +222,9 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         # Advection ---------------------
         WENO_advection!(phases, (Vx_c, Vy_c), weno_c, di, dt)
         WENO_advection!(phases_blob, (Vx_c, Vy_c), weno_c, di, dt)
-WENO_advection!(phases, (Vx_c, Vy_c), weno, di, dt)
-WENO_advection!(phases_blob, (Vx_c, Vy_c), weno, di, dt)
-WENO_advection!(phases_bg, (Vx_c, Vy_c), weno, di, dt)
+        WENO_advection!(phases, (Vx_c, Vy_c), weno, di, dt)
+        WENO_advection!(phases_blob, (Vx_c, Vy_c), weno, di, dt)
+        WENO_advection!(phases_bg, (Vx_c, Vy_c), weno, di, dt)
 
         # update phase ratios
         update_phase_ratios_2D!(phase_ratios, (phases_bg, phases_blob), xci, xvi)

@@ -116,8 +116,6 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
     thermal_bcs!(thermal, thermal_bc)
-    @views thermal.T[:, end - 1] .= Ttop
-    @views thermal.T[:, 2] .= Tbot
     # ----------------------------------------------------
 
     # Buoyancy forces

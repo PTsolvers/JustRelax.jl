@@ -4,23 +4,11 @@ const backend_JR = CPUBackend
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-
 using GeoParams
 using JustPIC, JustPIC._2D
 const backend = JustPIC.CPUBackend
 
 distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
-
-@parallel_indices (i, j) function init_T!(T, z)
-    if z[j] == maximum(z)
-        T[i + 1, j + 1] = 300.0
-    elseif z[j] == minimum(z)
-        T[i + 1, j + 1] = 3500.0
-    else
-        T[i + 1, j + 1] = z[j] * (1900.0 - 1600.0) / minimum(z) + 1600.0
-    end
-    return nothing
-end
 
 @parallel_indices (i, j) function init_T!(T, z, ly)
     T[i, j + 1] = -z[j] * (1900.0 - 1600.0) / ly + 1600.0
@@ -64,6 +52,13 @@ function init_phases!(phases, particles, xc, yc, r)
 
     return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, center, r)
 end
+
+nx = 32
+ny = 32
+lx = 100.0e3
+ly = 100.0e3
+Cp0 = 1.2e3
+K0 = 3.0
 
 function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e3, K0 = 3.0)
     kyr = 1.0e3 * 3600 * 24 * 365.25
@@ -110,7 +105,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
-    @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2])
+    @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2], li)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation

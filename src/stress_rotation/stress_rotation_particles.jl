@@ -31,19 +31,19 @@ end
 @parallel_indices (I...) function compute_vorticity!(
         ωyz, ωxz, ωxy, Vx, Vy, Vz, _di
     )
-
-    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _di, I...)
-    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _di, I...)
-    Base.@propagate_inbounds @inline dz(A) = _d_za(A, _di, I...)
+    _dx, _dy, _dz = @dxi(_di, I...)
+    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
+    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
+    Base.@propagate_inbounds @inline dz(A) = _d_za(A, _dz, I...)
 
     if all(I .≤ size(ωyz))
-        @inbounds ωyz[I...] = 0.5 * (dy(Vz, I...) - dz(Vy, I...))
+        @inbounds ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
     end
     if all(I .≤ size(ωxz))
-        @inbounds ωxz[I...] = 0.5 * (dz(Vx, I...) - dx(Vz, I...))
+        @inbounds ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
     end
     if all(I .≤ size(ωxy))
-        @inbounds ωxy[I...] = 0.5 * (dx(Vy, I...) - dy(Vx, I...))
+        @inbounds ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
     end
 
     return nothing

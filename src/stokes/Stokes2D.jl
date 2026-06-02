@@ -840,7 +840,7 @@ function _solve!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.xy, @velocity(stokes)..., _di.velocity[1], _di.velocity[2]
+        stokes.ω.xy, @velocity(stokes)..., _di.velocity...
     )
 
     # Interpolate shear components to cell center arrays

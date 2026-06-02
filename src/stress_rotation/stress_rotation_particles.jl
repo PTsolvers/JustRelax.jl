@@ -4,7 +4,7 @@ using StaticArrays
 
 function compute_vorticity!(stokes::JustRelax.StokesArrays, _di, ni, ::Val{2})
     return @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.xy, @velocity(stokes)..., _di.velocity[1], _di.velocity[2]
+        stokes.ω.xy, @velocity(stokes)..., _di.velocity...
     )
 end
 
@@ -16,12 +16,12 @@ end
 
 @parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _di_vx, _di_vy)
 
-    Base.@propagate_inbounds @inline dx(A, I::Vararg{Int, 2}) = _d_xa(A, _dx, I...)
-    Base.@propagate_inbounds @inline dy(A, I::Vararg{Int, 2}) = _d_ya(A, _dy, I...)
-
     i, j = I
-    _dx = @dx(_di_vy, i)
-    _dy = @dy(_di_vx, j)
+    _dx = JR.@dx(_di_vy, i)
+    _dy = JR.@dy(_di_vx, j)
+
+    Base.@propagate_inbounds @inline dx(A, I::Vararg{Int, 2}) = JR._d_xa(A, _dx, I...)
+    Base.@propagate_inbounds @inline dy(A, I::Vararg{Int, 2}) = JR._d_ya(A, _dy, I...)
 
     @inbounds ωxy[I...] = 0.5 * (dx(Vy, I...) - dy(Vx, I...))
 

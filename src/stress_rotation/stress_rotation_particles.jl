@@ -2,14 +2,28 @@ using StaticArrays
 
 # Vorticity tensor
 
+function compute_vorticity!(stokes::JustRelax.StokesArrays, _di, ni, ::Val{2})
+    return @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.xy, @velocity(stokes)..., _di.velocity[1], _di.velocity[2]
+    )
+end
+
+function compute_vorticity!(stokes::JustRelax.StokesArrays, _di, ni, ::Val{3})
+    return @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di.velocity...
+    )
+end
+
 @parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _di_vx, _di_vy)
+
+    Base.@propagate_inbounds @inline dx(A, I::Vararg{Int, 2}) = _d_xa(A, _dx, I...)
+    Base.@propagate_inbounds @inline dy(A, I::Vararg{Int, 2}) = _d_ya(A, _dy, I...)
+
     i, j = I
     _dx = @dx(_di_vy, i)
     _dy = @dy(_di_vx, j)
-    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
-    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
 
-    @inbounds ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+    @inbounds ωxy[I...] = 0.5 * (dx(Vy, I...) - dy(Vx, I...))
 
     return nothing
 end
@@ -17,19 +31,61 @@ end
 @parallel_indices (I...) function compute_vorticity!(
         ωyz, ωxz, ωxy, Vx, Vy, Vz, _di
     )
-    _dx, _dy, _dz = @dxi(_di, I...)
-    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
-    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
-    Base.@propagate_inbounds @inline dz(A) = _d_za(A, _dz, I...)
+
+    Base.@propagate_inbounds @inline dx(A, I::Vararg{Int, 3}) = _d_xa(A, _dx, I...)
+    Base.@propagate_inbounds @inline dy(A, I::Vararg{Int, 3}) = _d_ya(A, _dy, I...)
+    Base.@propagate_inbounds @inline dz(A, I::Vararg{Int, 3}) = _d_za(A, _dz, I...)
 
     if all(I .≤ size(ωyz))
-        @inbounds ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
+        i, j, k = I
+        _dx = @dx(_di_vy, i)
+        _dy = @dy(_di_vx, j)
+        _dz = @dz(_di_vz, k)
+        @inbounds ωyz[I...] = 0.5 * (dy(Vz, I...) - dz(Vy, I...))
     end
     if all(I .≤ size(ωxz))
-        @inbounds ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
+        i, j, k = I
+        _dx = @dx(_di_vy, i)
+        _dy = @dy(_di_vx, j)
+        _dz = @dz(_di_vz, k)
+        @inbounds ωxz[I...] = 0.5 * (dz(Vx, I...) - dx(Vz, I...))
     end
     if all(I .≤ size(ωxy))
-        @inbounds ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+        i, j, k = I
+        _dx = @dx(_di_vy, i)
+        _dy = @dy(_di_vx, j)
+        _dz = @dz(_di_vz, k)
+        @inbounds ωxy[I...] = 0.5 * (dx(Vy, I...) - dy(Vx, I...))
+    end
+
+    return nothing
+end
+
+@parallel_indices (I...) function compute_vorticity!(
+        ωyz, ωxz, ωxy, Vx, Vy, Vz, _di_vx, _di_vy, _di_vz
+    )
+    i, j, k = I
+
+    if all(I .≤ size(ωyz))
+        _dy_vz = @dy(_di_vz, j)
+        _dz_vy = @dz(_di_vy, k)
+        ∂Vz∂y = _dy_vz * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
+        ∂Vy∂z = _dz_vy * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k])
+        @inbounds ωyz[I...] = 0.5 * (∂Vz∂y - ∂Vy∂z)
+    end
+    if all(I .≤ size(ωxz))
+        _dz_vx = @dz(_di_vx, k)
+        _dx_vz = @dx(_di_vz, i)
+        ∂Vx∂z = _dz_vx * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k])
+        ∂Vz∂x = _dx_vz * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
+        @inbounds ωxz[I...] = 0.5 * (∂Vx∂z - ∂Vz∂x)
+    end
+    if all(I .≤ size(ωxy))
+        _dx_vy = @dx(_di_vy, i)
+        _dy_vx = @dy(_di_vx, j)
+        ∂Vy∂x = _dx_vy * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
+        ∂Vx∂y = _dy_vx * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1])
+        @inbounds ωxy[I...] = 0.5 * (∂Vy∂x - ∂Vx∂y)
     end
 
     return nothing

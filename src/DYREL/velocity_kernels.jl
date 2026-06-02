@@ -1,5 +1,28 @@
 ## DIVERGENCE + DEVIATORIC STRAIN RATE TENSOR
 
+function compute_∇V_strain_rate!(stokes, _di, ni, dim)
+    @parallel (@idx ni .+ 1) compute_∇V_strain_rate!(
+        stokes.∇V,
+        @strain(stokes)...,
+        @velocity(stokes)...,
+        _di.vertex,
+        _di.velocity...
+    )
+    return interpolate_shear_ε_to_centers(stokes, dim)
+end
+
+function interpolate_shear_ε_to_centers(stokes, ::Val{2})
+    vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
+    return nothing
+end
+
+function interpolate_shear_ε_to_centers(stokes, ::Val{3})
+    vertex2center!(stokes.ε.yz_c, stokes.ε.yz)
+    vertex2center!(stokes.ε.xz_c, stokes.ε.xz)
+    vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
+    return nothing
+end
+
 @parallel_indices (i, j) function compute_∇V_strain_rate!(
         ∇V::AbstractArray{T, 2},
         εxx::AbstractArray{T, 2},
@@ -42,6 +65,74 @@
             div_third = div_ij * third
             εxx[i, j] = dVx_dx - div_third
             εyy[i, j] = dVy_dy - div_third
+        end
+    end
+
+    return nothing
+end
+
+@parallel_indices (i, j, k) function compute_∇V_strain_rate!(
+        ∇V::AbstractArray{T, 3},
+        εxx,
+        εyy,
+        εzz,
+        εyz,
+        εxz,
+        εxy,
+        Vx,
+        Vy,
+        Vz,
+        _di_vertex,
+        _di_vx,
+        _di_vy,
+        _di_vz,
+    ) where {T}
+
+    third = T(1) / T(3)
+
+    @inbounds begin
+        if all((i, j, k) .≤ size(∇V))
+            _dx, _dy, _dz = @dxi(_di_vertex, i, j, k)
+            dVx_dx = (Vx[i + 1, j + 1, k + 1] - Vx[i, j + 1, k + 1]) * _dx
+            dVy_dy = (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j, k + 1]) * _dy
+            dVz_dz = (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k]) * _dz
+            div_ijk = dVx_dx + dVy_dy + dVz_dz
+            ∇V[i, j, k] = div_ijk
+
+            div_third = div_ijk * third
+            εxx[i, j, k] = dVx_dx - div_third
+            εyy[i, j, k] = dVy_dy - div_third
+            εzz[i, j, k] = dVz_dz - div_third
+        end
+
+        if all((i, j, k) .≤ size(εyz))
+            _dz_vy = @dz(_di_vy, k)
+            _dy_vz = @dy(_di_vz, j)
+            εyz[i, j, k] =
+                0.5 * (
+                _dz_vy * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
+                    _dy_vz * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
+            )
+        end
+
+        if all((i, j, k) .≤ size(εxz))
+            _dz_vx = @dz(_di_vx, k)
+            _dx_vz = @dx(_di_vz, i)
+            εxz[i, j, k] =
+                0.5 * (
+                _dz_vx * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
+                    _dx_vz * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
+            )
+        end
+
+        if all((i, j, k) .≤ size(εxy))
+            _dy_vx = @dy(_di_vx, j)
+            _dx_vy = @dx(_di_vy, i)
+            εxy[i, j, k] =
+                0.5 * (
+                _dy_vx * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
+                    _dx_vy * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
+            )
         end
     end
 
@@ -287,6 +378,57 @@ end
         @inline
         if all(I .≤ size(dVdτ[i]))
             V[i][I .+ 1...] += dVdτ[i][I...] * βV[i][I...] * dτV[i][I...]
+        end
+    end
+
+    return nothing
+end
+
+@parallel_indices (I...) function update_V_damping_DR_V!(
+        V::NTuple{N, AbstractArray{T, N}},
+        dVdτ::NTuple{N, AbstractArray{T, N}},
+        R::NTuple{N, AbstractArray{T, N}},
+        αV::NTuple{N, AbstractArray{T, N}},
+        βV::NTuple{N, AbstractArray{T, N}},
+        dτV::NTuple{N, AbstractArray{T, N}},
+    ) where {N, T}
+
+    ntuple(Val(N)) do d
+        @inline
+        if all(I .≤ size(R[d]))
+            dVdτ[d][I...] = αV[d][I...] * dVdτ[d][I...] + R[d][I...]
+            V[d][I .+ 1...] += dVdτ[d][I...] * βV[d][I...] * dτV[d][I...]
+        end
+    end
+
+    return nothing
+end
+
+@parallel_indices (I...) function compute_dV!(
+        dV::NTuple{N, AbstractArray{T, N}},
+        dVdτ::NTuple{N, AbstractArray{T, N}},
+        βV::NTuple{N, AbstractArray{T, N}},
+        dτV::NTuple{N, AbstractArray{T, N}},
+    ) where {N, T}
+
+    ntuple(Val(N)) do d
+        @inline
+        if all(I .≤ size(dV[d]))
+            dV[d][I...] = dVdτ[d][I...] * βV[d][I...] * dτV[d][I...]
+        end
+    end
+
+    return nothing
+end
+
+@parallel_indices (I...) function update_cV!(
+        cV::NTuple{N, AbstractArray{T, N}}, cV_I
+    ) where {N, T}
+
+    ntuple(Val(N)) do d
+        @inline
+        if all(I .≤ size(cV[d]))
+            cV[d][I...] = cV_I
         end
     end
 

@@ -44,7 +44,7 @@ function _solve_DYREL!(
         phase_ratios::JustPIC.PhaseRatios,
         rheology,
         args,
-        grid::Geometry{2},
+        grid::Geometry{N},
         dt,
         igg::IGG;
         viscosity_cutoff = (-Inf, Inf),
@@ -60,35 +60,18 @@ function _solve_DYREL!(
         verbose_DR = true,
         linear_viscosity = false,
         kwargs...,
-    )
+    ) where {N}
 
-    # unpack
-    (;
-        γ_eff,
-        Dx,
-        Dy,
-        λmaxVx,
-        λmaxVy,
-        dVxdτ,
-        dVydτ,
-        dτVx,
-        dτVy,
-        dVx,
-        dVy,
-        βVx,
-        βVy,
-        cVx,
-        cVy,
-        αVx,
-        αVy,
-        c_fact,
-        ηb,
-    ) = dyrel
-
+    dim = Val(N)
+    v_dofs = velocity_dofs(dim)
+    p_dof = pressure_dof(dim)
     di = grid.di
     _di = grid._di
     di_center = di.center
     ni = size(stokes.P)
+
+    residuals = @residuals(stokes)
+    fields = dyrel_fields(dyrel, dim)
 
     # errors
     err = 1.0
@@ -96,8 +79,7 @@ function _solve_DYREL!(
 
     # solver loop
     @copy stokes.P0 stokes.P
-    Rx0 = similar(stokes.R.Rx)
-    Ry0 = similar(stokes.R.Ry)
+    residuals0 = map(similar, residuals)
 
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
@@ -110,11 +92,9 @@ function _solve_DYREL!(
     # Iteration loop
     err_min = Inf
     err = 1.0
-    errVx0 = 1.0
-    errVy0 = 1.0
+    errV0 = ntuple(_ -> 1.0, dim)
     errPt0 = 1.0
-    errVx00 = 1.0
-    errVy00 = 1.0
+    errV00 = ntuple(_ -> 1.0, dim)
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
@@ -136,18 +116,10 @@ function _solve_DYREL!(
         update_ρg!(ρg, phase_ratios, rheology, args)
 
         # compute divergence and deviatoric strain rate in one pass
-        @parallel (@idx ni .+ 1) compute_∇V_strain_rate!(
-            stokes.∇V,
-            @strain(stokes)...,
-            @velocity(stokes)...,
-            _di.vertex,
-            _di.velocity[1],
-            _di.velocity[2],
-        )
-        vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
+        compute_∇V_strain_rate!(stokes, _di, ni, dim)
 
         # compute deviatoric stress
-        compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt) # not resetting λ in every PH iteration seems to work better
+        compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)
         # update_halo!(stokes.τ.yy_v)
@@ -166,8 +138,7 @@ function _solve_DYREL!(
 
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
-            stokes.R.Rx,
-            stokes.R.Ry,
+            residuals...,
             stokes.P,
             stokes.ΔPψ,
             @stress(stokes)...,
@@ -183,7 +154,7 @@ function _solve_DYREL!(
             stokes.P0,
             stokes.∇V,
             stokes.Q, # volumetric source/sink term
-            ηb,
+            dyrel.ηb,
             rheology,
             phase_ratios,
             dt,
@@ -191,24 +162,25 @@ function _solve_DYREL!(
         )
 
         # Residual check
-        errVx = norm_mpi(stokes.R.Rx) / √((nx_g() - 2) * (ny_g() - 1))
-        errVy = norm_mpi(stokes.R.Ry) / √((nx_g() - 1) * (ny_g() - 2))
-        errPt = norm_mpi(stokes.R.RP) / √(nx_g() * ny_g())
+        residuals = @residuals(stokes)
+        errV = ntuple(d -> norm_mpi(residuals[d]) / √(v_dofs[d]), dim)
+        errPt = norm_mpi(stokes.R.RP) / √(p_dof)
         if isone(itPH)
-            errVx0 = errVx + eps()
-            errVy0 = errVy + eps()
+            errV0 = map(x -> x + eps(), errV)
             errPt0 = errPt + eps()
         end
         if itPH == 2
             errPt0 = errPt + eps()
         end
-        err = maximum(
-            # (min(errVx/errVx0, errVx), min(errVy/errVy0, errVy))
-            (min(errVx / errVx0, errVx), min(errVy / errVy0, errVy), min(errPt / errPt0, errPt))
-        )
+        errV_rel = ntuple(d -> min(errV[d] / errV0[d], errV[d]), dim)
+        err = maximum((errV_rel..., min(errPt / errPt0, errPt)))
 
         if verbose_PH && igg.me == 0
-            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[Rx=%1.3e %1.3e, Ry=%1.3e %1.3e, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errVx, errVx / errVx0, errVy, errVy / errVy0, errPt, errPt / errPt0)
+            errV_msg = join(
+                ntuple(d -> @sprintf("R%d=%1.3e %1.3e", d, errV[d], errV[d] / errV0[d]), dim),
+                ", ",
+            )
+            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0)
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
@@ -231,19 +203,10 @@ function _solve_DYREL!(
             iter += 1
 
             # Pseudo-old dudes
-            copyto!(Rx0, stokes.R.Rx)
-            copyto!(Ry0, stokes.R.Ry)
+            foreach(copyto!, residuals0, residuals)
 
-            # Deviatoric strain rate and divergence
-            @parallel (@idx ni .+ 1) compute_∇V_strain_rate!(
-                stokes.∇V,
-                @strain(stokes)...,
-                @velocity(stokes)...,
-                _di.vertex,
-                _di.velocity[1],
-                _di.velocity[2],
-            )
-            vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
+            # compute divergence and deviatoric strain rate in one pass
+            compute_∇V_strain_rate!(stokes, _di, ni, dim)
 
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
@@ -258,7 +221,7 @@ function _solve_DYREL!(
                 stokes.P0,
                 stokes.∇V,
                 stokes.Q, # volumetric source/sink term
-                ηb,
+                dyrel.ηb,
                 rheology,
                 phase_ratios,
                 dt,
@@ -277,47 +240,46 @@ function _solve_DYREL!(
             end
 
             # Residuals
-            @. P_num = γ_eff * stokes.R.RP
+            @. P_num = dyrel.γ_eff * stokes.R.RP
             @parallel (@idx ni) compute_DR_residual_V!(
-                stokes.R.Rx,
-                stokes.R.Ry,
+                residuals...,
                 stokes.P,
                 P_num,
                 stokes.ΔPψ,
                 @stress(stokes)...,
                 ρg...,
-                Dx,
-                Dy,
+                fields.D...,
                 _di.center,
                 _di.vertex,
             )
 
-            # Damping-pong
-            @parallel (@idx ni) update_V_damping!((dVxdτ, dVydτ), (stokes.R.Rx, stokes.R.Ry), (αVx, αVy))
-
-            # PT updates
-            @parallel (@idx ni .+ 1) update_DR_V!((stokes.V.Vx, stokes.V.Vy), (dVxdτ, dVydτ), (βVx, βVy), (dτVx, dτVy))
+            # Damping-pong + PT updates
+            @parallel (@idx ni) update_V_damping_DR_V!(
+                @velocity(stokes),
+                fields.dVdτ,
+                residuals,
+                fields.αV,
+                fields.βV,
+                fields.dτV,
+            )
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)
 
             # Residual check
             if iszero(iter % nout)
 
-                errVx = norm_mpi(Dx .* stokes.R.Rx) / √((nx_g() - 2) * (ny_g() - 1))
-                errVy = norm_mpi(Dy .* stokes.R.Ry) / √((nx_g() - 1) * (ny_g() - 2))
+                errV = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]), dim)
 
                 if iter == nout
-                    errVx00 = errVx
-                    errVy00 = errVy
+                    errV00 = errV
                 end
 
-                err = max(
-                    errVx / errVx00, errVy / errVy00
-                )
+                errV_ratio = ntuple(d -> errV[d] / errV00[d], dim)
+                err = maximum(errV_ratio)
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
                 push!(err_evo_tot, err)
-                push!(err_evo_V, errVx / errVx00)
+                push!(err_evo_V, maximum(errV_ratio))
                 push!(err_evo_P, errPt / errPt0)
                 push!(err_evo_it, iter)
 
@@ -325,16 +287,11 @@ function _solve_DYREL!(
                 if verbose_DR && igg.me == 0
                     @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
                 end
-                @. dVx = dVxdτ * βVx * dτVx
-                @. dVy = dVydτ * βVy * dτVy
-
-                λminV = abs(sum_mpi(dVx .* (stokes.R.Rx .- Rx0)) + sum_mpi(dVy .* (stokes.R.Ry .- Ry0))) /
-                    (sum_mpi(dVx .^ 2) + sum_mpi(dVy .^ 2))
-                @. cVx = 2 * √(λminV) * c_fact
-                @. cVy = 2 * √(λminV) * c_fact
+                λminV = compute_λminV!(fields, residuals, residuals0, ni, dim)
+                @parallel (@idx ni) update_cV!(fields.cV, λminV, 2 * √(λminV) * c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, γ_eff, phase_ratios, rheology, grid.di, dt)
+                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)
@@ -342,7 +299,7 @@ function _solve_DYREL!(
         end
 
         # update pressure
-        @. stokes.P += γ_eff .* stokes.R.RP
+        @. stokes.P += dyrel.γ_eff .* stokes.R.RP
 
         iter > total_iterMax && break
     end
@@ -351,9 +308,7 @@ function _solve_DYREL!(
     @. stokes.P += stokes.ΔPψ
 
     # compute vorticity
-    @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.xy, @velocity(stokes)..., _di.velocity[1], _di.velocity[2]
-    )
+    compute_vorticity!(stokes, _di, ni, dim)
 
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)
@@ -366,9 +321,7 @@ function _solve_DYREL!(
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
-    stokes.τ_o.xx_v .= stokes.τ.xx_v
-    stokes.τ_o.yy_v .= stokes.τ.yy_v
-
+    copy_stress_vertices!(stokes, dim)
 
     return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
 
@@ -389,6 +342,69 @@ function _solve_DYREL!(
     )
     grid = JustRelax.legacy_uniform_grid(size(stokes.P), di)
     return _solve_DYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg; kwargs...)
+end
+
+# Dimension-agnostic helpers for DYREL
+
+@inline function dyrel_fields(dyrel::JustRelax.DYREL, ::Val{2})
+    return (
+        D = (dyrel.Dx, dyrel.Dy),
+        λmaxV = (dyrel.λmaxVx, dyrel.λmaxVy),
+        dVdτ = (dyrel.dVxdτ, dyrel.dVydτ),
+        dτV = (dyrel.dτVx, dyrel.dτVy),
+        dV = (dyrel.dVx, dyrel.dVy),
+        βV = (dyrel.βVx, dyrel.βVy),
+        cV = (dyrel.cVx, dyrel.cVy),
+        αV = (dyrel.αVx, dyrel.αVy),
+    )
+end
+
+@inline function dyrel_fields(dyrel::JustRelax.DYREL, ::Val{3})
+    return (
+        D = (dyrel.Dx, dyrel.Dy, dyrel.Dz),
+        λmaxV = (dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz),
+        dVdτ = (dyrel.dVxdτ, dyrel.dVydτ, dyrel.dVzdτ),
+        dτV = (dyrel.dτVx, dyrel.dτVy, dyrel.dτVz),
+        dV = (dyrel.dVx, dyrel.dVy, dyrel.dVz),
+        βV = (dyrel.βVx, dyrel.βVy, dyrel.βVz),
+        cV = (dyrel.cVx, dyrel.cVy, dyrel.cVz),
+        αV = (dyrel.αVx, dyrel.αVy, dyrel.αVz),
+    )
+end
+
+@inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
+
+@inline global_grid_size(::Val{2}) = nx_g(), ny_g()
+@inline global_grid_size(::Val{3}) = nx_g(), ny_g(), nz_g()
+@inline global_grid_size(::Val{N}) where {N} = error("Unsupported dimension $N")
+
+@inline pressure_dof(N) = prod(global_grid_size(N))
+
+function velocity_dofs(::Val{N}) where {N}
+    global_size = global_grid_size(Val(N))
+    return ntuple(Val(N)) do d
+        @inline
+        prod(i -> i == d ? global_size[i] - 2 : global_size[i] - 1, 1:N)
+    end
+end
+
+function compute_λminV!(fields, residuals, residuals0, ni, ::Val{N}) where {N}
+    @parallel (@idx ni) compute_dV!(fields.dV, fields.dVdτ, fields.βV, fields.dτV)
+
+    numerator = sum(ntuple(d -> sum_mpi(fields.dV[d] .* (residuals[d] .- residuals0[d])), Val(N)))
+    denominator = sum(ntuple(d -> sum_mpi(fields.dV[d] .^ 2), Val(N)))
+    return abs(numerator) / denominator
+end
+
+function copy_stress_vertices!(stokes::JustRelax.StokesArrays, ::Val{2})
+    stokes.τ_o.xx_v .= stokes.τ.xx_v
+    return stokes.τ_o.yy_v .= stokes.τ.yy_v
+end
+
+function copy_stress_vertices!(stokes::JustRelax.StokesArrays, ::Val{3})
+    stokes.τ_o.xx_v .= stokes.τ.xx_v
+    stokes.τ_o.yy_v .= stokes.τ.yy_v
+    return stokes.τ_o.zz_v .= stokes.τ.zz_v
 end
 
 # TODO: will be addressed in following PRs

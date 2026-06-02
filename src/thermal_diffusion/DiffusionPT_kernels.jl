@@ -723,7 +723,7 @@ end
     @inbounds begin
         α = compute_α(rheology, getindex_phase(phases, I...))
         # Adiabtic heating term
-        A[i1, j] = (P[I...] - P0[I...]) * α * _dt
+        A[i, j] = (P[I...] - P0[I...]) * α * _dt
     end
     return nothing
 end

@@ -35,7 +35,7 @@ __init__() = @init_parallel_stencil(CUDA, Float64, 2)
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 include("../../variational_stokes/Stokes2D.jl")
-include("../../DYREL/DYREL2D.jl")
+include("../../DYREL/solver.jl")
 
 # Types
 function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}

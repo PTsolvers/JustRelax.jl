@@ -152,7 +152,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 verbose_DR = false,
                 iterMax = 50.0e3,
                 nout = 10,
-                rel_drop = 1e-2,
+                rel_drop = 1.0e-2,
                 λ_relaxation_PH = 1,
                 λ_relaxation_DR = 1,
                 viscosity_relaxation = 1,

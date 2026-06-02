@@ -346,29 +346,71 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_DR_residual_V!(
-        Rx::AbstractArray{T, 3}, Ry, Rz, P, P_num, ΔPψ, τxx, τyy, τzz, τxy, τxz, τyz, ρgx, ρgy, ρgz, Dx, Dy, Dz, _di
+        Rx::AbstractArray{T, 3},
+        Ry,
+        Rz,
+        P,
+        P_num,
+        ΔPψ,
+        τxx,
+        τyy,
+        τzz,
+        τxy,
+        τxz,
+        τyz,
+        ρgx,
+        ρgy,
+        ρgz,
+        Dx,
+        Dy,
+        Dz,
+        _di_center,
+        _di_vertex,
     ) where {T}
-    _dx, _dy, _dz = @dxi(_di, i, j, k)
 
-    Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_za(A) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_zi(A) = _d_zi(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j, k)
-    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j, k)
-    Base.@propagate_inbounds @inline av_za(A) = _av_za(A, i, j, k)
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_zi(A, _dz) = _d_zi(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
 
     # @inbounds begin
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
-        Rx[i, j, k] = (d_xa(τxx) + d_yi(τxy) + d_zi(τxz) - d_xa(P) - d_xa(P_num) - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j, k]
+        _dx = @dx(_di_center, i)
+        _dy = @dy(_di_vertex, j)
+        _dz = @dz(_di_vertex, k)
+
+        Rx[i, j, k] =
+            (
+            d_xa(τxx, _dx) + d_yi(τxy, _dy) + d_zi(τxz, _dz) -
+                d_xa(P, _dx) - d_xa(P_num, _dx) - d_xa(ΔPψ, _dx) - av_x(ρgx)
+        ) / Dx[i, j, k]
     end
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
-        Ry[i, j, k] = (d_ya(τyy) + d_xi(τxy) + d_zi(τyz) - d_ya(P) - d_ya(P_num) - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j, k]
+        _dx = @dx(_di_vertex, i)
+        _dy = @dy(_di_center, j)
+        _dz = @dz(_di_vertex, k)
+
+        Ry[i, j, k] =
+            (
+            d_ya(τyy, _dy) + d_xi(τxy, _dx) + d_zi(τyz, _dz) -
+                d_ya(P, _dy) - d_ya(P_num, _dy) - d_ya(ΔPψ, _dy) - av_y(ρgy)
+        ) / Dy[i, j, k]
     end
     if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
-        Rz[i, j, k] = (d_za(τzz) + d_xi(τxz) + d_yi(τyz) - d_za(P) - d_za(P_num) - d_za(ΔPψ) - av_za(ρgz)) / Dz[i, j, k]
+        _dx = @dx(_di_vertex, i)
+        _dy = @dy(_di_vertex, j)
+        _dz = @dz(_di_center, k)
+
+        Rz[i, j, k] =
+            (
+            d_za(τzz, _dz) + d_xi(τxz, _dx) + d_yi(τyz, _dy) -
+                d_za(P, _dz) - d_za(P_num, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz)
+        ) / Dz[i, j, k]
     end
     # end
 

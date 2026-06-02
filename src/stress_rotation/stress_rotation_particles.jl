@@ -32,29 +32,17 @@ end
         ωyz, ωxz, ωxy, Vx, Vy, Vz, _di
     )
 
-    Base.@propagate_inbounds @inline dx(A, I::Vararg{Int, 3}) = _d_xa(A, _dx, I...)
-    Base.@propagate_inbounds @inline dy(A, I::Vararg{Int, 3}) = _d_ya(A, _dy, I...)
-    Base.@propagate_inbounds @inline dz(A, I::Vararg{Int, 3}) = _d_za(A, _dz, I...)
+    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _di, I...)
+    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _di, I...)
+    Base.@propagate_inbounds @inline dz(A) = _d_za(A, _di, I...)
 
     if all(I .≤ size(ωyz))
-        i, j, k = I
-        _dx = @dx(_di_vy, i)
-        _dy = @dy(_di_vx, j)
-        _dz = @dz(_di_vz, k)
         @inbounds ωyz[I...] = 0.5 * (dy(Vz, I...) - dz(Vy, I...))
     end
     if all(I .≤ size(ωxz))
-        i, j, k = I
-        _dx = @dx(_di_vy, i)
-        _dy = @dy(_di_vx, j)
-        _dz = @dz(_di_vz, k)
         @inbounds ωxz[I...] = 0.5 * (dz(Vx, I...) - dx(Vz, I...))
     end
     if all(I .≤ size(ωxy))
-        i, j, k = I
-        _dx = @dx(_di_vy, i)
-        _dy = @dy(_di_vx, j)
-        _dz = @dz(_di_vz, k)
         @inbounds ωxy[I...] = 0.5 * (dx(Vy, I...) - dy(Vx, I...))
     end
 

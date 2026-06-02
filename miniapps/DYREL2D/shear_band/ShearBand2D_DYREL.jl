@@ -60,7 +60,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     Gi = G0 / 2         # elastic shear modulus perturbation
     εbg = 1.0            # background strain-rate
     η_reg = 1.0e-2         # regularisation "viscosity"
-    dt = η0 / G0 / 4.0  # assumes Maxwell time of 4
+    dt = η0 / G0 / 6.0  # assumes Maxwell time of 4
     el_bg = ConstantElasticity(; G = G0, Kb = 5)
     el_inc = ConstantElasticity(; G = Gi, Kb = 5)
     visc = LinearViscous(; η = η0)
@@ -105,7 +105,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
 
     # Rheology
     compute_viscosity!(
@@ -133,7 +133,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     sol = [0.0e0]
     ttot = [0.0e0]
 
-    for _ in 1:15
+    for _ in 1:20
 
         # Stokes solver ----------------
         iters = solve_DYREL!(
@@ -148,11 +148,11 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (;
-                verbose_PH = false,
+                verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 50.0e3,
-                nout = 50,
-                rel_drop = 0.5,
+                nout = 10,
+                rel_drop = 1e-2,
                 λ_relaxation_PH = 1,
                 λ_relaxation_DR = 1,
                 viscosity_relaxation = 1,
@@ -182,8 +182,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
         ax3 = Axis(fig[1, 3], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
         ax4 = Axis(fig[2, 3], aspect = 1)
-        h11 = heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
-        # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
+        # h11 = heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
+        h11= heatmap!(ax1, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
         # h21 = heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
         h21 = lines!(ax2, iters.err_evo_it / nx, log10.(iters.err_evo_V), linewidth = 3, label = "V")
         h21 = lines!(ax2, iters.err_evo_it / nx, log10.(iters.err_evo_P), linewidth = 3, label = "P")
@@ -206,7 +206,7 @@ end
 
 n = 3
 nx = 128
-ny = 128
+ny = 128 * 2
 figdir = "ShearBands2D_DYREL"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)

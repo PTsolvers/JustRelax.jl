@@ -182,7 +182,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
         ax3 = Axis(fig[1, 3], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
         ax4 = Axis(fig[2, 3], aspect = 1)
-        # h11 = heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         h11= heatmap!(ax1, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
         # h21 = heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
         h21 = lines!(ax2, iters.err_evo_it / nx, log10.(iters.err_evo_V), linewidth = 3, label = "V")
@@ -204,7 +203,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 3
 nx = 128
 ny = 128 * 2
 figdir = "ShearBands2D_DYREL"

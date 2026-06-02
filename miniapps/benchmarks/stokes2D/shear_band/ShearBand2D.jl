@@ -192,7 +192,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 64
 nx = 128
 ny = 256
 figdir = "ShearBands2D"

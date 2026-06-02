@@ -17,11 +17,11 @@ end
 @parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _di_vx, _di_vy)
 
     i, j = I
-    _dx = JR.@dx(_di_vy, i)
-    _dy = JR.@dy(_di_vx, j)
+    _dx = @dx(_di_vy, i)
+    _dy = @dy(_di_vx, j)
 
-    Base.@propagate_inbounds @inline dx(A, I::Vararg{Int, 2}) = JR._d_xa(A, _dx, I...)
-    Base.@propagate_inbounds @inline dy(A, I::Vararg{Int, 2}) = JR._d_ya(A, _dy, I...)
+    Base.@propagate_inbounds @inline dx(A, I::Vararg{Int, 2}) = _d_xa(A, _dx, I...)
+    Base.@propagate_inbounds @inline dy(A, I::Vararg{Int, 2}) = _d_ya(A, _dy, I...)
 
     @inbounds ωxy[I...] = 0.5 * (dx(Vy, I...) - dy(Vx, I...))
 

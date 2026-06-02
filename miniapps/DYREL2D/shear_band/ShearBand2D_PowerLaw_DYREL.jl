@@ -87,7 +87,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
 
     # Rheology
     stokes.ε.xx .= 1

@@ -121,7 +121,7 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-5, ϵ_rel = 1.0e-5, CFL = 0.75 / √3.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
     # Rheology
     cutoff_visc = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)

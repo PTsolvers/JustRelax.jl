@@ -109,7 +109,7 @@ function strain_increment(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
     # Rheology
     compute_viscosity!(
@@ -246,7 +246,7 @@ function velocity_based(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
     # Rheology
     compute_viscosity!(

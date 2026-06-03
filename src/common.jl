@@ -1,4 +1,4 @@
-using Adapt, MuladdMacro
+using Adapt, MuladdMacro, ForwardDiff
 
 include("types/constructors/stokes.jl")
 export StokesArrays, PTStokesCoeffs

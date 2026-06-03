@@ -120,8 +120,11 @@ function _solve_DYREL!(
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
 
+        do_partials = Val(false)
+
         # compute divergence and deviatoric strain rate in one pass
-        compute_∇V_strain_rate!(stokes, _di, ni, dim)
+        compute_local_strain_rates!(stokes, dyrel.∂εᵢᵢ_∂Vx, dyrel.∂εᵢᵢ_∂Vy, dyrel.∂εxy_∂Vx, dyrel.∂εxy_∂Vy, grid, do_partials)
+        # compute_∇V_strain_rate!(stokes, _di, ni, dim)
 
         # compute deviatoric stress
         compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt)
@@ -210,7 +213,8 @@ function _solve_DYREL!(
             foreach(copyto!, residuals0, residuals)
 
             # compute divergence and deviatoric strain rate in one pass
-            compute_∇V_strain_rate!(stokes, _di, ni, dim)
+            compute_local_strain_rates!(stokes, dyrel.∂εᵢᵢ_∂Vx, dyrel.∂εᵢᵢ_∂Vy, dyrel.∂εxy_∂Vx, dyrel.∂εxy_∂Vy, grid, do_partials)
+            # compute_∇V_strain_rate!(stokes, _di, ni, dim)
 
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)

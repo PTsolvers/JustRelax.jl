@@ -50,4 +50,8 @@ struct DYREL{T, F}
     ϵ::F      # convergence criterion
     ϵ_vel::F  # convergence criterion
     c_fact::F # damping factor
+    ∂εᵢᵢ_∂Vx::T
+    ∂εᵢᵢ_∂Vy::T
+    ∂εxy_∂Vx::T
+    ∂εxy_∂Vy::T
 end

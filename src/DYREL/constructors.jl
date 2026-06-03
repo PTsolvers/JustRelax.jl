@@ -42,12 +42,16 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     αVx = @zeros(nx - 1, ny)
     αVy = @zeros(nx, ny - 1)
     αVz = @zeros(1, 1)  # dummy for 2D
+    ∂εᵢᵢ_∂Vx = @zeros(nx, ny)
+    ∂εᵢᵢ_∂Vy = @zeros(nx, ny)
+    ∂εxy_∂Vx = @zeros(nx + 1, ny + 1)
+    ∂εxy_∂Vy = @zeros(nx + 1, ny + 1)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
     return JustRelax.DYREL{T, F}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
-        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact, ∂εᵢᵢ_∂Vx, ∂εᵢᵢ_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy
     )
 end
 

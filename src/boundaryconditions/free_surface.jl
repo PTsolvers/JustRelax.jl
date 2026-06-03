@@ -1,16 +1,11 @@
 function free_surface_bcs!(
-        stokes, bcs::AbstractFlowBoundaryConditions, η, rheology, phase_ratios, dt, _di_vx, _di_vy
+        stokes, bcs::AbstractFlowBoundaryConditions, ηeff, _di_vx, _di_vy, ::Val{2}
     )
     return if bcs.free_surface
         @parallel (@idx (size(stokes.V.Vy, 1) - 2)) FreeSurface_Vy!(
             @velocity(stokes)...,
-            stokes.P,
-            stokes.P0,
-            stokes.τ_o.yy,
-            η,
-            rheology,
-            phase_ratios.center,
-            dt,
+            stokes.τ.yy,
+            ηeff,
             _di_vx,
             _di_vy,
         )
@@ -18,19 +13,16 @@ function free_surface_bcs!(
 end
 
 function free_surface_bcs!(
-        stokes, bcs::AbstractFlowBoundaryConditions, η, rheology, phase_ratios, dt, di
+        stokes, bcs::AbstractFlowBoundaryConditions, ηeff, di_vx, di_vy, di_vz, ::Val{3}
     )
     return if bcs.free_surface
-        @parallel (@idx (size(stokes.V.Vz, 1) - 2, size(stokes.V.Vz, 2) - 2)) FreeSurface_Vy!(
+        @parallel (@idx (size(stokes.V.Vz, 1) - 2, size(stokes.V.Vz, 2) - 2)) FreeSurface_Vz!(
             @velocity(stokes)...,
-            stokes.P,
-            stokes.P0,
-            stokes.τ_o.yy,
-            η,
-            rheology,
-            phase_ratios.center,
-            dt,
-            di,
+            stokes.τ.zz,
+            ηeff,
+            di_vx,
+            di_vy,
+            di_vz,
         )
     end
 end
@@ -38,62 +30,53 @@ end
 @parallel_indices (i) function FreeSurface_Vy!(
         Vx::AbstractArray{T, 2},
         Vy::AbstractArray{T, 2},
-        P::AbstractArray{T, 2},
-        P_old::AbstractArray{T, 2},
-        τyy_old::AbstractArray{T, 2},
-        η::AbstractArray{T, 2},
-        rheology,
-        phase_ratios,
-        dt::T,
-        _di_vx,
-        _di_vy,
+        τyy::AbstractArray{T, 2},
+        ηeff::AbstractArray{T, 2},
+        di_vx,
+        di_vy,
     ) where {T}
-    dx = @dx(_di_vx, i)
-    dy = @dy(_di_vy, size(P, 2))
-    phase = @inbounds phase_ratios[i, end]
-    Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
-    ν = 1.0e-2
-    Vy[i + 1, end] =
-        ν * (
-        Vy[i + 1, end - 1] +
-            (3 / 2) *
-            (
-            P[i, end] / (2.0 * η[i, end]) + #-
-                (τyy_old[i, end] + P_old[i, end]) / (2.0 * Gdt) +
-                inv(3.0) * (Vx[i + 1, end - 1] - Vx[i, end - 1]) * inv(dx)
-        ) *
-            dy
-    ) + (1 - ν) * Vy[i + 1, end]
+
+    dx = @dx(di_vx, i)
+    dy = @dy(di_vy, size(τyy, 2))
+    ∂Vx∂x = (Vx[i + 1, end - 1] - Vx[i, end - 1]) / dx
+    ∂Vy∂y = ∂Vx∂x / 2 + 3 * τyy[i, end] / (4 * ηeff[i, end])
+    Vy[i + 1, end] = Vy[i + 1, end - 1] + ∂Vy∂y * dy
     return nothing
 end
 
-@parallel_indices (i, j) function FreeSurface_Vy!(
+@parallel_indices (i, j) function FreeSurface_Vz!(
         Vx::AbstractArray{T, 3},
         Vy::AbstractArray{T, 3},
         Vz::AbstractArray{T, 3},
-        P::AbstractArray{T, 3},
-        P_old::AbstractArray{T, 3},
-        τyy_old::AbstractArray{T, 3},
-        η::AbstractArray{T, 3},
-        rheology,
-        phase_ratios,
-        dt::T,
-        di,
+        τzz::AbstractArray{T, 3},
+        ηeff::AbstractArray{T, 3},
+        di_vx,
+        di_vy,
+        di_vz,
     ) where {T}
-    dx, dy, dz = @dxi(di, i, j, size(P, 3))
-    phase = @inbounds phase_ratios[i, j, end]
-    Gdt = fn_ratio(get_shear_modulus, rheology, phase) * dt
-    Vz[i + 1, j + 1, end] =
-        Vz[i + 1, j + 1, end - 1] +
-        3.0 / 2.0 *
-        (
-        P[i, j, end] / (2.0 * η[i, j, end]) -
-            (τyy_old[i, j, end] + P_old[i, j, end]) / (2.0 * Gdt) +
-            inv(3.0) * (
-            (Vx[i + 1, j + 1, end - 1] - Vx[i, j + 1, end - 1]) * inv(dx) +
-                (Vy[i + 1, j + 1, end - 1] - Vy[i + 1, j, end - 1]) * inv(dy)
-        )
-    ) *
-        dz
+    dx = @dx(di_vx, i)
+    dy = @dy(di_vy, j)
+    dz = @dz(di_vz, size(τzz, 3))
+    ∂Vx∂x = (Vx[i + 1, j + 1, end - 1] - Vx[i, j + 1, end - 1]) / dx
+    ∂Vy∂y = (Vy[i + 1, j + 1, end - 1] - Vy[i + 1, j, end - 1]) / dy
+    ∂Vz∂z = (∂Vx∂x + ∂Vy∂y) / 2 + 3 * τzz[i, j, end] / (4 * ηeff[i, j, end])
+    Vz[i + 1, j + 1, end] = Vz[i + 1, j + 1, end - 1] + ∂Vz∂z * dz
+    return nothing
+end
+
+function free_surface_stress_bcs!(stokes, bcs::AbstractFlowBoundaryConditions, ::Val{2})
+    return if bcs.free_surface
+        @parallel (@idx size(stokes.P, 1)) free_surface_stress_bcs!(stokes.P, stokes.τ.yy)
+    end
+end
+
+function free_surface_stress_bcs!(stokes, bcs::AbstractFlowBoundaryConditions, ::Val{3})
+    return if bcs.free_surface
+        @parallel (@idx (size(stokes.P, 1), size(stokes.P, 2))) free_surface_stress_bcs!(stokes.P, stokes.τ.zz)
+    end
+end
+
+@parallel_indices (I...) function free_surface_stress_bcs!(P, τn)
+    τn[I..., end] = P[I..., end]
     return nothing
 end

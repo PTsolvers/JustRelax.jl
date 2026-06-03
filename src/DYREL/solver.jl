@@ -130,6 +130,8 @@ function _solve_DYREL!(
         # update_halo!(stokes.τ.yy_v)
         # update_halo!(stokes.τ.xy)
 
+        free_surface_stress_bcs!(stokes, flow_bcs, dim)
+
         if !linear_viscosity
             update_viscosity_τII!(
                 stokes,
@@ -267,6 +269,9 @@ function _solve_DYREL!(
                 fields.dτV,
             )
             flow_bcs!(stokes, flow_bcs)
+            free_surface_bcs!(
+                stokes, flow_bcs, stokes.viscosity.η_vep, grid.di.velocity..., dim
+            )
             update_halo!(@velocity(stokes)...)
 
             # Residual check

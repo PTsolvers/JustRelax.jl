@@ -1,0 +1,22 @@
+include:
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+
+unit_tests:
+  extends: .baremetal-runner-beverin-mi300
+  script:
+    - echo "Preparing the AMDGPU test environment"
+    - export JULIA_JUSTRELAX_BACKEND=AMDGPU
+    - export JULIA_CSCS_CI=true
+    - export JULIAUP_DEPOT_PATH="/users/lraess/julia_amd"
+    - export JULIA_DEPOT_PATH="/users/lraess/julia_amd"
+    - alias julia12="/users/lraess/julia_amd/juliaup/julia-1.12.6+0.x64.linux.gnu/bin/julia"
+    - srun -n 1 --uenv b2550889de318ab5 --view=default
+    - srun -n 1 --uenv b2550889de318ab5 --view=default julia12 --project -e 'using Pkg; Pkg.instantiate();'
+    - srun -n 1 --uenv b2550889de318ab5 --view=default julia12 --project -e 'using Pkg; Pkg.add(name="AMDGPU");'
+    - srun -n 1 --uenv b2550889de318ab5 --view=default julia12 --project -e 'using AMDGPU; AMDGPU.versioninfo();'
+    - echo "Done."
+  variables:
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_NTASKS_PER_NODE: 4
+    SLURM_GPUS_PER_TASK: 1
+    SLURM_TIMELIMIT: "00:30:00"

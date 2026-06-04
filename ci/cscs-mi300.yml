@@ -9,8 +9,8 @@ unit_tests:
     - export JULIA_CSCS_CI=true
     - export JULIAUP_DEPOT_PATH="/users/lraess/julia_amd"
     - export JULIA_DEPOT_PATH="/users/lraess/julia_amd"
-    - srun -n 1 --uenv b2550889de318ab5 --view=default /users/lraess/julia_amd/juliaup/julia-1.12.6+0.x64.linux.gnu/bin/julia --project -e 'using Pkg; Pkg.instantiate(); Pkg.rm("JustPIC");'
-    - srun -n 1 --uenv b2550889de318ab5 --view=default /users/lraess/julia_amd/juliaup/julia-1.12.6+0.x64.linux.gnu/bin/julia --project -e 'using Pkg; Pkg.add("AMDGPU"); Pkg.update();'
+    - srun -n 1 --uenv b2550889de318ab5 --view=default /users/lraess/julia_amd/juliaup/julia-1.12.6+0.x64.linux.gnu/bin/julia --project -e 'using Pkg; Pkg.instantiate();'
+    - srun -n 1 --uenv b2550889de318ab5 --view=default /users/lraess/julia_amd/juliaup/julia-1.12.6+0.x64.linux.gnu/bin/julia --project -e 'using Pkg; Pkg.add("AMDGPU");'
     - srun -n 1 --uenv b2550889de318ab5 --view=default /users/lraess/julia_amd/juliaup/julia-1.12.6+0.x64.linux.gnu/bin/julia --project -e 'using AMDGPU; AMDGPU.versioninfo();'
     - echo "Done."
   variables:

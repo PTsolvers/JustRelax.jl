@@ -86,7 +86,8 @@ end
         Rx::AbstractArray{T, 2},
         Ry,
         P,
-        P_num,
+        γ_eff,
+        RP,
         ΔPψ,
         τxx,
         τyy,
@@ -109,7 +110,8 @@ end
             Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
             Rx[i, j] = if isvalid_vx(ϕ, i + 1, j)
-                (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(P_num, ϕ.center) - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
+                dP_num = (-γ_eff[i, j] * RP[i, j] * ϕ.center[i, j] + γ_eff[i + 1, j] * RP[i + 1, j] * ϕ.center[i + 1, j]) * _dx_c
+                (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - dP_num - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
             else
                 0.0
             end
@@ -120,7 +122,8 @@ end
             Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
             Ry[i, j] = if isvalid_vy(ϕ, i, j + 1)
-                (d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - d_ya(P, ϕ.center) - d_ya(P_num, ϕ.center) - d_ya(ΔPψ, ϕ.center) - av_ya(ρgy, ϕ.center)) / Dy[i, j]
+                dP_num = (-γ_eff[i, j] * RP[i, j] * ϕ.center[i, j] + γ_eff[i, j + 1] * RP[i, j + 1] * ϕ.center[i, j + 1]) * _dy_c
+                (d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - d_ya(P, ϕ.center) - dP_num - d_ya(ΔPψ, ϕ.center) - av_ya(ρgy, ϕ.center)) / Dy[i, j]
             else
                 0.0
             end

@@ -221,7 +221,8 @@ end
         Rx::AbstractArray{T, 2},
         Ry,
         P,
-        P_num,
+        γ_eff,
+        RP,
         ΔPψ,
         τxx,
         τyy,
@@ -242,16 +243,130 @@ end
         _dy_v = @dy(_di_vertex, j)
         Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
         Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
-        Rx[i, j] = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(P_num) - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j]
+        dP_num = (-γ_eff[i, j] * RP[i, j] + γ_eff[i + 1, j] * RP[i + 1, j]) * _dx_c
+        Rx[i, j] = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - dP_num - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j]
     end
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-        _dy_c = @dy(_di_center, j)
         _dx_v = @dx(_di_vertex, i)
+        _dy_c = @dy(_di_center, j)
         Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
         Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-        Ry[i, j] = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(P_num) - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j]
+        dP_num = (-γ_eff[i, j] * RP[i, j] + γ_eff[i, j + 1] * RP[i, j + 1]) * _dy_c
+        Ry[i, j] = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - dP_num - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j]
     end
     # end
+
+    return nothing
+end
+
+@parallel_indices (i, j) function compute_DR_residual_damping_V!(
+        Rx::AbstractArray{T, 2},
+        Ry,
+        Vx,
+        Vy,
+        dVxdτ,
+        dVydτ,
+        αVx,
+        αVy,
+        βVx,
+        βVy,
+        dτVx,
+        dτVy,
+        P,
+        γ_eff,
+        RP,
+        ΔPψ,
+        τxx,
+        τyy,
+        τxy,
+        ρgx,
+        ρgy,
+        Dx,
+        Dy,
+        _di_center,
+        _di_vertex,
+    ) where {T}
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+
+    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
+        _dx_c = @dx(_di_center, i)
+        _dy_v = @dy(_di_vertex, j)
+        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
+        dP_num = (-γ_eff[i, j] * RP[i, j] + γ_eff[i + 1, j] * RP[i + 1, j]) * _dx_c
+        Rx_ij = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - dP_num - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j]
+        dVxdτ_ij = αVx[i, j] * dVxdτ[i, j] + Rx_ij
+        Rx[i, j] = Rx_ij
+        dVxdτ[i, j] = dVxdτ_ij
+        Vx[i + 1, j + 1] += dVxdτ_ij * βVx[i, j] * dτVx[i, j]
+    end
+    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+        _dx_v = @dx(_di_vertex, i)
+        _dy_c = @dy(_di_center, j)
+        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+        Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
+        dP_num = (-γ_eff[i, j] * RP[i, j] + γ_eff[i, j + 1] * RP[i, j + 1]) * _dy_c
+        Ry_ij = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - dP_num - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j]
+        dVydτ_ij = αVy[i, j] * dVydτ[i, j] + Ry_ij
+        Ry[i, j] = Ry_ij
+        dVydτ[i, j] = dVydτ_ij
+        Vy[i + 1, j + 1] += dVydτ_ij * βVy[i, j] * dτVy[i, j]
+    end
+
+    return nothing
+end
+
+@parallel_indices (i, j) function compute_DR_damping_V!(
+        Vx::AbstractArray{T, 2},
+        Vy,
+        dVxdτ,
+        dVydτ,
+        αVx,
+        αVy,
+        βVx,
+        βVy,
+        dτVx,
+        dτVy,
+        P,
+        γ_eff,
+        RP,
+        ΔPψ,
+        τxx,
+        τyy,
+        τxy,
+        ρgx,
+        ρgy,
+        Dx,
+        Dy,
+        _di_center,
+        _di_vertex,
+    ) where {T}
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+
+    if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
+        _dx_c = @dx(_di_center, i)
+        _dy_v = @dy(_di_vertex, j)
+        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
+        dP_num = (-γ_eff[i, j] * RP[i, j] + γ_eff[i + 1, j] * RP[i + 1, j]) * _dx_c
+        Rx_ij = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - dP_num - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j]
+        dVxdτ_ij = αVx[i, j] * dVxdτ[i, j] + Rx_ij
+        dVxdτ[i, j] = dVxdτ_ij
+        Vx[i + 1, j + 1] += dVxdτ_ij * βVx[i, j] * dτVx[i, j]
+    end
+    if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
+        _dx_v = @dx(_di_vertex, i)
+        _dy_c = @dy(_di_center, j)
+        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+        Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
+        dP_num = (-γ_eff[i, j] * RP[i, j] + γ_eff[i, j + 1] * RP[i, j + 1]) * _dy_c
+        Ry_ij = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - dP_num - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j]
+        dVydτ_ij = αVy[i, j] * dVydτ[i, j] + Ry_ij
+        dVydτ[i, j] = dVydτ_ij
+        Vy[i + 1, j + 1] += dVydτ_ij * βVy[i, j] * dτVy[i, j]
+    end
 
     return nothing
 end
@@ -350,7 +465,8 @@ end
         Ry,
         Rz,
         P,
-        P_num,
+        γ_eff,
+        RP,
         ΔPψ,
         τxx,
         τyy,
@@ -383,36 +499,229 @@ end
         _dx = @dx(_di_center, i)
         _dy = @dy(_di_vertex, j)
         _dz = @dz(_di_vertex, k)
+        dP_num = (-γ_eff[i, j, k] * RP[i, j, k] + γ_eff[i + 1, j, k] * RP[i + 1, j, k]) * _dx
 
         Rx[i, j, k] =
             (
             d_xa(τxx, _dx) + d_yi(τxy, _dy) + d_zi(τxz, _dz) -
-                d_xa(P, _dx) - d_xa(P_num, _dx) - d_xa(ΔPψ, _dx) - av_x(ρgx)
+                d_xa(P, _dx) - dP_num - d_xa(ΔPψ, _dx) - av_x(ρgx)
         ) / Dx[i, j, k]
     end
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
         _dx = @dx(_di_vertex, i)
         _dy = @dy(_di_center, j)
         _dz = @dz(_di_vertex, k)
+        dP_num = (-γ_eff[i, j, k] * RP[i, j, k] + γ_eff[i, j + 1, k] * RP[i, j + 1, k]) * _dy
 
         Ry[i, j, k] =
             (
             d_ya(τyy, _dy) + d_xi(τxy, _dx) + d_zi(τyz, _dz) -
-                d_ya(P, _dy) - d_ya(P_num, _dy) - d_ya(ΔPψ, _dy) - av_y(ρgy)
+                d_ya(P, _dy) - dP_num - d_ya(ΔPψ, _dy) - av_y(ρgy)
         ) / Dy[i, j, k]
     end
     if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
         _dx = @dx(_di_vertex, i)
         _dy = @dy(_di_vertex, j)
         _dz = @dz(_di_center, k)
+        dP_num = (-γ_eff[i, j, k] * RP[i, j, k] + γ_eff[i, j, k + 1] * RP[i, j, k + 1]) * _dz
 
         Rz[i, j, k] =
             (
             d_za(τzz, _dz) + d_xi(τxz, _dx) + d_yi(τyz, _dy) -
-                d_za(P, _dz) - d_za(P_num, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz)
+                d_za(P, _dz) - dP_num - d_za(ΔPψ, _dz) - av_z(ρgz)
         ) / Dz[i, j, k]
     end
     # end
+
+    return nothing
+end
+
+@parallel_indices (i, j, k) function compute_DR_residual_damping_V!(
+        Rx::AbstractArray{T, 3},
+        Ry,
+        Rz,
+        Vx,
+        Vy,
+        Vz,
+        dVxdτ,
+        dVydτ,
+        dVzdτ,
+        αVx,
+        αVy,
+        αVz,
+        βVx,
+        βVy,
+        βVz,
+        dτVx,
+        dτVy,
+        dτVz,
+        P,
+        γ_eff,
+        RP,
+        ΔPψ,
+        τxx,
+        τyy,
+        τzz,
+        τxy,
+        τxz,
+        τyz,
+        ρgx,
+        ρgy,
+        ρgz,
+        Dx,
+        Dy,
+        Dz,
+        _di_center,
+        _di_vertex,
+    ) where {T}
+
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_zi(A, _dz) = _d_zi(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+
+    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
+        _dx = @dx(_di_center, i)
+        _dy = @dy(_di_vertex, j)
+        _dz = @dz(_di_vertex, k)
+        dP_num = (-γ_eff[i, j, k] * RP[i, j, k] + γ_eff[i + 1, j, k] * RP[i + 1, j, k]) * _dx
+        Rx_ijk =
+            (
+            d_xa(τxx, _dx) + d_yi(τxy, _dy) + d_zi(τxz, _dz) -
+                d_xa(P, _dx) - dP_num - d_xa(ΔPψ, _dx) - av_x(ρgx)
+        ) / Dx[i, j, k]
+        dVxdτ_ijk = αVx[i, j, k] * dVxdτ[i, j, k] + Rx_ijk
+        Rx[i, j, k] = Rx_ijk
+        dVxdτ[i, j, k] = dVxdτ_ijk
+        Vx[i + 1, j + 1, k + 1] += dVxdτ_ijk * βVx[i, j, k] * dτVx[i, j, k]
+    end
+    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
+        _dx = @dx(_di_vertex, i)
+        _dy = @dy(_di_center, j)
+        _dz = @dz(_di_vertex, k)
+        dP_num = (-γ_eff[i, j, k] * RP[i, j, k] + γ_eff[i, j + 1, k] * RP[i, j + 1, k]) * _dy
+        Ry_ijk =
+            (
+            d_ya(τyy, _dy) + d_xi(τxy, _dx) + d_zi(τyz, _dz) -
+                d_ya(P, _dy) - dP_num - d_ya(ΔPψ, _dy) - av_y(ρgy)
+        ) / Dy[i, j, k]
+        dVydτ_ijk = αVy[i, j, k] * dVydτ[i, j, k] + Ry_ijk
+        Ry[i, j, k] = Ry_ijk
+        dVydτ[i, j, k] = dVydτ_ijk
+        Vy[i + 1, j + 1, k + 1] += dVydτ_ijk * βVy[i, j, k] * dτVy[i, j, k]
+    end
+    if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
+        _dx = @dx(_di_vertex, i)
+        _dy = @dy(_di_vertex, j)
+        _dz = @dz(_di_center, k)
+        dP_num = (-γ_eff[i, j, k] * RP[i, j, k] + γ_eff[i, j, k + 1] * RP[i, j, k + 1]) * _dz
+        Rz_ijk =
+            (
+            d_za(τzz, _dz) + d_xi(τxz, _dx) + d_yi(τyz, _dy) -
+                d_za(P, _dz) - dP_num - d_za(ΔPψ, _dz) - av_z(ρgz)
+        ) / Dz[i, j, k]
+        dVzdτ_ijk = αVz[i, j, k] * dVzdτ[i, j, k] + Rz_ijk
+        Rz[i, j, k] = Rz_ijk
+        dVzdτ[i, j, k] = dVzdτ_ijk
+        Vz[i + 1, j + 1, k + 1] += dVzdτ_ijk * βVz[i, j, k] * dτVz[i, j, k]
+    end
+
+    return nothing
+end
+
+@parallel_indices (i, j, k) function compute_DR_damping_V!(
+        Vx::AbstractArray{T, 3},
+        Vy,
+        Vz,
+        dVxdτ,
+        dVydτ,
+        dVzdτ,
+        αVx,
+        αVy,
+        αVz,
+        βVx,
+        βVy,
+        βVz,
+        dτVx,
+        dτVy,
+        dτVz,
+        P,
+        γ_eff,
+        RP,
+        ΔPψ,
+        τxx,
+        τyy,
+        τzz,
+        τxy,
+        τxz,
+        τyz,
+        ρgx,
+        ρgy,
+        ρgz,
+        Dx,
+        Dy,
+        Dz,
+        _di_center,
+        _di_vertex,
+    ) where {T}
+
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_zi(A, _dz) = _d_zi(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+
+    if i ≤ size(Dx, 1) && j ≤ size(Dx, 2) && k ≤ size(Dx, 3)
+        _dx = @dx(_di_center, i)
+        _dy = @dy(_di_vertex, j)
+        _dz = @dz(_di_vertex, k)
+        dP_num = (-γ_eff[i, j, k] * RP[i, j, k] + γ_eff[i + 1, j, k] * RP[i + 1, j, k]) * _dx
+        Rx_ijk =
+            (
+            d_xa(τxx, _dx) + d_yi(τxy, _dy) + d_zi(τxz, _dz) -
+                d_xa(P, _dx) - dP_num - d_xa(ΔPψ, _dx) - av_x(ρgx)
+        ) / Dx[i, j, k]
+        dVxdτ_ijk = αVx[i, j, k] * dVxdτ[i, j, k] + Rx_ijk
+        dVxdτ[i, j, k] = dVxdτ_ijk
+        Vx[i + 1, j + 1, k + 1] += dVxdτ_ijk * βVx[i, j, k] * dτVx[i, j, k]
+    end
+    if i ≤ size(Dy, 1) && j ≤ size(Dy, 2) && k ≤ size(Dy, 3)
+        _dx = @dx(_di_vertex, i)
+        _dy = @dy(_di_center, j)
+        _dz = @dz(_di_vertex, k)
+        dP_num = (-γ_eff[i, j, k] * RP[i, j, k] + γ_eff[i, j + 1, k] * RP[i, j + 1, k]) * _dy
+        Ry_ijk =
+            (
+            d_ya(τyy, _dy) + d_xi(τxy, _dx) + d_zi(τyz, _dz) -
+                d_ya(P, _dy) - dP_num - d_ya(ΔPψ, _dy) - av_y(ρgy)
+        ) / Dy[i, j, k]
+        dVydτ_ijk = αVy[i, j, k] * dVydτ[i, j, k] + Ry_ijk
+        dVydτ[i, j, k] = dVydτ_ijk
+        Vy[i + 1, j + 1, k + 1] += dVydτ_ijk * βVy[i, j, k] * dτVy[i, j, k]
+    end
+    if i ≤ size(Dz, 1) && j ≤ size(Dz, 2) && k ≤ size(Dz, 3)
+        _dx = @dx(_di_vertex, i)
+        _dy = @dy(_di_vertex, j)
+        _dz = @dz(_di_center, k)
+        dP_num = (-γ_eff[i, j, k] * RP[i, j, k] + γ_eff[i, j, k + 1] * RP[i, j, k + 1]) * _dz
+        Rz_ijk =
+            (
+            d_za(τzz, _dz) + d_xi(τxz, _dx) + d_yi(τyz, _dy) -
+                d_za(P, _dz) - dP_num - d_za(ΔPψ, _dz) - av_z(ρgz)
+        ) / Dz[i, j, k]
+        dVzdτ_ijk = αVz[i, j, k] * dVzdτ[i, j, k] + Rz_ijk
+        dVzdτ[i, j, k] = dVzdτ_ijk
+        Vz[i + 1, j + 1, k + 1] += dVzdτ_ijk * βVz[i, j, k] * dτVz[i, j, k]
+    end
 
     return nothing
 end

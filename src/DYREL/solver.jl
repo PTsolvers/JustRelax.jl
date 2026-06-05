@@ -2,7 +2,18 @@
 """
     solve_DYREL!(
         stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
-        kwargs...,
+        viscosity_cutoff=(-Inf, Inf),
+        viscosity_relaxation=1.0e-2,
+        λ_relaxation_DR=1,
+        λ_relaxation_PH=1,
+        iterMax=50.0e3,
+        total_iterMax=50.0e3,
+        nout=100,
+        rel_drop=1.0e-2,
+        b_width=(4, 4, 0),
+        verbose_PH=true,
+        verbose_DR=true,
+        linear_viscosity=false,
     )
 
 Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
@@ -29,17 +40,40 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `total_iterMax`: Maximum number of total dynamic-relaxation iterations. Default: `50.0e3`.
 - `nout`: Output frequency for residuals. Default: `100`.
 - `rel_drop`: Relative residual drop tolerance. Default: `1.0e-2`.
+- `b_width`: Boundary width tuple kept for compatibility. Default: `(4, 4, 0)`.
 - `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
+
+For backward compatibility, callers may still pass a nested keyword named `kwargs`,
+e.g. `solve_DYREL!(...; kwargs=(; verbose_DR=false))`. New code should pass solver
+options directly, e.g. `solve_DYREL!(...; verbose_DR=false)`.
 """
-function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
-    out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
+function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    out = solve_DYREL!(backend(stokes), stokes, args...; _dyrel_solver_kwargs(kwargs)...)
     return out
 end
 
 # entry point for extensions
-solve_DYREL!(::CPUBackendTrait, stokes, args...; kwargs) = _solve_DYREL!(stokes, args...; kwargs...)
+solve_DYREL!(::CPUBackendTrait, stokes, args...; kwargs...) =
+    _solve_DYREL!(stokes, args...; _dyrel_solver_kwargs(kwargs)...)
+
+"""
+    _dyrel_solver_kwargs(kwargs)
+
+Normalize DYREL solver keywords.
+
+Accepts the current direct keyword style, e.g. `verbose_DR=false`, and the legacy
+nested style, e.g. `kwargs=(; verbose_DR=false)`. If both are supplied, direct
+keywords override entries from the nested `kwargs` named tuple.
+"""
+function _dyrel_solver_kwargs(kwargs)
+    direct_kwargs = NamedTuple(kwargs)
+    nested_kwargs = get(direct_kwargs, :kwargs, NamedTuple())
+    direct_keys = filter(!=(:kwargs), keys(direct_kwargs))
+    direct_without_nested = NamedTuple{Tuple(direct_keys)}(direct_kwargs)
+    return merge(nested_kwargs, direct_without_nested)
+end
 
 function _solve_DYREL!(
         stokes::JustRelax.StokesArrays,
@@ -108,7 +142,6 @@ function _solve_DYREL!(
     err_evo_P = Float64[]
     err_evo_it = Float64[]
     itg = 0
-    P_num = similar(stokes.P)
 
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
@@ -130,7 +163,7 @@ function _solve_DYREL!(
         # update_halo!(stokes.τ.yy_v)
         # update_halo!(stokes.τ.xy)
 
-        free_surface_stress_bcs!(stokes, flow_bcs, dim)
+        # free_surface_stress_bcs!(stokes, flow_bcs, dim)
 
         if !linear_viscosity
             update_viscosity_τII!(
@@ -208,8 +241,13 @@ function _solve_DYREL!(
             itg += 1
             iter += 1
 
-            # Pseudo-old dudes
-            foreach(copyto!, residuals0, residuals)
+            check_residual = iszero(iter % nout)
+            store_residual = check_residual || iszero((iter + 1) % nout)
+
+            if check_residual
+                # Pseudo-old dudes
+                foreach(copyto!, residuals0, residuals)
+            end
 
             # compute divergence and deviatoric strain rate in one pass
             compute_∇V_strain_rate!(stokes, _di, ni, dim)
@@ -245,29 +283,43 @@ function _solve_DYREL!(
                 )
             end
 
-            # Residuals
-            @. P_num = dyrel.γ_eff * stokes.R.RP
-            @parallel (@idx ni) compute_DR_residual_V!(
-                residuals...,
-                stokes.P,
-                P_num,
-                stokes.ΔPψ,
-                @stress(stokes)...,
-                ρg...,
-                fields.D...,
-                _di.center,
-                _di.vertex,
-            )
-
-            # Damping and pseudo-transient velocity updates
-            @parallel (@idx ni) update_V_damping_DR_V!(
-                @velocity(stokes),
-                fields.dVdτ,
-                residuals,
-                fields.αV,
-                fields.βV,
-                fields.dτV,
-            )
+            # Residuals, damping, and pseudo-transient velocity updates
+            if store_residual
+                @parallel (@idx ni) compute_DR_residual_damping_V!(
+                    residuals...,
+                    @velocity(stokes)...,
+                    fields.dVdτ...,
+                    fields.αV...,
+                    fields.βV...,
+                    fields.dτV...,
+                    stokes.P,
+                    dyrel.γ_eff,
+                    stokes.R.RP,
+                    stokes.ΔPψ,
+                    @stress(stokes)...,
+                    ρg...,
+                    fields.D...,
+                    _di.center,
+                    _di.vertex,
+                )
+            else
+                @parallel (@idx ni) compute_DR_damping_V!(
+                    @velocity(stokes)...,
+                    fields.dVdτ...,
+                    fields.αV...,
+                    fields.βV...,
+                    fields.dτV...,
+                    stokes.P,
+                    dyrel.γ_eff,
+                    stokes.R.RP,
+                    stokes.ΔPψ,
+                    @stress(stokes)...,
+                    ρg...,
+                    fields.D...,
+                    _di.center,
+                    _di.vertex,
+                )
+            end
             flow_bcs!(stokes, flow_bcs)
             free_surface_bcs!(
                 stokes, flow_bcs, stokes.viscosity.η_vep, grid.di.velocity..., dim
@@ -275,9 +327,10 @@ function _solve_DYREL!(
             update_halo!(@velocity(stokes)...)
 
             # Residual check
-            if iszero(iter % nout)
+            if check_residual
 
-                errV = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]), dim)
+                # λmaxV is refreshed by Gershgorin below before it is used again.
+                errV = ntuple(d -> weighted_norm_mpi!(fields.λmaxV[d], fields.D[d], residuals[d]) / √(v_dofs[d]), dim)
 
                 if iter == nout
                     errV00 = errV
@@ -400,9 +453,40 @@ end
 function compute_λminV!(fields, residuals, residuals0, ni, ::Val{N}) where {N}
     @parallel (@idx ni) compute_dV!(fields.dV, fields.dVdτ, fields.βV, fields.dτV)
 
-    numerator = sum(ntuple(d -> sum_mpi(fields.dV[d] .* (residuals[d] .- residuals0[d])), Val(N)))
-    denominator = sum(ntuple(d -> sum_mpi(fields.dV[d] .^ 2), Val(N)))
+    # λmaxV is scratch here; Gershgorin overwrites it before the λmax values are needed.
+    numerator = sum(ntuple(d -> λmin_numerator_mpi!(fields.λmaxV[d], fields.dV[d], residuals[d], residuals0[d]), Val(N)))
+    denominator = sum(ntuple(d -> sum_abs2_mpi!(fields.λmaxV[d], fields.dV[d]), Val(N)))
     return abs(numerator) / denominator
+end
+
+function weighted_norm_mpi!(scratch, D, R)
+    @parallel (@idx size(scratch)) weighted_norm_kernel!(scratch, D, R)
+    return sqrt(sum_mpi(scratch))
+end
+
+@parallel_indices (I...) function weighted_norm_kernel!(scratch, D, R)
+    @inbounds scratch[I...] = abs2(D[I...] * R[I...])
+    return nothing
+end
+
+function λmin_numerator_mpi!(scratch, dV, R, R0)
+    @parallel (@idx size(scratch)) λmin_numerator_kernel!(scratch, dV, R, R0)
+    return sum_mpi(scratch)
+end
+
+@parallel_indices (I...) function λmin_numerator_kernel!(scratch, dV, R, R0)
+    @inbounds scratch[I...] = dV[I...] * (R[I...] - R0[I...])
+    return nothing
+end
+
+function sum_abs2_mpi!(scratch, A)
+    @parallel (@idx size(scratch)) abs2_kernel!(scratch, A)
+    return sum_mpi(scratch)
+end
+
+@parallel_indices (I...) function abs2_kernel!(scratch, A)
+    @inbounds scratch[I...] = abs2(A[I...])
+    return nothing
 end
 
 function copy_stress_vertices!(stokes::JustRelax.StokesArrays, ::Val{2})

@@ -22,6 +22,81 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt
     return nothing
 end
 
+@parallel_indices (I...) function compute_stress_centers_DRYEL!(
+        τ,
+        τ_o,
+        τII,
+        ε,
+        ε_pl,
+        EII_pl,
+        ε_vol_pl,
+        P,
+        λ,
+        η,
+        η_vep,
+        ΔPψ,
+        rheology, phase_ratios_center, λ_relaxation, dt
+    )
+    Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
+
+    @inbounds begin
+        τij_o = τ_o[1][I...], τ_o[2][I...], τ_o[3][I...]
+        εij = ε[1][I...], ε[2][I...], av(ε[3])
+        λij = λ[I...]
+        ηij = η[I...]
+        Pij = P[I...]
+        EII = EII_pl[I...]
+        ratio = phase_ratios_center[I...]
+
+        τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
+            compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
+
+        τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
+        ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
+        ε_vol_pl[I...] = ε_vol_pl_I
+        τII[I...] = τII_I
+        η_vep[I...] = ηvep_I
+        λ[I...] = λ_I
+        ΔPψ[I...] = ΔPψ_I
+    end
+
+    return nothing
+end
+
+@parallel_indices (I...) function compute_stress_vertices_DRYEL!(
+        τ_v,
+        τ_ov,
+        ε,
+        ε_pl,
+        EII_pl,
+        P,
+        λv,
+        ηv,
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt
+    )
+
+    ni = size(phase_ratios_center)
+
+    @inbounds begin
+        Ic = clamped_indices(ni, I...)
+        τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
+        εij = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
+        λvij = λv[I...]
+        ηij = ηv[I...]
+        Pij = av_clamped(P, Ic...)
+        EIIv = av_clamped(EII_pl, Ic...)
+        ratio = phase_ratios_vertex[I...]
+
+        τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
+
+        τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
+        ε_pl[3][I...] = εxy_pl
+        λv[I...] = λ_I
+    end
+
+    return nothing
+end
+
 @parallel_indices (I...) function compute_stress_DRYEL!(
         τ,
         τ_v,
@@ -139,14 +214,26 @@ end
     τij = @. 2 * η_ve * εij_eff
     τII = second_invariant(τij)
 
-    # F + gradients at trial stress via GeoParams (DP cone, DPCap cone+cap, ...)
+    if !ispl
+        η_vep = τII * 0.5 * inv(second_invariant(εij))
+        return τij..., zero_tuple(εij)..., τII, 0.0, 0.0, η_vep, 0.0
+    end
+
+    # F at trial stress via GeoParams (DP cone, DPCap cone+cap, ...)
     elements = rheology.CompositeRheology[1].elements
     args = (; P = P, τII = τII, EII = EII)
     F = _yieldfunction_elements(elements, args)
+
+    if F < 0
+        η_vep = τII * 0.5 * inv(second_invariant(εij))
+        return τij..., zero_tuple(εij)..., τII, 0.0, 0.0, η_vep, 0.0
+    end
+
     dQdτ, dQdP, dFdP = _plastic_grad_elements(elements, τij, args)
     # dQdτ is already in tensor convention (shear slots halved inside _plastic_grad_primitive)
 
-    λ, ε_vol_pl = if ispl && F ≥ 0
+    
+    λ, ε_vol_pl = if F ≥ 0
         λ_new = F / (η_ve + η_reg + Kb * dt * dFdP * dQdP)
         λ_relaxation * λ_new + (1 - λ_relaxation) * λ
         # Volumetric plastic strain rate

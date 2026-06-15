@@ -1,4 +1,4 @@
-function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt)
+function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation, dt, do_partials = Val(false))
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
@@ -17,7 +17,10 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt
         stokes.viscosity.ηv,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
-        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt
+        dyrel.∂τc_∂ε,
+        dyrel.∂τv_∂ε,
+        dyrel.∂ΔPψc_∂ε,
+        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, do_partials
     )
     return nothing
 end
@@ -39,8 +42,11 @@ end
         ηv,
         η_vep,
         ΔPψ,
-        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt
-    )
+        ∂τc_∂ε,
+        ∂τv_∂ε,
+        ∂ΔPψc_∂ε,
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, ::Val{do_partials}
+    ) where {do_partials}
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
 
@@ -65,6 +71,11 @@ end
         ε_pl[3][I...] = εxy_pl
         λv[I...] = λ_I
 
+        if do_partials
+            Jτ_vertex = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
+            store_stress_jacobian!(∂τv_∂ε, Jτ_vertex, I...)
+        end
+
         ## CENTER CALCULATION
         if all(I .≤ ni)
             τij_o = τ_o[1][I...], τ_o[2][I...], τ_o[3][I...]
@@ -86,6 +97,12 @@ end
             η_vep[I...] = ηvep_I
             λ[I...] = λ_I
             ΔPψ[I...] = ΔPψ_I
+
+            if do_partials
+                Jτ_center = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
+                store_stress_jacobian!(∂τc_∂ε, Jτ_center, I...)
+                store_pressure_correction_jacobian!(∂ΔPψc_∂ε, Jτ_center, I...)
+            end
         end
     end
 
@@ -117,6 +134,34 @@ end
     end
 end
 
+@inline function local_stress_jacobian_ε(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
+    εij_vec = SA[εij...]
+    return ForwardDiff.jacobian(
+        ε -> compute_local_stress(Tuple(ε), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII),
+        εij_vec,
+    )
+end
+
+@inline function store_stress_jacobian!(∂τ_∂ε, Jτ, I...)
+    ∂τ_∂ε[1][I...] = Jτ[1, 1]
+    ∂τ_∂ε[2][I...] = Jτ[1, 2]
+    ∂τ_∂ε[3][I...] = Jτ[1, 3]
+    ∂τ_∂ε[4][I...] = Jτ[2, 1]
+    ∂τ_∂ε[5][I...] = Jτ[2, 2]
+    ∂τ_∂ε[6][I...] = Jτ[2, 3]
+    ∂τ_∂ε[7][I...] = Jτ[3, 1]
+    ∂τ_∂ε[8][I...] = Jτ[3, 2]
+    ∂τ_∂ε[9][I...] = Jτ[3, 3]
+    return nothing
+end
+
+@inline function store_pressure_correction_jacobian!(∂ΔPψ_∂ε, Jτ, I...)
+    ∂ΔPψ_∂ε[1][I...] = Jτ[9, 1]
+    ∂ΔPψ_∂ε[2][I...] = Jτ[9, 2]
+    ∂ΔPψ_∂ε[3][I...] = Jτ[9, 3]
+    return nothing
+end
+
 @inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology, dt, EII)
     # Only is_pl and η_reg are still needed locally; F + gradients come from GeoParams.
     # EII=0 here matches the existing DYREL pattern (no EII-softening in the inner loop).
@@ -133,7 +178,7 @@ end
     εII = second_invariant(εij_eff)
 
     # early return if there is no deformation
-    iszero(εII) && return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η, 0.0)
+    iszero(εII) && return SA[zero_tuple(εij)..., zero_tuple(εij)..., zero(εII), zero(εII), zero(εII), η, zero(εII)]
 
     # trial stress
     τij = @. 2 * η_ve * εij_eff
@@ -173,21 +218,22 @@ end
     # Effective viscoelastic-plastic viscosity
     η_vep = τII * 0.5 * inv(second_invariant(εij))
 
-    return τij..., εij_pl..., τII, λ, ΔPψ, η_vep, ε_vol_pl
+    return SA[τij..., εij_pl..., τII, λ, ΔPψ, η_vep, ε_vol_pl]
 end
 
 # this returns zero for: τxx, τyy, τxy, εxx_pl, εyy_pl, εxy_pl, τII, λ, ΔPψ, ηvep, ε_vol_pl
-@inline empty_stress_solution(::NTuple{3, T}) where {T} = zero_tuple(T, Val(11))
+@inline empty_stress_solution(::NTuple{3, T}) where {T} = zero_static_vector(T, Val(11))
 # 3D placeholder: τxx, τyy, τzz, τyz, τxz, τxy, εxx_pl..εxy_pl, τII, λ, ΔPψ, ηvep, ε_vol_pl
-@inline empty_stress_solution(::NTuple{6, T}) where {T} = zero_tuple(T, Val(17))
+@inline empty_stress_solution(::NTuple{6, T}) where {T} = zero_static_vector(T, Val(17))
 
 @inline zero_tuple(::Type{T}, ::Val{N}) where {T, N} = ntuple(_ -> zero(T), Val(N))
 @inline zero_tuple(::NTuple{N, T}) where {T, N} = zero_tuple(T, Val(N))
+@inline zero_static_vector(::Type{T}, ::Val{N}) where {T, N} = SA[zero_tuple(T, Val(N))...]
 
 
 ## VARIATIONAL STOKES STRESS KERNELS
 
-function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt)
+function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt, do_partials = Val(false))
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
@@ -205,8 +251,11 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.Roc
         stokes.viscosity.η,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
+        dyrel.∂τc_∂ε,
+        dyrel.∂τv_∂ε,
+        dyrel.∂ΔPψc_∂ε,
         ϕ::JustRelax.RockRatio,
-        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt
+        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, do_partials
     )
     return nothing
 end
@@ -227,9 +276,12 @@ end
         η,
         η_vep,
         ΔPψ,
+        ∂τc_∂ε,
+        ∂τv_∂ε,
+        ∂ΔPψc_∂ε,
         ϕ::JustRelax.RockRatio,
-        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt
-    )
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, ::Val{do_partials}
+    ) where {do_partials}
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
 
@@ -254,6 +306,11 @@ end
             τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
             ε_pl[3][I...] = εxy_pl
             λv[I...] = λ_I
+
+            if do_partials
+                Jτ_vertex = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij)
+                store_stress_jacobian!(∂τv_∂ε, Jτ_vertex, I...)
+            end
 
         else
             τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = 0.0e0, 0.0e0, 0.0e0
@@ -283,6 +340,12 @@ end
                 η_vep[I...] = ηvep_I
                 λ[I...] = λ_I
                 ΔPψ[I...] = ΔPψ_I
+
+                if do_partials
+                    Jτ_center = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
+                    store_stress_jacobian!(∂τc_∂ε, Jτ_center, I...)
+                    store_pressure_correction_jacobian!(∂ΔPψc_∂ε, Jτ_center, I...)
+                end
 
             else
                 τ[1][I...], τ[2][I...], τ[3][I...] = 0.0e0, 0.0e0, 0.0e0

@@ -10,6 +10,9 @@ Creates a new `DYREL` struct with fields initialized to zero.
 - `CFL`: Courant-Friedrichs-Lewy number.
 - `c_fact`: Damping scaling factor.
 """
+@inline zero_field_tuple(::Val{N}, dims...) where {N} =
+    ntuple(_ -> @zeros(dims...), Val(N))
+
 function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
     nx, ny = ni
     # penalty parameter
@@ -42,16 +45,24 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     αVx = @zeros(nx - 1, ny)
     αVy = @zeros(nx, ny - 1)
     αVz = @zeros(1, 1)  # dummy for 2D
-    ∂εᵢᵢ_∂Vx = @zeros(nx, ny)
-    ∂εᵢᵢ_∂Vy = @zeros(nx, ny)
-    ∂εxy_∂Vx = @zeros(nx + 1, ny + 1)
-    ∂εxy_∂Vy = @zeros(nx + 1, ny + 1)
+    ∂Rx_∂Vx  = zero_field_tuple(Val(9), nx - 1, ny)
+    ∂Rx_∂Vy  = zero_field_tuple(Val(12), nx - 1, ny)
+    ∂Ry_∂Vx  = zero_field_tuple(Val(12), nx, ny - 1)
+    ∂Ry_∂Vy  = zero_field_tuple(Val(9), nx, ny - 1)
+    ∂τc_∂ε   = zero_field_tuple(Val(9), nx, ny)
+    ∂τv_∂ε   = zero_field_tuple(Val(9), nx + 1, ny + 1)
+    ∂ΔPψc_∂ε = zero_field_tuple(Val(3), nx, ny)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
-    return JustRelax.DYREL{T, F}(
+    J = Union{typeof(∂Rx_∂Vx), typeof(∂Rx_∂Vy), typeof(∂Ry_∂Vx), typeof(∂Ry_∂Vy)}
+    S = typeof(∂τc_∂ε)
+    D = typeof(∂ΔPψc_∂ε)
+    return JustRelax.DYREL{T, F, J, S, D}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
-        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact, ∂εᵢᵢ_∂Vx, ∂εᵢᵢ_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact,
+        ∂τc_∂ε, ∂τv_∂ε, ∂ΔPψc_∂ε,
+        ∂Rx_∂Vx, ∂Rx_∂Vy, ∂Ry_∂Vx, ∂Ry_∂Vy
     )
 end
 
@@ -89,12 +100,24 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     αVx = @zeros(nx - 1, ny, nz)
     αVy = @zeros(nx, ny - 1, nz)
     αVz = @zeros(nx, ny, nz - 1)
+    ∂Rx_∂Vx  = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Rx_∂Vy  = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Ry_∂Vx  = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Ry_∂Vy  = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂τc_∂ε   = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂τv_∂ε   = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂ΔPψc_∂ε = zero_field_tuple(Val(1), 1, 1, 1)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
-    return JustRelax.DYREL{T, F}(
+    J = typeof(∂Rx_∂Vx)
+    S = typeof(∂τc_∂ε)
+    D = typeof(∂ΔPψc_∂ε)
+    return JustRelax.DYREL{T, F, J, S, D}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
-        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact,
+        ∂τc_∂ε, ∂τv_∂ε, ∂ΔPψc_∂ε,
+        ∂Rx_∂Vx, ∂Rx_∂Vy, ∂Ry_∂Vx, ∂Ry_∂Vy
     )
 end
 

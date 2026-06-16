@@ -1,5 +1,5 @@
 """
-    struct DYREL{T, F, J, S, D}
+    struct DYREL{T, F, S, D}
 
 Structure containing parameters and arrays for the DYREL (Dynamic Relaxation) solver.
 
@@ -19,7 +19,7 @@ Structure containing parameters and arrays for the DYREL (Dynamic Relaxation) so
 - `ϵ_vel`: Velocity convergence tolerance.
 - `c_fact`: Damping scaling factor.
 """
-struct DYREL{T, F, J, S, D}
+struct DYREL{T, F, S, D}
     γ_eff::T  # penalty parameter
     Dx::T     # diagonal preconditioner
     Dy::T     # diagonal preconditioner
@@ -53,8 +53,4 @@ struct DYREL{T, F, J, S, D}
     ∂τc_∂ε::S
     ∂τv_∂ε::S
     ∂ΔPψc_∂ε::D
-    ∂Rx_∂Vx::J
-    ∂Rx_∂Vy::J
-    ∂Ry_∂Vx::J
-    ∂Ry_∂Vy::J
 end

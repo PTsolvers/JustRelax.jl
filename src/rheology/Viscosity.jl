@@ -2,19 +2,19 @@
 
 # without phase ratios
 @inline function update_viscosity_εII!(
-        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = Val(false), ∂η_∂ε = nothing
     )
     update_viscosity!(
-        stokes, args, rheology, cutoff, compute_viscosity_εII; relaxation = relaxation
+        stokes, args, rheology, cutoff, compute_viscosity_εII; relaxation = relaxation, do_partials = do_partials, ∂η_∂ε = ∂η_∂ε
     )
     return nothing
 end
 
 @inline function update_viscosity_τII!(
-        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = Val(false), ∂η_∂ε = nothing
     )
     update_viscosity!(
-        stokes, args, rheology, cutoff, compute_viscosity_τII; relaxation = relaxation
+        stokes, args, rheology, cutoff, compute_viscosity_τII; relaxation = relaxation, do_partials = do_partials, ∂η_∂ε = ∂η_∂ε
     )
     return nothing
 end
@@ -28,11 +28,13 @@ end
         cutoff,
         fn_viscosity::F;
         relaxation = 1.0e0,
+        do_partials = Val(false),
+        ∂η_∂ε = nothing,
     ) where {F}
 
     fn = get_viscosity_fn(fn_viscosity)
 
-    fn(stokes, args, rheology, cutoff, fn_viscosity; relaxation = relaxation)
+    fn(stokes, args, rheology, cutoff, fn_viscosity; relaxation = relaxation, do_partials = do_partials, ∂η_∂ε = ∂η_∂ε)
 
     return nothing
 end
@@ -50,6 +52,8 @@ end
         cutoff;
         air_phase::Integer = 0,
         relaxation = 1.0e0,
+        do_partials = Val(false),
+        ∂η_∂ε = (nothing, nothing),
     )
     update_viscosity!(
         stokes,
@@ -60,6 +64,8 @@ end
         cutoff,
         compute_viscosity_εII;
         relaxation = relaxation,
+        do_partials = do_partials,
+        ∂η_∂ε = ∂η_∂ε,
     )
     return nothing
 end
@@ -72,6 +78,8 @@ end
         cutoff;
         air_phase::Integer = 0,
         relaxation = 1.0e0,
+        do_partials = Val(false),
+        ∂η_∂ε = (nothing, nothing),
     )
     update_viscosity!(
         stokes,
@@ -82,6 +90,8 @@ end
         cutoff,
         compute_viscosity_τII;
         relaxation = relaxation,
+        do_partials = do_partials,
+        ∂η_∂ε = ∂η_∂ε,
     )
     return nothing
 end
@@ -95,12 +105,18 @@ end
         cutoff,
         fn_viscosity::F;
         relaxation = 1.0e0,
+        do_partials = Val(false),
+        ∂η_∂ε = (nothing, nothing),
     ) where {F}
 
     fn = get_viscosity_fn(fn_viscosity)
 
     fn(
-        stokes, phase_ratios, args, rheology, cutoff; relaxation = relaxation, air_phase = air_phase
+        stokes, phase_ratios, args, rheology, cutoff;
+        relaxation = relaxation,
+        air_phase = air_phase,
+        do_partials = do_partials,
+        ∂η_∂ε = ∂η_∂ε,
     )
     return nothing
 end
@@ -108,40 +124,40 @@ end
 ## 2D KERNELS
 
 function compute_viscosity_τII!(
-        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = Val(false), ∂η_∂ε = nothing
     )
-    return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_τII)
+    return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_τII, do_partials, ∂η_∂ε)
 end
 
 function compute_viscosity_εII!(
-        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = Val(false), ∂η_∂ε = nothing
     )
-    return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_εII)
+    return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_εII, do_partials, ∂η_∂ε)
 end
 
 # generic fallback
 function compute_viscosity!(
-        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = Val(false)
     )
-    compute_viscosity_εII!(stokes, args, rheology, cutoff; relaxation = relaxation)
+    compute_viscosity_εII!(stokes, args, rheology, cutoff; relaxation = relaxation, do_partials = do_partials)
     return nothing
 end
 
-function compute_viscosity!(::CPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
+function compute_viscosity!(::CPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F, do_partials = Val(false), ∂η_∂ε = nothing) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
-function _compute_viscosity!(stokes::JustRelax.StokesArrays, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
+function _compute_viscosity!(stokes::JustRelax.StokesArrays, ν, args, rheology, cutoff, fn_viscosity::F, do_partials, ∂η_∂ε) where {F}
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(
-        stokes.viscosity.η, ν, @strain(stokes)..., args, rheology, cutoff, fn_viscosity
+        stokes.viscosity.η, ν, @strain(stokes)..., args, rheology, cutoff, fn_viscosity, do_partials, ∂η_∂ε
     )
     return nothing
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-        η, ν, Axx, Ayy, Axyv, args, rheology, cutoff, fn_viscosity::F
-    ) where {F}
+        η, ν, Axx, Ayy, Axyv, args, rheology, cutoff, fn_viscosity::F, ::Val{do_partials}, ∂η_∂ε_field
+    ) where {F, do_partials}
 
     # convenience closure
     Base.@propagate_inbounds @inline gather(A) = _gather(A, I...)
@@ -150,19 +166,18 @@ end
         # cache
         A = Axx[I...], Ayy[I...], Axyv[I...]
 
-        # we need strain rate not to be zero, otherwise we get NaNs
-        AII_0 = allzero(A...) * eps()
-
         # argument fields at local index
         args_ij = local_viscosity_args(args, I...)
 
-        # compute second invariant of strain rate tensor
-        AII = second_invariant(AII_0 + A[1], -AII_0 + A[2], A[3])
-
         # compute and update stress viscosity
-        ηi = fn_viscosity(rheology, AII, args_ij)
-        ηi = continuation_linear(ηi, η[I...], ν)
-        η[I...] = clamp(ηi, cutoff...)
+        η_old = η[I...]
+        η[I...] = compute_local_viscosity(A, η_old, ν, args_ij, rheology, cutoff, fn_viscosity)
+
+        # compute gradients
+        if do_partials
+            ∂η_∂ε = local_viscosity_gradient_strainrate(A, η_old, ν, args_ij, rheology, cutoff, fn_viscosity)
+            store_viscosity_gradient!(∂η_∂ε_field, ∂η_∂ε, I...)
+        end
     end
 
     return nothing
@@ -191,10 +206,7 @@ end
         AII_ij = AII[I...]
 
         # compute and update stress viscosity
-        ηi = fn_viscosity(rheology, AII_ij, args_ij)
-
-        ηi = continuation_linear(ηi, η[I...], ν)
-        η[I...] = clamp(ηi, cutoff...)
+        η[I...] = compute_local_viscosity(AII_ij, η[I...], ν, args_ij, rheology, cutoff, fn_viscosity)
     end
 
     return nothing
@@ -208,9 +220,11 @@ function compute_viscosity_τII!(
         cutoff;
         air_phase::Integer = 0,
         relaxation = 1.0e0,
+        do_partials = Val(false),
+        ∂η_∂ε = (nothing, nothing),
     )
     compute_viscosity!(
-        backend(stokes), stokes, relaxation, phase_ratios, args, rheology, air_phase, cutoff, compute_viscosity_τII
+        backend(stokes), stokes, relaxation, phase_ratios, args, rheology, air_phase, cutoff, compute_viscosity_τII, do_partials, ∂η_∂ε
     )
     return nothing
 end
@@ -223,9 +237,11 @@ function compute_viscosity_εII!(
         cutoff;
         air_phase::Integer = 0,
         relaxation = 1.0e0,
+        do_partials = Val(false),
+        ∂η_∂ε = (nothing, nothing),
     )
     compute_viscosity!(
-        backend(stokes), stokes, relaxation, phase_ratios, args, rheology, air_phase, cutoff, compute_viscosity_εII
+        backend(stokes), stokes, relaxation, phase_ratios, args, rheology, air_phase, cutoff, compute_viscosity_εII, do_partials, ∂η_∂ε
     )
     return nothing
 end
@@ -240,9 +256,11 @@ function compute_viscosity!(
         cutoff;
         air_phase::Integer = 0,
         relaxation = 1.0e0,
+        do_partials = Val(false),
+        ∂η_∂ε = (nothing, nothing),
     )
     compute_viscosity!(
-        backend(stokes), stokes, relaxation, phase_ratios, args, rheology, air_phase, cutoff, compute_viscosity_εII
+        backend(stokes), stokes, relaxation, phase_ratios, args, rheology, air_phase, cutoff, compute_viscosity_εII, do_partials, ∂η_∂ε
     )
     return nothing
 end
@@ -256,9 +274,11 @@ function compute_viscosity!(
         rheology,
         air_phase,
         cutoff,
-        fn_viscosity::F
+        fn_viscosity::F,
+        do_partials = Val(false),
+        ∂η_∂ε = (nothing, nothing)
     ) where {F}
-    _compute_viscosity!(stokes, ν, args, rheology, air_phase, cutoff, fn_viscosity)
+    _compute_viscosity!(stokes, ν, args, rheology, air_phase, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 
     return nothing
 end
@@ -272,9 +292,11 @@ function compute_viscosity!(
         rheology,
         air_phase,
         cutoff,
-        fn_viscosity::F
+        fn_viscosity::F,
+        do_partials,
+        ∂η_∂ε
     ) where {F}
-    _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
+    _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 
     return nothing
 end
@@ -287,7 +309,9 @@ function _compute_viscosity!(
         rheology,
         air_phase,
         cutoff,
-        fn_viscosity::F
+        fn_viscosity::F,
+        do_partials,
+        ∂η_∂ε
     ) where {F}
     ni = size(stokes.viscosity.η)
     # centered viscosity
@@ -302,6 +326,8 @@ function _compute_viscosity!(
         cutoff,
         fn_viscosity,
         local_viscosity_args,
+        do_partials,
+        ∂η_∂ε[1],
     )
     # vertex viscosity
     # skip for 3D for now, may change in the future
@@ -317,6 +343,8 @@ function _compute_viscosity!(
             cutoff,
             fn_viscosity,
             local_viscosity_args_vertex,
+            do_partials,
+            ∂η_∂ε[2],
         )
     end
     return nothing
@@ -330,7 +358,8 @@ function _compute_viscosity!(
         air_phase,
         cutoff,
         fn_viscosity::F,
-        # do_vertices
+        do_partials,
+        ∂η_∂ε,
     ) where {F}
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(
@@ -343,6 +372,8 @@ function _compute_viscosity!(
         cutoff,
         fn_viscosity,
         local_viscosity_args,
+        do_partials,
+        ∂η_∂ε[1],
     )
     # skip for 3D for now, may change in the future
     length(ni) == 3 && return
@@ -355,7 +386,10 @@ function _compute_viscosity!(
         rheology,
         air_phase,
         cutoff,
+        fn_viscosity,
         local_viscosity_args_vertex,
+        do_partials,
+        ∂η_∂ε[2],
     )
     return nothing
 end
@@ -379,8 +413,8 @@ end
 @inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_τII), ::Val{3}) = @stress(stokes.τ)
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-        η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2
-    ) where {F1, F2}
+        η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2, ::Val{do_partials}, ∂η_∂ε_field
+    ) where {F1, F2, do_partials}
 
     # convenience closure
     Base.@propagate_inbounds @inline gather(A) = _gather(A, I...)
@@ -388,9 +422,6 @@ end
     @inbounds begin
         # cache
         A = Axx[I...], Ayy[I...], Axyv[I...]
-
-        # we need strain rate not to be zero, otherwise we get NaNs
-        AII_0 = allzero(A...) * eps()
 
         # argument fields at local index
         args_ij = fn_args(args, I...)
@@ -403,14 +434,15 @@ end
             ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
         end
 
-        # compute second invariant of strain rate tensor
-        Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
-        AII = second_invariant(Aij...)
-
         # compute and update stress viscosity
-        ηi = compute_phase_viscosity(rheology, ratio_ij, AII, fn_viscosity, args_ij)
-        ηi = continuation_linear(ηi, η[I...], ν)
-        η[I...] = clamp(ηi, cutoff...)
+        η_old = η[I...]
+        η[I...] = compute_local_viscosity(A, η_old, ν, ratio_ij, args_ij, rheology, cutoff, fn_viscosity)
+
+        # compute gradients
+        if do_partials
+            ∂η_∂ε = local_viscosity_gradient_strainrate(A, η_old, ν, ratio_ij, args_ij, rheology, cutoff, fn_viscosity)
+            store_viscosity_gradient!(∂η_∂ε_field, ∂η_∂ε, I...)
+        end
     end
 
     return nothing
@@ -465,8 +497,10 @@ end
         air_phase::Integer,
         cutoff,
         fn_viscosity::F1,
-        fn_args::F2
-    ) where {F1, F2}
+        fn_args::F2,
+        ::Val{do_partials},
+        ∂η_∂ε_field
+    ) where {F1, F2, do_partials}
 
     # convenience closures
     Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)
@@ -503,6 +537,63 @@ end
 end
 
 ## HELPER FUNCTIONS
+@inline _primal_value(x) = x
+@inline _primal_value(x::ForwardDiff.Dual) = ForwardDiff.value(x)
+@inline _all_primal_zero(Aij) = all(x -> iszero(_primal_value(x)), Aij)
+
+@inline function _strainrate_second_invariant(Aij::NTuple{3})
+    # we need strain rate not to be zero, otherwise we get NaNs
+    AII_0 = _all_primal_zero(Aij) * eps()
+    return second_invariant(AII_0 + Aij[1], -AII_0 + Aij[2], Aij[3])
+end
+
+@inline function compute_local_viscosity(AII::Number, η_old, ν, args_ij, rheology, cutoff, fn_viscosity)
+    ηi = fn_viscosity(rheology, AII, args_ij)
+    ηi = continuation_linear(ηi, η_old, ν)
+    return clamp(ηi, cutoff...)
+end
+
+@inline function compute_local_viscosity(Aij::NTuple{3}, η_old, ν, args_ij, rheology, cutoff, fn_viscosity)
+    AII = _strainrate_second_invariant(Aij)
+    return compute_local_viscosity(AII, η_old, ν, args_ij, rheology, cutoff, fn_viscosity)
+end
+
+@inline function compute_local_viscosity(AII::Number, η_old, ν, ratio, args_ij, rheology, cutoff, fn_viscosity)
+    ηi = compute_phase_viscosity(rheology, ratio, AII, fn_viscosity, args_ij)
+    ηi = continuation_linear(ηi, η_old, ν)
+    return clamp(ηi, cutoff...)
+end
+
+@inline function compute_local_viscosity(Aij::NTuple{3}, η_old, ν, ratio, args_ij, rheology, cutoff, fn_viscosity)
+    AII = _strainrate_second_invariant(Aij)
+    return compute_local_viscosity(AII, η_old, ν, ratio, args_ij, rheology, cutoff, fn_viscosity)
+end
+
+@inline function local_viscosity_gradient_strainrate(Aij::NTuple{3}, η_old, ν, args_ij, rheology, cutoff, fn_viscosity)
+    Aij_vec = SA[Aij...]
+    return ForwardDiff.gradient(
+        A -> compute_local_viscosity(Tuple(A), η_old, ν, args_ij, rheology, cutoff, fn_viscosity),
+        Aij_vec,
+    )
+end
+
+@inline function local_viscosity_gradient_strainrate(Aij::NTuple{3}, η_old, ν, ratio, args_ij, rheology, cutoff, fn_viscosity)
+    Aij_vec = SA[Aij...]
+    return ForwardDiff.gradient(
+        A -> compute_local_viscosity(Tuple(A), η_old, ν, ratio, args_ij, rheology, cutoff, fn_viscosity),
+        Aij_vec,
+    )
+end
+
+@inline store_viscosity_gradient!(::Nothing, ∂η_∂ε, I...) = nothing
+
+@inline function store_viscosity_gradient!(∂η_∂ε_field, ∂η_∂ε, I...)
+    ∂η_∂ε_field[1][I...] = ∂η_∂ε[1]
+    ∂η_∂ε_field[2][I...] = ∂η_∂ε[2]
+    ∂η_∂ε_field[3][I...] = ∂η_∂ε[3]
+    return nothing
+end
+
 getindex_or_scalar(A::AbstractArray, I::Vararg{Integer, N}) where {N} = A[I...]
 getindex_or_scalar(A::Number, I::Vararg{Integer, N}) where {N} = A
 

@@ -154,10 +154,10 @@ end
     εS = dε_vertex_dVx(i + 1, j,     vi, vj, _di_vertex, _di_vx, ni_center)
     εN = dε_vertex_dVx(i + 1, j + 1, vi, vj, _di_vertex, _di_vx, ni_center)
 
-    dτxxW = dτ_dV(dyrel.∂τc_∂ε, 1, i,     j, εW.εxx, εW.εyy, εW.εxy)
-    dτxxE = dτ_dV(dyrel.∂τc_∂ε, 1, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
-    dτxyS = dτ_dV(dyrel.∂τv_∂ε, 3, i + 1, j,     εS.εxx, εS.εyy, εS.εxy)
-    dτxyN = dτ_dV(dyrel.∂τv_∂ε, 3, i + 1, j + 1, εN.εxx, εN.εyy, εN.εxy)
+    dτxxW = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 1, i,     j, εW.εxx, εW.εyy, εW.εxy)
+    dτxxE = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 1, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
+    dτxyS = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j,     εS.εxx, εS.εyy, εS.εxy)
+    dτxyN = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εN.εxx, εN.εyy, εN.εxy)
 
     dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i,     j, εW.εxx, εW.εyy, εW.εxy)
     dΔPψE = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
@@ -185,10 +185,10 @@ end
     εS = dε_vertex_dVy(i + 1, j,     vi, vj, _di_vertex, _di_vy, ni_center)
     εN = dε_vertex_dVy(i + 1, j + 1, vi, vj, _di_vertex, _di_vy, ni_center)
 
-    dτxxW = dτ_dV(dyrel.∂τc_∂ε, 1, i,     j, εW.εxx, εW.εyy, εW.εxy)
-    dτxxE = dτ_dV(dyrel.∂τc_∂ε, 1, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
-    dτxyS = dτ_dV(dyrel.∂τv_∂ε, 3, i + 1, j,     εS.εxx, εS.εyy, εS.εxy)
-    dτxyN = dτ_dV(dyrel.∂τv_∂ε, 3, i + 1, j + 1, εN.εxx, εN.εyy, εN.εxy)
+    dτxxW = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 1, i,     j, εW.εxx, εW.εyy, εW.εxy)
+    dτxxE = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 1, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
+    dτxyS = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j,     εS.εxx, εS.εyy, εS.εxy)
+    dτxyN = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εN.εxx, εN.εyy, εN.εxy)
 
     dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i,     j, εW.εxx, εW.εyy, εW.εxy)
     dΔPψE = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
@@ -216,10 +216,10 @@ end
     εW = dε_vertex_dVx(i,     j + 1, vi, vj, _di_vertex, _di_vx, ni_center)
     εE = dε_vertex_dVx(i + 1, j + 1, vi, vj, _di_vertex, _di_vx, ni_center)
 
-    dτyyS = dτ_dV(dyrel.∂τc_∂ε, 2, i, j,     εS.εxx, εS.εyy, εS.εxy)
-    dτyyN = dτ_dV(dyrel.∂τc_∂ε, 2, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
-    dτxyW = dτ_dV(dyrel.∂τv_∂ε, 3, i,     j + 1, εW.εxx, εW.εyy, εW.εxy)
-    dτxyE = dτ_dV(dyrel.∂τv_∂ε, 3, i + 1, j + 1, εE.εxx, εE.εyy, εE.εxy)
+    dτyyS = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 2, i, j,     εS.εxx, εS.εyy, εS.εxy)
+    dτyyN = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 2, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
+    dτxyW = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i,     j + 1, εW.εxx, εW.εyy, εW.εxy)
+    dτxyE = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εE.εxx, εE.εyy, εE.εxy)
 
     dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i, j,     εS.εxx, εS.εyy, εS.εxy)
     dΔPψN = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
@@ -247,10 +247,10 @@ end
     εW = dε_vertex_dVy(i,     j + 1, vi, vj, _di_vertex, _di_vy, ni_center)
     εE = dε_vertex_dVy(i + 1, j + 1, vi, vj, _di_vertex, _di_vy, ni_center)
 
-    dτyyS = dτ_dV(dyrel.∂τc_∂ε, 2, i, j,     εS.εxx, εS.εyy, εS.εxy)
-    dτyyN = dτ_dV(dyrel.∂τc_∂ε, 2, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
-    dτxyW = dτ_dV(dyrel.∂τv_∂ε, 3, i,     j + 1, εW.εxx, εW.εyy, εW.εxy)
-    dτxyE = dτ_dV(dyrel.∂τv_∂ε, 3, i + 1, j + 1, εE.εxx, εE.εyy, εE.εxy)
+    dτyyS = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 2, i, j,     εS.εxx, εS.εyy, εS.εxy)
+    dτyyN = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 2, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
+    dτxyW = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i,     j + 1, εW.εxx, εW.εyy, εW.εxy)
+    dτxyE = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εE.εxx, εE.εyy, εE.εxy)
 
     dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i, j,     εS.εxx, εS.εyy, εS.εxy)
     dΔPψN = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
@@ -381,6 +381,14 @@ end
     return ∂τ_∂ε[o + 1][i, j] * dεxx_dV +
            ∂τ_∂ε[o + 2][i, j] * dεyy_dV +
            ∂τ_∂ε[o + 3][i, j] * dεxy_dV
+end
+
+@inline function dτ_dV(∂τ_∂ε, ∂τ_∂η, ∂η_∂ε, row, i, j, dεxx_dV, dεyy_dV, dεxy_dV)
+    dτ_dε = dτ_dV(∂τ_∂ε, row, i, j, dεxx_dV, dεyy_dV, dεxy_dV)
+    dη_dV = ∂η_∂ε[1][i, j] * dεxx_dV +
+            ∂η_∂ε[2][i, j] * dεyy_dV +
+            ∂η_∂ε[3][i, j] * dεxy_dV
+    return dτ_dε + ∂τ_∂η[row][i, j] * dη_dV
 end
 
 @inline function dΔPψ_dV(∂ΔPψ_∂ε, i, j, dεxx_dV, dεyy_dV, dεxy_dV)

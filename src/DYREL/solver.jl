@@ -148,6 +148,8 @@ function _solve_DYREL!(
                 rheology,
                 viscosity_cutoff;
                 relaxation = viscosity_relaxation,
+                do_partials = do_partials,
+                ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
             )
         end
 
@@ -256,6 +258,8 @@ function _solve_DYREL!(
                     rheology,
                     viscosity_cutoff;
                     relaxation = viscosity_relaxation,
+                    do_partials = do_partials,
+                    ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
                 )
             end
 

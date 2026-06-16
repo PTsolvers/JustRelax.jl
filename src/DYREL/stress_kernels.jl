@@ -20,6 +20,8 @@ function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxat
         dyrel.∂τc_∂ε,
         dyrel.∂τv_∂ε,
         dyrel.∂ΔPψc_∂ε,
+        dyrel.∂τc_∂η,
+        dyrel.∂τv_∂η,
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, do_partials
     )
     return nothing
@@ -45,6 +47,8 @@ end
         ∂τc_∂ε,
         ∂τv_∂ε,
         ∂ΔPψc_∂ε,
+        ∂τc_∂η,
+        ∂τv_∂η,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, ::Val{do_partials}
     ) where {do_partials}
 
@@ -74,6 +78,8 @@ end
         if do_partials
             Jτ_vertex = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
             store_stress_jacobian!(∂τv_∂ε, Jτ_vertex, I...)
+            Jτη_vertex = local_stress_jacobian_η(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
+            store_stress_viscosity_jacobian!(∂τv_∂η, Jτη_vertex, I...)
         end
 
         ## CENTER CALCULATION
@@ -102,6 +108,8 @@ end
                 Jτ_center = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
                 store_stress_jacobian!(∂τc_∂ε, Jτ_center, I...)
                 store_pressure_correction_jacobian!(∂ΔPψc_∂ε, Jτ_center, I...)
+                Jτη_center = local_stress_jacobian_η(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
+                store_stress_viscosity_jacobian!(∂τc_∂η, Jτη_center, I...)
             end
         end
     end
@@ -142,6 +150,14 @@ end
     )
 end
 
+@inline function local_stress_jacobian_η(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
+    η_vec = SA[η]
+    return ForwardDiff.jacobian(
+        η -> compute_local_stress(εij, τij_o, η[1], P, λ, λ_relaxation, rheology, phase_ratio, dt, EII),
+        η_vec,
+    )
+end
+
 @inline function store_stress_jacobian!(∂τ_∂ε, Jτ, I...)
     ∂τ_∂ε[1][I...] = Jτ[1, 1]
     ∂τ_∂ε[2][I...] = Jτ[1, 2]
@@ -159,6 +175,13 @@ end
     ∂ΔPψ_∂ε[1][I...] = Jτ[9, 1]
     ∂ΔPψ_∂ε[2][I...] = Jτ[9, 2]
     ∂ΔPψ_∂ε[3][I...] = Jτ[9, 3]
+    return nothing
+end
+
+@inline function store_stress_viscosity_jacobian!(∂τ_∂η, Jτ, I...)
+    ∂τ_∂η[1][I...] = Jτ[1, 1]
+    ∂τ_∂η[2][I...] = Jτ[2, 1]
+    ∂τ_∂η[3][I...] = Jτ[3, 1]
     return nothing
 end
 
@@ -254,6 +277,8 @@ function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRe
         dyrel.∂τc_∂ε,
         dyrel.∂τv_∂ε,
         dyrel.∂ΔPψc_∂ε,
+        dyrel.∂τc_∂η,
+        dyrel.∂τv_∂η,
         ϕ::JustRelax.RockRatio,
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, do_partials
     )
@@ -279,6 +304,8 @@ end
         ∂τc_∂ε,
         ∂τv_∂ε,
         ∂ΔPψc_∂ε,
+        ∂τc_∂η,
+        ∂τv_∂η,
         ϕ::JustRelax.RockRatio,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, ::Val{do_partials}
     ) where {do_partials}
@@ -310,6 +337,8 @@ end
             if do_partials
                 Jτ_vertex = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij)
                 store_stress_jacobian!(∂τv_∂ε, Jτ_vertex, I...)
+                Jτη_vertex = local_stress_jacobian_η(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij)
+                store_stress_viscosity_jacobian!(∂τv_∂η, Jτη_vertex, I...)
             end
 
         else
@@ -345,6 +374,8 @@ end
                     Jτ_center = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
                     store_stress_jacobian!(∂τc_∂ε, Jτ_center, I...)
                     store_pressure_correction_jacobian!(∂ΔPψc_∂ε, Jτ_center, I...)
+                    Jτη_center = local_stress_jacobian_η(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
+                    store_stress_viscosity_jacobian!(∂τc_∂η, Jτη_center, I...)
                 end
 
             else

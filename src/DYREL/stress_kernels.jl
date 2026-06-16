@@ -20,6 +20,7 @@ function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxat
         dyrel.∂τc_∂ε,
         dyrel.∂τv_∂ε,
         dyrel.∂ΔPψc_∂ε,
+        dyrel.∂ΔPψc_∂η,
         dyrel.∂τc_∂η,
         dyrel.∂τv_∂η,
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, do_partials
@@ -47,6 +48,7 @@ end
         ∂τc_∂ε,
         ∂τv_∂ε,
         ∂ΔPψc_∂ε,
+        ∂ΔPψc_∂η,
         ∂τc_∂η,
         ∂τv_∂η,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, ::Val{do_partials}
@@ -110,6 +112,7 @@ end
                 store_pressure_correction_jacobian!(∂ΔPψc_∂ε, Jτ_center, I...)
                 Jτη_center = local_stress_jacobian_η(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
                 store_stress_viscosity_jacobian!(∂τc_∂η, Jτη_center, I...)
+                store_pressure_correction_viscosity_jacobian!(∂ΔPψc_∂η, Jτη_center, I...)
             end
         end
     end
@@ -175,6 +178,11 @@ end
     ∂ΔPψ_∂ε[1][I...] = Jτ[9, 1]
     ∂ΔPψ_∂ε[2][I...] = Jτ[9, 2]
     ∂ΔPψ_∂ε[3][I...] = Jτ[9, 3]
+    return nothing
+end
+
+@inline function store_pressure_correction_viscosity_jacobian!(∂ΔPψ_∂η, Jτ, I...)
+    ∂ΔPψ_∂η[1][I...] = Jτ[9, 1]
     return nothing
 end
 
@@ -277,6 +285,7 @@ function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRe
         dyrel.∂τc_∂ε,
         dyrel.∂τv_∂ε,
         dyrel.∂ΔPψc_∂ε,
+        dyrel.∂ΔPψc_∂η,
         dyrel.∂τc_∂η,
         dyrel.∂τv_∂η,
         ϕ::JustRelax.RockRatio,
@@ -304,6 +313,7 @@ end
         ∂τc_∂ε,
         ∂τv_∂ε,
         ∂ΔPψc_∂ε,
+        ∂ΔPψc_∂η,
         ∂τc_∂η,
         ∂τv_∂η,
         ϕ::JustRelax.RockRatio,
@@ -376,6 +386,7 @@ end
                     store_pressure_correction_jacobian!(∂ΔPψc_∂ε, Jτ_center, I...)
                     Jτη_center = local_stress_jacobian_η(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
                     store_stress_viscosity_jacobian!(∂τc_∂η, Jτη_center, I...)
+                    store_pressure_correction_viscosity_jacobian!(∂ΔPψc_∂η, Jτη_center, I...)
                 end
 
             else

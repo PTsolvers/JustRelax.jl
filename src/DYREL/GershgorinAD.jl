@@ -159,8 +159,8 @@ end
     dτxyS = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j,     εS.εxx, εS.εyy, εS.εxy)
     dτxyN = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εN.εxx, εN.εyy, εN.εxy)
 
-    dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i,     j, εW.εxx, εW.εyy, εW.εxy)
-    dΔPψE = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
+    dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i,     j, εW.εxx, εW.εyy, εW.εxy)
+    dΔPψE = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
     dPnumW = dyrel.γ_eff[i,     j] * εW.div
     dPnumE = dyrel.γ_eff[i + 1, j] * εE.div
 
@@ -190,8 +190,8 @@ end
     dτxyS = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j,     εS.εxx, εS.εyy, εS.εxy)
     dτxyN = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εN.εxx, εN.εyy, εN.εxy)
 
-    dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i,     j, εW.εxx, εW.εyy, εW.εxy)
-    dΔPψE = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
+    dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i,     j, εW.εxx, εW.εyy, εW.εxy)
+    dΔPψE = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
     dPnumW = dyrel.γ_eff[i,     j] * εW.div
     dPnumE = dyrel.γ_eff[i + 1, j] * εE.div
 
@@ -221,8 +221,8 @@ end
     dτxyW = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i,     j + 1, εW.εxx, εW.εyy, εW.εxy)
     dτxyE = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εE.εxx, εE.εyy, εE.εxy)
 
-    dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i, j,     εS.εxx, εS.εyy, εS.εxy)
-    dΔPψN = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
+    dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j,     εS.εxx, εS.εyy, εS.εxy)
+    dΔPψN = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
     dPnumS = dyrel.γ_eff[i, j]     * εS.div
     dPnumN = dyrel.γ_eff[i, j + 1] * εN.div
 
@@ -252,8 +252,8 @@ end
     dτxyW = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i,     j + 1, εW.εxx, εW.εyy, εW.εxy)
     dτxyE = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εE.εxx, εE.εyy, εE.εxy)
 
-    dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i, j,     εS.εxx, εS.εyy, εS.εxy)
-    dΔPψN = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
+    dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j,     εS.εxx, εS.εyy, εS.εxy)
+    dΔPψN = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
     dPnumS = dyrel.γ_eff[i, j]     * εS.div
     dPnumN = dyrel.γ_eff[i, j + 1] * εN.div
 
@@ -395,4 +395,12 @@ end
     return ∂ΔPψ_∂ε[1][i, j] * dεxx_dV +
            ∂ΔPψ_∂ε[2][i, j] * dεyy_dV +
            ∂ΔPψ_∂ε[3][i, j] * dεxy_dV
+end
+
+@inline function dΔPψ_dV(∂ΔPψ_∂ε, ∂ΔPψ_∂η, ∂η_∂ε, i, j, dεxx_dV, dεyy_dV, dεxy_dV)
+    dΔPψ_dε = dΔPψ_dV(∂ΔPψ_∂ε, i, j, dεxx_dV, dεyy_dV, dεxy_dV)
+    dη_dV = ∂η_∂ε[1][i, j] * dεxx_dV +
+            ∂η_∂ε[2][i, j] * dεyy_dV +
+            ∂η_∂ε[3][i, j] * dεxy_dV
+    return dΔPψ_dε + ∂ΔPψ_∂η[1][i, j] * dη_dV
 end

@@ -68,12 +68,25 @@ end
         # MeltDependent_Density: pure-solid (ϕ=0) → αsolid, pure-melt (ϕ=1) → αmelt
         @test JustRelax2D.get_α(md; ϕ = 0.0) ≈ 3.0e-5
         @test JustRelax2D.get_α(md; ϕ = 1.0) ≈ 5.0e-5
-        @test JustRelax2D.get_α(md, (T = 300.0,)) ≈ 3.0e-5     # strip-args overload
+        # args-NamedTuple overload forwards ϕ (and absorbs extra keys like T)
+        @test JustRelax2D.get_α(md, (T = 300.0,)) ≈ 3.0e-5
+        @test JustRelax2D.get_α(md, (ϕ = 1.0, T = 300.0)) ≈ 5.0e-5
+        @test JustRelax2D.get_α(md, (ϕ = 0.5,)) ≈ 4.0e-5
 
         # BubbleFlow_Density: only check it returns without erroring (the
         # formula uses 1/αgas of a ConstantDensity which is 0 ⇒ NaN, by design)
         @test JustRelax2D.get_α(bf; P = -1.0e5) isa Real
         @test JustRelax2D.get_α(bf, (P = 1.0e5,)) isa Real
+        # with a finite αgas the args-overload must forward P: below the
+        # c0²/a² cutoff some gas remains exsolved (α ≠ αmelt), above it c = c0
+        # and the harmonic mean collapses to αmelt
+        bf_T = GeoParams.BubbleFlow_Density(;
+            ρmelt = GeoParams.T_Density(; α = 4.0e-5),
+            ρgas = GeoParams.T_Density(; α = 1.0e-4),
+            c0 = 0.01, a = 1.0,
+        )
+        @test JustRelax2D.get_α(bf_T, (P = 1.0,)) ≈ 4.0e-5
+        @test !(JustRelax2D.get_α(bf_T, (P = 0.0,)) ≈ 4.0e-5)
 
         # GasPyroclast_Density
         @test JustRelax2D.get_α(gp) ≈ 0.5 * 4.0e-5     # δ·αgas + (1−δ)·αmelt with αgas=0
@@ -266,10 +279,10 @@ end
         la2 = JustRelax2D.local_args(args, 2, 3)
         @test la2.T == T[2, 3]
 
-        # local_viscosity_args_vertex (2D): averages four cell-center neighbors
+        # local_viscosity_args_vertex (2D): averages four cell-center neighbors via average_or_scalar
         la_v = JustRelax2D.local_viscosity_args_vertex(args, 2, 3)
-        # Clamped indices: il=max(1,1)=1, ir=min(2,3)=2, jb=max(2,1)=2, jt=min(3,4)=3
-        expected_T = 0.25 * (T[(1, 2) .+ 1...] + T[(2, 2) .+ 1...] + T[(1, 3) .+ 1...] + T[(2, 3) .+ 1...])
+        # average_or_scalar(T, 2, 3) = 0.25*(T[2,3]+T[3,3]+T[2,4]+T[3,4])
+        expected_T = 0.25 * (T[2, 3] + T[3, 3] + T[2, 4] + T[3, 4])
         @test la_v.T ≈ expected_T
         @test la_v.dt === Inf
 
@@ -278,7 +291,7 @@ end
         P3 = reshape(collect(101.0:127.0), 3, 3, 3)
         args3 = (; T = T3, P = P3)
         la3 = JustRelax2D.local_viscosity_args_vertex(args3, 2, 2, 2)
-        # il,ir,jb,jt,kf,kb all valid → sum of T3[1..2, 1..2, 1..2] / 8
+        # average_or_scalar(T3, 2, 2, 2) = sum of T3[2:3, 2:3, 2:3] / 8
         expected_T3 = sum(T3[i, j, k] for i in 2:3, j in 2:3, k in 2:3) / 8
         @test la3.T ≈ expected_T3
 

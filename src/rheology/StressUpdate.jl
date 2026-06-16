@@ -22,7 +22,7 @@ function _compute_τ_nonlinear!(
     dτij, τII_trial = compute_stress_increment_and_trial(τij, τij_o, ηij, εij, _Gdt, dτ_r)
 
     # visco-elastic strain rates
-    εij_ve = ntuple(i -> fma(0.5 * τij_o[i], _Gdt, εij[i]), Val(N1))
+    # εij_ve = ntuple(i -> fma(0.5 * τij_o[i], _Gdt, εij[i]), Val(N1))
 
     # get plastic parameters (if any...)
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters

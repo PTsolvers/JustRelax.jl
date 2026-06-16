@@ -355,6 +355,7 @@ function _compute_viscosity!(
         rheology,
         air_phase,
         cutoff,
+        fn_viscosity,
         local_viscosity_args_vertex,
     )
     return nothing

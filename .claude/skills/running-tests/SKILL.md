@@ -32,6 +32,6 @@ How `test/runtests.jl` works:
 
 ## Practical guidance
 
-- The full suite is **slow** (solver tests run actual pseudo-transient iterations). Prefer one targeted test file. Quick smoke tests: `test_types`, `test_traits`, `test_arrays_conversions`, `test_boundary_conditions2D` (seconds, no solver). Physics regressions: `test_shearband2D`, `test_diffusion2D`, `test_Blankenbach`, `test_VanKeken` (minutes).
+- The full suite is **slow** (solver tests run actual pseudo-transient iterations). Prefer one targeted test file. Quick smoke tests: `test_types`, `test_traits`, `test_arrays_conversions`, `test_boundary_conditions2D` (seconds, no solver). Physics regressions: `test_shearband2D`, `test_diffusion2D`, `test_Blankenbach`.
 - MPI tests locally: `mpiexec -n 2 julia --project=. --startup-file=no test/test_diffusion2D_multiphase_MPI.jl` (use the MPI.jl-provided `mpiexecjl` if no system MPI is configured).
-- GPU backends cannot be tested on this machine (macOS/Apple Silicon); CPU-pass + CI (CSCS GH200 pipeline in `ci/cscs-gh200.yml` runs CUDA + MPI tests) is the verification path.
+- GPU backends cannot be tested on this machine; CPU-pass + CI (CSCS GH200 pipeline in `ci/cscs-gh200.yml` runs CUDA + MPI tests) is the verification path.

@@ -22,4 +22,16 @@ description: How JustRelax.jl handles CPU/CUDA/AMDGPU backends — module struct
 
 ## Local environment
 
-This machine is macOS/Apple Silicon: only the CPU (Threads) backend runs locally. GPU correctness is verified by the CSCS GH200 CUDA pipeline (`ci/cscs-gh200.yml`). Write GPU-safe code (see [kernel-style](../kernel-style/SKILL.md)) and rely on CPU tests + CI.
+Before assuming which backends are available, check at runtime:
+
+```julia
+# Is a CUDA GPU present and functional?
+using CUDA
+CUDA.functional()   # true → CUDA backend usable; false → no GPU or driver issue
+
+# Is an AMD GPU present?
+using AMDGPU
+AMDGPU.functional() # analogous
+```
+
+The CPU (Threads) backend always works regardless of OS. GPU availability depends on hardware and drivers — don't assume a machine lacks a GPU based on OS alone (Windows/Linux with NVIDIA hardware is common in HPC and workstation setups). When `CUDA.functional()` returns `false`, fall back to CPU and note that GPU correctness is verified by the CSCS GH200 CUDA pipeline (`ci/cscs-gh200.yml`). Write GPU-safe code (see [kernel-style](../kernel-style/SKILL.md)) regardless, so changes are ready for CI validation.

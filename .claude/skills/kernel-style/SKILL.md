@@ -9,7 +9,7 @@ description: ParallelStencil kernel idioms and GPU-compatibility rules for JustR
 
 - Two kernel forms:
   - `@parallel function f!(A, B, ...)` with `@all(A) = ...`, `@inn`, `@av`, `@d_xa`, etc. (FiniteDifferences2D/3D macros) for pure stencil updates.
-  - `@parallel_indices (i, j) function f!(...)` when you need explicit indexing, branching per cell, or CellArray access. Always `return nothing` at the end.
+  - `@parallel_indices (I...) function f!(...)` when you need explicit indexing, branching per cell, or CellArray access. Always `return nothing` at the end. `I...` is the dimension agnostic way if it is a general kernel. Use `i, j` or `i, j, k` for dimension specific kernels  
 - Launch with `@parallel (1:nx, 1:ny) f!(...)` or `@parallel f!(...)` for full-array kernels.
 - Custom staggered-grid helpers live in `src/MiniKernels.jl` (e.g. `_d_xa`, averaging mini-kernels) — reuse these instead of writing new index arithmetic. `@dxi, @dx, @dy, @dz` come from JustRelax itself.
 - Use `@muladd` (MuladdMacro) where the surrounding code does; match local style.

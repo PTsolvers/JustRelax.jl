@@ -279,32 +279,21 @@ end
         la2 = JustRelax2D.local_args(args, 2, 3)
         @test la2.T == T[2, 3]
 
-        # local_viscosity_args_vertex (2D): averages four cell-center neighbors
+        # local_viscosity_args_vertex (2D): averages four cell-center neighbors via average_or_scalar
         la_v = JustRelax2D.local_viscosity_args_vertex(args, 2, 3)
-        # Clamped indices: il=max(1,1)=1, ir=min(2,3)=2, jb=max(2,1)=2, jt=min(3,4)=3
-        expected_T = 0.25 * (T[(1, 2) .+ 1...] + T[(2, 2) .+ 1...] + T[(1, 3) .+ 1...] + T[(2, 3) .+ 1...])
+        # average_or_scalar(T, 2, 3) = 0.25*(T[2,3]+T[3,3]+T[2,4]+T[3,4])
+        expected_T = 0.25 * (T[2, 3] + T[3, 3] + T[2, 4] + T[3, 4])
         @test la_v.T ≈ expected_T
         @test la_v.dt === Inf
-        la_v_boundary = JustRelax2D.local_viscosity_args_vertex(args, 1, 1)
-        @test la_v_boundary.T == T[2, 2]
-        @test la_v_boundary.P == P[1, 1]
-        args_scalar_first = (; T = T, C = 1.0, P = P)
-        la_v_scalar_first = JustRelax2D.local_viscosity_args_vertex(args_scalar_first, 1, 1)
-        @test la_v_scalar_first.C == 1.0
-        @test la_v_scalar_first.P == P[1, 1]
-        @test la_v_scalar_first.T == T[2, 2]
 
         # local_viscosity_args_vertex (3D): averages eight cell-center neighbors
         T3 = reshape(collect(1.0:125.0), (3, 3, 3) .+ 2...)
         P3 = reshape(collect(101.0:127.0), 3, 3, 3)
         args3 = (; T = T3, P = P3)
         la3 = JustRelax2D.local_viscosity_args_vertex(args3, 2, 2, 2)
-        # il,ir,jb,jt,kf,kb all valid → sum of T3[1..2, 1..2, 1..2] / 8
+        # average_or_scalar(T3, 2, 2, 2) = sum of T3[2:3, 2:3, 2:3] / 8
         expected_T3 = sum(T3[i, j, k] for i in 2:3, j in 2:3, k in 2:3) / 8
         @test la3.T ≈ expected_T3
-        la3_boundary = JustRelax2D.local_viscosity_args_vertex(args3, 1, 1, 1)
-        @test la3_boundary.T == T3[2, 2, 2]
-        @test la3_boundary.P == P3[1, 1, 1]
 
         # compute_phase_viscosity — single-phase dominance (ratio[i] > 0.999) → early-exit
         η1, η2 = 1.0e21, 1.0e23

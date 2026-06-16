@@ -525,26 +525,20 @@ end
 
 @inline function local_viscosity_args_vertex(i, j; T = 0.0e0, args0...)
     args = (; args0...)
-    center_size = center_size_from_args(args, T, Val(2))
     # clamp indices
-    nx, ny = center_size
+    nx, ny = size(args[1])
     il = max(i - 1, 1)  # left
     ir = min(i, nx)     # right
     jb = max(j - 1, 1)  # bottom
     jt = min(j, ny)     # top
     # average values at cell centers surrounding vertex
-    v11 = getindex_cellcenter_or_scalar.(values(args), (center_size,), il, jb)
-    v12 = getindex_cellcenter_or_scalar.(values(args), (center_size,), ir, jb)
-    v21 = getindex_cellcenter_or_scalar.(values(args), (center_size,), il, jt)
-    v22 = getindex_cellcenter_or_scalar.(values(args), (center_size,), ir, jt)
+    v11 = getindex_or_scalar.(values(args), il, jb)
+    v12 = getindex_or_scalar.(values(args), ir, jb)
+    v21 = getindex_or_scalar.(values(args), il, jt)
+    v22 = getindex_or_scalar.(values(args), ir, jt)
     v = @. 0.25 * (v11 + v12 + v21 + v22)
     # average T from surrounding cell centers
-    T_vertex = 0.25 * (
-        getindex_cellcenter_or_scalar(T, center_size, il, jb) +
-            getindex_cellcenter_or_scalar(T, center_size, ir, jb) +
-            getindex_cellcenter_or_scalar(T, center_size, il, jt) +
-            getindex_cellcenter_or_scalar(T, center_size, ir, jt)
-    )
+    T_vertex = average_or_scalar(T, i, j)
     # create local args
     local_args = merge(
         (; zip(keys(args), v)...),
@@ -555,9 +549,8 @@ end
 
 @inline function local_viscosity_args_vertex(i, j, k; T = 0.0e0, args0...)
     args = (; args0...)
-    center_size = center_size_from_args(args, T, Val(3))
     # clamp indices
-    nx, ny, nz = center_size
+    nx, ny, nz = size(args[1])
     il = max(i - 1, 1)  # left
     ir = min(i, nx)     # right
     jb = max(j - 1, 1)  # bottom
@@ -565,57 +558,23 @@ end
     kf = max(k - 1, 1)  # front
     kb = min(k, nz)   # back
     # average values at cell centers surrounding vertex
-    v111 = getindex_cellcenter_or_scalar.(values(args), (center_size,), il, jb, kf)
-    v121 = getindex_cellcenter_or_scalar.(values(args), (center_size,), ir, jb, kf)
-    v211 = getindex_cellcenter_or_scalar.(values(args), (center_size,), il, jt, kf)
-    v221 = getindex_cellcenter_or_scalar.(values(args), (center_size,), ir, jt, kf)
-    v112 = getindex_cellcenter_or_scalar.(values(args), (center_size,), il, jb, kb)
-    v122 = getindex_cellcenter_or_scalar.(values(args), (center_size,), ir, jb, kb)
-    v212 = getindex_cellcenter_or_scalar.(values(args), (center_size,), il, jt, kb)
-    v222 = getindex_cellcenter_or_scalar.(values(args), (center_size,), ir, jt, kb)
+    v111 = getindex_or_scalar.(values(args), il, jb, kf)
+    v121 = getindex_or_scalar.(values(args), ir, jb, kf)
+    v211 = getindex_or_scalar.(values(args), il, jt, kf)
+    v221 = getindex_or_scalar.(values(args), ir, jt, kf)
+    v112 = getindex_or_scalar.(values(args), il, jb, kb)
+    v122 = getindex_or_scalar.(values(args), ir, jb, kb)
+    v212 = getindex_or_scalar.(values(args), il, jt, kb)
+    v222 = getindex_or_scalar.(values(args), ir, jt, kb)
     v = @. 0.125 * (v111 + v121 + v211 + v221 + v112 + v122 + v212 + v222)
     # create local args
-    T_vertex = 0.125 * (
-        getindex_cellcenter_or_scalar(T, center_size, il, jb, kf) +
-            getindex_cellcenter_or_scalar(T, center_size, ir, jb, kf) +
-            getindex_cellcenter_or_scalar(T, center_size, il, jt, kf) +
-            getindex_cellcenter_or_scalar(T, center_size, ir, jt, kf) +
-            getindex_cellcenter_or_scalar(T, center_size, il, jb, kb) +
-            getindex_cellcenter_or_scalar(T, center_size, ir, jb, kb) +
-            getindex_cellcenter_or_scalar(T, center_size, il, jt, kb) +
-            getindex_cellcenter_or_scalar(T, center_size, ir, jt, kb)
-    )
+    T_vertex = average_or_scalar(T, i, j, k)
     local_args = merge(
         (; zip(keys(args), v)...),
         (; T = T_vertex, dt = Inf, τII_old = 0.0)
     )
     return local_args
 end
-
-@inline center_size_from_args(args::NamedTuple, T, dim::Val{N}) where {N} =
-    center_size_from_values(values(args), fallback_center_size(T, dim), dim)
-
-@inline fallback_center_size(A::AbstractArray, ::Val{N}) where {N} =
-    ntuple(d -> max(size(A, d) - 2, 1), Val(N))
-@inline fallback_center_size(::Number, ::Val{N}) where {N} =
-    ntuple(_ -> typemax(Int), Val(N))
-
-@inline center_size_from_values(::Tuple{}, center_size, ::Val{N}) where {N} = center_size
-@inline function center_size_from_values(values::Tuple{A, Vararg}, center_size, dim::Val{N}) where {A, N}
-    center_size = min_center_size(center_size, first(values), dim)
-    return center_size_from_values(Base.tail(values), center_size, dim)
-end
-
-@inline min_center_size(center_size, A::AbstractArray, ::Val{N}) where {N} =
-    ntuple(d -> min(center_size[d], size(A, d)), Val(N))
-@inline min_center_size(center_size, A, ::Val{N}) where {N} = center_size
-
-@inline cellcenter_offset(A::AbstractArray, center_size::NTuple{N}, ::Val{N}) where {N} =
-    ntuple(d -> size(A, d) > center_size[d], Val(N))
-
-@inline getindex_cellcenter_or_scalar(A::AbstractArray, center_size::NTuple{N}, I::Vararg{Integer, N}) where {N} =
-    A[(I .+ cellcenter_offset(A, center_size, Val(N)))...]
-@inline getindex_cellcenter_or_scalar(A::Number, center_size::NTuple{N}, I::Vararg{Integer, N}) where {N} = A
 
 @inline function average_or_scalar(A::AbstractArray, i, j)
     return 0.25 * (A[i, j] + A[i + 1, j] + A[i, j + 1] + A[i + 1, j + 1])

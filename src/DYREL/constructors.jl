@@ -45,24 +45,18 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     αVx = @zeros(nx - 1, ny)
     αVy = @zeros(nx, ny - 1)
     αVz = @zeros(1, 1)  # dummy for 2D
-    ∂Rx_∂Vx  = zero_field_tuple(Val(9), nx - 1, ny)
-    ∂Rx_∂Vy  = zero_field_tuple(Val(12), nx - 1, ny)
-    ∂Ry_∂Vx  = zero_field_tuple(Val(12), nx, ny - 1)
-    ∂Ry_∂Vy  = zero_field_tuple(Val(9), nx, ny - 1)
     ∂τc_∂ε   = zero_field_tuple(Val(9), nx, ny)
     ∂τv_∂ε   = zero_field_tuple(Val(9), nx + 1, ny + 1)
     ∂ΔPψc_∂ε = zero_field_tuple(Val(3), nx, ny)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
-    J = Union{typeof(∂Rx_∂Vx), typeof(∂Rx_∂Vy), typeof(∂Ry_∂Vx), typeof(∂Ry_∂Vy)}
     S = typeof(∂τc_∂ε)
     D = typeof(∂ΔPψc_∂ε)
-    return JustRelax.DYREL{T, F, J, S, D}(
+    return JustRelax.DYREL{T, F, S, D}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
         dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact,
-        ∂τc_∂ε, ∂τv_∂ε, ∂ΔPψc_∂ε,
-        ∂Rx_∂Vx, ∂Rx_∂Vy, ∂Ry_∂Vx, ∂Ry_∂Vy
+        ∂τc_∂ε, ∂τv_∂ε, ∂ΔPψc_∂ε
     )
 end
 
@@ -100,24 +94,18 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     αVx = @zeros(nx - 1, ny, nz)
     αVy = @zeros(nx, ny - 1, nz)
     αVz = @zeros(nx, ny, nz - 1)
-    ∂Rx_∂Vx  = zero_field_tuple(Val(1), 1, 1, 1)
-    ∂Rx_∂Vy  = zero_field_tuple(Val(1), 1, 1, 1)
-    ∂Ry_∂Vx  = zero_field_tuple(Val(1), 1, 1, 1)
-    ∂Ry_∂Vy  = zero_field_tuple(Val(1), 1, 1, 1)
     ∂τc_∂ε   = zero_field_tuple(Val(1), 1, 1, 1)
     ∂τv_∂ε   = zero_field_tuple(Val(1), 1, 1, 1)
     ∂ΔPψc_∂ε = zero_field_tuple(Val(1), 1, 1, 1)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
-    J = typeof(∂Rx_∂Vx)
     S = typeof(∂τc_∂ε)
     D = typeof(∂ΔPψc_∂ε)
-    return JustRelax.DYREL{T, F, J, S, D}(
+    return JustRelax.DYREL{T, F, S, D}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
         dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact,
-        ∂τc_∂ε, ∂τv_∂ε, ∂ΔPψc_∂ε,
-        ∂Rx_∂Vx, ∂Rx_∂Vy, ∂Ry_∂Vx, ∂Ry_∂Vy
+        ∂τc_∂ε, ∂τv_∂ε, ∂ΔPψc_∂ε
     )
 end
 
@@ -205,6 +193,19 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
     return nothing
 end
 
+function DYREL_AD!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, grid::Geometry, dt; CFL = 0.99, γfact = 20.0)
+    # compute bulk viscosity and penalty parameter
+    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
+
+    # assemble Gershgorin estimates from local stress gradients
+    Gershgorin_Stokes2D_SchurComplementAD(dyrel, grid._di.center, grid._di.vertex, grid._di.velocity[1], grid._di.velocity[2])
+
+    # compute damping coefficients
+    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+
+    return nothing
+end
+
 # variational version
 function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL = 0.99, γfact = 20.0)
     # compute bulk viscosity and penalty parameter
@@ -218,7 +219,6 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
 
     return nothing
 end
-
 
 """
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)

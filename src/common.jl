@@ -122,7 +122,7 @@ include("DYREL/constructors.jl")
 include("DYREL/pressure_kernels.jl")
 include("DYREL/stress_kernels.jl")
 include("DYREL/velocity_kernels.jl")
-include("DYREL/assemble_jacobian_entries.jl")
+include("DYREL/GershgorinAD.jl")
 include("DYREL/Gershgorin.jl")
 
 # thermal diffusion

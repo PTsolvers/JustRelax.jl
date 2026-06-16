@@ -148,62 +148,6 @@ end
     return nothing
 end
 
-@inline function local_abs_sum(J, i, j)
-    s = zero(eltype(J[1]))
-    for A in J
-        s += abs(A[i, j])
-    end
-    return s
-end
-
-function Gershgorin_Stokes2D_SchurComplementAD!(Dx, Dy, λmaxVx, λmaxVy, dyrel)
-    ni = size(dyrel.γ_eff)
-    @parallel (@idx ni) _Gershgorin_Stokes2D_SchurComplementAD!(
-        Dx,
-        Dy,
-        λmaxVx,
-        λmaxVy,
-        dyrel,
-    )
-    return nothing
-end
-
-Gershgorin_Stokes2D_SchurComplementAD!(dyrel) =
-    Gershgorin_Stokes2D_SchurComplementAD!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, dyrel)
-
-@parallel_indices (i, j) function _Gershgorin_Stokes2D_SchurComplementAD!(
-        Dx, Dy, λmaxVx, λmaxVy, dyrel
-    )
-
-    if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
-
-        # compute Gershgorin entries
-        Cxx = local_abs_sum(dyrel.∂Rx_∂Vx, i, j)
-
-        Cxy = local_abs_sum(dyrel.∂Rx_∂Vy, i, j)
-
-        # this is the preconditioner diagonal entry
-        Dx_ij = Dx[i, j] = abs(dyrel.∂Rx_∂Vx[5][i, j])
-        # maximum eigenvalue estimate
-        λmaxVx[i, j] = inv(Dx_ij) * (Cxx + Cxy)
-    end
-
-    if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
-
-        # compute Gershgorin entries
-        Cyy = local_abs_sum(dyrel.∂Ry_∂Vy, i, j)
-
-        Cyx = local_abs_sum(dyrel.∂Ry_∂Vx, i, j)
-
-        # this is the preconditioner diagonal entry
-        Dy_ij = Dy[i, j] = abs(dyrel.∂Ry_∂Vy[5][i, j])
-        # maximum eigenvalue estimate
-        λmaxVy[i, j] = inv(Dy_ij) * (Cyx + Cyy)
-    end
-
-    return nothing
-end
-
 """
     update_α_β!(βV, αV, dτV, cV)
 

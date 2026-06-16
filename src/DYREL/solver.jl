@@ -113,7 +113,11 @@ function _solve_DYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
+    # DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
+
+    do_partials = Val(true)
+    compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, do_partials)
+    DYREL_AD!(dyrel, stokes, rheology, phase_ratios, grid, dt; CFL = dyrel.CFL)
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
@@ -124,7 +128,8 @@ function _solve_DYREL!(
         compute_∇V_strain_rate!(stokes, _di, ni, dim)
 
         # compute deviatoric stress
-        compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt)
+        do_partials = Val(false)
+        compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, do_partials)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)
         # update_halo!(stokes.τ.yy_v)
@@ -212,8 +217,14 @@ function _solve_DYREL!(
             # compute divergence and deviatoric strain rate in one pass
             compute_∇V_strain_rate!(stokes, _di, ni, dim)
 
+            if iszero(iter % nout)
+                do_partials = Val(true)
+            else
+                do_partials = Val(false)
+            end
+
             # Deviatoric stress
-            compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
+            compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_DR, dt, do_partials)
             # update_halo!(stokes.λv)
             # update_halo!(stokes.τ.xx_v)
             # update_halo!(stokes.τ.yy_v)
@@ -294,11 +305,13 @@ function _solve_DYREL!(
                 λminV = compute_λminV!(fields, residuals, residuals0, ni, dim)
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
-                # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
+                # # Optimal pseudo-time steps - can be replaced by AD
+                # Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
 
-                # Select dτ
-                update_dτV_α_β!(dyrel)
+                # # Select dτ
+                # update_dτV_α_β!(dyrel)
+                # Optimal pseudo-time steps from assembled AD Jacobian entries
+                DYREL_AD!(dyrel, stokes, rheology, phase_ratios, grid, dt; CFL = dyrel.CFL)
             end
         end
 

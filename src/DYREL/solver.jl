@@ -32,6 +32,8 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
+- `use_gershgorin_ad`: Use the AD-based Gershgorin entries from `GershgorinAD.jl`
+  instead of the analytic linear-viscoelastic estimate from `Gershgorin.jl`. Default: `false`.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
     out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
@@ -64,6 +66,7 @@ function _solve_DYREL!(
         verbose_PH = true,
         verbose_DR = true,
         linear_viscosity = false,
+        use_gershgorin_ad = false,
         kwargs...,
     ) where {N}
 
@@ -113,11 +116,13 @@ function _solve_DYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    # DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
-
-    do_partials = Val(true)
-    compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, do_partials)
-    DYREL_AD!(dyrel, stokes, rheology, phase_ratios, grid, dt; CFL = dyrel.CFL)
+    if use_gershgorin_ad
+        compute_∇V_strain_rate!(stokes, _di, ni, dim)
+        compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, Val(true))
+        DYREL_AD!(dyrel, stokes, rheology, phase_ratios, grid, dt; CFL = dyrel.CFL)
+    else
+        DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
+    end
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
@@ -217,7 +222,7 @@ function _solve_DYREL!(
             # compute divergence and deviatoric strain rate in one pass
             compute_∇V_strain_rate!(stokes, _di, ni, dim)
 
-            if iszero(iter % nout)
+            if use_gershgorin_ad && iszero(iter % nout)
                 do_partials = Val(true)
             else
                 do_partials = Val(false)
@@ -305,13 +310,15 @@ function _solve_DYREL!(
                 λminV = compute_λminV!(fields, residuals, residuals0, ni, dim)
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
-                # # Optimal pseudo-time steps - can be replaced by AD
-                # Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
+                # Optimal pseudo-time steps
+                if use_gershgorin_ad
+                    Gershgorin_Stokes2D_SchurComplementAD(dyrel, _di.center, _di.vertex, _di.velocity[1], _di.velocity[2])
+                else
+                    Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
+                end
 
-                # # Select dτ
-                # update_dτV_α_β!(dyrel)
-                # Optimal pseudo-time steps from assembled AD Jacobian entries
-                DYREL_AD!(dyrel, stokes, rheology, phase_ratios, grid, dt; CFL = dyrel.CFL)
+                # Select dτ
+                update_dτV_α_β!(dyrel)
             end
         end
 

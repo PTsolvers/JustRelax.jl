@@ -544,7 +544,8 @@ end
 @inline function _strainrate_second_invariant(Aij::NTuple{3})
     # we need strain rate not to be zero, otherwise we get NaNs
     AII_0 = _all_primal_zero(Aij) * eps()
-    return second_invariant(AII_0 + Aij[1], -AII_0 + Aij[2], Aij[3])
+    AII = second_invariant(AII_0 + Aij[1], -AII_0 + Aij[2], Aij[3])
+    return ifelse(iszero(_primal_value(AII)), AII + eps(), AII)
 end
 
 @inline function compute_local_viscosity(AII::Number, η_old, ν, args_ij, rheology, cutoff, fn_viscosity)

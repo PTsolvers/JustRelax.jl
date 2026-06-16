@@ -53,6 +53,7 @@ struct DYREL{T, F, S, D}
     ∂τc_∂ε::S
     ∂τv_∂ε::S
     ∂ΔPψc_∂ε::D
+    ∂ΔPψc_∂η::D
     ∂τc_∂η::D
     ∂τv_∂η::D
     ∂ηc_∂ε::D

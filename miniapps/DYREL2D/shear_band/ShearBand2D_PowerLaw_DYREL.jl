@@ -1,4 +1,4 @@
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -126,10 +126,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         dt,
         igg;
         kwargs = (;
-            verbose_PH = false,
+            verbose_PH = true,
             verbose_DR = false,
             iterMax = 50.0e3,
-            nout = 400,
+            nout = 100,
             rel_drop = 1.0e-5,
             # λ_relaxation_DR = 0,
             # λ_relaxation_PH = 0,
@@ -137,6 +137,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             λ_relaxation_PH = 1,
             viscosity_relaxation = 1.0e-1,
             viscosity_cutoff = (-Inf, Inf),
+            use_gershgorin_ad = true,
         )
     )
     tensor_invariant!(stokes.ε)

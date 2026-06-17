@@ -209,6 +209,46 @@ end
         @test JustRelax2D.dΔPψ_dV(∂ΔPψ_∂ε, ∂ΔPψ_∂η, ∂η_∂ε, 1, 1, dε...) ≈ dΔPψ_dε - 3.0 * dη_dV
     end
 
+    @testset "GershgorinAD local Rx-Vx entry" begin
+        dyrel = JustRelax2D.DYREL(CPUBackend, (3, 3))
+        dyrel.γ_eff .= 2.0
+
+        dyrel.∂τc_∂ε[1] .= 1.0
+        dyrel.∂τc_∂ε[2] .= 2.0
+        dyrel.∂τc_∂ε[3] .= 4.0
+        dyrel.∂τc_∂η[1] .= 3.0
+        dyrel.∂ηc_∂ε[1] .= 5.0
+        dyrel.∂ηc_∂ε[2] .= 7.0
+        dyrel.∂ηc_∂ε[3] .= 11.0
+
+        dyrel.∂τv_∂ε[7] .= 13.0
+        dyrel.∂τv_∂ε[8] .= 17.0
+        dyrel.∂τv_∂ε[9] .= 19.0
+        dyrel.∂τv_∂η[3] .= 23.0
+        dyrel.∂ηv_∂ε[1] .= 29.0
+        dyrel.∂ηv_∂ε[2] .= 31.0
+        dyrel.∂ηv_∂ε[3] .= 37.0
+
+        dyrel.∂ΔPψc_∂ε[1] .= 41.0
+        dyrel.∂ΔPψc_∂ε[2] .= 43.0
+        dyrel.∂ΔPψc_∂ε[3] .= 47.0
+        dyrel.∂ΔPψc_∂η[1] .= 53.0
+
+        jacobian_entry, gershgorin_entry = JustRelax2D.local_Rx_Vx_gershgorin_entry(
+            dyrel,
+            1,
+            1,
+            5,
+            (2.0, 3.0),
+            (5.0, 7.0),
+            (11.0, 13.0),
+            size(dyrel.γ_eff),
+        )
+
+        @test jacobian_entry ≈ -77870.0
+        @test gershgorin_entry ≈ 80590.0
+    end
+
     @testset "DYREL partial field storage" begin
         nx, ny = 4, 3
         ni = (nx, ny)

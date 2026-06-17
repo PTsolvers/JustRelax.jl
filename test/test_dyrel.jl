@@ -4,8 +4,10 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 using Test
+using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 import JustRelax.JustRelax3D as JR3
+using JustPIC, JustPIC._2D
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
@@ -17,6 +19,13 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
 else
     @init_parallel_stencil(Threads, Float64, 2)
     CPUBackend
+end
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    JustPIC.AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    JustPIC.CPUBackend
 end
 
 @testset "DYREL" begin
@@ -40,9 +49,19 @@ end
         @test length(dyrel.∂τc_∂ε) == 9
         @test length(dyrel.∂τv_∂ε) == 9
         @test length(dyrel.∂ΔPψc_∂ε) == 3
+        @test length(dyrel.∂ΔPψc_∂η) == 3
+        @test length(dyrel.∂τc_∂η) == 3
+        @test length(dyrel.∂τv_∂η) == 3
+        @test length(dyrel.∂ηc_∂ε) == 3
+        @test length(dyrel.∂ηv_∂ε) == 3
         @test size(dyrel.∂τc_∂ε[1]) == (nx, ny)
         @test size(dyrel.∂τv_∂ε[1]) == (nx + 1, ny + 1)
         @test size(dyrel.∂ΔPψc_∂ε[1]) == (nx, ny)
+        @test size(dyrel.∂ΔPψc_∂η[1]) == (nx, ny)
+        @test size(dyrel.∂τc_∂η[1]) == (nx, ny)
+        @test size(dyrel.∂τv_∂η[1]) == (nx + 1, ny + 1)
+        @test size(dyrel.∂ηc_∂ε[1]) == (nx, ny)
+        @test size(dyrel.∂ηv_∂ε[1]) == (nx + 1, ny + 1)
         @test dyrel.CFL === 0.5
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
@@ -73,6 +92,11 @@ end
         @test length(dyrel.∂τc_∂ε) == 1
         @test length(dyrel.∂τv_∂ε) == 1
         @test length(dyrel.∂ΔPψc_∂ε) == 1
+        @test length(dyrel.∂ΔPψc_∂η) == 1
+        @test length(dyrel.∂τc_∂η) == 1
+        @test length(dyrel.∂τv_∂η) == 1
+        @test length(dyrel.∂ηc_∂ε) == 1
+        @test length(dyrel.∂ηv_∂ε) == 1
         @test dyrel.CFL === 0.6
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
@@ -165,6 +189,78 @@ end
         expected_dτ = 2 / sqrt(4.0) * 0.8
         @test all(dyrel.dτVx .≈ expected_dτ)
         @test all(dyrel.dτVy .≈ expected_dτ)
+    end
+
+    @testset "DYREL partial field storage" begin
+        nx, ny = 4, 3
+        ni = (nx, ny)
+        xvi = (range(0.0, 1.0; length = nx + 1), range(0.0, 1.0; length = ny + 1))
+        xci = (range(0.125, 0.875; length = nx), range(0.125, 0.875; length = ny))
+
+        visc = GeoParams.LinearViscous(; η = 10.0)
+        rheology = (
+            GeoParams.SetMaterialParams(;
+                Phase = 1,
+                Density = GeoParams.ConstantDensity(; ρ = 0.0),
+                CompositeRheology = GeoParams.CompositeRheology((visc,)),
+            ),
+        )
+        phase_ratios = JustPIC._2D.PhaseRatios(backend_JP, length(rheology), ni)
+        JustRelax2D.update_phase_ratios_2D!(phase_ratios, (@ones(ni...),), xci, xvi)
+
+        stokes = StokesArrays(backend_JR, ni)
+        stokes.ε.xx .= 1.0
+        stokes.ε.yy .= -0.5
+        stokes.ε.xy .= 0.25
+        stokes.ε.xy_c .= 0.25
+        stokes.ε.xx_v .= 1.0
+        stokes.ε.yy_v .= -0.5
+        stokes.viscosity.η .= 10.0
+        stokes.viscosity.ηv .= 10.0
+
+        dyrel = JustRelax2D.DYREL(backend_JR, ni)
+        foreach(A -> fill!(A, NaN), dyrel.∂τc_∂η)
+        foreach(A -> fill!(A, NaN), dyrel.∂τv_∂η)
+        foreach(A -> fill!(A, NaN), dyrel.∂ΔPψc_∂η)
+        JustRelax2D.compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, 1.0, Inf, Val(true))
+
+        expected_∂τ_∂η = (2.0, -1.0, 0.5)
+        @test all(dyrel.∂τc_∂η[1] .≈ expected_∂τ_∂η[1])
+        @test all(dyrel.∂τc_∂η[2] .≈ expected_∂τ_∂η[2])
+        @test all(dyrel.∂τc_∂η[3] .≈ expected_∂τ_∂η[3])
+        @test all(dyrel.∂τv_∂η[1] .≈ expected_∂τ_∂η[1])
+        @test all(dyrel.∂τv_∂η[2] .≈ expected_∂τ_∂η[2])
+        @test all(dyrel.∂τv_∂η[3] .≈ expected_∂τ_∂η[3])
+        @test all(iszero, dyrel.∂ΔPψc_∂η[1])
+
+        pow = GeoParams.PowerlawViscous(; η0 = 10.0, n = 3, ε0 = 1.0)
+        rheology_powerlaw = (
+            GeoParams.SetMaterialParams(;
+                Phase = 1,
+                Density = GeoParams.ConstantDensity(; ρ = 0.0),
+                CompositeRheology = GeoParams.CompositeRheology((pow,)),
+            ),
+        )
+        args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
+        foreach(A -> fill!(A, NaN), dyrel.∂ηc_∂ε)
+        foreach(A -> fill!(A, NaN), dyrel.∂ηv_∂ε)
+        JustRelax2D.update_viscosity_εII!(
+            stokes,
+            phase_ratios,
+            args,
+            rheology_powerlaw,
+            (-Inf, Inf);
+            do_partials = Val(true),
+            ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
+        )
+
+        expected_∂η_∂ε = (5 * (2 * 1.0 - 0.5), 5 * (2 * -0.5 + 1.0), 5 * (2 * 0.25))
+        @test all(dyrel.∂ηc_∂ε[1] .≈ expected_∂η_∂ε[1])
+        @test all(dyrel.∂ηc_∂ε[2] .≈ expected_∂η_∂ε[2])
+        @test all(dyrel.∂ηc_∂ε[3] .≈ expected_∂η_∂ε[3])
+        @test all(dyrel.∂ηv_∂ε[1] .≈ expected_∂η_∂ε[1])
+        @test all(dyrel.∂ηv_∂ε[2] .≈ expected_∂η_∂ε[2])
+        @test all(dyrel.∂ηv_∂ε[3] .≈ expected_∂η_∂ε[3])
     end
 
 end

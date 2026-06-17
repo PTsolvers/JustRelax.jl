@@ -144,6 +144,7 @@ end
     return i + ox, j + oy
 end
 
+# Assemble one local Jacobian/Gershgorin contribution ∂Rx[i,j]/∂Vx[vi,vj].
 @inline function local_Rx_Vx_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vx, ni_center)
     _dx = @dx(_di_center, i)
     _dy = @dy(_di_vertex, j)
@@ -178,6 +179,7 @@ end
     return jacobian_entry, gershgorin_entry
 end
 
+# Assemble one local Jacobian/Gershgorin contribution ∂Rx[i,j]/∂Vy[vi,vj].
 @inline function local_Rx_Vy_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vy, ni_center)
     _dx = @dx(_di_center, i)
     _dy = @dy(_di_vertex, j)
@@ -212,6 +214,7 @@ end
     return jacobian_entry, gershgorin_entry
 end
 
+# Assemble one local Jacobian/Gershgorin contribution ∂Ry[i,j]/∂Vx[vi,vj].
 @inline function local_Ry_Vx_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vx, ni_center)
     _dy = @dy(_di_center, j)
     _dx = @dx(_di_vertex, i)
@@ -246,6 +249,7 @@ end
     return jacobian_entry, gershgorin_entry
 end
 
+# Assemble one local Jacobian/Gershgorin contribution ∂Ry[i,j]/∂Vy[vi,vj].
 @inline function local_Ry_Vy_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vy, ni_center)
     _dy = @dy(_di_center, j)
     _dx = @dx(_di_vertex, i)

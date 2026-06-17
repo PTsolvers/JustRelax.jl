@@ -174,7 +174,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
 
- # Plotting ---------------------
+        # Plotting ---------------------
         # f, _, h = heatmap(velocity, colormap = :vikO)
         # f, _, h = heatmap(stokes.∇V, colormap = :vikO)
         f, _, h = heatmap(log10.(abs.(stokes.∇V)))

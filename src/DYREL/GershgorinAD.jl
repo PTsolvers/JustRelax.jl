@@ -1,9 +1,9 @@
 function Gershgorin_Stokes2D_SchurComplementAD(
-    dyrel,
-    _di_center,
-    _di_vertex,
-    _di_vx,
-    _di_vy,
+        dyrel,
+        _di_center,
+        _di_vertex,
+        _di_vx,
+        _di_vy,
     )
 
     ni = size(dyrel.Dx)
@@ -151,21 +151,21 @@ end
     vi, vj = local_Rx_Vx_index(i, j, k)
 
     # ∂ε/∂Vx[vi,vj] at the center and vertex stencil points used by Rx[i,j].
-    εW = dε_center_dVx(i,     j, vi, vj, _di_vertex, _di_vx)
+    εW = dε_center_dVx(i, j, vi, vj, _di_vertex, _di_vx)
     εE = dε_center_dVx(i + 1, j, vi, vj, _di_vertex, _di_vx)
-    εS = dε_vertex_dVx(i + 1, j,     vi, vj, _di_vertex, _di_vx, ni_center)
+    εS = dε_vertex_dVx(i + 1, j, vi, vj, _di_vertex, _di_vx, ni_center)
     εN = dε_vertex_dVx(i + 1, j + 1, vi, vj, _di_vertex, _di_vx, ni_center)
 
     # ∂τ/∂Vx[vi,vj] = ∂τ/∂ε * ∂ε/∂Vx + ∂τ/∂η * ∂η/∂ε * ∂ε/∂Vx.
-    dτxxW = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 1, i,     j, εW.εxx, εW.εyy, εW.εxy)
+    dτxxW = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 1, i, j, εW.εxx, εW.εyy, εW.εxy)
     dτxxE = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 1, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
-    dτxyS = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j,     εS.εxx, εS.εyy, εS.εxy)
+    dτxyS = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j, εS.εxx, εS.εyy, εS.εxy)
     dτxyN = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εN.εxx, εN.εyy, εN.εxy)
 
     # ∂ΔPψ/∂Vx[vi,vj] = ∂ΔPψ/∂ε * ∂ε/∂Vx + ∂ΔPψ/∂η * ∂η/∂ε * ∂ε/∂Vx; dPnum is ∂(γeff ∇⋅V)/∂Vx.
-    dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i,     j, εW.εxx, εW.εyy, εW.εxy)
+    dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j, εW.εxx, εW.εyy, εW.εxy)
     dΔPψE = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
-    dPnumW = dyrel.γ_eff[i,     j] * εW.div
+    dPnumW = dyrel.γ_eff[i, j] * εW.div
     dPnumE = dyrel.γ_eff[i + 1, j] * εE.div
 
     τxx_term = _dx * (dτxxE - dτxxW)      # ∂/∂Vx[vi,vj](∂τxx/∂x)
@@ -186,21 +186,21 @@ end
     vi, vj = local_Rx_Vy_index(i, j, k)
 
     # ∂ε/∂Vy[vi,vj] at the center and vertex stencil points used by Rx[i,j].
-    εW = dε_center_dVy(i,     j, vi, vj, _di_vertex, _di_vy)
+    εW = dε_center_dVy(i, j, vi, vj, _di_vertex, _di_vy)
     εE = dε_center_dVy(i + 1, j, vi, vj, _di_vertex, _di_vy)
-    εS = dε_vertex_dVy(i + 1, j,     vi, vj, _di_vertex, _di_vy, ni_center)
+    εS = dε_vertex_dVy(i + 1, j, vi, vj, _di_vertex, _di_vy, ni_center)
     εN = dε_vertex_dVy(i + 1, j + 1, vi, vj, _di_vertex, _di_vy, ni_center)
 
     # ∂τ/∂Vy[vi,vj] = ∂τ/∂ε * ∂ε/∂Vy + ∂τ/∂η * ∂η/∂ε * ∂ε/∂Vy.
-    dτxxW = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 1, i,     j, εW.εxx, εW.εyy, εW.εxy)
+    dτxxW = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 1, i, j, εW.εxx, εW.εyy, εW.εxy)
     dτxxE = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 1, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
-    dτxyS = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j,     εS.εxx, εS.εyy, εS.εxy)
+    dτxyS = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j, εS.εxx, εS.εyy, εS.εxy)
     dτxyN = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εN.εxx, εN.εyy, εN.εxy)
 
     # ∂ΔPψ/∂Vy[vi,vj] = ∂ΔPψ/∂ε * ∂ε/∂Vy + ∂ΔPψ/∂η * ∂η/∂ε * ∂ε/∂Vy; dPnum is ∂(γeff ∇⋅V)/∂Vy.
-    dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i,     j, εW.εxx, εW.εyy, εW.εxy)
+    dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j, εW.εxx, εW.εyy, εW.εxy)
     dΔPψE = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
-    dPnumW = dyrel.γ_eff[i,     j] * εW.div
+    dPnumW = dyrel.γ_eff[i, j] * εW.div
     dPnumE = dyrel.γ_eff[i + 1, j] * εE.div
 
     τxx_term = _dx * (dτxxE - dτxxW)      # ∂/∂Vy[vi,vj](∂τxx/∂x)
@@ -221,21 +221,21 @@ end
     vi, vj = local_Ry_Vx_index(i, j, k)
 
     # ∂ε/∂Vx[vi,vj] at the center and vertex stencil points used by Ry[i,j].
-    εS = dε_center_dVx(i, j,     vi, vj, _di_vertex, _di_vx)
+    εS = dε_center_dVx(i, j, vi, vj, _di_vertex, _di_vx)
     εN = dε_center_dVx(i, j + 1, vi, vj, _di_vertex, _di_vx)
-    εW = dε_vertex_dVx(i,     j + 1, vi, vj, _di_vertex, _di_vx, ni_center)
+    εW = dε_vertex_dVx(i, j + 1, vi, vj, _di_vertex, _di_vx, ni_center)
     εE = dε_vertex_dVx(i + 1, j + 1, vi, vj, _di_vertex, _di_vx, ni_center)
 
     # ∂τ/∂Vx[vi,vj] = ∂τ/∂ε * ∂ε/∂Vx + ∂τ/∂η * ∂η/∂ε * ∂ε/∂Vx.
-    dτyyS = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 2, i, j,     εS.εxx, εS.εyy, εS.εxy)
+    dτyyS = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 2, i, j, εS.εxx, εS.εyy, εS.εxy)
     dτyyN = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 2, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
-    dτxyW = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i,     j + 1, εW.εxx, εW.εyy, εW.εxy)
+    dτxyW = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i, j + 1, εW.εxx, εW.εyy, εW.εxy)
     dτxyE = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εE.εxx, εE.εyy, εE.εxy)
 
     # ∂ΔPψ/∂Vx[vi,vj] = ∂ΔPψ/∂ε * ∂ε/∂Vx + ∂ΔPψ/∂η * ∂η/∂ε * ∂ε/∂Vx; dPnum is ∂(γeff ∇⋅V)/∂Vx.
-    dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j,     εS.εxx, εS.εyy, εS.εxy)
+    dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j, εS.εxx, εS.εyy, εS.εxy)
     dΔPψN = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
-    dPnumS = dyrel.γ_eff[i, j]     * εS.div
+    dPnumS = dyrel.γ_eff[i, j] * εS.div
     dPnumN = dyrel.γ_eff[i, j + 1] * εN.div
 
     τyy_term = _dy * (dτyyN - dτyyS)      # ∂/∂Vx[vi,vj](∂τyy/∂y)
@@ -256,21 +256,21 @@ end
     vi, vj = local_Ry_Vy_index(i, j, k)
 
     # ∂ε/∂Vy[vi,vj] at the center and vertex stencil points used by Ry[i,j].
-    εS = dε_center_dVy(i, j,     vi, vj, _di_vertex, _di_vy)
+    εS = dε_center_dVy(i, j, vi, vj, _di_vertex, _di_vy)
     εN = dε_center_dVy(i, j + 1, vi, vj, _di_vertex, _di_vy)
-    εW = dε_vertex_dVy(i,     j + 1, vi, vj, _di_vertex, _di_vy, ni_center)
+    εW = dε_vertex_dVy(i, j + 1, vi, vj, _di_vertex, _di_vy, ni_center)
     εE = dε_vertex_dVy(i + 1, j + 1, vi, vj, _di_vertex, _di_vy, ni_center)
 
     # ∂τ/∂Vy[vi,vj] = ∂τ/∂ε * ∂ε/∂Vy + ∂τ/∂η * ∂η/∂ε * ∂ε/∂Vy.
-    dτyyS = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 2, i, j,     εS.εxx, εS.εyy, εS.εxy)
+    dτyyS = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 2, i, j, εS.εxx, εS.εyy, εS.εxy)
     dτyyN = dτ_dV(dyrel.∂τc_∂ε, dyrel.∂τc_∂η, dyrel.∂ηc_∂ε, 2, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
-    dτxyW = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i,     j + 1, εW.εxx, εW.εyy, εW.εxy)
+    dτxyW = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i, j + 1, εW.εxx, εW.εyy, εW.εxy)
     dτxyE = dτ_dV(dyrel.∂τv_∂ε, dyrel.∂τv_∂η, dyrel.∂ηv_∂ε, 3, i + 1, j + 1, εE.εxx, εE.εyy, εE.εxy)
 
     # ∂ΔPψ/∂Vy[vi,vj] = ∂ΔPψ/∂ε * ∂ε/∂Vy + ∂ΔPψ/∂η * ∂η/∂ε * ∂ε/∂Vy; dPnum is ∂(γeff ∇⋅V)/∂Vy.
-    dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j,     εS.εxx, εS.εyy, εS.εxy)
+    dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j, εS.εxx, εS.εyy, εS.εxy)
     dΔPψN = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
-    dPnumS = dyrel.γ_eff[i, j]     * εS.div
+    dPnumS = dyrel.γ_eff[i, j] * εS.div
     dPnumN = dyrel.γ_eff[i, j + 1] * εN.div
 
     τyy_term = _dy * (dτyyN - dτyyS)      # ∂/∂Vy[vi,vj](∂τyy/∂y)
@@ -313,10 +313,10 @@ end
     normal = dεnormal_center_dVx(ci, cj, vi, vj, _di_vertex)
     quarter = one(normal.εxx) / 4
     dεxy = quarter * (
-        dεxy_vertex_dVx(ci,     cj,     vi, vj, _di_vx) +
-        dεxy_vertex_dVx(ci + 1, cj,     vi, vj, _di_vx) +
-        dεxy_vertex_dVx(ci,     cj + 1, vi, vj, _di_vx) +
-        dεxy_vertex_dVx(ci + 1, cj + 1, vi, vj, _di_vx)
+        dεxy_vertex_dVx(ci, cj, vi, vj, _di_vx) +
+            dεxy_vertex_dVx(ci + 1, cj, vi, vj, _di_vx) +
+            dεxy_vertex_dVx(ci, cj + 1, vi, vj, _di_vx) +
+            dεxy_vertex_dVx(ci + 1, cj + 1, vi, vj, _di_vx)
     )
 
     return (εxx = normal.εxx, εyy = normal.εyy, εxy = dεxy, div = normal.div)
@@ -367,10 +367,10 @@ end
     normal = dεnormal_center_dVy(ci, cj, vi, vj, _di_vertex)
     quarter = one(normal.εxx) / 4
     dεxy = quarter * (
-        dεxy_vertex_dVy(ci,     cj,     vi, vj, _di_vy) +
-        dεxy_vertex_dVy(ci + 1, cj,     vi, vj, _di_vy) +
-        dεxy_vertex_dVy(ci,     cj + 1, vi, vj, _di_vy) +
-        dεxy_vertex_dVy(ci + 1, cj + 1, vi, vj, _di_vy)
+        dεxy_vertex_dVy(ci, cj, vi, vj, _di_vy) +
+            dεxy_vertex_dVy(ci + 1, cj, vi, vj, _di_vy) +
+            dεxy_vertex_dVy(ci, cj + 1, vi, vj, _di_vy) +
+            dεxy_vertex_dVy(ci + 1, cj + 1, vi, vj, _di_vy)
     )
 
     return (εxx = normal.εxx, εyy = normal.εyy, εxy = dεxy, div = normal.div)
@@ -395,28 +395,28 @@ end
 @inline function dτ_dV(∂τ_∂ε, row, i, j, dεxx_dV, dεyy_dV, dεxy_dV)
     o = 3 * (row - 1)
     return ∂τ_∂ε[o + 1][i, j] * dεxx_dV +
-           ∂τ_∂ε[o + 2][i, j] * dεyy_dV +
-           ∂τ_∂ε[o + 3][i, j] * dεxy_dV
+        ∂τ_∂ε[o + 2][i, j] * dεyy_dV +
+        ∂τ_∂ε[o + 3][i, j] * dεxy_dV
 end
 
 @inline function dτ_dV(∂τ_∂ε, ∂τ_∂η, ∂η_∂ε, row, i, j, dεxx_dV, dεyy_dV, dεxy_dV)
     dτ_dε = dτ_dV(∂τ_∂ε, row, i, j, dεxx_dV, dεyy_dV, dεxy_dV)
     dη_dV = ∂η_∂ε[1][i, j] * dεxx_dV +
-            ∂η_∂ε[2][i, j] * dεyy_dV +
-            ∂η_∂ε[3][i, j] * dεxy_dV
+        ∂η_∂ε[2][i, j] * dεyy_dV +
+        ∂η_∂ε[3][i, j] * dεxy_dV
     return dτ_dε + ∂τ_∂η[row][i, j] * dη_dV
 end
 
 @inline function dΔPψ_dV(∂ΔPψ_∂ε, i, j, dεxx_dV, dεyy_dV, dεxy_dV)
     return ∂ΔPψ_∂ε[1][i, j] * dεxx_dV +
-           ∂ΔPψ_∂ε[2][i, j] * dεyy_dV +
-           ∂ΔPψ_∂ε[3][i, j] * dεxy_dV
+        ∂ΔPψ_∂ε[2][i, j] * dεyy_dV +
+        ∂ΔPψ_∂ε[3][i, j] * dεxy_dV
 end
 
 @inline function dΔPψ_dV(∂ΔPψ_∂ε, ∂ΔPψ_∂η, ∂η_∂ε, i, j, dεxx_dV, dεyy_dV, dεxy_dV)
     dΔPψ_dε = dΔPψ_dV(∂ΔPψ_∂ε, i, j, dεxx_dV, dεyy_dV, dεxy_dV)
     dη_dV = ∂η_∂ε[1][i, j] * dεxx_dV +
-            ∂η_∂ε[2][i, j] * dεyy_dV +
-            ∂η_∂ε[3][i, j] * dεxy_dV
+        ∂η_∂ε[2][i, j] * dεyy_dV +
+        ∂η_∂ε[3][i, j] * dεxy_dV
     return dΔPψ_dε + ∂ΔPψ_∂η[1][i, j] * dη_dV
 end

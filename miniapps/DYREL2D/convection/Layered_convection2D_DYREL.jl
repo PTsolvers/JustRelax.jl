@@ -273,6 +273,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                 λ_relaxation_DR = 1,
                 viscosity_relaxation = 1.0e-2,
                 viscosity_cutoff = viscosity_cutoff,
+                use_gershgorin_ad = true,
             )
         )
         tensor_invariant!(stokes.ε)

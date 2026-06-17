@@ -178,6 +178,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 viscosity_relaxation = 1 / 2,
                 linear_viscosity = true,
                 viscosity_cutoff = (-Inf, Inf),
+                use_gershgorin_ad = true,
             )
         )
         tensor_invariant!(stokes.τ)

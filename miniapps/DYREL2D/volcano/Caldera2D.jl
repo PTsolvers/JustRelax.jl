@@ -386,6 +386,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                 λ_relaxation_PH = 1,
                 viscosity_relaxation = 1.0e-2,
                 viscosity_cutoff = viscosity_cutoff,
+                use_gershgorin_ad = true,
             )
         )
 

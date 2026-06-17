@@ -310,6 +310,33 @@ end
         η_only2 = JustRelax2D.compute_phase_viscosity(rheo2, SA[0.0, 0.8], AII, GeoParams.compute_viscosity_εII, v_args)
         @test η_only2 ≈ inv(0.8 / η2)
 
+        # local viscosity + ForwardDiff gradient w.r.t. strain-rate components.
+        # Use a non-linear test law so the gradient is not trivially zero.
+        fn_test = (_, AII, _) -> AII^2
+        Aij = (3.0, 4.0, 12.0)
+        η_old = 2.0
+        ν = 0.25
+        cutoff = (-Inf, Inf)
+        fη(A) = JustRelax2D.compute_local_viscosity(Tuple(A), η_old, ν, v_args, nothing, cutoff, fn_test)
+        η_local = fη(SA[Aij...])
+        η_expected = (1 - ν) * η_old + ν * GeoParams.second_invariant(Aij...)^2
+        @test η_local ≈ η_expected
+
+        gradη = JustRelax2D.local_viscosity_gradient_strainrate(Aij, η_old, ν, v_args, nothing, cutoff, fn_test)
+        h = 1.0e-6
+        gradη_fd = SA[
+            (fη(SA[Aij[1] + h, Aij[2], Aij[3]]) - fη(SA[Aij[1] - h, Aij[2], Aij[3]])) / (2h),
+            (fη(SA[Aij[1], Aij[2] + h, Aij[3]]) - fη(SA[Aij[1], Aij[2] - h, Aij[3]])) / (2h),
+            (fη(SA[Aij[1], Aij[2], Aij[3] + h]) - fη(SA[Aij[1], Aij[2], Aij[3] - h])) / (2h),
+        ]
+        @test gradη ≈ gradη_fd rtol = 1.0e-8
+        @test all(isfinite, JustRelax2D.local_viscosity_gradient_strainrate((0.0, 0.0, 0.0), η_old, ν, v_args, nothing, cutoff, fn_test))
+
+        gradη_mix = JustRelax2D.local_viscosity_gradient_strainrate(
+            Aij, η_old, ν, SA[0.5, 0.5], v_args, rheo2, cutoff, GeoParams.compute_viscosity_εII
+        )
+        @test all(iszero, gradη_mix)
+
         # get_viscosity_fn — dispatcher
         @test JustRelax2D.get_viscosity_fn(GeoParams.compute_viscosity_εII) === JustRelax2D.compute_viscosity_εII!
         @test JustRelax2D.get_viscosity_fn(GeoParams.compute_viscosity_τII) === JustRelax2D.compute_viscosity_τII!

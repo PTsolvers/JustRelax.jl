@@ -37,6 +37,12 @@ end
         @test size(dyrel.dVydτ) == (nx, ny - 1)
         @test size(dyrel.βVx) == (nx - 1, ny)
         @test size(dyrel.αVy) == (nx, ny - 1)
+        @test length(dyrel.∂τc_∂ε) == 9
+        @test length(dyrel.∂τv_∂ε) == 9
+        @test length(dyrel.∂ΔPψc_∂ε) == 3
+        @test size(dyrel.∂τc_∂ε[1]) == (nx, ny)
+        @test size(dyrel.∂τv_∂ε[1]) == (nx + 1, ny + 1)
+        @test size(dyrel.∂ΔPψc_∂ε[1]) == (nx, ny)
         @test dyrel.CFL === 0.5
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
@@ -64,6 +70,9 @@ end
         @test size(dyrel.βVx) == (nx - 1, ny, nz)
         @test size(dyrel.αVy) == (nx, ny - 1, nz)
         @test size(dyrel.cVz) == (nx, ny, nz - 1)
+        @test length(dyrel.∂τc_∂ε) == 1
+        @test length(dyrel.∂τv_∂ε) == 1
+        @test length(dyrel.∂ΔPψc_∂ε) == 1
         @test dyrel.CFL === 0.6
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
@@ -157,4 +166,5 @@ end
         @test all(dyrel.dτVx .≈ expected_dτ)
         @test all(dyrel.dτVy .≈ expected_dτ)
     end
+
 end

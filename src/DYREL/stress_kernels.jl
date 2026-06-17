@@ -1,4 +1,4 @@
-function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation, dt, do_partials = Val(false))
+function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation, dt, do_partials = false)
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
@@ -51,8 +51,8 @@ end
         ∂ΔPψc_∂η,
         ∂τc_∂η,
         ∂τv_∂η,
-        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, ::Val{do_partials}
-    ) where {do_partials}
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, do_partials::Bool
+    )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
 
@@ -264,7 +264,7 @@ end
 
 ## VARIATIONAL STOKES STRESS KERNELS
 
-function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt, do_partials = Val(false))
+function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt, do_partials = false)
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
@@ -317,8 +317,8 @@ end
         ∂τc_∂η,
         ∂τv_∂η,
         ϕ::JustRelax.RockRatio,
-        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, ::Val{do_partials}
-    ) where {do_partials}
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, do_partials::Bool
+    )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
 

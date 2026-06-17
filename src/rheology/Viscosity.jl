@@ -2,7 +2,7 @@
 
 # without phase ratios
 @inline function update_viscosity_εII!(
-        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = Val(false), ∂η_∂ε = nothing
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = false, ∂η_∂ε = nothing
     )
     update_viscosity!(
         stokes, args, rheology, cutoff, compute_viscosity_εII; relaxation = relaxation, do_partials = do_partials, ∂η_∂ε = ∂η_∂ε
@@ -11,7 +11,7 @@
 end
 
 @inline function update_viscosity_τII!(
-        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = Val(false), ∂η_∂ε = nothing
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = false, ∂η_∂ε = nothing
     )
     update_viscosity!(
         stokes, args, rheology, cutoff, compute_viscosity_τII; relaxation = relaxation, do_partials = do_partials, ∂η_∂ε = ∂η_∂ε
@@ -28,7 +28,7 @@ end
         cutoff,
         fn_viscosity::F;
         relaxation = 1.0e0,
-        do_partials = Val(false),
+        do_partials = false,
         ∂η_∂ε = nothing,
     ) where {F}
 
@@ -52,7 +52,7 @@ end
         cutoff;
         air_phase::Integer = 0,
         relaxation = 1.0e0,
-        do_partials = Val(false),
+        do_partials = false,
         ∂η_∂ε = (nothing, nothing),
     )
     update_viscosity!(
@@ -78,7 +78,7 @@ end
         cutoff;
         air_phase::Integer = 0,
         relaxation = 1.0e0,
-        do_partials = Val(false),
+        do_partials = false,
         ∂η_∂ε = (nothing, nothing),
     )
     update_viscosity!(
@@ -105,7 +105,7 @@ end
         cutoff,
         fn_viscosity::F;
         relaxation = 1.0e0,
-        do_partials = Val(false),
+        do_partials = false,
         ∂η_∂ε = (nothing, nothing),
     ) where {F}
 
@@ -124,26 +124,26 @@ end
 ## 2D KERNELS
 
 function compute_viscosity_τII!(
-        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = Val(false), ∂η_∂ε = nothing
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = false, ∂η_∂ε = nothing
     )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_τII, do_partials, ∂η_∂ε)
 end
 
 function compute_viscosity_εII!(
-        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = Val(false), ∂η_∂ε = nothing
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = false, ∂η_∂ε = nothing
     )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_εII, do_partials, ∂η_∂ε)
 end
 
 # generic fallback
 function compute_viscosity!(
-        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = Val(false)
+        stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0, do_partials = false
     )
     compute_viscosity_εII!(stokes, args, rheology, cutoff; relaxation = relaxation, do_partials = do_partials)
     return nothing
 end
 
-function compute_viscosity!(::CPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F, do_partials = Val(false), ∂η_∂ε = nothing) where {F}
+function compute_viscosity!(::CPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = nothing) where {F}
     return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
@@ -156,8 +156,8 @@ function _compute_viscosity!(stokes::JustRelax.StokesArrays, ν, args, rheology,
 end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-        η, ν, Axx, Ayy, Axyv, args, rheology, cutoff, fn_viscosity::F, ::Val{do_partials}, ∂η_∂ε_field
-    ) where {F, do_partials}
+        η, ν, Axx, Ayy, Axyv, args, rheology, cutoff, fn_viscosity::F, do_partials::Bool, ∂η_∂ε_field
+    ) where {F}
 
     # convenience closure
     Base.@propagate_inbounds @inline gather(A) = _gather(A, I...)
@@ -220,7 +220,7 @@ function compute_viscosity_τII!(
         cutoff;
         air_phase::Integer = 0,
         relaxation = 1.0e0,
-        do_partials = Val(false),
+        do_partials = false,
         ∂η_∂ε = (nothing, nothing),
     )
     compute_viscosity!(
@@ -237,7 +237,7 @@ function compute_viscosity_εII!(
         cutoff;
         air_phase::Integer = 0,
         relaxation = 1.0e0,
-        do_partials = Val(false),
+        do_partials = false,
         ∂η_∂ε = (nothing, nothing),
     )
     compute_viscosity!(
@@ -256,7 +256,7 @@ function compute_viscosity!(
         cutoff;
         air_phase::Integer = 0,
         relaxation = 1.0e0,
-        do_partials = Val(false),
+        do_partials = false,
         ∂η_∂ε = (nothing, nothing),
     )
     compute_viscosity!(
@@ -275,7 +275,7 @@ function compute_viscosity!(
         air_phase,
         cutoff,
         fn_viscosity::F,
-        do_partials = Val(false),
+        do_partials = false,
         ∂η_∂ε = (nothing, nothing)
     ) where {F}
     _compute_viscosity!(stokes, ν, args, rheology, air_phase, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
@@ -413,8 +413,8 @@ end
 @inline select_tensor_vertex(stokes, ::typeof(compute_viscosity_τII), ::Val{3}) = @stress(stokes.τ)
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
-        η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2, ::Val{do_partials}, ∂η_∂ε_field
-    ) where {F1, F2, do_partials}
+        η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2, do_partials::Bool, ∂η_∂ε_field
+    ) where {F1, F2}
 
     # convenience closure
     Base.@propagate_inbounds @inline gather(A) = _gather(A, I...)
@@ -498,9 +498,9 @@ end
         cutoff,
         fn_viscosity::F1,
         fn_args::F2,
-        ::Val{do_partials},
+        do_partials::Bool,
         ∂η_∂ε_field
-    ) where {F1, F2, do_partials}
+    ) where {F1, F2}
 
     # convenience closures
     Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)

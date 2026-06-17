@@ -118,7 +118,7 @@ function _solve_DYREL!(
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     if use_gershgorin_ad
         compute_∇V_strain_rate!(stokes, _di, ni, dim)
-        compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, Val(true))
+        compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, true)
         DYREL_AD!(dyrel, stokes, rheology, phase_ratios, grid, dt; CFL = dyrel.CFL)
     else
         DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
@@ -133,7 +133,7 @@ function _solve_DYREL!(
         compute_∇V_strain_rate!(stokes, _di, ni, dim)
 
         # compute deviatoric stress
-        do_partials = Val(false)
+        do_partials = false
         compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, do_partials)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)

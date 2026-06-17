@@ -280,7 +280,7 @@ end
         foreach(A -> fill!(A, NaN), dyrel.∂τc_∂η)
         foreach(A -> fill!(A, NaN), dyrel.∂τv_∂η)
         foreach(A -> fill!(A, NaN), dyrel.∂ΔPψc_∂η)
-        JustRelax2D.compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, 1.0, Inf, Val(true))
+        JustRelax2D.compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, 1.0, Inf, true)
 
         expected_∂τ_∂η = (2.0, -1.0, 0.5)
         @test all(dyrel.∂τc_∂η[1] .≈ expected_∂τ_∂η[1])
@@ -308,7 +308,7 @@ end
             args,
             rheology_powerlaw,
             (-Inf, Inf);
-            do_partials = Val(true),
+            do_partials = true,
             ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
         )
 

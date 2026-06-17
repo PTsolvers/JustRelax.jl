@@ -137,8 +137,8 @@ function init_rheology(CharDim; is_compressible = false, steady_state = true)
     G0 = 6.0e11Pa      # elastic shear modulus
     G_magma = 6.0e11Pa      # elastic shear modulus perturbation
 
-    # soft_C = LinearSoftening((ustrip(Coh)/2, ustrip(Coh)), (0e0, 1e-1)) # softening law
-    soft_C = NonLinearSoftening(; ξ₀ = ustrip(Coh), Δ = ustrip(Coh) / 2)   # softening law
+    # soft_C = LinearSoftening((Coh/2, Coh), (0e0, 1e-1)) # softening law
+    soft_C = NonLinearSoftening(; ξ₀ = Coh, Δ = Coh / 2)   # softening law
     pl = DruckerPrager_regularised(; C = Coh, ϕ = ϕ, η_vp = η_reg, Ψ = 0.0, softening_C = soft_C)        # plasticity
     if is_compressible == true
         el = SetConstantElasticity(; G = G0, ν = 0.25)           # elastic spring

@@ -224,11 +224,7 @@ function _solve_DYREL!(
             # compute divergence and deviatoric strain rate in one pass
             compute_∇V_strain_rate!(stokes, _di, ni, dim)
 
-            if use_gershgorin_ad && iszero(iter % nout)
-                do_partials = Val(true)
-            else
-                do_partials = Val(false)
-            end
+            do_partials = use_gershgorin_ad && iszero(iter % nout)
 
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_DR, dt, do_partials)

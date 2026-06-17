@@ -191,6 +191,24 @@ end
         @test all(dyrel.dτVy .≈ expected_dτ)
     end
 
+    @testset "GershgorinAD chain rule helpers" begin
+        ∂τ_∂ε = ntuple(i -> fill(Float64(i), 1, 1), 9)
+        ∂τ_∂η = (fill(10.0, 1, 1), fill(20.0, 1, 1), fill(30.0, 1, 1))
+        ∂η_∂ε = (fill(0.5, 1, 1), fill(-0.25, 1, 1), fill(2.0, 1, 1))
+        dε = (3.0, -4.0, 0.25)
+
+        dτ_dε = 4.0 * dε[1] + 5.0 * dε[2] + 6.0 * dε[3]
+        dη_dV = 0.5 * dε[1] - 0.25 * dε[2] + 2.0 * dε[3]
+        @test JustRelax2D.dτ_dV(∂τ_∂ε, 2, 1, 1, dε...) ≈ dτ_dε
+        @test JustRelax2D.dτ_dV(∂τ_∂ε, ∂τ_∂η, ∂η_∂ε, 2, 1, 1, dε...) ≈ dτ_dε + 20.0 * dη_dV
+
+        ∂ΔPψ_∂ε = (fill(7.0, 1, 1), fill(8.0, 1, 1), fill(9.0, 1, 1))
+        ∂ΔPψ_∂η = (fill(-3.0, 1, 1), fill(0.0, 1, 1), fill(0.0, 1, 1))
+        dΔPψ_dε = 7.0 * dε[1] + 8.0 * dε[2] + 9.0 * dε[3]
+        @test JustRelax2D.dΔPψ_dV(∂ΔPψ_∂ε, 1, 1, dε...) ≈ dΔPψ_dε
+        @test JustRelax2D.dΔPψ_dV(∂ΔPψ_∂ε, ∂ΔPψ_∂η, ∂η_∂ε, 1, 1, dε...) ≈ dΔPψ_dε - 3.0 * dη_dV
+    end
+
     @testset "DYREL partial field storage" begin
         nx, ny = 4, 3
         ni = (nx, ny)

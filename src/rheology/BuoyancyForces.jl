@@ -13,7 +13,7 @@ function compute_ρg!(ρg, rheology, args)
 end
 
 @parallel_indices (I...) function compute_ρg_kernel!(ρg, rheology, args)
-    args_ijk = ntuple_idx(args, I...)
+    args_ijk = getindex_NamedTuple(args, I...)
     @inbounds ρg[I...] = compute_buoyancy(rheology, args_ijk)
     return nothing
 end
@@ -21,7 +21,7 @@ end
 @parallel_indices (I...) function compute_ρg_kernel!(
         ρg::NTuple{N, AbstractArray}, rheology, args
     ) where {N}
-    args_ijk = ntuple_idx(args, I...)
+    args_ijk = getindex_NamedTuple(args, I...)
     gᵢ = compute_gravity(first(rheology))
     ρgᵢ = compute_buoyancies(rheology, args_ijk, gᵢ, Val(N))
     fill_density!(ρg, ρgᵢ, I...)
@@ -44,7 +44,7 @@ function compute_ρg!(ρg, phase_ratios::JustPIC.PhaseRatios, rheology, args)
 end
 
 @parallel_indices (I...) function compute_ρg_kernel!(ρg, phase_ratios, rheology, args)
-    args_ijk = ntuple_idx(args, I...)
+    args_ijk = getindex_NamedTuple(args, I...)
     ρg[I...] = compute_buoyancy(rheology, args_ijk, @cell(phase_ratios[I...]))
     return nothing
 end
@@ -52,7 +52,7 @@ end
 @parallel_indices (I...) function compute_ρg_kernel!(
         ρg::NTuple{N, AbstractArray}, phase_ratios, rheology, args
     ) where {N}
-    args_ijk = ntuple_idx(args, I...)
+    args_ijk = getindex_NamedTuple(args, I...)
     gᵢ = compute_gravity(first(rheology))
     ρgᵢ = compute_buoyancies(rheology, @cell(phase_ratios[I...]), args_ijk, gᵢ, Val(N))
     fill_density!(ρg, ρgᵢ, I...)

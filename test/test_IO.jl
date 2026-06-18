@@ -36,12 +36,7 @@ using WriteVTK, JLD2
         # 2D case
         dst = "test_IO"
         stokes = StokesArrays(backend_JR, ni)
-
-        thermal = ThermalArrays(backend_JR, 4, 4)
-        @test size(thermal.Tc) === (4, 4)
-
         thermal = ThermalArrays(backend_JR, ni)
-        @test size(thermal.Tc) === (4, 4)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(
@@ -60,7 +55,6 @@ using WriteVTK, JLD2
         metadata(pwd(), dst, "test_traits.jl", "test_types.jl")
         @test isfile(joinpath(dst, "test_traits.jl"))
         @test isfile(joinpath(dst, "test_types.jl"))
-        @test isfile(joinpath(dst, "Project.toml"))
 
         # Call the function
         checkpointing_jld2(dst, stokes, thermal, time, dt)
@@ -107,13 +101,13 @@ using WriteVTK, JLD2
         Vy_v = @zeros(ni .+ 1...)
         velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
         data_v = (;
-            T = Array(thermal.T),
             τII = Array(stokes.τ.II),
             εII = Array(stokes.ε.II),
             Vx = Array(Vx_v),
             Vy = Array(Vy_v),
         )
         data_c = (;
+            T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
             P = Array(stokes.P),
             η = Array(stokes.viscosity.η),
         )
@@ -174,14 +168,20 @@ using WriteVTK, JLD2
         save_marker_chain(joinpath(dst, "MarkerChain"), chain.cell_vertices, chain.h_vertices)
         @test isfile(joinpath(dst, "MarkerChain.vtp"))
 
+        # exercise the pvd collection branch of save_marker_chain
+        save_marker_chain(
+            joinpath(dst, "MarkerChainPVD"), chain.cell_vertices, chain.h_vertices;
+            pvd = joinpath(dst, "markerchain_pvd"), t = 1.0,
+        )
+        @test isfile(joinpath(dst, "MarkerChainPVD.vtp"))
+        @test isfile(joinpath(dst, "markerchain_pvd.pvd"))
+
         # 3D case
         ni = nx, ny, nz
         stokes = StokesArrays(backend_JR, ni)
 
         thermal = ThermalArrays(backend_JR, 4, 4, 4)
-        @test size(thermal.Tc) === (4, 4, 4)
         thermal = ThermalArrays(backend_JR, ni)
-        @test size(thermal.Tc) === (4, 4, 4)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(
@@ -268,6 +268,36 @@ using WriteVTK, JLD2
         # test save_data function
         save_data(joinpath(dst, "save_data.hdf5"), grid)
         @test isfile(joinpath(dst, "save_data.hdf5"))
+
+        # 3D save_data exercises the `N == 3` Zc/Zv branch in IO/H5.jl
+        grid3d = Geometry((4, 4, 4), (1.0, 1.0, 1.0); origin = (0.0, 0.0, -1.0))
+        save_data(joinpath(dst, "save_data3D.hdf5"), grid3d)
+        @test isfile(joinpath(dst, "save_data3D.hdf5"))
+
+        # JLD2 kwargs path: exercise the AbstractArray, Tuple, scalar, and nothing branches
+        checkpointing_jld2(
+            dst, stokes, thermal, time, dt;
+            extra_vec = [1.0, 2.0, 3.0],
+            extra_tuple = ([1.0, 2.0], [3.0, 4.0]),
+            extra_scalar = 42,
+            extra_nothing = nothing,
+        )
+        restart_data = load(joinpath(dst, "checkpoint.jld2"))
+        @test restart_data["extra_vec"] == [1.0, 2.0, 3.0]
+        @test restart_data["extra_scalar"] == 42
+        @test restart_data["extra_nothing"] === nothing
+
+        # metadata fallback: file only present under <src>/test/
+        srcdir = mktempdir()
+        testsub = joinpath(srcdir, "test")
+        mkpath(testsub)
+        write(joinpath(testsub, "only_in_test.toml"), "name = \"x\"\n")
+        write(joinpath(srcdir, "Project.toml"), "name = \"x\"\n")
+        write(joinpath(srcdir, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        metadata_dst = joinpath(dst, "meta_fallback")
+        metadata(srcdir, metadata_dst, "only_in_test.toml")
+        @test isfile(joinpath(metadata_dst, "only_in_test.toml"))
+        @test isfile(joinpath(metadata_dst, "Project.toml"))
 
         # Remove the generated directory
         rm(dst, recursive = true)

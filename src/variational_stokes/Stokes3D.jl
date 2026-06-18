@@ -121,6 +121,8 @@ function _solve_VS!(
                 @strain(stokes),
                 @plastic_strain(stokes),
                 stokes.EII_pl,
+                stokes.ε_vol_pl,
+                stokes.EVol_pl,
                 @tensor_center(stokes.τ),
                 (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy),
                 @tensor_center(stokes.τ_o),
@@ -217,6 +219,7 @@ function _solve_VS!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))

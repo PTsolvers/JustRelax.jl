@@ -105,7 +105,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
 
     # Rheology
     compute_viscosity!(
@@ -178,6 +178,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
                 viscosity_relaxation = 1 / 2,
                 linear_viscosity = true,
                 viscosity_cutoff = (-Inf, Inf),
+                use_gershgorin_ad = true,
             )
         )
         tensor_invariant!(stokes.τ)

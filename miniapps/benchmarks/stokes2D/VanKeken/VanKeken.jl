@@ -95,7 +95,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
     # Rheology

@@ -41,19 +41,35 @@ __init__() = @init_parallel_stencil(AMDGPU, Float64, 2)
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 include("../../variational_stokes/Stokes2D.jl")
-include("../../DYREL/DYREL2D.jl")
+include("../../DYREL/solver.jl")
 
 # Types
 function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end
 
-function JR2D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
-    return DYREL(ni)
+function JR2D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) where {N}
+    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
 end
 
-function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, CFL = 0.99, c_fat = 0.5, γfact = 20.0)
-    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, CFL = CFL, c_fat = c_fat, γfact = γfact)
+function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
+function JR2D.update_α_β!(βVx::ROCArray, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
+    return update_α_β!(βVx, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
+end
+
+function JR2D.update_α_β!(dyrel::JustRelax.DYREL{<:ROCArray})
+    return update_α_β!(dyrel)
+end
+
+function JR2D.update_dτV_α_β!(dτVx::ROCArray, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
+    return update_dτV_α_β!(dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy, CFL_v)
+end
+
+function JR2D.update_dτV_α_β!(dyrel::JustRelax.DYREL{<:ROCArray})
+    return update_dτV_α_β!(dyrel)
 end
 
 function JR2D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Number}) where {N}
@@ -71,6 +87,10 @@ function JR2D.WENO5(
 end
 
 function JR2D.RockRatio(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return RockRatio(ni...)
+end
+
+function JR2D.RockRatio(::Type{AMDGPUBackend}, ni::Vararg{Integer, N}) where {N}
     return RockRatio(ni...)
 end
 
@@ -217,34 +237,34 @@ end
 
 ## viscosity
 
-function JR2D.compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
+function JR2D.compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = nothing) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
 function JR2D.compute_viscosity!(
-        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity::F
+        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = (nothing, nothing)
     ) where {F}
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, 0, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
 function JR2D.compute_viscosity!(
-        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
+        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = (nothing, nothing)
     ) where {F}
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
 function JR2D.compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
-function compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
+function compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = nothing) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
 function compute_viscosity!(
-        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
+        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = (nothing, nothing)
     ) where {F}
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
 function compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
@@ -262,6 +282,14 @@ end
 
 function accumulate_tensor!(::AMDGPUBackendTrait, II, A::JustRelax.SymmetricTensor, dt)
     return _accumulate_tensor!(II, A, dt)
+end
+
+function JR2D.accumulate_vol!(::AMDGPUBackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+end
+
+function accumulate_vol!(::AMDGPUBackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
 end
 
 ## Buoyancy forces
@@ -288,15 +316,6 @@ function JR2D.compute_melt_fraction!(
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
-# Interpolations
-function JR2D.temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
-function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
 function JR2D.shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
     _shear2center!(A)
     return nothing
@@ -307,8 +326,10 @@ function shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
     return nothing
 end
 
-function JR2D.vertex2center!(center::T, vertex::T) where {T <: ROCArray}
-    return vertex2center!(center, vertex)
+function JR2D.vertex2center!(
+        center::T, vertex::T; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false
+    ) where {T <: ROCArray}
+    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z)
 end
 
 function JR2D.center2vertex!(vertex::T, center::T) where {T <: ROCArray}
@@ -360,6 +381,10 @@ function JR2D.solve_VariationalStokes!(::AMDGPUBackendTrait, stokes, args...; kw
     return _solve_VS!(stokes, args...; kwargs...)
 end
 
+function JR2D.solve_DYREL!(::AMDGPUBackendTrait, stokes, args...; kwargs)
+    return _solve_DYREL!(stokes, args...; kwargs...)
+end
+
 function JR2D.heatdiffusion_PT!(::AMDGPUBackendTrait, thermal, args...; kwargs)
     return _heatdiffusion_PT!(thermal, args...; kwargs...)
 end
@@ -382,7 +407,7 @@ function JR2D.subgrid_characteristic_time!(
     )
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end
@@ -398,7 +423,7 @@ function JR2D.subgrid_characteristic_time!(
     ) where {N}
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end

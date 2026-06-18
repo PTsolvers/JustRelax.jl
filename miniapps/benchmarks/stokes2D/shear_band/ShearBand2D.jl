@@ -60,7 +60,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
     εbg = 1.0           # background strain-rate
     η_reg = 8.0e-3          # regularisation "viscosity"
-    dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
+    dt = η0 / G0 / 6.0     # assumes Maxwell time of 4
     el_bg = ConstantElasticity(; G = G0, Kb = 4)
     el_inc = ConstantElasticity(; G = Gi, Kb = 4)
     visc = LinearViscous(; η = η0)
@@ -109,7 +109,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
     # Rheology
     compute_viscosity!(
@@ -135,7 +135,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     sol = Float64[]
     ttot = Float64[]
     # while t < tmax
-    for _ in 1:15
+    for _ in 1:19
 
         # Stokes solver ----------------
         iters = solve!(
@@ -192,9 +192,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 64
-nx = n
-ny = n
+nx = 128
+ny = 256
 figdir = "ShearBands2D"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)

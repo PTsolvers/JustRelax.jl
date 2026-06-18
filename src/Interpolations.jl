@@ -64,54 +64,31 @@ end
     return nothing
 end
 
-# From cell vertices to cell center
-
-temperature2center!(thermal) = temperature2center!(backend(thermal), thermal)
-function temperature2center!(::CPUBackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
-function _temperature2center!(thermal::JustRelax.ThermalArrays)
-    @parallel (@idx size(thermal.Tc)...) temperature2center_kernel!(thermal.Tc, thermal.T)
-    return nothing
-end
-
-@parallel_indices (i, j) function temperature2center_kernel!(
-        T_center::T, T_vertex::T
-    ) where {T <: AbstractArray{_T, 2} where {_T <: Real}}
-    T_center[i, j] =
-        (
-        T_vertex[i + 1, j] +
-            T_vertex[i + 2, j] +
-            T_vertex[i + 1, j + 1] +
-            T_vertex[i + 2, j + 1]
-    ) * 0.25
-    return nothing
-end
-
-@parallel_indices (i, j, k) function temperature2center_kernel!(
-        T_center::T, T_vertex::T
-    ) where {T <: AbstractArray{_T, 3} where {_T <: Real}}
-    @inline av_T() = _av(T_vertex, i, j, k)
-
-    T_center[i, j, k] = av_T()
-
-    return nothing
-end
-
 """
     vertex2center!(center, vertex)
 
 Interpolates the values at the `vertex` onto `center` points.
 """
-
-function vertex2center!(center, vertex)
-    @parallel vertex2center_kernel!(center, vertex)
+function vertex2center!(center, vertex; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false)
+    ni = size(vertex) .- 1
+    @parallel (@idx ni) vertex2center_kernel!(center, vertex, ghost_x, ghost_y, ghost_z)
     return nothing
 end
 
-@parallel function vertex2center_kernel!(center, vertex)
-    @all(center) = @av(vertex)
+@parallel_indices (I...) function vertex2center_kernel!(center::AbstractArray{T, 2}, vertex::AbstractArray{T, 2}, ghost_x, ghost_y, ::Bool) where {T}
+    Ic = I .+ (ghost_x, ghost_y)
+    i, j = I
+    center[Ic...] = 0.25 * (vertex[i, j] + vertex[i + 1, j] + vertex[i, j + 1] + vertex[i + 1, j + 1])
+    return nothing
+end
+
+@parallel_indices (I...) function vertex2center_kernel!(center::AbstractArray{T, 3}, vertex::AbstractArray{T, 3}, ghost_x, ghost_y, ghost_z) where {T}
+    Ic = I .+ (ghost_x, ghost_y, ghost_z)
+    i, j, k = I
+    center[Ic...] = 0.125 * (
+        vertex[i, j, k] + vertex[i + 1, j, k] + vertex[i, j + 1, k] + vertex[i + 1, j + 1, k] +
+            vertex[i, j, k + 1] + vertex[i + 1, j, k + 1] + vertex[i, j + 1, k + 1] + vertex[i + 1, j + 1, k + 1]
+    )
     return nothing
 end
 

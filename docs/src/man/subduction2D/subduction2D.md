@@ -82,14 +82,12 @@ We need to copy the thermal field from the [GeophysicalModelGenerator.jl](https:
 Ttop             = 20 + 273
 Tbot             = maximum(T_GMG)
 thermal          = ThermalArrays(backend, ni)
-@views thermal.T[2:end-1, :] .= PTArray(backend)(T_GMG)
+vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
 thermal_bc       = TemperatureBoundaryConditions(;
     no_flux      = (left = true, right = true, top = false, bot = false),
+    constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
 )
 thermal_bcs!(thermal, thermal_bc)
-@views thermal.T[:, end] .= Ttop
-@views thermal.T[:, 1]   .= Tbot
-temperature2center!(thermal) # interpolate temperature from vertices to centers
 ```
 
 ## Instantiate Stokes arrays
@@ -102,7 +100,7 @@ pt_stokes        = PTStokesCoeffs(li, di; ϵ_rel=1e-4, Re=3π, r=1e0, CFL = 0.98
 ## Initialize buoyancy forces and lithostatic pressure
 ```julia
 ρg        = ntuple(_ -> @zeros(ni...), Val(2))
-compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
 stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
 ```
 
@@ -147,7 +145,6 @@ particle2grid!(T_buffer, pT, particles)
 @views T_buffer[:, 1]        .= Tbot
 @views thermal.T[2:end-1, :] .= T_buffer
 thermal_bcs!(thermal, thermal_bc)
-temperature2center!(thermal)
 ```
 2. Solve stokes
 ```julia

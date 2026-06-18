@@ -119,7 +119,7 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 60, 80, 40
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -149,7 +149,7 @@ function main(igg, nx, ny)
 
     # Buoyancy forces & rheology
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))

@@ -69,26 +69,140 @@ displacement2velocity!(stokes, dt) # convert displacement to velocity
 update_halo!(@velocity(stokes)...)
 ```
 
-# Thermal boundary conditions
+# Thermal Boundary Conditions
 
-Supported boundary conditions:
+Thermal boundary conditions are collected in `TemperatureBoundaryConditions`.
+The same type is used in 2D and 3D.
+
+Supported thermal boundary conditions:
 
 1. No flux
 
     $\frac{\partial T}{\partial x_i} = 0$ at the boundary $\Gamma$
 
-2. Dirichlet
+2. Constant temperature on the outer boundary
 
-    $T = f(x_i) $ at a given point of the domain $\Omega$
+    $T = T_\Gamma$ at the boundary $\Gamma$
 
-## Defining the boundary conditions
-Thermal boundary conditions can be defined using the `ThermalBoundaryConditions` struct. As with the flow boundary conditions, they can be switched on and off by setting them as `true` or `false` at the appropriate boundaries.
+3. Constant heat flux in the pseudo-transient diffusion kernels
 
-For example, if we want to have a zero-flux boundary condition 
-at the left and right boundaries, and a Dirichlet boundary condition at the top and bottom boundaries in a 2D simulation, we need to instantiate `ThermalBoundaryConditions` as:
+    $q_T = q_\Gamma$ at the boundary $\Gamma$
+
+4. Periodic temperature
+
+    $T(\Gamma_i) = T(\Gamma_j)$ across paired boundaries
+
+5. Mask-based Dirichlet values inside the domain
+
+    $T = f(x_i)$ at selected points in $\Omega$
+
+## Face Names
+
+In 2D, boundary tuples use `left`, `right`, `top`, and `bot`.
+In 3D, add `front` and `back`:
+
 ```julia
-bcs = ThermalBoundaryConditions(;
-    no_flux = (left=true, right=true, top=false, bot=false),
+thermal_bc = TemperatureBoundaryConditions(;
+    no_flux = (
+        left = true,
+        right = true,
+        front = true,
+        back = true,
+        top = false,
+        bot = false,
+    ),
 )
 ```
-Unspecified boundaries will be set to a Dirichlet boundary condition by default.
+
+Faces omitted from `no_flux`, `constant_flux`, `constant_value`, or `periodic`
+are treated as inactive for that condition. The dimensionality is inferred from
+the longest tuple you provide, so a tuple with `front` or `back` creates a 3D
+boundary-condition set.
+
+## No-Flux Boundaries
+
+Use `no_flux` to copy the adjacent interior temperature into the ghost layer.
+For example, this applies no-flux boundaries on the left and right sides of a 2D
+domain:
+
+```julia
+thermal_bc = TemperatureBoundaryConditions(;
+    no_flux = (left = true, right = true, top = false, bot = false),
+)
+
+thermal_bcs!(thermal, thermal_bc)
+```
+
+## Constant-Value Boundaries
+
+Use `constant_value` for fixed-temperature outer boundaries. These values are
+applied by `thermal_bcs!` through the ghost-cell relation
+`Tghost = 2 * Tboundary - Tinterior`.
+
+```julia
+thermal_bc = TemperatureBoundaryConditions(;
+    no_flux = (left = true, right = true),
+    constant_value = (top = 273.0, bot = 1573.0),
+)
+
+thermal_bcs!(thermal, thermal_bc)
+```
+
+If `no_flux` and `constant_value` are both active on the same face, `thermal_bcs!`
+applies `constant_value` first and `no_flux` second.
+
+## Periodic Boundaries
+
+Use `periodic` to copy the opposite interior temperature into the ghost layer.
+For example, this applies periodic temperature boundaries on the left and right
+sides of a 2D domain:
+
+```julia
+thermal_bc = TemperatureBoundaryConditions(;
+    periodic = (left = true, right = true, top = false, bot = false),
+)
+
+thermal_bcs!(thermal, thermal_bc)
+```
+
+In 3D, include `front` and `back` when those faces should also be periodic:
+
+```julia
+thermal_bc = TemperatureBoundaryConditions(;
+    periodic = (
+        left = true,
+        right = true,
+        front = true,
+        back = true,
+        top = false,
+        bot = false,
+    ),
+)
+```
+
+If multiple ghost-cell conditions are active on the same face, `thermal_bcs!`
+applies `constant_value` first, `no_flux` second, and `periodic` last.
+
+## Constant-Flux Boundaries
+
+Use `constant_flux` to prescribe flux values in the pseudo-transient heat diffusion
+solver. These values are consumed by the PT `compute_flux!` kernels, not by
+`thermal_bcs!`.
+
+```julia
+thermal_bc = TemperatureBoundaryConditions(;
+    no_flux = (left = true, right = true, front = true, back = true),
+    constant_flux = (top = 0.0, bot = 0.03),
+)
+```
+
+## Mask-Based Dirichlet Conditions
+
+Use `dirichlet` for fixed values inside the domain, selected by a mask:
+
+```julia
+thermal_bc = TemperatureBoundaryConditions(;
+    no_flux = (left = true, right = true, top = false, bot = false),
+    dirichlet = (; constant = 273.0, mask = mask),
+)
+```

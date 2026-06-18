@@ -19,8 +19,7 @@ steps:
                 using Pkg
                 Pkg.test("JustRelax"; test_args=["--backend=CUDA"], coverage=true)'
     agents:
-      queue: "juliagpu"
-      cuda: "*"
+      queue: "cuda"
     timeout_in_minutes: 120
     soft_fail:
       - exit_status: 3
@@ -46,8 +45,7 @@ steps:
   #               using Pkg
   #               Pkg.test("JustRelax"; test_args=["--backend=AMDGPU"], coverage=true)'
   #   agents:
-  #     queue: "juliagpu"
-  #     rocm: "*"
+  #     queue: "rocm"
   #     rocmgpu: "*"
   #   timeout_in_minutes: 120
   #   soft_fail:

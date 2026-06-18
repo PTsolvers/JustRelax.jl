@@ -2,6 +2,10 @@ function RockRatio(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return RockRatio(ni...)
 end
 
+function RockRatio(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}
+    return RockRatio(ni...)
+end
+
 """
     RockRatio(nx, ny)
 

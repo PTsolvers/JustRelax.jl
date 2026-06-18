@@ -38,6 +38,19 @@ function JR3D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N
     return StokesArrays(ni)
 end
 
+function JR3D.DYREL(::Type{CUDABackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) where {N}
+    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+end
+
+function JR3D.DYREL(::Type{CUDABackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
+    return DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+end
+
+function JR3D.DYREL(::Type{CUDABackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
+
 function JR3D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N, Number}) where {N}
     return ThermalArrays(ni...)
 end
@@ -51,6 +64,10 @@ function JR3D.WENO5(::Type{CUDABackend}, method::Val{T}, ni::NTuple{N, Integer})
 end
 
 function JR3D.RockRatio(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
+    return RockRatio(ni...)
+end
+
+function JR3D.RockRatio(::Type{CUDABackend}, ni::Vararg{Integer, N}) where {N}
     return RockRatio(ni...)
 end
 
@@ -210,34 +227,34 @@ end
 
 ## viscosity
 
-function JR3D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
+function JR3D.compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = nothing) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
 function JR3D.compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity::F
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = (nothing, nothing)
     ) where {F}
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, cutoff, fn_viscosity)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, 0, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
 function JR3D.compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = (nothing, nothing)
     ) where {F}
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
 function JR3D.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
-function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
-    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
+function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = nothing) where {F}
+    return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
 function compute_viscosity!(
-        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
+        ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F, do_partials = false, ∂η_∂ε = (nothing, nothing)
     ) where {F}
-    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
+    return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity, do_partials, ∂η_∂ε)
 end
 
 function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
@@ -255,6 +272,14 @@ end
 
 function accumulate_tensor!(::CUDABackendTrait, II, A::JustRelax.SymmetricTensor, dt)
     return _accumulate_tensor!(II, A, dt)
+end
+
+function JR3D.accumulate_vol!(::CUDABackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+end
+
+function accumulate_vol!(::CUDABackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
 end
 
 ## Buoyancy forces
@@ -283,15 +308,6 @@ function JR3D.compute_melt_fraction!(
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
-# Interpolations
-function JR3D.temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
-function temperature2center!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
 function JR3D.shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
     _shear2center!(A)
     return nothing
@@ -302,8 +318,10 @@ function shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
     return nothing
 end
 
-function JR3D.vertex2center!(center::T, vertex::T) where {T <: CuArray}
-    return vertex2center!(center, vertex)
+function JR3D.vertex2center!(
+        center::T, vertex::T; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false
+    ) where {T <: CuArray}
+    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z)
 end
 
 function JR3D.center2vertex!(vertex::T, center::T) where {T <: CuArray}
@@ -374,7 +392,7 @@ function JR3D.subgrid_characteristic_time!(
     )
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end
@@ -390,7 +408,7 @@ function JR3D.subgrid_characteristic_time!(
     ) where {N}
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases, rheology, thermal.Tc, stokes.P, particles.di.vertex
+        dt₀, phases, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end

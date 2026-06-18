@@ -34,7 +34,7 @@ module JustRelax2D
     include("stokes/Stokes2D.jl")
     export solve!
 
-    include("DYREL/DYREL2D.jl")
+    include("DYREL/solver.jl")
     export solve_DYREL!, DYREL
 
     include("variational_stokes/Stokes2D.jl")

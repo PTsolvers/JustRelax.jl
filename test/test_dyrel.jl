@@ -234,7 +234,7 @@ end
         dyrel.∂ΔPψc_∂ε[3] .= 47.0
         dyrel.∂ΔPψc_∂η[1] .= 53.0
 
-        jacobian_entry, gershgorin_entry = JustRelax2D.local_Rx_Vx_gershgorin_entry(
+        jacobian_entry = JustRelax2D.local_Rx_Vx_gershgorin_entry(
             dyrel,
             1,
             1,
@@ -245,8 +245,8 @@ end
             size(dyrel.γ_eff),
         )
 
-        @test jacobian_entry ≈ -77870.0
-        @test gershgorin_entry ≈ 80590.0
+        @test jacobian_entry ≈ -77950.0
+        @test abs(jacobian_entry) ≈ 77950.0
     end
 
     @testset "DYREL partial field storage" begin

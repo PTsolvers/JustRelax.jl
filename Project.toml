@@ -5,7 +5,6 @@ authors = ["Albert De Montserrat <albertdemontserratnavarro@erdw.ethz.ch>, Pasca
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
@@ -39,7 +38,6 @@ JustRelaxMakieExt = "Makie"
 AMDGPU = "1, 2"
 Adapt = "4"
 CUDA = "5, 6"
-CairoMakie = "0.15.11"
 CellArrays = "0.3.2"
 Crayons = "4.1.1"
 ForwardDiff = "1.4.1"

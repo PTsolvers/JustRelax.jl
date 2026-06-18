@@ -47,17 +47,17 @@ end
 
         Cxx = zero(eltype(dyrel.Dx))
         for k in 1:9
-            jacobian_entry, gershgorin_entry = local_Rx_Vx_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vx, ni_center)
-            Cxx += gershgorin_entry
+            jac = local_Rx_Vx_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vx, ni_center)
+            Cxx += abs(jac)
             if k == 5
-                dyrel.Dx[i, j] = abs(jacobian_entry)
+                dyrel.Dx[i, j] = abs(jac)
             end
         end
 
         Cxy = zero(eltype(dyrel.Dx))
         for k in 1:12
-            _, gershgorin_entry = local_Rx_Vy_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vy, ni_center)
-            Cxy += gershgorin_entry
+            jac = local_Rx_Vy_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vy, ni_center)
+            Cxy += abs(jac)
         end
 
         dyrel.λmaxVx[i, j] = inv(dyrel.Dx[i, j]) * (Cxx + Cxy)
@@ -101,16 +101,16 @@ end
 
         Cyx = zero(eltype(dyrel.Dy))
         for k in 1:12
-            _, gershgorin_entry = local_Ry_Vx_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vx, ni_center)
-            Cyx += gershgorin_entry
+            jac = local_Ry_Vx_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vx, ni_center)
+            Cyx += abs(jac)
         end
 
         Cyy = zero(eltype(dyrel.Dy))
         for k in 1:9
-            jacobian_entry, gershgorin_entry = local_Ry_Vy_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vy, ni_center)
-            Cyy += gershgorin_entry
+            jac = local_Ry_Vy_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vy, ni_center)
+            Cyy += abs(jac)
             if k == 5
-                dyrel.Dy[i, j] = abs(jacobian_entry)
+                dyrel.Dy[i, j] = abs(jac)
             end
         end
 
@@ -165,18 +165,14 @@ end
     # ∂ΔPψ/∂Vx[vi,vj] = ∂ΔPψ/∂ε * ∂ε/∂Vx + ∂ΔPψ/∂η * ∂η/∂ε * ∂ε/∂Vx; dPnum is ∂(γeff ∇⋅V)/∂Vx.
     dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j, εW.εxx, εW.εyy, εW.εxy)
     dΔPψE = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
-    dPnumW = dyrel.γ_eff[i, j] * εW.div
-    dPnumE = dyrel.γ_eff[i + 1, j] * εE.div
+    dPnumW = -dyrel.γ_eff[i, j] * εW.div
+    dPnumE = -dyrel.γ_eff[i + 1, j] * εE.div
 
     τxx_term = _dx * (dτxxE - dτxxW)      # ∂/∂Vx[vi,vj](∂τxx/∂x)
     τxy_term = _dy * (dτxyN - dτxyS)      # ∂/∂Vx[vi,vj](∂τxy/∂y)
     Pnum_term = -_dx * (dPnumE - dPnumW)  # ∂/∂Vx[vi,vj](-∂Pnum/∂x)
     ΔPψ_term = -_dx * (dΔPψE - dΔPψW)    # ∂/∂Vx[vi,vj](-∂ΔPψ/∂x)
-    # First value is the signed Jacobian entry; second value is the
-    # conservative Gershgorin row contribution.
-    jacobian_entry = τxx_term + τxy_term + Pnum_term + ΔPψ_term
-    gershgorin_entry = abs(τxx_term) + abs(τxy_term) + abs(Pnum_term) + abs(ΔPψ_term)
-    return jacobian_entry, gershgorin_entry
+    return τxx_term + τxy_term + Pnum_term + ΔPψ_term
 end
 
 # Assemble one local Jacobian/Gershgorin contribution ∂Rx[i,j]/∂Vy[vi,vj].
@@ -200,18 +196,14 @@ end
     # ∂ΔPψ/∂Vy[vi,vj] = ∂ΔPψ/∂ε * ∂ε/∂Vy + ∂ΔPψ/∂η * ∂η/∂ε * ∂ε/∂Vy; dPnum is ∂(γeff ∇⋅V)/∂Vy.
     dΔPψW = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j, εW.εxx, εW.εyy, εW.εxy)
     dΔPψE = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i + 1, j, εE.εxx, εE.εyy, εE.εxy)
-    dPnumW = dyrel.γ_eff[i, j] * εW.div
-    dPnumE = dyrel.γ_eff[i + 1, j] * εE.div
+    dPnumW = -dyrel.γ_eff[i, j] * εW.div
+    dPnumE = -dyrel.γ_eff[i + 1, j] * εE.div
 
     τxx_term = _dx * (dτxxE - dτxxW)      # ∂/∂Vy[vi,vj](∂τxx/∂x)
     τxy_term = _dy * (dτxyN - dτxyS)      # ∂/∂Vy[vi,vj](∂τxy/∂y)
     Pnum_term = -_dx * (dPnumE - dPnumW)  # ∂/∂Vy[vi,vj](-∂Pnum/∂x)
     ΔPψ_term = -_dx * (dΔPψE - dΔPψW)    # ∂/∂Vy[vi,vj](-∂ΔPψ/∂x)
-    # First value is the signed Jacobian entry; second value is the
-    # conservative Gershgorin row contribution.
-    jacobian_entry = τxx_term + τxy_term + Pnum_term + ΔPψ_term
-    gershgorin_entry = abs(τxx_term) + abs(τxy_term) + abs(Pnum_term) + abs(ΔPψ_term)
-    return jacobian_entry, gershgorin_entry
+    return τxx_term + τxy_term + Pnum_term + ΔPψ_term
 end
 
 # Assemble one local Jacobian/Gershgorin contribution ∂Ry[i,j]/∂Vx[vi,vj].
@@ -235,18 +227,14 @@ end
     # ∂ΔPψ/∂Vx[vi,vj] = ∂ΔPψ/∂ε * ∂ε/∂Vx + ∂ΔPψ/∂η * ∂η/∂ε * ∂ε/∂Vx; dPnum is ∂(γeff ∇⋅V)/∂Vx.
     dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j, εS.εxx, εS.εyy, εS.εxy)
     dΔPψN = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
-    dPnumS = dyrel.γ_eff[i, j] * εS.div
-    dPnumN = dyrel.γ_eff[i, j + 1] * εN.div
+    dPnumS = -dyrel.γ_eff[i, j] * εS.div
+    dPnumN = -dyrel.γ_eff[i, j + 1] * εN.div
 
     τyy_term = _dy * (dτyyN - dτyyS)      # ∂/∂Vx[vi,vj](∂τyy/∂y)
     τxy_term = _dx * (dτxyE - dτxyW)      # ∂/∂Vx[vi,vj](∂τxy/∂x)
     Pnum_term = -_dy * (dPnumN - dPnumS)  # ∂/∂Vx[vi,vj](-∂Pnum/∂y)
     ΔPψ_term = -_dy * (dΔPψN - dΔPψS)    # ∂/∂Vx[vi,vj](-∂ΔPψ/∂y)
-    # First value is the signed Jacobian entry; second value is the
-    # conservative Gershgorin row contribution.
-    jacobian_entry = τyy_term + τxy_term + Pnum_term + ΔPψ_term
-    gershgorin_entry = abs(τyy_term) + abs(τxy_term) + abs(Pnum_term) + abs(ΔPψ_term)
-    return jacobian_entry, gershgorin_entry
+    return τyy_term + τxy_term + Pnum_term + ΔPψ_term
 end
 
 # Assemble one local Jacobian/Gershgorin contribution ∂Ry[i,j]/∂Vy[vi,vj].
@@ -270,18 +258,14 @@ end
     # ∂ΔPψ/∂Vy[vi,vj] = ∂ΔPψ/∂ε * ∂ε/∂Vy + ∂ΔPψ/∂η * ∂η/∂ε * ∂ε/∂Vy; dPnum is ∂(γeff ∇⋅V)/∂Vy.
     dΔPψS = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j, εS.εxx, εS.εyy, εS.εxy)
     dΔPψN = dΔPψ_dV(dyrel.∂ΔPψc_∂ε, dyrel.∂ΔPψc_∂η, dyrel.∂ηc_∂ε, i, j + 1, εN.εxx, εN.εyy, εN.εxy)
-    dPnumS = dyrel.γ_eff[i, j] * εS.div
-    dPnumN = dyrel.γ_eff[i, j + 1] * εN.div
+    dPnumS = -dyrel.γ_eff[i, j] * εS.div
+    dPnumN = -dyrel.γ_eff[i, j + 1] * εN.div
 
     τyy_term = _dy * (dτyyN - dτyyS)      # ∂/∂Vy[vi,vj](∂τyy/∂y)
     τxy_term = _dx * (dτxyE - dτxyW)      # ∂/∂Vy[vi,vj](∂τxy/∂x)
     Pnum_term = -_dy * (dPnumN - dPnumS)  # ∂/∂Vy[vi,vj](-∂Pnum/∂y)
     ΔPψ_term = -_dy * (dΔPψN - dΔPψS)    # ∂/∂Vy[vi,vj](-∂ΔPψ/∂y)
-    # First value is the signed Jacobian entry; second value is the
-    # conservative Gershgorin row contribution.
-    jacobian_entry = τyy_term + τxy_term + Pnum_term + ΔPψ_term
-    gershgorin_entry = abs(τyy_term) + abs(τxy_term) + abs(Pnum_term) + abs(ΔPψ_term)
-    return jacobian_entry, gershgorin_entry
+    return τyy_term + τxy_term + Pnum_term + ΔPψ_term
 end
 
 @inline function dεnormal_center_dVx(ci, cj, vi, vj, _di_vertex)

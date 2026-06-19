@@ -120,27 +120,9 @@ end
     return nothing
 end
 
-@inline function local_Rx_Vx_index(i, j, k)
-    ox = (k - 1) % 3
-    oy = (k - 1) ÷ 3
-    return i + ox, j + oy
-end
-
-@inline function local_Rx_Vy_index(i, j, k)
-    ox = (k - 1) % 4
-    oy = (k - 1) ÷ 4
-    return i + ox, j + oy
-end
-
-@inline function local_Ry_Vx_index(i, j, k)
-    ox = (k - 1) % 3
-    oy = (k - 1) ÷ 3
-    return i + ox, j + oy
-end
-
-@inline function local_Ry_Vy_index(i, j, k)
-    ox = (k - 1) % 3
-    oy = (k - 1) ÷ 3
+@inline function local_stencil_index(i, j, k, nx)
+    ox = (k - 1) % nx
+    oy = (k - 1) ÷ nx
     return i + ox, j + oy
 end
 
@@ -148,7 +130,7 @@ end
 @inline function local_Rx_Vx_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vx, ni_center)
     _dx = @dx(_di_center, i)
     _dy = @dy(_di_vertex, j)
-    vi, vj = local_Rx_Vx_index(i, j, k)
+    vi, vj = local_stencil_index(i, j, k, 3)
 
     # ∂ε/∂Vx[vi,vj] at the center and vertex stencil points used by Rx[i,j].
     εW = dε_center_dVx(i, j, vi, vj, _di_vertex, _di_vx)
@@ -179,7 +161,7 @@ end
 @inline function local_Rx_Vy_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vy, ni_center)
     _dx = @dx(_di_center, i)
     _dy = @dy(_di_vertex, j)
-    vi, vj = local_Rx_Vy_index(i, j, k)
+    vi, vj = local_stencil_index(i, j, k, 4)
 
     # ∂ε/∂Vy[vi,vj] at the center and vertex stencil points used by Rx[i,j].
     εW = dε_center_dVy(i, j, vi, vj, _di_vertex, _di_vy)
@@ -210,7 +192,7 @@ end
 @inline function local_Ry_Vx_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vx, ni_center)
     _dy = @dy(_di_center, j)
     _dx = @dx(_di_vertex, i)
-    vi, vj = local_Ry_Vx_index(i, j, k)
+    vi, vj = local_stencil_index(i, j, k, 3)
 
     # ∂ε/∂Vx[vi,vj] at the center and vertex stencil points used by Ry[i,j].
     εS = dε_center_dVx(i, j, vi, vj, _di_vertex, _di_vx)
@@ -241,7 +223,7 @@ end
 @inline function local_Ry_Vy_gershgorin_entry(dyrel, i, j, k, _di_center, _di_vertex, _di_vy, ni_center)
     _dy = @dy(_di_center, j)
     _dx = @dx(_di_vertex, i)
-    vi, vj = local_Ry_Vy_index(i, j, k)
+    vi, vj = local_stencil_index(i, j, k, 3)
 
     # ∂ε/∂Vy[vi,vj] at the center and vertex stencil points used by Ry[i,j].
     εS = dε_center_dVy(i, j, vi, vj, _di_vertex, _di_vy)

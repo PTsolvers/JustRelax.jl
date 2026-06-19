@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 # Load script dependencies
 using GeoParams, GLMakie
 

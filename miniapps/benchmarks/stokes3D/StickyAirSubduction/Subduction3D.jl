@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 const isGPU = true
 @static if isGPU
     using CUDA

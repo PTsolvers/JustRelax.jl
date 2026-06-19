@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 const isCUDA = false
 
 @static if isCUDA

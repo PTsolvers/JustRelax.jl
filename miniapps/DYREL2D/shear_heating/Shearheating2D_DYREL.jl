@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 # Benchmark of Duretz et al. 2014
 # http://dx.doi.org/10.1002/2014GL060438
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO

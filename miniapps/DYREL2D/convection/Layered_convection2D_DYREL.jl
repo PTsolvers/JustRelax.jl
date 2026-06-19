@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 # using CUDA
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 

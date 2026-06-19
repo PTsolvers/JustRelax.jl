@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 using JustRelax, JustRelax.JustRelax2D
 const backend_JR = CPUBackend
 

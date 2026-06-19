@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO, CairoMakie
 using ParallelStencil

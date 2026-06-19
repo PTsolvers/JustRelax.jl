@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 using ParallelStencil.FiniteDifferences3D
 
 # benchmark reference:

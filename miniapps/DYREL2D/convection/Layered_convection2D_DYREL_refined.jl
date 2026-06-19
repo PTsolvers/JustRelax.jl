@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 const isGPU = false
 
 @static if isGPU

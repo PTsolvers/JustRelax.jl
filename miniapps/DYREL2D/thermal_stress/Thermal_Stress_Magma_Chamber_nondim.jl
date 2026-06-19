@@ -1,4 +1,5 @@
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = CPUBackend
 
@@ -135,7 +136,7 @@ function init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressi
     G0 = 30GPa            # elastic shear modulus
     G_magma = 30GPa       # elastic shear modulus perturbation
 
-    soft_C = NonLinearSoftening(; ξ₀ = ustrip(Coh), Δ = ustrip(Coh) / 2) # softening law
+    soft_C = NonLinearSoftening(; ξ₀ = Coh, Δ = Coh / 2) # softening law
     pl = DruckerPrager_regularised(; C = Coh, ϕ = ϕ, η_vp = η_reg, Ψ = 0.0, softening_C = soft_C)        # plasticity
     if is_compressible == true
         el = SetConstantElasticity(; G = G0, ν = 0.25)           # elastic spring

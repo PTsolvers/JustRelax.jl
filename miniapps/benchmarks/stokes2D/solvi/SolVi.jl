@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 using ParallelStencil.FiniteDifferences2D
 # include benchmark related functions
 include("vizSolVi.jl")

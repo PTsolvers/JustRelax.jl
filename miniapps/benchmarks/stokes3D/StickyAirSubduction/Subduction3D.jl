@@ -3,6 +3,7 @@ const isGPU = true
     using CUDA
 end
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = @static if isGPU
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend

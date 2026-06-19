@@ -1,5 +1,6 @@
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO, CairoMakie
+using Pkg; Pkg.activate("miniapps")
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 

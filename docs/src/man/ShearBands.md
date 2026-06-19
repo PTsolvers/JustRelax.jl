@@ -7,6 +7,7 @@ Shear band localization miniapp to test the visco-elasto-plastic rheology implem
 Load [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) necessary modules and define backend.
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D

@@ -1,4 +1,5 @@
 using JustRelax, JustRelax.JustRelax2D, Printf, LinearAlgebra
+using Pkg; Pkg.activate("miniapps")
 using MPI: MPI
 using CairoMakie
 

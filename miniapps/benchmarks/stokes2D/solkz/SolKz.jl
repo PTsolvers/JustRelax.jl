@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
 
 # include benchmark related plotting and error functions

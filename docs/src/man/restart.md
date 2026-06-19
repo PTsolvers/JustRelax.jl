@@ -10,6 +10,7 @@ Load JustRelax necessary modules and define backend.
 ```julia
 using CUDA # comment this out if you are not using CUDA; or load AMDGPU.jl if you are using an AMD GPU
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 const backend_JR = CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBackend
 ```
 

@@ -1,4 +1,3 @@
-using Pkg; Pkg.activate("miniapps")
 # Load script dependencies
 using GeoParams, CairoMakie
 
@@ -9,6 +8,7 @@ const isCUDA = false
 end
 
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend

@@ -1,6 +1,6 @@
-using Pkg; Pkg.activate("miniapps")
 # using CairoMakie
 using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
 const backend_JR = CPUBackend
 
 using ParallelStencil

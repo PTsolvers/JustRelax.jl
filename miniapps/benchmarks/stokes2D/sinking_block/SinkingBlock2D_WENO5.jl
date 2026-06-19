@@ -1,4 +1,3 @@
-using Pkg; Pkg.activate("miniapps")
 const isCUDA = true
 
 @static if isCUDA
@@ -6,6 +5,7 @@ const isCUDA = true
 end
 
 using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend

@@ -1,6 +1,6 @@
-using Pkg; Pkg.activate("miniapps")
 using LinearAlgebra, CairoMakie
 using JustRelax, JustRelax.JustRelax3D
+using Pkg; Pkg.activate("miniapps")
 using MPI: MPI
 
 using ParallelStencil

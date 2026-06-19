@@ -1,4 +1,3 @@
-using Pkg; Pkg.activate("miniapps")
 const isGPU = true
 
 @static if isGPU
@@ -6,6 +5,7 @@ const isGPU = true
 end
 
 using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
 using JustPIC, JustPIC._2D
 using ParallelStencil, GeoParams
 

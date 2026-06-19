@@ -7,6 +7,7 @@ Thermal convection benchmark from  [Blankenbach et al., 1989](https://academic.o
 Load [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) necessary modules and define backend.
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 const backend_JR = CPUBackend
 ```
 

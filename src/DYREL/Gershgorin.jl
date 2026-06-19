@@ -71,13 +71,16 @@ end
         γW_dx = γW * _dx
 
         # compute Gershgorin entries
-        Cxx = (ηN + ηS) * _dy2 +
-            (γE + c43 * ηE) * _dx2 +
-            (γW + c43 * ηW) * _dx2 +
-            (ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx
+        Cxx = abs(ηN * _dy2) +
+            abs(ηS * _dy2) +
+            abs((γE + c43 * ηE) * _dx2) +
+            abs((γW + c43 * ηW) * _dx2) +
+            abs((ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx)
 
-        Cxy = ((γE - c23 * ηE + ηN) + (γE - c23 * ηE + ηS)) * _dxdy +
-            ((γW + ηN - c23 * ηW) + (γW + ηS - c23 * ηW)) * _dxdy
+        Cxy = abs((γE - c23 * ηE + ηN) * _dxdy) +
+            abs((γE - c23 * ηE + ηS) * _dxdy) +
+            abs((γW + ηN - c23 * ηW) * _dxdy) +
+            abs((γW + ηS - c23 * ηW) * _dxdy)
 
         # this is the preconditioner diagonal entry
         Dx_ij = Dx[i, j] = (ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx
@@ -130,13 +133,16 @@ end
         γS_dy = γS * _dy
 
         # compute Gershgorin entries
-        Cyy = (ηE + ηW) * _dx2 +
-            (γN + c43 * ηN) * _dy2 +
-            (γS + c43 * ηS) * _dy2 +
-            (γN_dy + γS_dy + c43 * (ηN_dy + ηS_dy)) * _dy + (ηE_dx + ηW_dx) * _dx
+        Cyy = abs(ηE * _dx2) +
+            abs(ηW * _dx2) +
+            abs((γN + c43 * ηN) * _dy2) +
+            abs((γS + c43 * ηS) * _dy2) +
+            abs((γN_dy + γS_dy + c43 * (ηN_dy + ηS_dy)) * _dy + (ηE_dx + ηW_dx) * _dx)
 
-        Cyx = ((γN + ηE - c23 * ηN) + (γN - c23 * ηN + ηW)) * _dxdy +
-            ((γS + ηE - c23 * ηS) + (γS - c23 * ηS + ηW)) * _dxdy
+        Cyx = abs((γN + ηE - c23 * ηN) * _dxdy) +
+            abs((γN - c23 * ηN + ηW) * _dxdy) +
+            abs((γS + ηE - c23 * ηS) * _dxdy) +
+            abs((γS - c23 * ηS + ηW) * _dxdy)
 
         # this is the preconditioner diagonal entry
         Dy_ij = Dy[i, j] = (γN_dy + γS_dy + c43 * (ηN_dy + ηS_dy)) * _dy + (ηE_dx + ηW_dx) * _dx

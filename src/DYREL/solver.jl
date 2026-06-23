@@ -118,6 +118,14 @@ function _solve_DYREL!(
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     if use_gershgorin_ad
         compute_∇V_strain_rate!(stokes, _di, ni, dim)
+        if !linear_viscosity
+            update_viscosity_εII!(
+                stokes, phase_ratios, args, rheology, viscosity_cutoff;
+                relaxation = viscosity_relaxation,
+                do_partials = true,
+                ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
+                )
+        end
         compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, true)
         DYREL_AD!(dyrel, stokes, rheology, phase_ratios, grid, dt; CFL = dyrel.CFL)
     else
@@ -134,14 +142,8 @@ function _solve_DYREL!(
 
         # compute deviatoric stress
         do_partials = false
-        compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, do_partials)
-        # update_halo!(stokes.λv)
-        # update_halo!(stokes.τ.xx_v)
-        # update_halo!(stokes.τ.yy_v)
-        # update_halo!(stokes.τ.xy)
-
         if !linear_viscosity
-            update_viscosity_τII!(
+            update_viscosity_εII!(
                 stokes,
                 phase_ratios,
                 args,
@@ -152,6 +154,24 @@ function _solve_DYREL!(
                 ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
             )
         end
+        compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, do_partials)
+        # update_halo!(stokes.λv)
+        # update_halo!(stokes.τ.xx_v)
+        # update_halo!(stokes.τ.yy_v)
+        # update_halo!(stokes.τ.xy)
+
+        # if !linear_viscosity
+        #     update_viscosity_τII!(
+        #         stokes,
+        #         phase_ratios,
+        #         args,
+        #         rheology,
+        #         viscosity_cutoff;
+        #         relaxation = viscosity_relaxation,
+        #         do_partials = do_partials,
+        #         ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
+        #     )
+        # end
 
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
@@ -227,6 +247,18 @@ function _solve_DYREL!(
             do_partials = use_gershgorin_ad && iszero(iter % nout)
 
             # Deviatoric stress
+            if !linear_viscosity
+                update_viscosity_εII!(
+                    stokes,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff;
+                    relaxation = viscosity_relaxation,
+                    do_partials = do_partials,
+                    ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
+                )
+            end
             compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_DR, dt, do_partials)
             # update_halo!(stokes.λv)
             # update_halo!(stokes.τ.xx_v)
@@ -246,18 +278,18 @@ function _solve_DYREL!(
                 args,
             )
 
-            if !linear_viscosity
-                update_viscosity_τII!(
-                    stokes,
-                    phase_ratios,
-                    args,
-                    rheology,
-                    viscosity_cutoff;
-                    relaxation = viscosity_relaxation,
-                    do_partials = do_partials,
-                    ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
-                )
-            end
+            # if !linear_viscosity
+            #     update_viscosity_τII!(
+            #         stokes,
+            #         phase_ratios,
+            #         args,
+            #         rheology,
+            #         viscosity_cutoff;
+            #         relaxation = viscosity_relaxation,
+            #         do_partials = do_partials,
+            #         ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
+            #     )
+            # end
 
             # Residuals
             @. P_num = dyrel.γ_eff * stokes.R.RP

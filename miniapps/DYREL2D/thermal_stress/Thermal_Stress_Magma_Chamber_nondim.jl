@@ -385,6 +385,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
             λ_relaxation_DR = 1,
             viscosity_relaxation = 1.0e-3,
             viscosity_cutoff = cutoff_visc,
+            use_gershgorin_ad = true,
         )
     )
 

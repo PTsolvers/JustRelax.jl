@@ -144,7 +144,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
             dt,
             igg;
             kwargs = (;
-                verbose_PH = false,
+                verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 50.0e3,
                 nout = 10,
@@ -153,6 +153,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
                 λ_relaxation_DR = 1,
                 viscosity_relaxation = 1,
                 viscosity_cutoff = viscosity_cutoff,
+                use_gershgorin_ad = true,
             )
         )
         dt = compute_dt(stokes, di, igg) * 0.8

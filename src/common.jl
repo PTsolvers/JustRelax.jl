@@ -1,4 +1,4 @@
-using Adapt, MuladdMacro
+using Adapt, MuladdMacro, ForwardDiff
 
 include("types/constructors/stokes.jl")
 export StokesArrays, PTStokesCoeffs
@@ -122,6 +122,7 @@ include("DYREL/constructors.jl")
 include("DYREL/pressure_kernels.jl")
 include("DYREL/stress_kernels.jl")
 include("DYREL/velocity_kernels.jl")
+include("DYREL/GershgorinAD.jl")
 include("DYREL/Gershgorin.jl")
 
 # thermal diffusion

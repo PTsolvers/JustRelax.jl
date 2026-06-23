@@ -31,7 +31,7 @@ end
                 Az[i, end, j] = Az[i, end - 1, j]
             end
         end
-        # free slip in the front and back XY planes
+        # free slip in the top and bottom XY planes
         if bc.top
             if i ≤ size(Ax, 1) && j ≤ size(Ax, 2)
                 Ax[i, j, 1] = Ax[i, j, 2]
@@ -48,7 +48,7 @@ end
                 Ay[i, j, end] = Ay[i, j, end - 1]
             end
         end
-        # free slip in the front and back YZ planes
+        # free slip in the left and right YZ planes
         if bc.left
             if i ≤ size(Ay, 2) && j ≤ size(Ay, 3)
                 Ay[1, i, j] = Ay[2, i, j]

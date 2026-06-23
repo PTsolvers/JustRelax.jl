@@ -90,14 +90,15 @@ end
 end
 
 @parallel_indices (I...) function compute_RP_kernel!(
-        RP,
         P,
         P0,
+        RP,
         ∇V,
         Q, # volumetric source/sink term
         ηb,
         rheology::NTuple{N, MaterialParams},
         phase_ratio::C,
+        dt,
         ΔT,
         melt_fraction,
     ) where {N, C <: JustRelax.CellArray}

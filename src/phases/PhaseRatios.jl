@@ -176,7 +176,7 @@ end
                 total_weight += weight
 
                 for k in 1:N
-                    @inbounds w_vals[k] += weight * phase_arrays[k][i_cell, j_cell]
+                    @inbounds w_vals[k] += weight * phase_arrays[k][i_cell, j_cell, k_cell]
                 end
             end
         end

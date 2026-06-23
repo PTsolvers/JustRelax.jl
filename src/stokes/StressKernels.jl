@@ -958,7 +958,7 @@ end
             ε_vol_pl[I...] = -λ[I...] * dQdP
 
             Base.@nexprs 6 i -> begin
-                @inbounds τ[i][I...] = dτij[i] + τij[i]
+                @inbounds τ[i][I...] = τij[i]
             end
             Base.@nexprs 3 i -> begin
                 @inbounds ε_pl[i][I...] = εij_pl[i]

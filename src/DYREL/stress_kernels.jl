@@ -148,10 +148,10 @@ end
 
     λ, ε_vol_pl = if ispl && F ≥ 0
         λ_new = F / (η_ve + η_reg + Kb * dt * dFdP * dQdP)
-        λ_relaxation * λ_new + (1 - λ_relaxation) * λ
+        λ = λ_relaxation * λ_new + (1 - λ_relaxation) * λ
         # Volumetric plastic strain rate
         ε_vol_pl = -λ * dQdP
-        λ_new, ε_vol_pl
+        λ, ε_vol_pl
     else
         0.0, 0.0
     end

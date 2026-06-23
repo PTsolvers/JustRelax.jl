@@ -122,12 +122,13 @@ end
         ω_xy = @inbounds @index ωxy[ip, I...]
         τ_xx = @inbounds @index xx[ip, I...]
         τ_yy = @inbounds @index yy[ip, I...]
+        τ_zz = @inbounds @index zz[ip, I...]
         τ_yz = @inbounds @index yz[ip, I...]
         τ_xz = @inbounds @index xz[ip, I...]
         τ_xy = @inbounds @index xy[ip, I...]
 
         τ_rotated = GeoParams.rotate_elastic_stress3D(
-            (ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_xy, τ_yz, τ_xz, τ_xy), dt
+            (ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy), dt
         )
 
         components = xx, yy, zz, yz, xz, xy

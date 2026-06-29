@@ -418,6 +418,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
         particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
         @views thermal.T[:, :, end] .= Tsurf
         @views thermal.T[:, :, 1] .= Tbot
         thermal_bcs!(thermal, thermal_bc)

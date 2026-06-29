@@ -225,6 +225,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         move_particles!(particles, particle_args)
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
         # update phase ratios

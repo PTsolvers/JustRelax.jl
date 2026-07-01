@@ -55,9 +55,21 @@ function run_pvtk_MPI()
         t = 2.5, precision = Float32, pvd = joinpath(dst, "series"),
     )
     # single group + velocity (Float64 precision)
-    save_pvtk(joinpath(dst, "cvel"), di, data_c, (fill(0.1, nx, ny), fill(0.2, nx, ny)), igg; precision = Float64)
+    save_pvtk(joinpath(dst, "cvel"), di, data_c, igg; velocity = (fill(0.1, nx, ny), fill(0.2, nx, ny)), precision = Float64)
     # single group, no velocity, no time
     save_pvtk(joinpath(dst, "center_only"), di, data_c, igg)
+
+    # parallel particles: duck-typed to avoid a JustPIC dep in this test.
+    mock(a) = (; data = a)
+    particles = (;
+        coords = (mock(rand(2, 2, nx * ny)), mock(rand(2, 2, nx * ny))),
+        index = mock(fill(true, 2, 2, nx * ny)),
+    )
+    save_particles(
+        particles, igg;
+        fname = joinpath(dst, "parts"), pPhases = mock(fill(Float64(me + 1), 2, 2, nx * ny)),
+        pvd = joinpath(dst, "pseries"), t = 1.0,
+    )
     JustRelax.MPI.Barrier(igg.comm_cart)
 
     if me == 0
@@ -79,6 +91,11 @@ function run_pvtk_MPI()
         @test occursin("Float64", chdr)
         # t defaulted to nothing for center_only ⇒ no TimeValue array
         @test !occursin("TimeValue", read(joinpath(dst, "center_only.pvti"), String))
+        # parallel particles: one .pvtu header + one .vtu piece per rank + pvd series
+        @test isfile(joinpath(dst, "parts.pvtu"))
+        @test occursin("phase", read(joinpath(dst, "parts.pvtu"), String))
+        @test count(f -> endswith(f, ".vtu"), readdir(joinpath(dst, "parts"))) == igg.nprocs
+        @test isfile(joinpath(dst, "pseries.pvd"))
         rm(dst; recursive = true)
     end
 

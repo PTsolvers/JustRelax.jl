@@ -312,17 +312,22 @@ using WriteVTK, JLD2
         rm(dst, recursive = true)
     end
 
-    @suppress @testset "save_particles3D no-phase variant" begin
+    @suppress @testset "save_particles3D phase and no-phase variants" begin
         dst3 = mktempdir()
         n = 8
-        idx = trues(n)
         particles_mock = (
             coords = ((data = rand(n),), (data = rand(n),), (data = rand(n),)),
-            index = (data = idx,),
+            index = (data = trues(n),),
         )
         JustRelax.DataIO.save_particles3D(
             particles_mock, Float32; fname = joinpath(dst3, "p3d"),
         )
         @test isfile(joinpath(dst3, "p3d.vtu"))
+
+        pPhases_mock = (data = rand(Float32, n),)
+        JustRelax.DataIO.save_particles3D(
+            particles_mock, pPhases_mock, Float32; fname = joinpath(dst3, "p3d_phases"),
+        )
+        @test isfile(joinpath(dst3, "p3d_phases.vtu"))
     end
 end

@@ -261,6 +261,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
 
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
         @show extrema(thermal.T)
         any(isnan.(thermal.T)) && break

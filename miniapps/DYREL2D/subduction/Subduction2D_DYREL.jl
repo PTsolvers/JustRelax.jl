@@ -1,4 +1,4 @@
-const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -162,7 +162,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)
 
@@ -177,6 +177,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
 
         # interpolate stress back to the grid

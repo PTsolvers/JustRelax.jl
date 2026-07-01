@@ -215,6 +215,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
 
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
 
         args = (; T = thermal.T, P = stokes.P, dt = Inf)

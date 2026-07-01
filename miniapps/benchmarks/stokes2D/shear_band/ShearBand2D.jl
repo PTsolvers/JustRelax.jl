@@ -1,4 +1,4 @@
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, CairoMakie
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 using ParallelStencil

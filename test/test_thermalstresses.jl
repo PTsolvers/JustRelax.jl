@@ -123,7 +123,7 @@ function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi, 
             T, δT, xc_anomaly, yc_anomaly, r_anomaly, x, y, sticky_air
         )
         depth = -y[j] #- sticky_air
-        if ((x[i] - xc_anomaly)^2 + (depth[j] + yc_anomaly)^2 ≤ r_anomaly^2)
+        if ((x[i] - xc_anomaly)^2 + (depth + yc_anomaly)^2 ≤ r_anomaly^2)
             # T[i + 1, j + 1] *= δT / 100 + 1
             T[i + 1, j + 1] = δT
         end
@@ -168,8 +168,8 @@ function init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressi
         β_rock = 6.0e-11
         β_magma = 6.0e-11
     else
-        el = SetConstantElasticity(; G = G0, ν = 0.5)            # elastic spring
-        el_magma = SetConstantElasticity(; G = G_magma, ν = 0.5) # elastic spring
+        el = SetConstantElasticity(; G = G0, ν = 0.499)            # elastic spring
+        el_magma = SetConstantElasticity(; G = G_magma, ν = 0.499) # elastic spring
         β_rock = inv(get_Kb(el))
         β_magma = inv(get_Kb(el_magma))
     end
@@ -330,7 +330,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     end
 
     # Arguments for functions
-    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = thermal.ΔT)
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -373,7 +373,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     while it < 1
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
+        # args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
 
         # Stokes solver -----------------
         solve!(

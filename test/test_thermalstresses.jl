@@ -348,32 +348,31 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     P_init = deepcopy(stokes.P)
 
     # Stokes solver -----------------
-    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
-    solve!(
-        stokes,
-        pt_stokes,
-        grid,
-        flow_bcs,
-        ρg,
-        phase_ratios,
-        rheology_inc,
-        args,
-        dt,
-        igg;
-        kwargs = (;
-            iterMax = 100.0e3,
-            free_surface = true,
-            nout = 5.0e3,
-            viscosity_cutoff = cutoff_visc,
-            relaxation = 1.0e-3,
-            λ_relaxation = 1.0e0,
-        )
-    )
+    # args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
+    # solve!(
+    #     stokes,
+    #     pt_stokes,
+    #     grid,
+    #     flow_bcs,
+    #     ρg,
+    #     phase_ratios,
+    #     rheology_inc,
+    #     args,
+    #     dt,
+    #     igg;
+    #     kwargs = (;
+    #         iterMax = 100.0e3,
+    #         free_surface = true,
+    #         nout = 5.0e3,
+    #         viscosity_cutoff = cutoff_visc,
+    #         relaxation = 1.0e-3,
+    #         λ_relaxation = 1.0e0,
+    #     )
+    # )
 
     while it < 1
 
-        # Update buoyancy and viscosity -
-        # args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
 
         # Stokes solver -----------------
         solve!(
@@ -463,7 +462,7 @@ end
 
 @testset "thermal stresses" begin
     @suppress begin
-        nx, ny = 32, 32           # number of cells
+        nx, ny = 50, 50           # number of cells
         igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
             IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
         else

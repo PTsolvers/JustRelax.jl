@@ -55,7 +55,7 @@ function run_pvtk_MPI()
         t = 2.5, precision = Float32, pvd = joinpath(dst, "series"),
     )
     # single group + velocity (Float64 precision)
-    save_pvtk(joinpath(dst, "cvel"), di, data_c, igg; velocity = (fill(0.1, nx, ny), fill(0.2, nx, ny)), precision = Float64)
+    save_pvtk(joinpath(dst, "cvel"), di, data_c, (fill(0.1, nx, ny), fill(0.2, nx, ny)), igg; precision = Float64)
     # single group, no velocity, no time
     save_pvtk(joinpath(dst, "center_only"), di, data_c, igg)
 

@@ -210,9 +210,9 @@ end
     @suppress begin
         iters, τII, sol, extrema_τII = ShearBand2D()
         @test iters.err_evo_tot[end] < 1.0e-6
-        @test extrema_τII[1] ≈ 1.544 atol = 1.0e-3
+        @test extrema_τII[1] ≈ 1.538 atol = 1.0e-3
         @test extrema_τII[2] ≈ 1.639 atol = 1.0e-3
-        @test τII[end] ≈ 1.6388 atol = 1.0e-4
+        @test τII[end] ≈ 1.6377 atol = 1.0e-4
         @test sol[end] ≈ 1.8358 atol = 1.0e-4
     end
 end

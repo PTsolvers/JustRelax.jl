@@ -217,8 +217,7 @@ function _save_pvtk(
     # global per-process extents (VTK overlap = 1), computed analytically (no comm)
     extents = vec(ImplicitGlobalGrid.metagrid(ImplicitGlobalGrid.extents_g, nxyz_A, 1))
     # `metagrid` is ordered column-major by Cartesian coords ⇒ matching part index
-    c, d = igg.coords, igg.dims
-    part = c[1] + c[2] * d[1] + c[3] * d[1] * d[2] + 1
+    part = LinearIndices(Tuple(igg.dims))[(igg.coords .+ 1)...]
     # this rank's local Cartesian coordinate extents (VTK overlap = 1)
     coords = ImplicitGlobalGrid.extents_g(nxyz_A, 1; dxyz = di)
 

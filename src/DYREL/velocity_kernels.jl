@@ -1,5 +1,83 @@
-## DIVERGENCE + DEVIATORIC STRAIN RATE TENSOR
+function compute_local_strain_rates!(stokes, ∂εᵢᵢ_∂Vx, ∂εᵢᵢ_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy, grid, do_partials)
+    _di_vertex = grid._di.vertex
+    _di_vx     = grid._di.velocity[1]
+    _di_vy     = grid._di.velocity[2]
+    ni         = size(stokes.ε.xy)
+    @parallel (@idx ni)  compute_local_strain_rates!(stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, ∂εᵢᵢ_∂Vx, ∂εᵢᵢ_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy, stokes.∇V,stokes.V.Vx, stokes.V.Vy, _di_vertex, _di_vx, _di_vy, do_partials,)
+    return interpolate_shear_ε_to_centers(stokes, Val(ndims(stokes.P)))
+end
 
+@parallel_indices (I...) function compute_local_strain_rates!(εxx, εyy, εxy, ∂εᵢᵢ_∂Vx, ∂εᵢᵢ_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy, ∇V,Vx, Vy, _di_vertex, _di_vx, _di_vy, do_partials,)
+    compute_local_strain_rates!(εxx, εyy, εxy, ∂εᵢᵢ_∂Vx, ∂εᵢᵢ_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy, ∇V,Vx, Vy, _di_vertex, _di_vx, _di_vy, do_partials, I...)
+    return nothing
+end
+
+function compute_local_strain_rates!(εxx, εyy, εxy, ∂εᵢᵢ_∂Vx, ∂εᵢᵢ_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy, ∇V,Vx, Vy, _di_vertex, _di_vx, _di_vy, ::Val{do_partials}, i, j) where {do_partials}
+
+    @inbounds begin
+        vx_s = Vx[i, j]
+        vx_n = Vx[i, j + 1]
+        vy_w = Vy[i, j]
+        vy_e = Vy[i + 1, j]
+
+        if i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
+            _dy_vx     = @dy(_di_vx, j)
+            _dx_vy     = @dx(_di_vy, i)
+            Vxᵢⱼ_shear = SA[vx_s, vx_n]
+            Vyᵢⱼ_shear = SA[vy_w, vy_e]
+
+            εxy[i, j] = local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy)
+
+            if do_partials
+                ∂εxy_∂Vx[i, j] = ForwardDiff.gradient(Vxᵢⱼ_shear -> local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy), Vxᵢⱼ_shear) |> sum
+                ∂εxy_∂Vy[i, j] = ForwardDiff.gradient(Vyᵢⱼ_shear -> local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy), Vyᵢⱼ_shear) |> sum
+            end
+        end
+
+        if i ≤ size(∇V, 1) && j ≤ size(∇V, 2)
+            vx_ne    = Vx[i + 1, j + 1]
+            vy_ne    = Vy[i + 1, j + 1]
+            _dx, _dy = @dxi(_di_vertex, i, j)
+            Vxᵢⱼ     = SA[vx_n, vx_ne]
+            Vyᵢⱼ     = SA[vy_e, vy_ne]
+
+            εxx[i, j], εyy[i, j], ∇V[i, j] = local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy)
+
+            if do_partials
+                J_normal = ForwardDiff.jacobian(Vxᵢⱼ -> local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy), Vxᵢⱼ)
+                ∂εxx_∂Vx = J_normal[1, 1] + J_normal[1, 2]
+                ∂εyy_∂Vx = J_normal[2, 1] + J_normal[2, 2]
+                ∂εᵢᵢ_∂Vx[i, j] = ∂εxx_∂Vx + ∂εyy_∂Vx
+
+                J_normal = ForwardDiff.jacobian(Vyᵢⱼ -> local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy), Vyᵢⱼ)
+                ∂εxx_∂Vy = J_normal[1, 1] + J_normal[1, 2]
+                ∂εyy_∂Vy = J_normal[2, 1] + J_normal[2, 2]
+                ∂εᵢᵢ_∂Vy[i, j] = ∂εxx_∂Vy + ∂εyy_∂Vy
+            end
+        end
+    end
+
+    return nothing
+end
+
+function local_strain_rate_normal_components(Vx, Vy, _dx, _dy)
+    dVx_dx = (Vx[2] - Vx[1]) * _dx
+    dVy_dy = (Vy[2] - Vy[1]) * _dy
+    div_ij = dVx_dx + dVy_dy
+    third = typeof(div_ij)(1) / typeof(div_ij)(3)
+    div_third = div_ij * third
+    εxx = dVx_dx - div_third
+    εyy = dVy_dy - div_third
+    return SA[εxx, εyy, div_ij]
+end
+function local_strain_rate_shear_components(Vx, Vy, _dy_vx, _dx_vy)
+    dVx_dy = (Vx[2] - Vx[1]) * _dy_vx
+    dVy_dx = (Vy[2] - Vy[1]) * _dx_vy
+    εxy = 0.5 * (dVx_dy + dVy_dx)
+    return εxy
+end
+
+## DIVERGENCE + DEVIATORIC STRAIN RATE TENSOR
 function compute_∇V_strain_rate!(stokes, _di, ni, dim)
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate!(
         stokes.∇V,
@@ -23,6 +101,7 @@ function interpolate_shear_ε_to_centers(stokes, ::Val{3})
     return nothing
 end
 
+#=
 @parallel_indices (i, j) function compute_∇V_strain_rate!(
         ∇V::AbstractArray{T, 2},
         εxx::AbstractArray{T, 2},
@@ -138,7 +217,7 @@ end
 
     return nothing
 end
-
+=#
 ## RESIDUALS
 
 @parallel_indices (i, j) function compute_PH_residual_V!(

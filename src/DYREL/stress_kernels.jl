@@ -92,6 +92,119 @@ end
     return nothing
 end
 
+# 3D Kernel
+function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt)
+    ni = size(phase_ratios.vertex)
+    @parallel (@idx ni) compute_stress_DRYEL!(
+        (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.xy_c, stokes.τ.yz_c, stokes.τ.xz_c),  # centers
+        (stokes.τ.xy, stokes.τ.yz, stokes.τ.xz), # shear stresses
+        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.zz_v), # vertices
+        (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.zz, stokes.τ_o.xy_c, stokes.τ_o.yz_c, stokes.τ_o.xz_c),    # centers
+        (stokes.τ_o.xy, stokes.τ_o.yz, stokes.τ_o.xz),  # shear stresses
+        (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.zz_v), # vertices
+        stokes.τ.II,
+        (stokes.ε.xx, stokes.ε.yy, stokes.ε.zz),
+        (stokes.ε.xy, stokes.ε.yz, stokes.ε.xz),
+        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.zz),
+        (stokes.ε_pl.xy, stokes.ε_pl.yz, stokes.ε_pl.xz),
+        stokes.EII_pl,                                      # accumulated plastic strain rate @ centers
+        stokes.ε_vol_pl,                                    # volumetric plastic strain rate @ centers
+        stokes.P,
+        stokes.λ,
+        stokes.λv,
+        stokes.viscosity.η,
+        # stokes.viscosity.ηv,
+        stokes.viscosity.η_vep,
+        stokes.ΔPψ,
+        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt
+    )
+    return nothing
+end
+
+@parallel_indices (I...) function compute_stress_DRYEL!(
+        τ_c,
+        τ_shear,
+        τ_v,
+        τ_o_c,
+        τ_o_shear,
+        τ_o_v,
+        τII,
+        εii,
+        εij,
+        εii_pl,
+        εij_pl,
+        EII_pl,
+        ε_vol_pl,
+        P,
+        λ,
+        λv,
+        η,
+        ηv,
+        η_vep,
+        ΔPψ,
+        phase_ratios_center,
+        phase_ratios_vertex,
+        phase_xy,
+        phase_yz,
+        phase_xz,
+        rheology,
+        λ_relaxation,
+        dt
+    )
+
+    # τyzv, τxzv, τxyv = τshear_v
+    # τyzv_old, τxzv_old, τxyv_old = τshear_ov
+
+    ni = size(P)
+    Ic = clamped_indices(ni, I...)
+
+    ## yz
+    if all(I .≤ size(εij[2]))
+        # interpolate to ith vertex
+        ηij   = harm_clamped_yz(η, Ic...)
+        Pij   = av_clamped_yz(P, Ic...)
+        EIIv_ij = av_clamped_yz(EII_pl, Ic...)
+        εxxv_ij = av_clamped_yz(εii[1], Ic...)
+        εyyv_ij = av_clamped_yz(εii[2], Ic...)
+        εzzv_ij = av_clamped_yz(εii[3], Ic...)
+        εyzv_ij = εij[2][I...]
+        εxzv_ij = av_clamped_yz_y(εij[3], Ic...)
+        εxyv_ij = av_clamped_yz_z(εij[1], Ic...)
+        ε = (εxxv_ij, εyyv_ij, εzzv_ij, εyzv_ij, εxzv_ij, εxyv_ij)
+
+        # τxxv_ij = av_clamped_yz(τ_c[1], Ic...)
+        # τyyv_ij = av_clamped_yz(τ_c[2], Ic...)
+        # τzzv_ij = av_clamped_yz(τ_c[3], Ic...)
+        # τyzv_ij = τ_shear[2][I...]
+        # τxzv_ij = av_clamped_yz_y(τ_shear[3], Ic...)
+        # τxyv_ij = av_clamped_yz_z(τ_shear[1], Ic...)
+
+        τxxv_old_ij = av_clamped_yz(τ_o_c[1], Ic...)
+        τyyv_old_ij = av_clamped_yz(τ_o_c[2], Ic...)
+        τzzv_old_ij = av_clamped_yz(τ_o_c[3], Ic...)
+        τyzv_old_ij = τ_o_shear[2][I...]
+        τxzv_old_ij = av_clamped_yz_y(τ_o_shear[3], Ic...)
+        τxyv_old_ij = av_clamped_yz_z(τ_o_shear[1], Ic...)
+        τij_o = (τxxv_old_ij, τyyv_old_ij, τzzv_old_ij, τyzv_old_ij, τxzv_old_ij, τxyv_old_ij)
+
+        # vertex parameters
+        phase = @inbounds phase_yz[I...]
+
+        # compute local stress
+        τxx_I, τyy_I, τzz_I, τxy_I, τyz_I, τxz_I, εxx_pl, εyy_pl, εzz_pl, εxy_pl, _, λ_I, = compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
+
+        # update arrays
+        τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τzz_I, τxy_I, τyz_I, τxz_I
+        ε_pl[3][I...] = εxy_pl
+        λv[I...] = λ_I
+
+    else
+        τyzv[I...] = zero(eltype(T))
+    end
+
+    return nothing
+end
+
 @generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt, EII) where {N}
     return quote
         @inline

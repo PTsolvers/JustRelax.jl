@@ -57,6 +57,14 @@ end
         @test length(dyrel.∂τv_∂η) == 3
         @test length(dyrel.∂ηc_∂ε) == 3
         @test length(dyrel.∂ηv_∂ε) == 3
+        @test length(dyrel.∂εxx_∂Vx) == 2
+        @test length(dyrel.∂εyy_∂Vx) == 2
+        @test length(dyrel.∂∇V_∂Vx) == 2
+        @test length(dyrel.∂εxx_∂Vy) == 2
+        @test length(dyrel.∂εyy_∂Vy) == 2
+        @test length(dyrel.∂∇V_∂Vy) == 2
+        @test length(dyrel.∂εxy_∂Vx) == 2
+        @test length(dyrel.∂εxy_∂Vy) == 2
         @test size(dyrel.∂τc_∂ε[1]) == (nx, ny)
         @test size(dyrel.∂τv_∂ε[1]) == (nx + 1, ny + 1)
         @test size(dyrel.∂ΔPψc_∂ε[1]) == (nx, ny)
@@ -65,6 +73,14 @@ end
         @test size(dyrel.∂τv_∂η[1]) == (nx + 1, ny + 1)
         @test size(dyrel.∂ηc_∂ε[1]) == (nx, ny)
         @test size(dyrel.∂ηv_∂ε[1]) == (nx + 1, ny + 1)
+        @test size(dyrel.∂εxx_∂Vx[1]) == (nx, ny)
+        @test size(dyrel.∂εyy_∂Vx[1]) == (nx, ny)
+        @test size(dyrel.∂∇V_∂Vx[1]) == (nx, ny)
+        @test size(dyrel.∂εxx_∂Vy[1]) == (nx, ny)
+        @test size(dyrel.∂εyy_∂Vy[1]) == (nx, ny)
+        @test size(dyrel.∂∇V_∂Vy[1]) == (nx, ny)
+        @test size(dyrel.∂εxy_∂Vx[1]) == (nx + 1, ny + 1)
+        @test size(dyrel.∂εxy_∂Vy[1]) == (nx + 1, ny + 1)
         @test dyrel.CFL === 0.5
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
@@ -100,6 +116,14 @@ end
         @test length(dyrel.∂τv_∂η) == 1
         @test length(dyrel.∂ηc_∂ε) == 1
         @test length(dyrel.∂ηv_∂ε) == 1
+        @test length(dyrel.∂εxx_∂Vx) == 1
+        @test length(dyrel.∂εyy_∂Vx) == 1
+        @test length(dyrel.∂∇V_∂Vx) == 1
+        @test length(dyrel.∂εxx_∂Vy) == 1
+        @test length(dyrel.∂εyy_∂Vy) == 1
+        @test length(dyrel.∂∇V_∂Vy) == 1
+        @test length(dyrel.∂εxy_∂Vx) == 1
+        @test length(dyrel.∂εxy_∂Vy) == 1
         @test dyrel.CFL === 0.6
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
@@ -194,23 +218,75 @@ end
         @test all(dyrel.dτVy .≈ expected_dτ)
     end
 
-    # @testset "GershgorinAD chain rule helpers" begin
-    #     ∂τ_∂ε = ntuple(i -> fill(Float64(i), 1, 1), 9)
-    #     ∂τ_∂η = (fill(10.0, 1, 1), fill(20.0, 1, 1), fill(30.0, 1, 1))
-    #     ∂η_∂ε = (fill(0.5, 1, 1), fill(-0.25, 1, 1), fill(2.0, 1, 1))
-    #     dε = (3.0, -4.0, 0.25)
+    @testset "local strain-rate partial storage" begin
+        ni = 3, 3
+        grid = Geometry(ni, (1.0, 1.0))
+        stokes = StokesArrays(backend_JR, ni)
+        dyrel = JustRelax2D.DYREL(backend_JR, ni)
 
-    #     dτ_dε = 4.0 * dε[1] + 5.0 * dε[2] + 6.0 * dε[3]
-    #     dη_dV = 0.5 * dε[1] - 0.25 * dε[2] + 2.0 * dε[3]
-    #     @test JustRelax2D.dτ_dV(∂τ_∂ε, 2, 1, 1, dε...) ≈ dτ_dε
-    #     @test JustRelax2D.dτ_dV(∂τ_∂ε, ∂τ_∂η, ∂η_∂ε, 2, 1, 1, dε...) ≈ dτ_dε + 20.0 * dη_dV
+        JustRelax2D.compute_local_strain_rates!(stokes, dyrel, grid, true)
 
-    #     ∂ΔPψ_∂ε = (fill(7.0, 1, 1), fill(8.0, 1, 1), fill(9.0, 1, 1))
-    #     ∂ΔPψ_∂η = (fill(-3.0, 1, 1), fill(0.0, 1, 1), fill(0.0, 1, 1))
-    #     dΔPψ_dε = 7.0 * dε[1] + 8.0 * dε[2] + 9.0 * dε[3]
-    #     @test JustRelax2D.dΔPψ_dV(∂ΔPψ_∂ε, 1, 1, dε...) ≈ dΔPψ_dε
-    #     @test JustRelax2D.dΔPψ_dV(∂ΔPψ_∂ε, ∂ΔPψ_∂η, ∂η_∂ε, 1, 1, dε...) ≈ dΔPψ_dε - 3.0 * dη_dV
-    # end
+        @test dyrel.∂εxx_∂Vx[1][2, 2] != 0
+        @test dyrel.∂εxx_∂Vx[1][2, 2] ≈ -dyrel.∂εxx_∂Vx[2][2, 2]
+        @test dyrel.∂εyy_∂Vx[1][2, 2] ≈ -dyrel.∂εyy_∂Vx[2][2, 2]
+        @test dyrel.∂∇V_∂Vx[1][2, 2] ≈ -dyrel.∂∇V_∂Vx[2][2, 2]
+        @test dyrel.∂εxx_∂Vy[1][2, 2] ≈ -dyrel.∂εxx_∂Vy[2][2, 2]
+        @test dyrel.∂εyy_∂Vy[1][2, 2] != 0
+        @test dyrel.∂εyy_∂Vy[1][2, 2] ≈ -dyrel.∂εyy_∂Vy[2][2, 2]
+        @test dyrel.∂∇V_∂Vy[1][2, 2] ≈ -dyrel.∂∇V_∂Vy[2][2, 2]
+        @test dyrel.∂εxy_∂Vx[1][2, 2] != 0
+        @test dyrel.∂εxy_∂Vx[1][2, 2] ≈ -dyrel.∂εxy_∂Vx[2][2, 2]
+        @test dyrel.∂εxy_∂Vy[1][2, 2] != 0
+        @test dyrel.∂εxy_∂Vy[1][2, 2] ≈ -dyrel.∂εxy_∂Vy[2][2, 2]
+
+        ni_center = size(dyrel.γ_eff)
+        @test JustRelax2D.strain_derivative_at(dyrel, Val(:center), Val(:Vx), 2, 2, 2, 3, ni_center) ==
+            JustRelax2D.dε_center_dVx(dyrel, 2, 2, 2, 3)
+        @test JustRelax2D.strain_derivative_at(dyrel, Val(:vertex), Val(:Vy), 2, 2, 2, 2, ni_center) ==
+            JustRelax2D.dε_vertex_dVy(dyrel, 2, 2, 2, 2, ni_center)
+    end
+
+    @testset "GershgorinAD stress chain rule helpers" begin
+        ∂τ_∂ε = ntuple(i -> fill(Float64(i), 1, 1), 9)
+        ∂τ_∂η = (fill(10.0, 1, 1), fill(20.0, 1, 1), fill(30.0, 1, 1))
+        ∂η_∂ε = (fill(0.5, 1, 1), fill(-0.25, 1, 1), fill(2.0, 1, 1))
+        dε = (εxx = 3.0, εyy = -4.0, εxy = 0.25, div = 0.0)
+
+        dτ_dε = 4.0 * dε.εxx + 5.0 * dε.εyy + 6.0 * dε.εxy
+        dη_dV = 0.5 * dε.εxx - 0.25 * dε.εyy + 2.0 * dε.εxy
+        @test JustRelax2D.stress_derivative_at(∂τ_∂ε, ∂τ_∂η, ∂η_∂ε, Val(:yy), 1, 1, dε) ≈ dτ_dε + 20.0 * dη_dV
+    end
+
+    @testset "DYREL local residual helpers" begin
+        τn = (2.0, 5.0)
+        τs = (-1.0, 3.0)
+        P = (7.0, 11.0)
+        Pnum = (0.5, 2.5)
+        ΔPψ = (1.0, 4.0)
+        ρg = (6.0, 10.0)
+        _dn = 0.25
+        _ds = 0.5
+
+        expected = (τn[2] - τn[1]) * _dn + (τs[2] - τs[1]) * _ds -
+            (P[2] - P[1]) * _dn - (ΔPψ[2] - ΔPψ[1]) * _dn - 0.5 * (ρg[1] + ρg[2])
+        @test JustRelax2D.local_Rx_residual(τn, τs, P, ΔPψ, ρg, _dn, _ds) ≈ expected
+        @test JustRelax2D.local_Ry_residual(τn, τs, P, ΔPψ, ρg, _dn, _ds) ≈ expected
+        @test JustRelax2D.local_DR_Rx_residual(τn, τs, P, Pnum, ΔPψ, ρg, _dn, _ds, 2.0) ≈
+            (expected - (Pnum[2] - Pnum[1]) * _dn) / 2.0
+        @test JustRelax2D.local_DR_Ry_residual(τn, τs, P, Pnum, ΔPψ, ρg, _dn, _ds, 2.0) ≈
+            (expected - (Pnum[2] - Pnum[1]) * _dn) / 2.0
+
+        ∂Rx = JustRelax2D.local_Rx_residual_partials(collect(τn), collect(τs), collect(P), collect(ΔPψ), collect(ρg), _dn, _ds)
+        @test ∂Rx.τxx ≈ [-_dn, _dn]
+        @test ∂Rx.τxy ≈ [-_ds, _ds]
+        @test ∂Rx.P ≈ [_dn, -_dn]
+        @test ∂Rx.ΔPψ ≈ [_dn, -_dn]
+        @test ∂Rx.ρgx ≈ [-0.5, -0.5]
+
+        ∂DRy = JustRelax2D.local_DR_Ry_residual_partials(collect(τn), collect(τs), collect(P), collect(Pnum), collect(ΔPψ), collect(ρg), _dn, _ds, 2.0)
+        @test ∂DRy.τyy ≈ [-_dn, _dn]
+        @test ∂DRy.P_num ≈ [_dn, -_dn]
+    end
 
     # @testset "GershgorinAD local Rx-Vx entry" begin
     #     dyrel = JustRelax2D.DYREL(CPUBackend, (3, 3))

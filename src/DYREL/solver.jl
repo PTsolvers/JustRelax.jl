@@ -117,7 +117,7 @@ function _solve_DYREL!(
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     if use_gershgorin_ad
-        compute_∇V_strain_rate!(stokes, _di, ni, dim)
+        compute_local_strain_rates!(stokes, dyrel, grid, true)
         if !linear_viscosity
             update_viscosity_εII!(
                 stokes, phase_ratios, args, rheology, viscosity_cutoff;
@@ -138,7 +138,7 @@ function _solve_DYREL!(
         update_ρg!(ρg, phase_ratios, rheology, args)
 
         # compute divergence and deviatoric strain rate in one pass
-        compute_∇V_strain_rate!(stokes, _di, ni, dim)
+        compute_local_strain_rates!(stokes, dyrel, grid, false)
 
         # compute deviatoric stress
         do_partials = false
@@ -182,6 +182,7 @@ function _solve_DYREL!(
             ρg...,
             _di.center,
             _di.vertex,
+            do_partials,
         )
 
         # compute pressure residual
@@ -242,7 +243,7 @@ function _solve_DYREL!(
             foreach(copyto!, residuals0, residuals)
 
             # compute divergence and deviatoric strain rate in one pass
-            compute_∇V_strain_rate!(stokes, _di, ni, dim)
+            compute_local_strain_rates!(stokes, dyrel, grid, false)
 
             do_partials = use_gershgorin_ad && iszero(iter % nout)
 
@@ -303,6 +304,7 @@ function _solve_DYREL!(
                 fields.D...,
                 _di.center,
                 _di.vertex,
+                do_partials,
             )
 
             # Damping and pseudo-transient velocity updates

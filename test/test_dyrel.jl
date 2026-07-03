@@ -265,6 +265,45 @@ end
         @test JustRelax2D.stress_derivative_at(∂τ_∂ε, ∂τ_∂η, ∂η_∂ε, Val(:yy), 1, 1, dε) ≈ dτ_dε + 20.0 * dη_dV
     end
 
+    @testset "GershgorinAD partialRxpartialVx" begin
+        dyrel = JustRelax2D.DYREL(backend_JR, (4, 4))
+        i, j, k = 2, 2, 5
+
+        dyrel.∂εxx_∂Vx[2][2, 2] = 2.0
+        dyrel.∂∇V_∂Vx[2][2, 2] = 3.0
+        dyrel.∂εxx_∂Vx[1][3, 2] = 7.0
+        dyrel.∂∇V_∂Vx[1][3, 2] = 5.0
+        dyrel.∂εxy_∂Vx[2][3, 2] = 11.0
+        dyrel.∂εxy_∂Vx[1][3, 3] = 13.0
+
+        dyrel.∂τc_∂ε[1] .= 1.0
+        dyrel.∂τv_∂ε[9] .= 1.0
+        dyrel.∂ΔPψc_∂ε[1] .= 1.0
+        dyrel.γ_eff[2, 2] = 10.0
+        dyrel.γ_eff[3, 2] = 20.0
+
+        dyrel.∂Rx_∂τxx[1][i, j] = 101.0
+        dyrel.∂Rx_∂τxx[2][i, j] = 103.0
+        dyrel.∂Rx_∂τxy[1][i, j] = 107.0
+        dyrel.∂Rx_∂τxy[2][i, j] = 109.0
+        dyrel.∂Rx_∂P_num[1][i, j] = 113.0
+        dyrel.∂Rx_∂P_num[2][i, j] = 127.0
+        dyrel.∂Rx_∂ΔPψ[1][i, j] = 131.0
+        dyrel.∂Rx_∂ΔPψ[2][i, j] = 137.0
+
+        expected =
+            101.0 * 2.0 +
+            103.0 * 7.0 +
+            107.0 * 11.0 +
+            109.0 * 13.0 +
+            113.0 * (-10.0 * 3.0) +
+            127.0 * (-20.0 * 5.0) +
+            131.0 * 2.0 +
+            137.0 * 7.0
+
+        @test JustRelax2D.partialRxpartialVx(dyrel, i, j, k) ≈ expected
+    end
+
     @testset "DYREL local residual helpers" begin
         τn = (2.0, 5.0)
         τs = (-1.0, 3.0)

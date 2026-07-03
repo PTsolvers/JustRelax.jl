@@ -215,9 +215,9 @@ function _solve_DYREL!(
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
             # update_halo!(stokes.λv)
-            # update_halo!(stokes.τ.xx_v)
-            # update_halo!(stokes.τ.yy_v)
-            # update_halo!(stokes.τ.xy)
+            update_halo!(stokes.τ.xx_v)
+            update_halo!(stokes.τ.yy_v)
+            update_halo!(stokes.τ.xy)
 
             compute_residual_P!(
                 stokes.R.RP,

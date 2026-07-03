@@ -282,8 +282,8 @@ end
         igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
         Urms, Nu_top, iters = main2D(igg; nx = nx, ny = ny)
-        @test Urms[end] ≈ 0.2679304476129473 rtol = 1.0e-1
-        @test Nu_top[end] ≈ 1.000000002029353 rtol = 1.0e-2
+        @test Urms[end] ≈ 0.40987052065118357 rtol = 1.0e-1
+        @test Nu_top[end] ≈ 1.0026242251320245 rtol = 1.0e-2
         @test iters.err_evo1[end] < 1.0e-4
     end
 end

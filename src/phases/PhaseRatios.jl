@@ -3,7 +3,7 @@
         phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractMatrix}, xci, xvi
     ) where {B, T <: AbstractMatrix, N}
 
-JustRelax routine based on `JustPIC._2D.update_phase_ratios!` or `JustPIC._3D.update_phase_ratios!`.
+JustRelax routine based on `JustPIC.update_phase_ratios!` or `JustPIC.update_phase_ratios!`.
 Update the phase ratios in `phase_ratios` using the provided `phase_arrays`, `xci`, and `xvi`.
 The phase arrays need to be AbstractArrays and have values between 0 and 1.
 
@@ -38,7 +38,7 @@ end
         phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractArray}, xci, xvi
     ) where {B, T <: AbstractArray, N}
 
-JustRelax routine based on `JustPIC._2D.update_phase_ratios!` or `JustPIC._3D.update_phase_ratios!`.
+JustRelax routine based on `JustPIC.update_phase_ratios!` or `JustPIC.update_phase_ratios!`.
 Update the phase ratios in `phase_ratios` using the provided `phase_arrays`, `xci`, and `xvi`.
 The phase arrays need to be AbstractArrays and have values between 0 and 1.
 

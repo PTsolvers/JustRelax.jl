@@ -18,14 +18,14 @@ else
     @init_parallel_stencil(Threads, Float64, 3)
 end
 
-using JustPIC, JustPIC._3D
+using JustPIC
 # const backend_JP = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-# const backend_JP = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# const backend_JP = JustPIC.CPU # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 const backend_JP = @static if isGPU
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 # Load script dependencies

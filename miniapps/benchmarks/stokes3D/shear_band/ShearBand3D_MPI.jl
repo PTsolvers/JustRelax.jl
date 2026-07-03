@@ -8,9 +8,9 @@ using GeoParams, CairoMakie
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
-using JustPIC, JustPIC._3D
+using JustPIC
 
-const backend = JustPIC.CPUBackend
+const backend = JustPIC.CPU
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))

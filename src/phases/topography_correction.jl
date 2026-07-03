@@ -1,4 +1,4 @@
-import JustPIC._2D: cell_index, interp1D_inner, interp1D_extremas, distance
+import JustPIC: cell_index, interp1D_inner, interp1D_extremas, distance
 using StaticArrays
 
 function update_phases_given_markerchain!(

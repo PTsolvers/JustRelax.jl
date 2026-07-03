@@ -16,11 +16,11 @@ else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 const backend = @static if isCUDA
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 using GeoParams, CairoMakie

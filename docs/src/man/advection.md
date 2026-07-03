@@ -7,7 +7,7 @@ The recommended workflow is now:
 
 ```julia
 using JustRelax
-using JustPIC, JustPIC._2D
+using JustPIC
 
 grid = Geometry(ni, li; origin = origin)
 

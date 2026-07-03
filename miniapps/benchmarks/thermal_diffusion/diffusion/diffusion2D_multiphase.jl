@@ -6,8 +6,8 @@ using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using GeoParams
-using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend
+using JustPIC
+const backend = JustPIC.CPU
 
 distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
 

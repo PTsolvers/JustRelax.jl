@@ -10,14 +10,14 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 const backend_JR = CPUBackend
 
-using JustPIC, JustPIC._2D
-import JustPIC._2D.GridGeometryUtils as GGU
+using JustPIC
+import JustPIC.GridGeometryUtils as GGU
 const backend_JP = JustPIC.CPUBackend
 ```
 
 ```julia
-using JustPIC, JustPIC._2D
-import JustPIC._2D.GridGeometryUtils as GGU
+using JustPIC
+import JustPIC.GridGeometryUtils as GGU
 const backend_JP = JustPIC.CPUBackend
 ```
 

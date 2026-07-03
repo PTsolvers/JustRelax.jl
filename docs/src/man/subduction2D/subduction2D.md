@@ -14,7 +14,7 @@ const backend_JR = CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBacken
 
 For this benchmark we will use particles to track the advection of the material phases and their information. For this, we will use [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl)
 ```julia
-using JustPIC, JustPIC._2D
+using JustPIC
 const backend = CUDABackend # Options: JustPIC.CPUBackend, CUDABackend, JustPIC.AMDGPUBackend
 ```
 

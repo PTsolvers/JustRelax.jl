@@ -83,7 +83,7 @@ Here `grid.xci`, `grid.xvi`, and `grid.xi_vel` correspond to the local rank, whi
 Recent particle-related updates use the staggered velocity grids stored in `Geometry` directly:
 
 ```julia
-using JustPIC, JustPIC._2D
+using JustPIC
 
 nxcell = 24
 max_xcell = 36

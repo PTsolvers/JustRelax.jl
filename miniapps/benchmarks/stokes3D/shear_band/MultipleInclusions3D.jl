@@ -7,9 +7,9 @@ const backend_JR = CUDABackend
 
 using Printf, GeoParams, CairoMakie, CellArrays
 
-using JustPIC, JustPIC._3D
+using JustPIC
 const backend_JP = CUDABackend
-# const backend_JP = JustPIC.CPUBackend
+# const backend_JP = JustPIC.CPU
 
 using ParallelStencil
 @init_parallel_stencil(CUDA, Float64, 3)

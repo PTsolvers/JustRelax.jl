@@ -13,6 +13,10 @@ using StaticArrays
 using Statistics
 using TOML, Crayons
 @reexport using JustPIC
+# JustPIC no longer re-exports the CellArray element-access macro `@index`
+# (it clashes with KernelAbstractions' `@index`); pull it from CellArraysIndexing.
+using CellArraysIndexing: @index
+export @index
 
 function solve!() end
 #! format: off
@@ -169,6 +173,7 @@ export versioninfo
 #! format: on
 abstract type AbstractBackend end
 struct CPUBackend <: AbstractBackend end
+struct CUDABackend <: AbstractBackend end
 struct AMDGPUBackend <: AbstractBackend end
 
 PTArray() = Array

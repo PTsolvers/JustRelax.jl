@@ -8,7 +8,7 @@ using Printf, GeoParams, CairoMakie, CellArrays
 using ParallelStencil
 @init_parallel_stencil(CUDA, Float64, 3)
 
-using JustPIC, JustPIC._3D
+using JustPIC
 const backend = CUDABackend
 
 # HELPER FUNCTIONS ---------------------------------------------------------------

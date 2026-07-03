@@ -2,7 +2,7 @@ module JustRelax2D
 
 using JustRelax: JustRelax
 using CUDA
-using JustPIC, JustPIC._2D
+using JustPIC
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -28,7 +28,7 @@ import JustRelax:
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
-import JustPIC._2D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
+import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
 
 __init__() = @init_parallel_stencil(CUDA, Float64, 2)
 
@@ -449,7 +449,7 @@ end
 # stress rotation on particles
 
 function JR2D.rotate_stress_particles!(
-        τ::NTuple, ω::NTuple, particles::Particles{CUDABackend}, dt; method::Symbol = :matrix
+        τ::NTuple, ω::NTuple, particles::Particles{CUDA.CUDABackend}, dt; method::Symbol = :matrix
     )
     fn = if method === :matrix
         rotate_stress_particles_rotation_matrix!
@@ -475,14 +475,14 @@ function JR2D.update_rock_ratio!(
 end
 
 function JR2D.stress2grid!(
-        stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, particles
+        stokes, τ_particles::JustRelax.StressParticles{CUDA.CUDABackend}, particles
     )
     stress2grid!(stokes, τ_particles, particles)
     return nothing
 end
 
 function JR2D.rotate_stress!(
-        τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, dt
+        τ_particles::JustRelax.StressParticles{CUDA.CUDABackend}, stokes, particles, dt
     )
     rotate_stress!(τ_particles, stokes, particles, dt)
     return nothing
@@ -491,8 +491,8 @@ end
 # marker chain
 function JR2D.update_phases_given_markerchain!(
         phase,
-        chain::MarkerChain{CUDABackend},
-        particles::Particles{CUDABackend},
+        chain::MarkerChain{CUDA.CUDABackend},
+        particles::Particles{CUDA.CUDABackend},
         origin,
         di,
         air_phase,
@@ -502,8 +502,8 @@ end
 
 function JR2D.update_phases_given_markerchain!(
         phase,
-        chain::MarkerChain{CUDABackend},
-        particles::Particles{CUDABackend},
+        chain::MarkerChain{CUDA.CUDABackend},
+        particles::Particles{CUDA.CUDABackend},
         origin,
         di,
         air_phase,
@@ -515,7 +515,7 @@ end
 # Phase ratios with arrays
 
 function JR2D.update_phase_ratios_2D!(
-        phase_ratios::JustPIC.PhaseRatios{CUDABackend, T},
+        phase_ratios::JustPIC.PhaseRatios{CUDA.CUDABackend, T},
         phase_arrays::NTuple{N, CuArray{U, 2}},
         xci,
         xvi

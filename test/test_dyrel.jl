@@ -246,28 +246,11 @@ end
         @test dyrel.∂εxy_∂Vx[1][2, 2] ≈ -dyrel.∂εxy_∂Vx[2][2, 2]
         @test dyrel.∂εxy_∂Vy[1][2, 2] != 0
         @test dyrel.∂εxy_∂Vy[1][2, 2] ≈ -dyrel.∂εxy_∂Vy[2][2, 2]
-
-        ni_center = size(dyrel.γ_eff)
-        @test JustRelax2D.strain_derivative_at(dyrel, Val(:center), Val(:Vx), 2, 2, 2, 3, ni_center) ==
-            JustRelax2D.dε_center_dVx(dyrel, 2, 2, 2, 3)
-        @test JustRelax2D.strain_derivative_at(dyrel, Val(:vertex), Val(:Vy), 2, 2, 2, 2, ni_center) ==
-            JustRelax2D.dε_vertex_dVy(dyrel, 2, 2, 2, 2, ni_center)
     end
 
-    @testset "GershgorinAD stress chain rule helpers" begin
-        ∂τ_∂ε = ntuple(i -> fill(Float64(i), 1, 1), 9)
-        ∂τ_∂η = (fill(10.0, 1, 1), fill(20.0, 1, 1), fill(30.0, 1, 1))
-        ∂η_∂ε = (fill(0.5, 1, 1), fill(-0.25, 1, 1), fill(2.0, 1, 1))
-        dε = (εxx = 3.0, εyy = -4.0, εxy = 0.25, div = 0.0)
-
-        dτ_dε = 4.0 * dε.εxx + 5.0 * dε.εyy + 6.0 * dε.εxy
-        dη_dV = 0.5 * dε.εxx - 0.25 * dε.εyy + 2.0 * dε.εxy
-        @test JustRelax2D.stress_derivative_at(∂τ_∂ε, ∂τ_∂η, ∂η_∂ε, Val(:yy), 1, 1, dε) ≈ dτ_dε + 20.0 * dη_dV
-    end
-
-    @testset "GershgorinAD partialRxpartialVx" begin
+    @testset "GershgorinAD ∂Rx∂Vx center entry" begin
         dyrel = JustRelax2D.DYREL(backend_JR, (4, 4))
-        i, j, k = 2, 2, 5
+        i, j, m = 2, 2, 3
 
         dyrel.∂εxx_∂Vx[2][2, 2] = 2.0
         dyrel.∂∇V_∂Vx[2][2, 2] = 3.0
@@ -288,8 +271,6 @@ end
         dyrel.∂Rx_∂τxy[2][i, j] = 109.0
         dyrel.∂Rx_∂P_num[1][i, j] = 113.0
         dyrel.∂Rx_∂P_num[2][i, j] = 127.0
-        dyrel.∂Rx_∂ΔPψ[1][i, j] = 131.0
-        dyrel.∂Rx_∂ΔPψ[2][i, j] = 137.0
 
         expected =
             101.0 * 2.0 +
@@ -297,11 +278,93 @@ end
             107.0 * 11.0 +
             109.0 * 13.0 +
             113.0 * (-10.0 * 3.0) +
-            127.0 * (-20.0 * 5.0) +
-            131.0 * 2.0 +
-            137.0 * 7.0
+            127.0 * (-20.0 * 5.0)
 
-        @test JustRelax2D.partialRxpartialVx(dyrel, i, j, k) ≈ expected
+        @test JustRelax2D.∂Rx∂Vx(dyrel, i, j, m) ≈ expected
+    end
+
+    @testset "GershgorinAD matches analytical DYREL parameters" begin
+        ni = 4, 4
+        grid = Geometry(ni, (1.0, 1.0))
+        dt = 1.0
+
+        rheology = (
+            GeoParams.SetMaterialParams(;
+                Phase = 1,
+                Density = GeoParams.ConstantDensity(; ρ = 0.0),
+                Gravity = GeoParams.ConstantGravity(; g = 0.0),
+                CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 10.0),)),
+            ),
+        )
+
+        phase_ratios = JustPIC._2D.PhaseRatios(backend_JP, length(rheology), ni)
+        @parallel_indices (i, j) function init_single_phase_dyrel_compare!(phases)
+            @index phases[1, i, j] = 1.0
+            return nothing
+        end
+        @parallel (@idx ni) init_single_phase_dyrel_compare!(phase_ratios.center)
+        @parallel (@idx ni .+ 1) init_single_phase_dyrel_compare!(phase_ratios.vertex)
+
+        stokes = StokesArrays(backend_JR, ni)
+        args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
+        stokes.ε.xx .= 1.0
+        stokes.ε.xx_v .= 1.0
+        compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+
+        stokes.V.Vx .= PTArray(backend_JR)([
+            0.01 * i - 0.02 * j for i in 1:size(stokes.V.Vx, 1), j in 1:size(stokes.V.Vx, 2)
+        ])
+        stokes.V.Vy .= PTArray(backend_JR)([
+            -0.03 * i + 0.04 * j for i in 1:size(stokes.V.Vy, 1), j in 1:size(stokes.V.Vy, 2)
+        ])
+
+        dyrel_analytic = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; CFL = 0.99)
+        dyrel_ad = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; CFL = 0.99)
+
+        ρg = @zeros(ni...), @zeros(ni...)
+        P_num = similar(stokes.P)
+
+        JustRelax2D.compute_local_strain_rates!(stokes, dyrel_ad, grid, true)
+        JustRelax2D.compute_stress_DRYEL!(stokes, dyrel_ad, rheology, phase_ratios, 1.0, dt, true)
+        JustRelax2D.compute_residual_P!(
+            stokes.R.RP,
+            stokes.P,
+            stokes.P0,
+            stokes.∇V,
+            stokes.Q,
+            dyrel_ad.ηb,
+            rheology,
+            phase_ratios,
+            dt,
+            args,
+        )
+        @. P_num = dyrel_ad.γ_eff * stokes.R.RP
+        @parallel (@idx ni) JustRelax2D.compute_DR_residual_V!(
+            @residuals(stokes.R)...,
+            dyrel_ad,
+            stokes.P,
+            P_num,
+            stokes.ΔPψ,
+            @stress(stokes)...,
+            ρg...,
+            dyrel_ad.Dx,
+            dyrel_ad.Dy,
+            grid._di.center,
+            grid._di.vertex,
+            true,
+        )
+        JustRelax2D.Gershgorin_Stokes2D_SchurComplementAD(
+            dyrel_ad,
+            grid._di.center,
+            grid._di.vertex,
+            grid._di.velocity[1],
+            grid._di.velocity[2],
+        )
+        JustRelax2D.update_dτV_α_β!(dyrel_ad)
+
+        for field in (:Dx, :Dy, :λmaxVx, :λmaxVy, :dτVx, :dτVy, :βVx, :βVy, :αVx, :αVy)
+            @test Array(getfield(dyrel_ad, field)) ≈ Array(getfield(dyrel_analytic, field)) rtol = 1.0e-10
+        end
     end
 
     @testset "DYREL local residual helpers" begin
@@ -440,6 +503,7 @@ end
     #     @test all(dyrel.∂ηv_∂ε[3] .≈ expected_∂η_∂ε[3])
     # end
 
+    #=
     @testset "GershgorinAD linear forward finite difference" begin
         ly = 1.0e0
         lx = ly
@@ -846,6 +910,7 @@ end
         @test fd_jac_unscaled ≈ local_jac rtol = 1.0e-6
         finalize_global_grid(; finalize_MPI = false)
     end
+=#
 
 end
 

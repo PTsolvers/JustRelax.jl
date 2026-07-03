@@ -462,7 +462,7 @@ end
 
 @testset "thermal stresses" begin
     @suppress begin
-        nx, ny = 50, 50           # number of cells
+        nx, ny = 32, 32           # number of cells
         igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
             IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
         else

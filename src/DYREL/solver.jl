@@ -118,16 +118,44 @@ function _solve_DYREL!(
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     if use_gershgorin_ad
         compute_local_strain_rates!(stokes, dyrel, grid, true)
-        if !linear_viscosity
-            update_viscosity_εII!(
-                stokes, phase_ratios, args, rheology, viscosity_cutoff;
-                relaxation = viscosity_relaxation,
-                do_partials = true,
-                ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
-                )
-        end
+        # if !linear_viscosity
+        #     update_viscosity_εII!(
+        #         stokes, phase_ratios, args, rheology, viscosity_cutoff;
+        #         relaxation = viscosity_relaxation,
+        #         do_partials = true,
+        #         ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
+        #         )
+        # end
         compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, true)
-        DYREL_AD!(dyrel, stokes, rheology, phase_ratios, grid, dt; CFL = dyrel.CFL)
+        # compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, 20.0, dt)
+        # compute_residual_P!(
+        #     stokes.R.RP,
+        #     stokes.P,
+        #     stokes.P0,
+        #     stokes.∇V,
+        #     stokes.Q,
+        #     dyrel.ηb,
+        #     rheology,
+        #     phase_ratios,
+        #     dt,
+        #     args,
+        # )
+        # @. P_num = dyrel.γ_eff * stokes.R.RP
+        @parallel (@idx ni) compute_DR_residual_V!(
+            residuals...,
+            dyrel,
+            stokes.P,
+            P_num,
+            stokes.ΔPψ,
+            @stress(stokes)...,
+            ρg...,
+            fields.D...,
+            _di.center,
+            _di.vertex,
+            true,
+        )
+        Gershgorin_Stokes2D_SchurComplementAD(dyrel, _di.center, _di.vertex, _di.velocity[1], _di.velocity[2])
+        update_dτV_α_β!(dyrel)
     else
         DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
     end
@@ -247,18 +275,18 @@ function _solve_DYREL!(
             do_partials = use_gershgorin_ad && iszero(iter % nout)
 
             # Deviatoric stress
-            if !linear_viscosity
-                update_viscosity_εII!(
-                    stokes,
-                    phase_ratios,
-                    args,
-                    rheology,
-                    viscosity_cutoff;
-                    relaxation = viscosity_relaxation,
-                    do_partials = do_partials,
-                    ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
-                )
-            end
+            # if !linear_viscosity
+            #     update_viscosity_εII!(
+            #         stokes,
+            #         phase_ratios,
+            #         args,
+            #         rheology,
+            #         viscosity_cutoff;
+            #         relaxation = viscosity_relaxation,
+            #         do_partials = do_partials,
+            #         ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
+            #     )
+            # end
             compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_DR, dt, do_partials)
             # update_halo!(stokes.λv)
             # update_halo!(stokes.τ.xx_v)
@@ -278,18 +306,18 @@ function _solve_DYREL!(
                 args,
             )
 
-            # if !linear_viscosity
-            #     update_viscosity_τII!(
-            #         stokes,
-            #         phase_ratios,
-            #         args,
-            #         rheology,
-            #         viscosity_cutoff;
-            #         relaxation = viscosity_relaxation,
-            #         do_partials = do_partials,
-            #         ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
-            #     )
-            # end
+            if !linear_viscosity
+                update_viscosity_τII!(
+                    stokes,
+                    phase_ratios,
+                    args,
+                    rheology,
+                    viscosity_cutoff;
+                    relaxation = viscosity_relaxation,
+                    do_partials = false,
+                    ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
+                )
+            end
 
             # Residuals
             @. P_num = dyrel.γ_eff * stokes.R.RP
@@ -304,7 +332,7 @@ function _solve_DYREL!(
                 fields.D...,
                 _di.center,
                 _di.vertex,
-                do_partials,
+                false,
             )
 
             # Damping and pseudo-transient velocity updates

@@ -66,4 +66,14 @@ struct DYREL{T, F, S, D, E}
     ∂∇V_∂Vy::E
     ∂εxy_∂Vx::E
     ∂εxy_∂Vy::E
+    ∂Rx_∂τxx::E
+    ∂Rx_∂τxy::E
+    ∂Rx_∂P::E
+    ∂Rx_∂P_num::E
+    ∂Rx_∂ΔPψ::E
+    ∂Ry_∂τyy::E
+    ∂Ry_∂τxy::E
+    ∂Ry_∂P::E
+    ∂Ry_∂P_num::E
+    ∂Ry_∂ΔPψ::E
 end

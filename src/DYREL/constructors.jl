@@ -61,6 +61,16 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     ∂∇V_∂Vy = zero_field_tuple(Val(2), nx, ny)
     ∂εxy_∂Vx = zero_field_tuple(Val(2), nx + 1, ny + 1)
     ∂εxy_∂Vy = zero_field_tuple(Val(2), nx + 1, ny + 1)
+    ∂Rx_∂τxx = zero_field_tuple(Val(2), nx - 1, ny)
+    ∂Rx_∂τxy = zero_field_tuple(Val(2), nx - 1, ny)
+    ∂Rx_∂P = zero_field_tuple(Val(2), nx - 1, ny)
+    ∂Rx_∂P_num = zero_field_tuple(Val(2), nx - 1, ny)
+    ∂Rx_∂ΔPψ = zero_field_tuple(Val(2), nx - 1, ny)
+    ∂Ry_∂τyy = zero_field_tuple(Val(2), nx, ny - 1)
+    ∂Ry_∂τxy = zero_field_tuple(Val(2), nx, ny - 1)
+    ∂Ry_∂P = zero_field_tuple(Val(2), nx, ny - 1)
+    ∂Ry_∂P_num = zero_field_tuple(Val(2), nx, ny - 1)
+    ∂Ry_∂ΔPψ = zero_field_tuple(Val(2), nx, ny - 1)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
@@ -71,7 +81,9 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
         dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact,
         ∂τc_∂ε, ∂τv_∂ε, ∂ΔPψc_∂ε, ∂ΔPψc_∂η, ∂τc_∂η, ∂τv_∂η, ∂ηc_∂ε, ∂ηv_∂ε,
-        ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy
+        ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy,
+        ∂Rx_∂τxx, ∂Rx_∂τxy, ∂Rx_∂P, ∂Rx_∂P_num, ∂Rx_∂ΔPψ,
+        ∂Ry_∂τyy, ∂Ry_∂τxy, ∂Ry_∂P, ∂Ry_∂P_num, ∂Ry_∂ΔPψ
     )
 end
 
@@ -125,6 +137,16 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     ∂∇V_∂Vy = zero_field_tuple(Val(1), 1, 1, 1)
     ∂εxy_∂Vx = zero_field_tuple(Val(1), 1, 1, 1)
     ∂εxy_∂Vy = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Rx_∂τxx = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Rx_∂τxy = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Rx_∂P = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Rx_∂P_num = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Rx_∂ΔPψ = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Ry_∂τyy = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Ry_∂τxy = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Ry_∂P = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Ry_∂P_num = zero_field_tuple(Val(1), 1, 1, 1)
+    ∂Ry_∂ΔPψ = zero_field_tuple(Val(1), 1, 1, 1)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
@@ -135,7 +157,9 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
         dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact,
         ∂τc_∂ε, ∂τv_∂ε, ∂ΔPψc_∂ε, ∂ΔPψc_∂η, ∂τc_∂η, ∂τv_∂η, ∂ηc_∂ε, ∂ηv_∂ε,
-        ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy
+        ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy,
+        ∂Rx_∂τxx, ∂Rx_∂τxy, ∂Rx_∂P, ∂Rx_∂P_num, ∂Rx_∂ΔPψ,
+        ∂Ry_∂τyy, ∂Ry_∂τxy, ∂Ry_∂P, ∂Ry_∂P_num, ∂Ry_∂ΔPψ
     )
 end
 

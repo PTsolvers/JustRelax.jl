@@ -65,6 +65,10 @@ end
         @test length(dyrel.∂∇V_∂Vy) == 2
         @test length(dyrel.∂εxy_∂Vx) == 2
         @test length(dyrel.∂εxy_∂Vy) == 2
+        @test length(dyrel.∂Rx_∂τxx) == 2
+        @test length(dyrel.∂Rx_∂P_num) == 2
+        @test length(dyrel.∂Ry_∂τyy) == 2
+        @test length(dyrel.∂Ry_∂P_num) == 2
         @test size(dyrel.∂τc_∂ε[1]) == (nx, ny)
         @test size(dyrel.∂τv_∂ε[1]) == (nx + 1, ny + 1)
         @test size(dyrel.∂ΔPψc_∂ε[1]) == (nx, ny)
@@ -81,6 +85,10 @@ end
         @test size(dyrel.∂∇V_∂Vy[1]) == (nx, ny)
         @test size(dyrel.∂εxy_∂Vx[1]) == (nx + 1, ny + 1)
         @test size(dyrel.∂εxy_∂Vy[1]) == (nx + 1, ny + 1)
+        @test size(dyrel.∂Rx_∂τxx[1]) == (nx - 1, ny)
+        @test size(dyrel.∂Rx_∂P_num[1]) == (nx - 1, ny)
+        @test size(dyrel.∂Ry_∂τyy[1]) == (nx, ny - 1)
+        @test size(dyrel.∂Ry_∂P_num[1]) == (nx, ny - 1)
         @test dyrel.CFL === 0.5
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
@@ -275,13 +283,6 @@ end
             (expected - (Pnum[2] - Pnum[1]) * _dn) / 2.0
         @test JustRelax2D.local_DR_Ry_residual(τn, τs, P, Pnum, ΔPψ, ρg, _dn, _ds, 2.0) ≈
             (expected - (Pnum[2] - Pnum[1]) * _dn) / 2.0
-
-        ∂Rx = JustRelax2D.local_Rx_residual_partials(collect(τn), collect(τs), collect(P), collect(ΔPψ), collect(ρg), _dn, _ds)
-        @test ∂Rx.τxx ≈ [-_dn, _dn]
-        @test ∂Rx.τxy ≈ [-_ds, _ds]
-        @test ∂Rx.P ≈ [_dn, -_dn]
-        @test ∂Rx.ΔPψ ≈ [_dn, -_dn]
-        @test ∂Rx.ρgx ≈ [-0.5, -0.5]
 
         ∂DRy = JustRelax2D.local_DR_Ry_residual_partials(collect(τn), collect(τs), collect(P), collect(Pnum), collect(ΔPψ), collect(ρg), _dn, _ds, 2.0)
         @test ∂DRy.τyy ≈ [-_dn, _dn]

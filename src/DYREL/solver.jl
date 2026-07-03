@@ -181,8 +181,7 @@ function _solve_DYREL!(
             @stress(stokes)...,
             ρg...,
             _di.center,
-            _di.vertex,
-            do_partials,
+            _di.vertex
         )
 
         # compute pressure residual
@@ -296,6 +295,7 @@ function _solve_DYREL!(
             @. P_num = dyrel.γ_eff * stokes.R.RP
             @parallel (@idx ni) compute_DR_residual_V!(
                 residuals...,
+                dyrel,
                 stokes.P,
                 P_num,
                 stokes.ΔPψ,

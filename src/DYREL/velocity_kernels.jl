@@ -186,18 +186,18 @@ end
 
 @inline function local_Rx_residual(τxx, τxy, P, ΔPψ, ρgx, _dx, _dy)
     return (τxx[2] - τxx[1]) * _dx +
-        (τxy[2] - τxy[1]) * _dy -
-        (P[2] - P[1]) * _dx -
-        (ΔPψ[2] - ΔPψ[1]) * _dx -
-        0.5 * (ρgx[1] + ρgx[2])
+           (τxy[2] - τxy[1]) * _dy -
+           (P[2] - P[1]) * _dx -
+           (ΔPψ[2] - ΔPψ[1]) * _dx -
+           0.5 * (ρgx[1] + ρgx[2])
 end
 
 @inline function local_Ry_residual(τyy, τxy, P, ΔPψ, ρgy, _dy, _dx)
     return (τyy[2] - τyy[1]) * _dy +
-        (τxy[2] - τxy[1]) * _dx -
-        (P[2] - P[1]) * _dy -
-        (ΔPψ[2] - ΔPψ[1]) * _dy -
-        0.5 * (ρgy[1] + ρgy[2])
+           (τxy[2] - τxy[1]) * _dx -
+           (P[2] - P[1]) * _dy -
+           (ΔPψ[2] - ΔPψ[1]) * _dy -
+           0.5 * (ρgy[1] + ρgy[2])
 end
 
 @inline function local_DR_Rx_residual(τxx, τxy, P, P_num, ΔPψ, ρgx, _dx, _dy, D)
@@ -240,40 +240,15 @@ end
     D,
 )
 
-@inline function local_Rx_residual_partials(τxx, τxy, P, ΔPψ, ρgx, _dx, _dy)
-    q = SA[τxx[1], τxx[2], τxy[1], τxy[2], P[1], P[2], ΔPψ[1], ΔPψ[2], ρgx[1], ρgx[2]]
-    ∂R = ForwardDiff.gradient(q -> local_Rx_residual(q, _dx, _dy), q)
-    return (
-        τxx = SA[∂R[1], ∂R[2]],
-        τxy = SA[∂R[3], ∂R[4]],
-        P = SA[∂R[5], ∂R[6]],
-        ΔPψ = SA[∂R[7], ∂R[8]],
-        ρgx = SA[∂R[9], ∂R[10]],
-    )
-end
-
-@inline function local_Ry_residual_partials(τyy, τxy, P, ΔPψ, ρgy, _dy, _dx)
-    q = SA[τyy[1], τyy[2], τxy[1], τxy[2], P[1], P[2], ΔPψ[1], ΔPψ[2], ρgy[1], ρgy[2]]
-    ∂R = ForwardDiff.gradient(q -> local_Ry_residual(q, _dy, _dx), q)
-    return (
-        τyy = SA[∂R[1], ∂R[2]],
-        τxy = SA[∂R[3], ∂R[4]],
-        P = SA[∂R[5], ∂R[6]],
-        ΔPψ = SA[∂R[7], ∂R[8]],
-        ρgy = SA[∂R[9], ∂R[10]],
-    )
-end
-
 @inline function local_DR_Rx_residual_partials(τxx, τxy, P, P_num, ΔPψ, ρgx, _dx, _dy, D)
     q = SA[τxx[1], τxx[2], τxy[1], τxy[2], P[1], P[2], P_num[1], P_num[2], ΔPψ[1], ΔPψ[2], ρgx[1], ρgx[2]]
     ∂R = ForwardDiff.gradient(q -> local_DR_Rx_residual(q, _dx, _dy, one(D)), q)
     return (
-        τxx = SA[∂R[1], ∂R[2]],
-        τxy = SA[∂R[3], ∂R[4]],
-        P = SA[∂R[5], ∂R[6]],
+        τxx   = SA[∂R[1], ∂R[2]],
+        τxy   = SA[∂R[3], ∂R[4]],
+        P     = SA[∂R[5], ∂R[6]],
         P_num = SA[∂R[7], ∂R[8]],
-        ΔPψ = SA[∂R[9], ∂R[10]],
-        ρgx = SA[∂R[11], ∂R[12]],
+        ΔPψ   = SA[∂R[9], ∂R[10]],
     )
 end
 
@@ -281,17 +256,26 @@ end
     q = SA[τyy[1], τyy[2], τxy[1], τxy[2], P[1], P[2], P_num[1], P_num[2], ΔPψ[1], ΔPψ[2], ρgy[1], ρgy[2]]
     ∂R = ForwardDiff.gradient(q -> local_DR_Ry_residual(q, _dy, _dx, one(D)), q)
     return (
-        τyy = SA[∂R[1], ∂R[2]],
-        τxy = SA[∂R[3], ∂R[4]],
-        P = SA[∂R[5], ∂R[6]],
+        τyy   = SA[∂R[1], ∂R[2]],
+        τxy   = SA[∂R[3], ∂R[4]],
+        P     = SA[∂R[5], ∂R[6]],
         P_num = SA[∂R[7], ∂R[8]],
-        ΔPψ = SA[∂R[9], ∂R[10]],
-        ρgy = SA[∂R[11], ∂R[12]],
+        ΔPψ   = SA[∂R[9], ∂R[10]],
     )
 end
 
 @parallel_indices (i, j) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _di_center, _di_vertex, do_partials::Bool
+        Rx::AbstractArray{T, 2},
+        Ry,
+        P,
+        ΔPψ,
+        τxx,
+        τyy,
+        τxy,
+        ρgx,
+        ρgy,
+        _di_center,
+        _di_vertex,
     ) where {T}
 
     # @inbounds begin
@@ -300,7 +284,7 @@ end
         _dy_v = @dy(_di_vertex, j)
         τxxᵢⱼ = SA[τxx[i, j], τxx[i + 1, j]]
         τxyᵢⱼ = SA[τxy[i + 1, j], τxy[i + 1, j + 1]]
-        Pᵢⱼ = SA[P[i, j], P[i + 1, j]]
+        Pᵢⱼ   = SA[P[i, j], P[i + 1, j]]
         ΔPψᵢⱼ = SA[ΔPψ[i, j], ΔPψ[i + 1, j]]
         ρgxᵢⱼ = SA[ρgx[i, j], ρgx[i + 1, j]]
         Rx[i, j] = local_Rx_residual(
@@ -312,9 +296,6 @@ end
             _dx_c,
             _dy_v,
         )
-        if do_partials
-            local_Rx_residual_partials(τxxᵢⱼ, τxyᵢⱼ, Pᵢⱼ, ΔPψᵢⱼ, ρgxᵢⱼ, _dx_c, _dy_v)
-        end
     end
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
         _dy_c = @dy(_di_center, j)
@@ -333,11 +314,7 @@ end
             _dy_c,
             _dx_v,
         )
-        if do_partials
-            local_Ry_residual_partials(τyyᵢⱼ, τxyᵢⱼ, Pᵢⱼ, ΔPψᵢⱼ, ρgyᵢⱼ, _dy_c, _dx_v)
-        end
     end
-    # end
     return nothing
 end
 
@@ -356,18 +333,17 @@ end
         _di_center,
         _di_vertex,
         dt,
-        do_partials::Bool,
     ) where {T}
 
     nx, ny = size(ρgy)
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-        _dx_c = @dx(_di_center, i)
-        _dy_v = @dy(_di_vertex, j)
-        τxxᵢⱼ = SA[τxx[i, j], τxx[i + 1, j]]
-        τxyᵢⱼ = SA[τxy[i + 1, j], τxy[i + 1, j + 1]]
-        Pᵢⱼ = SA[P[i, j], P[i + 1, j]]
-        ΔPψᵢⱼ = SA[ΔPψ[i, j], ΔPψ[i + 1, j]]
-        ρgxᵢⱼ = SA[ρgx[i, j], ρgx[i + 1, j]]
+        _dx_c    = @dx(_di_center, i)
+        _dy_v    = @dy(_di_vertex, j)
+        τxxᵢⱼ    = SA[τxx[i, j], τxx[i + 1, j]]
+        τxyᵢⱼ    = SA[τxy[i + 1, j], τxy[i + 1, j + 1]]
+        Pᵢⱼ      = SA[P[i, j], P[i + 1, j]]
+        ΔPψᵢⱼ    = SA[ΔPψ[i, j], ΔPψ[i + 1, j]]
+        ρgxᵢⱼ    = SA[ρgx[i, j], ρgx[i + 1, j]]
         Rx[i, j] = local_Rx_residual(
             τxxᵢⱼ,
             τxyᵢⱼ,
@@ -377,9 +353,6 @@ end
             _dx_c,
             _dy_v,
         )
-        if do_partials
-            local_Rx_residual_partials(τxxᵢⱼ, τxyᵢⱼ, Pᵢⱼ, ΔPψᵢⱼ, ρgxᵢⱼ, _dx_c, _dy_v)
-        end
     end
 
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
@@ -411,9 +384,6 @@ end
             _dy_c,
             _dx_v,
         ) + ρg_correction
-        if do_partials
-            local_Ry_residual_partials(τyyᵢⱼ, τxyᵢⱼ, Pᵢⱼ, ΔPψᵢⱼ, ρgyᵢⱼ, _dy_c, _dx_v)
-        end
     end
 
     return nothing
@@ -422,6 +392,7 @@ end
 @parallel_indices (i, j) function compute_DR_residual_V!(
         Rx::AbstractArray{T, 2},
         Ry,
+        dyrel,
         P,
         P_num,
         ΔPψ,
@@ -459,18 +430,28 @@ end
             Dx[i, j],
         )
         if do_partials
-            local_DR_Rx_residual_partials(τxxᵢⱼ, τxyᵢⱼ, Pᵢⱼ, Pnumᵢⱼ, ΔPψᵢⱼ, ρgxᵢⱼ, _dx_c, _dy_v, Dx[i, j])
+            ∂R = local_DR_Rx_residual_partials(τxxᵢⱼ, τxyᵢⱼ, Pᵢⱼ, Pnumᵢⱼ, ΔPψᵢⱼ, ρgxᵢⱼ, _dx_c, _dy_v, Dx[i, j])
+            dyrel.∂Rx_∂τxx[1][i, j]   = ∂R.τxx[1]
+            dyrel.∂Rx_∂τxx[2][i, j]   = ∂R.τxx[2]
+            dyrel.∂Rx_∂τxy[1][i, j]   = ∂R.τxy[1]
+            dyrel.∂Rx_∂τxy[2][i, j]   = ∂R.τxy[2]
+            dyrel.∂Rx_∂P[1][i, j]     = ∂R.P[1]
+            dyrel.∂Rx_∂P[2][i, j]     = ∂R.P[2]
+            dyrel.∂Rx_∂P_num[1][i, j] = ∂R.P_num[1]
+            dyrel.∂Rx_∂P_num[2][i, j] = ∂R.P_num[2]
+            dyrel.∂Rx_∂ΔPψ[1][i, j]   = ∂R.ΔPψ[1]
+            dyrel.∂Rx_∂ΔPψ[2][i, j]   = ∂R.ΔPψ[2]
         end
     end
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-        _dy_c = @dy(_di_center, j)
-        _dx_v = @dx(_di_vertex, i)
-        τyyᵢⱼ = SA[τyy[i, j], τyy[i, j + 1]]
-        τxyᵢⱼ = SA[τxy[i, j + 1], τxy[i + 1, j + 1]]
-        Pᵢⱼ   = SA[P[i, j], P[i, j + 1]]
-        Pnumᵢⱼ = SA[P_num[i, j], P_num[i, j + 1]]
-        ΔPψᵢⱼ = SA[ΔPψ[i, j], ΔPψ[i, j + 1]]
-        ρgyᵢⱼ = SA[ρgy[i, j], ρgy[i, j + 1]]
+        _dy_c    = @dy(_di_center, j)
+        _dx_v    = @dx(_di_vertex, i)
+        τyyᵢⱼ    = SA[τyy[i, j], τyy[i, j + 1]]
+        τxyᵢⱼ    = SA[τxy[i, j + 1], τxy[i + 1, j + 1]]
+        Pᵢⱼ      = SA[P[i, j], P[i, j + 1]]
+        Pnumᵢⱼ   = SA[P_num[i, j], P_num[i, j + 1]]
+        ΔPψᵢⱼ    = SA[ΔPψ[i, j], ΔPψ[i, j + 1]]
+        ρgyᵢⱼ    = SA[ρgy[i, j], ρgy[i, j + 1]]
         Ry[i, j] = local_DR_Ry_residual(
             τyyᵢⱼ,
             τxyᵢⱼ,
@@ -483,11 +464,19 @@ end
             Dy[i, j],
         )
         if do_partials
-            local_DR_Ry_residual_partials(τyyᵢⱼ, τxyᵢⱼ, Pᵢⱼ, Pnumᵢⱼ, ΔPψᵢⱼ, ρgyᵢⱼ, _dy_c, _dx_v, Dy[i, j])
+            ∂R = local_DR_Ry_residual_partials(τyyᵢⱼ, τxyᵢⱼ, Pᵢⱼ, Pnumᵢⱼ, ΔPψᵢⱼ, ρgyᵢⱼ, _dy_c, _dx_v, Dy[i, j])
+            dyrel.∂Ry_∂τyy[1][i, j]   = ∂R.τyy[1]
+            dyrel.∂Ry_∂τyy[2][i, j]   = ∂R.τyy[2]
+            dyrel.∂Ry_∂τxy[1][i, j]   = ∂R.τxy[1]
+            dyrel.∂Ry_∂τxy[2][i, j]   = ∂R.τxy[2]
+            dyrel.∂Ry_∂P[1][i, j]     = ∂R.P[1]
+            dyrel.∂Ry_∂P[2][i, j]     = ∂R.P[2]
+            dyrel.∂Ry_∂P_num[1][i, j] = ∂R.P_num[1]
+            dyrel.∂Ry_∂P_num[2][i, j] = ∂R.P_num[2]
+            dyrel.∂Ry_∂ΔPψ[1][i, j]   = ∂R.ΔPψ[1]
+            dyrel.∂Ry_∂ΔPψ[2][i, j]   = ∂R.ΔPψ[2]
         end
     end
-    # end
-
     return nothing
 end
 

@@ -144,7 +144,7 @@ end
 # numerical pressure P_num = γ_eff * RP in the same pass, reusing the in-register divergence
 # `div_ij` instead of reading ∇V back. RP and P_num are local per-center writes (no halo needed).
 
-function compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args, dim)
+function compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args)
     ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
     melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
@@ -166,7 +166,10 @@ function compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_rati
         melt_fraction,
         dt,
     )
-    return interpolate_shear_ε_to_centers(stokes, dim)
+    # NB: no vertex→center shear-strain interpolation here — ε.*_c is not read inside the DYREL
+    # loop (stress reads ε.xy at vertices; τII viscosity reads τ.xy_c). The center strain arrays
+    # are re-derived once after the loop by shear2center!(stokes.ε).
+    return nothing
 end
 
 @parallel_indices (i, j) function compute_∇V_strain_rate_RP!(

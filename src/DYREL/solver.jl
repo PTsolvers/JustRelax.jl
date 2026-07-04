@@ -121,7 +121,7 @@ function _solve_DYREL!(
         update_ρg!(ρg, phase_ratios, rheology, args)
 
         # compute divergence, deviatoric strain rate, pressure residual and P_num in one pass
-        compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args, dim)
+        compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args)
 
         # compute deviatoric stress
         compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt)
@@ -198,14 +198,13 @@ function _solve_DYREL!(
             iszero(iter % nout) && foreach(copyto!, residuals0, residuals)
 
             # compute divergence, deviatoric strain rate, pressure residual and P_num in one pass
-            compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args, dim)
+            compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args)
 
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
             # update_halo!(stokes.λv)
-            update_halo!(stokes.τ.xx_v)
-            update_halo!(stokes.τ.yy_v)
-            update_halo!(stokes.τ.xy)
+            # batch the vertex-stress halos into a single MPI exchange
+            update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
 
             if !linear_viscosity
                 update_viscosity_τII!(

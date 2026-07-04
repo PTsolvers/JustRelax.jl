@@ -84,7 +84,7 @@ function _solve_DYREL!(
 
     # solver loop
     @copy stokes.P0 stokes.P
-    residuals0 = map(similar, residuals)
+    residuals0 = fields.R0
 
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
@@ -108,7 +108,7 @@ function _solve_DYREL!(
     err_evo_P = Float64[]
     err_evo_it = Float64[]
     itg = 0
-    P_num = similar(stokes.P)
+    P_num = dyrel.P_num
 
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
@@ -313,6 +313,7 @@ end
         βV = (dyrel.βVx, dyrel.βVy),
         cV = (dyrel.cVx, dyrel.cVy),
         αV = (dyrel.αVx, dyrel.αVy),
+        R0 = (dyrel.Rx0, dyrel.Ry0),
     )
 end
 
@@ -326,6 +327,7 @@ end
         βV = (dyrel.βVx, dyrel.βVy, dyrel.βVz),
         cV = (dyrel.cVx, dyrel.cVy, dyrel.cVz),
         αV = (dyrel.αVx, dyrel.αVy, dyrel.αVz),
+        R0 = (dyrel.Rx0, dyrel.Ry0, dyrel.Rz0),
     )
 end
 

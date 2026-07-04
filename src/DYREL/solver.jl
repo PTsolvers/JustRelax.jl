@@ -120,8 +120,8 @@ function _solve_DYREL!(
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
 
-        # compute divergence and deviatoric strain rate in one pass
-        compute_∇V_strain_rate!(stokes, _di, ni, dim)
+        # compute divergence, deviatoric strain rate, pressure residual and P_num in one pass
+        compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args, dim)
 
         # compute deviatoric stress
         compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt)
@@ -152,19 +152,7 @@ function _solve_DYREL!(
             _di.vertex,
         )
 
-        # compute pressure residual
-        compute_residual_P!(
-            stokes.R.RP,
-            stokes.P,
-            stokes.P0,
-            stokes.∇V,
-            stokes.Q, # volumetric source/sink term
-            dyrel.ηb,
-            rheology,
-            phase_ratios,
-            dt,
-            args,
-        )
+        # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
 
         # Residual check
         errV = ntuple(d -> norm_mpi(residuals[d]) / √(v_dofs[d]), dim)
@@ -206,11 +194,11 @@ function _solve_DYREL!(
             itg += 1
             iter += 1
 
-            # Pseudo-old dudes
-            foreach(copyto!, residuals0, residuals)
+            # Pseudo-old dudes (only needed by compute_λminV! on residual-check iterations)
+            iszero(iter % nout) && foreach(copyto!, residuals0, residuals)
 
-            # compute divergence and deviatoric strain rate in one pass
-            compute_∇V_strain_rate!(stokes, _di, ni, dim)
+            # compute divergence, deviatoric strain rate, pressure residual and P_num in one pass
+            compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args, dim)
 
             # Deviatoric stress
             compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
@@ -218,19 +206,6 @@ function _solve_DYREL!(
             update_halo!(stokes.τ.xx_v)
             update_halo!(stokes.τ.yy_v)
             update_halo!(stokes.τ.xy)
-
-            compute_residual_P!(
-                stokes.R.RP,
-                stokes.P,
-                stokes.P0,
-                stokes.∇V,
-                stokes.Q, # volumetric source/sink term
-                dyrel.ηb,
-                rheology,
-                phase_ratios,
-                dt,
-                args,
-            )
 
             if !linear_viscosity
                 update_viscosity_τII!(
@@ -243,28 +218,23 @@ function _solve_DYREL!(
                 )
             end
 
-            # Residuals
-            @. P_num = dyrel.γ_eff * stokes.R.RP
-            @parallel (@idx ni) compute_DR_residual_V!(
+            # Velocity residuals + damped pseudo-transient velocity update (fused; P_num already
+            # computed above in compute_∇V_strain_rate_RP!)
+            @parallel (@idx ni) compute_DR_residual_update_V!(
                 residuals...,
+                @velocity(stokes)...,
+                fields.dVdτ...,
                 stokes.P,
                 P_num,
                 stokes.ΔPψ,
                 @stress(stokes)...,
                 ρg...,
                 fields.D...,
+                fields.αV...,
+                fields.βV...,
+                fields.dτV...,
                 _di.center,
                 _di.vertex,
-            )
-
-            # Damping and pseudo-transient velocity updates
-            @parallel (@idx ni) update_V_damping_DR_V!(
-                @velocity(stokes),
-                fields.dVdτ,
-                residuals,
-                fields.αV,
-                fields.βV,
-                fields.dτV,
             )
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)

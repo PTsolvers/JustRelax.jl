@@ -123,23 +123,12 @@ function _solve_DYREL!(
         # compute divergence, deviatoric strain rate, pressure residual and P_num in one pass
         compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args)
 
-        # compute deviatoric stress
-        compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt)
+        # compute deviatoric stress and refresh τII viscosity in one pass
+        compute_stress_viscosity_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)
         # update_halo!(stokes.τ.yy_v)
         # update_halo!(stokes.τ.xy)
-
-        if !linear_viscosity
-            update_viscosity_τII!(
-                stokes,
-                phase_ratios,
-                args,
-                rheology,
-                viscosity_cutoff;
-                relaxation = viscosity_relaxation,
-            )
-        end
 
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
@@ -200,21 +189,16 @@ function _solve_DYREL!(
             # compute divergence, deviatoric strain rate, pressure residual and P_num in one pass
             compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args)
 
-            # Deviatoric stress
-            compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt)
+            # Deviatoric stress and τII viscosity refresh in one pass
+            compute_stress_viscosity_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
             # update_halo!(stokes.λv)
-            # batch the vertex-stress halos into a single MPI exchange
-            update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
-
-            if !linear_viscosity
-                update_viscosity_τII!(
-                    stokes,
-                    phase_ratios,
-                    args,
-                    rheology,
-                    viscosity_cutoff;
-                    relaxation = viscosity_relaxation,
-                )
+            # batch the vertex-stress halos (+ vertex viscosity, refreshed above in the fused
+            # kernel from pre-halo stress) into a single MPI exchange, so shared boundary vertices
+            # stay consistent across ranks — matching the original stress→halo→viscosity ordering.
+            if linear_viscosity
+                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
+            else
+                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
             end
 
             # Velocity residuals + damped pseudo-transient velocity update (fused; P_num already

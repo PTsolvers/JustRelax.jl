@@ -140,24 +140,28 @@ end
 end
 
 ## DIVERGENCE + DEVIATORIC STRAIN RATE + PRESSURE RESIDUAL (fused)
-# Same as `compute_∇V_strain_rate!` but additionally evaluates the pressure residual RP and the
-# numerical pressure P_num = γ_eff * RP in the same pass, reusing the in-register divergence
-# `div_ij` instead of reading ∇V back. RP and P_num are local per-center writes (no halo needed).
+# Same as `compute_∇V_strain_rate!` but additionally evaluates the pressure residual RP in the same
+# pass, reusing the in-register divergence `div_ij` instead of reading ∇V back. RP is a local
+# per-center write (no halo needed). The numerical pressure P_num = γ_eff·RP is NOT materialized
+# here — it is folded with the (similarly small) plastic pressure correction ΔPψ into the single
+# `θc` correction array by the stress kernel. Only these two small corrections are summed; the large
+# hydrostatic P is kept separate in the momentum kernel to preserve precision (see
+# compute_stress_viscosity_DRYEL!).
+# NB: ∇V itself is NOT stored here — it is dead inside the DYREL/PH loop (RP is derived from the
+# in-register `div_ij`, and nothing on this path reads ∇V back). The public `stokes.∇V` diagnostic
+# is recomputed once from the converged velocity field after the loop in `_solve_DYREL!`.
 
-function compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args)
+function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
     ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
     melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
-        stokes.∇V,
         @strain(stokes)...,
         @velocity(stokes)...,
         stokes.R.RP,
-        P_num,
         stokes.P,
         stokes.P0,
         stokes.Q,
         dyrel.ηb,
-        dyrel.γ_eff,
         _di.vertex,
         _di.velocity...,
         rheology,
@@ -173,19 +177,16 @@ function compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_rati
 end
 
 @parallel_indices (i, j) function compute_∇V_strain_rate_RP!(
-        ∇V::AbstractArray{T, 2},
-        εxx,
+        εxx::AbstractArray{T, 2},
         εyy,
         εxy,
         Vx,
         Vy,
         RP,
-        P_num,
         P,
         P0,
         Q,
         ηb,
-        γ_eff,
         _di_vertex,
         _di_vx,
         _di_vy,
@@ -213,7 +214,7 @@ end
             εxy[i, j] = 0.5 * (dVx_dy + dVy_dx)
         end
 
-        if i ≤ size(∇V, 1) && j ≤ size(∇V, 2)
+        if i ≤ size(εxx, 1) && j ≤ size(εxx, 2)
             vx_ne = Vx[i + 1, j + 1]
             vy_ne = Vy[i + 1, j + 1]
             _dx, _dy = @dxi(_di_vertex, i, j)
@@ -221,16 +222,14 @@ end
             dVx_dx = (vx_ne - vx_n) * _dx
             dVy_dy = (vy_ne - vy_e) * _dy
             div_ij = dVx_dx + dVy_dy
-            ∇V[i, j] = div_ij
 
             div_third = div_ij * third
             εxx[i, j] = dVx_dx - div_third
             εyy[i, j] = dVy_dy - div_third
 
-            # fused pressure residual + numerical pressure (reuses `div_ij` in-register)
-            RP_ij = _RP_cell(P[i, j], P0[i, j], div_ij, Q[i, j], ηb[i, j], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j)
-            RP[i, j] = RP_ij
-            P_num[i, j] = γ_eff[i, j] * RP_ij
+            # fused pressure residual (reuses `div_ij` in-register); the numerical pressure
+            # P_num = γ_eff·RP is folded into θc (with ΔPψ) downstream by the stress kernel.
+            RP[i, j] = _RP_cell(P[i, j], P0[i, j], div_ij, Q[i, j], ηb[i, j], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j)
         end
     end
 
@@ -238,8 +237,7 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_∇V_strain_rate_RP!(
-        ∇V::AbstractArray{T, 3},
-        εxx,
+        εxx::AbstractArray{T, 3},
         εyy,
         εzz,
         εyz,
@@ -249,12 +247,10 @@ end
         Vy,
         Vz,
         RP,
-        P_num,
         P,
         P0,
         Q,
         ηb,
-        γ_eff,
         _di_vertex,
         _di_vx,
         _di_vy,
@@ -269,23 +265,21 @@ end
     third = T(1) / T(3)
 
     @inbounds begin
-        if all((i, j, k) .≤ size(∇V))
+        if all((i, j, k) .≤ size(εxx))
             _dx, _dy, _dz = @dxi(_di_vertex, i, j, k)
             dVx_dx = (Vx[i + 1, j + 1, k + 1] - Vx[i, j + 1, k + 1]) * _dx
             dVy_dy = (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j, k + 1]) * _dy
             dVz_dz = (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k]) * _dz
             div_ijk = dVx_dx + dVy_dy + dVz_dz
-            ∇V[i, j, k] = div_ijk
 
             div_third = div_ijk * third
             εxx[i, j, k] = dVx_dx - div_third
             εyy[i, j, k] = dVy_dy - div_third
             εzz[i, j, k] = dVz_dz - div_third
 
-            # fused pressure residual + numerical pressure (reuses `div_ijk` in-register)
-            RP_ijk = _RP_cell(P[i, j, k], P0[i, j, k], div_ijk, Q[i, j, k], ηb[i, j, k], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j, k)
-            RP[i, j, k] = RP_ijk
-            P_num[i, j, k] = γ_eff[i, j, k] * RP_ijk
+            # fused pressure residual (reuses `div_ijk` in-register); the numerical pressure
+            # P_num = γ_eff·RP is folded into θc (with ΔPψ) downstream by the stress kernel.
+            RP[i, j, k] = _RP_cell(P[i, j, k], P0[i, j, k], div_ijk, Q[i, j, k], ηb[i, j, k], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j, k)
         end
 
         if all((i, j, k) .≤ size(εyz))
@@ -663,9 +657,12 @@ end
     return dVdτ_new, dVdτ_new * β * dτ
 end
 
-# Fuses `compute_DR_residual_V!` (velocity residual R = ∂ⱼτiⱼ − ∂ᵢ(P + P_num + ΔPψ) − ρgᵢ, /Dᵢ)
-# with the damped update of `update_V_damping_DR_V!`. R[I] is written to global memory (needed by
-# the residual norm / λmin) and immediately reused in-register for the velocity update.
+# Fuses `compute_DR_residual_V!` (velocity residual R = ∂ⱼτiⱼ − ∂ᵢ(P + θc) − ρgᵢ, /Dᵢ, where the
+# small pressure correction θc = P_num + ΔPψ is assembled once per iteration by the stress kernel)
+# with the damped update of `update_V_damping_DR_V!`. Folding only the two small corrections (not the
+# large hydrostatic P) collapses three neighbour-stencil reads into two while keeping P differenced
+# at full precision. R[I] is written to global memory (needed by the residual norm / λmin) and
+# immediately reused in-register for the velocity update.
 @parallel_indices (i, j) function compute_DR_residual_update_V!(
         Rx::AbstractArray{T, 2},
         Ry,
@@ -674,8 +671,7 @@ end
         dVxdτ,
         dVydτ,
         P,
-        P_num,
-        ΔPψ,
+        θc,
         τxx,
         τyy,
         τxy,
@@ -701,7 +697,7 @@ end
             _dy_v = @dy(_di_vertex, j)
             Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
-            Rx_ij = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(P_num) - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j]
+            Rx_ij = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(θc) - av_xa(ρgx)) / Dx[i, j]
             Rx[i, j] = Rx_ij
 
             dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
@@ -713,7 +709,7 @@ end
             _dx_v = @dx(_di_vertex, i)
             Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-            Ry_ij = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(P_num) - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j]
+            Ry_ij = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(θc) - av_ya(ρgy)) / Dy[i, j]
             Ry[i, j] = Ry_ij
 
             dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij, αVy[i, j], βVy[i, j], dτVy[i, j])
@@ -736,8 +732,7 @@ end
         dVydτ,
         dVzdτ,
         P,
-        P_num,
-        ΔPψ,
+        θc,
         τxx,
         τyy,
         τzz,
@@ -782,7 +777,7 @@ end
             Rx_ijk =
                 (
                 d_xa(τxx, _dx) + d_yi(τxy, _dy) + d_zi(τxz, _dz) -
-                    d_xa(P, _dx) - d_xa(P_num, _dx) - d_xa(ΔPψ, _dx) - av_x(ρgx)
+                    d_xa(P, _dx) - d_xa(θc, _dx) - av_x(ρgx)
             ) / Dx[i, j, k]
             Rx[i, j, k] = Rx_ijk
 
@@ -798,7 +793,7 @@ end
             Ry_ijk =
                 (
                 d_ya(τyy, _dy) + d_xi(τxy, _dx) + d_zi(τyz, _dz) -
-                    d_ya(P, _dy) - d_ya(P_num, _dy) - d_ya(ΔPψ, _dy) - av_y(ρgy)
+                    d_ya(P, _dy) - d_ya(θc, _dy) - av_y(ρgy)
             ) / Dy[i, j, k]
             Ry[i, j, k] = Ry_ijk
 
@@ -814,7 +809,7 @@ end
             Rz_ijk =
                 (
                 d_za(τzz, _dz) + d_xi(τxz, _dx) + d_yi(τyz, _dy) -
-                    d_za(P, _dz) - d_za(P_num, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz)
+                    d_za(P, _dz) - d_za(θc, _dz) - av_z(ρgz)
             ) / Dz[i, j, k]
             Rz[i, j, k] = Rz_ijk
 

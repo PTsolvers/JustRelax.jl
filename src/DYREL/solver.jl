@@ -108,7 +108,10 @@ function _solve_DYREL!(
     err_evo_P = Float64[]
     err_evo_it = Float64[]
     itg = 0
-    P_num = dyrel.P_num
+    # small pressure correction θc = P_num + ΔPψ = γ_eff·RP + ΔPψ, assembled by the stress kernel and
+    # read (alongside the separately-differenced P) by the momentum kernel. Reuses the dyrel.P_num
+    # scratch — P_num is no longer materialized separately.
+    θc = dyrel.P_num
 
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
@@ -120,11 +123,11 @@ function _solve_DYREL!(
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
 
-        # compute divergence, deviatoric strain rate, pressure residual and P_num in one pass
-        compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args)
+        # compute divergence, deviatoric strain rate and pressure residual in one pass
+        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
 
-        # compute deviatoric stress and refresh τII viscosity in one pass
-        compute_stress_viscosity_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+        # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
+        compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)
         # update_halo!(stokes.τ.yy_v)
@@ -186,11 +189,11 @@ function _solve_DYREL!(
             # Pseudo-old dudes (only needed by compute_λminV! on residual-check iterations)
             iszero(iter % nout) && foreach(copyto!, residuals0, residuals)
 
-            # compute divergence, deviatoric strain rate, pressure residual and P_num in one pass
-            compute_∇V_strain_rate_RP!(stokes, dyrel, P_num, rheology, phase_ratios, _di, ni, dt, args)
+            # compute divergence, deviatoric strain rate and pressure residual in one pass
+            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
 
-            # Deviatoric stress and τII viscosity refresh in one pass
-            compute_stress_viscosity_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+            # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
+            compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
             # update_halo!(stokes.λv)
             # batch the vertex-stress halos (+ vertex viscosity, refreshed above in the fused
             # kernel from pre-halo stress) into a single MPI exchange, so shared boundary vertices
@@ -201,15 +204,14 @@ function _solve_DYREL!(
                 update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
             end
 
-            # Velocity residuals + damped pseudo-transient velocity update (fused; P_num already
-            # computed above in compute_∇V_strain_rate_RP!)
+            # Velocity residuals + damped pseudo-transient velocity update (fused; the small pressure
+            # correction θc = γ_eff·RP + ΔPψ was assembled by the stress kernel above; P stays separate)
             @parallel (@idx ni) compute_DR_residual_update_V!(
                 residuals...,
                 @velocity(stokes)...,
                 fields.dVdτ...,
                 stokes.P,
-                P_num,
-                stokes.ΔPψ,
+                θc,
                 @stress(stokes)...,
                 ρg...,
                 fields.D...,
@@ -263,6 +265,10 @@ function _solve_DYREL!(
 
     # absorb plastic pressure correction into P (mirrors APT: stokes.P .= θ = P + ΔPψ)
     @. stokes.P += stokes.ΔPψ
+
+    # refresh the ∇V diagnostic from the converged velocity field (it is not stored inside the
+    # DYREL/PH loop — see compute_∇V_strain_rate_RP!)
+    @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di.vertex)
 
     # compute vorticity
     compute_vorticity!(stokes, _di, ni, dim)

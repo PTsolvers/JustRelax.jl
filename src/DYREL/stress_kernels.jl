@@ -98,7 +98,7 @@ end
 # τ instead of relaunching a kernel that reads the stress tensor back. The τII-viscosity update
 # is purely local (same cell), so this is race-free and needs no halo.
 function compute_stress_viscosity_DRYEL!(
-        stokes, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
+        stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
     )
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_viscosity_DRYEL!(
@@ -118,6 +118,7 @@ function compute_stress_viscosity_DRYEL!(
         stokes.viscosity.ηv,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
+        θc, stokes.R.RP, γ_eff,                             # small pressure correction θc = γ_eff·RP + ΔPψ
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt,
         viscosity_relaxation, args, viscosity_cutoff, linear_viscosity,
     )
@@ -150,6 +151,7 @@ end
         ηv,
         η_vep,
         ΔPψ,
+        θc, RP, γ_eff,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
         ν, visc_args, cutoff, linear_viscosity
     )
@@ -202,6 +204,12 @@ end
             η_vep[I...] = ηvep_I
             λ[I...] = λ_I
             ΔPψ[I...] = ΔPψ_I
+
+            # small pressure correction θc = P_num + ΔPψ = γ_eff·RP + ΔPψ (ΔPψ_I in-register). Both
+            # terms are small corrections of similar magnitude, so summing them is precision-safe;
+            # the large hydrostatic P is kept separate in the momentum kernel. Collapses the momentum
+            # stencil from three pressure reads (P, P_num, ΔPψ) to two (P, θc).
+            θc[I...] = γ_eff[I...] * RP[I...] + ΔPψ_I
 
             # fused τII-viscosity update at the center (reuses in-register stress)
             if !linear_viscosity

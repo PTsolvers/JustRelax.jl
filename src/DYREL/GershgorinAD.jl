@@ -69,53 +69,53 @@ end
 
     return nothing
 end
-# ToDO What about boundary treatment?
+
 @inline function ∂Rx∂Vx(dyrel, i, j, m)
     if m == 1
         # ∂Rx[i,j] / ∂Vx[i+1,j] (south)
-        return dyrel.∂Rx_∂τxy[1][i,j] * dyrel.∂τv_∂ε[9][i+1,j] * dyrel.∂εxy_∂Vx[1][i+1,j]
+        return dyrel.∂Rx_∂τxy[1][i,j] * dyrel.∂τxyv_∂εxy[i+1,j] * dyrel.∂εxy_∂Vx[1][i+1,j]
     elseif m == 2
         # ∂Rx[i,j] / ∂Vx[i,j+1] (west)
-        return dyrel.∂Rx_∂τxx[1][i,j] * dyrel.∂τc_∂ε[1][i,j] * dyrel.∂εxx_∂Vx[1][i,j] +
+        return dyrel.∂Rx_∂τxx[1][i,j] * dyrel.∂τxxc_∂εxx[i,j] * dyrel.∂εxx_∂Vx[1][i,j] +
                dyrel.∂Rx_∂P_num[1][i,j] * (-dyrel.γ_eff[i,j] * dyrel.∂∇V_∂Vx[1][i,j])
     elseif m == 3
         # ∂Rx[i,j] / ∂Vx[i+1,j+1] (center)
-        return dyrel.∂Rx_∂τxx[2][i,j] * dyrel.∂τc_∂ε[1][i+1,j] * dyrel.∂εxx_∂Vx[1][i+1,j] +
-               dyrel.∂Rx_∂τxx[1][i,j] * dyrel.∂τc_∂ε[1][i,j] * dyrel.∂εxx_∂Vx[2][i,j] +
-               dyrel.∂Rx_∂τxy[2][i,j] * dyrel.∂τv_∂ε[9][i+1,j+1] * dyrel.∂εxy_∂Vx[1][i+1,j+1] +
-               dyrel.∂Rx_∂τxy[1][i,j] * dyrel.∂τv_∂ε[9][i+1,j] * dyrel.∂εxy_∂Vx[2][i+1,j] +
+        return dyrel.∂Rx_∂τxx[2][i,j] * dyrel.∂τxxc_∂εxx[i+1,j] * dyrel.∂εxx_∂Vx[1][i+1,j] +
+               dyrel.∂Rx_∂τxx[1][i,j] * dyrel.∂τxxc_∂εxx[i,j] * dyrel.∂εxx_∂Vx[2][i,j] +
+               dyrel.∂Rx_∂τxy[2][i,j] * dyrel.∂τxyv_∂εxy[i+1,j+1] * dyrel.∂εxy_∂Vx[1][i+1,j+1] +
+               dyrel.∂Rx_∂τxy[1][i,j] * dyrel.∂τxyv_∂εxy[i+1,j] * dyrel.∂εxy_∂Vx[2][i+1,j] +
                dyrel.∂Rx_∂P_num[2][i,j] * (-dyrel.γ_eff[i+1,j] * dyrel.∂∇V_∂Vx[1][i+1,j]) +
                dyrel.∂Rx_∂P_num[1][i,j] * (-dyrel.γ_eff[i,j] * dyrel.∂∇V_∂Vx[2][i,j])
     elseif m == 4
         # ∂Rx[i,j] / ∂Vx[i+2,j+1] (east)
-        return dyrel.∂Rx_∂τxx[2][i,j] * dyrel.∂τc_∂ε[1][i+1,j] * dyrel.∂εxx_∂Vx[2][i+1,j] +
+        return dyrel.∂Rx_∂τxx[2][i,j] * dyrel.∂τxxc_∂εxx[i+1,j] * dyrel.∂εxx_∂Vx[2][i+1,j] +
                dyrel.∂Rx_∂P_num[2][i,j] * (-dyrel.γ_eff[i+1,j] * dyrel.∂∇V_∂Vx[2][i+1,j])
     else
         # ∂Rx[i,j] / ∂Vx[i+1,j+2] (north)
-        return dyrel.∂Rx_∂τxy[2][i,j] * dyrel.∂τv_∂ε[9][i+1,j+1] * dyrel.∂εxy_∂Vx[2][i+1,j+1]
+        return dyrel.∂Rx_∂τxy[2][i,j] * dyrel.∂τxyv_∂εxy[i+1,j+1] * dyrel.∂εxy_∂Vx[2][i+1,j+1]
     end
 end
 
 @inline function ∂Rx∂Vy(dyrel, i, j, m)
     if m == 1
         # ∂Rx[i,j] / ∂Vy[i+1,j] (southwest)
-        return dyrel.∂Rx_∂τxx[1][i,j] * dyrel.∂τc_∂ε[1][i,j] * dyrel.∂εxx_∂Vy[1][i,j] +
-               dyrel.∂Rx_∂τxy[1][i,j] * dyrel.∂τv_∂ε[9][i+1,j] * dyrel.∂εxy_∂Vy[1][i+1,j] +
+        return dyrel.∂Rx_∂τxx[1][i,j] * dyrel.∂τxxc_∂εxx[i,j] * dyrel.∂εxx_∂Vy[1][i,j] +
+               dyrel.∂Rx_∂τxy[1][i,j] * dyrel.∂τxyv_∂εxy[i+1,j] * dyrel.∂εxy_∂Vy[1][i+1,j] +
                dyrel.∂Rx_∂P_num[1][i,j] * (-dyrel.γ_eff[i,j] * dyrel.∂∇V_∂Vy[1][i,j])
     elseif m == 2
         # ∂Rx[i,j] / ∂Vy[i+2,j] (southeast)
-        return dyrel.∂Rx_∂τxx[2][i,j] * dyrel.∂τc_∂ε[1][i+1,j] * dyrel.∂εxx_∂Vy[1][i+1,j] +
-               dyrel.∂Rx_∂τxy[1][i,j] * dyrel.∂τv_∂ε[9][i+1,j] * dyrel.∂εxy_∂Vy[2][i+1,j] +
+        return dyrel.∂Rx_∂τxx[2][i,j] * dyrel.∂τxxc_∂εxx[i+1,j] * dyrel.∂εxx_∂Vy[1][i+1,j] +
+               dyrel.∂Rx_∂τxy[1][i,j] * dyrel.∂τxyv_∂εxy[i+1,j] * dyrel.∂εxy_∂Vy[2][i+1,j] +
                dyrel.∂Rx_∂P_num[2][i,j] * (-dyrel.γ_eff[i+1,j] * dyrel.∂∇V_∂Vy[1][i+1,j])
     elseif m == 3
         # ∂Rx[i,j] / ∂Vy[i+1,j+1] (northwest)
-        return dyrel.∂Rx_∂τxx[1][i,j] * dyrel.∂τc_∂ε[1][i,j] * dyrel.∂εxx_∂Vy[2][i,j] +
-               dyrel.∂Rx_∂τxy[2][i,j] * dyrel.∂τv_∂ε[9][i+1,j+1] * dyrel.∂εxy_∂Vy[1][i+1,j+1] +
+        return dyrel.∂Rx_∂τxx[1][i,j] * dyrel.∂τxxc_∂εxx[i,j] * dyrel.∂εxx_∂Vy[2][i,j] +
+               dyrel.∂Rx_∂τxy[2][i,j] * dyrel.∂τxyv_∂εxy[i+1,j+1] * dyrel.∂εxy_∂Vy[1][i+1,j+1] +
                dyrel.∂Rx_∂P_num[1][i,j] * (-dyrel.γ_eff[i,j] * dyrel.∂∇V_∂Vy[2][i,j])
     else
         # ∂Rx[i,j] / ∂Vy[i+2,j+1] (northeast)
-        return dyrel.∂Rx_∂τxx[2][i,j] * dyrel.∂τc_∂ε[1][i+1,j] * dyrel.∂εxx_∂Vy[2][i+1,j] +
-               dyrel.∂Rx_∂τxy[2][i,j] * dyrel.∂τv_∂ε[9][i+1,j+1] * dyrel.∂εxy_∂Vy[2][i+1,j+1] +
+        return dyrel.∂Rx_∂τxx[2][i,j] * dyrel.∂τxxc_∂εxx[i+1,j] * dyrel.∂εxx_∂Vy[2][i+1,j] +
+               dyrel.∂Rx_∂τxy[2][i,j] * dyrel.∂τxyv_∂εxy[i+1,j+1] * dyrel.∂εxy_∂Vy[2][i+1,j+1] +
                dyrel.∂Rx_∂P_num[2][i,j] * (-dyrel.γ_eff[i+1,j] * dyrel.∂∇V_∂Vy[2][i+1,j])
     end
 end
@@ -123,23 +123,23 @@ end
 @inline function ∂Ry∂Vx(dyrel, i, j, m)
     if m == 1
         # ∂Ry[i,j] / ∂Vx[i,j+1] (southwest)
-        return dyrel.∂Ry_∂τyy[1][i,j] * dyrel.∂τc_∂ε[5][i,j] * dyrel.∂εyy_∂Vx[1][i,j] +
-               dyrel.∂Ry_∂τxy[1][i,j] * dyrel.∂τv_∂ε[9][i,j+1] * dyrel.∂εxy_∂Vx[1][i,j+1] +
+        return dyrel.∂Ry_∂τyy[1][i,j] * dyrel.∂τyyc_∂εyy[i,j] * dyrel.∂εyy_∂Vx[1][i,j] +
+               dyrel.∂Ry_∂τxy[1][i,j] * dyrel.∂τxyv_∂εxy[i,j+1] * dyrel.∂εxy_∂Vx[1][i,j+1] +
                dyrel.∂Ry_∂P_num[1][i,j] * (-dyrel.γ_eff[i,j] * dyrel.∂∇V_∂Vx[1][i,j])
     elseif m == 2
         # ∂Ry[i,j] / ∂Vx[i+1,j+1] (southeast)
-        return dyrel.∂Ry_∂τyy[1][i,j] * dyrel.∂τc_∂ε[5][i,j] * dyrel.∂εyy_∂Vx[2][i,j] +
-               dyrel.∂Ry_∂τxy[2][i,j] * dyrel.∂τv_∂ε[9][i+1,j+1] * dyrel.∂εxy_∂Vx[1][i+1,j+1] +
+        return dyrel.∂Ry_∂τyy[1][i,j] * dyrel.∂τyyc_∂εyy[i,j] * dyrel.∂εyy_∂Vx[2][i,j] +
+               dyrel.∂Ry_∂τxy[2][i,j] * dyrel.∂τxyv_∂εxy[i+1,j+1] * dyrel.∂εxy_∂Vx[1][i+1,j+1] +
                dyrel.∂Ry_∂P_num[1][i,j] * (-dyrel.γ_eff[i,j] * dyrel.∂∇V_∂Vx[2][i,j])
     elseif m == 3
         # ∂Ry[i,j] / ∂Vx[i,j+2] (northwest)
-        return dyrel.∂Ry_∂τyy[2][i,j] * dyrel.∂τc_∂ε[5][i,j+1] * dyrel.∂εyy_∂Vx[1][i,j+1] +
-               dyrel.∂Ry_∂τxy[1][i,j] * dyrel.∂τv_∂ε[9][i,j+1] * dyrel.∂εxy_∂Vx[2][i,j+1] +
+        return dyrel.∂Ry_∂τyy[2][i,j] * dyrel.∂τyyc_∂εyy[i,j+1] * dyrel.∂εyy_∂Vx[1][i,j+1] +
+               dyrel.∂Ry_∂τxy[1][i,j] * dyrel.∂τxyv_∂εxy[i,j+1] * dyrel.∂εxy_∂Vx[2][i,j+1] +
                dyrel.∂Ry_∂P_num[2][i,j] * (-dyrel.γ_eff[i,j+1] * dyrel.∂∇V_∂Vx[1][i,j+1])
     else
         # ∂Ry[i,j] / ∂Vx[i+1,j+2] (northeast)
-        return dyrel.∂Ry_∂τyy[2][i,j] * dyrel.∂τc_∂ε[5][i,j+1] * dyrel.∂εyy_∂Vx[2][i,j+1] +
-               dyrel.∂Ry_∂τxy[2][i,j] * dyrel.∂τv_∂ε[9][i+1,j+1] * dyrel.∂εxy_∂Vx[2][i+1,j+1] +
+        return dyrel.∂Ry_∂τyy[2][i,j] * dyrel.∂τyyc_∂εyy[i,j+1] * dyrel.∂εyy_∂Vx[2][i,j+1] +
+               dyrel.∂Ry_∂τxy[2][i,j] * dyrel.∂τxyv_∂εxy[i+1,j+1] * dyrel.∂εxy_∂Vx[2][i+1,j+1] +
                dyrel.∂Ry_∂P_num[2][i,j] * (-dyrel.γ_eff[i,j+1] * dyrel.∂∇V_∂Vx[2][i,j+1])
     end
 end
@@ -147,25 +147,25 @@ end
 @inline function ∂Ry∂Vy(dyrel, i, j, m)
     if m == 1
         # ∂Ry[i,j] / ∂Vy[i+1,j] (south)
-        return dyrel.∂Ry_∂τyy[1][i,j] * dyrel.∂τc_∂ε[5][i,j] * dyrel.∂εyy_∂Vy[1][i,j] +
+        return dyrel.∂Ry_∂τyy[1][i,j] * dyrel.∂τyyc_∂εyy[i,j] * dyrel.∂εyy_∂Vy[1][i,j] +
                dyrel.∂Ry_∂P_num[1][i,j] * (-dyrel.γ_eff[i,j] * dyrel.∂∇V_∂Vy[1][i,j])
     elseif m == 2
         # ∂Ry[i,j] / ∂Vy[i,j+1] (west)
-        return dyrel.∂Ry_∂τxy[1][i,j] * dyrel.∂τv_∂ε[9][i,j+1] * dyrel.∂εxy_∂Vy[1][i,j+1]
+        return dyrel.∂Ry_∂τxy[1][i,j] * dyrel.∂τxyv_∂εxy[i,j+1] * dyrel.∂εxy_∂Vy[1][i,j+1]
     elseif m == 3
         # ∂Ry[i,j] / ∂Vy[i+1,j+1] (center)
-        return dyrel.∂Ry_∂τyy[2][i,j] * dyrel.∂τc_∂ε[5][i,j+1] * dyrel.∂εyy_∂Vy[1][i,j+1] +
-               dyrel.∂Ry_∂τyy[1][i,j] * dyrel.∂τc_∂ε[5][i,j] * dyrel.∂εyy_∂Vy[2][i,j] +
-               dyrel.∂Ry_∂τxy[2][i,j] * dyrel.∂τv_∂ε[9][i+1,j+1] * dyrel.∂εxy_∂Vy[1][i+1,j+1] +
-               dyrel.∂Ry_∂τxy[1][i,j] * dyrel.∂τv_∂ε[9][i,j+1] * dyrel.∂εxy_∂Vy[2][i,j+1] +
+        return dyrel.∂Ry_∂τyy[2][i,j] * dyrel.∂τyyc_∂εyy[i,j+1] * dyrel.∂εyy_∂Vy[1][i,j+1] +
+               dyrel.∂Ry_∂τyy[1][i,j] * dyrel.∂τyyc_∂εyy[i,j] * dyrel.∂εyy_∂Vy[2][i,j] +
+               dyrel.∂Ry_∂τxy[2][i,j] * dyrel.∂τxyv_∂εxy[i+1,j+1] * dyrel.∂εxy_∂Vy[1][i+1,j+1] +
+               dyrel.∂Ry_∂τxy[1][i,j] * dyrel.∂τxyv_∂εxy[i,j+1] * dyrel.∂εxy_∂Vy[2][i,j+1] +
                dyrel.∂Ry_∂P_num[2][i,j] * (-dyrel.γ_eff[i,j+1] * dyrel.∂∇V_∂Vy[1][i,j+1]) +
                dyrel.∂Ry_∂P_num[1][i,j] * (-dyrel.γ_eff[i,j] * dyrel.∂∇V_∂Vy[2][i,j])
     elseif m == 4
         # ∂Ry[i,j] / ∂Vy[i+2,j+1] (east)
-        return dyrel.∂Ry_∂τxy[2][i,j] * dyrel.∂τv_∂ε[9][i+1,j+1] * dyrel.∂εxy_∂Vy[2][i+1,j+1]
+        return dyrel.∂Ry_∂τxy[2][i,j] * dyrel.∂τxyv_∂εxy[i+1,j+1] * dyrel.∂εxy_∂Vy[2][i+1,j+1]
     else
         # ∂Ry[i,j] / ∂Vy[i+1,j+2] (north)
-        return dyrel.∂Ry_∂τyy[2][i,j] * dyrel.∂τc_∂ε[5][i,j+1] * dyrel.∂εyy_∂Vy[2][i,j+1] +
+        return dyrel.∂Ry_∂τyy[2][i,j] * dyrel.∂τyyc_∂εyy[i,j+1] * dyrel.∂εyy_∂Vy[2][i,j+1] +
                dyrel.∂Ry_∂P_num[2][i,j] * (-dyrel.γ_eff[i,j+1] * dyrel.∂∇V_∂Vy[2][i,j+1])
     end
 end

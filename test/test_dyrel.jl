@@ -49,14 +49,9 @@ end
         @test size(dyrel.dVydτ) == (nx, ny - 1)
         @test size(dyrel.βVx) == (nx - 1, ny)
         @test size(dyrel.αVy) == (nx, ny - 1)
-        @test length(dyrel.∂τc_∂ε) == 9
-        @test length(dyrel.∂τv_∂ε) == 9
+        @test size(dyrel.∂τxxc_∂εxx) == (nx, ny)
+        @test size(dyrel.∂τxyv_∂εxy) == (nx + 1, ny + 1)
         @test length(dyrel.∂ΔPψc_∂ε) == 3
-        @test length(dyrel.∂ΔPψc_∂η) == 3
-        @test length(dyrel.∂τc_∂η) == 3
-        @test length(dyrel.∂τv_∂η) == 3
-        @test length(dyrel.∂ηc_∂ε) == 3
-        @test length(dyrel.∂ηv_∂ε) == 3
         @test length(dyrel.∂εxx_∂Vx) == 2
         @test length(dyrel.∂εyy_∂Vx) == 2
         @test length(dyrel.∂∇V_∂Vx) == 2
@@ -69,14 +64,9 @@ end
         @test length(dyrel.∂Rx_∂P_num) == 2
         @test length(dyrel.∂Ry_∂τyy) == 2
         @test length(dyrel.∂Ry_∂P_num) == 2
-        @test size(dyrel.∂τc_∂ε[1]) == (nx, ny)
-        @test size(dyrel.∂τv_∂ε[1]) == (nx + 1, ny + 1)
+        @test size(dyrel.∂τxxc_∂εxx) == (nx, ny)
+        @test size(dyrel.∂τxxv_∂εxx) == (nx + 1, ny + 1)
         @test size(dyrel.∂ΔPψc_∂ε[1]) == (nx, ny)
-        @test size(dyrel.∂ΔPψc_∂η[1]) == (nx, ny)
-        @test size(dyrel.∂τc_∂η[1]) == (nx, ny)
-        @test size(dyrel.∂τv_∂η[1]) == (nx + 1, ny + 1)
-        @test size(dyrel.∂ηc_∂ε[1]) == (nx, ny)
-        @test size(dyrel.∂ηv_∂ε[1]) == (nx + 1, ny + 1)
         @test size(dyrel.∂εxx_∂Vx[1]) == (nx, ny)
         @test size(dyrel.∂εyy_∂Vx[1]) == (nx, ny)
         @test size(dyrel.∂∇V_∂Vx[1]) == (nx, ny)
@@ -116,14 +106,9 @@ end
         @test size(dyrel.βVx) == (nx - 1, ny, nz)
         @test size(dyrel.αVy) == (nx, ny - 1, nz)
         @test size(dyrel.cVz) == (nx, ny, nz - 1)
-        @test length(dyrel.∂τc_∂ε) == 1
-        @test length(dyrel.∂τv_∂ε) == 1
+        @test size(dyrel.∂τxxc_∂εxx) == (1, 1, 1)
+        @test size(dyrel.∂τxyv_∂εxy) == (1, 1, 1)
         @test length(dyrel.∂ΔPψc_∂ε) == 1
-        @test length(dyrel.∂ΔPψc_∂η) == 1
-        @test length(dyrel.∂τc_∂η) == 1
-        @test length(dyrel.∂τv_∂η) == 1
-        @test length(dyrel.∂ηc_∂ε) == 1
-        @test length(dyrel.∂ηv_∂ε) == 1
         @test length(dyrel.∂εxx_∂Vx) == 1
         @test length(dyrel.∂εyy_∂Vx) == 1
         @test length(dyrel.∂∇V_∂Vx) == 1
@@ -259,8 +244,8 @@ end
         dyrel.∂εxy_∂Vx[2][3, 2] = 11.0
         dyrel.∂εxy_∂Vx[1][3, 3] = 13.0
 
-        dyrel.∂τc_∂ε[1] .= 1.0
-        dyrel.∂τv_∂ε[9] .= 1.0
+        dyrel.∂τxxc_∂εxx .= 1.0
+        dyrel.∂τxyv_∂εxy .= 1.0
         dyrel.∂ΔPψc_∂ε[1] .= 1.0
         dyrel.γ_eff[2, 2] = 10.0
         dyrel.γ_eff[3, 2] = 20.0
@@ -395,26 +380,17 @@ end
     #     dyrel = JustRelax2D.DYREL(CPUBackend, (3, 3))
     #     dyrel.γ_eff .= 2.0
 
-    #     dyrel.∂τc_∂ε[1] .= 1.0
-    #     dyrel.∂τc_∂ε[2] .= 2.0
-    #     dyrel.∂τc_∂ε[3] .= 4.0
-    #     dyrel.∂τc_∂η[1] .= 3.0
-    #     dyrel.∂ηc_∂ε[1] .= 5.0
-    #     dyrel.∂ηc_∂ε[2] .= 7.0
-    #     dyrel.∂ηc_∂ε[3] .= 11.0
+    #     dyrel.∂τxxc_∂εxx .= 1.0
+    #     dyrel.∂τxxc_∂εyy .= 2.0
+    #     dyrel.∂τxxc_∂εxy .= 4.0
 
-    #     dyrel.∂τv_∂ε[7] .= 13.0
-    #     dyrel.∂τv_∂ε[8] .= 17.0
-    #     dyrel.∂τv_∂ε[9] .= 19.0
-    #     dyrel.∂τv_∂η[3] .= 23.0
-    #     dyrel.∂ηv_∂ε[1] .= 29.0
-    #     dyrel.∂ηv_∂ε[2] .= 31.0
-    #     dyrel.∂ηv_∂ε[3] .= 37.0
+    #     dyrel.∂τxyv_∂εxx .= 13.0
+    #     dyrel.∂τxyv_∂εyy .= 17.0
+    #     dyrel.∂τxyv_∂εxy .= 19.0
 
     #     dyrel.∂ΔPψc_∂ε[1] .= 41.0
     #     dyrel.∂ΔPψc_∂ε[2] .= 43.0
     #     dyrel.∂ΔPψc_∂ε[3] .= 47.0
-    #     dyrel.∂ΔPψc_∂η[1] .= 53.0
 
     #     jacobian_entry = JustRelax2D.local_Rx_Vx_gershgorin_entry(
     #         dyrel,
@@ -459,19 +435,9 @@ end
     #     stokes.viscosity.ηv .= 10.0
 
     #     dyrel = JustRelax2D.DYREL(backend_JR, ni)
-    #     foreach(A -> fill!(A, NaN), dyrel.∂τc_∂η)
-    #     foreach(A -> fill!(A, NaN), dyrel.∂τv_∂η)
-    #     foreach(A -> fill!(A, NaN), dyrel.∂ΔPψc_∂η)
     #     JustRelax2D.compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, 1.0, Inf, true)
 
     #     expected_∂τ_∂η = (2.0, -1.0, 0.5)
-    #     @test all(dyrel.∂τc_∂η[1] .≈ expected_∂τ_∂η[1])
-    #     @test all(dyrel.∂τc_∂η[2] .≈ expected_∂τ_∂η[2])
-    #     @test all(dyrel.∂τc_∂η[3] .≈ expected_∂τ_∂η[3])
-    #     @test all(dyrel.∂τv_∂η[1] .≈ expected_∂τ_∂η[1])
-    #     @test all(dyrel.∂τv_∂η[2] .≈ expected_∂τ_∂η[2])
-    #     @test all(dyrel.∂τv_∂η[3] .≈ expected_∂τ_∂η[3])
-    #     @test all(iszero, dyrel.∂ΔPψc_∂η[1])
 
     #     pow = GeoParams.PowerlawViscous(; η0 = 10.0, n = 3, ε0 = 1.0)
     #     rheology_powerlaw = (
@@ -482,8 +448,6 @@ end
     #         ),
     #     )
     #     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
-    #     foreach(A -> fill!(A, NaN), dyrel.∂ηc_∂ε)
-    #     foreach(A -> fill!(A, NaN), dyrel.∂ηv_∂ε)
     #     JustRelax2D.update_viscosity_εII!(
     #         stokes,
     #         phase_ratios,
@@ -491,16 +455,8 @@ end
     #         rheology_powerlaw,
     #         (-Inf, Inf);
     #         do_partials = true,
-    #         ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
     #     )
 
-    #     expected_∂η_∂ε = (5 * (2 * 1.0 - 0.5), 5 * (2 * -0.5 + 1.0), 5 * (2 * 0.25))
-    #     @test all(dyrel.∂ηc_∂ε[1] .≈ expected_∂η_∂ε[1])
-    #     @test all(dyrel.∂ηc_∂ε[2] .≈ expected_∂η_∂ε[2])
-    #     @test all(dyrel.∂ηc_∂ε[3] .≈ expected_∂η_∂ε[3])
-    #     @test all(dyrel.∂ηv_∂ε[1] .≈ expected_∂η_∂ε[1])
-    #     @test all(dyrel.∂ηv_∂ε[2] .≈ expected_∂η_∂ε[2])
-    #     @test all(dyrel.∂ηv_∂ε[3] .≈ expected_∂η_∂ε[3])
     # end
 
     #=

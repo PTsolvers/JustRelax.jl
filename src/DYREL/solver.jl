@@ -92,7 +92,7 @@ function _solve_DYREL!(
 
     # reset plastic multiplier at the beginning of the time step
     stokes.λ .= 0.0
-    stokes.λv .= 0.0
+    reset_dyrel_vertex_λ!(dyrel_vertex_λ(stokes, dim))
 
     # Iteration loop
     err_min = Inf

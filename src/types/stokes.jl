@@ -179,6 +179,9 @@ struct StokesArrays{A, B, C, D, E, F, T}
     ∇U::T
     λ::T
     λv::T
+    λv_yz::Union{T, Nothing}
+    λv_xz::Union{T, Nothing}
+    λv_xy::Union{T, Nothing}
     ΔPψ::T
 end
 

@@ -250,6 +250,13 @@ end
 function StokesArrays(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end
+
+stokes_vertex_λ_shear(::NTuple{2, Integer}) = (nothing, nothing, nothing)
+function stokes_vertex_λ_shear(ni::NTuple{3, Integer})
+    nx, ny, nz = ni
+    return @zeros(nx, ny + 1, nz + 1), @zeros(nx + 1, ny, nz + 1), @zeros(nx + 1, ny + 1, nz)
+end
+
 """
     StokesArrays(ni::NTuple{N,Integer}) where {N}
 
@@ -274,6 +281,7 @@ Create the Stokes arrays object in 2D or 3D.
 - `∇U`: Displacement gradient
 - `λ` : plastic multiplier @ centers
 - `λv` : plastic multiplier @ vertices
+- `λv_yz`, `λv_xz`, `λv_xy` : 3D plastic multiplier on shear staggered grids
 - `ΔPψ` : pressure correction in dilatant case
 """
 function StokesArrays(ni::NTuple{N, Integer}) where {N}
@@ -297,7 +305,8 @@ function StokesArrays(ni::NTuple{N, Integer}) where {N}
     ∇U = @zeros(ni...)
     λ = @zeros(ni...)
     λv = @zeros(ni .+ 1...)
+    λv_yz, λv_xz, λv_xy = stokes_vertex_λ_shear(ni)
     ΔPψ = @zeros(ni...)
 
-    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, EVol_pl, ε_vol_pl, viscosity, τ_o, R, U, ω, Δε, ∇U, λ, λv, ΔPψ)
+    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, EVol_pl, ε_vol_pl, viscosity, τ_o, R, U, ω, Δε, ∇U, λ, λv, λv_yz, λv_xz, λv_xy, ΔPψ)
 end

@@ -63,7 +63,6 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     ∂τxyv_∂εxx = @zeros(nx + 1, ny + 1)
     ∂τxyv_∂εyy = @zeros(nx + 1, ny + 1)
     ∂τxyv_∂εxy = @zeros(nx + 1, ny + 1)
-    ∂ΔPψc_∂ε = zero_field_tuple(Val(3), nx, ny)
     ∂εxx_∂Vx = zero_field_tuple(Val(2), nx, ny)
     ∂εyy_∂Vx = zero_field_tuple(Val(2), nx, ny)
     ∂∇V_∂Vx = zero_field_tuple(Val(2), nx, ny)
@@ -76,26 +75,21 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     ∂Rx_∂τxy = zero_field_tuple(Val(2), nx - 1, ny)
     ∂Rx_∂P = zero_field_tuple(Val(2), nx - 1, ny)
     ∂Rx_∂P_num = zero_field_tuple(Val(2), nx - 1, ny)
-    ∂Rx_∂ΔPψ = zero_field_tuple(Val(2), nx - 1, ny)
     ∂Ry_∂τyy = zero_field_tuple(Val(2), nx, ny - 1)
     ∂Ry_∂τxy = zero_field_tuple(Val(2), nx, ny - 1)
     ∂Ry_∂P = zero_field_tuple(Val(2), nx, ny - 1)
     ∂Ry_∂P_num = zero_field_tuple(Val(2), nx, ny - 1)
-    ∂Ry_∂ΔPψ = zero_field_tuple(Val(2), nx, ny - 1)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
-    D = typeof(∂ΔPψc_∂ε)
     E = typeof(∂εxx_∂Vx)
-    return JustRelax.DYREL{T, F, D, E}(
+    return JustRelax.DYREL{T, F, E}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
         dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact,
         ∂τxxc_∂εxx, ∂τxxc_∂εyy, ∂τxxc_∂εxy, ∂τyyc_∂εxx, ∂τyyc_∂εyy, ∂τyyc_∂εxy, ∂τxyc_∂εxx, ∂τxyc_∂εyy, ∂τxyc_∂εxy,
         ∂τxxv_∂εxx, ∂τxxv_∂εyy, ∂τxxv_∂εxy, ∂τyyv_∂εxx, ∂τyyv_∂εyy, ∂τyyv_∂εxy, ∂τxyv_∂εxx, ∂τxyv_∂εyy, ∂τxyv_∂εxy,
-        ∂ΔPψc_∂ε,
-        ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy,
-        ∂Rx_∂τxx, ∂Rx_∂τxy, ∂Rx_∂P, ∂Rx_∂P_num, ∂Rx_∂ΔPψ,
-        ∂Ry_∂τyy, ∂Ry_∂τxy, ∂Ry_∂P, ∂Ry_∂P_num, ∂Ry_∂ΔPψ
+        ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy, ∂Rx_∂τxx, ∂Rx_∂τxy, ∂Rx_∂P,
+        ∂Rx_∂P_num, ∂Ry_∂τyy, ∂Ry_∂τxy, ∂Ry_∂P, ∂Ry_∂P_num
     )
 end
 
@@ -151,7 +145,6 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     ∂τxyv_∂εxx = @zeros(1, 1, 1)
     ∂τxyv_∂εyy = @zeros(1, 1, 1)
     ∂τxyv_∂εxy = @zeros(1, 1, 1)
-    ∂ΔPψc_∂ε = zero_field_tuple(Val(1), 1, 1, 1)
     ∂εxx_∂Vx = zero_field_tuple(Val(1), 1, 1, 1)
     ∂εyy_∂Vx = zero_field_tuple(Val(1), 1, 1, 1)
     ∂∇V_∂Vx = zero_field_tuple(Val(1), 1, 1, 1)
@@ -164,26 +157,21 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     ∂Rx_∂τxy = zero_field_tuple(Val(1), 1, 1, 1)
     ∂Rx_∂P = zero_field_tuple(Val(1), 1, 1, 1)
     ∂Rx_∂P_num = zero_field_tuple(Val(1), 1, 1, 1)
-    ∂Rx_∂ΔPψ = zero_field_tuple(Val(1), 1, 1, 1)
     ∂Ry_∂τyy = zero_field_tuple(Val(1), 1, 1, 1)
     ∂Ry_∂τxy = zero_field_tuple(Val(1), 1, 1, 1)
     ∂Ry_∂P = zero_field_tuple(Val(1), 1, 1, 1)
     ∂Ry_∂P_num = zero_field_tuple(Val(1), 1, 1, 1)
-    ∂Ry_∂ΔPψ = zero_field_tuple(Val(1), 1, 1, 1)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
-    D = typeof(∂ΔPψc_∂ε)
     E = typeof(∂εxx_∂Vx)
-    return JustRelax.DYREL{T, F, D, E}(
+    return JustRelax.DYREL{T, F, E}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
         dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact,
         ∂τxxc_∂εxx, ∂τxxc_∂εyy, ∂τxxc_∂εxy, ∂τyyc_∂εxx, ∂τyyc_∂εyy, ∂τyyc_∂εxy, ∂τxyc_∂εxx, ∂τxyc_∂εyy, ∂τxyc_∂εxy,
         ∂τxxv_∂εxx, ∂τxxv_∂εyy, ∂τxxv_∂εxy, ∂τyyv_∂εxx, ∂τyyv_∂εyy, ∂τyyv_∂εxy, ∂τxyv_∂εxx, ∂τxyv_∂εyy, ∂τxyv_∂εxy,
-        ∂ΔPψc_∂ε,
         ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy,
-        ∂Rx_∂τxx, ∂Rx_∂τxy, ∂Rx_∂P, ∂Rx_∂P_num, ∂Rx_∂ΔPψ,
-        ∂Ry_∂τyy, ∂Ry_∂τxy, ∂Ry_∂P, ∂Ry_∂P_num, ∂Ry_∂ΔPψ
+        ∂Rx_∂τxx, ∂Rx_∂τxy, ∂Rx_∂P, ∂Rx_∂P_num, ∂Ry_∂τyy, ∂Ry_∂τxy, ∂Ry_∂P, ∂Ry_∂P_num
     )
 end
 

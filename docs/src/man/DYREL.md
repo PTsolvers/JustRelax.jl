@@ -60,9 +60,7 @@ where the solver keyword arguments are:
 - `viscosity_relaxation` $\rightarrow$ relaxation coefficient for the viscosity. `viscosity_relaxation=1` means no relaxation.
 - `linear_viscosity` $\rightarrow$ if the rheology is linear (viscosity will not be updated during the solver iterations).
 - `viscosity_cutoff` $\rightarrow$ viscosity is clamped so that $\text{viscosity_cutoff}_1 \leq \eta \leq \text{viscosity_cutoff}_2$.
-- `use_gershgorin_ad` $\rightarrow$ use AD-based estimates for the DYREL pseudo-time-step/preconditioner update. This includes strain-rate-dependent viscosity terms through the stored DYREL partial derivative fields. Default is `false`.
-
-When `use_gershgorin_ad = true`, DYREL stores the local partial derivatives needed for the AD Gershgorin estimate, including `∂ηc_∂ε`, `∂ηv_∂ε`, `∂τc_∂η`, `∂τv_∂η`, and `∂ΔPψc_∂η`.
+- `use_gershgorin_ad` $\rightarrow$ use AD-based estimates for the DYREL pseudo-time-step/preconditioner update. Default is `false`.
 
 # Examples
 

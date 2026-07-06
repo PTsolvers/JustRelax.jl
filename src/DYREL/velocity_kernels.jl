@@ -439,8 +439,6 @@ end
             dyrel.∂Rx_∂P[2][i, j]     = ∂R.P[2]
             dyrel.∂Rx_∂P_num[1][i, j] = ∂R.P_num[1]
             dyrel.∂Rx_∂P_num[2][i, j] = ∂R.P_num[2]
-            dyrel.∂Rx_∂ΔPψ[1][i, j]   = ∂R.ΔPψ[1]
-            dyrel.∂Rx_∂ΔPψ[2][i, j]   = ∂R.ΔPψ[2]
         end
     end
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
@@ -473,8 +471,6 @@ end
             dyrel.∂Ry_∂P[2][i, j]     = ∂R.P[2]
             dyrel.∂Ry_∂P_num[1][i, j] = ∂R.P_num[1]
             dyrel.∂Ry_∂P_num[2][i, j] = ∂R.P_num[2]
-            dyrel.∂Ry_∂ΔPψ[1][i, j]   = ∂R.ΔPψ[1]
-            dyrel.∂Ry_∂ΔPψ[2][i, j]   = ∂R.ΔPψ[2]
         end
     end
     return nothing

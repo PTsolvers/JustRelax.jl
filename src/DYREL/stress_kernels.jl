@@ -18,7 +18,6 @@ function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxat
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
         dyrel,
-        dyrel.∂ΔPψc_∂ε,
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, do_partials
     )
     return nothing
@@ -42,7 +41,6 @@ end
         η_vep,
         ΔPψ,
         dyrel,
-        ∂ΔPψc_∂ε,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, do_partials::Bool
     )
 
@@ -99,7 +97,6 @@ end
             if do_partials
                 Jτ_center = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
                 store_stress_jacobian_center!(dyrel, Jτ_center, I...)
-                store_pressure_correction_jacobian!(∂ΔPψc_∂ε, Jτ_center, I...)
             end
         end
     end
@@ -132,10 +129,15 @@ end
     end
 end
 
+@inline function local_stress_τ(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
+    res = compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
+    return SA[res[1], res[2], res[3]]
+end
+
 @inline function local_stress_jacobian_ε(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
     εij_vec = SA[εij...]
     return ForwardDiff.jacobian(
-        ε -> compute_local_stress(Tuple(ε), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII),
+        ε -> local_stress_τ(Tuple(ε), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII),
         εij_vec,
     )
 end
@@ -163,13 +165,6 @@ end
     dyrel.∂τxyv_∂εxx[I...] = Jτ[3, 1]
     dyrel.∂τxyv_∂εyy[I...] = Jτ[3, 2]
     dyrel.∂τxyv_∂εxy[I...] = Jτ[3, 3]
-    return nothing
-end
-
-@inline function store_pressure_correction_jacobian!(∂ΔPψ_∂ε, Jτ, I...)
-    ∂ΔPψ_∂ε[1][I...] = Jτ[9, 1]
-    ∂ΔPψ_∂ε[2][I...] = Jτ[9, 2]
-    ∂ΔPψ_∂ε[3][I...] = Jτ[9, 3]
     return nothing
 end
 
@@ -263,7 +258,6 @@ function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRe
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
         dyrel,
-        dyrel.∂ΔPψc_∂ε,
         ϕ::JustRelax.RockRatio,
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, do_partials
     )
@@ -287,7 +281,6 @@ end
         η_vep,
         ΔPψ,
         dyrel,
-        ∂ΔPψc_∂ε,
         ϕ::JustRelax.RockRatio,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, do_partials::Bool
     )
@@ -353,7 +346,6 @@ end
                 if do_partials
                     Jτ_center = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
                     store_stress_jacobian_center!(dyrel, Jτ_center, I...)
-                    store_pressure_correction_jacobian!(∂ΔPψc_∂ε, Jτ_center, I...)
                 end
 
             else

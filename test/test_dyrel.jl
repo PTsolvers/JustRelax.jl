@@ -51,7 +51,6 @@ end
         @test size(dyrel.αVy) == (nx, ny - 1)
         @test size(dyrel.∂τxxc_∂εxx) == (nx, ny)
         @test size(dyrel.∂τxyv_∂εxy) == (nx + 1, ny + 1)
-        @test length(dyrel.∂ΔPψc_∂ε) == 3
         @test length(dyrel.∂εxx_∂Vx) == 2
         @test length(dyrel.∂εyy_∂Vx) == 2
         @test length(dyrel.∂∇V_∂Vx) == 2
@@ -66,7 +65,6 @@ end
         @test length(dyrel.∂Ry_∂P_num) == 2
         @test size(dyrel.∂τxxc_∂εxx) == (nx, ny)
         @test size(dyrel.∂τxxv_∂εxx) == (nx + 1, ny + 1)
-        @test size(dyrel.∂ΔPψc_∂ε[1]) == (nx, ny)
         @test size(dyrel.∂εxx_∂Vx[1]) == (nx, ny)
         @test size(dyrel.∂εyy_∂Vx[1]) == (nx, ny)
         @test size(dyrel.∂∇V_∂Vx[1]) == (nx, ny)
@@ -108,7 +106,6 @@ end
         @test size(dyrel.cVz) == (nx, ny, nz - 1)
         @test size(dyrel.∂τxxc_∂εxx) == (1, 1, 1)
         @test size(dyrel.∂τxyv_∂εxy) == (1, 1, 1)
-        @test length(dyrel.∂ΔPψc_∂ε) == 1
         @test length(dyrel.∂εxx_∂Vx) == 1
         @test length(dyrel.∂εyy_∂Vx) == 1
         @test length(dyrel.∂∇V_∂Vx) == 1
@@ -246,7 +243,6 @@ end
 
         dyrel.∂τxxc_∂εxx .= 1.0
         dyrel.∂τxyv_∂εxy .= 1.0
-        dyrel.∂ΔPψc_∂ε[1] .= 1.0
         dyrel.γ_eff[2, 2] = 10.0
         dyrel.γ_eff[3, 2] = 20.0
 
@@ -387,10 +383,6 @@ end
     #     dyrel.∂τxyv_∂εxx .= 13.0
     #     dyrel.∂τxyv_∂εyy .= 17.0
     #     dyrel.∂τxyv_∂εxy .= 19.0
-
-    #     dyrel.∂ΔPψc_∂ε[1] .= 41.0
-    #     dyrel.∂ΔPψc_∂ε[2] .= 43.0
-    #     dyrel.∂ΔPψc_∂ε[3] .= 47.0
 
     #     jacobian_entry = JustRelax2D.local_Rx_Vx_gershgorin_entry(
     #         dyrel,

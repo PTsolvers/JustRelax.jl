@@ -1,0 +1,286 @@
+# Load script dependencies
+using GeoParams, CairoMakie
+
+const isCUDA = false
+
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+# using Pkg; Pkg.activate("miniapps")
+
+const backend_JR = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
+
+using JustPIC, JustPIC._3D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend_JP = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+include("Subduction3D_rheology.jl")
+include("Subduction3D_setup.jl")
+
+## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
+
+import ParallelStencil.INDICES
+const idx_k = INDICES[3]
+macro all_k(A)
+    return esc(:($A[$idx_k]))
+end
+
+# Initial pressure profile - not accurate
+@parallel function init_P!(P, ρg, z)
+    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
+    return nothing
+end
+## END OF HELPER FUNCTION ------------------------------------------------------------
+
+## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
+function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vtk = false)
+
+    thickness = 660.0e3 * m
+    η0 = 1.0e20 * Pa * s
+    CharDim = GEO_units(;
+        length = thickness, viscosity = η0, temperature = 1000 * K
+    )
+    li_nd = nondimensionalize(li .* m, CharDim)
+    origin_nd = nondimensionalize(origin .* m, CharDim)
+
+    # Physical domain ------------------------------------
+    ni = nx, ny, nz        # number of cells
+    di = @. li_nd / ni        # grid steps
+    grid = Geometry(ni, li_nd; origin = origin_nd)
+    (; xci, xvi) = grid              # nodes at the center and vertices of the cells
+    # ----------------------------------------------------
+
+    # Physical properties using GeoParams ----------------
+    rheology = init_rheologies(CharDim)
+    dt = nondimensionalize(10.0e3 * yr, CharDim) # diffusive CFL timestep limiter
+    # ----------------------------------------------------
+
+    # Initialize particles -------------------------------
+    nxcell = 40
+    max_xcell = 60
+    min_xcell = 20
+    particles = init_particles(
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
+    grid_vxi = velocity_grids(xci, xvi, di)
+    # material phase & temperature
+    pPhases, pT = init_cell_arrays(particles, Val(2))
+
+    # particle fields for the stress rotation
+    pτ = StressParticles(particles)
+    particle_args = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
+
+    # Initialize particles -------------------------------
+    nxcell, max_xcell, min_xcell = 50, 75, 25
+    particles = init_particles(
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
+    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
+    # temperature
+    particle_args = pPhases, = init_cell_arrays(particles, Val(1))
+
+    # Assign particles phases anomaly
+    phases_device = PTArray(backend_JR)(phases_GMG)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    init_phases!(pPhases, phases_device, particles, xvi)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
+    # ----------------------------------------------------
+
+    # STOKES ---------------------------------------------
+    # Allocate arrays needed for every Stokes problem
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li_nd, di; ϵ_abs = 5.0e-3, ϵ_rel = 5.0e-3, CFL = 0.99 / √3.1)
+    # ----------------------------------------------------
+
+    # TEMPERATURE PROFILE --------------------------------
+    thermal = ThermalArrays(backend_JR, ni)
+    # ----------------------------------------------------
+
+    # Buoyancy forces
+    ρg = ntuple(_ -> @zeros(ni...), Val(3))
+    compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
+    @parallel (@idx ni) init_P!(stokes.P, ρg[3], xci[3])
+    # stokes.P        .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
+    # Rheology
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
+    viscosity_cutoff = nondimensionalize((1.0e18, 1.0e24) .* (Pa * s), CharDim)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+
+    # Boundary conditions
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = false, front = true, back = true),
+        no_slip = (left = false, right = false, top = false, bot = true, front = false, back = false),
+    )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+
+    # IO -------------------------------------------------
+    # if it does not exist, make folder where figures are stored
+    if do_vtk
+        vtk_dir = joinpath(figdir, "vtk")
+        take(vtk_dir)
+    end
+    take(figdir)
+    # ----------------------------------------------------
+
+    local Vx_v, Vy_v, Vz_v
+    if do_vtk
+        Vx_v = @zeros(ni .+ 1...)
+        Vy_v = @zeros(ni .+ 1...)
+        Vz_v = @zeros(ni .+ 1...)
+    end
+
+    # Time loop
+    t, it = 0.0, 0
+    t_max = nondimensionalize(10 * Myr, CharDim)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
+    while t < t_max
+
+        # # interpolate fields from particles to centroids
+        # particle2centroid!(thermal.T, pT, particles)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
+
+        # Stokes solver ----------------
+        t_stokes = @elapsed begin
+        out = solve_DYREL!(
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            rheology,
+            args,
+            grid,
+            dt,
+            igg;
+            kwargs = (;
+                verbose_PH = true,
+                verbose_DR = false,
+                iterMax = 50.0e3,
+                nout = 100,
+                rel_drop = 1.0e-2,
+                λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
+                viscosity_relaxation = 1,
+                viscosity_cutoff = viscosity_cutoff,
+            )
+        )
+        end
+        println("Stokes solver time             ")
+        println("   Total time:      $t_stokes s")
+        println("   Time/iteration:  $(t_stokes / out.iter) s")
+        tensor_invariant!(stokes.ε)
+        dt = compute_dt(stokes, di)
+        # ------------------------------
+
+        # # Thermal solver ---------------
+        # heatdiffusion_PT!(
+        #     thermal,
+        #     pt_thermal,
+        #     thermal_bc,
+        #     rheology,
+        #     args,
+        #     dt,
+        #     di;
+        #     igg     = igg,
+        #     phase   = phase_ratios,
+        #     iterMax = 10e3,
+        #     nout    = 1e2,
+        #     verbose = true,
+        # )
+        # ------------------------------
+
+        # Advection --------------------
+        # advect particles in space
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
+        # advect particles in memory
+        move_particles!(particles, particle_args)
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        @show it += 1
+        t += dt
+
+        # Data I/O and plotting ---------------------
+        if it == 1 || rem(it, 20) == 0
+            # checkpointing(figdir, stokes, thermal.T, η, t)
+            xvi_dim = ntuple(i -> dimensionalize_and_strip(xvi[i], km, CharDim), Val(3))
+            xci_dim = ntuple(i -> dimensionalize_and_strip(xci[i], km, CharDim), Val(3))
+            if do_vtk
+                velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
+                data_v = (;
+                    phase_vertex = [argmax(p) for p in Array(phase_ratios.center)],
+                )
+                data_c = (;
+                    P = dimensionalize_and_strip(Array(stokes.P), Pa, CharDim),
+                    T = dimensionalize_and_strip(Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]), C, CharDim),
+                    τII = dimensionalize_and_strip(Array(stokes.τ.II), Pa, CharDim),
+                    εII = dimensionalize_and_strip(Array(stokes.ε.II), s^-1, CharDim),
+                    η = dimensionalize_and_strip(Array(stokes.viscosity.η), Pa * s, CharDim),
+                    phase_center = [argmax(p) for p in Array(phase_ratios.center)],
+                )
+                velocity_v = (
+                    dimensionalize_and_strip(Array(Vx_v), cm / yr, CharDim),
+                    dimensionalize_and_strip(Array(Vy_v), cm / yr, CharDim),
+                    dimensionalize_and_strip(Array(Vz_v), cm / yr, CharDim),
+                )
+                save_vtk(
+                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                    xvi_dim,
+                    xci_dim,
+                    data_v,
+                    data_c,
+                    velocity_v;
+                    t = dimensionalize_and_strip(t, Myr, CharDim)
+                )
+            end
+        end
+        # ------------------------------
+
+    end
+
+    return nothing
+end
+## END OF MAIN SCRIPT ----------------------------------------------------------------
+
+let
+    do_vtk = true # set to true to generate VTK files for ParaView
+    # nx, ny, nz = 150, 40, 150
+    nx,ny,nz = 64, 32, 64
+    li, origin, phases_GMG, = GMG_only(nx + 1, ny + 1, nz + 1)
+    igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+        IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
+    else
+        igg
+    end
+
+    # (Path)/folder where output data and figures are stored
+    figdir = "Subduction3D_DYREL"
+    main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk)
+end

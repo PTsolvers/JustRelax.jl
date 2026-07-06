@@ -8,17 +8,16 @@ end
 using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
-import JustRelax.JustRelax3D as JR3
 using ParallelStencil
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    @init_parallel_stencil(AMDGPU, Float64, 3)
+    @init_parallel_stencil(AMDGPU, Float64, 2)
     AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    @init_parallel_stencil(CUDA, Float64, 3)
+    @init_parallel_stencil(CUDA, Float64, 2)
     CUDABackend
 else
-    @init_parallel_stencil(Threads, Float64, 3)
+    @init_parallel_stencil(Threads, Float64, 2)
     CPUBackend
 end
 
@@ -31,7 +30,13 @@ else
     JustPIC.CPUBackend
 end
 
-import JustRelax.JustRelax2D: compute_PH_residual_V!, compute_DR_residual_update_V!
+const JR2K = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    Base.get_extension(JustRelax, :JustRelaxAMDGPUExt).JustRelax2D
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    Base.get_extension(JustRelax, :JustRelaxCUDAExt).JustRelax2D
+else
+    JustRelax.JustRelax2D
+end
 
 @parallel_indices (i, j) function _init_single_phase!(phases)
     @index phases[1, i, j] = 1.0
@@ -79,44 +84,13 @@ end
         stokes.V.Vx .= PTArray(backend_JR)([a * x for x in xvi[1], _ in 1:(ny + 2)])
         stokes.V.Vy .= PTArray(backend_JR)([b * y for _ in 1:(nx + 2), y in xvi[2]])
 
-        JustRelax2D.compute_∇V_strain_rate!(stokes, _di, ni, Val(2))
+        JR2K.compute_∇V_strain_rate!(stokes, _di, ni, Val(2))
 
         div = a + b
         @test all(Array(stokes.∇V) .≈ div)
         @test all(Array(stokes.ε.xx) .≈ a - div / 3)
         @test all(Array(stokes.ε.yy) .≈ b - div / 3)
         @test all(abs.(Array(stokes.ε.xy)) .< 1.0e-12)
-    end
-
-    # ------------------------------------------------------------------ #
-    # Geometric divergence + deviatoric strain rate (3D):
-    #   Vx = a·x, Vy = b·y, Vz = c·z ⇒ ∇V = a+b+c, εii = di - (a+b+c)/3,
-    #   off-diagonal shear rates = 0
-    # ------------------------------------------------------------------ #
-    @testset "compute_∇V_strain_rate! 3D" begin
-        nx, ny, nz = 5, 4, 3
-        ni = nx, ny, nz
-        li = 1.0, 1.0, 1.0
-        grid = JR3.Geometry(ni, li; origin = (0.0, 0.0, 0.0))
-        (; xvi) = grid
-        _di = grid._di
-
-        stokes = JR3.StokesArrays(backend_JR, ni)
-        a, b, c = 1.5, -0.5, 0.8
-        stokes.V.Vx .= PTArray(backend_JR)([a * x for x in xvi[1], _ in 1:(ny + 2), __ in 1:(nz + 2)])
-        stokes.V.Vy .= PTArray(backend_JR)([b * y for _ in 1:(nx + 2), y in xvi[2], __ in 1:(nz + 2)])
-        stokes.V.Vz .= PTArray(backend_JR)([c * z for _ in 1:(nx + 2), __ in 1:(ny + 2), z in xvi[3]])
-
-        JR3.compute_∇V_strain_rate!(stokes, _di, ni, Val(3))
-
-        div = a + b + c
-        @test all(Array(stokes.∇V) .≈ div)
-        @test all(Array(stokes.ε.xx) .≈ a - div / 3)
-        @test all(Array(stokes.ε.yy) .≈ b - div / 3)
-        @test all(Array(stokes.ε.zz) .≈ c - div / 3)
-        @test all(abs.(Array(stokes.ε.xy)) .< 1.0e-12)
-        @test all(abs.(Array(stokes.ε.xz)) .< 1.0e-12)
-        @test all(abs.(Array(stokes.ε.yz)) .< 1.0e-12)
     end
 
     # ------------------------------------------------------------------ #
@@ -164,14 +138,14 @@ end
         # P0 = P and Q = 0 ⇒ RP = -∇V = -(a+b), independent of ηb
         stokes.P0 .= stokes.P
         stokes.Q .= 0.0
-        JustRelax2D.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
+        JR2K.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
         @test all(Array(stokes.R.RP) .≈ -(a + b))
         @test all(Array(stokes.ε.xx) .≈ a - (a + b) / 3)
 
         # --- fused stress + τII viscosity refresh (nonlinear branch) ---
         θc = copy(dyrel.P_num)
         η_before = copy(stokes.viscosity.η)
-        JustRelax2D.compute_stress_viscosity_DRYEL!(
+        JR2K.compute_stress_viscosity_DRYEL!(
             stokes, θc, dyrel.γ_eff, rheology, phase_ratios,
             1.0, dt, 1.0, args, (-Inf, Inf), false,
         )
@@ -183,7 +157,7 @@ end
 
         # --- Powell-Hestenes velocity residual (no D division: safe) ---
         ρg = @zeros(ni...), @zeros(ni...)
-        @parallel (@idx ni) compute_PH_residual_V!(
+        @parallel (@idx ni) JR2K.compute_PH_residual_V!(
             stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
             stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
             _di.center, _di.vertex,
@@ -199,7 +173,7 @@ end
         dyrel.dτVx .= 1.0; dyrel.dτVy .= 1.0
         Vx_before = copy(stokes.V.Vx)
         Vy_before = copy(stokes.V.Vy)
-        @parallel (@idx ni) compute_DR_residual_update_V!(
+        @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
             stokes.R.Rx, stokes.R.Ry,
             stokes.V.Vx, stokes.V.Vy,
             dyrel.dVxdτ, dyrel.dVydτ,

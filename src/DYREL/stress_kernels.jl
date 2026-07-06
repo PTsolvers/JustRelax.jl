@@ -1,4 +1,15 @@
-function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt)
+compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt) =
+    compute_stress_DRYEL!(Val(ndims(stokes.P)), stokes, rheology, phase_ratios, λ_relaxation, dt)
+
+function compute_stress_DRYEL!(
+    ::Val{2},
+    stokes,
+    rheology,
+    phase_ratios,
+    λ_relaxation,
+    dt,
+    )
+
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
@@ -93,7 +104,15 @@ end
 end
 
 # 3D Kernel
-function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt)
+function compute_stress_DRYEL!(
+    ::Val{3},
+    stokes,
+    rheology,
+    phase_ratios,
+    λ_relaxation,
+    dt,
+    )
+
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.xy_c, stokes.τ.yz_c, stokes.τ.xz_c),  # centers

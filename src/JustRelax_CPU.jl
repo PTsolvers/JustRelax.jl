@@ -77,6 +77,9 @@ module JustRelax3D
     include("stokes/Stokes3D.jl")
     export solve!
 
+    include("DYREL/solver.jl")
+    export solve_DYREL!, DYREL
+
     include("variational_stokes/Stokes3D.jl")
     export solve_VariationalStokes!
 

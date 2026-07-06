@@ -295,7 +295,7 @@ function _solve_DYREL!(
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
+                Gershgorin_Stokes_SchurComplement!(dim, fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)
@@ -339,7 +339,7 @@ function _solve_DYREL!(
         phase_ratios::JustPIC.PhaseRatios,
         rheology,
         args,
-        di::Union{NTuple{2, <:Real}, NamedTuple},
+        di::Union{NTuple{2, <:Real}, NTuple{3, <:Real}, NamedTuple},
         dt,
         igg::IGG;
         kwargs...,

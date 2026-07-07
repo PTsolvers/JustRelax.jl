@@ -154,6 +154,212 @@ end
     return nothing
 end
 
+function Gershgorin_Stokes3D_SchurComplement!(Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, η, ηv, γ_eff, phase_ratios, rheology, di, dt)
+    ni = size(η)
+    @parallel (@idx ni) _Gershgorin_Stokes3D_SchurComplement!(
+        Dx,
+        Dy,
+        Dz,
+        λmaxVx,
+        λmaxVy,
+        λmaxVz,
+        η,
+        γ_eff,
+        di.center,
+        di.vertex,
+        phase_ratios.center,
+        phase_ratios.yz,
+        phase_ratios.xz,
+        phase_ratios.xy,
+        rheology,
+        dt,
+    )
+    return nothing
+end
+
+@inline function Gershgorin_Stokes_SchurComplement!(
+        ::Val{2}, Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, rheology, di, dt
+    )
+    return Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, rheology, di, dt)
+end
+
+@inline function Gershgorin_Stokes_SchurComplement!(
+        ::Val{2}, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, η, ηv, γ_eff, phase_ratios, rheology, di, dt
+    )
+    return Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, rheology, di, dt)
+end
+
+@inline function Gershgorin_Stokes_SchurComplement!(
+        ::Val{3}, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, η, ηv, γ_eff, phase_ratios, rheology, di, dt
+    )
+    return Gershgorin_Stokes3D_SchurComplement!(Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, η, ηv, γ_eff, phase_ratios, rheology, di, dt)
+end
+
+Base.@propagate_inbounds @inline function _ηve(ηij, rheology, phase, dt)
+    Gij = fn_ratio(get_shear_modulus, rheology, phase)
+    return inv(inv(ηij) + inv(Gij * dt))
+end
+
+Base.@propagate_inbounds @inline _ηve_center(η, phase_center, rheology, dt, i, j, k) =
+    _ηve(η[i, j, k], rheology, phase_center[i, j, k], dt)
+
+Base.@propagate_inbounds @inline function _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k)
+    Ic = clamped_indices(ni, i, j, k)
+    return _ηve(harm_clamped_yz(η, Ic...), rheology, phase_yz[i, j, k], dt)
+end
+
+Base.@propagate_inbounds @inline function _ηve_xz(η, phase_xz, rheology, dt, ni, i, j, k)
+    Ic = clamped_indices(ni, i, j, k)
+    return _ηve(harm_clamped_xz(η, Ic...), rheology, phase_xz[i, j, k], dt)
+end
+
+Base.@propagate_inbounds @inline function _ηve_xy(η, phase_xy, rheology, dt, ni, i, j, k)
+    Ic = clamped_indices(ni, i, j, k)
+    return _ηve(harm_clamped_xy(η, Ic...), rheology, phase_xy[i, j, k], dt)
+end
+
+@parallel_indices (i, j, k) function _Gershgorin_Stokes3D_SchurComplement!(
+        Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, η, γ_eff, di_center, di_vertex,
+        phase_center, phase_yz, phase_xz, phase_xy, rheology, dt
+    )
+
+    ni = size(η)
+    c13 = 1 / 3
+    c43 = 4 / 3
+
+    # DYREL D/λ arrays store active velocity updates; boundary values are enforced by flow_bcs! after the shifted update.
+    if i ≤ size(Dx, 1) && j ≤ size(Dx, 2) && k ≤ size(Dx, 3)
+        _dx = inv(@dx(di_center, i))
+        _dy = inv(@dy(di_vertex, j))
+        _dz = inv(@dz(di_vertex, k))
+        _dx2 = _dx * _dx
+        _dy2 = _dy * _dy
+        _dz2 = _dz * _dz
+        _dxdy = _dx * _dy
+        _dxdz = _dx * _dz
+
+        ηW = _ηve_center(η, phase_center, rheology, dt, i, j, k)
+        ηE = _ηve_center(η, phase_center, rheology, dt, i + 1, j, k)
+        ηS = _ηve_xy(η, phase_xy, rheology, dt, ni, i, j, k)
+        ηN = _ηve_xy(η, phase_xy, rheology, dt, ni, i, j + 1, k)
+        ηB = _ηve_xz(η, phase_xz, rheology, dt, ni, i, j, k)
+        ηF = _ηve_xz(η, phase_xz, rheology, dt, ni, i, j, k + 1)
+        γ = 0.5 * (γ_eff[i, j, k] + γ_eff[i + 1, j, k])
+
+        Dx_ijk = Dx[i, j, k] =
+            (ηN + ηS) * _dy2 +
+            (ηB + ηF) * _dz2 +
+            (2 * γ + c43 * (ηE + ηW)) * _dx2
+
+        Cx =
+            abs(c13 * (3 * γ + 4 * ηE) * _dx2) +
+            abs(c13 * (3 * γ + 4 * ηW) * _dx2) +
+            abs(ηN * _dy2) +
+            abs(ηS * _dy2) +
+            abs(ηB * _dz2) +
+            abs(ηF * _dz2) +
+            abs(c13 * (3 * γ - 2 * ηE + 3 * ηN) * _dxdy) +
+            abs(c13 * (3 * γ - 2 * ηE + 3 * ηS) * _dxdy) +
+            abs(c13 * (3 * γ + 3 * ηN - 2 * ηW) * _dxdy) +
+            abs(c13 * (3 * γ + 3 * ηS - 2 * ηW) * _dxdy) +
+            abs(c13 * (3 * γ + 3 * ηB - 2 * ηE) * _dxdz) +
+            abs(c13 * (3 * γ + 3 * ηB - 2 * ηW) * _dxdz) +
+            abs(c13 * (3 * γ - 2 * ηE + 3 * ηF) * _dxdz) +
+            abs(c13 * (3 * γ + 3 * ηF - 2 * ηW) * _dxdz) +
+            abs(Dx_ijk)
+
+        λmaxVx[i, j, k] = Cx / Dx_ijk
+    end
+
+    if i ≤ size(Dy, 1) && j ≤ size(Dy, 2) && k ≤ size(Dy, 3)
+        _dx = inv(@dx(di_vertex, i))
+        _dy = inv(@dy(di_center, j))
+        _dz = inv(@dz(di_vertex, k))
+        _dx2 = _dx * _dx
+        _dy2 = _dy * _dy
+        _dz2 = _dz * _dz
+        _dxdy = _dx * _dy
+        _dydz = _dy * _dz
+
+        ηW = _ηve_xy(η, phase_xy, rheology, dt, ni, i, j, k)
+        ηE = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j, k)
+        ηS = _ηve_center(η, phase_center, rheology, dt, i, j, k)
+        ηN = _ηve_center(η, phase_center, rheology, dt, i, j + 1, k)
+        ηB = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k)
+        ηF = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k + 1)
+        γ = 0.5 * (γ_eff[i, j, k] + γ_eff[i, j + 1, k])
+
+        Dy_ijk = Dy[i, j, k] =
+            (ηE + ηW) * _dx2 +
+            (ηB + ηF) * _dz2 +
+            (2 * γ + c43 * (ηN + ηS)) * _dy2
+
+        Cy =
+            abs(ηE * _dx2) +
+            abs(ηW * _dx2) +
+            abs(c13 * (3 * γ + 4 * ηN) * _dy2) +
+            abs(c13 * (3 * γ + 4 * ηS) * _dy2) +
+            abs(ηB * _dz2) +
+            abs(ηF * _dz2) +
+            abs(c13 * (3 * γ + 3 * ηE - 2 * ηN) * _dxdy) +
+            abs(c13 * (3 * γ + 3 * ηE - 2 * ηS) * _dxdy) +
+            abs(c13 * (3 * γ - 2 * ηN + 3 * ηW) * _dxdy) +
+            abs(c13 * (3 * γ - 2 * ηS + 3 * ηW) * _dxdy) +
+            abs(c13 * (3 * γ + 3 * ηB - 2 * ηN) * _dydz) +
+            abs(c13 * (3 * γ + 3 * ηB - 2 * ηS) * _dydz) +
+            abs(c13 * (3 * γ + 3 * ηF - 2 * ηN) * _dydz) +
+            abs(c13 * (3 * γ + 3 * ηF - 2 * ηS) * _dydz) +
+            abs(Dy_ijk)
+
+        λmaxVy[i, j, k] = Cy / Dy_ijk
+    end
+
+    if i ≤ size(Dz, 1) && j ≤ size(Dz, 2) && k ≤ size(Dz, 3)
+        _dx = inv(@dx(di_vertex, i))
+        _dy = inv(@dy(di_vertex, j))
+        _dz = inv(@dz(di_center, k))
+        _dx2 = _dx * _dx
+        _dy2 = _dy * _dy
+        _dz2 = _dz * _dz
+        _dxdz = _dx * _dz
+        _dydz = _dy * _dz
+
+        ηW = _ηve_xz(η, phase_xz, rheology, dt, ni, i, j, k)
+        ηE = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k)
+        ηS = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k)
+        ηN = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k)
+        ηB = _ηve_center(η, phase_center, rheology, dt, i, j, k)
+        ηF = _ηve_center(η, phase_center, rheology, dt, i, j, k + 1)
+        γ = 0.5 * (γ_eff[i, j, k] + γ_eff[i, j, k + 1])
+
+        Dz_ijk = Dz[i, j, k] =
+            (ηE + ηW) * _dx2 +
+            (ηN + ηS) * _dy2 +
+            (2 * γ + c43 * (ηB + ηF)) * _dz2
+
+        Cz =
+            abs(ηE * _dx2) +
+            abs(ηW * _dx2) +
+            abs(ηN * _dy2) +
+            abs(ηS * _dy2) +
+            abs(c13 * (3 * γ + 4 * ηB) * _dz2) +
+            abs(c13 * (3 * γ + 4 * ηF) * _dz2) +
+            abs(c13 * (3 * γ - 2 * ηB + 3 * ηE) * _dxdz) +
+            abs(c13 * (3 * γ - 2 * ηB + 3 * ηW) * _dxdz) +
+            abs(c13 * (3 * γ + 3 * ηE - 2 * ηF) * _dxdz) +
+            abs(c13 * (3 * γ - 2 * ηF + 3 * ηW) * _dxdz) +
+            abs(c13 * (3 * γ - 2 * ηB + 3 * ηN) * _dydz) +
+            abs(c13 * (3 * γ - 2 * ηB + 3 * ηS) * _dydz) +
+            abs(c13 * (3 * γ - 2 * ηF + 3 * ηN) * _dydz) +
+            abs(c13 * (3 * γ - 2 * ηF + 3 * ηS) * _dydz) +
+            abs(Dz_ijk)
+
+        λmaxVz[i, j, k] = Cz / Dz_ijk
+    end
+
+    return nothing
+end
+
 """
     update_α_β!(βV, αV, dτV, cV)
 
@@ -246,8 +452,11 @@ end
     return nothing
 end
 
-# 2D wrapper for update_α_β!
 function update_α_β!(dyrel::JustRelax.DYREL)
+    return update_α_β!(Val(ndims(dyrel.γ_eff)), dyrel)
+end
+
+function update_α_β!(::Val{2}, dyrel::JustRelax.DYREL)
     return update_α_β!(
         (dyrel.βVx, dyrel.βVy),
         (dyrel.αVx, dyrel.αVy),
@@ -256,15 +465,42 @@ function update_α_β!(dyrel::JustRelax.DYREL)
     )
 end
 
-# 2D wrapper for update_dτV_α_β!
+function update_α_β!(::Val{3}, dyrel::JustRelax.DYREL)
+    return update_α_β!(
+        (dyrel.βVx, dyrel.βVy, dyrel.βVz),
+        (dyrel.αVx, dyrel.αVy, dyrel.αVz),
+        (dyrel.dτVx, dyrel.dτVy, dyrel.dτVz),
+        (dyrel.cVx, dyrel.cVy, dyrel.cVz)
+    )
+end
+
 function update_dτV_α_β!(dyrel::JustRelax.DYREL)
+    return update_dτV_α_β!(dyrel, dyrel.CFL)
+end
+
+function update_dτV_α_β!(dyrel::JustRelax.DYREL, CFL_v)
+    return update_dτV_α_β!(Val(ndims(dyrel.γ_eff)), dyrel, CFL_v)
+end
+
+function update_dτV_α_β!(::Val{2}, dyrel::JustRelax.DYREL, CFL_v)
     return update_dτV_α_β!(
         (dyrel.dτVx, dyrel.dτVy),
         (dyrel.βVx, dyrel.βVy),
         (dyrel.αVx, dyrel.αVy),
         (dyrel.cVx, dyrel.cVy),
         (dyrel.λmaxVx, dyrel.λmaxVy),
-        dyrel.CFL
+        CFL_v
+    )
+end
+
+function update_dτV_α_β!(::Val{3}, dyrel::JustRelax.DYREL, CFL_v)
+    return update_dτV_α_β!(
+        (dyrel.dτVx, dyrel.dτVy, dyrel.dτVz),
+        (dyrel.βVx, dyrel.βVy, dyrel.βVz),
+        (dyrel.αVx, dyrel.αVy, dyrel.αVz),
+        (dyrel.cVx, dyrel.cVy, dyrel.cVz),
+        (dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz),
+        CFL_v
     )
 end
 
@@ -311,25 +547,3 @@ function update_dτV_α_β!(dτVx, dτVy, dτVz, βVx, βVy, βVz, αVx, αVy, �
         CFL_v
     )
 end
-
-# # 3D wrapper for update_α_β!
-# function update_α_β!(dyrel::JustRelax.DYREL)
-#     return update_α_β!(
-#         (dyrel.βVx,  dyrel.βVy, dyrel.βVz),
-#         (dyrel.αVx,  dyrel.αVy, dyrel.αVz),
-#         (dyrel.dτVx, dyrel.dτVy, dyrel.dτVz),
-#         (dyrel.cVx,  dyrel.cVy, dyrel.cVz)
-#     )
-# end
-
-# # 3D wrapper for update_dτV_α_β!
-# function update_dτV_α_β!(dyrel::JustRelax.DYREL)
-#     return update_dτV_α_β!(
-#         (dyrel.dτVx, dyrel.dτVy, dyrel.dτVz),
-#         (dyrel.βVx, dyrel.βVy, dyrel.βVz),
-#         (dyrel.αVx, dyrel.αVy, dyrel.αVz),
-#         (dyrel.cVx, dyrel.cVy, dyrel.cVz),
-#         (dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz),
-#         dyrel.CFL
-#     )
-# end

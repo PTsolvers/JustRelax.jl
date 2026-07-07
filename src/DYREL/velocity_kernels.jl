@@ -1,129 +1,74 @@
-function compute_local_strain_rates!(stokes, dyrel, grid, do_partials::Bool)
-    return compute_local_strain_rates!(stokes, dyrel, grid, Val(do_partials))
-end
+# function compute_local_strain_rates!(
+#         εxx,
+#         εyy,
+#         εxy,
+#         dyrel,
+#         ∇V,
+#         Vx,
+#         Vy,
+#         _di_vertex,
+#         _di_vx,
+#         _di_vy,
+#         do_partials::Bool,
+#         i,
+#         j,
+#     )
 
-function compute_local_strain_rates!(stokes, dyrel, grid, do_partials::Val)
-    _di_vertex = grid._di.vertex
-    _di_vx     = grid._di.velocity[1]
-    _di_vy     = grid._di.velocity[2]
-    ni         = size(stokes.ε.xy)
-    @parallel (@idx ni)  compute_local_strain_rates!(
-        stokes.ε.xx,
-        stokes.ε.yy,
-        stokes.ε.xy,
-        dyrel,
-        stokes.∇V,
-        stokes.V.Vx,
-        stokes.V.Vy,
-        _di_vertex,
-        _di_vx,
-        _di_vy,
-        do_partials,
-    )
-    return interpolate_shear_ε_to_centers(stokes, Val(ndims(stokes.P)))
-end
+#     @inbounds begin
+#         vx_s = Vx[i, j]
+#         vx_n = Vx[i, j + 1]
+#         vy_w = Vy[i, j]
+#         vy_e = Vy[i + 1, j]
 
-@parallel_indices (I...) function compute_local_strain_rates!(
-        εxx,
-        εyy,
-        εxy,
-        dyrel,
-        ∇V,
-        Vx,
-        Vy,
-        _di_vertex,
-        _di_vx,
-        _di_vy,
-        do_partials,
-    )
-    compute_local_strain_rates!(
-        εxx,
-        εyy,
-        εxy,
-        dyrel,
-        ∇V,
-        Vx,
-        Vy,
-        _di_vertex,
-        _di_vx,
-        _di_vy,
-        do_partials,
-        I...,
-    )
-    return nothing
-end
+#         if i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
+#             _dy_vx     = @dy(_di_vx, j)
+#             _dx_vy     = @dx(_di_vy, i)
+#             Vxᵢⱼ_shear = SA[vx_s, vx_n]
+#             Vyᵢⱼ_shear = SA[vy_w, vy_e]
 
-function compute_local_strain_rates!(
-        εxx,
-        εyy,
-        εxy,
-        dyrel,
-        ∇V,
-        Vx,
-        Vy,
-        _di_vertex,
-        _di_vx,
-        _di_vy,
-        ::Val{do_partials},
-        i,
-        j,
-    ) where {do_partials}
+#             εxy[i, j] = local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy)
 
-    @inbounds begin
-        vx_s = Vx[i, j]
-        vx_n = Vx[i, j + 1]
-        vy_w = Vy[i, j]
-        vy_e = Vy[i + 1, j]
+#             if do_partials
+#                 ∂εxy_∂Vxᵢⱼ = ForwardDiff.gradient(Vxᵢⱼ_shear -> local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy), Vxᵢⱼ_shear)
+#                 ∂εxy_∂Vyᵢⱼ = ForwardDiff.gradient(Vyᵢⱼ_shear -> local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy), Vyᵢⱼ_shear)
+#                 dyrel.∂εxy_∂Vx[1][i, j] = ∂εxy_∂Vxᵢⱼ[1]
+#                 dyrel.∂εxy_∂Vx[2][i, j] = ∂εxy_∂Vxᵢⱼ[2]
+#                 dyrel.∂εxy_∂Vy[1][i, j] = ∂εxy_∂Vyᵢⱼ[1]
+#                 dyrel.∂εxy_∂Vy[2][i, j] = ∂εxy_∂Vyᵢⱼ[2]
+#             end
+#         end
 
-        if i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
-            _dy_vx     = @dy(_di_vx, j)
-            _dx_vy     = @dx(_di_vy, i)
-            Vxᵢⱼ_shear = SA[vx_s, vx_n]
-            Vyᵢⱼ_shear = SA[vy_w, vy_e]
+#         if i ≤ size(∇V, 1) && j ≤ size(∇V, 2)
+#             vx_ne    = Vx[i + 1, j + 1]
+#             vy_ne    = Vy[i + 1, j + 1]
+#             _dx, _dy = @dxi(_di_vertex, i, j)
+#             Vxᵢⱼ     = SA[vx_n, vx_ne]
+#             Vyᵢⱼ     = SA[vy_e, vy_ne]
 
-            εxy[i, j] = local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy)
+#             εxx[i, j], εyy[i, j], ∇V[i, j] = local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy)
 
-            if do_partials
-                ∂εxy_∂Vxᵢⱼ = ForwardDiff.gradient(Vxᵢⱼ_shear -> local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy), Vxᵢⱼ_shear)
-                ∂εxy_∂Vyᵢⱼ = ForwardDiff.gradient(Vyᵢⱼ_shear -> local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy), Vyᵢⱼ_shear)
-                dyrel.∂εxy_∂Vx[1][i, j] = ∂εxy_∂Vxᵢⱼ[1]
-                dyrel.∂εxy_∂Vx[2][i, j] = ∂εxy_∂Vxᵢⱼ[2]
-                dyrel.∂εxy_∂Vy[1][i, j] = ∂εxy_∂Vyᵢⱼ[1]
-                dyrel.∂εxy_∂Vy[2][i, j] = ∂εxy_∂Vyᵢⱼ[2]
-            end
-        end
+#             if do_partials
+#                 J_normal = ForwardDiff.jacobian(Vxᵢⱼ -> local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy), Vxᵢⱼ)
+#                 dyrel.∂εxx_∂Vx[1][i, j] = J_normal[1, 1]
+#                 dyrel.∂εxx_∂Vx[2][i, j] = J_normal[1, 2]
+#                 dyrel.∂εyy_∂Vx[1][i, j] = J_normal[2, 1]
+#                 dyrel.∂εyy_∂Vx[2][i, j] = J_normal[2, 2]
+#                 dyrel.∂∇V_∂Vx[1][i, j] = J_normal[3, 1]
+#                 dyrel.∂∇V_∂Vx[2][i, j] = J_normal[3, 2]
 
-        if i ≤ size(∇V, 1) && j ≤ size(∇V, 2)
-            vx_ne    = Vx[i + 1, j + 1]
-            vy_ne    = Vy[i + 1, j + 1]
-            _dx, _dy = @dxi(_di_vertex, i, j)
-            Vxᵢⱼ     = SA[vx_n, vx_ne]
-            Vyᵢⱼ     = SA[vy_e, vy_ne]
+#                 J_normal = ForwardDiff.jacobian(Vyᵢⱼ -> local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy), Vyᵢⱼ)
+#                 dyrel.∂εxx_∂Vy[1][i, j] = J_normal[1, 1]
+#                 dyrel.∂εxx_∂Vy[2][i, j] = J_normal[1, 2]
+#                 dyrel.∂εyy_∂Vy[1][i, j] = J_normal[2, 1]
+#                 dyrel.∂εyy_∂Vy[2][i, j] = J_normal[2, 2]
+#                 dyrel.∂∇V_∂Vy[1][i, j] = J_normal[3, 1]
+#                 dyrel.∂∇V_∂Vy[2][i, j] = J_normal[3, 2]
+#             end
+#         end
+#     end
 
-            εxx[i, j], εyy[i, j], ∇V[i, j] = local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy)
-
-            if do_partials
-                J_normal = ForwardDiff.jacobian(Vxᵢⱼ -> local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy), Vxᵢⱼ)
-                dyrel.∂εxx_∂Vx[1][i, j] = J_normal[1, 1]
-                dyrel.∂εxx_∂Vx[2][i, j] = J_normal[1, 2]
-                dyrel.∂εyy_∂Vx[1][i, j] = J_normal[2, 1]
-                dyrel.∂εyy_∂Vx[2][i, j] = J_normal[2, 2]
-                dyrel.∂∇V_∂Vx[1][i, j] = J_normal[3, 1]
-                dyrel.∂∇V_∂Vx[2][i, j] = J_normal[3, 2]
-
-                J_normal = ForwardDiff.jacobian(Vyᵢⱼ -> local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy), Vyᵢⱼ)
-                dyrel.∂εxx_∂Vy[1][i, j] = J_normal[1, 1]
-                dyrel.∂εxx_∂Vy[2][i, j] = J_normal[1, 2]
-                dyrel.∂εyy_∂Vy[1][i, j] = J_normal[2, 1]
-                dyrel.∂εyy_∂Vy[2][i, j] = J_normal[2, 2]
-                dyrel.∂∇V_∂Vy[1][i, j] = J_normal[3, 1]
-                dyrel.∂∇V_∂Vy[2][i, j] = J_normal[3, 2]
-            end
-        end
-    end
-
-    return nothing
-end
+#     return nothing
+# end
 
 function local_strain_rate_normal_components(Vx, Vy, _dx, _dy)
     dVx_dx = (Vx[2] - Vx[1]) * _dx
@@ -143,32 +88,32 @@ function local_strain_rate_shear_components(Vx, Vy, _dy_vx, _dx_vy)
 end
 
 ## DIVERGENCE + DEVIATORIC STRAIN RATE TENSOR
-function compute_∇V_strain_rate!(stokes, _di, ni, dim::Val{2})
-    @parallel (@idx ni .+ 1) compute_local_strain_rates!(
-        stokes.ε.xx,
-        stokes.ε.yy,
-        stokes.ε.xy,
-        nothing,
-        stokes.∇V,
-        stokes.V.Vx,
-        stokes.V.Vy,
-        _di.vertex,
-        _di.velocity...,
-        Val(false),
-    )
-    return interpolate_shear_ε_to_centers(stokes, dim)
-end
+# function compute_∇V_strain_rate!(stokes, _di, ni, dim::Val{2})
+#     @parallel (@idx ni .+ 1) compute_local_strain_rates!(
+#         stokes.ε.xx,
+#         stokes.ε.yy,
+#         stokes.ε.xy,
+#         nothing,
+#         stokes.∇V,
+#         stokes.V.Vx,
+#         stokes.V.Vy,
+#         _di.vertex,
+#         _di.velocity...,
+#         false,
+#     )
+#     return interpolate_shear_ε_to_centers(stokes, dim)
+# end
 
-function compute_∇V_strain_rate!(stokes, _di, ni, dim)
-    @parallel (@idx ni .+ 1) compute_∇V_strain_rate!(
-        stokes.∇V,
-        @strain(stokes)...,
-        @velocity(stokes)...,
-        _di.vertex,
-        _di.velocity...
-    )
-    return interpolate_shear_ε_to_centers(stokes, dim)
-end
+# function compute_∇V_strain_rate!(stokes, _di, ni, dim)
+#     @parallel (@idx ni .+ 1) compute_∇V_strain_rate!(
+#         stokes.∇V,
+#         @strain(stokes)...,
+#         @velocity(stokes)...,
+#         _di.vertex,
+#         _di.velocity...
+#     )
+#     return interpolate_shear_ε_to_centers(stokes, dim)
+# end
 
 function interpolate_shear_ε_to_centers(stokes, ::Val{2})
     vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
@@ -182,121 +127,121 @@ function interpolate_shear_ε_to_centers(stokes, ::Val{3})
     return nothing
 end
 
-@parallel_indices (i, j) function compute_∇V_strain_rate!(
-        ∇V::AbstractArray{T, 2},
-        εxx::AbstractArray{T, 2},
-        εyy,
-        εxy,
-        Vx,
-        Vy,
-        _di_vertex,
-        _di_vx,
-        _di_vy,
-    ) where {T}
+# @parallel_indices (i, j) function compute_∇V_strain_rate!(
+#         ∇V::AbstractArray{T, 2},
+#         εxx::AbstractArray{T, 2},
+#         εyy,
+#         εxy,
+#         Vx,
+#         Vy,
+#         _di_vertex,
+#         _di_vx,
+#         _di_vy,
+#     ) where {T}
 
-    third = T(1) / T(3)
+#     third = T(1) / T(3)
 
-    @inbounds begin
-        vx_s = Vx[i, j]
-        vx_n = Vx[i, j + 1]
-        vy_w = Vy[i, j]
-        vy_e = Vy[i + 1, j]
+#     @inbounds begin
+#         vx_s = Vx[i, j]
+#         vx_n = Vx[i, j + 1]
+#         vy_w = Vy[i, j]
+#         vy_e = Vy[i + 1, j]
 
-        if i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
-            _dy_vx = @dy(_di_vx, j)
-            _dx_vy = @dx(_di_vy, i)
+#         if i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
+#             _dy_vx = @dy(_di_vx, j)
+#             _dx_vy = @dx(_di_vy, i)
 
-            dVx_dy = (vx_n - vx_s) * _dy_vx
-            dVy_dx = (vy_e - vy_w) * _dx_vy
-            εxy[i, j] = 0.5 * (dVx_dy + dVy_dx)
-        end
+#             dVx_dy = (vx_n - vx_s) * _dy_vx
+#             dVy_dx = (vy_e - vy_w) * _dx_vy
+#             εxy[i, j] = 0.5 * (dVx_dy + dVy_dx)
+#         end
 
-        if i ≤ size(∇V, 1) && j ≤ size(∇V, 2)
-            vx_ne = Vx[i + 1, j + 1]
-            vy_ne = Vy[i + 1, j + 1]
-            _dx, _dy = @dxi(_di_vertex, i, j)
+#         if i ≤ size(∇V, 1) && j ≤ size(∇V, 2)
+#             vx_ne = Vx[i + 1, j + 1]
+#             vy_ne = Vy[i + 1, j + 1]
+#             _dx, _dy = @dxi(_di_vertex, i, j)
 
-            dVx_dx = (vx_ne - vx_n) * _dx
-            dVy_dy = (vy_ne - vy_e) * _dy
-            div_ij = dVx_dx + dVy_dy
-            ∇V[i, j] = div_ij
+#             dVx_dx = (vx_ne - vx_n) * _dx
+#             dVy_dy = (vy_ne - vy_e) * _dy
+#             div_ij = dVx_dx + dVy_dy
+#             ∇V[i, j] = div_ij
 
-            div_third = div_ij * third
-            εxx[i, j] = dVx_dx - div_third
-            εyy[i, j] = dVy_dy - div_third
-        end
-    end
+#             div_third = div_ij * third
+#             εxx[i, j] = dVx_dx - div_third
+#             εyy[i, j] = dVy_dy - div_third
+#         end
+#     end
 
-    return nothing
-end
+#     return nothing
+# end
 
-@parallel_indices (i, j, k) function compute_∇V_strain_rate!(
-        ∇V::AbstractArray{T, 3},
-        εxx,
-        εyy,
-        εzz,
-        εyz,
-        εxz,
-        εxy,
-        Vx,
-        Vy,
-        Vz,
-        _di_vertex,
-        _di_vx,
-        _di_vy,
-        _di_vz,
-    ) where {T}
+# @parallel_indices (i, j, k) function compute_∇V_strain_rate!(
+#         ∇V::AbstractArray{T, 3},
+#         εxx,
+#         εyy,
+#         εzz,
+#         εyz,
+#         εxz,
+#         εxy,
+#         Vx,
+#         Vy,
+#         Vz,
+#         _di_vertex,
+#         _di_vx,
+#         _di_vy,
+#         _di_vz,
+#     ) where {T}
 
-    third = T(1) / T(3)
+#     third = T(1) / T(3)
 
-    @inbounds begin
-        if all((i, j, k) .≤ size(∇V))
-            _dx, _dy, _dz = @dxi(_di_vertex, i, j, k)
-            dVx_dx = (Vx[i + 1, j + 1, k + 1] - Vx[i, j + 1, k + 1]) * _dx
-            dVy_dy = (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j, k + 1]) * _dy
-            dVz_dz = (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k]) * _dz
-            div_ijk = dVx_dx + dVy_dy + dVz_dz
-            ∇V[i, j, k] = div_ijk
+#     @inbounds begin
+#         if all((i, j, k) .≤ size(∇V))
+#             _dx, _dy, _dz = @dxi(_di_vertex, i, j, k)
+#             dVx_dx = (Vx[i + 1, j + 1, k + 1] - Vx[i, j + 1, k + 1]) * _dx
+#             dVy_dy = (Vy[i + 1, j + 1, k + 1] - Vy[i + 1, j, k + 1]) * _dy
+#             dVz_dz = (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k]) * _dz
+#             div_ijk = dVx_dx + dVy_dy + dVz_dz
+#             ∇V[i, j, k] = div_ijk
 
-            div_third = div_ijk * third
-            εxx[i, j, k] = dVx_dx - div_third
-            εyy[i, j, k] = dVy_dy - div_third
-            εzz[i, j, k] = dVz_dz - div_third
-        end
+#             div_third = div_ijk * third
+#             εxx[i, j, k] = dVx_dx - div_third
+#             εyy[i, j, k] = dVy_dy - div_third
+#             εzz[i, j, k] = dVz_dz - div_third
+#         end
 
-        if all((i, j, k) .≤ size(εyz))
-            _dz_vy = @dz(_di_vy, k)
-            _dy_vz = @dy(_di_vz, j)
-            εyz[i, j, k] =
-                0.5 * (
-                _dz_vy * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
-                    _dy_vz * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
-            )
-        end
+#         if all((i, j, k) .≤ size(εyz))
+#             _dz_vy = @dz(_di_vy, k)
+#             _dy_vz = @dy(_di_vz, j)
+#             εyz[i, j, k] =
+#                 0.5 * (
+#                 _dz_vy * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
+#                     _dy_vz * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
+#             )
+#         end
 
-        if all((i, j, k) .≤ size(εxz))
-            _dz_vx = @dz(_di_vx, k)
-            _dx_vz = @dx(_di_vz, i)
-            εxz[i, j, k] =
-                0.5 * (
-                _dz_vx * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
-                    _dx_vz * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
-            )
-        end
+#         if all((i, j, k) .≤ size(εxz))
+#             _dz_vx = @dz(_di_vx, k)
+#             _dx_vz = @dx(_di_vz, i)
+#             εxz[i, j, k] =
+#                 0.5 * (
+#                 _dz_vx * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
+#                     _dx_vz * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
+#             )
+#         end
 
-        if all((i, j, k) .≤ size(εxy))
-            _dy_vx = @dy(_di_vx, j)
-            _dx_vy = @dx(_di_vy, i)
-            εxy[i, j, k] =
-                0.5 * (
-                _dy_vx * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
-                    _dx_vy * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
-            )
-        end
-    end
+#         if all((i, j, k) .≤ size(εxy))
+#             _dy_vx = @dy(_di_vx, j)
+#             _dx_vy = @dx(_di_vy, i)
+#             εxy[i, j, k] =
+#                 0.5 * (
+#                 _dy_vx * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
+#                     _dx_vy * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
+#             )
+#         end
+#     end
 
-    return nothing
-end
+#     return nothing
+# end
 
 ## DIVERGENCE + DEVIATORIC STRAIN RATE + PRESSURE RESIDUAL (fused)
 # Same as `compute_∇V_strain_rate!` but additionally evaluates the pressure residual RP in the same
@@ -310,7 +255,51 @@ end
 # in-register `div_ij`, and nothing on this path reads ∇V back). The public `stokes.∇V` diagnostic
 # is recomputed once from the converged velocity field after the loop in `_solve_DYREL!`.
 
-function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
+function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, do_partials::Bool = false)
+    return compute_∇V_strain_rate_RP!(
+        Val(ndims(stokes.P)),
+        stokes,
+        dyrel,
+        rheology,
+        phase_ratios,
+        _di,
+        ni,
+        dt,
+        args,
+        do_partials,
+    )
+end
+
+function compute_∇V_strain_rate_RP!(::Val{2}, stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, do_partials::Bool)
+    ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
+    melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
+    @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
+        stokes.ε.xx,
+        stokes.ε.yy,
+        stokes.ε.xy,
+        dyrel,
+        @velocity(stokes)...,
+        stokes.R.RP,
+        stokes.P,
+        stokes.P0,
+        stokes.Q,
+        dyrel.ηb,
+        _di.vertex,
+        _di.velocity...,
+        rheology,
+        phase_ratios.center,
+        ΔT,
+        melt_fraction,
+        dt,
+        do_partials,
+    )
+    # NB: no vertex→center shear-strain interpolation here — ε.*_c is not read inside the DYREL
+    # loop (stress reads ε.xy at vertices; τII viscosity reads τ.xy_c). The center strain arrays
+    # are re-derived once after the loop by shear2center!(stokes.ε).
+    return nothing
+end
+
+function compute_∇V_strain_rate_RP!(::Val{3}, stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, do_partials::Bool)
     ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
     melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
@@ -339,6 +328,7 @@ end
         εxx::AbstractArray{T, 2},
         εyy,
         εxy,
+        dyrel,
         Vx,
         Vy,
         RP,
@@ -354,9 +344,8 @@ end
         ΔT,
         melt_fraction,
         dt,
+        do_partials,
     ) where {T}
-
-    third = T(1) / T(3)
 
     @inbounds begin
         vx_s = Vx[i, j]
@@ -365,30 +354,51 @@ end
         vy_e = Vy[i + 1, j]
 
         if i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
-            _dy_vx = @dy(_di_vx, j)
-            _dx_vy = @dx(_di_vy, i)
+            _dy_vx     = @dy(_di_vx, j)
+            _dx_vy     = @dx(_di_vy, i)
+            Vxᵢⱼ_shear = SA[vx_s, vx_n]
+            Vyᵢⱼ_shear = SA[vy_w, vy_e]
 
-            dVx_dy = (vx_n - vx_s) * _dy_vx
-            dVy_dx = (vy_e - vy_w) * _dx_vy
-            εxy[i, j] = 0.5 * (dVx_dy + dVy_dx)
+            εxy[i, j] = local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy)
+
+            if do_partials
+                ∂εxy_∂Vxᵢⱼ = ForwardDiff.gradient(Vxᵢⱼ_shear -> local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy), Vxᵢⱼ_shear)
+                ∂εxy_∂Vyᵢⱼ = ForwardDiff.gradient(Vyᵢⱼ_shear -> local_strain_rate_shear_components(Vxᵢⱼ_shear, Vyᵢⱼ_shear, _dy_vx, _dx_vy), Vyᵢⱼ_shear)
+                dyrel.∂εxy_∂Vx[1][i, j] = ∂εxy_∂Vxᵢⱼ[1]
+                dyrel.∂εxy_∂Vx[2][i, j] = ∂εxy_∂Vxᵢⱼ[2]
+                dyrel.∂εxy_∂Vy[1][i, j] = ∂εxy_∂Vyᵢⱼ[1]
+                dyrel.∂εxy_∂Vy[2][i, j] = ∂εxy_∂Vyᵢⱼ[2]
+            end
         end
 
         if i ≤ size(εxx, 1) && j ≤ size(εxx, 2)
-            vx_ne = Vx[i + 1, j + 1]
-            vy_ne = Vy[i + 1, j + 1]
+            vx_ne    = Vx[i + 1, j + 1]
+            vy_ne    = Vy[i + 1, j + 1]
             _dx, _dy = @dxi(_di_vertex, i, j)
+            Vxᵢⱼ     = SA[vx_n, vx_ne]
+            Vyᵢⱼ     = SA[vy_e, vy_ne]
 
-            dVx_dx = (vx_ne - vx_n) * _dx
-            dVy_dy = (vy_ne - vy_e) * _dy
-            div_ij = dVx_dx + dVy_dy
-
-            div_third = div_ij * third
-            εxx[i, j] = dVx_dx - div_third
-            εyy[i, j] = dVy_dy - div_third
-
-            # fused pressure residual (reuses `div_ij` in-register); the numerical pressure
-            # P_num = γ_eff·RP is folded into θc (with ΔPψ) downstream by the stress kernel.
+            εxx[i, j], εyy[i, j], div_ij = local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy)
             RP[i, j] = _RP_cell(P[i, j], P0[i, j], div_ij, Q[i, j], ηb[i, j], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j)
+
+            if do_partials
+
+                J_normal = ForwardDiff.jacobian(Vxᵢⱼ -> local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy), Vxᵢⱼ)
+                dyrel.∂εxx_∂Vx[1][i, j] = J_normal[1, 1]
+                dyrel.∂εxx_∂Vx[2][i, j] = J_normal[1, 2]
+                dyrel.∂εyy_∂Vx[1][i, j] = J_normal[2, 1]
+                dyrel.∂εyy_∂Vx[2][i, j] = J_normal[2, 2]
+                dyrel.∂∇V_∂Vx[1][i, j] = J_normal[3, 1]
+                dyrel.∂∇V_∂Vx[2][i, j] = J_normal[3, 2]
+
+                J_normal = ForwardDiff.jacobian(Vyᵢⱼ -> local_strain_rate_normal_components(Vxᵢⱼ, Vyᵢⱼ, _dx, _dy), Vyᵢⱼ)
+                dyrel.∂εxx_∂Vy[1][i, j] = J_normal[1, 1]
+                dyrel.∂εxx_∂Vy[2][i, j] = J_normal[1, 2]
+                dyrel.∂εyy_∂Vy[1][i, j] = J_normal[2, 1]
+                dyrel.∂εyy_∂Vy[2][i, j] = J_normal[2, 2]
+                dyrel.∂∇V_∂Vy[1][i, j] = J_normal[3, 1]
+                dyrel.∂∇V_∂Vy[2][i, j] = J_normal[3, 2]
+            end
         end
     end
 
@@ -611,76 +621,76 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 2},
-        Ry,
-        Vx,
-        Vy,
-        P,
-        ΔPψ,
-        τxx,
-        τyy,
-        τxy,
-        ρgx,
-        ρgy,
-        _di_center,
-        _di_vertex,
-        dt,
-    ) where {T}
+# @parallel_indices (i, j) function compute_PH_residual_V!(
+#         Rx::AbstractArray{T, 2},
+#         Ry,
+#         Vx,
+#         Vy,
+#         P,
+#         ΔPψ,
+#         τxx,
+#         τyy,
+#         τxy,
+#         ρgx,
+#         ρgy,
+#         _di_center,
+#         _di_vertex,
+#         dt,
+#     ) where {T}
 
-    nx, ny = size(ρgy)
-    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-        _dx_c    = @dx(_di_center, i)
-        _dy_v    = @dy(_di_vertex, j)
-        τxxᵢⱼ    = SA[τxx[i, j], τxx[i + 1, j]]
-        τxyᵢⱼ    = SA[τxy[i + 1, j], τxy[i + 1, j + 1]]
-        Pᵢⱼ      = SA[P[i, j], P[i + 1, j]]
-        ΔPψᵢⱼ    = SA[ΔPψ[i, j], ΔPψ[i + 1, j]]
-        ρgxᵢⱼ    = SA[ρgx[i, j], ρgx[i + 1, j]]
-        Rx[i, j] = local_Rx_residual(
-            τxxᵢⱼ,
-            τxyᵢⱼ,
-            Pᵢⱼ,
-            ΔPψᵢⱼ,
-            ρgxᵢⱼ,
-            _dx_c,
-            _dy_v,
-        )
-    end
+#     nx, ny = size(ρgy)
+#     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
+#         _dx_c    = @dx(_di_center, i)
+#         _dy_v    = @dy(_di_vertex, j)
+#         τxxᵢⱼ    = SA[τxx[i, j], τxx[i + 1, j]]
+#         τxyᵢⱼ    = SA[τxy[i + 1, j], τxy[i + 1, j + 1]]
+#         Pᵢⱼ      = SA[P[i, j], P[i + 1, j]]
+#         ΔPψᵢⱼ    = SA[ΔPψ[i, j], ΔPψ[i + 1, j]]
+#         ρgxᵢⱼ    = SA[ρgx[i, j], ρgx[i + 1, j]]
+#         Rx[i, j] = local_Rx_residual(
+#             τxxᵢⱼ,
+#             τxyᵢⱼ,
+#             Pᵢⱼ,
+#             ΔPψᵢⱼ,
+#             ρgxᵢⱼ,
+#             _dx_c,
+#             _dy_v,
+#         )
+#     end
 
-    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-        _dy_c = @dy(_di_center, j)
-        _dx_v = @dx(_di_vertex, i)
-        θ = 1.0
-        # Vertical velocity
-        Vyᵢⱼ = Vy[i + 1, j + 1]
-        # Get necessary buoyancy forces
-        j_N = min(j + 1, ny)
-        ρg_S = ρgy[i, j]
-        ρg_N = ρgy[i, j_N]
-        # Spatial derivatives
-        ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
-        # correction term
-        ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
-        τyyᵢⱼ = SA[τyy[i, j], τyy[i, j + 1]]
-        τxyᵢⱼ = SA[τxy[i, j + 1], τxy[i + 1, j + 1]]
-        Pᵢⱼ = SA[P[i, j], P[i, j + 1]]
-        ΔPψᵢⱼ = SA[ΔPψ[i, j], ΔPψ[i, j + 1]]
-        ρgyᵢⱼ = SA[ρgy[i, j], ρgy[i, j + 1]]
+#     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+#         _dy_c = @dy(_di_center, j)
+#         _dx_v = @dx(_di_vertex, i)
+#         θ = 1.0
+#         # Vertical velocity
+#         Vyᵢⱼ = Vy[i + 1, j + 1]
+#         # Get necessary buoyancy forces
+#         j_N = min(j + 1, ny)
+#         ρg_S = ρgy[i, j]
+#         ρg_N = ρgy[i, j_N]
+#         # Spatial derivatives
+#         ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
+#         # correction term
+#         ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
+#         τyyᵢⱼ = SA[τyy[i, j], τyy[i, j + 1]]
+#         τxyᵢⱼ = SA[τxy[i, j + 1], τxy[i + 1, j + 1]]
+#         Pᵢⱼ = SA[P[i, j], P[i, j + 1]]
+#         ΔPψᵢⱼ = SA[ΔPψ[i, j], ΔPψ[i, j + 1]]
+#         ρgyᵢⱼ = SA[ρgy[i, j], ρgy[i, j + 1]]
 
-        Ry[i, j] = local_Ry_residual(
-            τyyᵢⱼ,
-            τxyᵢⱼ,
-            Pᵢⱼ,
-            ΔPψᵢⱼ,
-            ρgyᵢⱼ,
-            _dy_c,
-            _dx_v,
-        ) + ρg_correction
-    end
+#         Ry[i, j] = local_Ry_residual(
+#             τyyᵢⱼ,
+#             τxyᵢⱼ,
+#             Pᵢⱼ,
+#             ΔPψᵢⱼ,
+#             ρgyᵢⱼ,
+#             _dy_c,
+#             _dx_v,
+#         ) + ρg_correction
+#     end
 
-    return nothing
-end
+#     return nothing
+# end
 
 @parallel_indices (i, j) function compute_DR_residual_V!(
         Rx::AbstractArray{T, 2},
@@ -1023,30 +1033,59 @@ end
         dτVy,
         _di_center,
         _di_vertex,
+        dyrel,
+        do_partials::Bool,
     ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
-
     @inbounds begin
+        ΔPψᵢⱼ = SA[zero(T), zero(T)]
+
         if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-            _dx_c = @dx(_di_center, i)
-            _dy_v = @dy(_di_vertex, j)
-            Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
-            Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
-            Rx_ij = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(θc) - av_xa(ρgx)) / Dx[i, j]
+            _dx_c  = @dx(_di_center, i)
+            _dy_v  = @dy(_di_vertex, j)
+            τxxᵢⱼ  = SA[τxx[i, j], τxx[i + 1, j]]
+            τxyᵢⱼ  = SA[τxy[i + 1, j], τxy[i + 1, j + 1]]
+            Pᵢⱼ    = SA[P[i, j], P[i + 1, j]]
+            θcᵢⱼ   = SA[θc[i, j], θc[i + 1, j]]
+            ρgxᵢⱼ  = SA[ρgx[i, j], ρgx[i + 1, j]]
+            Rx_ij  = local_DR_Rx_residual(τxxᵢⱼ, τxyᵢⱼ, Pᵢⱼ, θcᵢⱼ, ΔPψᵢⱼ, ρgxᵢⱼ, _dx_c, _dy_v, Dx[i, j])
             Rx[i, j] = Rx_ij
+            if do_partials
+                ∂R = local_DR_Rx_residual_partials(τxxᵢⱼ, τxyᵢⱼ, Pᵢⱼ, θcᵢⱼ, ΔPψᵢⱼ, ρgxᵢⱼ, _dx_c, _dy_v, Dx[i, j])
+                dyrel.∂Rx_∂τxx[1][i, j]   = ∂R.τxx[1]
+                dyrel.∂Rx_∂τxx[2][i, j]   = ∂R.τxx[2]
+                dyrel.∂Rx_∂τxy[1][i, j]   = ∂R.τxy[1]
+                dyrel.∂Rx_∂τxy[2][i, j]   = ∂R.τxy[2]
+                dyrel.∂Rx_∂P[1][i, j]     = ∂R.P[1]
+                dyrel.∂Rx_∂P[2][i, j]     = ∂R.P[2]
+                dyrel.∂Rx_∂P_num[1][i, j] = ∂R.P_num[1]
+                dyrel.∂Rx_∂P_num[2][i, j] = ∂R.P_num[2]
+            end
 
             dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
             dVxdτ[i, j] = dVx_new
             Vx[i + 1, j + 1] += ΔVx
         end
         if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-            _dy_c = @dy(_di_center, j)
-            _dx_v = @dx(_di_vertex, i)
-            Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
-            Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-            Ry_ij = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(θc) - av_ya(ρgy)) / Dy[i, j]
+            _dy_c  = @dy(_di_center, j)
+            _dx_v  = @dx(_di_vertex, i)
+            τyyᵢⱼ  = SA[τyy[i, j], τyy[i, j + 1]]
+            τxyᵢⱼ  = SA[τxy[i, j + 1], τxy[i + 1, j + 1]]
+            Pᵢⱼ    = SA[P[i, j], P[i, j + 1]]
+            θcᵢⱼ   = SA[θc[i, j], θc[i, j + 1]]
+            ρgyᵢⱼ  = SA[ρgy[i, j], ρgy[i, j + 1]]
+            Ry_ij  = local_DR_Ry_residual(τyyᵢⱼ, τxyᵢⱼ, Pᵢⱼ, θcᵢⱼ, ΔPψᵢⱼ, ρgyᵢⱼ, _dy_c, _dx_v, Dy[i, j])
             Ry[i, j] = Ry_ij
+            if do_partials
+                ∂R = local_DR_Ry_residual_partials(τyyᵢⱼ, τxyᵢⱼ, Pᵢⱼ, θcᵢⱼ, ΔPψᵢⱼ, ρgyᵢⱼ, _dy_c, _dx_v, Dy[i, j])
+                dyrel.∂Ry_∂τyy[1][i, j]   = ∂R.τyy[1]
+                dyrel.∂Ry_∂τyy[2][i, j]   = ∂R.τyy[2]
+                dyrel.∂Ry_∂τxy[1][i, j]   = ∂R.τxy[1]
+                dyrel.∂Ry_∂τxy[2][i, j]   = ∂R.τxy[2]
+                dyrel.∂Ry_∂P[1][i, j]     = ∂R.P[1]
+                dyrel.∂Ry_∂P[2][i, j]     = ∂R.P[2]
+                dyrel.∂Ry_∂P_num[1][i, j] = ∂R.P_num[1]
+                dyrel.∂Ry_∂P_num[2][i, j] = ∂R.P_num[2]
+            end
 
             dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij, αVy[i, j], βVy[i, j], dτVy[i, j])
             dVydτ[i, j] = dVy_new
@@ -1092,6 +1131,8 @@ end
         dτVz,
         _di_center,
         _di_vertex,
+        dyrel,
+        do_partials::Bool,
     ) where {T}
 
     Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)

@@ -27,7 +27,7 @@ end
     i, j = I
 
     if i ≤ size(dyrel.Dx, 1) && j ≤ size(dyrel.Dx, 2)
-        ni_center = size(dyrel.γ_eff)
+        ni_center = size(-dyrel.γ_eff)
 
         Cxx = zero(eltype(dyrel.Dx))
         for m in 1:5
@@ -55,7 +55,7 @@ end
     i, j = I
 
     if i ≤ size(dyrel.Dy, 1) && j ≤ size(dyrel.Dy, 2)
-        ni_center = size(dyrel.γ_eff)
+        ni_center = size(-dyrel.γ_eff)
 
         Cyx = zero(eltype(dyrel.Dy))
         for m in 1:4

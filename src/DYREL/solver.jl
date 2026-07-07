@@ -119,23 +119,28 @@ function _solve_DYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
+
     if use_gershgorin_ad
-        compute_local_strain_rates!(stokes, dyrel, grid, true)
-        compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, true)
-        @parallel (@idx ni) compute_DR_residual_V!(
+        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, true)
+        compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, dyrel, true)
+        @parallel (@idx ni) compute_DR_residual_update_V!(
             residuals...,
-            dyrel,
+            @velocity(stokes)...,
+            fields.dVdτ...,
             stokes.P,
-            P_num,
-            stokes.ΔPψ,
+            θc,
             @stress(stokes)...,
             ρg...,
             fields.D...,
+            fields.αV...,
+            fields.βV...,
+            fields.dτV...,
             _di.center,
             _di.vertex,
+            dyrel,
             true,
-        )
-        Gershgorin_Stokes2D_SchurComplementAD(dyrel, _di.center, _di.vertex, _di.velocity[1], _di.velocity[2])
+            )
+        Gershgorin_Stokes_SchurComplementAD!(dim, dyrel, grid)
         update_dτV_α_β!(dyrel)
     else
         DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
@@ -147,10 +152,10 @@ function _solve_DYREL!(
         update_ρg!(ρg, phase_ratios, rheology, args)
 
         # compute divergence, deviatoric strain rate and pressure residual in one pass
-        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
+        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, false)
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
-        compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+        compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, dyrel, false)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)
         # update_halo!(stokes.τ.yy_v)
@@ -208,15 +213,16 @@ function _solve_DYREL!(
             itPT += 1
             itg += 1
             iter += 1
+            do_partials = use_gershgorin_ad && iszero(iter % nout)
 
             # Pseudo-old dudes (only needed by compute_λminV! on residual-check iterations)
             iszero(iter % nout) && foreach(copyto!, residuals0, residuals)
 
             # compute divergence, deviatoric strain rate and pressure residual in one pass
-            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
+            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, do_partials)
 
             # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
-            compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+            compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, dyrel, do_partials)
             # update_halo!(stokes.λv)
             # batch the vertex-stress halos (+ vertex viscosity, refreshed above in the fused
             # kernel from pre-halo stress) into a single MPI exchange, so shared boundary vertices
@@ -243,7 +249,8 @@ function _solve_DYREL!(
                 fields.dτV...,
                 _di.center,
                 _di.vertex,
-                false,
+                dyrel,
+                do_partials,
             )
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)
@@ -277,7 +284,7 @@ function _solve_DYREL!(
                 if use_gershgorin_ad
                     Gershgorin_Stokes2D_SchurComplementAD(dyrel, _di.center, _di.vertex, _di.velocity[1], _di.velocity[2])
                 else
-                    Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
+                    Gershgorin_Stokes_SchurComplement!(dim, fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
                 end
 
                 # Select dτ

@@ -185,9 +185,29 @@ end
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
             _di.center, _di.vertex,
+            dyrel, false,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test Array(stokes.V.Vx) == Array(Vx_before)
         @test Array(stokes.V.Vy) == Array(Vy_before)
+
+        dyrel.∂Rx_∂P_num[1] .= 0.0
+        dyrel.∂Ry_∂P_num[1] .= 0.0
+        @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
+            stokes.R.Rx, stokes.R.Ry,
+            stokes.V.Vx, stokes.V.Vy,
+            dyrel.dVxdτ, dyrel.dVydτ,
+            stokes.P, θc,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy,
+            ρg...,
+            dyrel.Dx, dyrel.Dy,
+            dyrel.αVx, dyrel.αVy,
+            dyrel.βVx, dyrel.βVy,
+            dyrel.dτVx, dyrel.dτVy,
+            _di.center, _di.vertex,
+            dyrel, true,
+        )
+        @test dyrel.∂Rx_∂P_num[1][2, 2] != 0
+        @test dyrel.∂Ry_∂P_num[1][2, 2] != 0
     end
 end

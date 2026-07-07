@@ -223,8 +223,20 @@ end
         grid = Geometry(ni, (1.0, 1.0))
         stokes = StokesArrays(backend_JR, ni)
         dyrel = JustRelax2D.DYREL(backend_JR, ni)
+        dt = 1.0
+        rheology = (
+            GeoParams.SetMaterialParams(;
+                Phase = 1,
+                Density = GeoParams.ConstantDensity(; ρ = 0.0),
+                Gravity = GeoParams.ConstantGravity(; g = 0.0),
+                CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 10.0),)),
+            ),
+        )
+        phase_ratios = JustPIC._2D.PhaseRatios(backend_JP, length(rheology), ni)
+        args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
+        dyrel.ηb .= 1.0
 
-        JustRelax2D.compute_local_strain_rates!(stokes, dyrel, grid, true)
+        JustRelax2D.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, grid._di, ni, dt, args, true)
 
         @test dyrel.∂εxx_∂Vx[1][2, 2] != 0
         @test dyrel.∂εxx_∂Vx[1][2, 2] ≈ -dyrel.∂εxx_∂Vx[2][2, 2]
@@ -315,20 +327,8 @@ end
         ρg = @zeros(ni...), @zeros(ni...)
         P_num = similar(stokes.P)
 
-        JustRelax2D.compute_local_strain_rates!(stokes, dyrel_ad, grid, true)
+        JustRelax2D.compute_∇V_strain_rate_RP!(stokes, dyrel_ad, rheology, phase_ratios, grid._di, ni, dt, args, true)
         JustRelax2D.compute_stress_DRYEL!(stokes, dyrel_ad, rheology, phase_ratios, 1.0, dt, true)
-        JustRelax2D.compute_residual_P!(
-            stokes.R.RP,
-            stokes.P,
-            stokes.P0,
-            stokes.∇V,
-            stokes.Q,
-            dyrel_ad.ηb,
-            rheology,
-            phase_ratios,
-            dt,
-            args,
-        )
         @. P_num = dyrel_ad.γ_eff * stokes.R.RP
         @parallel (@idx ni) JustRelax2D.compute_DR_residual_V!(
             @residuals(stokes.R)...,

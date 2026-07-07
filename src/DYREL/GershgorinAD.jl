@@ -14,6 +14,14 @@ function Gershgorin_Stokes2D_SchurComplementAD(
     return nothing
 end
 
+@inline function Gershgorin_Stokes_SchurComplementAD!(::Val{2}, dyrel, grid)
+    return Gershgorin_Stokes2D_SchurComplementAD(dyrel, grid._di.center, grid._di.vertex, grid._di.velocity[1], grid._di.velocity[2])
+end
+
+@inline function Gershgorin_Stokes_SchurComplementAD!(::Val{3}, dyrel, grid)
+    error("Not yet implemented for 3D")
+end
+
 @parallel_indices (I...) function assemble_Rx_gershgorin!(dyrel, _di_center, _di_vertex, _di_vx, _di_vy)
 
     i, j = I

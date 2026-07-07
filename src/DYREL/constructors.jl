@@ -89,13 +89,12 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     E = typeof(∂εxx_∂Vx)
     return JustRelax.DYREL{T, F, E}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
-        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact,
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0, Rz0,
+        CFL, ϵ, ϵ_vel, c_fact,
         ∂τxxc_∂εxx, ∂τxxc_∂εyy, ∂τxxc_∂εxy, ∂τyyc_∂εxx, ∂τyyc_∂εyy, ∂τyyc_∂εxy, ∂τxyc_∂εxx, ∂τxyc_∂εyy, ∂τxyc_∂εxy,
         ∂τxxv_∂εxx, ∂τxxv_∂εyy, ∂τxxv_∂εxy, ∂τyyv_∂εxx, ∂τyyv_∂εyy, ∂τyyv_∂εxy, ∂τxyv_∂εxx, ∂τxyv_∂εyy, ∂τxyv_∂εxy,
         ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy, ∂Rx_∂τxx, ∂Rx_∂τxy, ∂Rx_∂P,
         ∂Rx_∂P_num, ∂Ry_∂τyy, ∂Ry_∂τxy, ∂Ry_∂P, ∂Ry_∂P_num
-        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0,
-        Rz0, CFL, ϵ, ϵ_vel, c_fact
     )
 end
 
@@ -177,13 +176,12 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     E = typeof(∂εxx_∂Vx)
     return JustRelax.DYREL{T, F, E}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
-        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact,
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0, Rz0,
+        CFL, ϵ, ϵ_vel, c_fact,
         ∂τxxc_∂εxx, ∂τxxc_∂εyy, ∂τxxc_∂εxy, ∂τyyc_∂εxx, ∂τyyc_∂εyy, ∂τyyc_∂εxy, ∂τxyc_∂εxx, ∂τxyc_∂εyy, ∂τxyc_∂εxy,
         ∂τxxv_∂εxx, ∂τxxv_∂εyy, ∂τxxv_∂εxy, ∂τyyv_∂εxx, ∂τyyv_∂εyy, ∂τyyv_∂εxy, ∂τxyv_∂εxx, ∂τxyv_∂εyy, ∂τxyv_∂εxy,
         ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy,
         ∂Rx_∂τxx, ∂Rx_∂τxy, ∂Rx_∂P, ∂Rx_∂P_num, ∂Ry_∂τyy, ∂Ry_∂τxy, ∂Ry_∂P, ∂Ry_∂P_num
-        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0,
-        Rz0, CFL, ϵ, ϵ_vel, c_fact
     )
 end
 
@@ -220,6 +218,7 @@ This function:
 function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
 
     ni = size(stokes.P)
+    dim = Val(length(ni))
 
     # instantiate DYREL object
     dyrel = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
@@ -228,10 +227,10 @@ function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; �
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    Gershgorin_Stokes_SchurComplement!(dim, dyrel.Dx, dyrel.Dy, dyrel.Dz, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
 
     # compute damping coefficients
-    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+    update_dτV_α_β!(dyrel, CFL)
 
     return dyrel
 end
@@ -259,41 +258,47 @@ This function recomputes:
 Returns `nothing`.
 """
 function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = 0.99, γfact = 20.0)
+    dim = Val(ndims(stokes.P))
+
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    Gershgorin_Stokes_SchurComplement!(dim, dyrel.Dx, dyrel.Dy, dyrel.Dz, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
 
     # compute damping coefficients
-    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+    update_dτV_α_β!(dyrel, CFL)
 
     return nothing
 end
 
 function DYREL_AD!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, grid::Geometry, dt; CFL = 0.99, γfact = 20.0)
+    dim = Val(ndims(stokes.P))
+
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
     # assemble Gershgorin estimates from local stress gradients
-    Gershgorin_Stokes2D_SchurComplementAD(dyrel, grid._di.center, grid._di.vertex, grid._di.velocity[1], grid._di.velocity[2])
+    Gershgorin_Stokes_SchurComplementAD!(dim, dyrel, grid)
 
     # compute damping coefficients
-    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+    update_dτV_α_β!(dyrel, CFL)
 
     return nothing
 end
 
 # variational version
 function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL = 0.99, γfact = 20.0)
+    dim = Val(ndims(stokes.P))
+
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    Gershgorin_Stokes_SchurComplement!(dim, dyrel.Dx, dyrel.Dy, dyrel.Dz, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
 
     # compute damping coefficients
-    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+    update_dτV_α_β!(dyrel, CFL)
 
     return nothing
 end

@@ -36,6 +36,7 @@ include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 include("../../variational_stokes/Stokes2D.jl")
 include("../../DYREL/solver.jl")
+include("../../DYREL/solver_VS.jl")
 
 # Types
 function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}

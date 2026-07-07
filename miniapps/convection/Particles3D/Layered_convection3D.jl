@@ -1,4 +1,5 @@
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = CPUBackend
 
@@ -199,6 +200,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
 
         # interpolate fields from particle to grid vertices
         particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
         # ------------------------------
 
         # Stokes solver ----------------

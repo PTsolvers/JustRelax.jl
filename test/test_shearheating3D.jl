@@ -155,6 +155,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
 
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
 
         # Stokes solver ----------------
         iters = solve!(

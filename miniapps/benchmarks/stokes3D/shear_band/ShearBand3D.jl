@@ -1,5 +1,6 @@
 using CUDA
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = CUDABackend
 using Printf, GeoParams, CairoMakie, CellArrays

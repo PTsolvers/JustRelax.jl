@@ -1,5 +1,6 @@
 # using CUDA
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = JustRelax.CPUBackend
 

@@ -77,11 +77,16 @@ end
         @test size(dyrel.∂Rx_∂P_num[1]) == (nx - 1, ny)
         @test size(dyrel.∂Ry_∂τyy[1]) == (nx, ny - 1)
         @test size(dyrel.∂Ry_∂P_num[1]) == (nx, ny - 1)
+        @test size(dyrel.P_num) == (nx, ny)
+        @test size(dyrel.Rx0) == (nx - 1, ny)
+        @test size(dyrel.Ry0) == (nx, ny - 1)
+        @test size(dyrel.Rz0) == (1, 1)
         @test dyrel.CFL === 0.5
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
         @test dyrel.c_fact === 0.25
         @test all(iszero.(dyrel.γ_eff))
+        @test all(iszero.(dyrel.P_num))
         @test all(iszero.(dyrel.Dx)) && all(iszero.(dyrel.Dy))
         @test all(iszero.(dyrel.λmaxVx)) && all(iszero.(dyrel.λmaxVy))
     end
@@ -114,11 +119,16 @@ end
         @test length(dyrel.∂∇V_∂Vy) == 1
         @test length(dyrel.∂εxy_∂Vx) == 1
         @test length(dyrel.∂εxy_∂Vy) == 1
+        @test size(dyrel.P_num) == (nx, ny, nz)
+        @test size(dyrel.Rx0) == (nx - 1, ny, nz)
+        @test size(dyrel.Ry0) == (nx, ny - 1, nz)
+        @test size(dyrel.Rz0) == (nx, ny, nz - 1)
         @test dyrel.CFL === 0.6
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
         @test dyrel.c_fact === 0.3
         @test all(iszero.(dyrel.γ_eff))
+        @test all(iszero.(dyrel.P_num))
         @test all(iszero.(dyrel.Dz)) && all(iszero.(dyrel.λmaxVz))
 
         # 3-int forwarder

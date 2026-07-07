@@ -257,6 +257,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 
         it += 1
@@ -281,8 +282,8 @@ end
         igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
         Urms, Nu_top, iters = main2D(igg; nx = nx, ny = ny)
-        @test Urms[end] ≈ 0.2679304476129473 rtol = 1.0e-1
-        @test Nu_top[end] ≈ 1.000000002029353 rtol = 1.0e-2
+        @test Urms[end] ≈ 0.40987052065118357 rtol = 1.0e-1
+        @test Nu_top[end] ≈ 1.0026242251320245 rtol = 1.0e-2
         @test iters.err_evo1[end] < 1.0e-4
     end
 end

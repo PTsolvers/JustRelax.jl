@@ -1,5 +1,6 @@
 using GeoParams, CairoMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
 
@@ -232,7 +233,7 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
 
         # ax4 plotting
         cp = tensile_cap_params(sind(ϕ), cosd(ϕ), sind(ψ), C / cosd(ϕ), abs(pl.pT.val))
-        xc_array = range(-abs(pl.pT.val), cp.pd; length = 100)
+        xc_array = range(pl.pT.val, cp.pd; length = 100)
         yc_array = sqrt.(max.(0.0, cp.R^2 .- (collect(xc_array) .- cp.py) .^ 2))
 
         P_pts = vec(Array(stokes.P))

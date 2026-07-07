@@ -1,3 +1,4 @@
+using Pkg; Pkg.activate("miniapps")
 using MPI
 
 # FVCA8 benchmark for the Stokes and Navier-Stokes

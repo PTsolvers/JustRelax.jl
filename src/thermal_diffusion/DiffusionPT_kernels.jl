@@ -335,7 +335,7 @@ end
         elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
             qTx[i, j] = bc_flux.right
         else
-            _dx = @dx(_di_center, clamp(i, 1, nx))
+            _dx = @dx(_di_center, clamp(i, 1, nx - 1))
             iL = clamp(i - 1, 1, nx)
             iR = clamp(i, 1, nx)
             Kx = (K[iL, j] + K[iR, j]) * 0.5
@@ -351,7 +351,7 @@ end
         elseif j == size(qTy, 2) && !isa(bc_flux.top, Bool)
             qTy[i, j] = bc_flux.top
         else
-            _dy = @dy(_di_center, clamp(j, 1, ny))
+            _dy = @dy(_di_center, clamp(j, 1, ny - 1))
             jB = clamp(j - 1, 1, ny)
             jT = clamp(j, 1, ny)
             Ky = (K[i, jB] + K[i, jT]) * 0.5
@@ -396,7 +396,7 @@ end
             K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
             ii, jj = iR, j
-            phase_ij = getindex_phase(phase_ratios_qy, ii, jj)
+            phase_ij = getindex_phase(phase_ratios_qx, ii, jj)
             args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
             K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
             K = (K1 + K2) * 0.5

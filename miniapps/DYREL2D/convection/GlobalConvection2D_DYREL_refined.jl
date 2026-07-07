@@ -5,6 +5,7 @@ const isGPU = true
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 @static if isGPU
     const backend_JR = CUDABackend
@@ -388,6 +389,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
         # interpolate fields from particles to cell centers
         particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         @views thermal.T[:, end - 1] .= Ttop
         @views thermal.T[:, 2] .= Tbot
         thermal_bcs!(thermal, thermal_bc)

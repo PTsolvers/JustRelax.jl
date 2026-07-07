@@ -116,6 +116,24 @@ function JR3D.PTThermalCoeffs(
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ = ϵ, CFL = CFL)
 end
 
+function JR3D.update_pt_thermal_arrays!(
+        pt_thermal::JustRelax.PTThermalCoeffs{T, <:ROCArray},
+        phase_ratios::JustPIC.PhaseRatios,
+        rheology,
+        args,
+        _dt,
+    ) where {T}
+    update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)
+    return nothing
+end
+
+function JR3D.update_pt_thermal_arrays!(
+        pt_thermal::JustRelax.PTThermalCoeffs{T, <:ROCArray}, phase_ratios, rheology, args, _dt
+    ) where {T}
+    update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)
+    return nothing
+end
+
 function JR3D.update_thermal_coeffs!(
         pt_thermal::JustRelax.PTThermalCoeffs{T, <:ROCArray}, rheology, phase_ratios, args, dt
     ) where {T}
@@ -534,9 +552,9 @@ function JR3D.update_phase_ratios_3D!(
     phase_ratios_face_from_arrays!(phase_ratios.Vz, phase_arrays, xci, :z)
 
     # shear stress nodes
-    phase_ratios_midpoint_from_centers!(phase_ratios.xy, phase_arrays, xci, :xy)
-    phase_ratios_midpoint_from_centers!(phase_ratios.yz, phase_arrays, xci, :yz)
-    phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, xci, :xz)
+    phase_ratios_midpoint_from_arrays!(phase_ratios.xy, phase_arrays, xci, :xy)
+    phase_ratios_midpoint_from_arrays!(phase_ratios.yz, phase_arrays, xci, :yz)
+    phase_ratios_midpoint_from_arrays!(phase_ratios.xz, phase_arrays, xci, :xz)
     return nothing
 end
 

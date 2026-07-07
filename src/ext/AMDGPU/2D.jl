@@ -524,7 +524,19 @@ function JR2D.update_phases_given_markerchain!(
         di,
         air_phase,
     )
-    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
+    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, ())
+end
+
+function JR2D.update_phases_given_markerchain!(
+        phase,
+        chain::MarkerChain{JustPIC.AMDGPUBackend},
+        particles::Particles{JustPIC.AMDGPUBackend},
+        origin,
+        di,
+        air_phase,
+        args::NTuple{N, Any},
+    ) where {N}
+    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, args)
 end
 
 # Phase ratios with arrays

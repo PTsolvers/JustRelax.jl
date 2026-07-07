@@ -9,6 +9,7 @@ using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else

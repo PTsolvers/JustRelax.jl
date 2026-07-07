@@ -79,6 +79,10 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     ∂Ry_∂τxy = zero_field_tuple(Val(2), nx, ny - 1)
     ∂Ry_∂P = zero_field_tuple(Val(2), nx, ny - 1)
     ∂Ry_∂P_num = zero_field_tuple(Val(2), nx, ny - 1)
+    P_num = @zeros(nx, ny)
+    Rx0 = @zeros(nx - 1, ny)
+    Ry0 = @zeros(nx, ny - 1)
+    Rz0 = @zeros(1, 1)  # dummy for 2D
 
     T = typeof(γ_eff)
     F = typeof(CFL)
@@ -90,6 +94,8 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
         ∂τxxv_∂εxx, ∂τxxv_∂εyy, ∂τxxv_∂εxy, ∂τyyv_∂εxx, ∂τyyv_∂εyy, ∂τyyv_∂εxy, ∂τxyv_∂εxx, ∂τxyv_∂εyy, ∂τxyv_∂εxy,
         ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy, ∂Rx_∂τxx, ∂Rx_∂τxy, ∂Rx_∂P,
         ∂Rx_∂P_num, ∂Ry_∂τyy, ∂Ry_∂τxy, ∂Ry_∂P, ∂Ry_∂P_num
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0,
+        Rz0, CFL, ϵ, ϵ_vel, c_fact
     )
 end
 
@@ -161,6 +167,10 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     ∂Ry_∂τxy = zero_field_tuple(Val(1), 1, 1, 1)
     ∂Ry_∂P = zero_field_tuple(Val(1), 1, 1, 1)
     ∂Ry_∂P_num = zero_field_tuple(Val(1), 1, 1, 1)
+    P_num = @zeros(nx, ny, nz)
+    Rx0 = @zeros(nx - 1, ny, nz)
+    Ry0 = @zeros(nx, ny - 1, nz)
+    Rz0 = @zeros(nx, ny, nz - 1)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
@@ -172,6 +182,8 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
         ∂τxxv_∂εxx, ∂τxxv_∂εyy, ∂τxxv_∂εxy, ∂τyyv_∂εxx, ∂τyyv_∂εyy, ∂τyyv_∂εxy, ∂τxyv_∂εxx, ∂τxyv_∂εyy, ∂τxyv_∂εxy,
         ∂εxx_∂Vx, ∂εyy_∂Vx, ∂∇V_∂Vx, ∂εxx_∂Vy, ∂εyy_∂Vy, ∂∇V_∂Vy, ∂εxy_∂Vx, ∂εxy_∂Vy,
         ∂Rx_∂τxx, ∂Rx_∂τxy, ∂Rx_∂P, ∂Rx_∂P_num, ∂Ry_∂τyy, ∂Ry_∂τxy, ∂Ry_∂P, ∂Ry_∂P_num
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0,
+        Rz0, CFL, ϵ, ϵ_vel, c_fact
     )
 end
 

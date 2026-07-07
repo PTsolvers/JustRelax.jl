@@ -111,3 +111,19 @@ end
 
 @inline _compute_RP!(P, P0, ∇V, Q, ηb, dt) = -∇V - (P - P0) / ηb + (Q / dt)
 @inline _compute_RP!(P, P0, ∇V, Q, ΔT, α, ηb, dt) = -∇V - (P - P0) / ηb + α * (ΔT / dt) + (Q / dt)
+
+# Per-cell pressure residual, dispatching on the presence of ΔT / melt_fraction exactly as
+# `compute_RP_kernel!` does. Used to fold the RP computation into the strain-rate kernel while
+# reusing `_compute_RP!` and keeping the thermal branch resolved at compile time (GPU-friendly).
+@inline _RP_cell(P, P0, ∇V, Q, ηb, dt, rheology, phase_ratio, ::Nothing, ::Nothing, I::Vararg{Int}) =
+    _compute_RP!(P, P0, ∇V, Q, ηb, dt)
+@inline _RP_cell(P, P0, ∇V, Q, ηb, dt, rheology, phase_ratio, ::Nothing, melt_fraction, I::Vararg{Int}) =
+    _compute_RP!(P, P0, ∇V, Q, ηb, dt)
+@inline function _RP_cell(P, P0, ∇V, Q, ηb, dt, rheology, phase_ratio, ΔT, ::Nothing, I::Vararg{Int})
+    α = fn_ratio(get_thermal_expansion, rheology, phase_ratio[I...])
+    return _compute_RP!(P, P0, ∇V, Q, ΔT[(I .+ 1)...], α, ηb, dt)
+end
+@inline function _RP_cell(P, P0, ∇V, Q, ηb, dt, rheology, phase_ratio, ΔT, melt_fraction, I::Vararg{Int})
+    α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
+    return _compute_RP!(P, P0, ∇V, Q, ΔT[(I .+ 1)...], α, ηb, dt)
+end

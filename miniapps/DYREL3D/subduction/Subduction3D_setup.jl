@@ -3,8 +3,8 @@ using GeophysicalModelGenerator
 function GMG_only(nx, ny, nz)
 
     x = range(-3960, 500, nx)
-    y = range(0, 2640, ny)
-    air_thickness = 0.0
+    y = range(0, 400, ny)
+    air_thickness = 50.0
     z = range(-660, air_thickness, nz)
     Grid = CartData(xyz_grid(x, y, z))
 
@@ -34,14 +34,14 @@ function GMG_only(nx, ny, nz)
     add_box!(Phases, Temp, Grid; xlim = (-3000, -1000), ylim = (0, 1000), zlim = (-80, 0), phase = LithosphericPhases(Layers = [20, 60], Phases = [1, 2]))
     add_box!(Phases, Temp, Grid, xlim = (-1000, -810), ylim = (0, 1000), zlim = (-80, 0), phase = LithosphericPhases(Layers = [20, 60], Phases = [1, 2]), DipAngle = 20)
 
+    surf = Grid.z.val .> 0.0
+    Phases[surf] .= 4
+
     # Add them to the `CartData` dataset:
     Grid = addfield(Grid, (; Phases, Temp))
 
     # Which looks like
     write_paraview(Grid, "Initial_Setup_Subduction")
-
-    surf = Grid.z.val .> 0.0
-    Phases[surf] .= 4
 
     li = (abs(last(x) - first(x)), abs(last(y) - first(y)), abs(last(z) - first(z))) .* 1.0e3
     origin = (x[1], y[1], z[1]) .* 1.0e3

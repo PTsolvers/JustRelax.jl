@@ -155,7 +155,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # Time loop
     t, it = 0.0, 0
     t_max = nondimensionalize(10 * Myr, CharDim)
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 5.0e-3,  γfact = 10.0)
     while t < t_max
 
         # # interpolate fields from particles to centroids
@@ -190,9 +190,10 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
             )
         )
         end
+        niter = isempty(out.err_evo_it) ? 0.0 : last(out.err_evo_it)
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
-        println("   Time/iteration:  $(t_stokes / out.iter) s")
+        println("   Time/iteration:  $(iszero(niter) ? NaN : t_stokes / niter) s")
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di)
         # ------------------------------
@@ -228,7 +229,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 20) == 0
+        if it == 1 || rem(it, 10) == 0
             # checkpointing(figdir, stokes, thermal.T, η, t)
             xvi_dim = ntuple(i -> dimensionalize_and_strip(xvi[i], km, CharDim), Val(3))
             xci_dim = ntuple(i -> dimensionalize_and_strip(xci[i], km, CharDim), Val(3))
@@ -269,10 +270,10 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
-let
+# let
     do_vtk = true # set to true to generate VTK files for ParaView
     # nx, ny, nz = 150, 40, 150
-    nx,ny,nz = 64, 32, 64
+    nx,ny,nz = 128, 16, 64
     li, origin, phases_GMG, = GMG_only(nx + 1, ny + 1, nz + 1)
     igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
         IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
@@ -283,4 +284,4 @@ let
     # (Path)/folder where output data and figures are stored
     figdir = "Subduction3D_DYREL"
     main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk)
-end
+# end

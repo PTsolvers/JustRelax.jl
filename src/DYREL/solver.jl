@@ -121,25 +121,7 @@ function _solve_DYREL!(
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
 
     if use_gershgorin_ad
-        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, true)
         compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, dyrel, true)
-        @parallel (@idx ni) compute_DR_residual_update_V!(
-            residuals...,
-            @velocity(stokes)...,
-            fields.dVdτ...,
-            stokes.P,
-            θc,
-            @stress(stokes)...,
-            ρg...,
-            fields.D...,
-            fields.αV...,
-            fields.βV...,
-            fields.dτV...,
-            _di.center,
-            _di.vertex,
-            dyrel,
-            true,
-            )
         Gershgorin_Stokes_SchurComplementAD!(dim, dyrel, grid)
         update_dτV_α_β!(dyrel)
     else
@@ -152,7 +134,7 @@ function _solve_DYREL!(
         update_ρg!(ρg, phase_ratios, rheology, args)
 
         # compute divergence, deviatoric strain rate and pressure residual in one pass
-        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, false)
+        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
         compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, dyrel, false)
@@ -213,16 +195,16 @@ function _solve_DYREL!(
             itPT += 1
             itg += 1
             iter += 1
-            do_partials = use_gershgorin_ad && iszero(iter % nout)
+            do_stress_partials = use_gershgorin_ad && iszero(iter % nout)
 
             # Pseudo-old dudes (only needed by compute_λminV! on residual-check iterations)
             iszero(iter % nout) && foreach(copyto!, residuals0, residuals)
 
             # compute divergence, deviatoric strain rate and pressure residual in one pass
-            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, do_partials)
+            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
 
             # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
-            compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, dyrel, do_partials)
+            compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, dyrel, do_stress_partials)
             # update_halo!(stokes.λv)
             # batch the vertex-stress halos (+ vertex viscosity, refreshed above in the fused
             # kernel from pre-halo stress) into a single MPI exchange, so shared boundary vertices
@@ -249,8 +231,6 @@ function _solve_DYREL!(
                 fields.dτV...,
                 _di.center,
                 _di.vertex,
-                dyrel,
-                do_partials,
             )
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)

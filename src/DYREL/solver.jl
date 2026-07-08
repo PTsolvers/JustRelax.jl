@@ -128,20 +128,19 @@ function _solve_DYREL!(
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
         compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
-        # update_halo!(stokes.λv)
-        # update_halo!(stokes.τ.xx_v)
-        # update_halo!(stokes.τ.yy_v)
-        # update_halo!(stokes.τ.xy)
+        update_stress_halo!(stokes, dim, linear_viscosity)
 
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
             residuals...,
+            @velocity(stokes)...,
             stokes.P,
             stokes.ΔPψ,
             @stress(stokes)...,
             ρg...,
             _di.center,
             _di.vertex,
+            dt,
         )
 
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
@@ -194,15 +193,7 @@ function _solve_DYREL!(
 
             # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
             compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
-            # update_halo!(stokes.λv)
-            # batch the vertex-stress halos (+ vertex viscosity, refreshed above in the fused
-            # kernel from pre-halo stress) into a single MPI exchange, so shared boundary vertices
-            # stay consistent across ranks — matching the original stress→halo→viscosity ordering.
-            if linear_viscosity
-                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
-            else
-                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
-            end
+            update_stress_halo!(stokes, dim, linear_viscosity)
 
             # Velocity residuals + damped pseudo-transient velocity update (fused; the small pressure
             # correction θc = γ_eff·RP + ΔPψ was assembled by the stress kernel above; P stays separate)
@@ -220,6 +211,7 @@ function _solve_DYREL!(
                 fields.dτV...,
                 _di.center,
                 _di.vertex,
+                dt,
             )
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)
@@ -338,6 +330,20 @@ end
 end
 
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
+
+function update_stress_halo!(stokes::JustRelax.StokesArrays, ::Val{2}, linear_viscosity)
+    if linear_viscosity
+        update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
+    else
+        update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
+    end
+    return nothing
+end
+
+function update_stress_halo!(stokes::JustRelax.StokesArrays, ::Val{3}, linear_viscosity)
+    update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
+    return nothing
+end
 
 @inline global_grid_size(::Val{2}) = nx_g(), ny_g()
 @inline global_grid_size(::Val{3}) = nx_g(), ny_g(), nz_g()

@@ -74,33 +74,44 @@ end
     return nothing
 end
 
+# Calculates (∂εxx/∂Vx, ∂εyy/∂Vx, ∂∇V/∂Vx) for the positive x-side velocity.
 @inline function ∂normal_∂Vx(_di_vertex, i, j)
     _dx, _ = @dxi(_di_vertex, i, j)
     return (2 * _dx / 3, -_dx / 3, _dx)
 end
 
+# Calculates (∂εxx/∂Vy, ∂εyy/∂Vy, ∂∇V/∂Vy) for the positive y-side velocity.
 @inline function ∂normal_∂Vy(_di_vertex, i, j)
     _, _dy = @dxi(_di_vertex, i, j)
     return (-_dy / 3, 2 * _dy / 3, _dy)
 end
 
+# Calculates ∂εxy/∂Vx for the positive y-side velocity.
 @inline function ∂shear_∂Vx(_di_vx, j)
     _dy = @dy(_di_vx, j)
     return 0.5 * _dy
 end
 
+# Calculates ∂εxy/∂Vy for the positive x-side velocity.
 @inline function ∂shear_∂Vy(_di_vy, i)
     _dx = @dx(_di_vy, i)
     return 0.5 * _dx
 end
 
+# Calculates ∂Rx/∂τxx for the x-normal stress stencil.
 @inline ∂Rx_∂τxx(_di_center, i) = @dx(_di_center, i)
+# Calculates ∂Rx/∂τxy for the xy-shear stress stencil.
 @inline ∂Rx_∂τxy(_di_vertex, j) = @dy(_di_vertex, j)
+# Calculates ∂Rx/∂P_num for the pressure-correction stencil.
 @inline ∂Rx_∂Pnum(_di_center, i) = @dx(_di_center, i)
+# Calculates ∂Ry/∂τyy for the y-normal stress stencil.
 @inline ∂Ry_∂τyy(_di_center, j) = @dy(_di_center, j)
+# Calculates ∂Ry/∂τxy for the xy-shear stress stencil.
 @inline ∂Ry_∂τxy(_di_vertex, i) = @dx(_di_vertex, i)
+# Calculates ∂Ry/∂P_num for the pressure-correction stencil.
 @inline ∂Ry_∂Pnum(_di_center, j) = @dy(_di_center, j)
 
+# Calculates ∂Rx[i,j]/∂Vx_m for the five-point Vx stencil.
 @inline function ∂Rx∂Vx(dyrel, _di_center, _di_vertex, _di_vx, i, j, m)
     dτxx = ∂Rx_∂τxx(_di_center, i)
     dτxy = ∂Rx_∂τxy(_di_vertex, j)
@@ -135,6 +146,7 @@ end
     end
 end
 
+# Calculates ∂Rx[i,j]/∂Vy_m for the four-point Vy stencil.
 @inline function ∂Rx∂Vy(dyrel, _di_center, _di_vertex, _di_vy, i, j, m)
     dτxx = ∂Rx_∂τxx(_di_center, i)
     dτxy = ∂Rx_∂τxy(_di_vertex, j)
@@ -167,6 +179,7 @@ end
     end
 end
 
+# Calculates ∂Ry[i,j]/∂Vx_m for the four-point Vx stencil.
 @inline function ∂Ry∂Vx(dyrel, _di_center, _di_vertex, _di_vx, i, j, m)
     dτyy = ∂Ry_∂τyy(_di_center, j)
     dτxy = ∂Ry_∂τxy(_di_vertex, i)
@@ -199,6 +212,7 @@ end
     end
 end
 
+# Calculates ∂Ry[i,j]/∂Vy_m for the five-point Vy stencil.
 @inline function ∂Ry∂Vy(dyrel, _di_center, _di_vertex, _di_vy, i, j, m)
     dτyy = ∂Ry_∂τyy(_di_center, j)
     dτxy = ∂Ry_∂τxy(_di_vertex, i)

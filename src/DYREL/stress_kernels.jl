@@ -239,7 +239,10 @@ end
     return nothing
 end
 
-@generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt, EII) where {N}
+@inline compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII) =
+    compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, true)
+
+@generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt, EII, do_plastic::Bool) where {N}
     return quote
         @inline
         # iterate over phases
@@ -254,7 +257,7 @@ end
                 G = get_shear_modulus(rheology, phase)
                 Kb = get_bulk_modulus(rheology, phase)
                 ratio_I .* _compute_local_stress(
-                    εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology[phase], dt, EII
+                    εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology[phase], dt, EII, do_plastic
                 )
             end
         end
@@ -266,29 +269,30 @@ end
 
 @inline function local_stress_dτxx_dεxx(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
     return ForwardDiff.derivative(
-        εxx -> compute_local_stress((εxx, zero(εxx) + εij[2], zero(εxx) + εij[3]), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)[1],
+        εxx -> compute_local_stress((εxx, zero(εxx) + εij[2], zero(εxx) + εij[3]), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, false)[1],
         εij[1],
     )
 end
 
 @inline function local_stress_dτyy_dεyy(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
     return ForwardDiff.derivative(
-        εyy -> compute_local_stress((zero(εyy) + εij[1], εyy, zero(εyy) + εij[3]), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)[2],
+        εyy -> compute_local_stress((zero(εyy) + εij[1], εyy, zero(εyy) + εij[3]), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, false)[2],
         εij[2],
     )
 end
 
 @inline function local_stress_dτxy_dεxy(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
     return ForwardDiff.derivative(
-        εxy -> compute_local_stress((zero(εxy) + εij[1], zero(εxy) + εij[2], εxy), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)[3],
+        εxy -> compute_local_stress((zero(εxy) + εij[1], zero(εxy) + εij[2], εxy), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, false)[3],
         εij[3],
     )
 end
 
-@inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology, dt, EII)
+@inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology, dt, EII, do_plastic::Bool)
     # Only is_pl and η_reg are still needed locally; F + gradients come from GeoParams.
     # EII=0 here matches the existing DYREL pattern (no EII-softening in the inner loop).
     ispl, _, _, _, _, η_reg = plastic_params(rheology, EII)
+    ispl = do_plastic && ispl
 
     # viscoelastic viscosity
     η_ve = isinf(G) ?

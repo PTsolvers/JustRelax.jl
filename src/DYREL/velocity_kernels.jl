@@ -151,7 +151,7 @@ end
 # in-register `div_ij`, and nothing on this path reads ∇V back). The public `stokes.∇V` diagnostic
 # is recomputed once from the converged velocity field after the loop in `_solve_DYREL!`.
 
-function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
+function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, do_strain_rate = true)
     ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
     melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
@@ -169,6 +169,7 @@ function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di
         ΔT,
         melt_fraction,
         dt,
+        do_strain_rate
     )
     # NB: no vertex→center shear-strain interpolation here — ε.*_c is not read inside the DYREL
     # loop (stress reads ε.xy at vertices; τII viscosity reads τ.xy_c). The center strain arrays
@@ -195,6 +196,7 @@ end
         ΔT,
         melt_fraction,
         dt,
+        do_strain_rate
     ) where {T}
 
     third = T(1) / T(3)
@@ -205,7 +207,7 @@ end
         vy_w = Vy[i, j]
         vy_e = Vy[i + 1, j]
 
-        if i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
+        if do_strain_rate && i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
             _dy_vx = @dy(_di_vx, j)
             _dx_vy = @dx(_di_vy, i)
 
@@ -223,10 +225,11 @@ end
             dVy_dy = (vy_ne - vy_e) * _dy
             div_ij = dVx_dx + dVy_dy
 
-            div_third = div_ij * third
-            εxx[i, j] = dVx_dx - div_third
-            εyy[i, j] = dVy_dy - div_third
-
+            if do_strain_rate
+                div_third = div_ij * third
+                εxx[i, j] = dVx_dx - div_third
+                εyy[i, j] = dVy_dy - div_third
+            end
             # fused pressure residual (reuses `div_ij` in-register); the numerical pressure
             # P_num = γ_eff·RP is folded into θc (with ΔPψ) downstream by the stress kernel.
             RP[i, j] = _RP_cell(P[i, j], P0[i, j], div_ij, Q[i, j], ηb[i, j], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j)
@@ -260,6 +263,7 @@ end
         ΔT,
         melt_fraction,
         dt,
+        do_strain_rate,
     ) where {T}
 
     third = T(1) / T(3)
@@ -272,17 +276,18 @@ end
             dVz_dz = (Vz[i + 1, j + 1, k + 1] - Vz[i + 1, j + 1, k]) * _dz
             div_ijk = dVx_dx + dVy_dy + dVz_dz
 
-            div_third = div_ijk * third
-            εxx[i, j, k] = dVx_dx - div_third
-            εyy[i, j, k] = dVy_dy - div_third
-            εzz[i, j, k] = dVz_dz - div_third
-
+            if do_strain_rate
+                div_third = div_ijk * third
+                εxx[i, j, k] = dVx_dx - div_third
+                εyy[i, j, k] = dVy_dy - div_third
+                εzz[i, j, k] = dVz_dz - div_third
+            end
             # fused pressure residual (reuses `div_ijk` in-register); the numerical pressure
             # P_num = γ_eff·RP is folded into θc (with ΔPψ) downstream by the stress kernel.
             RP[i, j, k] = _RP_cell(P[i, j, k], P0[i, j, k], div_ijk, Q[i, j, k], ηb[i, j, k], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j, k)
         end
 
-        if all((i, j, k) .≤ size(εyz))
+        if do_strain_rate && all((i, j, k) .≤ size(εyz))
             _dz_vy = @dz(_di_vy, k)
             _dy_vz = @dy(_di_vz, j)
             εyz[i, j, k] =
@@ -292,7 +297,7 @@ end
             )
         end
 
-        if all((i, j, k) .≤ size(εxz))
+        if do_strain_rate && all((i, j, k) .≤ size(εxz))
             _dz_vx = @dz(_di_vx, k)
             _dx_vz = @dx(_di_vz, i)
             εxz[i, j, k] =
@@ -302,7 +307,7 @@ end
             )
         end
 
-        if all((i, j, k) .≤ size(εxy))
+        if do_strain_rate && all((i, j, k) .≤ size(εxy))
             _dy_vx = @dy(_di_vx, j)
             _dx_vy = @dx(_di_vy, i)
             εxy[i, j, k] =

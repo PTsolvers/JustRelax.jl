@@ -131,16 +131,18 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # if it does not exist, make folder where figures are stored
     if do_vtk
         vtk_dir = joinpath(figdir, "vtk")
+        vtk_pvd = joinpath(vtk_dir, "Subduction3D")
         take(vtk_dir)
+        rm(vtk_pvd * ".pvd"; force = true)
     end
     take(figdir)
     # ----------------------------------------------------
 
-    local Vx_v, Vy_v, Vz_v
+    local Vx_c, Vy_c, Vz_c
     if do_vtk
-        Vx_v = @zeros(ni .+ 1...)
-        Vy_v = @zeros(ni .+ 1...)
-        Vz_v = @zeros(ni .+ 1...)
+        Vx_c = @zeros(ni...)
+        Vy_c = @zeros(ni...)
+        Vz_c = @zeros(ni...)
     end
 
     # Time loop
@@ -236,13 +238,9 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 10) == 0
             # checkpointing(figdir, stokes, thermal.T, η, t)
-            xvi_dim = ntuple(i -> dimensionalize_and_strip(xvi[i], km, CharDim), Val(3))
             xci_dim = ntuple(i -> dimensionalize_and_strip(xci[i], km, CharDim), Val(3))
             if do_vtk
-                velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-                data_v = (;
-                    phase_vertex = [argmax(p) for p in Array(phase_ratios.center)],
-                )
+                velocity2center!(Vx_c, Vy_c, Vz_c, @velocity(stokes)...)
                 data_c = (;
                     P = dimensionalize_and_strip(Array(stokes.P), Pa, CharDim),
                     T = dimensionalize_and_strip(Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]), C, CharDim),
@@ -251,20 +249,18 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
                     η = dimensionalize_and_strip(Array(stokes.viscosity.η), Pa * s, CharDim),
                     phase_center = [argmax(p) for p in Array(phase_ratios.center)],
                 )
-                velocity_v = (
-                    dimensionalize_and_strip(Array(Vx_v), cm / yr, CharDim),
-                    dimensionalize_and_strip(Array(Vy_v), cm / yr, CharDim),
-                    dimensionalize_and_strip(Array(Vz_v), cm / yr, CharDim),
+                velocity_c = (
+                    dimensionalize_and_strip(Array(Vx_c), cm / yr, CharDim),
+                    dimensionalize_and_strip(Array(Vy_c), cm / yr, CharDim),
+                    dimensionalize_and_strip(Array(Vz_c), cm / yr, CharDim),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                    xvi_dim,
                     xci_dim,
-                    data_v,
                     data_c,
-                    velocity_v;
+                    velocity_c;
                     t = dimensionalize_and_strip(t, Myr, CharDim),
-                    pvd = joinpath(vtk_dir, "Subduction3D"),
+                    pvd = vtk_pvd,
                 )
             end
         end

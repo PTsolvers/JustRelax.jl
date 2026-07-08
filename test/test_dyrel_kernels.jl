@@ -5,10 +5,11 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-using Test, Suppressor
+using Test
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
+using StaticArrays
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
@@ -64,6 +65,28 @@ end
         dVdτ_new, ΔV = JustRelax2D.damped_update_V(dVdτ, R, a, b, dτ)
         @test dVdτ_new ≈ a * dVdτ + R
         @test ΔV ≈ (a * dVdτ + R) * b * dτ
+
+        el = ConstantElasticity(; G = 1.0, Kb = 5.0)
+        rheology = (
+            SetMaterialParams(;
+                Phase = 1,
+                Density = ConstantDensity(; ρ = 0.0),
+                Gravity = ConstantGravity(; g = 0.0),
+                CompositeRheology = CompositeRheology((
+                    LinearViscous(; η = 1.0),
+                    el,
+                    DruckerPrager_regularised(; C = 0.1, ϕ = 0.0, η_vp = 1.0e-2, Ψ = 0.0),
+                )),
+                Elasticity = el,
+            ),
+        )
+        εij = (2.0, -1.0, 0.5)
+        τij_o = (0.0, 0.0, 0.0)
+        τ_plastic = JR2K.compute_local_stress(εij, τij_o, 1.0, 0.0, 0.0, 1.0, rheology, SA[1.0], 1.0, 0.0, true)
+        τ_trial = JR2K.compute_local_stress(εij, τij_o, 1.0, 0.0, 0.0, 1.0, rheology, SA[1.0], 1.0, 0.0, false)
+        @test τ_plastic[8] > 0.0
+        @test τ_plastic[1] != τ_trial[1]
+        @test JR2K.local_stress_dτxx_dεxx(εij, τij_o, 1.0, 0.0, 0.0, 1.0, rheology, SA[1.0], 1.0, 0.0) ≈ 1.0
     end
 
     # ------------------------------------------------------------------ #
@@ -147,13 +170,16 @@ end
         η_before = copy(stokes.viscosity.η)
         JR2K.compute_stress_viscosity_DRYEL!(
             stokes, θc, dyrel.γ_eff, rheology, phase_ratios,
-            1.0, dt, 1.0, args, (-Inf, Inf), false,
+            1.0, dt, 1.0, args, (-Inf, Inf), false, dyrel, true,
         )
         @test all(isfinite, Array(stokes.viscosity.η))
         @test all(>(0), Array(stokes.viscosity.η))
         @test all(isfinite, Array(stokes.viscosity.ηv))
         # θc assembles the small pressure correction γ_eff·RP + ΔPψ
         @test Array(θc) ≈ Array(dyrel.γ_eff) .* Array(stokes.R.RP) .+ Array(stokes.ΔPψ)
+        @test dyrel.∂τxxc_∂εxx[2, 2] ≈ 1.0
+        @test dyrel.∂τyyc_∂εyy[2, 2] ≈ 1.0
+        @test dyrel.∂τxyv_∂εxy[2, 2] ≈ 1.0
 
         # --- Powell-Hestenes velocity residual (no D division: safe) ---
         ρg = @zeros(ni...), @zeros(ni...)
@@ -185,29 +211,9 @@ end
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
             _di.center, _di.vertex,
-            dyrel, false,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test Array(stokes.V.Vx) == Array(Vx_before)
         @test Array(stokes.V.Vy) == Array(Vy_before)
-
-        dyrel.∂Rx_∂P_num[1] .= 0.0
-        dyrel.∂Ry_∂P_num[1] .= 0.0
-        @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
-            stokes.R.Rx, stokes.R.Ry,
-            stokes.V.Vx, stokes.V.Vy,
-            dyrel.dVxdτ, dyrel.dVydτ,
-            stokes.P, θc,
-            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy,
-            ρg...,
-            dyrel.Dx, dyrel.Dy,
-            dyrel.αVx, dyrel.αVy,
-            dyrel.βVx, dyrel.βVy,
-            dyrel.dτVx, dyrel.dτVy,
-            _di.center, _di.vertex,
-            dyrel, true,
-        )
-        @test dyrel.∂Rx_∂P_num[1][2, 2] != 0
-        @test dyrel.∂Ry_∂P_num[1][2, 2] != 0
     end
 end

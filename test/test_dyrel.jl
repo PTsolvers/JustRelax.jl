@@ -50,33 +50,8 @@ end
         @test size(dyrel.βVx) == (nx - 1, ny)
         @test size(dyrel.αVy) == (nx, ny - 1)
         @test size(dyrel.∂τxxc_∂εxx) == (nx, ny)
+        @test size(dyrel.∂τyyc_∂εyy) == (nx, ny)
         @test size(dyrel.∂τxyv_∂εxy) == (nx + 1, ny + 1)
-        @test length(dyrel.∂εxx_∂Vx) == 2
-        @test length(dyrel.∂εyy_∂Vx) == 2
-        @test length(dyrel.∂∇V_∂Vx) == 2
-        @test length(dyrel.∂εxx_∂Vy) == 2
-        @test length(dyrel.∂εyy_∂Vy) == 2
-        @test length(dyrel.∂∇V_∂Vy) == 2
-        @test length(dyrel.∂εxy_∂Vx) == 2
-        @test length(dyrel.∂εxy_∂Vy) == 2
-        @test length(dyrel.∂Rx_∂τxx) == 2
-        @test length(dyrel.∂Rx_∂P_num) == 2
-        @test length(dyrel.∂Ry_∂τyy) == 2
-        @test length(dyrel.∂Ry_∂P_num) == 2
-        @test size(dyrel.∂τxxc_∂εxx) == (nx, ny)
-        @test size(dyrel.∂τxxv_∂εxx) == (nx + 1, ny + 1)
-        @test size(dyrel.∂εxx_∂Vx[1]) == (nx, ny)
-        @test size(dyrel.∂εyy_∂Vx[1]) == (nx, ny)
-        @test size(dyrel.∂∇V_∂Vx[1]) == (nx, ny)
-        @test size(dyrel.∂εxx_∂Vy[1]) == (nx, ny)
-        @test size(dyrel.∂εyy_∂Vy[1]) == (nx, ny)
-        @test size(dyrel.∂∇V_∂Vy[1]) == (nx, ny)
-        @test size(dyrel.∂εxy_∂Vx[1]) == (nx + 1, ny + 1)
-        @test size(dyrel.∂εxy_∂Vy[1]) == (nx + 1, ny + 1)
-        @test size(dyrel.∂Rx_∂τxx[1]) == (nx - 1, ny)
-        @test size(dyrel.∂Rx_∂P_num[1]) == (nx - 1, ny)
-        @test size(dyrel.∂Ry_∂τyy[1]) == (nx, ny - 1)
-        @test size(dyrel.∂Ry_∂P_num[1]) == (nx, ny - 1)
         @test size(dyrel.P_num) == (nx, ny)
         @test size(dyrel.Rx0) == (nx - 1, ny)
         @test size(dyrel.Ry0) == (nx, ny - 1)
@@ -89,6 +64,14 @@ end
         @test all(iszero.(dyrel.P_num))
         @test all(iszero.(dyrel.Dx)) && all(iszero.(dyrel.Dy))
         @test all(iszero.(dyrel.λmaxVx)) && all(iszero.(dyrel.λmaxVy))
+
+        for field in (
+                :∂εxx_∂Vx, :∂εyy_∂Vx, :∂∇V_∂Vx, :∂εxx_∂Vy, :∂εyy_∂Vy,
+                :∂∇V_∂Vy, :∂εxy_∂Vx, :∂εxy_∂Vy, :∂Rx_∂τxx, :∂Rx_∂P_num,
+                :∂Ry_∂τyy, :∂Ry_∂P_num, :∂τxxv_∂εxx,
+            )
+            @test !hasproperty(dyrel, field)
+        end
     end
 
     @testset "DYREL 3D allocator" begin
@@ -110,15 +93,8 @@ end
         @test size(dyrel.αVy) == (nx, ny - 1, nz)
         @test size(dyrel.cVz) == (nx, ny, nz - 1)
         @test size(dyrel.∂τxxc_∂εxx) == (1, 1, 1)
+        @test size(dyrel.∂τyyc_∂εyy) == (1, 1, 1)
         @test size(dyrel.∂τxyv_∂εxy) == (1, 1, 1)
-        @test length(dyrel.∂εxx_∂Vx) == 1
-        @test length(dyrel.∂εyy_∂Vx) == 1
-        @test length(dyrel.∂∇V_∂Vx) == 1
-        @test length(dyrel.∂εxx_∂Vy) == 1
-        @test length(dyrel.∂εyy_∂Vy) == 1
-        @test length(dyrel.∂∇V_∂Vy) == 1
-        @test length(dyrel.∂εxy_∂Vx) == 1
-        @test length(dyrel.∂εxy_∂Vy) == 1
         @test size(dyrel.P_num) == (nx, ny, nz)
         @test size(dyrel.Rx0) == (nx - 1, ny, nz)
         @test size(dyrel.Ry0) == (nx, ny - 1, nz)
@@ -130,6 +106,13 @@ end
         @test all(iszero.(dyrel.γ_eff))
         @test all(iszero.(dyrel.P_num))
         @test all(iszero.(dyrel.Dz)) && all(iszero.(dyrel.λmaxVz))
+
+        for field in (
+                :∂εxx_∂Vx, :∂εyy_∂Vx, :∂∇V_∂Vx, :∂εxx_∂Vy, :∂εyy_∂Vy,
+                :∂∇V_∂Vy, :∂εxy_∂Vx, :∂εxy_∂Vy,
+            )
+            @test !hasproperty(dyrel, field)
+        end
 
         # 3-int forwarder
         dyrel2 = JR3.DYREL(backend_JR, nx, ny, nz; CFL = 0.7)
@@ -218,72 +201,33 @@ end
         @test all(dyrel.dτVy .≈ expected_dτ)
     end
 
-    @testset "local strain-rate partial storage" begin
-        ni = 3, 3
-        grid = Geometry(ni, (1.0, 1.0))
-        stokes = StokesArrays(backend_JR, ni)
-        dyrel = JustRelax2D.DYREL(backend_JR, ni)
-        dt = 1.0
-        rheology = (
-            GeoParams.SetMaterialParams(;
-                Phase = 1,
-                Density = GeoParams.ConstantDensity(; ρ = 0.0),
-                Gravity = GeoParams.ConstantGravity(; g = 0.0),
-                CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 10.0),)),
-            ),
-        )
-        phase_ratios = JustPIC._2D.PhaseRatios(backend_JP, length(rheology), ni)
-        args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
-        dyrel.ηb .= 1.0
-
-        JustRelax2D.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, grid._di, ni, dt, args, true)
-
-        @test dyrel.∂εxx_∂Vx[1][2, 2] != 0
-        @test dyrel.∂εxx_∂Vx[1][2, 2] ≈ -dyrel.∂εxx_∂Vx[2][2, 2]
-        @test dyrel.∂εyy_∂Vx[1][2, 2] ≈ -dyrel.∂εyy_∂Vx[2][2, 2]
-        @test dyrel.∂∇V_∂Vx[1][2, 2] ≈ -dyrel.∂∇V_∂Vx[2][2, 2]
-        @test dyrel.∂εxx_∂Vy[1][2, 2] ≈ -dyrel.∂εxx_∂Vy[2][2, 2]
-        @test dyrel.∂εyy_∂Vy[1][2, 2] != 0
-        @test dyrel.∂εyy_∂Vy[1][2, 2] ≈ -dyrel.∂εyy_∂Vy[2][2, 2]
-        @test dyrel.∂∇V_∂Vy[1][2, 2] ≈ -dyrel.∂∇V_∂Vy[2][2, 2]
-        @test dyrel.∂εxy_∂Vx[1][2, 2] != 0
-        @test dyrel.∂εxy_∂Vx[1][2, 2] ≈ -dyrel.∂εxy_∂Vx[2][2, 2]
-        @test dyrel.∂εxy_∂Vy[1][2, 2] != 0
-        @test dyrel.∂εxy_∂Vy[1][2, 2] ≈ -dyrel.∂εxy_∂Vy[2][2, 2]
-    end
-
     @testset "GershgorinAD ∂Rx∂Vx center entry" begin
         dyrel = JustRelax2D.DYREL(backend_JR, (4, 4))
+        grid = Geometry((4, 4), (1.0, 1.0))
         i, j, m = 2, 2, 3
 
-        dyrel.∂εxx_∂Vx[2][2, 2] = 2.0
-        dyrel.∂∇V_∂Vx[2][2, 2] = 3.0
-        dyrel.∂εxx_∂Vx[1][3, 2] = 7.0
-        dyrel.∂∇V_∂Vx[1][3, 2] = 5.0
-        dyrel.∂εxy_∂Vx[2][3, 2] = 11.0
-        dyrel.∂εxy_∂Vx[1][3, 3] = 13.0
+        dyrel.∂τxxc_∂εxx[2, 2] = 1.0
+        dyrel.∂τxxc_∂εxx[3, 2] = 2.0
+        dyrel.∂τxyv_∂εxy[3, 2] = 3.0
+        dyrel.∂τxyv_∂εxy[3, 3] = 4.0
+        dyrel.γ_eff[2, 2] = 5.0
+        dyrel.γ_eff[3, 2] = 6.0
 
-        dyrel.∂τxxc_∂εxx .= 1.0
-        dyrel.∂τxyv_∂εxy .= 1.0
-        dyrel.γ_eff[2, 2] = 10.0
-        dyrel.γ_eff[3, 2] = 20.0
-
-        dyrel.∂Rx_∂τxx[1][i, j] = 101.0
-        dyrel.∂Rx_∂τxx[2][i, j] = 103.0
-        dyrel.∂Rx_∂τxy[1][i, j] = 107.0
-        dyrel.∂Rx_∂τxy[2][i, j] = 109.0
-        dyrel.∂Rx_∂P_num[1][i, j] = 113.0
-        dyrel.∂Rx_∂P_num[2][i, j] = 127.0
+        dτxx = JustRelax2D.∂Rx_∂τxx(grid._di.center, i)
+        dτxy = JustRelax2D.∂Rx_∂τxy(grid._di.vertex, j)
+        dPnum = JustRelax2D.∂Rx_∂Pnum(grid._di.center, i)
+        dεxx_E, _, d∇V_E = JustRelax2D.∂normal_∂Vx(grid._di.vertex, i + 1, j)
+        dεxx_W, _, d∇V_W = JustRelax2D.∂normal_∂Vx(grid._di.vertex, i, j)
 
         expected =
-            101.0 * 2.0 +
-            103.0 * 7.0 +
-            107.0 * 11.0 +
-            109.0 * 13.0 +
-            113.0 * (-10.0 * 3.0) +
-            127.0 * (-20.0 * 5.0)
+            -dτxx * dyrel.∂τxxc_∂εxx[i + 1, j] * dεxx_E -
+            dτxx * dyrel.∂τxxc_∂εxx[i, j] * dεxx_W -
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j + 1] * JustRelax2D.∂shear_∂Vx(grid._di.velocity[1], j + 1) -
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j] * JustRelax2D.∂shear_∂Vx(grid._di.velocity[1], j) -
+            dPnum * (dyrel.γ_eff[i + 1, j] * d∇V_E) -
+            dPnum * (dyrel.γ_eff[i, j] * d∇V_W)
 
-        @test JustRelax2D.∂Rx∂Vx(dyrel, i, j, m) ≈ expected
+        @test JustRelax2D.∂Rx∂Vx(dyrel, grid._di.center, grid._di.vertex, grid._di.velocity[1], i, j, m) ≈ expected
     end
 
     @testset "GershgorinAD matches analytical DYREL parameters" begin
@@ -327,12 +271,11 @@ end
         ρg = @zeros(ni...), @zeros(ni...)
         P_num = similar(stokes.P)
 
-        JustRelax2D.compute_∇V_strain_rate_RP!(stokes, dyrel_ad, rheology, phase_ratios, grid._di, ni, dt, args, true)
+        JustRelax2D.compute_∇V_strain_rate_RP!(stokes, dyrel_ad, rheology, phase_ratios, grid._di, ni, dt, args)
         JustRelax2D.compute_stress_DRYEL!(stokes, dyrel_ad, rheology, phase_ratios, 1.0, dt, true)
         @. P_num = dyrel_ad.γ_eff * stokes.R.RP
         @parallel (@idx ni) JustRelax2D.compute_DR_residual_V!(
             @residuals(stokes.R)...,
-            dyrel_ad,
             stokes.P,
             P_num,
             stokes.ΔPψ,
@@ -342,7 +285,6 @@ end
             dyrel_ad.Dy,
             grid._di.center,
             grid._di.vertex,
-            true,
         )
         JustRelax2D.Gershgorin_Stokes2D_SchurComplementAD(
             dyrel_ad,
@@ -358,519 +300,4 @@ end
         end
     end
 
-    @testset "DYREL local residual helpers" begin
-        τn = (2.0, 5.0)
-        τs = (-1.0, 3.0)
-        P = (7.0, 11.0)
-        Pnum = (0.5, 2.5)
-        ΔPψ = (1.0, 4.0)
-        ρg = (6.0, 10.0)
-        _dn = 0.25
-        _ds = 0.5
-
-        expected = (τn[2] - τn[1]) * _dn + (τs[2] - τs[1]) * _ds -
-            (P[2] - P[1]) * _dn - (ΔPψ[2] - ΔPψ[1]) * _dn - 0.5 * (ρg[1] + ρg[2])
-        @test JustRelax2D.local_Rx_residual(τn, τs, P, ΔPψ, ρg, _dn, _ds) ≈ expected
-        @test JustRelax2D.local_Ry_residual(τn, τs, P, ΔPψ, ρg, _dn, _ds) ≈ expected
-        @test JustRelax2D.local_DR_Rx_residual(τn, τs, P, Pnum, ΔPψ, ρg, _dn, _ds, 2.0) ≈
-            (expected - (Pnum[2] - Pnum[1]) * _dn) / 2.0
-        @test JustRelax2D.local_DR_Ry_residual(τn, τs, P, Pnum, ΔPψ, ρg, _dn, _ds, 2.0) ≈
-            (expected - (Pnum[2] - Pnum[1]) * _dn) / 2.0
-
-        ∂DRy = JustRelax2D.local_DR_Ry_residual_partials(collect(τn), collect(τs), collect(P), collect(Pnum), collect(ΔPψ), collect(ρg), _dn, _ds, 2.0)
-        @test ∂DRy.τyy ≈ [-_dn, _dn]
-        @test ∂DRy.P_num ≈ [_dn, -_dn]
-    end
-
-    # @testset "GershgorinAD local Rx-Vx entry" begin
-    #     dyrel = JustRelax2D.DYREL(CPUBackend, (3, 3))
-    #     dyrel.γ_eff .= 2.0
-
-    #     dyrel.∂τxxc_∂εxx .= 1.0
-    #     dyrel.∂τxxc_∂εyy .= 2.0
-    #     dyrel.∂τxxc_∂εxy .= 4.0
-
-    #     dyrel.∂τxyv_∂εxx .= 13.0
-    #     dyrel.∂τxyv_∂εyy .= 17.0
-    #     dyrel.∂τxyv_∂εxy .= 19.0
-
-    #     jacobian_entry = JustRelax2D.local_Rx_Vx_gershgorin_entry(
-    #         dyrel,
-    #         1,
-    #         1,
-    #         5,
-    #         (2.0, 3.0),
-    #         (5.0, 7.0),
-    #         (11.0, 13.0),
-    #         size(dyrel.γ_eff),
-    #     )
-
-    #     @test jacobian_entry ≈ -1509.0
-    #     @test abs(jacobian_entry) ≈ 1509.0
-    # end
-
-    # @testset "DYREL partial field storage" begin
-    #     nx, ny = 4, 3
-    #     ni = (nx, ny)
-    #     xvi = (range(0.0, 1.0; length = nx + 1), range(0.0, 1.0; length = ny + 1))
-    #     xci = (range(0.125, 0.875; length = nx), range(0.125, 0.875; length = ny))
-
-    #     visc = GeoParams.LinearViscous(; η = 10.0)
-    #     rheology = (
-    #         GeoParams.SetMaterialParams(;
-    #             Phase = 1,
-    #             Density = GeoParams.ConstantDensity(; ρ = 0.0),
-    #             CompositeRheology = GeoParams.CompositeRheology((visc,)),
-    #         ),
-    #     )
-    #     phase_ratios = JustPIC._2D.PhaseRatios(backend_JP, length(rheology), ni)
-    #     JustRelax2D.update_phase_ratios_2D!(phase_ratios, (@ones(ni...),), xci, xvi)
-
-    #     stokes = StokesArrays(backend_JR, ni)
-    #     stokes.ε.xx .= 1.0
-    #     stokes.ε.yy .= -0.5
-    #     stokes.ε.xy .= 0.25
-    #     stokes.ε.xy_c .= 0.25
-    #     stokes.ε.xx_v .= 1.0
-    #     stokes.ε.yy_v .= -0.5
-    #     stokes.viscosity.η .= 10.0
-    #     stokes.viscosity.ηv .= 10.0
-
-    #     dyrel = JustRelax2D.DYREL(backend_JR, ni)
-    #     JustRelax2D.compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, 1.0, Inf, true)
-
-    #     expected_∂τ_∂η = (2.0, -1.0, 0.5)
-
-    #     pow = GeoParams.PowerlawViscous(; η0 = 10.0, n = 3, ε0 = 1.0)
-    #     rheology_powerlaw = (
-    #         GeoParams.SetMaterialParams(;
-    #             Phase = 1,
-    #             Density = GeoParams.ConstantDensity(; ρ = 0.0),
-    #             CompositeRheology = GeoParams.CompositeRheology((pow,)),
-    #         ),
-    #     )
-    #     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
-    #     JustRelax2D.update_viscosity_εII!(
-    #         stokes,
-    #         phase_ratios,
-    #         args,
-    #         rheology_powerlaw,
-    #         (-Inf, Inf);
-    #         do_partials = true,
-    #     )
-
-    # end
-
-    #=
-    @testset "GershgorinAD linear forward finite difference" begin
-        ly = 1.0e0
-        lx = ly
-        ni = 4, 4
-        grid = Geometry(ni, (lx, ly); origin = (-lx / 2, -ly / 2))
-        (; xci, xvi) = grid
-        dt = 1.0
-        εbg = 1.0e-2
-        igg = IGG(init_global_grid(ni[1], ni[2], 1; init_MPI = !JustRelax.MPI.Initialized())...)
-
-
-        # Physical properties using GeoParams ----------------
-        visc_bg  = GeoParams.LinearViscous(; η = 1.0e2)
-        visc_inc = GeoParams.LinearViscous(; η = 1.0e-1)
-
-        rheology = (
-            GeoParams.SetMaterialParams(;
-                Phase = 1,
-                Density = GeoParams.ConstantDensity(; ρ = 0.0),
-                Gravity = GeoParams.ConstantGravity(; g = 0.0),
-                CompositeRheology = GeoParams.CompositeRheology((visc_bg,)),
-            ),
-            GeoParams.SetMaterialParams(;
-                Phase = 2,
-                Density = GeoParams.ConstantDensity(; ρ = 0.0),
-                Gravity = GeoParams.ConstantGravity(; g = 0.0),
-                CompositeRheology = GeoParams.CompositeRheology(( visc_inc,)),
-            ),
-        )
-
-        phase_ratios = JustPIC._2D.PhaseRatios(backend_JP, length(rheology), ni)
-        circle = GGU.Circle((0.0, 0.0), 0.1)
-
-        @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
-            p = GGU.Point(xc[i], yc[j])
-            if GGU.inside(p, circle)
-                @index phases[1, i, j] = 0.0
-                @index phases[2, i, j] = 1.0
-            else
-                @index phases[1, i, j] = 1.0
-                @index phases[2, i, j] = 0.0
-            end
-            return nothing
-        end
-        @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
-        @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
-
-        flow_bcs = VelocityBoundaryConditions(;
-            free_slip = (left = true, right = true, top = true, bot = true),
-            no_slip = (left = false, right = false, top = false, bot = false),
-        )
-
-        function run_once(; perturb = false, h = 1.0e-6, h0 = 1.0e-6)
-            stokes = StokesArrays(backend_JR, ni)
-            ρg = @zeros(ni...), @zeros(ni...)
-            args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
-
-            stokes.ε.xx .= 1
-            stokes.ε.xx_v .= 1
-            compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
-
-            stokes.V.Vx .= PTArray(backend_JR)([εbg * x for x in xvi[1], _ in 1:(ni[2] + 2)])
-            stokes.V.Vy .= PTArray(backend_JR)([-εbg * y for _ in 1:(ni[1] + 2), y in xvi[2]])
-            flow_bcs!(stokes, flow_bcs)
-
-            δVx = h0 + (perturb ? h : 0.0)
-            stokes.V.Vx[3, 3] += δVx
-            vx12_start = Float64(εbg) * Float64(xvi[1][3]) + δVx
-
-            dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; CFL = 0.99, ϵ = 1.0e-6)
-            solve_DYREL!(
-                stokes,
-                ρg,
-                dyrel,
-                flow_bcs,
-                phase_ratios,
-                rheology,
-                args,
-                grid,
-                dt,
-                igg;
-                kwargs = (;
-                    verbose_PH = false,
-                    verbose_DR = false,
-                    iterMax = 0,
-                    nout = 1,
-                    rel_drop = 1.0e-5,
-                    λ_relaxation_DR = 1,
-                    λ_relaxation_PH = 1,
-                    viscosity_relaxation = 1.0e-1,
-                    viscosity_cutoff = (-Inf, Inf),
-                    use_gershgorin_ad = true,
-                    total_iterMax = 0,
-                )
-            )
-
-            return Array(stokes.R.Rx), dyrel, vx12_start, Float64(dyrel.Dx[2, 2])
-        end
-
-        Rx, dyrel, Vx12_start, Dx11_start = run_once()
-        RxP, _, Vx12P_start, Dx11P_start = run_once(; perturb = true)
-
-        fd_jac_unscaled = (RxP[2, 2] * Dx11P_start - Rx[2, 2] * Dx11_start) / (Vx12P_start - Vx12_start)
-        local_jac = JustRelax2D.local_Rx_Vx_gershgorin_entry(
-            dyrel,
-            2,
-            2,
-            5,
-            grid._di.center,
-            grid._di.vertex,
-            grid._di.velocity[1],
-            size(dyrel.γ_eff),
-        )
-
-        @test fd_jac_unscaled ≈ local_jac rtol = 1.0e-6
-        finalize_global_grid(; finalize_MPI = false)
-    end
-
-     @testset "GershgorinAD nonlinear forward finite difference" begin
-        ly = 1.0e0
-        lx = ly
-        ni = 4, 4
-        grid = Geometry(ni, (lx, ly); origin = (-lx / 2, -ly / 2))
-        (; xci, xvi) = grid
-        dt = 1.0
-        εbg = 1.0e-2
-        igg = IGG(init_global_grid(ni[1], ni[2], 1; init_MPI = !JustRelax.MPI.Initialized())...)
-
-
-        # Physical properties using GeoParams ----------------
-        visc_bg  = PowerlawViscous(; η0 = 1.0e2, n = 3, ε0 = 1.0e0)
-        visc_inc = PowerlawViscous(; η0 = 1.0e-1, n = 3, ε0 = 1.0e0)
-
-        rheology = (
-            GeoParams.SetMaterialParams(;
-                Phase = 1,
-                Density = GeoParams.ConstantDensity(; ρ = 0.0),
-                Gravity = GeoParams.ConstantGravity(; g = 0.0),
-                CompositeRheology = GeoParams.CompositeRheology((visc_bg,)),
-            ),
-            GeoParams.SetMaterialParams(;
-                Phase = 2,
-                Density = GeoParams.ConstantDensity(; ρ = 0.0),
-                Gravity = GeoParams.ConstantGravity(; g = 0.0),
-                CompositeRheology = GeoParams.CompositeRheology(( visc_inc,)),
-            ),
-        )
-
-        phase_ratios = JustPIC._2D.PhaseRatios(backend_JP, length(rheology), ni)
-        circle = GGU.Circle((0.0, 0.0), 0.1)
-
-        @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
-            p = GGU.Point(xc[i], yc[j])
-            if GGU.inside(p, circle)
-                @index phases[1, i, j] = 0.0
-                @index phases[2, i, j] = 1.0
-            else
-                @index phases[1, i, j] = 1.0
-                @index phases[2, i, j] = 0.0
-            end
-            return nothing
-        end
-        @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
-        @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
-
-        flow_bcs = VelocityBoundaryConditions(;
-            free_slip = (left = true, right = true, top = true, bot = true),
-            no_slip = (left = false, right = false, top = false, bot = false),
-        )
-
-        function run_once(; perturb = false, h = 1.0e-6, h0 = 1.0e-6)
-            stokes = StokesArrays(backend_JR, ni)
-            ρg = @zeros(ni...), @zeros(ni...)
-            args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
-
-            stokes.ε.xx .= 1
-            stokes.ε.xx_v .= 1
-            compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
-
-            stokes.V.Vx .= PTArray(backend_JR)([εbg * x for x in xvi[1], _ in 1:(ni[2] + 2)])
-            stokes.V.Vy .= PTArray(backend_JR)([-εbg * y for _ in 1:(ni[1] + 2), y in xvi[2]])
-            flow_bcs!(stokes, flow_bcs)
-
-            δVx = h0 + (perturb ? h : 0.0)
-            stokes.V.Vx[3, 3] += δVx
-            vx12_start = Float64(εbg) * Float64(xvi[1][3]) + δVx
-
-            dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; CFL = 0.99, ϵ = 1.0e-6)
-            solve_DYREL!(
-                stokes,
-                ρg,
-                dyrel,
-                flow_bcs,
-                phase_ratios,
-                rheology,
-                args,
-                grid,
-                dt,
-                igg;
-                kwargs = (;
-                    verbose_PH = false,
-                    verbose_DR = false,
-                    iterMax = 0,
-                    nout = 1,
-                    rel_drop = 1.0e-5,
-                    λ_relaxation_DR = 1,
-                    λ_relaxation_PH = 1,
-                    viscosity_relaxation = 1.0,
-                    viscosity_cutoff = (-Inf, Inf),
-                    use_gershgorin_ad = true,
-                    total_iterMax = 0,
-                )
-            )
-
-            return Array(stokes.R.Rx), dyrel, vx12_start, Float64(dyrel.Dx[2, 2])
-        end
-
-        Rx, dyrel, Vx12_start, Dx11_start = run_once()
-        RxP, _, Vx12P_start, Dx11P_start = run_once(; perturb = true)
-
-        fd_jac_unscaled = (RxP[2, 2] * Dx11P_start - Rx[2, 2] * Dx11_start) / (Vx12P_start - Vx12_start)
-        local_jac = JustRelax2D.local_Rx_Vx_gershgorin_entry(
-            dyrel,
-            2,
-            2,
-            5,
-            grid._di.center,
-            grid._di.vertex,
-            grid._di.velocity[1],
-            size(dyrel.γ_eff),
-        )
-
-        @test fd_jac_unscaled ≈ local_jac rtol = 1.0e-6
-        finalize_global_grid(; finalize_MPI = false)
-    end
-
-    @testset "GershgorinAD viscoelastoplastic forward finite difference" begin
-        ly = 1.0e0
-        lx = ly
-        ni = 4, 4
-        grid = Geometry(ni, (lx, ly); origin = (0.0, 0.0))
-        (; xci, xvi) = grid
-        τ_y = 1.6
-        ϕ = 30.0
-        η0 = 1.0
-        G0 = 1.0
-        Gi = G0 / 2
-        εbg = 1.0
-        η_reg = 1.0e-2
-        dt = η0 / G0 / 6.0
-        igg = IGG(init_global_grid(ni[1], ni[2], 1; init_MPI = !JustRelax.MPI.Initialized())...)
-
-        el_bg = GeoParams.ConstantElasticity(; G = G0, Kb = 5.0)
-        el_inc = GeoParams.ConstantElasticity(; G = Gi, Kb = 5.0)
-        visc = GeoParams.LinearViscous(; η = η0)
-        pl = GeoParams.DruckerPrager_regularised(;
-            C = τ_y / cosd(ϕ),
-            ϕ = ϕ,
-            η_vp = η_reg,
-            Ψ = 10.0,
-        )
-
-        rheology = (
-            GeoParams.SetMaterialParams(;
-                Phase = 1,
-                Density = GeoParams.ConstantDensity(; ρ = 0.0),
-                Gravity = GeoParams.ConstantGravity(; g = 0.0),
-                CompositeRheology = GeoParams.CompositeRheology((visc, el_bg, pl)),
-                Elasticity = el_bg,
-            ),
-            GeoParams.SetMaterialParams(;
-                Phase = 2,
-                Density = GeoParams.ConstantDensity(; ρ = 0.0),
-                Gravity = GeoParams.ConstantGravity(; g = 0.0),
-                CompositeRheology = GeoParams.CompositeRheology((visc, el_inc, pl)),
-                Elasticity = el_inc,
-            ),
-        )
-
-        phase_ratios = JustPIC._2D.PhaseRatios(backend_JP, length(rheology), ni)
-        circle = GGU.Circle((0.5, 0.5), 0.1)
-
-        @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
-            p = GGU.Point(xc[i], yc[j])
-            if GGU.inside(p, circle)
-                @index phases[1, i, j] = 0.0
-                @index phases[2, i, j] = 1.0
-            else
-                @index phases[1, i, j] = 1.0
-                @index phases[2, i, j] = 0.0
-            end
-            return nothing
-        end
-        @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
-        @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
-
-        flow_bcs = VelocityBoundaryConditions(;
-            free_slip = (left = true, right = true, top = true, bot = true),
-            no_slip = (left = false, right = false, top = false, bot = false),
-        )
-
-        function run_once(; perturb = false, h = 1.0e-6, h0 = 1.0e-6)
-            stokes = StokesArrays(backend_JR, ni)
-            ρg = @zeros(ni...), @zeros(ni...)
-            args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
-
-            compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
-
-            stokes.V.Vx .= PTArray(backend_JR)([εbg * x for x in xvi[1], _ in 1:(ni[2] + 2)])
-            stokes.V.Vy .= PTArray(backend_JR)([-εbg * y for _ in 1:(ni[1] + 2), y in xvi[2]])
-            @views stokes.V.Vx[2:(end - 1), 2:(end - 1)] .= 0.0
-            @views stokes.V.Vy[2:(end - 1), 2:(end - 1)] .= 0.0
-            flow_bcs!(stokes, flow_bcs)
-            update_halo!(@velocity(stokes)...)
-
-            dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; CFL = 0.99, ϵ = 1.0e-6)
-
-            t = 0.0
-            for _ in 1:10
-                solve_DYREL!(
-                    stokes,
-                    ρg,
-                    dyrel,
-                    flow_bcs,
-                    phase_ratios,
-                    rheology,
-                    args,
-                    grid,
-                    dt,
-                    igg;
-                    kwargs = (;
-                        verbose_PH = false,
-                        verbose_DR = false,
-                        iterMax = 50.0e3,
-                        nout = 10,
-                        rel_drop = 1.0e-2,
-                        λ_relaxation_DR = 1,
-                        λ_relaxation_PH = 1,
-                        viscosity_relaxation = 1.0,
-                        linear_viscosity = true,
-                        viscosity_cutoff = (-Inf, Inf),
-                        use_gershgorin_ad = true,
-                    )
-                )
-                tensor_invariant!(stokes.τ)
-                tensor_invariant!(stokes.ε)
-                tensor_invariant!(stokes.ε_pl)
-                t += dt
-            end
-
-            δVx = h0 + (perturb ? h : 0.0)
-            stokes.V.Vx[3, 3] += δVx
-            vx12_start = Float64(stokes.V.Vx[3, 3])
-
-            solve_DYREL!(
-                stokes,
-                ρg,
-                dyrel,
-                flow_bcs,
-                phase_ratios,
-                rheology,
-                args,
-                grid,
-                dt,
-                igg;
-                kwargs = (;
-                    verbose_PH = false,
-                    verbose_DR = false,
-                    iterMax = 0,
-                    nout = 1,
-                    rel_drop = 1.0e-5,
-                    λ_relaxation_DR = 1,
-                    λ_relaxation_PH = 1,
-                    viscosity_relaxation = 1.0,
-                    linear_viscosity = true,
-                    viscosity_cutoff = (-Inf, Inf),
-                    use_gershgorin_ad = true,
-                    total_iterMax = 0,
-                )
-            )
-
-            dx11_start = Float64(dyrel.Dx[2, 2])
-            tensor_invariant!(stokes.ε_pl)
-            return Array(stokes.R.Rx), dyrel, vx12_start, dx11_start, stokes
-        end
-
-        Rx, dyrel, Vx12_start, Dx11_start, pl = run_once()
-        RxP, _, Vx12P_start, Dx11P_start, plP = run_once(; perturb = true)
-
-        fd_jac_unscaled = (RxP[2, 2] * Dx11P_start - Rx[2, 2] * Dx11_start) / (Vx12P_start - Vx12_start)
-        local_jac = JustRelax2D.local_Rx_Vx_gershgorin_entry(
-            dyrel,
-            2,
-            2,
-            5,
-            grid._di.center,
-            grid._di.vertex,
-            grid._di.velocity[1],
-            size(dyrel.γ_eff),
-        )
-
-        @test pl.ε_pl.II[2,2] > 0.0
-        @test pl.ε_pl.II[2,2] > 0.0
-        @test fd_jac_unscaled ≈ local_jac rtol = 1.0e-6
-        finalize_global_grid(; finalize_MPI = false)
-    end
-=#
-
 end
-
-# using CairoMakie
-# heatmap(pl.ε_pl.II)

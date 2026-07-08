@@ -72,11 +72,13 @@ end
                 Phase = 1,
                 Density = ConstantDensity(; ρ = 0.0),
                 Gravity = ConstantGravity(; g = 0.0),
-                CompositeRheology = CompositeRheology((
-                    LinearViscous(; η = 1.0),
-                    el,
-                    DruckerPrager_regularised(; C = 0.1, ϕ = 0.0, η_vp = 1.0e-2, Ψ = 0.0),
-                )),
+                CompositeRheology = CompositeRheology(
+                    (
+                        LinearViscous(; η = 1.0),
+                        el,
+                        DruckerPrager_regularised(; C = 0.1, ϕ = 0.0, η_vp = 1.0e-2, Ψ = 0.0),
+                    )
+                ),
                 Elasticity = el,
             ),
         )

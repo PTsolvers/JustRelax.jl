@@ -119,30 +119,30 @@ end
 
     if m == 1
         # ∂Rx[i,j] / ∂Vx[i+1,j] (south)
-        return dτxy * dyrel.∂τxyv_∂εxy[i+1,j] * ∂shear_∂Vx(_di_vx, j)
+        return dτxy * dyrel.∂τxyv_∂εxy[i + 1, j] * ∂shear_∂Vx(_di_vx, j)
     elseif m == 2
         # ∂Rx[i,j] / ∂Vx[i,j+1] (west)
         dεxx, _, d∇V = ∂normal_∂Vx(_di_vertex, i, j)
-        return dτxx * dyrel.∂τxxc_∂εxx[i,j] * dεxx +
-               dPnum * (dyrel.γ_eff[i,j] * d∇V)
+        return dτxx * dyrel.∂τxxc_∂εxx[i, j] * dεxx +
+            dPnum * (dyrel.γ_eff[i, j] * d∇V)
     elseif m == 3
         # ∂Rx[i,j] / ∂Vx[i+1,j+1] (center)
         dεxx_E, _, d∇V_E = ∂normal_∂Vx(_di_vertex, i + 1, j)
         dεxx_W, _, d∇V_W = ∂normal_∂Vx(_di_vertex, i, j)
-        return -dτxx * dyrel.∂τxxc_∂εxx[i+1,j] * dεxx_E -
-               dτxx * dyrel.∂τxxc_∂εxx[i,j] * dεxx_W -
-               dτxy * dyrel.∂τxyv_∂εxy[i+1,j+1] * ∂shear_∂Vx(_di_vx, j + 1) -
-               dτxy * dyrel.∂τxyv_∂εxy[i+1,j] * ∂shear_∂Vx(_di_vx, j) -
-               dPnum * (dyrel.γ_eff[i+1,j] * d∇V_E) -
-               dPnum * (dyrel.γ_eff[i,j] * d∇V_W)
+        return -dτxx * dyrel.∂τxxc_∂εxx[i + 1, j] * dεxx_E -
+            dτxx * dyrel.∂τxxc_∂εxx[i, j] * dεxx_W -
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j + 1] * ∂shear_∂Vx(_di_vx, j + 1) -
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j] * ∂shear_∂Vx(_di_vx, j) -
+            dPnum * (dyrel.γ_eff[i + 1, j] * d∇V_E) -
+            dPnum * (dyrel.γ_eff[i, j] * d∇V_W)
     elseif m == 4
         # ∂Rx[i,j] / ∂Vx[i+2,j+1] (east)
         dεxx, _, d∇V = ∂normal_∂Vx(_di_vertex, i + 1, j)
-        return dτxx * dyrel.∂τxxc_∂εxx[i+1,j] * dεxx +
-               dPnum * (dyrel.γ_eff[i+1,j] * d∇V)
+        return dτxx * dyrel.∂τxxc_∂εxx[i + 1, j] * dεxx +
+            dPnum * (dyrel.γ_eff[i + 1, j] * d∇V)
     else
         # ∂Rx[i,j] / ∂Vx[i+1,j+2] (north)
-        return dτxy * dyrel.∂τxyv_∂εxy[i+1,j+1] * ∂shear_∂Vx(_di_vx, j + 1)
+        return dτxy * dyrel.∂τxyv_∂εxy[i + 1, j + 1] * ∂shear_∂Vx(_di_vx, j + 1)
     end
 end
 
@@ -155,27 +155,27 @@ end
     if m == 1
         # ∂Rx[i,j] / ∂Vy[i+1,j] (southwest)
         dεxx, _, d∇V = ∂normal_∂Vy(_di_vertex, i, j)
-        return dτxx * dyrel.∂τxxc_∂εxx[i,j] * dεxx +
-               dτxy * dyrel.∂τxyv_∂εxy[i+1,j] * ∂shear_∂Vy(_di_vy, i + 1) +
-               dPnum * (dyrel.γ_eff[i,j] * d∇V)
+        return dτxx * dyrel.∂τxxc_∂εxx[i, j] * dεxx +
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j] * ∂shear_∂Vy(_di_vy, i + 1) +
+            dPnum * (dyrel.γ_eff[i, j] * d∇V)
     elseif m == 2
         # ∂Rx[i,j] / ∂Vy[i+2,j] (southeast)
         dεxx, _, d∇V = ∂normal_∂Vy(_di_vertex, i + 1, j)
-        return -dτxx * dyrel.∂τxxc_∂εxx[i+1,j] * dεxx -
-               dτxy * dyrel.∂τxyv_∂εxy[i+1,j] * ∂shear_∂Vy(_di_vy, i + 1) -
-               dPnum * (dyrel.γ_eff[i+1,j] * d∇V)
+        return -dτxx * dyrel.∂τxxc_∂εxx[i + 1, j] * dεxx -
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j] * ∂shear_∂Vy(_di_vy, i + 1) -
+            dPnum * (dyrel.γ_eff[i + 1, j] * d∇V)
     elseif m == 3
         # ∂Rx[i,j] / ∂Vy[i+1,j+1] (northwest)
         dεxx, _, d∇V = ∂normal_∂Vy(_di_vertex, i, j)
-        return -dτxx * dyrel.∂τxxc_∂εxx[i,j] * dεxx -
-               dτxy * dyrel.∂τxyv_∂εxy[i+1,j+1] * ∂shear_∂Vy(_di_vy, i + 1) -
-               dPnum * (dyrel.γ_eff[i,j] * d∇V)
+        return -dτxx * dyrel.∂τxxc_∂εxx[i, j] * dεxx -
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j + 1] * ∂shear_∂Vy(_di_vy, i + 1) -
+            dPnum * (dyrel.γ_eff[i, j] * d∇V)
     else
         # ∂Rx[i,j] / ∂Vy[i+2,j+1] (northeast)
         dεxx, _, d∇V = ∂normal_∂Vy(_di_vertex, i + 1, j)
-        return dτxx * dyrel.∂τxxc_∂εxx[i+1,j] * dεxx +
-               dτxy * dyrel.∂τxyv_∂εxy[i+1,j+1] * ∂shear_∂Vy(_di_vy, i + 1) +
-               dPnum * (dyrel.γ_eff[i+1,j] * d∇V)
+        return dτxx * dyrel.∂τxxc_∂εxx[i + 1, j] * dεxx +
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j + 1] * ∂shear_∂Vy(_di_vy, i + 1) +
+            dPnum * (dyrel.γ_eff[i + 1, j] * d∇V)
     end
 end
 
@@ -188,27 +188,27 @@ end
     if m == 1
         # ∂Ry[i,j] / ∂Vx[i,j+1] (southwest)
         _, dεyy, d∇V = ∂normal_∂Vx(_di_vertex, i, j)
-        return dτyy * dyrel.∂τyyc_∂εyy[i,j] * dεyy +
-               dτxy * dyrel.∂τxyv_∂εxy[i,j+1] * ∂shear_∂Vx(_di_vx, j + 1) +
-               dPnum * (dyrel.γ_eff[i,j] * d∇V)
+        return dτyy * dyrel.∂τyyc_∂εyy[i, j] * dεyy +
+            dτxy * dyrel.∂τxyv_∂εxy[i, j + 1] * ∂shear_∂Vx(_di_vx, j + 1) +
+            dPnum * (dyrel.γ_eff[i, j] * d∇V)
     elseif m == 2
         # ∂Ry[i,j] / ∂Vx[i+1,j+1] (southeast)
         _, dεyy, d∇V = ∂normal_∂Vx(_di_vertex, i, j)
-        return -dτyy * dyrel.∂τyyc_∂εyy[i,j] * dεyy -
-               dτxy * dyrel.∂τxyv_∂εxy[i+1,j+1] * ∂shear_∂Vx(_di_vx, j + 1) -
-               dPnum * (dyrel.γ_eff[i,j] * d∇V)
+        return -dτyy * dyrel.∂τyyc_∂εyy[i, j] * dεyy -
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j + 1] * ∂shear_∂Vx(_di_vx, j + 1) -
+            dPnum * (dyrel.γ_eff[i, j] * d∇V)
     elseif m == 3
         # ∂Ry[i,j] / ∂Vx[i,j+2] (northwest)
         _, dεyy, d∇V = ∂normal_∂Vx(_di_vertex, i, j + 1)
-        return -dτyy * dyrel.∂τyyc_∂εyy[i,j+1] * dεyy -
-               dτxy * dyrel.∂τxyv_∂εxy[i,j+1] * ∂shear_∂Vx(_di_vx, j + 1) -
-               dPnum * (dyrel.γ_eff[i,j+1] * d∇V)
+        return -dτyy * dyrel.∂τyyc_∂εyy[i, j + 1] * dεyy -
+            dτxy * dyrel.∂τxyv_∂εxy[i, j + 1] * ∂shear_∂Vx(_di_vx, j + 1) -
+            dPnum * (dyrel.γ_eff[i, j + 1] * d∇V)
     else
         # ∂Ry[i,j] / ∂Vx[i+1,j+2] (northeast)
         _, dεyy, d∇V = ∂normal_∂Vx(_di_vertex, i, j + 1)
-        return dτyy * dyrel.∂τyyc_∂εyy[i,j+1] * dεyy +
-               dτxy * dyrel.∂τxyv_∂εxy[i+1,j+1] * ∂shear_∂Vx(_di_vx, j + 1) +
-               dPnum * (dyrel.γ_eff[i,j+1] * d∇V)
+        return dτyy * dyrel.∂τyyc_∂εyy[i, j + 1] * dεyy +
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j + 1] * ∂shear_∂Vx(_di_vx, j + 1) +
+            dPnum * (dyrel.γ_eff[i, j + 1] * d∇V)
     end
 end
 
@@ -221,28 +221,28 @@ end
     if m == 1
         # ∂Ry[i,j] / ∂Vy[i+1,j] (south)
         _, dεyy, d∇V = ∂normal_∂Vy(_di_vertex, i, j)
-        return dτyy * dyrel.∂τyyc_∂εyy[i,j] * dεyy +
-               dPnum * (dyrel.γ_eff[i,j] * d∇V)
+        return dτyy * dyrel.∂τyyc_∂εyy[i, j] * dεyy +
+            dPnum * (dyrel.γ_eff[i, j] * d∇V)
     elseif m == 2
         # ∂Ry[i,j] / ∂Vy[i,j+1] (west)
-        return dτxy * dyrel.∂τxyv_∂εxy[i,j+1] * ∂shear_∂Vy(_di_vy, i)
+        return dτxy * dyrel.∂τxyv_∂εxy[i, j + 1] * ∂shear_∂Vy(_di_vy, i)
     elseif m == 3
         # ∂Ry[i,j] / ∂Vy[i+1,j+1] (center)
         _, dεyy_N, d∇V_N = ∂normal_∂Vy(_di_vertex, i, j + 1)
         _, dεyy_S, d∇V_S = ∂normal_∂Vy(_di_vertex, i, j)
-        return -dτyy * dyrel.∂τyyc_∂εyy[i,j+1] * dεyy_N -
-               dτyy * dyrel.∂τyyc_∂εyy[i,j] * dεyy_S -
-               dτxy * dyrel.∂τxyv_∂εxy[i+1,j+1] * ∂shear_∂Vy(_di_vy, i + 1) -
-               dτxy * dyrel.∂τxyv_∂εxy[i,j+1] * ∂shear_∂Vy(_di_vy, i) -
-               dPnum * (dyrel.γ_eff[i,j+1] * d∇V_N) -
-               dPnum * (dyrel.γ_eff[i,j] * d∇V_S)
+        return -dτyy * dyrel.∂τyyc_∂εyy[i, j + 1] * dεyy_N -
+            dτyy * dyrel.∂τyyc_∂εyy[i, j] * dεyy_S -
+            dτxy * dyrel.∂τxyv_∂εxy[i + 1, j + 1] * ∂shear_∂Vy(_di_vy, i + 1) -
+            dτxy * dyrel.∂τxyv_∂εxy[i, j + 1] * ∂shear_∂Vy(_di_vy, i) -
+            dPnum * (dyrel.γ_eff[i, j + 1] * d∇V_N) -
+            dPnum * (dyrel.γ_eff[i, j] * d∇V_S)
     elseif m == 4
         # ∂Ry[i,j] / ∂Vy[i+2,j+1] (east)
-        return dτxy * dyrel.∂τxyv_∂εxy[i+1,j+1] * ∂shear_∂Vy(_di_vy, i + 1)
+        return dτxy * dyrel.∂τxyv_∂εxy[i + 1, j + 1] * ∂shear_∂Vy(_di_vy, i + 1)
     else
         # ∂Ry[i,j] / ∂Vy[i+1,j+2] (north)
         _, dεyy, d∇V = ∂normal_∂Vy(_di_vertex, i, j + 1)
-        return dτyy * dyrel.∂τyyc_∂εyy[i,j+1] * dεyy +
-               dPnum * (dyrel.γ_eff[i,j+1] * d∇V)
+        return dτyy * dyrel.∂τyyc_∂εyy[i, j + 1] * dεyy +
+            dPnum * (dyrel.γ_eff[i, j + 1] * d∇V)
     end
 end

@@ -258,12 +258,16 @@ end
         stokes.ε.xx_v .= 1.0
         compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
-        stokes.V.Vx .= PTArray(backend_JR)([
-            0.01 * i - 0.02 * j for i in 1:size(stokes.V.Vx, 1), j in 1:size(stokes.V.Vx, 2)
-        ])
-        stokes.V.Vy .= PTArray(backend_JR)([
-            -0.03 * i + 0.04 * j for i in 1:size(stokes.V.Vy, 1), j in 1:size(stokes.V.Vy, 2)
-        ])
+        stokes.V.Vx .= PTArray(backend_JR)(
+            [
+                0.01 * i - 0.02 * j for i in 1:size(stokes.V.Vx, 1), j in 1:size(stokes.V.Vx, 2)
+            ]
+        )
+        stokes.V.Vy .= PTArray(backend_JR)(
+            [
+                -0.03 * i + 0.04 * j for i in 1:size(stokes.V.Vy, 1), j in 1:size(stokes.V.Vy, 2)
+            ]
+        )
 
         dyrel_analytic = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; CFL = 0.99)
         dyrel_ad = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; CFL = 0.99)

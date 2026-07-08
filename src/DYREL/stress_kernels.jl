@@ -67,10 +67,7 @@ end
         ε_pl[3][I...] = εxy_pl
         λv[I...] = λ_I
 
-        if do_partials
-            Jτ_vertex = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
-            store_stress_jacobian_vertex!(dyrel, Jτ_vertex, I...)
-        end
+        do_partials && (dyrel.∂τxyv_∂εxy[I...] = local_stress_dτxy_dεxy(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv))
 
         ## CENTER CALCULATION
         if all(I .≤ ni)
@@ -95,8 +92,8 @@ end
             ΔPψ[I...] = ΔPψ_I
 
             if do_partials
-                Jτ_center = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
-                store_stress_jacobian_center!(dyrel, Jτ_center, I...)
+                dyrel.∂τxxc_∂εxx[I...] = local_stress_dτxx_dεxx(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
+                dyrel.∂τyyc_∂εyy[I...] = local_stress_dτyy_dεyy(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
             end
         end
     end
@@ -192,10 +189,7 @@ end
         ε_pl[3][I...] = εxy_pl
         λv[I...] = λ_I
 
-        if do_partials
-            Jτ_vertex = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
-            store_stress_jacobian_vertex!(dyrel, Jτ_vertex, I...)
-        end
+        do_partials && (dyrel.∂τxyv_∂εxy[I...] = local_stress_dτxy_dεxy(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv))
 
         # fused τII-viscosity update at the vertex (reuses in-register stress)
         if !linear_viscosity
@@ -225,8 +219,8 @@ end
             ΔPψ[I...] = ΔPψ_I
 
             if do_partials
-                Jτ_center = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
-                store_stress_jacobian_center!(dyrel, Jτ_center, I...)
+                dyrel.∂τxxc_∂εxx[I...] = local_stress_dτxx_dεxx(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
+                dyrel.∂τyyc_∂εyy[I...] = local_stress_dτyy_dεyy(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
             end
 
             # small pressure correction θc = P_num + ΔPψ = γ_eff·RP + ΔPψ (ΔPψ_I in-register). Both
@@ -270,43 +264,25 @@ end
     end
 end
 
-@inline function local_stress_τ(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
-    res = compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
-    return SA[res[1], res[2], res[3]]
-end
-
-@inline function local_stress_jacobian_ε(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
-    εij_vec = SA[εij...]
-    return ForwardDiff.jacobian(
-        ε -> local_stress_τ(Tuple(ε), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII),
-        εij_vec,
+@inline function local_stress_dτxx_dεxx(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
+    return ForwardDiff.derivative(
+        εxx -> compute_local_stress((εxx, zero(εxx) + εij[2], zero(εxx) + εij[3]), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)[1],
+        εij[1],
     )
 end
 
-@inline function store_stress_jacobian_center!(dyrel, Jτ, I...)
-    dyrel.∂τxxc_∂εxx[I...] = Jτ[1, 1]
-    dyrel.∂τxxc_∂εyy[I...] = Jτ[1, 2]
-    dyrel.∂τxxc_∂εxy[I...] = Jτ[1, 3]
-    dyrel.∂τyyc_∂εxx[I...] = Jτ[2, 1]
-    dyrel.∂τyyc_∂εyy[I...] = Jτ[2, 2]
-    dyrel.∂τyyc_∂εxy[I...] = Jτ[2, 3]
-    dyrel.∂τxyc_∂εxx[I...] = Jτ[3, 1]
-    dyrel.∂τxyc_∂εyy[I...] = Jτ[3, 2]
-    dyrel.∂τxyc_∂εxy[I...] = Jτ[3, 3]
-    return nothing
+@inline function local_stress_dτyy_dεyy(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
+    return ForwardDiff.derivative(
+        εyy -> compute_local_stress((zero(εyy) + εij[1], εyy, zero(εyy) + εij[3]), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)[2],
+        εij[2],
+    )
 end
 
-@inline function store_stress_jacobian_vertex!(dyrel, Jτ, I...)
-    dyrel.∂τxxv_∂εxx[I...] = Jτ[1, 1]
-    dyrel.∂τxxv_∂εyy[I...] = Jτ[1, 2]
-    dyrel.∂τxxv_∂εxy[I...] = Jτ[1, 3]
-    dyrel.∂τyyv_∂εxx[I...] = Jτ[2, 1]
-    dyrel.∂τyyv_∂εyy[I...] = Jτ[2, 2]
-    dyrel.∂τyyv_∂εxy[I...] = Jτ[2, 3]
-    dyrel.∂τxyv_∂εxx[I...] = Jτ[3, 1]
-    dyrel.∂τxyv_∂εyy[I...] = Jτ[3, 2]
-    dyrel.∂τxyv_∂εxy[I...] = Jτ[3, 3]
-    return nothing
+@inline function local_stress_dτxy_dεxy(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
+    return ForwardDiff.derivative(
+        εxy -> compute_local_stress((zero(εxy) + εij[1], zero(εxy) + εij[2], εxy), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)[3],
+        εij[3],
+    )
 end
 
 @inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology, dt, EII)
@@ -450,10 +426,7 @@ end
             ε_pl[3][I...] = εxy_pl
             λv[I...] = λ_I
 
-            if do_partials
-                Jτ_vertex = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij)
-                store_stress_jacobian_vertex!(dyrel, Jτ_vertex, I...)
-            end
+            do_partials && (dyrel.∂τxyv_∂εxy[I...] = local_stress_dτxy_dεxy(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij))
 
         else
             τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = 0.0e0, 0.0e0, 0.0e0
@@ -485,8 +458,8 @@ end
                 ΔPψ[I...] = ΔPψ_I
 
                 if do_partials
-                    Jτ_center = local_stress_jacobian_ε(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
-                    store_stress_jacobian_center!(dyrel, Jτ_center, I...)
+                    dyrel.∂τxxc_∂εxx[I...] = local_stress_dτxx_dεxx(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
+                    dyrel.∂τyyc_∂εyy[I...] = local_stress_dτyy_dεyy(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
                 end
 
             else

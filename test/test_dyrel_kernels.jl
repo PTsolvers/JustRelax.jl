@@ -185,6 +185,7 @@ end
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
             _di.center, _di.vertex,
+            dt,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test Array(stokes.V.Vx) == Array(Vx_before)

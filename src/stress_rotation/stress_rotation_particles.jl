@@ -258,14 +258,24 @@ function rotate_stress!(
     centroid2particle!(pτxx, stokes.τ.xx, particles)
     centroid2particle!(pτyy, stokes.τ.yy, particles)
     centroid2particle!(pτzz, stokes.τ.zz, particles)
+
+    # Workaround as grid2particle! only works for full vertex grid
+    # Maybe add specific grid2particle! functions in JustPIC?
+
     # shear components
-    grid2particle!(pτyz, stokes.τ.yz, particles)
-    grid2particle!(pτxz, stokes.τ.xz, particles)
-    grid2particle!(pτxy, stokes.τ.xy, particles)
+    centroid2particle!(pτyz, stokes.τ.yz_c, particles)
+    centroid2particle!(pτxz, stokes.τ.xz_c, particles)
+    centroid2particle!(pτxy, stokes.τ.xy_c, particles)
     # vorticity tensor
-    grid2particle!(pωyz, stokes.ω.yz, particles)
-    grid2particle!(pωxz, stokes.ω.xz, particles)
-    grid2particle!(pωxy, stokes.ω.xy, particles)
+    ωyz_c = similar(stokes.τ.yz_c)
+    ωxz_c = similar(stokes.τ.xz_c)
+    ωxy_c = similar(stokes.τ.xy_c)
+    @parallel (@idx size(ωxy_c)) shear2center_kernel!(
+        (ωyz_c, ωxz_c, ωxy_c), (stokes.ω.yz, stokes.ω.xz, stokes.ω.xy)
+    )
+    centroid2particle!(pωyz, ωyz_c, particles)
+    centroid2particle!(pωxz, ωxz_c, particles)
+    centroid2particle!(pωxy, ωxy_c, particles)
     # rotate stress
     rotate_stress_particles!(
         (pτxx, pτyy, pτzz, pτyz, pτxz, pτxy), (pωyz, pωxz, pωxy), particles, dt

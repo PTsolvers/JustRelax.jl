@@ -151,7 +151,7 @@ end
 # in-register `div_ij`, and nothing on this path reads ∇V back). The public `stokes.∇V` diagnostic
 # is recomputed once from the converged velocity field after the loop in `_solve_DYREL!`.
 
-function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, do_strain_rate)
+function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, do_strain_rate = true)
     ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
     melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(

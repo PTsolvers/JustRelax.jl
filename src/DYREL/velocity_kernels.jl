@@ -440,9 +440,6 @@ end
     Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
     Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
     Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_zi(A, _dz) = _d_zi(A, _dz, i, j, k)
     Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
     Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
     Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
@@ -766,9 +763,9 @@ end
         τxx,
         τyy,
         τzz,
-        τxy,
-        τxz,
         τyz,
+        τxz,
+        τxy,
         ρgx,
         ρgy,
         ρgz,
@@ -791,9 +788,6 @@ end
     Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
     Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
     Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_zi(A, _dz) = _d_zi(A, _dz, i, j, k)
     Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
     Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
     Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
@@ -806,7 +800,9 @@ end
 
             Rx_ijk =
                 (
-                d_xa(τxx, _dx) + d_yi(τxy, _dy) + d_zi(τxz, _dz) -
+                d_xa(τxx, _dx) +
+                    _dy * (τxy[i + 1, j + 1, k] - τxy[i + 1, j, k]) +
+                    _dz * (τxz[i + 1, j, k + 1] - τxz[i + 1, j, k]) -
                     d_xa(P, _dx) - d_xa(θc, _dx) - av_x(ρgx)
             ) / Dx[i, j, k]
             Rx[i, j, k] = Rx_ijk
@@ -822,7 +818,9 @@ end
 
             Ry_ijk =
                 (
-                d_ya(τyy, _dy) + d_xi(τxy, _dx) + d_zi(τyz, _dz) -
+                d_ya(τyy, _dy) +
+                    _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
+                    _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) -
                     d_ya(P, _dy) - d_ya(θc, _dy) - av_y(ρgy)
             ) / Dy[i, j, k]
             Ry[i, j, k] = Ry_ijk
@@ -838,7 +836,9 @@ end
 
             Rz_ijk =
                 (
-                d_za(τzz, _dz) + d_xi(τxz, _dx) + d_yi(τyz, _dy) -
+                d_za(τzz, _dz) +
+                    _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
+                    _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) -
                     d_za(P, _dz) - d_za(θc, _dz) - av_z(ρgz)
             ) / Dz[i, j, k]
             Rz[i, j, k] = Rz_ijk

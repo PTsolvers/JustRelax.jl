@@ -220,11 +220,11 @@ end
             vx_ne = Vx[i + 1, j + 1]
             vy_ne = Vy[i + 1, j + 1]
             _dx, _dy = @dxi(_di_vertex, i, j)
-            
+
             dVx_dx = (vx_ne - vx_n) * _dx
             dVy_dy = (vy_ne - vy_e) * _dy
             div_ij = dVx_dx + dVy_dy
-            
+
             if do_strain_rate
                 div_third = div_ij * third
                 εxx[i, j] = dVx_dx - div_third

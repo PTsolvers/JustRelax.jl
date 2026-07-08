@@ -3,7 +3,7 @@ using GeophysicalModelGenerator
 function GMG_only(nx, ny, nz)
 
     x = range(-3960, 500, nx)
-    y = range(0, 400, ny)
+    y = range(0, 100, ny)
     air_thickness = 50.0
     z = range(-660, air_thickness, nz)
     Grid = CartData(xyz_grid(x, y, z))

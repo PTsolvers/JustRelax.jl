@@ -73,6 +73,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies(CharDim)
     dt = nondimensionalize(10.0e3 * yr, CharDim) # diffusive CFL timestep limiter
+    dt_max = dt
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -90,17 +91,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # particle fields for the stress rotation
     pτ = StressParticles(particles)
     particle_args = (pT, pPhases, unwrap(pτ)...)
-    particle_args_reduced = (pT, unwrap(pτ)...)
-
-    # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 50, 75, 25
-    particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
-    )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
-    # temperature
-    particle_args = pPhases, = init_cell_arrays(particles, Val(1))
+    particle_args_reduced = (pT, pτ.τ_normal..., pτ.τ_shear...)
 
     # Assign particles phases anomaly
     phases_device = PTArray(backend_JR)(phases_GMG)
@@ -194,8 +185,9 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(iszero(niter) ? NaN : t_stokes / niter) s")
+        rotate_stress!(pτ, stokes, particles, dt)
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di)
+        dt = compute_dt(stokes, di, dt_max)
         # ------------------------------
 
         # # Thermal solver ---------------
@@ -221,7 +213,20 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), ())
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (
+                thermal.T,
+                stokes.τ.xx,
+                stokes.τ.yy,
+                stokes.τ.zz,
+                stokes.τ.yz_c,
+                stokes.τ.xz_c,
+                stokes.τ.xy_c,
+            ),
+        )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
@@ -258,7 +263,8 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
                     data_v,
                     data_c,
                     velocity_v;
-                    t = dimensionalize_and_strip(t, Myr, CharDim)
+                    t = dimensionalize_and_strip(t, Myr, CharDim),
+                    pvd = joinpath(vtk_dir, "Subduction3D"),
                 )
             end
         end
@@ -273,7 +279,7 @@ end
 # let
     do_vtk = true # set to true to generate VTK files for ParaView
     # nx, ny, nz = 150, 40, 150
-    nx,ny,nz = 128, 16, 64
+    nx,ny,nz = 128, 4, 64
     li, origin, phases_GMG, = GMG_only(nx + 1, ny + 1, nz + 1)
     igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
         IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)

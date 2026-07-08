@@ -8,6 +8,7 @@ using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
+using Statistics
 using MPI
 
 import JustRelax.JustRelax2D as JR2D

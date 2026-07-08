@@ -8,6 +8,7 @@ using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
+using Statistics
 using MPI
 
 import JustRelax.JustRelax3D as JR3D
@@ -40,6 +41,8 @@ __init__() = @init_parallel_stencil(AMDGPU, Float64, 3)
 
 include("../../common.jl")
 include("../../stokes/Stokes3D.jl")
+include("../../variational_stokes/Stokes3D.jl")
+include("../../DYREL/solver.jl")
 
 # Types
 function JR3D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
@@ -392,6 +395,10 @@ end
 
 function JR3D.solve_VariationalStokes!(::AMDGPUBackendTrait, stokes, args...; kwargs)
     return _solve_VS!(stokes, args...; kwargs...)
+end
+
+function JR3D.solve_DYREL!(::AMDGPUBackendTrait, stokes, args...; kwargs)
+    return _solve_DYREL!(stokes, args...; kwargs...)
 end
 
 function JR3D.heatdiffusion_PT!(::AMDGPUBackendTrait, thermal, args...; kwargs)

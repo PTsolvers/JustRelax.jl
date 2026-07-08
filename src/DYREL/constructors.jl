@@ -42,12 +42,17 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     αVx = @zeros(nx - 1, ny)
     αVy = @zeros(nx, ny - 1)
     αVz = @zeros(1, 1)  # dummy for 2D
+    P_num = @zeros(nx, ny)
+    Rx0 = @zeros(nx - 1, ny)
+    Ry0 = @zeros(nx, ny - 1)
+    Rz0 = @zeros(1, 1)  # dummy for 2D
 
     T = typeof(γ_eff)
     F = typeof(CFL)
     return JustRelax.DYREL{T, F}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
-        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0,
+        Rz0, CFL, ϵ, ϵ_vel, c_fact
     )
 end
 
@@ -85,12 +90,17 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     αVx = @zeros(nx - 1, ny, nz)
     αVy = @zeros(nx, ny - 1, nz)
     αVz = @zeros(nx, ny, nz - 1)
+    P_num = @zeros(nx, ny, nz)
+    Rx0 = @zeros(nx - 1, ny, nz)
+    Ry0 = @zeros(nx, ny - 1, nz)
+    Rz0 = @zeros(nx, ny, nz - 1)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
     return JustRelax.DYREL{T, F}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
-        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, CFL, ϵ, ϵ_vel, c_fact
+        dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0,
+        Rz0, CFL, ϵ, ϵ_vel, c_fact
     )
 end
 

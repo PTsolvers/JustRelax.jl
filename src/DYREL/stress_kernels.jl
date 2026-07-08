@@ -108,6 +108,135 @@ end
     return nothing
 end
 
+## FUSED STRESS + τII-VISCOSITY UPDATE
+# Same as `compute_stress_DRYEL!` but, unless `linear_viscosity`, also refreshes the creep
+# viscosities η (center) / ηv (vertex) from the freshly-computed stress, reusing the in-register
+# τ instead of relaunching a kernel that reads the stress tensor back. The τII-viscosity update
+# is purely local (same cell), so this is race-free and needs no halo.
+function compute_stress_viscosity_DRYEL!(
+        stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
+    )
+    ni = size(phase_ratios.vertex)
+    @parallel (@idx ni) compute_stress_viscosity_DRYEL!(
+        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
+        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),        # vertices
+        (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),    # centers
+        (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),  # vertices
+        stokes.τ.II,
+        (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),            # staggered grid
+        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy),   # centers
+        stokes.EII_pl,                                      # accumulated plastic strain rate @ centers
+        stokes.ε_vol_pl,                                    # volumetric plastic strain rate @ centers
+        stokes.P,
+        stokes.λ,
+        stokes.λv,
+        stokes.viscosity.η,
+        stokes.viscosity.ηv,
+        stokes.viscosity.η_vep,
+        stokes.ΔPψ,
+        θc, stokes.R.RP, γ_eff,                             # small pressure correction θc = γ_eff·RP + ΔPψ
+        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt,
+        viscosity_relaxation, args, viscosity_cutoff, linear_viscosity,
+    )
+    return nothing
+end
+
+# local τII-based creep viscosity, mirroring compute_viscosity_kernel! (τII path, air_phase = 0)
+@inline function _update_τII_viscosity(τxx, τyy, τxy, ratio, rheology, args_ij, η_old, ν, cutoff)
+    AII_0 = allzero(τxx, τyy, τxy) * eps()
+    τII = second_invariant(τxx + AII_0, τyy - AII_0, τxy)
+    ηi = compute_phase_viscosity(rheology, ratio, τII, compute_viscosity_τII, args_ij)
+    ηi = continuation_linear(ηi, η_old, ν)
+    return clamp(ηi, cutoff...)
+end
+
+@parallel_indices (I...) function compute_stress_viscosity_DRYEL!(
+        τ,
+        τ_v,
+        τ_o,
+        τ_ov,
+        τII,
+        ε,
+        ε_pl,
+        EII_pl,
+        ε_vol_pl,
+        P,
+        λ,
+        λv,
+        η,
+        ηv,
+        η_vep,
+        ΔPψ,
+        θc, RP, γ_eff,
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
+        ν, visc_args, cutoff, linear_viscosity
+    )
+
+    Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
+
+    ni = size(phase_ratios_center)
+
+    ## VERTEX CALCULATION
+    @inbounds begin
+        Ic = clamped_indices(ni, I...)
+        τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
+        εij = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
+        λvij = λv[I...]
+        ηij = ηv[I...]
+        Pij = av_clamped(P, Ic...)
+        EIIv = av_clamped(EII_pl, Ic...)
+        ratio = phase_ratios_vertex[I...]
+        # compute local stress
+        τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
+
+        # update arrays
+        τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
+        ε_pl[3][I...] = εxy_pl
+        λv[I...] = λ_I
+
+        # fused τII-viscosity update at the vertex (reuses in-register stress)
+        if !linear_viscosity
+            ηv[I...] = _update_τII_viscosity(τxx_I, τyy_I, τxy_I, ratio, rheology, local_viscosity_args_vertex(visc_args, I...), ηij, ν, cutoff)
+        end
+
+        ## CENTER CALCULATION
+        if all(I .≤ ni)
+            τij_o = τ_o[1][I...], τ_o[2][I...], τ_o[3][I...]
+            εij = ε[1][I...], ε[2][I...], av(ε[3])
+            λij = λ[I...]
+            ηij = η[I...]
+            Pij = P[I...]
+            EII = EII_pl[I...]
+            ratio = phase_ratios_center[I...]
+
+            # compute local stress
+            τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
+                compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
+            # update arrays
+            τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
+            ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
+            ε_vol_pl[I...] = ε_vol_pl_I
+            τII[I...] = τII_I
+            η_vep[I...] = ηvep_I
+            λ[I...] = λ_I
+            ΔPψ[I...] = ΔPψ_I
+
+            # small pressure correction θc = P_num + ΔPψ = γ_eff·RP + ΔPψ (ΔPψ_I in-register). Both
+            # terms are small corrections of similar magnitude, so summing them is precision-safe;
+            # the large hydrostatic P is kept separate in the momentum kernel. Collapses the momentum
+            # stencil from three pressure reads (P, P_num, ΔPψ) to two (P, θc).
+            θc[I...] = γ_eff[I...] * RP[I...] + ΔPψ_I
+
+            # fused τII-viscosity update at the center (reuses in-register stress)
+            if !linear_viscosity
+                η[I...] = _update_τII_viscosity(τxx_I, τyy_I, τxy_I, ratio, rheology, local_viscosity_args(visc_args, I...), ηij, ν, cutoff)
+            end
+        end
+    end
+
+    return nothing
+end
+
 # 3D Kernel
 function compute_stress_DRYEL!(
     ::Val{3},

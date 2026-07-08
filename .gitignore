@@ -33,3 +33,5 @@ node_modules
 *.vtr
 *.h5
 *.jld2
+*.vts
+*.pvd

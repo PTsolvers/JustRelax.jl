@@ -1,3 +1,15 @@
+"""
+    JustRelax
+
+Massively parallel pseudo-transient solvers for geodynamic modeling.
+
+`JustRelax` builds on `ParallelStencil`, `ImplicitGlobalGrid`, `GeoParams`, and `JustPIC` to
+solve the Stokes and thermal-diffusion equations on staggered Cartesian grids, on CPU or GPU
+and across MPI ranks. The dimension- and backend-specific implementations live in the
+submodules `JustRelax.JustRelax2D` and `JustRelax.JustRelax3D`, whose entry points (for
+example [`solve!`](@ref)) are selected through the backend types `CPUBackend`, `CUDABackend`,
+and `AMDGPUBackend`.
+"""
 module JustRelax
 
 using Adapt

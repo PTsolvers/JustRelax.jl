@@ -1,3 +1,11 @@
+"""
+    compute_principal_stresses(backend, stokes::JustRelax.StokesArrays)
+
+Allocate a [`PrincipalStress`](@ref) for `backend` and fill it from the cell-centered
+deviatoric stress in `stokes`, returning it. Each entry holds the principal-stress
+eigenvector scaled by its eigenvalue, obtained from the eigen-decomposition of the local
+stress tensor. Use [`compute_principal_stresses!`](@ref) to write into an existing object.
+"""
 function compute_principal_stresses(backend, stokes::JustRelax.StokesArrays)
     ni = size(stokes.P)
     σ = PrincipalStress(backend, ni)
@@ -5,6 +13,12 @@ function compute_principal_stresses(backend, stokes::JustRelax.StokesArrays)
     return σ
 end
 
+"""
+    compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress)
+
+Fill the principal-stress fields of `σ` in place from the cell-centered deviatoric stress in
+`stokes`. In-place counterpart of [`compute_principal_stresses`](@ref).
+"""
 function compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress)
     ni = size(stokes.P)
     @parallel (@idx ni) principal_stresses_eigen!(σ, @stress_center(stokes)...)

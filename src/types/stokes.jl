@@ -200,6 +200,22 @@ end
 @inline static_dims(::StokesArrays{Velocity{A}}) where {A <: AbstractArray{T, N}} where {T, N} = Val(N)
 
 ## PTStokesCoeffs type
+"""
+    PTStokesCoeffs(li, di; ϵ_rel = 1e-6, ϵ_abs = 1e-12, Re = 3π, CFL = 0.9/√(2.1 or 3.1), r = 0.7)
+
+Pseudo-transient coefficients for the Stokes solver, derived from the domain lengths `li`
+and grid spacing `di` (tuples with one entry per dimension).
+
+The constructor computes the pseudo-time step and relaxation factors (`Vpdτ`, `θ_dτ`,
+`ηdτ`) from the numerical parameters:
+
+- `ϵ_rel`, `ϵ_abs`: relative and absolute convergence tolerances on the residual.
+- `Re`: numerical Reynolds number.
+- `CFL`: Courant number; defaults to `0.9/√2.1` in 2D and `0.9/√3.1` in 3D.
+- `r`: a scaling factor entering `θ_dτ`.
+
+The resulting object is passed to [`solve!`](@ref) as `pt_stokes`.
+"""
 struct PTStokesCoeffs{T}
     CFL::T
     ϵ_rel::T # relative PT tolerance

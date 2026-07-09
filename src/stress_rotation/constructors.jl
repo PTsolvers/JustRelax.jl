@@ -1,3 +1,9 @@
+"""
+    StressParticles(particles::JustRelax.Particles)
+
+Allocate a zero-initialized [`StressParticles`](@ref) matching the dimensionality and
+backend of `particles`, ready to carry the deviatoric stress and vorticity on the particles.
+"""
 function StressParticles(particles::JustRelax.Particles{backend, 2}) where {backend}
     τ_normal = init_cell_arrays(particles, Val(2)) # normal stress
     τ_shear = init_cell_arrays(particles, Val(1)) # normal stress

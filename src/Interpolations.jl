@@ -97,7 +97,6 @@ end
 
 Interpolates the values at the `center` onto `vertex` points.
 """
-
 function center2vertex!(vertex, center)
     @parallel center2vertex_kernel!(vertex, center)
     @views vertex[1, :] .= vertex[2, :]
@@ -207,7 +206,7 @@ end
     velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
 
 In-place interpolation of the velocity field `Vx`, `Vy`, `Vz` from a staggered grid with ghost nodes
-onto the pre-allocated `Vx_d`, `Vy_d`, `Vz_d` 3D arrays located at the grid vertices.
+onto the pre-allocated `Vx_v`, `Vy_v`, `Vz_v` arrays located at the grid vertices.
 """
 function velocity2vertex!(Vx_v, Vy_v, Vz_v, Vx, Vy, Vz)
     @assert size(Vx_v) == size(Vy_v) == size(Vz_v)
@@ -228,12 +227,11 @@ end
 # 2D
 
 """
-    velocity2vertex(Vx, Vy)
+    velocity2vertex!(Vx_v, Vy_v, Vx, Vy)
 
-Interpolate the velocity field `Vx`, `Vy` from a staggered grid with ghost nodes
-onto the grid vertices.
+In-place interpolation of the velocity field `Vx`, `Vy` from a staggered grid with ghost
+nodes onto the pre-allocated vertex arrays `Vx_v`, `Vy_v`.
 """
-
 function velocity2vertex!(Vx_v, Vy_v, Vx, Vy)
     @assert size(Vx_v) == size(Vy_v)
     # interpolate to cell vertices
@@ -248,12 +246,11 @@ end
 end
 
 """
-    velocity2center(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
+    velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
 
-Interpolate the velocity field `Vx`, `Vy`, `Vz` from a staggered grid with ghost nodes
-onto the grid centers.
+In-place interpolation of the velocity field `Vx`, `Vy`, `Vz` from a staggered grid with
+ghost nodes onto the pre-allocated cell-center arrays `Vx_c`, `Vy_c`, `Vz_c`.
 """
-
 function velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
     @assert size(Vx_c) == size(Vy_c) == size(Vz_c)
     # interpolate to cell vertices
@@ -269,12 +266,11 @@ end
 end
 
 """
-    velocity2center(Vx_c, Vy_c, Vx, Vy)
+    velocity2center!(Vx_c, Vy_c, Vx, Vy)
 
-Interpolate the velocity field `Vx`, `Vy` from a staggered grid with ghost nodes
-onto the grid centers.
+In-place interpolation of the velocity field `Vx`, `Vy` from a staggered grid with ghost
+nodes onto the pre-allocated cell-center arrays `Vx_c`, `Vy_c`.
 """
-
 function velocity2center!(Vx_c, Vy_c, Vx, Vy)
     @assert size(Vx_c) == size(Vy_c)
     # interpolate to cell vertices
@@ -288,6 +284,12 @@ end
     return nothing
 end
 
+"""
+    shear2center!(A::JustRelax.SymmetricTensor)
+
+Interpolate the shear (off-diagonal) components of the symmetric tensor `A` from the cell
+vertices onto the cell centers, updating the center-based shear fields of `A` in place.
+"""
 function shear2center!(A::JustRelax.SymmetricTensor)
     return shear2center!(backend(A), A)
 end

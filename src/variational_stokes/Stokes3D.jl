@@ -1,11 +1,21 @@
 ## 3D VISCO-ELASTIC STOKES SOLVER
 
 # backend trait
+"""
+    solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs)
+
+Stokes solver entry point for variational Stokes solvers. This function dispatches to the appropriate implementation based on the arguments given in the function call.
+"""
 function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs)
     return solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs)
 end
 
 # entry point for extensions
+"""
+    solve_VariationalStokes!(backend::BackendTrait, stokes::JustRelax.StokesArrays, args...; kwargs)
+
+Stokes solver entry point for variational Stokes solvers. This function dispatches to the appropriate implementation based on the backend provided in the function call.
+"""
 function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
     return _solve_VS!(stokes, args...; kwargs...)
 end

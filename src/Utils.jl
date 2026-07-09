@@ -105,7 +105,7 @@ end
 end
 
 """
-    @velocity(V)
+    @velocity(A)
 
 Unpacks the velocity arrays `V` from the StokesArrays `A`.
 """
@@ -120,7 +120,7 @@ end
     V.Vx, V.Vy, V.Vz
 
 """
-    @displacement(U)
+    @displacement(A)
 
 Unpacks the displacement arrays `U` from the StokesArrays `A`.
 """
@@ -136,7 +136,7 @@ end
     U.Ux, U.Uy, U.Uz
 
 """
-    @qT(V)
+    @qT(A)
 
 Unpacks the flux arrays `qT_i` from the ThermalArrays `A`.
 """
@@ -151,7 +151,7 @@ end
     A.qTx, A.qTy, A.qTz
 
 """
-    @qT2(V)
+    @qT2(A)
 
 Unpacks the flux arrays `qT2_i` from the ThermalArrays `A`.
 """
@@ -355,7 +355,7 @@ end
 end
 
 """
-    tensor_vertex(A)
+    @tensor_vertex(A)
 
 Unpacks the symmetric tensor `A`, where its components are defined in the vertices of the grid cells.
 Shear components are unpack following Voigt's notation.

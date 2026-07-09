@@ -1,6 +1,15 @@
 import JustPIC._2D: cell_index, interp1D_inner, interp1D_extremas, distance
 using StaticArrays
 
+"""
+    update_phases_given_markerchain!(phase, chain::MarkerChain, particles::Particles, origin, di, air_phase)
+
+Correct the particle `phase` field so it is consistent with the interface described by the
+marker `chain` (typically the free-surface topography). For particles in cells crossed by the
+chain, those lying above the interface are reassigned to `air_phase` and those below keep
+their rock phase. `origin` and `di` are the grid origin and spacing used to locate cells
+relative to the chain.
+"""
 function update_phases_given_markerchain!(
         phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase
     ) where {backend}

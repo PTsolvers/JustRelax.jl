@@ -92,6 +92,26 @@ struct TemperatureBoundaryConditions{T1, T2, T3, T4, D, nD} <: AbstractBoundaryC
     end
 end
 
+"""
+    DisplacementBoundaryConditions(; no_slip, free_slip, free_surface = false)
+
+Flow boundary conditions prescribed on the displacement field for the Stokes solver.
+
+Each face is named `left`, `right`, `top`, `bot` in 2D (plus `front`, `back` in 3D) and
+carries a `Bool`; the dimensionality is inferred from the tuple length. On a given face
+exactly one of `no_slip` / `free_slip` must be `true` (they cannot agree). `no_slip` pins the
+displacement to zero, `free_slip` allows tangential motion while blocking the normal
+component, and `free_surface` enables a free upper surface.
+
+# Examples
+
+```julia
+DisplacementBoundaryConditions(;
+    no_slip = (left = false, right = false, top = false, bot = true),
+    free_slip = (left = true, right = true, top = true, bot = false),
+)
+```
+"""
 struct DisplacementBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
     no_slip::T
     free_slip::T
@@ -109,6 +129,26 @@ struct DisplacementBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
         return new{T, nD}(no_slip, free_slip, free_surface)
     end
 end
+"""
+    VelocityBoundaryConditions(; no_slip, free_slip, free_surface = false)
+
+Flow boundary conditions prescribed on the velocity field for the Stokes solver.
+
+Each face is named `left`, `right`, `top`, `bot` in 2D (plus `front`, `back` in 3D) and
+carries a `Bool`; the dimensionality is inferred from the tuple length. On a given face
+exactly one of `no_slip` / `free_slip` must be `true` (they cannot agree). `no_slip` pins the
+velocity to zero, `free_slip` allows tangential flow while blocking the normal component, and
+`free_surface` enables a free upper surface.
+
+# Examples
+
+```julia
+VelocityBoundaryConditions(;
+    no_slip = (left = false, right = false, top = false, bot = false),
+    free_slip = (left = true, right = true, top = true, bot = true),
+)
+```
+"""
 struct VelocityBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
     no_slip::T
     free_slip::T

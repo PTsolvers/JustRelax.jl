@@ -1,5 +1,15 @@
 # import JustRelax.compute_ρCp
 
+"""
+    subgrid_characteristic_time!(subgrid_arrays, particles, dt₀, phases, rheology, thermal, stokes)
+
+Compute, for every cell, the characteristic thermal-diffusion time and store it in `dt₀`.
+The time is derived from the local thermal diffusivity of `rheology` evaluated at the current
+temperature `thermal.T` and pressure `stokes.P`, and the grid spacing. It sets the relaxation
+scale for subgrid temperature diffusion of the particles. `phases` is either a
+`JustPIC.PhaseRatios` (phase-averaged) or an integer phase array (with the grid spacing `di`
+passed as a trailing argument).
+"""
 function subgrid_characteristic_time!(
         subgrid_arrays,
         particles,

@@ -1,3 +1,12 @@
+"""
+    JustRelax.JustRelax2D
+
+Two-dimensional CPU implementation of the JustRelax solvers, initialized for
+`ParallelStencil` in 2D. It provides the concrete Stokes and thermal-diffusion entry points
+(such as [`solve!`](@ref), [`solve_DYREL!`](@ref), and [`solve_VariationalStokes!`](@ref))
+together with the array types, boundary conditions, and helper kernels used to build 2D
+models. The CUDA and AMDGPU backends extend the same functions through package extensions.
+"""
 module JustRelax2D
 
     using ..JustRelax
@@ -42,6 +51,15 @@ module JustRelax2D
 
 end
 
+"""
+    JustRelax.JustRelax3D
+
+Three-dimensional CPU implementation of the JustRelax solvers, initialized for
+`ParallelStencil` in 3D. It mirrors [`JustRelax.JustRelax2D`](@ref) in three dimensions,
+providing the concrete Stokes and thermal-diffusion entry points (such as [`solve!`](@ref)
+and [`solve_VariationalStokes!`](@ref)) and the supporting types and kernels. The CUDA and
+AMDGPU backends extend the same functions through package extensions.
+"""
 module JustRelax3D
 
     using ..JustRelax

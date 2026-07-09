@@ -1,3 +1,12 @@
+"""
+    WENO5(method::Val, ni::NTuple{N, Integer})
+    WENO5(backend, method::Val, ni::NTuple{N, Integer})
+
+Construct a `WENO5` fifth-order Weighted Essentially Non-Oscillatory advection scheme for a
+grid of size `ni`. `method` selects the smoothness weights, `Val(1)` for Jiang-Shu (JS) and
+`Val(2)` for the Z variant. The scheme's constants and temporary flux buffers are allocated
+for the given backend (`CPUBackend` by default). Pass the result to [`WENO_advection!`](@ref).
+"""
 function WENO5(::Type{CPUBackend}, method::Val{T}, ni::NTuple{N, Integer}) where {N, T}
     return WENO5(method, tuple(ni...))
 end

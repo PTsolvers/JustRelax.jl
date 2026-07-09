@@ -81,6 +81,13 @@ end
 
 ## Stress Rotation on the particles
 
+"""
+    rotate_stress_particles!(τ::NTuple, ω::NTuple, particles::Particles, dt; method = :matrix)
+
+Rotate the per-particle deviatoric stress tuple `τ` by the per-particle vorticity `ω` over
+the time step `dt`, in place. `τ` and `ω` are tuples of particle cell arrays holding the
+tensor and vorticity components.
+"""
 function rotate_stress_particles!(
         τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol = :matrix
     )
@@ -194,6 +201,13 @@ end
 
 # Interpolations between stress on the particles and the grid
 
+"""
+    stress2grid!(stokes, τ_particles::JustRelax.StressParticles, particles)
+
+Interpolate the deviatoric stress carried on the particles in `τ_particles` back onto the
+grid, writing the old-stress fields `stokes.τ_o` (centers and vertices) in place. Used after
+advection so the rotated particle stresses seed the next Stokes solve.
+"""
 function stress2grid!(
         stokes, τ_particles::JustRelax.StressParticles{backend}, particles
     ) where {backend}
@@ -231,6 +245,14 @@ function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, particle
     return nothing
 end
 
+"""
+    rotate_stress!(τ_particles::JustRelax.StressParticles, stokes, particles, dt)
+
+Co-rotate the deviatoric stress with the flow over the time step `dt`. The current grid
+stress `stokes.τ` and vorticity `stokes.ω` are interpolated onto the particles held in
+`τ_particles`, then each particle's stress tensor is rotated by its local vorticity. Updates
+`τ_particles` in place.
+"""
 function rotate_stress!(
         τ_particles::JustRelax.StressParticles{backend}, stokes, particles, dt
     ) where {backend}

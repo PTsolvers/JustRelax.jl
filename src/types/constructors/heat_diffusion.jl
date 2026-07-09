@@ -1,7 +1,7 @@
 """
     ThermalArrays(ni::NTuple{N, Integer}) where {N}
 
-Create the thermal arrays for the heat diffusion solver in 2D or 3D with the extents given by ni (`nx x ny` or `nx x ny x nz``).
+Create the thermal arrays for the heat diffusion solver in 2D or 3D with the extents given by ni (`nx x ny` or `nx x ny x nz`).
 """
 function ThermalArrays(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return ThermalArrays(ni...)

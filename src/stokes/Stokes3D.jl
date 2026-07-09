@@ -15,6 +15,32 @@ function update_τ_o!(stokes::JustRelax.StokesArrays)
 end
 
 ## 3D VISCO-ELASTIC STOKES SOLVER
+"""
+    solve!(stokes, pt_stokes, grid, flow_bcs, ρg, rheology, args, dt, igg; kwargs)
+    solve!(stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, dt, igg; kwargs)
+
+Solve the visco-elasto-plastic Stokes problem with the pseudo-transient method, updating
+`stokes` in place with the converged velocity, pressure, and stress fields. The backend is
+selected from `stokes`.
+
+# Arguments
+- `stokes`: `JustRelax.StokesArrays` holding the solution and residual fields.
+- `pt_stokes`: `JustRelax.PTStokesCoeffs` with the pseudo-transient coefficients and tolerances.
+- `grid`: `Geometry` describing the staggered grid.
+- `flow_bcs`: `VelocityBoundaryConditions` or `DisplacementBoundaryConditions`.
+- `ρg`: buoyancy-force arrays added to the momentum balance.
+- `phase_ratios`: `JustPIC.PhaseRatios` for multi-phase rheologies; omit for a single rheology.
+- `rheology`: GeoParams material parameters, or a tuple of them for multiple phases.
+- `args`: named tuple of fields (e.g. `(; T, P)`) forwarded to the rheology evaluations.
+- `dt`: time step.
+- `igg`: `IGG` distributed-grid handle.
+
+Solver options are forwarded through the `kwargs` keyword as a named tuple, for example
+`kwargs = (; iterMax, nout, viscosity_cutoff, viscosity_relaxation, verbose)`.
+
+Returns a named tuple with the iteration count `iter` and the residual histories
+(`norm_Rx`, `norm_Ry`, `norm_Rz`, `norm_∇V`, `err_evo1`, `err_evo2`).
+"""
 function solve!(stokes::JustRelax.StokesArrays, args...; kwargs)
     return solve!(backend(stokes), stokes, args...; kwargs)
 end

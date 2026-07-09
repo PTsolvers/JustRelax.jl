@@ -240,13 +240,6 @@ Check if  `ϕ.Vy[inds...]` is a not a nullspace.
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
 - `inds`: Cartesian indices to check.
 """
-# Base.@propagate_inbounds @inline function isvalid_vy(ϕ::JustRelax.RockRatio, i, j)
-#     # c = (ϕ.center[i, j] > 0) * (ϕ.center[i, j - 1] > 0)
-#     # v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i + 1, j] > 0)
-#     # cv = c * v
-#     # return cv * (ϕ.Vy[i, j] > 0)
-#     return (ϕ.Vy[i, j] > 0)
-# end
 Base.@propagate_inbounds @inline function isvalid_vy(
         ϕ::JustRelax.RockRatio, I::Vararg{Integer, N}
     ) where {N}

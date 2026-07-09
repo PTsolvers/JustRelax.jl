@@ -1,3 +1,15 @@
+"""
+    StressParticles{backend, nNormal, nShear, T}
+
+Per-particle stress carrier used to rotate the deviatoric stress tensor along the flow as
+particles advect. It stores the normal stress components `τ_normal`, the shear stress
+components `τ_shear`, and the vorticity `ω` as tuples of particle cell arrays (`nNormal` and
+`nShear` components, respectively: `(2, 1)` in 2D and `(3, 3)` in 3D).
+
+Construct one from a set of `JustPIC` particles with [`StressParticles(particles)`](@ref).
+Interpolate between the particle stresses and the grid with [`stress2grid!`](@ref) and
+[`rotate_stress!`](@ref).
+"""
 struct StressParticles{backend, nNormal, nShear, T}
     τ_normal::NTuple{nNormal, T}
     τ_shear::NTuple{nShear, T}

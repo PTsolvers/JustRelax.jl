@@ -103,7 +103,7 @@ end
 """
     Viscosity(ni::NTuple{N, Integer}) where {N}
 
-Create the viscosity arrays for the Stokes solver in 2D or 3D with the extents given by ni (`nx x ny` or `nx x ny x nz``).
+Create the viscosity arrays for the Stokes solver in 2D or 3D with the extents given by ni (`nx x ny` or `nx x ny x nz`).
 ## Fields
 - `η`: Viscosity at cell centers
 - `ηv`: Viscosity at vertices
@@ -122,7 +122,7 @@ end
 """
     PrincipalStress(ni::NTuple{N, Integer}) where {N}
 
-Create the principal stress arrays for the Stokes solver in 2D or 3D with the extents given by ni (`nx x ny` or `nx x ny x nz``).
+Create the principal stress arrays for the Stokes solver in 2D or 3D with the extents given by ni (`nx x ny` or `nx x ny x nz`).
 ## Fields
 - `σ1`: First principal stress
 - `σ2`: Second principal stress

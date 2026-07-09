@@ -107,19 +107,44 @@ end
 
 ## 2D KERNELS
 
+"""
+    compute_viscosity_τII!(stokes, args, rheology, cutoff; kwargs...)
+
+As [`compute_viscosity!`](@ref), but evaluating the creep laws as a function of the second
+invariant of the deviatoric stress instead of the strain rate.
+"""
 function compute_viscosity_τII!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_τII)
 end
 
+"""
+    compute_viscosity_εII!(stokes, args, rheology, cutoff; kwargs...)
+
+As [`compute_viscosity!`](@ref), evaluating the creep laws as a function of the second
+invariant of the strain rate. This is the variant [`compute_viscosity!`](@ref) uses.
+"""
 function compute_viscosity_εII!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_εII)
 end
 
-# generic fallback
+"""
+    compute_viscosity!(stokes, args, rheology, cutoff; relaxation = 1e0)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff; air_phase = 0, relaxation = 1e0)
+
+Update the effective viscosity field `stokes.viscosity.η` in place from the current
+strain-rate second invariant (equivalent to [`compute_viscosity_εII!`](@ref)).
+
+`rheology` provides the GeoParams creep laws, either a single set of `MaterialParams` or a
+tuple over phases blended with `phase_ratios`. `args` is a named tuple of the fields the
+laws depend on (e.g. `(; T, P, dt)`). The new viscosity is relaxed towards the previous
+value with the continuation factor `relaxation ∈ (0, 1]` and clamped to
+`cutoff = (ηmin, ηmax)`. `air_phase` marks a phase excluded from the phase average
+(`0` disables it).
+"""
 function compute_viscosity!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )

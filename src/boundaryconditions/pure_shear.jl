@@ -1,3 +1,12 @@
+"""
+    pureshear_bc!(stokes, xci, xvi, εbg, backend)
+
+Prescribe a pure-shear velocity field on the boundaries of `stokes.V` for a background
+strain rate `εbg`. The velocity increases linearly with position, using the cell-center and
+vertex coordinates `xci` and `xvi`, so the imposed rates are `εbg` along the horizontal
+directions and `-εbg` along the vertical, keeping the flow incompressible. Works in 2D and
+3D depending on the length of the coordinate tuples.
+"""
 function pureshear_bc!(
         stokes::JustRelax.StokesArrays, xci::NTuple{2}, xvi::NTuple{2}, εbg, backend
     )

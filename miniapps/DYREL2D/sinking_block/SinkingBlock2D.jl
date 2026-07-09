@@ -145,7 +145,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
             igg;
             kwargs = (;
                 verbose_PH = true,
-                verbose_DR = false,
+                verbose_DR = true,
                 iterMax = 50.0e3,
                 nout = 10,
                 rel_drop = 1.0e-2,
@@ -203,7 +203,3 @@ else
 end
 
 sinking_block2D(igg; ar = ar, nx = nx, ny = ny);
-# extrema(stokes.∇V) = (-1.9891239712950583e-16, 1.3077805713409153e-15)
-
-# dyrel.γ_eff
-# γ_eff

@@ -1,5 +1,6 @@
 <h1> <img src="./docs/src/assets/logo.png" alt="JustRelax.jl" width="50"> JustRelax.jl </h1>
 
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/stable/)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
 [![Ask us anything](https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg)](https://github.com/PTsolvers/JustRelax.jl/discussions/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
@@ -33,8 +34,8 @@ The package serves several purposes:
   * It provides a collection of solvers to be used in quickly developing new applications
   * It provides some standardization so that application codes can
 
-     - more easily handle local material properties through the use of [GeoParams.jl]((https://github.com/JuliaGeodynamics/GeoParams.jl))
-     - more easily switch between a pseudo-transient solver and another solvers (e.g. an explicit thermal solvers)
+     - more easily handle local material properties through the use of [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)
+     - more easily switch between a pseudo-transient solver and another solver (e.g. an explicit thermal solver)
 
   * It provides a natural repository for contributions of new solvers for use by the larger community
 
@@ -65,11 +66,41 @@ julia> ]
 
 The test will take a while, so grab a :coffee: or :tea:
 
-:warning: If you plan on developing JustRelax.jl and/or modifying the source coude, you can test your local version by running the testing framework again
+:warning: If you plan on developing JustRelax.jl and/or modifying the source code, `dev` your local clone (`] dev /path/to/JustRelax.jl`) and run `test JustRelax` again to exercise your changes.
+
+## Quick start
+
+A JustRelax model is assembled from a staggered `Geometry`, the field containers for the
+chosen backend, the pseudo-transient coefficients, and a set of boundary conditions. The
+dimension-specific API lives in the `JustRelax.JustRelax2D` and `JustRelax.JustRelax3D`
+submodules:
+
 ```julia
-julia> ]
-(@v1.xx) pkg> test JustRelax
+using JustRelax, JustRelax.JustRelax2D
+
+# pick a backend (CPUBackend, CUDABackend or AMDGPUBackend)
+backend = CPUBackend
+
+# staggered grid: 64 x 64 cells over a unit square
+ni = 64, 64          # number of cells
+li = 1.0, 1.0        # domain size
+di = li ./ ni        # grid spacing
+grid = Geometry(ni, li)
+
+# allocate the Stokes fields and the pseudo-transient coefficients
+stokes    = StokesArrays(backend, ni)
+pt_stokes = PTStokesCoeffs(li, di)
+
+# free-slip velocity boundary conditions on every side
+bcs = VelocityBoundaryConditions(;
+    no_slip   = (left = false, right = false, top = false, bot = false),
+    free_slip = (left = true,  right = true,  top = true,  bot = true),
+)
 ```
+
+From here a model adds a rheology (via [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)),
+buoyancy forces, and a time loop calling `solve!`. See the [documentation](https://ptsolvers.github.io/JustRelax.jl/stable/)
+and the miniapps below for complete, runnable models.
 
 ## Miniapps
 

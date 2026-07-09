@@ -82,7 +82,8 @@ makedocs(;
         devbranch = "main",
         devurl = "dev",
     ),
-    modules = [JustRelax],
+    modules = [JustRelax, JustRelax.JustRelax2D, JustRelax.JustRelax3D, JustRelax.DataIO],
+    checkdocs = :exports,
     warnonly = Documenter.except(:footnote),
     pages = [
         "Home" => "index.md",

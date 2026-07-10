@@ -37,6 +37,18 @@ end
 using GeoParams
 using CairoMakie
 
+# Rising-plume + sticky-air benchmark, mirroring `PlumeFreeSurface_VariationalStokes.jl` (same
+# physics, same RockRatio `ϕ` + marker chain), but driving the solve through the variational
+# self-tuned dynamic-relaxation solver `solve_DYREL!` instead of `solve_VariationalStokes!`.
+#
+# The variational DYREL path implements the implicit free-surface `ρg·dt` stabilization term
+# (`free_surface = true`), so the full CFL time step is stable.
+#
+# The viscosity is computed with `air_phase = 1` (soft sticky air removed → physically stiff
+# partial surface cells via `correct_phase_ratio`). The RockRatio `ϕ` masks the momentum solve and
+# the ϕ-aware Gershgorin preconditioner ϕ-weights the viscosity, so the stiff partial cells no
+# longer wreck DYREL conditioning. See the note next to `air_phase_visc` below.
+
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
 macro all_j(A)
@@ -127,6 +139,15 @@ function main(igg, nx, ny)
     )
     # ----------------------------------------------------
 
+    # finite viscosity cutoff (keeps the extreme air/rock contrast bounded)
+    viscosity_cutoff = (1.0e16, 1.0e24)
+
+    # Remove the soft air from partial-cell viscosity: `correct_phase_ratio` gives stiff, physical
+    # partial cells (η ~ 1e21) at the true free surface. This is the correct physics — the RockRatio
+    # `ϕ` masks the momentum solve, and the ϕ-aware Gershgorin preconditioner now ϕ-weights the
+    # viscosity so the stiff partial cells no longer wreck DYREL conditioning.
+    air_phase_visc = 1
+
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 15
     particles = init_particles(
@@ -158,7 +179,6 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -170,7 +190,7 @@ function main(igg, nx, ny)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase = air_phase)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase_visc)
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
@@ -181,31 +201,42 @@ function main(igg, nx, ny)
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    figdir = "FreeSurfacePlume_VS"
+    figdir = "FreeSurfacePlume_DYREL_VS"
     take(figdir)
+
+    # DYREL (self-tuned dynamic relaxation) solver state -
+    dt = 10.0e3 * (3600 * 24 * 365.25)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
 
     # Time loop
     t, it = 0.0, 0
-    dt = 10.0e3 * (3600 * 24 * 365.25)
     while it < 150
-        # Stokes -----------------------
-        solve_VariationalStokes!(
+        # Variational DYREL Stokes solve (ϕ positional, after phase_ratios) --
+        solve_DYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
             ϕ,
             rheology,
             args,
+            grid,
             dt,
             igg;
             kwargs = (;
+                air_phase = air_phase_visc,
                 iterMax = 100.0e3,
-                nout = 1.0e3,
-                viscosity_cutoff = (-Inf, Inf),
+                nout = 100,
+                rel_drop = 1.0e-2,
+                λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
+                viscosity_relaxation = 1.0e-2,
+                linear_viscosity = true,
                 free_surface = true,
+                verbose_PH = true,
+                verbose_DR = false,
+                viscosity_cutoff = viscosity_cutoff,
             )
         )
         dt = compute_dt(stokes, di) * 0.95

@@ -64,6 +64,7 @@ function _solve_DYREL!(
         verbose_PH = true,
         verbose_DR = true,
         linear_viscosity = false,
+        free_surface = false,
         kwargs...,
     ) where {N}
 
@@ -133,15 +134,17 @@ function _solve_DYREL!(
         # update_halo!(stokes.τ.yy_v)
         # update_halo!(stokes.τ.xy)
 
-        # compute velocity residuals
+        # compute velocity residuals (free-surface stabilization via dt * free_surface)
         @parallel (@idx ni) compute_PH_residual_V!(
             residuals...,
+            @velocity(stokes)...,
             stokes.P,
             stokes.ΔPψ,
             @stress(stokes)...,
             ρg...,
             _di.center,
             _di.vertex,
+            dt * free_surface,
         )
 
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
@@ -220,6 +223,7 @@ function _solve_DYREL!(
                 fields.dτV...,
                 _di.center,
                 _di.vertex,
+                dt * free_surface,
             )
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)

@@ -721,6 +721,77 @@ end
     return nothing
 end
 
+# Free-surface-stabilized variant of the 2D fused DR kernel: adds the implicit free-surface
+# advection term (Vy·∂ρg∂y·dt) to the vertical momentum residual, mirroring the FS overload of
+# `compute_PH_residual_V!`. The solver passes `dt * free_surface`, so the correction vanishes when
+# `free_surface = false` (branchless, matching the variational Stokes `compute_V!` idiom).
+@parallel_indices (i, j) function compute_DR_residual_update_V!(
+        Rx::AbstractArray{T, 2},
+        Ry,
+        Vx,
+        Vy,
+        dVxdτ,
+        dVydτ,
+        P,
+        θc,
+        τxx,
+        τyy,
+        τxy,
+        ρgx,
+        ρgy,
+        Dx,
+        Dy,
+        αVx,
+        αVy,
+        βVx,
+        βVy,
+        dτVx,
+        dτVy,
+        _di_center,
+        _di_vertex,
+        dt,
+    ) where {T}
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+
+    ny = size(ρgy, 2)
+    @inbounds begin
+        if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
+            _dx_c = @dx(_di_center, i)
+            _dy_v = @dy(_di_vertex, j)
+            Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+            Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
+            Rx_ij = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(θc) - av_xa(ρgx)) / Dx[i, j]
+            Rx[i, j] = Rx_ij
+
+            dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
+            dVxdτ[i, j] = dVx_new
+            Vx[i + 1, j + 1] += ΔVx
+        end
+        if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+            _dy_c = @dy(_di_center, j)
+            _dx_v = @dx(_di_vertex, i)
+            Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+            Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
+            # free-surface stabilization term
+            θ = 1.0
+            Vyᵢⱼ = Vy[i + 1, j + 1]
+            j_N = min(j + 1, ny)
+            ∂ρg∂y = (ρgy[i, j_N] - ρgy[i, j]) * _dy_c
+            ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
+
+            Ry_ij = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(θc) - av_ya(ρgy) + ρg_correction) / Dy[i, j]
+            Ry[i, j] = Ry_ij
+
+            dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij, αVy[i, j], βVy[i, j], dτVy[i, j])
+            dVydτ[i, j] = dVy_new
+            Vy[i + 1, j + 1] += ΔVy
+        end
+    end
+
+    return nothing
+end
+
 @parallel_indices (i, j, k) function compute_DR_residual_update_V!(
         Rx::AbstractArray{T, 3},
         Ry,

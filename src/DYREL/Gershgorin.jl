@@ -154,6 +154,178 @@ end
     return nothing
 end
 
+# variational (ϕ-aware) overload: mask air/invalid velocity DOFs and ϕ-weight the
+# viscosity entering the Gershgorin sums, so the preconditioner/eigenvalue estimate is
+# consistent with the already ϕ-weighted momentum operator (velocity_kernels_VS.jl).
+function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, ϕ::JustRelax.RockRatio, rheology, di, dt)
+    ni = size(η)
+    @parallel (@idx ni) _Gershgorin_Stokes2D_SchurComplement!(
+        Dx,
+        Dy,
+        λmaxVx,
+        λmaxVy,
+        η,
+        ηv,
+        γ_eff,
+        di.center,
+        di.vertex,
+        phase_ratios.vertex,
+        phase_ratios.center,
+        ϕ,
+        rheology,
+        dt,
+    )
+    return nothing
+end
+
+@parallel_indices (i, j) function _Gershgorin_Stokes2D_SchurComplement!(
+        Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di_center, di_vertex,
+        phase_vertex, phase_center, ϕ::JustRelax.RockRatio, rheology, dt
+    )
+
+    # @inbounds begin
+    phase = phase_vertex[i + 1, j + 1]
+    GN = fn_ratio(get_shear_modulus, rheology, phase)
+    phase = phase_vertex[i + 1, j]
+    GS = fn_ratio(get_shear_modulus, rheology, phase)
+    phase = phase_center[i, j]
+    GW = fn_ratio(get_shear_modulus, rheology, phase)
+
+    # ϕ-weighted viscosity coefficients at surrounding points (down-weights soft air)
+    ηN = ηv[i + 1, j + 1] * ϕ.vertex[i + 1, j + 1]
+    ηS = ηv[i + 1, j] * ϕ.vertex[i + 1, j]
+    ηW = η[i, j] * ϕ.center[i, j]
+    # # bulk viscosity coefficients at surrounding points
+    γW = γ_eff[i, j]
+
+    if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
+        if isvalid_vx(ϕ, i + 1, j)
+            # Hoist common parameters
+            dx = @dx(di_center, i)
+            dy = @dy(di_vertex, j)
+            _dx = inv(dx)
+            _dy = inv(dy)
+            _dx2 = _dx * _dx
+            _dy2 = _dy * _dy
+            _dxdy = _dx * _dy
+            c43 = 4 / 3
+            c23 = 2 / 3
+
+            phase = phase_center[i + 1, j]
+            GE = fn_ratio(get_shear_modulus, rheology, phase)
+            ηE = η[i + 1, j] * ϕ.center[i + 1, j]
+            γE = γ_eff[i + 1, j]
+            # effective viscoelastic viscosity (ϕ=0 ⇒ η=0 ⇒ 1/η=Inf ⇒ combine=0, no NaN)
+            ηN = 1 / (1 / ηN + 1 / (GN * dt))
+            ηS = 1 / (1 / ηS + 1 / (GS * dt))
+            ηW = 1 / (1 / ηW + 1 / (GW * dt))
+            ηE = 1 / (1 / ηE + 1 / (GE * dt))
+
+            # Precompute common terms
+            ηN_dy = ηN * _dy
+            ηS_dy = ηS * _dy
+            ηE_dx = ηE * _dx
+            ηW_dx = ηW * _dx
+            γE_dx = γE * _dx
+            γW_dx = γW * _dx
+
+            # compute Gershgorin entries
+            Cxx = abs(ηN * _dy2) +
+                abs(ηS * _dy2) +
+                abs((γE + c43 * ηE) * _dx2) +
+                abs((γW + c43 * ηW) * _dx2) +
+                abs((ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx)
+
+            Cxy = abs((γE - c23 * ηE + ηN) * _dxdy) +
+                abs((γE - c23 * ηE + ηS) * _dxdy) +
+                abs((γW + ηN - c23 * ηW) * _dxdy) +
+                abs((γW + ηS - c23 * ηW) * _dxdy)
+
+            # this is the preconditioner diagonal entry
+            Dx_ij = Dx[i, j] = (ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx
+            # maximum eigenvalue estimate
+            λmaxVx[i, j] = inv(Dx_ij) * (Cxx + Cxy)
+        else
+            # air/invalid DOF: benign FINITE values. The V-update is masked here (ϕ.Vx=0) and
+            # dVxdτ stays 0, so the node contributes nothing. λmaxVx=1 (not 0!) keeps dτVx/βVx
+            # finite — a 0 would give dτVx=Inf ⇒ βVx=NaN, which poisons the unmasked global sum
+            # in compute_λminV!. Dx=1 keeps errV finite (residual is 0 here anyway).
+            Dx[i, j] = one(eltype(Dx))
+            λmaxVx[i, j] = one(eltype(λmaxVx))
+        end
+    end
+
+    # ϕ-weighted viscosity coefficients at surrounding points
+    GS = GW # reuse cached value
+    phase = phase_vertex[i, j + 1]
+    GW = fn_ratio(get_shear_modulus, rheology, phase)
+    GE = GN # reuse cached value
+
+    ηS = η[i, j] * ϕ.center[i, j]
+    ηW = ηv[i, j + 1] * ϕ.vertex[i, j + 1]
+    ηE = ηv[i + 1, j + 1] * ϕ.vertex[i + 1, j + 1]
+    # # bulk viscosity coefficients at surrounding points
+    γS = γW # reuse cached value
+
+    if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
+        if isvalid_vy(ϕ, i, j + 1)
+            # Hoist common parameters
+            dx = @dx(di_vertex, i)
+            dy = @dy(di_center, j)
+            _dx = inv(dx)
+            _dy = inv(dy)
+            _dx2 = _dx * _dx
+            _dy2 = _dy * _dy
+            _dxdy = _dx * _dy
+            c43 = 4 / 3
+            c23 = 2 / 3
+
+            phase = phase_center[i, j + 1]
+            GN = fn_ratio(get_shear_modulus, rheology, phase)
+
+            ηN = η[i, j + 1] * ϕ.center[i, j + 1]
+            γN = γ_eff[i, j + 1]
+            # effective viscoelastic viscosity
+            ηN = 1 / (1 / ηN + 1 / (GN * dt))
+            ηS = 1 / (1 / ηS + 1 / (GS * dt))
+            ηW = 1 / (1 / ηW + 1 / (GW * dt))
+            ηE = 1 / (1 / ηE + 1 / (GE * dt))
+
+            # Precompute common terms
+            ηE_dx = ηE * _dx
+            ηW_dx = ηW * _dx
+            ηN_dy = ηN * _dy
+            ηS_dy = ηS * _dy
+            γN_dy = γN * _dy
+            γS_dy = γS * _dy
+
+            # compute Gershgorin entries
+            Cyy = abs(ηE * _dx2) +
+                abs(ηW * _dx2) +
+                abs((γN + c43 * ηN) * _dy2) +
+                abs((γS + c43 * ηS) * _dy2) +
+                abs((γN_dy + γS_dy + c43 * (ηN_dy + ηS_dy)) * _dy + (ηE_dx + ηW_dx) * _dx)
+
+            Cyx = abs((γN + ηE - c23 * ηN) * _dxdy) +
+                abs((γN - c23 * ηN + ηW) * _dxdy) +
+                abs((γS + ηE - c23 * ηS) * _dxdy) +
+                abs((γS - c23 * ηS + ηW) * _dxdy)
+
+            # this is the preconditioner diagonal entry
+            Dy_ij = Dy[i, j] = (γN_dy + γS_dy + c43 * (ηN_dy + ηS_dy)) * _dy + (ηE_dx + ηW_dx) * _dx
+            # maximum eigenvalue estimate
+            λmaxVy[i, j] = inv(Dy_ij) * (Cyx + Cyy)
+        else
+            # benign FINITE values (see the Dx else-branch); λmaxVy=1 avoids dτVy=Inf ⇒ βVy=NaN.
+            Dy[i, j] = one(eltype(Dy))
+            λmaxVy[i, j] = one(eltype(λmaxVy))
+        end
+    end
+    # end
+
+    return nothing
+end
+
 """
     update_α_β!(βV, αV, dτV, cV)
 

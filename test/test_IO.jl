@@ -176,6 +176,15 @@ using WriteVTK, JLD2
         @test isfile(joinpath(dst, "MarkerChainPVD.vtp"))
         @test isfile(joinpath(dst, "markerchain_pvd.pvd"))
 
+        save_vtk(joinpath(dst, "vtk_default_t"), xci, data_c, velocity_v)
+        @test isfile(joinpath(dst, "vtk_default_t.vti"))
+
+        # save_particles (2D) with and without phases
+        save_particles(particles, pPhases; fname = joinpath(dst, "particles2D_phases"))
+        @test isfile(joinpath(dst, "particles2D_phases.vtu"))
+        save_particles(particles; fname = joinpath(dst, "particles2D"))
+        @test isfile(joinpath(dst, "particles2D.vtu"))
+
         # 3D case
         ni = nx, ny, nz
         stokes = StokesArrays(backend_JR, ni)
@@ -301,5 +310,24 @@ using WriteVTK, JLD2
 
         # Remove the generated directory
         rm(dst, recursive = true)
+    end
+
+    @suppress @testset "save_particles3D phase and no-phase variants" begin
+        dst3 = mktempdir()
+        n = 8
+        particles_mock = (
+            coords = ((data = rand(n),), (data = rand(n),), (data = rand(n),)),
+            index = (data = trues(n),),
+        )
+        JustRelax.DataIO.save_particles3D(
+            particles_mock, Float32; fname = joinpath(dst3, "p3d"),
+        )
+        @test isfile(joinpath(dst3, "p3d.vtu"))
+
+        pPhases_mock = (data = rand(Float32, n),)
+        JustRelax.DataIO.save_particles3D(
+            particles_mock, pPhases_mock, Float32; fname = joinpath(dst3, "p3d_phases"),
+        )
+        @test isfile(joinpath(dst3, "p3d_phases.vtu"))
     end
 end

@@ -154,7 +154,7 @@ function save_vtk(
         data_c::NamedTuple,
         velocity::NTuple{N, T};
         precision = Float32,
-        t::Number = nothing,
+        t::Union{Number, Nothing} = nothing,
         pvd::Union{Nothing, String} = nothing
     ) where {N, T}
 
@@ -206,6 +206,99 @@ function save_vtk(fname::String, xi, data::NamedTuple; precision = Float32, pvd:
         end
     end
 
+    return nothing
+end
+
+function _save_pvtk(
+        fname::String, di::NTuple{N}, data::NamedTuple, velocity, igg::IGG, t, precision, pvd
+    ) where {N}
+
+    nxyz_A = size(first(values(data)))
+    # global per-process extents (VTK overlap = 1), computed analytically (no comm)
+    extents = vec(ImplicitGlobalGrid.metagrid(ImplicitGlobalGrid.extents_g, nxyz_A, 1))
+    # `metagrid` is ordered column-major by Cartesian coords ⇒ matching part index
+    part = LinearIndices(Tuple(igg.dims))[(igg.coords .+ 1)...]
+    # this rank's local Cartesian coordinate extents (VTK overlap = 1)
+    coords = ImplicitGlobalGrid.extents_g(nxyz_A, 1; dxyz = di)
+
+    pvtk_grid(fname, coords...; part = part, extents = extents) do pvtk
+        for (name_i, array_i) in pairs(data)
+            sl = ImplicitGlobalGrid.extents(array_i, 1)
+            pvtk[string(name_i)] = view(precision.(Array(array_i)), sl...)
+        end
+        if !isnothing(velocity)
+            # pack the velocity components into a single (Nv, extent...) array
+            sl = ImplicitGlobalGrid.extents(first(velocity), 1)
+            velocity_field = zeros(precision, length(velocity), length.(sl)...)
+            for (i, v) in enumerate(velocity)
+                selectdim(velocity_field, 1, i) .= view(precision.(Array(v)), sl...)
+            end
+            pvtk["Velocity"] = velocity_field
+        end
+        isnothing(t) || (pvtk["TimeValue"] = t)
+        # only the main rank (part 1) writes the header, so only it touches the pvd
+        if !isnothing(pvd) && igg.me == 0
+            paraview_collection(pvd; append = true) do pvd_collection
+                collection_add_timestep(pvd_collection, pvtk, isnothing(t) ? 0.0 : t)
+            end
+        end
+    end
+    return nothing
+end
+
+"""
+    save_pvtk(fname, di::NTuple{N}, data_v::NamedTuple, data_c::NamedTuple, velocity::NTuple, igg::IGG; t=nothing, precision=Float32, pvd=nothing)
+
+Parallel (MPI) counterpart of the multiblock serial `save_vtk` for an
+`ImplicitGlobalGrid`-distributed grid (requires ImplicitGlobalGrid ≥ 0.17).
+Writes vertex fields `data_v` + `velocity` to `<fname>_vertex.pvti` and cell
+fields `data_c` to `<fname>_center.pvti`, one `.vti` piece per rank. `di` is the
+**global** grid spacing (e.g. `grid.di.center`). Ranks overlap by one ghost
+layer, so `update_halo!` before writing. If `pvd` is given, the datasets are
+appended to `<pvd>_vertex.pvd` / `<pvd>_center.pvd` at time `t`.
+"""
+function save_pvtk(
+        fname::String,
+        di::NTuple{N, T},
+        data_v::NamedTuple,
+        data_c::NamedTuple,
+        velocity::NTuple{Nv, VT},
+        igg::IGG;
+        t::Union{Nothing, Number} = nothing,
+        precision = Float32,
+        pvd::Union{Nothing, String} = nothing,
+    ) where {N, T, Nv, VT}
+    pvd_v = isnothing(pvd) ? nothing : pvd * "_vertex"
+    pvd_c = isnothing(pvd) ? nothing : pvd * "_center"
+    _save_pvtk(fname * "_vertex", di, data_v, velocity, igg, t, precision, pvd_v)
+    _save_pvtk(fname * "_center", di, data_c, nothing, igg, t, precision, pvd_c)
+    return nothing
+end
+
+function save_pvtk(
+        fname::String,
+        di::NTuple{N, T},
+        data::NamedTuple,
+        velocity::NTuple{Nv, VT},
+        igg::IGG;
+        t::Union{Nothing, Number} = nothing,
+        precision = Float32,
+        pvd::Union{Nothing, String} = nothing,
+    ) where {N, T, Nv, VT}
+    _save_pvtk(fname, di, data, velocity, igg, t, precision, pvd)
+    return nothing
+end
+
+function save_pvtk(
+        fname::String,
+        di::NTuple{N, T},
+        data::NamedTuple,
+        igg::IGG;
+        t::Union{Nothing, Number} = nothing,
+        precision = Float32,
+        pvd::Union{Nothing, String} = nothing,
+    ) where {N, T}
+    _save_pvtk(fname, di, data, nothing, igg, t, precision, pvd)
     return nothing
 end
 
@@ -358,7 +451,7 @@ function save_particles2D(particles, precision; conversion = 1.0e3, fname::Strin
     x = pxv[idxv]
     y = pyv[idxv]
     npoints = length(x)
-    z = zeros(npoints)
+    z = zeros(precision, npoints)
     cells = [MeshCell(VTKCellTypes.VTK_VERTEX, (i,)) for i in 1:npoints]
 
     return vtk_grid(fname, x, y, z, cells) do vtk
@@ -375,7 +468,7 @@ end
 
 function save_particles3D(particles, precision; conversion = 1.0e3, fname::String = "./particles", pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
     p = particles.coords
-    ppx, ppy = p
+    ppx, ppy, ppz = p
     pxv = precision.(Array(ppx.data)[:] ./ conversion)
     pyv = precision.(Array(ppy.data)[:] ./ conversion)
     pzv = precision.(Array(ppz.data)[:] ./ conversion)
@@ -393,6 +486,42 @@ function save_particles3D(particles, precision; conversion = 1.0e3, fname::Strin
         if !isnothing(pvd)
             paraview_collection(pvd; append = true) do pvd_collection
                 collection_add_timestep(pvd_collection, vtk, t)
+            end
+        end
+    end
+end
+
+"""
+    save_particles(particles, igg::IGG; pPhases=nothing, conversion=1e3, fname="./particles", pvd=nothing, t=0.0, precision=Float32)
+
+Parallel (MPI) counterpart of [`save_particles`](@ref): each rank writes its own
+active particles as an unstructured `.vtu` piece, tied together by `<fname>.pvtu`.
+Works for 2D and 3D `particles`. `pPhases` (a `CellArray` of phase ids) is written
+as the `phase` point field when given, otherwise a constant is used. If `pvd` is
+given, the `.pvtu` datasets are appended to `<pvd>.pvd` at time `t` to build a
+time series (only rank 0 touches the collection).
+"""
+function save_particles(
+        particles, igg::IGG;
+        pPhases = nothing, conversion = 1.0e3, fname::String = "./particles",
+        pvd::Union{Nothing, String} = nothing, t::Number = 0.0, precision = Float32,
+    )
+    coords = particles.coords
+    idxv = Array(particles.index.data[:])
+    xyz = map(coords) do p
+        precision.(Array(p.data)[:] ./ conversion)[idxv]
+    end
+    length(xyz) == 2 && (xyz = (xyz..., zeros(precision, length(first(xyz)))))  # pad z for 2D
+    phase = isnothing(pPhases) ? 1 : precision.(Array(pPhases.data)[:])[idxv]
+    cells = [MeshCell(VTKCellTypes.VTK_VERTEX, (i,)) for i in 1:length(first(xyz))]
+
+    return pvtk_grid(
+        fname, xyz..., cells; part = igg.me + 1, nparts = prod(igg.dims)
+    ) do pvtk
+        pvtk["phase", VTKPointData()] = phase
+        if !isnothing(pvd) && igg.me == 0
+            paraview_collection(pvd; append = true) do pvd_collection
+                collection_add_timestep(pvd_collection, pvtk, t)
             end
         end
     end

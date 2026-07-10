@@ -67,6 +67,8 @@ export compute_viscosity!, compute_viscosity_εII!, compute_viscosity_τII!
 include("rheology/Melting.jl")
 export compute_melt_fraction!
 
+include("rheology/Solubility.jl")
+
 include("particles/subgrid_diffusion.jl")
 export subgrid_characteristic_time!
 

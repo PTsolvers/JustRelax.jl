@@ -20,6 +20,7 @@ Structure containing parameters and arrays for the DYREL (Dynamic Relaxation) so
 - `ϵ`: General convergence tolerance.
 - `ϵ_vel`: Velocity convergence tolerance.
 - `c_fact`: Damping scaling factor.
+- `γfact`: Penalty parameter factor (γ_eff = γfact · mean(η) for incompressible flow).
 """
 struct DYREL{T, F}
     γ_eff::T  # penalty parameter
@@ -56,4 +57,5 @@ struct DYREL{T, F}
     ϵ::F      # convergence criterion
     ϵ_vel::F  # convergence criterion
     c_fact::F # damping factor
+    γfact::F  # penalty parameter factor
 end

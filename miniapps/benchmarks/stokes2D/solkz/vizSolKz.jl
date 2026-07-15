@@ -1,46 +1,52 @@
 using ParallelStencil.FiniteDifferences2D
+using ExactFieldSolutions
 
-include("SolKz_solution.jl")
+# reference solution: Stokes2D_SolKz_Zhong1996 (Zhong, 1996), matching the density/viscosity
+# fields used in solKz_density/solKz_viscosity (SolKz.jl): ρ = -sin(km*y)*cos(3π*x), η = exp(2B*y).
+# Δη maps to B via η(y=1) = exp(2B) = Δη.
+solkz_params(Δη, km) = (Δη = Δη, B = log(Δη) / 2, km = km, n = 3, σ = 1.0)
 
-function solkz_solution(geometry)
-    # element center
-    xci, yci = geometry.xci
-    xc = [xc for xc in xci, _ in yci]
-    yc = [yc for _ in xci, yc in yci]
-    # element vertices
-    xvi, yvi = geometry.xvi
-    xv_x = [xc for xc in xvi, _ in yci] # for vx
-    yv_x = [yc for _ in xvi, yc in yci] # for vx
-
-    xv_y = [xc for xc in xci, _ in yvi] # for vy
-    yv_y = [yc for _ in xci, yc in yvi] # for vy
-
-    # analytical solution
-    ps = similar(xc) # @ centers
-    vxs = similar(xv_x) # @ vertices
-    vys = similar(xv_y) # @ vertices
-    Threads.@threads for i in eachindex(xc)
-        @inbounds _, _, ps[i] = _solkz_solution(xc[i], yc[i])
-    end
-    Threads.@threads for i in eachindex(xv_x)
-        @inbounds vxs[i], = _solkz_solution(xv_x[i], yv_x[i])
-    end
-    Threads.@threads for i in eachindex(xv_y)
-        @inbounds _, vys[i], = _solkz_solution(xv_y[i], yv_y[i])
-    end
-
-    return (vx = (vxs), vy = (vys), p = (ps))
+@parallel_indices (i, j) function _solkz_p!(ps, xci, yci, params)
+    ps[i, j] = Stokes2D_SolKz_Zhong1996((xci[i], yci[j]); params).p
+    return nothing
 end
 
-function Li_error(geometry, stokes; order = 2)
-    solk = solkz_solution(geometry)
+@parallel_indices (i, j) function _solkz_vx!(vxs, xvi, yci, params)
+    vxs[i, j] = Stokes2D_SolKz_Zhong1996((xvi[i], yci[j]); params).V.x
+    return nothing
+end
+
+@parallel_indices (i, j) function _solkz_vy!(vys, xci, yvi, params)
+    vys[i, j] = Stokes2D_SolKz_Zhong1996((xci[i], yvi[j]); params).V.y
+    return nothing
+end
+
+function solkz_solution(geometry; Δη = 1.0e6, km = 2)
+    params = solkz_params(Δη, km)
+    xci, yci = geometry.xci
+    xvi, yvi = geometry.xvi
+
+    ps = @zeros(length(xci), length(yci))
+    @parallel (@idx size(ps)) _solkz_p!(ps, xci, yci, params)
+
+    vxs = @zeros(length(xvi), length(yci))
+    @parallel (@idx size(vxs)) _solkz_vx!(vxs, xvi, yci, params)
+
+    vys = @zeros(length(xci), length(yvi))
+    @parallel (@idx size(vys)) _solkz_vy!(vys, xci, yvi, params)
+
+    return (vx = vxs, vy = vys, p = ps)
+end
+
+function Li_error(geometry, stokes; order = 2, Δη = 1.0e6, km = 2)
+    solk = solkz_solution(geometry; Δη = Δη, km = km)
     gridsize = reduce(*, geometry.di)
 
     Li(A, B; order = 2) = norm(A .- B, order)
 
-    L2_vx = Li(stokes.V.Vx[:, 2:(end - 1)], PTArray(backend)(solk.vx); order = order) * gridsize
-    L2_vy = Li(stokes.V.Vy[2:(end - 1), 2:(end - 1)], PTArray(backend)(solk.vy); order = order) * gridsize
-    L2_p = Li(stokes.P, PTArray(backend)(solk.p); order = order) * gridsize
+    L2_vx = Li(stokes.V.Vx[:, 2:(end - 1)], solk.vx; order = order) * gridsize
+    L2_vy = Li(stokes.V.Vy[2:(end - 1), :], solk.vy; order = order) * gridsize
+    L2_p = Li(stokes.P, solk.p; order = order) * gridsize
 
     return L2_vx, L2_vy, L2_p
 end
@@ -138,7 +144,7 @@ function plot_solKz_error(geometry, stokes; cmap = :vik)
         ax1,
         geometry.xci[1],
         geometry.xci[2],
-        log10.(err1(Array(stokes.P), solk.p));
+        log10.(err1(Array(stokes.P), Array(solk.p)));
         colormap = :batlow,
     )
     xlims!(ax1, (0, 1))
@@ -170,7 +176,7 @@ function plot_solKz_error(geometry, stokes; cmap = :vik)
     hidexdecorations!(ax1)
 
     ax1 = Axis(f[2, 2]; aspect = 1)
-    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], solk.vx; colormap = cmap)
+    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], Array(solk.vx); colormap = cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[2, 3], h1; label = "Vx", width = 20, tellheight = true)
@@ -186,7 +192,7 @@ function plot_solKz_error(geometry, stokes; cmap = :vik)
         ax1,
         geometry.xvi[1],
         geometry.xci[2],
-        log10.(err1(Array(stokes.V.Vx[2:(end - 1), 2:(end - 1)]), solk.vx[2:(end - 1), 2:(end - 1)]));
+        log10.(err1(Array(stokes.V.Vx[2:(end - 1), 2:(end - 1)]), Array(solk.vx[2:(end - 1), 2:(end - 1)])));
         colormap = :batlow,
     )
     xlims!(ax1, (0, 1))
@@ -216,7 +222,7 @@ function plot_solKz_error(geometry, stokes; cmap = :vik)
     ax1.yticks = 0:1
 
     ax1 = Axis(f[3, 2]; aspect = 1)
-    h1 = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], solk.vy; colormap = cmap)
+    h1 = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], Array(solk.vy); colormap = cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[3, 3], h1; label = "Vy", height = 300, width = 20, tellheight = true)
@@ -230,7 +236,7 @@ function plot_solKz_error(geometry, stokes; cmap = :vik)
         ax1,
         geometry.xci[1],
         geometry.xvi[2],
-        log10.(err1(Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]), solk.vy[:, 2:(end - 1)]));
+        log10.(err1(Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]), Array(solk.vy[:, 2:(end - 1)])));
         colormap = :batlow,
     )
     xlims!(ax1, (0, 1))

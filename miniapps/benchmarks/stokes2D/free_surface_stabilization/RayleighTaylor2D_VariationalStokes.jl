@@ -165,6 +165,7 @@ function main(igg, nx, ny)
     air_phase = 1
     ϕ = RockRatio(backend, ni)
     compute_rock_fraction!(ϕ, chain, xvi, di)
+    grid_vxi = velocity_grids(xci, xvi, di)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -237,7 +238,7 @@ function main(igg, nx, ny)
         inject_particles_phase!(particles, pPhases, (), ())
 
         # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios

@@ -1,18 +1,40 @@
-using CUDA
-using JustRelax, JustRelax.JustRelax2D
-using Pkg; Pkg.activate("miniapps")
-const backend_JR = CUDABackend
-# const backend_JR = CPUBackend
+const isCUDA = false
+# const isCUDA = true
 
-using JustPIC, JustPIC._2D
-const backend = CUDABackend
-# const backend = JustPIC.CPUBackend
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(CUDA, Float64, 2)
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC, JustPIC._2D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend_JP = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 # Load script dependencies
-using LinearAlgebra, GeoParams, CairoMakie
+using GeoParams
+using CairoMakie
 
 # Velocity helper grids for the particle advection
 function copyinn_x!(A, B)
@@ -118,9 +140,9 @@ function main(igg, nx, ny)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 60, 80, 40
+    nxcell, max_xcell, min_xcell = 125, 175, 75
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -128,81 +150,88 @@ function main(igg, nx, ny)
 
     # Elliptical temperature anomaly
     A = 5.0e3    # Amplitude of the anomaly
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, A)
     update_phase_ratios!(phase_ratios, particles, pPhases)
+    # ----------------------------------------------------
+
+    # Initialize marker chain-------------------------------
+    nxcell, max_xcell, min_xcell = 100, 150, 75
+    initial_elevation = -100.0e3
+    chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
     # ----------------------------------------------------
 
     # RockRatios
     air_phase = 1
     ϕ = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    compute_rock_fraction!(ϕ, chain, xvi, di)
+    grid_vxi = velocity_grids(xci, xvi, di)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.98 / √2.1)
+    stokes = StokesArrays(backend, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     # ----------------------------------------------------
 
     # Buoyancy forces & rheology
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
-    @parallel init_P!(stokes.P, ρg[2], xci[2])
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+    # @parallel init_P!(stokes.P, ρg[2], xci[2])
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase = air_phase)
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = false),
         no_slip = (left = false, right = false, top = false, bot = true),
-        free_surface = true,
+        free_surface = false,
     )
 
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    figdir = "RayleighTaylor2D"
+    figdir = "RayleighTaylor2D_DYREL_VS"
     take(figdir)
 
     # Time loop
     t, it = 0.0, 0
-    dt = 10.0e3 * (3600 * 24 * 365.25)
+    dt = 25.0e3 * (3600 * 24 * 365.25)
     dt_max = 50.0e3 * (3600 * 24 * 365.25)
 
-    _di = inv.(di)
-    (; ϵ_rel, r, θ_dτ, ηdτ) = pt_stokes
-    (; η, η_vep) = stokes.viscosity
-    ni = size(stokes.P)
-    iterMax = 15.0e3
-    nout = 1.0e3
-    viscosity_cutoff = (-Inf, Inf)
-    free_surface = false
-    ητ = @zeros(ni...)
-    while it < 1000
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
 
-        ## variational solver
+    while it < 1000 #00
+
         # Stokes solver ----------------
-        solve_VariationalStokes!(
+        # Variational DYREL Stokes solve (ϕ positional, after phase_ratios) --
+        solve_DYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
             ϕ,
             rheology,
             args,
+            grid,
             dt,
             igg;
-            kwargs = (
-                iterMax = 50.0e3,
-                iterMin = 1.0e3,
+            kwargs = (;
+                air_phase = air_phase,
+                iterMax = 100.0e3,
+                nout = 50,
+                rel_drop = 1.0e-2,
+                λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
                 viscosity_relaxation = 1.0e-2,
-                nout = 2.0e3,
+                linear_viscosity = true,
+                free_surface = true,
+                verbose_PH = true,
+                verbose_DR = false,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
@@ -211,20 +240,26 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), ())
+
+        # advect marker chain
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, air_phase)
+        compute_rock_fraction!(ϕ, chain, xvi, di)
 
         @show it += 1
         t += dt
 
         if it == 1 || rem(it, 5) == 0
             px, py = particles.coords
+            chain_x, chain_y = chain.coords
 
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
             nt = 5
@@ -232,6 +267,7 @@ function main(igg, nx, ny)
             ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
             # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
             scatter!(ax, Array(px.data[:]) .* 1.0e-3, Array(py.data[:]) .* 1.0e-3, color = Array(pPhases.data[:]), colormap = :grayC)
+            scatter!(ax, Array(chain_x.data[:]) .* 1.0e-3, Array(chain_y.data[:]) .* 1.0e-3, color = :red)
             arrows2d!(
                 ax,
                 xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,

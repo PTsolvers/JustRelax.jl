@@ -260,7 +260,7 @@ end
             if isvalid_vx(ϕ, i + 1, j)
                 Rx_ij = (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(θc, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
                 Rx[i, j] = Rx_ij
-                dVx_new, ΔVx = damped_update_V_VS(dVxdτ[i, j], Rx_ij, ϕ.Vx[i + 1, j], αVx[i, j], βVx[i, j], dτVx[i, j])
+                dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
                 dVxdτ[i, j] = dVx_new
                 Vx[i + 1, j + 1] += ΔVx
             else
@@ -277,7 +277,7 @@ end
             if isvalid_vy(ϕ, i, j + 1)
                 Ry_ij = (d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - d_ya(P, ϕ.center) - d_ya(θc, ϕ.center) - av_ya(ρgy, ϕ.center)) / Dy[i, j]
                 Ry[i, j] = Ry_ij
-                dVy_new, ΔVy = damped_update_V_VS(dVydτ[i, j], Ry_ij, ϕ.Vy[i, j + 1], αVy[i, j], βVy[i, j], dτVy[i, j])
+                dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij, αVy[i, j], βVy[i, j], dτVy[i, j])
                 dVydτ[i, j] = dVy_new
                 Vy[i + 1, j + 1] += ΔVy
             else
@@ -334,7 +334,7 @@ end
             if isvalid_vx(ϕ, i + 1, j)
                 Rx_ij = (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(θc, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
                 Rx[i, j] = Rx_ij
-                dVx_new, ΔVx = damped_update_V_VS(dVxdτ[i, j], Rx_ij, ϕ.Vx[i + 1, j], αVx[i, j], βVx[i, j], dτVx[i, j])
+                dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
                 dVxdτ[i, j] = dVx_new
                 Vx[i + 1, j + 1] += ΔVx
             else
@@ -360,7 +360,7 @@ end
 
                 Ry_ij = (d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - d_ya(P, ϕ.center) - d_ya(θc, ϕ.center) - av_ya(ρgy, ϕ.center) + ρg_correction) / Dy[i, j]
                 Ry[i, j] = Ry_ij
-                dVy_new, ΔVy = damped_update_V_VS(dVydτ[i, j], Ry_ij, ϕ.Vy[i, j + 1], αVy[i, j], βVy[i, j], dτVy[i, j])
+                dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij, αVy[i, j], βVy[i, j], dτVy[i, j])
                 dVydτ[i, j] = dVy_new
                 Vy[i + 1, j + 1] += ΔVy
             else

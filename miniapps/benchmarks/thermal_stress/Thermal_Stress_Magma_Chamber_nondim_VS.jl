@@ -668,7 +668,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
                     colormap = :glasgow,
                     colorrange = (log10(1.0e16), log10(1.0e24)),
                 )
-                arrows!(
+                arrows2d!(
                     ax2,
                     ustrip.(dimensionalize(xvi[1], km, CharDim))[1:5:(end - 1)],
                     ustrip.(dimensionalize(xvi[2], km, CharDim))[1:5:(end - 1)],

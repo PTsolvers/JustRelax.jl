@@ -83,7 +83,7 @@ function _solve_DYREL!(
     θc = similar(stokes.P)
 
     # recompute all the DYREL variables
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
+    compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; air_phase = air_phase)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, grid.di, dt)
 
@@ -102,6 +102,7 @@ function _solve_DYREL!(
             update_viscosity_τII!(
                 stokes,
                 phase_ratios,
+                ϕ,
                 args,
                 rheology,
                 viscosity_cutoff;
@@ -219,7 +220,7 @@ function _solve_DYREL!(
                     errV00 = errV
                 end
 
-                errV_ratio = ntuple(d -> errV[d] / errV00[d], dim)
+                errV_ratio = ntuple(d -> min(errV[d] / errV00[d], errV[d]), dim)
                 err = maximum(errV_ratio)
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
@@ -235,7 +236,7 @@ function _solve_DYREL!(
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, ϕ, rheology, grid.di, dt)
+                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, ϕ, rheology, grid.di, dt; ρgy = ρg[end], free_surface)
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)

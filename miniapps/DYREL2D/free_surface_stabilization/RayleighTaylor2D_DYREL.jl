@@ -1,15 +1,16 @@
-using CUDA
+# using CUDA
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
-const backend_JR = CUDABackend
-# const backend_JR = CPUBackend
+# const backend_JR = CUDABackend
+const backend_JR = CPUBackend
 
 using JustPIC, JustPIC._2D
-const backend = CUDABackend
-# const backend = JustPIC.CPUBackend
+# const backend = CUDABackend
+const backend = JustPIC.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(CUDA, Float64, 2)
+# @init_parallel_stencil(CUDA, Float64, 2)
+@init_parallel_stencil(Threads, Float64, 2)
 
 # Load script dependencies
 using LinearAlgebra, GeoParams, CairoMakie
@@ -133,11 +134,6 @@ function main(igg, nx, ny)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
-    # RockRatios
-    air_phase = 1
-    ϕ = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, air_phase)
-
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
@@ -165,7 +161,7 @@ function main(igg, nx, ny)
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    figdir = "RayleighTaylor2D"
+    figdir = "RayleighTaylor2D_DYREL"
     take(figdir)
 
     # Time loop
@@ -182,27 +178,35 @@ function main(igg, nx, ny)
     viscosity_cutoff = (-Inf, Inf)
     free_surface = false
     ητ = @zeros(ni...)
+
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
+
     while it < 1000
 
         ## variational solver
         # Stokes solver ----------------
-        solve_VariationalStokes!(
+        solve_DYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
-            ϕ,
             rheology,
             args,
+            grid,
             dt,
             igg;
-            kwargs = (
-                iterMax = 50.0e3,
-                iterMin = 1.0e3,
+            kwargs = (;
+                iterMax = 100.0e3,
+                nout = 100,
+                rel_drop = 1.0e-2,
+                λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
                 viscosity_relaxation = 1.0e-2,
-                nout = 2.0e3,
+                linear_viscosity = true,
+                free_surface = true,
+                verbose_PH = true,
+                verbose_DR = false,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
@@ -218,7 +222,6 @@ function main(igg, nx, ny)
         inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
-        update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
         @show it += 1
         t += dt

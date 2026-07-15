@@ -1,5 +1,6 @@
 using Pkg; Pkg.activate("miniapps")
 using ParallelStencil.FiniteDifferences2D
+using JLD2
 # include benchmark related functions
 include("vizSolVi.jl")
 
@@ -154,6 +155,8 @@ function multiple_solVi(; Δη = 1.0e-3, lx = 1.0e1, ly = 1.0e1, rc = 1.0e0, εb
     ax.ylabel = "L2 norm"
 
     save("SolVi_error.png", f)
+
+    jldsave(joinpath(@__DIR__, "solvi_normal_error.jld2"); h, L2_vx, L2_vy, L2_p, Δη, nrange)
 
     return f
 end

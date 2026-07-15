@@ -2,7 +2,7 @@ using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
 using Printf, LinearAlgebra, GeoParams
-using JustRelax, JustRelax.JustRelax2D
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -46,7 +46,10 @@ end
 # END OF HELPER FUNCTIONS --------------------------------------------------------
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
+function main2D(
+        igg; ny = 64, nx = 64, figdir = "model_figs", data_dir = "model_data",
+        plot_progress = true, snapshot_fracs = ()
+    )
 
     # Physical domain ------------------------------------
     ly = 1            # domain length in y
@@ -92,7 +95,6 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ_abs = 1.0e-8, CFL = 1 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -103,6 +105,9 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
+    # Note: DYREL's dynamic-relaxation velocity solve stalls under the no-slip top/bottom
+    # boundaries used here (the inner residual plateaus and never reaches the tolerance).
+    # With all-free-slip boundaries the same setup converges normally.
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = false, bot = false),
         no_slip = (left = false, right = false, top = true, bot = true),
@@ -113,6 +118,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     # IO ----- -------------------------------------------
     # if it does not exist, make folder where figures are stored
     !isdir(figdir) && mkpath(figdir)
+    !isdir(data_dir) && mkpath(data_dir)
     # ----------------------------------------------------
 
     # Buffer arrays to compute velocity rms
@@ -127,6 +133,12 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     sizehint!(Urms, 100000)
     sizehint!(trms, 100000)
 
+    # snapshot times (density field checkpoints), consumed in order as t crosses each target
+    snapshot_targets = sort(collect(snapshot_fracs) .* tmax)
+
+    # DYREL solver state (rebuilt from the current rheology inside solve_DYREL!)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-8)
+
     while t < tmax
 
         # Update buoyancy
@@ -134,20 +146,31 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
         # ------------------------------
 
         # Stokes solver ----------------
-        solve!(
+        solve_DYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
             rheology,
             args,
+            grid,
             dt,
             igg;
-            kwargs = (
-                iterMax = 10.0e3,
-                nout = 1.0e3,
+            kwargs = (;
+                verbose_PH = true,
+                verbose_DR = false,
+                iterMax = 50.0e3,
+                nout = 100,
+                # verbose_PH = true,
+                # verbose_DR = false,
+                # iterMax = 50.0e3,
+                # nout = 50,
+                # rel_drop = 0.1,
+                # λ_relaxation_PH = 1,
+                # λ_relaxation_DR = 1,
+                linear_viscosity = true,
+                # viscosity_relaxation = 1.0e-2,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
@@ -176,8 +199,18 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
         @show it += 1
         t += dt
 
+        # Snapshot checkpoints (density field), taken as t crosses each requested target time
+        if !isempty(snapshot_targets) && t >= snapshot_targets[1]
+            target = popfirst!(snapshot_targets)
+            fname = joinpath(data_dir, "snapshot_$(round(Int, target))_$(nx)x$(ny).jld2")
+            checkpointing_jld2(
+                data_dir, stokes, nothing, t, it, fname;
+                ρg = Array(ρg[2]), xci = Array.(xci), xvi = Array.(xvi)
+            )
+        end
+
         # Plotting ---------------------
-        if it == 1 || rem(it, 25) == 0 || t >= tmax
+        if plot_progress && (it == 1 || rem(it, 25) == 0 || t >= tmax)
             fig = Figure(size = (1000, 1000), font = "TeX Gyre Heros Makie")
             ax1 = Axis(
                 fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
@@ -206,19 +239,27 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
 
     end
 
-    # df = DataFrame(t=trms, Urms=Urms)
-    # CSV.write(joinpath(figdir, "Urms_$(nx)x$(ny).csv"), df)
+    # Final checkpoint: Urms/trms time series (every resolution) plus the last density field
+    checkpointing_jld2(
+        data_dir, stokes, nothing, t, it, joinpath(data_dir, "final_$(nx)x$(ny).jld2");
+        Urms = Urms, trms = trms, ρg = Array(ρg[2]), xci = Array.(xci), xvi = Array.(xvi)
+    )
 
     return nothing
 end
 
-figdir = "VanKeken"
-n = 64
+figdir = "VanKeken_DYREL"
+n = length(ARGS) >= 1 ? parse(Int, ARGS[1]) : 64
 nx = n
 ny = n
+save_snapshots = "snapshots" in ARGS
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
-main2D(igg; figdir = figdir, nx = nx, ny = ny);
+main2D(
+    igg; figdir = figdir, nx = nx, ny = ny,
+    data_dir = "VanKeken_DYREL_data", plot_progress = isempty(ARGS),
+    snapshot_fracs = save_snapshots ? (0.1, 0.5, 0.9) : ()
+);

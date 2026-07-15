@@ -1,43 +1,50 @@
-include("SolCx_solution.jl")
+using ExactFieldSolutions
+
+# reference solution: Stokes2D_SolCx_Zhong1996 (Zhong, 1996), matching the density/viscosity
+# fields used in solCx_density/solCx_viscosity (SolCx.jl): ρ = sin(π*y)*cos(π*x),
+# η = η_left for x≤0.5, η_right for x>0.5.
+@parallel_indices (i, j) function _solcx_p!(ps, xci, yci, params)
+    # Stokes2D_SolCx_Zhong1996 (adapted from Underworld) uses the opposite pressure
+    # sign convention from JustRelax; velocity is unaffected.
+    ps[i, j] = -Stokes2D_SolCx_Zhong1996((xci[i], yci[j]); params).p
+    return nothing
+end
+
+@parallel_indices (i, j) function _solcx_vx!(vxs, xvi, yci, params)
+    vxs[i, j] = Stokes2D_SolCx_Zhong1996((xvi[i], yci[j]); params).V.x
+    return nothing
+end
+
+@parallel_indices (i, j) function _solcx_vy!(vys, xci, yvi, params)
+    vys[i, j] = Stokes2D_SolCx_Zhong1996((xci[i], yvi[j]); params).V.y
+    return nothing
+end
 
 function solCx_solution(geometry; η_left = 1, η_right = 1.0e6)
-    # element center
+    params = (ηA = η_left, ηB = η_right)
     xci, yci = geometry.xci
-    xc = [xc for xc in xci, _ in yci]
-    yc = [yc for _ in xci, yc in yci]
-    # element vertices
     xvi, yvi = geometry.xvi
-    xv_x = [xc for xc in xvi, _ in yci] # for vx
-    yv_x = [yc for _ in xvi, yc in yci] # for vx
 
-    xv_y = [xc for xc in xci, _ in yvi] # for vy
-    yv_y = [yc for _ in xci, yc in yvi] # for vy
+    ps = @zeros(length(xci), length(yci))
+    @parallel (@idx size(ps)) _solcx_p!(ps, xci, yci, params)
 
-    # analytical solution
-    ps = similar(xc) # @ centers
-    vxs = similar(xv_x) # @ vertices
-    vys = similar(xv_y) # @ vertices
-    Threads.@threads for i in eachindex(xc)
-        @inbounds _, _, ps[i] = _solCx_solution(xc[i], yc[i], η_left, η_right)
-    end
-    Threads.@threads for i in eachindex(xv_x)
-        @inbounds vxs[i], = _solCx_solution(xv_x[i], yv_x[i], η_left, η_right)
-    end
-    Threads.@threads for i in eachindex(xv_y)
-        @inbounds _, vys[i], = _solCx_solution(xv_y[i], yv_y[i], η_left, η_right)
-    end
+    vxs = @zeros(length(xvi), length(yci))
+    @parallel (@idx size(vxs)) _solcx_vx!(vxs, xvi, yci, params)
+
+    vys = @zeros(length(xci), length(yvi))
+    @parallel (@idx size(vys)) _solcx_vy!(vys, xci, yvi, params)
 
     return (vx = vxs, vy = vys, p = ps)
 end
 
-function solcx_error(geometry, stokes; order = 2)
+function solcx_error(geometry, stokes; order = 2, Δη = 1.0e6)
     Li(A, B; order = 2) = norm(A .- B, order)
 
-    solk = solCx_solution(geometry)
+    solk = solCx_solution(geometry; η_right = Δη)
     gridsize = reduce(*, geometry.di)
-    L2_vx = Li(stokes.V.Vx[:, 2:(end - 1)], PTArray(backend)(solk.vx); order = order) * gridsize
-    L2_vy = Li(stokes.V.Vy[2:(end - 1), 2:(end - 1)], PTArray(backend)(solk.vy); order = order) * gridsize
-    L2_p = Li(stokes.P, PTArray(backend)(solk.p); order = order) * gridsize
+    L2_vx = Li(stokes.V.Vx[:, 2:(end - 1)], solk.vx; order = order) * gridsize
+    L2_vy = Li(stokes.V.Vy[2:(end - 1), :], solk.vy; order = order) * gridsize
+    L2_p = Li(stokes.P, solk.p; order = order) * gridsize
 
     return L2_vx, L2_vy, L2_p
 end
@@ -111,7 +118,7 @@ function plot_solCx_error(geometry, stokes, Δη; cmap = :vik)
         ax1,
         geometry.xci[1],
         geometry.xci[2],
-        solc.p;
+        Array(solc.p);
         colormap = cmap,
         colorrange = extrema(stokes.P),
     )
@@ -131,7 +138,7 @@ function plot_solCx_error(geometry, stokes, Δη; cmap = :vik)
         ax1,
         geometry.xci[1],
         geometry.xci[2],
-        log10.(err1(Array(stokes.P), solc.p));
+        log10.(err1(Array(stokes.P), Array(solc.p)));
         colormap = :batlow,
     )
     xlims!(ax1, (0, 1))
@@ -157,7 +164,7 @@ function plot_solCx_error(geometry, stokes, Δη; cmap = :vik)
     hidexdecorations!(ax1)
 
     ax1 = Axis(f[2, 2]; aspect = 1)
-    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], solc.vx; colormap = cmap)
+    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], Array(solc.vx); colormap = cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[2, 3], h1; label = "Vx", width = 20, height = 300, tellheight = true)
@@ -173,7 +180,7 @@ function plot_solCx_error(geometry, stokes, Δη; cmap = :vik)
         ax1,
         geometry.xvi[1],
         geometry.xci[2],
-        log10.(err1(Array(stokes.V.Vx[:, 2:(end - 1)]), solc.vx));
+        log10.(err1(Array(stokes.V.Vx[:, 2:(end - 1)]), Array(solc.vx)));
         colormap = :batlow,
     )
     xlims!(ax1, (0, 1))
@@ -197,7 +204,7 @@ function plot_solCx_error(geometry, stokes, Δη; cmap = :vik)
     ax1.yticks = 0:1
 
     ax1 = Axis(f[3, 2]; aspect = 1)
-    h1 = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], solc.vy; colormap = cmap)
+    h1 = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], Array(solc.vy); colormap = cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[3, 3], h1; label = "Vy", width = 20, height = 300, tellheight = true)
@@ -211,7 +218,7 @@ function plot_solCx_error(geometry, stokes, Δη; cmap = :vik)
         ax1,
         geometry.xci[1],
         geometry.xvi[2],
-        log10.(err1(Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]), solc.vy));
+        log10.(err1(Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]), Array(solc.vy)));
         colormap = :batlow,
     )
     xlims!(ax1, (0, 1))

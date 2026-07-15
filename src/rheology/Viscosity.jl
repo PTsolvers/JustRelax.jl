@@ -417,6 +417,144 @@ end
     return nothing
 end
 
+## ϕ-aware (variational, DYREL) 2D KERNELS
+#
+# Skip cells/vertices where `ϕ::RockRatio` marks the DOF invalid (fully air, or masked out by the
+# variational partial-cell rule) instead of computing through them. A fully-air cell legitimately
+# gives `η = Inf` (harmonic mean of an all-zero-weight phase vector); once that `Inf` is stored,
+# the *next* call's `continuation_linear` blends it against itself via `(1 - ν) * Inf`, which is
+# `NaN` even at `ν = 1` (meant to fully replace the old value). DYREL's ϕ-aware Gershgorin
+# preconditioner reads `η`/`ηv` before its own validity check, so that `NaN` reaches an unguarded
+# arithmetic sum there. Skipping the write at invalid DOFs means the value left behind is never
+# read downstream (both Gershgorin and `compute_stress_DRYEL!` mask on the same `ϕ`) — it can go
+# stale, but it can no longer go non-finite.
+function compute_viscosity!(
+        stokes::JustRelax.StokesArrays,
+        phase_ratios,
+        ϕ::JustRelax.RockRatio,
+        args,
+        rheology,
+        cutoff;
+        air_phase::Integer = 0,
+        relaxation = 1.0e0,
+    )
+    compute_viscosity!(
+        backend(stokes), stokes, relaxation, phase_ratios, ϕ, args, rheology, air_phase, cutoff, compute_viscosity_εII
+    )
+    return nothing
+end
+
+function update_viscosity_τII!(
+        stokes::JustRelax.StokesArrays,
+        phase_ratios,
+        ϕ::JustRelax.RockRatio,
+        args,
+        rheology,
+        cutoff;
+        air_phase::Integer = 0,
+        relaxation = 1.0e0,
+    )
+    compute_viscosity!(
+        backend(stokes), stokes, relaxation, phase_ratios, ϕ, args, rheology, air_phase, cutoff, compute_viscosity_τII
+    )
+    return nothing
+end
+
+function compute_viscosity!(
+        ::CPUBackendTrait,
+        stokes::JustRelax.StokesArrays,
+        ν,
+        phase_ratios,
+        ϕ::JustRelax.RockRatio,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        fn_viscosity::F
+    ) where {F}
+    _compute_viscosity!(stokes, ν, phase_ratios, ϕ, args, rheology, air_phase, cutoff, fn_viscosity)
+    return nothing
+end
+
+function _compute_viscosity!(
+        stokes::JustRelax.StokesArrays,
+        ν,
+        phase_ratios::JustPIC.PhaseRatios,
+        ϕ::JustRelax.RockRatio,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        fn_viscosity::F
+    ) where {F}
+    ni = size(stokes.viscosity.η)
+    # centered viscosity
+    @parallel (@idx ni) compute_viscosity_kernel!(
+        stokes.viscosity.η,
+        ν,
+        phase_ratios.center,
+        select_tensor_center(stokes, fn_viscosity)...,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        fn_viscosity,
+        local_viscosity_args,
+        ϕ,
+        isvalid_c,
+    )
+    # vertex viscosity (DYREL is 2D-only)
+    @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
+        stokes.viscosity.ηv,
+        ν,
+        phase_ratios.vertex,
+        select_tensor_vertex(stokes, fn_viscosity)...,
+        args,
+        rheology,
+        air_phase,
+        cutoff,
+        fn_viscosity,
+        local_viscosity_args_vertex,
+        ϕ,
+        isvalid_v,
+    )
+    return nothing
+end
+
+@parallel_indices (I...) function compute_viscosity_kernel!(
+        η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2,
+        ϕ::JustRelax.RockRatio, isvalid_fn::F3,
+    ) where {F1, F2, F3}
+
+    @inbounds if isvalid_fn(ϕ, I...)
+        A = Axx[I...], Ayy[I...], Axyv[I...]
+
+        # we need strain rate not to be zero, otherwise we get NaNs
+        AII_0 = allzero(A...) * eps()
+
+        # argument fields at local index
+        args_ij = fn_args(args, I...)
+
+        # local phase ratio
+        ratio_ij = @cell ratios_center[I...]
+        # remove phase ratio of the air if necessary & normalize ratios
+        if air_phase > 0
+            ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
+        end
+
+        # compute second invariant of strain rate tensor
+        Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
+        AII = second_invariant(Aij...)
+
+        # compute and update stress viscosity
+        ηi = compute_phase_viscosity(rheology, ratio_ij, AII, fn_viscosity, args_ij)
+        ηi = continuation_linear(ηi, η[I...], ν)
+        η[I...] = clamp(ηi, cutoff...)
+    end
+
+    return nothing
+end
+
 ## 3D KERNELS
 # @parallel_indices (I...) function compute_viscosity_kernel!(
 #         η, ν, Axx, Ayy, Azz, Ayzv, Axzv, Axyv, args, rheology, cutoff, fn_viscosity::F1, fn_args::F2

@@ -154,6 +154,12 @@ end
     return nothing
 end
 
+# ϕ·(1/η + 1/(G·dt))⁻¹, guarded against ϕ==0: an unbounded viscosity_cutoff can leave η == Inf at
+# masked-out (ϕ == 0) cells (compute_phase_viscosity's harmonic mean of zero ratios), and for
+# LinearViscous rheology G == Inf too, so 1/η + 1/(G·dt) == 0 and the unguarded ϕ/0 is 0/0 = NaN
+# instead of the intended 0. Short-circuiting on ϕ == 0 makes the mask exact regardless of η.
+@inline ϕ_weighted_harmonic(ϕij, ηij, Gij, dt) = iszero(ϕij) ? zero(ηij) : ϕij / (inv(ηij) + inv(Gij * dt))
+
 # variational (ϕ-aware) overload: mask air/invalid velocity DOFs and ϕ-weight the
 # viscosity entering the Gershgorin sums, so the preconditioner/eigenvalue estimate is
 # consistent with the already ϕ-weighted momentum operator (velocity_kernels_VS.jl).
@@ -191,12 +197,14 @@ end
     phase = phase_center[i, j]
     GW = fn_ratio(get_shear_modulus, rheology, phase)
 
-    # ϕ-weighted viscosity coefficients at surrounding points (down-weights soft air)
-    ηN = ηv[i + 1, j + 1] * ϕ.vertex[i + 1, j + 1]
-    ηS = ηv[i + 1, j] * ϕ.vertex[i + 1, j]
-    ηW = η[i, j] * ϕ.center[i, j]
-    # # bulk viscosity coefficients at surrounding points
-    γW = γ_eff[i, j]
+    # viscosity coefficients at surrounding points (unweighted; ϕ applied after the
+    # viscoelastic harmonic combine below, matching ϕ·(1/η + 1/(G·dt))⁻¹ in the operator)
+    ηN = ηv[i + 1, j + 1]
+    ηS = ηv[i + 1, j]
+    ηW = η[i, j]
+    # bulk-penalty coupling: the operator differences θc = γ_eff·RP with weight ϕc, and
+    # γ_eff = ϕc·γ̃ already carries one ϕc, so the diagonal coupling is ϕc²·γ̃ = ϕc·γ_eff
+    γW = γ_eff[i, j] * ϕ.center[i, j]
 
     if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
         if isvalid_vx(ϕ, i + 1, j)
@@ -213,13 +221,13 @@ end
 
             phase = phase_center[i + 1, j]
             GE = fn_ratio(get_shear_modulus, rheology, phase)
-            ηE = η[i + 1, j] * ϕ.center[i + 1, j]
-            γE = γ_eff[i + 1, j]
-            # effective viscoelastic viscosity (ϕ=0 ⇒ η=0 ⇒ 1/η=Inf ⇒ combine=0, no NaN)
-            ηN = 1 / (1 / ηN + 1 / (GN * dt))
-            ηS = 1 / (1 / ηS + 1 / (GS * dt))
-            ηW = 1 / (1 / ηW + 1 / (GW * dt))
-            ηE = 1 / (1 / ηE + 1 / (GE * dt))
+            ηE = η[i + 1, j]
+            γE = γ_eff[i + 1, j] * ϕ.center[i + 1, j]
+            # effective viscoelastic viscosity, ϕ-weighted after the combine (ϕ=0 ⇒ numerator 0 ⇒ 0, no NaN)
+            ηN = ϕ.vertex[i + 1, j + 1] / (1 / ηN + 1 / (GN * dt))
+            ηS = ϕ.vertex[i + 1, j] / (1 / ηS + 1 / (GS * dt))
+            ηW = ϕ.center[i, j] / (1 / ηW + 1 / (GW * dt))
+            ηE = ϕ.center[i + 1, j] / (1 / ηE + 1 / (GE * dt))
 
             # Precompute common terms
             ηN_dy = ηN * _dy
@@ -261,10 +269,10 @@ end
     GW = fn_ratio(get_shear_modulus, rheology, phase)
     GE = GN # reuse cached value
 
-    ηS = η[i, j] * ϕ.center[i, j]
-    ηW = ηv[i, j + 1] * ϕ.vertex[i, j + 1]
-    ηE = ηv[i + 1, j + 1] * ϕ.vertex[i + 1, j + 1]
-    # # bulk viscosity coefficients at surrounding points
+    ηS = η[i, j]
+    ηW = ηv[i, j + 1]
+    ηE = ηv[i + 1, j + 1]
+    # bulk-penalty coupling (ϕc² as above); γW already carries its ϕ.center[i, j]
     γS = γW # reuse cached value
 
     if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
@@ -283,13 +291,13 @@ end
             phase = phase_center[i, j + 1]
             GN = fn_ratio(get_shear_modulus, rheology, phase)
 
-            ηN = η[i, j + 1] * ϕ.center[i, j + 1]
-            γN = γ_eff[i, j + 1]
-            # effective viscoelastic viscosity
-            ηN = 1 / (1 / ηN + 1 / (GN * dt))
-            ηS = 1 / (1 / ηS + 1 / (GS * dt))
-            ηW = 1 / (1 / ηW + 1 / (GW * dt))
-            ηE = 1 / (1 / ηE + 1 / (GE * dt))
+            ηN = η[i, j + 1]
+            γN = γ_eff[i, j + 1] * ϕ.center[i, j + 1]
+            # effective viscoelastic viscosity, ϕ-weighted after the combine (see Vx block)
+            ηN = ϕ.center[i, j + 1] / (1 / ηN + 1 / (GN * dt))
+            ηS = ϕ.center[i, j] / (1 / ηS + 1 / (GS * dt))
+            ηW = ϕ.vertex[i, j + 1] / (1 / ηW + 1 / (GW * dt))
+            ηE = ϕ.vertex[i + 1, j + 1] / (1 / ηE + 1 / (GE * dt))
 
             # Precompute common terms
             ηE_dx = ηE * _dx

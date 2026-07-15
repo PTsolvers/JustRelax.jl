@@ -37,18 +37,6 @@ end
 using GeoParams
 using CairoMakie
 
-# Rising-plume + sticky-air benchmark, mirroring `PlumeFreeSurface_VariationalStokes.jl` (same
-# physics, same RockRatio `ϕ` + marker chain), but driving the solve through the variational
-# self-tuned dynamic-relaxation solver `solve_DYREL!` instead of `solve_VariationalStokes!`.
-#
-# The variational DYREL path implements the implicit free-surface `ρg·dt` stabilization term
-# (`free_surface = true`), so the full CFL time step is stable.
-#
-# The viscosity is computed with `air_phase = 1` (soft sticky air removed → physically stiff
-# partial surface cells via `correct_phase_ratio`). The RockRatio `ϕ` masks the momentum solve and
-# the ϕ-aware Gershgorin preconditioner ϕ-weights the viscosity, so the stiff partial cells no
-# longer wreck DYREL conditioning. See the note next to `air_phase_visc` below.
-
 import ParallelStencil.INDICES
 const idx_j = INDICES[2]
 macro all_j(A)
@@ -142,12 +130,6 @@ function main(igg, nx, ny)
     # finite viscosity cutoff (keeps the extreme air/rock contrast bounded)
     viscosity_cutoff = (1.0e16, 1.0e24)
 
-    # Remove the soft air from partial-cell viscosity: `correct_phase_ratio` gives stiff, physical
-    # partial cells (η ~ 1e21) at the true free surface. This is the correct physics — the RockRatio
-    # `ϕ` masks the momentum solve, and the ϕ-aware Gershgorin preconditioner now ϕ-weights the
-    # viscosity so the stiff partial cells no longer wreck DYREL conditioning.
-    air_phase_visc = 1
-
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 15
     particles = init_particles(
@@ -190,7 +172,7 @@ function main(igg, nx, ny)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase_visc)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
@@ -225,7 +207,7 @@ function main(igg, nx, ny)
             dt,
             igg;
             kwargs = (;
-                air_phase = air_phase_visc,
+                air_phase = air_phase,
                 iterMax = 100.0e3,
                 nout = 100,
                 rel_drop = 1.0e-2,
@@ -298,7 +280,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n = 128
+n = 64
 nx = n
 ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

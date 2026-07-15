@@ -1,5 +1,6 @@
 using Pkg; Pkg.activate("miniapps")
 using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
+using JLD2
 
 # include benchmark related plotting and error functions
 include("vizSolKz.jl")
@@ -25,29 +26,30 @@ function solKz_viscosity(xci, ni, di; B = log(1.0e6))
     return η
 end
 
-function solKz_density(xci, ni, di)
+function solKz_density(xci, ni, di; km = 2)
     xc, yc = xci
     # make grid array (will be eaten by GC)
     x = PTArray(backend)([xci for xci in xc, _ in yc])
     y = PTArray(backend)([yci for _ in xc, yci in yc])
     ρ = @zeros(ni...)
 
-    _density(x, y) = -sin(2 * y) * cos(3 * π * x)
+    # matches Stokes2D_SolKz_Zhong1996's reference density: ρ = -σ*sin(km*y)*cos(kn*x), σ=1, kn=3π
+    _density(x, y, km) = -sin(km * y) * cos(3 * π * x)
 
-    @parallel function density(ρ, x, y)
+    @parallel function density(ρ, x, y, km)
 
-        @all(ρ) = _density(@all(x), @all(y))
+        @all(ρ) = _density(@all(x), @all(y), km)
         return nothing
     end
 
     # compute density
-    @parallel density(ρ, x, y)
+    @parallel density(ρ, x, y, km)
 
     return ρ
 end
 
 function solKz(;
-        Δη = 1.0e6, nx = 256 - 1, ny = 256 - 1, lx = 1.0e0, ly = 1.0e0, init_MPI = true, finalize_MPI = false
+        Δη = 1.0e6, km = 2, nx = 256 - 1, ny = 256 - 1, lx = 1.0e0, ly = 1.0e0, init_MPI = true, finalize_MPI = false
     )
 
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
@@ -76,7 +78,7 @@ function solKz(;
 
     ## Setup-specific parameters and fields
     η .= solKz_viscosity(xci, ni, di; B = log(Δη)) # viscosity field
-    ρ = solKz_density(xci, ni, di)
+    ρ = solKz_density(xci, ni, di; km = km)
     fy = ρ .* g
     ρg = @zeros(ni...), fy
     dt = 0.1
@@ -119,12 +121,12 @@ function solKz(;
     return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), stokes, iters, ρ
 end
 
-function multiple_solKz(; Δη = 1.0e-6, nrange::UnitRange = 4:10)
+function multiple_solKz(; Δη = 1.0e6, km = 2, nrange::UnitRange = 4:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solKz(; Δη = Δη, nx = nx, ny = ny, init_MPI = false, finalize_MPI = false)
-        L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes; order = 1)
+        geometry, stokes, = solKz(; Δη = Δη, km = km, nx = nx, ny = ny, init_MPI = false, finalize_MPI = false)
+        L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes; order = 1, Δη = Δη, km = km)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)
         push!(L2_p, L2_pi)
@@ -149,6 +151,8 @@ function multiple_solKz(; Δη = 1.0e-6, nrange::UnitRange = 4:10)
     ax.ylabel = "L1 norm"
 
     save("SolKz_error.png", f)
+
+    jldsave(joinpath(@__DIR__, "solkz_normal_error.jld2"); h, L2_vx, L2_vy, L2_p, Δη, km, nrange)
 
     return f
 end

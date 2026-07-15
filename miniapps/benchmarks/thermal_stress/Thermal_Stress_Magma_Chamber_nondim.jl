@@ -615,7 +615,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                     colormap = :glasgow,
                     colorrange = (log10(1.0e16), log10(1.0e24)),
                 )
-                arrows!(
+                arrows2d!(
                     ax2,
                     ustrip.(dimensionalize(xvi[1], km, CharDim))[1:5:(end - 1)],
                     ustrip.(dimensionalize(xvi[2], km, CharDim))[1:5:(end - 1)],

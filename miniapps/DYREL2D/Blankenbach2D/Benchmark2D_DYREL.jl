@@ -32,10 +32,12 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Blankenbach_Rheology.jl")
+
+## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -71,6 +73,8 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
     @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
     return nothing
 end
+## END OF HELPER FUNCTION ------------------------------------------------------------
+
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -204,7 +208,11 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    while it ≤ nit
+    # DYREL solver state (rebuilt from the current rheology inside solve_DYREL!)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-4)
+
+    # while it ≤ nit
+    while t ≤ (4000.0e6 * (365.25 * 24 * 60 * 60))
         @show it
 
         # Update buoyancy and viscosity -
@@ -214,22 +222,24 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         # ------------------------------
 
         # Stokes solver ----------------
-        solve!(
+        solve_DYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
             rheology,
             args,
-            Inf,
+            grid,
+            dt,
             igg;
             kwargs = (;
+                verbose_PH = true,
+                verbose_DR = false,
                 iterMax = 150.0e3,
                 nout = 200,
+                linear_viscosity = true,
                 viscosity_cutoff = (-Inf, Inf),
-                verbose = true,
             )
         )
         dt = compute_dt(stokes, di, dt_diff)
@@ -287,6 +297,8 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         end
         push!(Urms, Urms_it)
         push!(trms, t)
+        t += dt
+        @show t
         # -------------------------------------------
 
         # interpolate fields from particles to centroids
@@ -361,7 +373,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             Colorbar(fig[2, 4], h4)
             linkaxes!(ax1, ax2, ax3, ax4)
             save(joinpath(figdir, "$(it).png"), fig)
-            fig
+            display(fig)
 
             fig2 = Figure(size = (900, 1200), title = "Time Series")
             ax21 = Axis(fig2[1, 1], aspect = 3, title = L"V_{RMS}")
@@ -399,7 +411,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         fig
     end
 
-    @show Urms[Int64(nit)] Nu_top[Int64(nit)]
+    @show Urms[Int64(it-1)] Nu_top[Int64(it-1)]
 
     finalize_global_grid(; finalize_MPI = finalize_MPI)
 
@@ -408,7 +420,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-figdir = "Blankenbach_subgrid"
+figdir = "Blankenbach_DYREL"
 do_vtk = false # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
 n = 64

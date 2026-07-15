@@ -559,9 +559,10 @@ end
 """
     continuation_linear(x_new, x_old, ν)
 
-Do a continuation step `(1-ν)*x_old + ν*x_new` with damping parameter `ν`
+Do a continuation step `(1-ν)*x_old + ν*x_new` with damping parameter `ν`. At `ν = 1` this
+returns `x_new` directly rather than evaluating `(1-ν)*x_old`.
 """
-@inline continuation_linear(x_new, x_old, ν) = (1 - ν) * x_old + ν * x_new
+@inline continuation_linear(x_new, x_old, ν) = isone(ν) ? x_new : (1 - ν) * x_old + ν * x_new
 # @inline continuation_linear(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
 
 # Others

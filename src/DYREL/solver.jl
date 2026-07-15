@@ -151,7 +151,7 @@ function _solve_DYREL!(
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
 
         # Residual check
-        errV = ntuple(d -> norm_mpi(residuals[d]) / √(v_dofs[d]), dim)
+        errV = ntuple(d -> norm_mpi(residuals[d][2:(end - 1), 2:(end - 1)]) / √(v_dofs[d]), dim)
         errPt = norm_mpi(stokes.R.RP) / √(p_dof)
         if isone(itPH)
             errV0 = map(x -> x + eps(), errV)
@@ -232,13 +232,13 @@ function _solve_DYREL!(
             # Residual check
             if iszero(iter % nout)
 
-                errV = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]), dim)
+                errV = ntuple(d -> norm_mpi(fields.D[d][2:(end - 1), 2:(end - 1)] .* residuals[d][2:(end - 1), 2:(end - 1)]) / √(v_dofs[d]), dim)
 
                 if iter == nout
                     errV00 = errV
                 end
 
-                errV_ratio = ntuple(d -> errV[d] / errV00[d], dim)
+                errV_ratio = ntuple(d -> min(errV[d] / errV00[d], errV[d]), dim)
                 err = maximum(errV_ratio)
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 

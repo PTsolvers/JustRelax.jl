@@ -154,15 +154,8 @@ end
     return nothing
 end
 
-# ϕ·(1/η + 1/(G·dt))⁻¹, guarded against ϕ==0: an unbounded viscosity_cutoff can leave η == Inf at
-# masked-out (ϕ == 0) cells (compute_phase_viscosity's harmonic mean of zero ratios), and for
-# LinearViscous rheology G == Inf too, so 1/η + 1/(G·dt) == 0 and the unguarded ϕ/0 is 0/0 = NaN
-# instead of the intended 0. Short-circuiting on ϕ == 0 makes the mask exact regardless of η.
 @inline ϕ_weighted_harmonic(ϕij, ηij, Gij, dt) = iszero(ϕij) ? zero(ηij) : ϕij / (inv(ηij) + inv(Gij * dt))
 
-# variational (ϕ-aware) overload: mask air/invalid velocity DOFs and ϕ-weight the
-# viscosity entering the Gershgorin sums, so the preconditioner/eigenvalue estimate is
-# consistent with the already ϕ-weighted momentum operator (velocity_kernels_VS.jl).
 function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, ϕ::JustRelax.RockRatio, rheology, di, dt)
     ni = size(η)
     @parallel (@idx ni) _Gershgorin_Stokes2D_SchurComplement!(
@@ -197,13 +190,11 @@ end
     phase = phase_center[i, j]
     GW = fn_ratio(get_shear_modulus, rheology, phase)
 
-    # viscosity coefficients at surrounding points (unweighted; ϕ applied after the
-    # viscoelastic harmonic combine below, matching ϕ·(1/η + 1/(G·dt))⁻¹ in the operator)
+
     ηN = ηv[i + 1, j + 1]
     ηS = ηv[i + 1, j]
     ηW = η[i, j]
-    # bulk-penalty coupling: the operator differences θc = γ_eff·RP with weight ϕc, and
-    # γ_eff = ϕc·γ̃ already carries one ϕc, so the diagonal coupling is ϕc²·γ̃ = ϕc·γ_eff
+
     γW = γ_eff[i, j] * ϕ.center[i, j]
 
     if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
@@ -223,11 +214,11 @@ end
             GE = fn_ratio(get_shear_modulus, rheology, phase)
             ηE = η[i + 1, j]
             γE = γ_eff[i + 1, j] * ϕ.center[i + 1, j]
-            # effective viscoelastic viscosity, ϕ-weighted after the combine (ϕ=0 ⇒ numerator 0 ⇒ 0, no NaN)
-            ηN = ϕ.vertex[i + 1, j + 1] / (1 / ηN + 1 / (GN * dt))
-            ηS = ϕ.vertex[i + 1, j] / (1 / ηS + 1 / (GS * dt))
-            ηW = ϕ.center[i, j] / (1 / ηW + 1 / (GW * dt))
-            ηE = ϕ.center[i + 1, j] / (1 / ηE + 1 / (GE * dt))
+            # effective viscoelastic viscosity, ϕ-weighted after the combine
+            ηN = ϕ_weighted_harmonic(ϕ.vertex[i + 1, j + 1], ηN, GN, dt)
+            ηS = ϕ_weighted_harmonic(ϕ.vertex[i + 1, j], ηS, GS, dt)
+            ηW = ϕ_weighted_harmonic(ϕ.center[i, j], ηW, GW, dt)
+            ηE = ϕ_weighted_harmonic(ϕ.center[i + 1, j], ηE, GE, dt)
 
             # Precompute common terms
             ηN_dy = ηN * _dy
@@ -254,10 +245,6 @@ end
             # maximum eigenvalue estimate
             λmaxVx[i, j] = inv(Dx_ij) * (Cxx + Cxy)
         else
-            # air/invalid DOF: benign FINITE values. The V-update is masked here (ϕ.Vx=0) and
-            # dVxdτ stays 0, so the node contributes nothing. λmaxVx=1 (not 0!) keeps dτVx/βVx
-            # finite — a 0 would give dτVx=Inf ⇒ βVx=NaN, which poisons the unmasked global sum
-            # in compute_λminV!. Dx=1 keeps errV finite (residual is 0 here anyway).
             Dx[i, j] = one(eltype(Dx))
             λmaxVx[i, j] = one(eltype(λmaxVx))
         end
@@ -294,10 +281,10 @@ end
             ηN = η[i, j + 1]
             γN = γ_eff[i, j + 1] * ϕ.center[i, j + 1]
             # effective viscoelastic viscosity, ϕ-weighted after the combine (see Vx block)
-            ηN = ϕ.center[i, j + 1] / (1 / ηN + 1 / (GN * dt))
-            ηS = ϕ.center[i, j] / (1 / ηS + 1 / (GS * dt))
-            ηW = ϕ.vertex[i, j + 1] / (1 / ηW + 1 / (GW * dt))
-            ηE = ϕ.vertex[i + 1, j + 1] / (1 / ηE + 1 / (GE * dt))
+            ηN = ϕ_weighted_harmonic(ϕ.center[i, j + 1], ηN, GN, dt)
+            ηS = ϕ_weighted_harmonic(ϕ.center[i, j], ηS, GS, dt)
+            ηW = ϕ_weighted_harmonic(ϕ.vertex[i, j + 1], ηW, GW, dt)
+            ηE = ϕ_weighted_harmonic(ϕ.vertex[i + 1, j + 1], ηE, GE, dt)
 
             # Precompute common terms
             ηE_dx = ηE * _dx
@@ -324,7 +311,6 @@ end
             # maximum eigenvalue estimate
             λmaxVy[i, j] = inv(Dy_ij) * (Cyx + Cyy)
         else
-            # benign FINITE values (see the Dx else-branch); λmaxVy=1 avoids dτVy=Inf ⇒ βVy=NaN.
             Dy[i, j] = one(eltype(Dy))
             λmaxVy[i, j] = one(eltype(λmaxVy))
         end

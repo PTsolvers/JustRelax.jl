@@ -104,7 +104,7 @@ function solKz_DYREL(;
     update_halo!(@velocity(stokes)...)
 
     !isnothing(figdir) && take(figdir)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-8)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-8, γfact = 20.0)
     iters = solve_DYREL!(
         stokes,
         ρg,
@@ -120,7 +120,7 @@ function solKz_DYREL(;
             verbose_PH = !isnothing(figdir),
             verbose_DR = false,
             iterMax = 150.0e3,
-            total_iterMax = 2.0e6,
+            total_iterMax = 200e3,
             nout = 100,
             linear_viscosity = true,
             viscosity_cutoff = (-Inf, Inf),

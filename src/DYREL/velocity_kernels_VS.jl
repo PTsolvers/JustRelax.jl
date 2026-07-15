@@ -210,18 +210,6 @@ end
 end
 
 ## DR VELOCITY RESIDUAL + DAMPED UPDATE (fused, masked)
-# Masked damped pseudo-transient velocity update. Unlike the non-variational `damped_update_V`,
-# the momentum/damping term is scaled by the rock ratio ϕᵢ = ϕ.Vᵢ (preserving the variational
-# `update_V_damping!` behaviour). Returns (dVdτⁿ⁺¹, ΔV).
-@inline function damped_update_V_VS(dVdτ, R, ϕᵢ, α, β, dτ)
-    dVdτ_new = ϕᵢ * (α * dVdτ) + R
-    return dVdτ_new, dVdτ_new * β * dτ
-end
-
-# Masked analogue of `compute_DR_residual_update_V!`: fuses the velocity residual (masked, /Dᵢ),
-# the ϕ-scaled damping and the velocity update into one pass. The small pressure correction
-# θc = γ_eff·RP + ΔPψ is assembled once per iteration by the solver (masked diffs are linear, so
-# d(θc) = d(P_num) + d(ΔPψ)); the large hydrostatic P stays separate for precision.
 @parallel_indices (i, j) function compute_DR_residual_update_V!(
         Rx::AbstractArray{T, 2},
         Ry,

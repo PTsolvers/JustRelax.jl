@@ -14,10 +14,10 @@ ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [compat]
-ExactFieldSolutions = "0.1.6"
+ExactFieldSolutions = "0.1, 0.2"
 GeoParams = "0.7.16"
 GeophysicalModelGenerator = "0.7.21"
-ImplicitGlobalGrid = "0.16.2"
+ImplicitGlobalGrid = "0.16.2, 0.17"
 JLD2 = "0.5, 0.6"
 JustPIC = "0.6.6"
 MPI = "0.20"

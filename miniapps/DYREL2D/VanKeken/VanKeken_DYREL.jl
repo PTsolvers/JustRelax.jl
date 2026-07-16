@@ -124,9 +124,6 @@ function main2D(
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions
-    # Note: DYREL's dynamic-relaxation velocity solve stalls under the no-slip top/bottom
-    # boundaries used here (the inner residual plateaus and never reaches the tolerance).
-    # With all-free-slip boundaries the same setup converges normally.
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = false, bot = false),
         no_slip = (left = false, right = false, top = true, bot = true),

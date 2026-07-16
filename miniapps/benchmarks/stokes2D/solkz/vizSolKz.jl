@@ -81,7 +81,7 @@ function plot_solkz(geometry, ρ, stokes; cmap = :vik)
     # Velocity-y
     ax1 = Axis(f[2, 3]; aspect = 1)
     h1 = heatmap!(
-        ax1, geometry.xvi[2], geometry.xci[1], stokes.V.Vy[2:(end - 1), 2:(end - 1)]; colormap = cmap
+        ax1, geometry.xci[1], geometry.xvi[2], stokes.V.Vy[2:(end - 1), :]; colormap = cmap
     )
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
@@ -192,7 +192,7 @@ function plot_solKz_error(geometry, stokes; cmap = :vik)
         ax1,
         geometry.xvi[1],
         geometry.xci[2],
-        log10.(err1(Array(stokes.V.Vx[2:(end - 1), 2:(end - 1)]), Array(solk.vx[2:(end - 1), 2:(end - 1)])));
+        log10.(err1(Array(stokes.V.Vx[:, 2:(end - 1)]), Array(solk.vx)));
         colormap = :batlow,
     )
     xlims!(ax1, (0, 1))
@@ -212,7 +212,7 @@ function plot_solKz_error(geometry, stokes; cmap = :vik)
         ax1,
         geometry.xci[1],
         geometry.xvi[2],
-        Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]);
+        Array(stokes.V.Vy[2:(end - 1), :]);
         colormap = cmap,
     )
     xlims!(ax1, (0, 1))
@@ -236,7 +236,7 @@ function plot_solKz_error(geometry, stokes; cmap = :vik)
         ax1,
         geometry.xci[1],
         geometry.xvi[2],
-        log10.(err1(Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]), Array(solk.vy[:, 2:(end - 1)])));
+        log10.(err1(Array(stokes.V.Vy[2:(end - 1), :]), Array(solk.vy)));
         colormap = :batlow,
     )
     xlims!(ax1, (0, 1))

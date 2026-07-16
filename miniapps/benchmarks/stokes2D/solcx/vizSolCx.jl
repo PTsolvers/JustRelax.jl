@@ -69,14 +69,14 @@ function plot_solCx(geometry, stokes, ρ; cmap = :vik, fun = heatmap!)
 
     # Velocity-x
     ax1 = Axis(f[2, 1]; aspect = 1)
-    h1 = fun(ax1, geometry.xvi[1], geometry.xci[2], stokes.V.Vx; colormap = cmap)
+    h1 = fun(ax1, geometry.xvi[1], geometry.xci[2], stokes.V.Vx[:, 2:(end - 1)]; colormap = cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[2, 2], h1; label = "Vx")
 
     # Velocity-y
     ax1 = Axis(f[2, 3]; aspect = 1)
-    h1 = fun(ax1, geometry.xci[1], geometry.xvi[2], stokes.V.Vy; colormap = cmap)
+    h1 = fun(ax1, geometry.xci[1], geometry.xvi[2], stokes.V.Vy[2:(end - 1), :]; colormap = cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
     Colorbar(f[2, 4], h1; label = "Vy")
@@ -154,7 +154,7 @@ function plot_solCx_error(geometry, stokes, Δη; cmap = :vik)
     # ROW 2: Velocity-x
     # Numerical
     ax1 = Axis(f[2, 1]; aspect = 1)
-    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], Array(stokes.V.Vx); colormap = cmap)
+    h1 = heatmap!(ax1, geometry.xvi[1], geometry.xci[2], Array(stokes.V.Vx[:, 2:(end - 1)]); colormap = cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
 
@@ -196,7 +196,7 @@ function plot_solCx_error(geometry, stokes, Δη; cmap = :vik)
     # ROW 3: Velocity-y
     # Numerical
     ax1 = Axis(f[3, 1]; aspect = 1)
-    h1 = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], Array(stokes.V.Vy); colormap = cmap)
+    h1 = heatmap!(ax1, geometry.xci[1], geometry.xvi[2], Array(stokes.V.Vy[2:(end - 1), :]); colormap = cmap)
     xlims!(ax1, (0, 1))
     ylims!(ax1, (0, 1))
 
@@ -218,7 +218,7 @@ function plot_solCx_error(geometry, stokes, Δη; cmap = :vik)
         ax1,
         geometry.xci[1],
         geometry.xvi[2],
-        log10.(err1(Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]), Array(solc.vy)));
+        log10.(err1(Array(stokes.V.Vy[2:(end - 1), :]), Array(solc.vy)));
         colormap = :batlow,
     )
     xlims!(ax1, (0, 1))

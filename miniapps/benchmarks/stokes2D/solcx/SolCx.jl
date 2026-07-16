@@ -60,7 +60,7 @@ function solCx(
         ny = 64,
         lx = 1.0e0,
         ly = 1.0e0,
-        init_MPI = true,
+        init_MPI = MPI.Initialized() ? false : true,
         finalize_MPI = false,
         b_width = (4, 4),
     )
@@ -110,6 +110,9 @@ function solCx(
         @views η2[:, end] .= η2[:, end - 1]
         η, η2 = η2, η # swap
     end
+    # the swap leaves the last pass in a temporary that is not the stokes array;
+    # copy it back so the solve actually uses all 5 passes
+    stokes.viscosity.η .= η
 
     ## Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;

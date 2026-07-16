@@ -4,12 +4,12 @@ using Pkg; Pkg.activate("miniapps")
 benchmark = :solcx
 
 # model resolution (number of gridpoints), used for runtype = :single
-nx, ny = 63, 63
+nx, ny = 64, 64
 
 # :single for a single run model with nx, ny resolution
 # :multiple for a grid sensitivity error sweep (saves h/L2_vx/L2_vy/L2_p to a jld2
 # file next to the benchmark script, read by ../convergence_comparison_figure.jl)
-runtype = :single
+runtype = :multiple
 
 if benchmark == :solcx
     # need to `include` again if you switch benchmark within the same session
@@ -23,7 +23,7 @@ if benchmark == :solcx
             figdir = "SolCx_DYREL",
         )
     elseif runtype == :multiple
-        f = multiple_solCx_DYREL(; Δη = Δη, nrange = 6:10) # nx = ny = 2^nrange - 1
+        f = multiple_solCx_DYREL(; Δη = Δη, nrange = 4:6) # nx = ny = 2^nrange - 1
     end
 
 elseif benchmark == :solkz

@@ -59,7 +59,7 @@ end
 @inline custom_τII(a::CustomRheology, EpsII; η_target = 1.0, kwargs...) = 2.0 * η_target * EpsII
 
 function solKz_DYREL(;
-        Δη = 1.0e6, km = 2, nx = 63, ny = 63, lx = 1.0e0, ly = 1.0e0,
+        Δη = 1.0e6, km = 2, nx = 64, ny = 64, lx = 1.0e0, ly = 1.0e0,
         init_MPI = true, finalize_MPI = false, figdir = nothing
     )
 
@@ -70,6 +70,10 @@ function solKz_DYREL(;
     di = @. li / (nx_g(), ny_g())
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid
+
+    ## (Physical) Time domain and discretization
+    ttot = 1   # total simulation time
+    Δt = 1     # physical time step
     dt = 0.1
 
     η_target = solKz_viscosity(xci, ni; B = log(Δη))
@@ -104,28 +108,40 @@ function solKz_DYREL(;
     update_halo!(@velocity(stokes)...)
 
     !isnothing(figdir) && take(figdir)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-8, γfact = 20.0)
-    iters = solve_DYREL!(
-        stokes,
-        ρg,
-        dyrel,
-        flow_bcs,
-        phase_ratios,
-        rheology,
-        args,
-        grid,
-        dt,
-        igg;
-        kwargs = (;
-            verbose_PH = !isnothing(figdir),
-            verbose_DR = false,
-            iterMax = 150.0e3,
-            total_iterMax = 200e3,
-            nout = 100,
-            linear_viscosity = true,
-            viscosity_cutoff = (-Inf, Inf),
+    # γfact = 200: at the γfact = 20 default the penalty is too weak for the pressure
+    # error to track APT's (resolution-persistent ~1e-4 floor); 200 matches APT's L2_p
+    # at ~5x the iteration cost
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-8, γfact = 200.0)
+
+    # Physical time loop
+    t = 0.0
+    local iters
+    while t < ttot
+        iters = solve_DYREL!(
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            rheology,
+            args,
+            grid,
+            dt,
+            igg;
+            kwargs = (;
+                verbose_PH = true,
+                verbose_DR = false,
+                iterMax = 150.0e3,
+                # must exceed the cumulative Powell-Hestenes budget: a γfact = 200 solve
+                # needs ~500k iterations at nx = 127 and more at finer resolution
+                total_iterMax = 200e3,
+                nout = 100,
+                linear_viscosity = true,
+                viscosity_cutoff = (-Inf, Inf),
+            )
         )
-    )
+        t += Δt
+    end
 
     if !isnothing(figdir)
         fig = Figure(size = (1200, 500))
@@ -146,7 +162,7 @@ function multiple_solKz_DYREL(; Δη = 1.0e6, km = 2, nrange::UnitRange = 4:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solKz_DYREL(; Δη = Δη, km = km, nx = nx, ny = ny, init_MPI = false, finalize_MPI = false)
+        geometry, stokes, = solKz_DYREL(; Δη = Δη, km = km, nx = nx, ny = ny, init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false)
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes; order = 1, Δη = Δη, km = km)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)
@@ -180,5 +196,5 @@ end
 
 # single run, only when this file is executed directly (not when `include`d for its functions)
 if abspath(PROGRAM_FILE) == @__FILE__
-    solKz_DYREL(; nx = 63, ny = 63, figdir = "SolKz_DYREL")
+    solKz_DYREL(; nx = 64, ny = 64, figdir = "SolKz_DYREL")
 end

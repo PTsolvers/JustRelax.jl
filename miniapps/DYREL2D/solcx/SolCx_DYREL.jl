@@ -9,6 +9,7 @@ using GeoParams, CairoMakie, JLD2, LinearAlgebra
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 using ParallelStencil
+using ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
 
 const backend = CPUBackend
@@ -19,6 +20,13 @@ const backend_JP = JustPIC.CPUBackend
 # analytical solution + solcx_error(geometry, stokes; order)
 include("../../benchmarks/stokes2D/solcx/vizSolCx.jl")
 
+@parallel function smooth!(
+        A2::AbstractArray{T, 2}, A::AbstractArray{T, 2}, fact::Real
+    ) where {T}
+    @inn(A2) = @inn(A) + 1.0 / 4.1 / fact * (@d2_xi(A) + @d2_yi(A))
+    return nothing
+end
+
 function solCx_viscosity(xci, ni; Δη = 1.0e6)
     xc, _ = xci
     η = @zeros(ni...)
@@ -27,6 +35,19 @@ function solCx_viscosity(xci, ni; Δη = 1.0e6)
         return nothing
     end
     @parallel (@idx ni) _viscosity!(η, xc, Δη)
+
+    # smooth the viscosity jump exactly like the normal-Stokes SolCx benchmark
+    # (5 Laplacian passes) so both solvers discretize the identical problem and
+    # the L2-error comparison is solver-only, not solver+problem
+    η2 = deepcopy(η)
+    for _ in 1:5
+        @parallel smooth!(η2, η, 1.0)
+        @views η2[1, :] .= η2[2, :]
+        @views η2[end, :] .= η2[end - 1, :]
+        @views η2[:, 1] .= η2[:, 2]
+        @views η2[:, end] .= η2[:, end - 1]
+        η, η2 = η2, η # swap
+    end
     return η
 end
 
@@ -59,7 +80,7 @@ end
 @inline custom_τII(a::CustomRheology, EpsII; η_target = 1.0, kwargs...) = 2.0 * η_target * EpsII
 
 function solCx_DYREL(;
-        Δη = 1.0e6, nx = 63, ny = 63, lx = 1.0e0, ly = 1.0e0,
+        Δη = 1.0e6, nx = 64, ny = 64, lx = 1.0e0, ly = 1.0e0,
         init_MPI = true, finalize_MPI = false, figdir = nothing
     )
 
@@ -70,7 +91,11 @@ function solCx_DYREL(;
     di = @. li / (nx_g(), ny_g())
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid
-    dt = 1.0             # steady viscous solve; dt only scales the penalty fallback
+
+    ## (Physical) Time domain and discretization
+    ttot = 1   # total simulation time
+    Δt = 1     # physical time step
+    dt = 1   # matches the dt the normal-Stokes SolCx script passes to solve!
 
     η_target = solCx_viscosity(xci, ni; Δη = Δη)
     ρ = solCx_density(xci, ni)
@@ -95,6 +120,7 @@ function solCx_DYREL(;
     ρg = @zeros(ni...), @zeros(ni...)
     index_field = reshape(1:prod(ni), ni)
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, η_target = η_target, index = index_field)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     flow_bcs = VelocityBoundaryConditions(;
@@ -105,27 +131,34 @@ function solCx_DYREL(;
 
     !isnothing(figdir) && take(figdir)
     dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-8)
-    iters = solve_DYREL!(
-        stokes,
-        ρg,
-        dyrel,
-        flow_bcs,
-        phase_ratios,
-        rheology,
-        args,
-        grid,
-        dt,
-        igg;
-        kwargs = (;
-            verbose_PH = !isnothing(figdir),
-            verbose_DR = false,
-            iterMax = 100.0e3,
-            total_iterMax = 2.0e6,
-            nout = 100,
-            linear_viscosity = true,
-            viscosity_cutoff = (-Inf, Inf),
+
+    # Physical time loop
+    t = 0.0
+    local iters
+    while t < ttot
+        iters = solve_DYREL!(
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            rheology,
+            args,
+            grid,
+            dt,
+            igg;
+            kwargs = (;
+                verbose_PH = true,
+                verbose_DR = false,
+                iterMax = 500.0e3,
+                total_iterMax = 200e3,
+                nout = 100,
+                linear_viscosity = true,
+                viscosity_cutoff = (-Inf, Inf),
+            )
         )
-    )
+        t += Δt
+    end
 
     if !isnothing(figdir)
         fig = Figure(size = (1200, 500))
@@ -146,7 +179,7 @@ function multiple_solCx_DYREL(; Δη = 1.0e6, nrange::UnitRange = 6:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solCx_DYREL(; Δη = Δη, nx = nx, ny = ny, init_MPI = false, finalize_MPI = false)
+        geometry, stokes, = solCx_DYREL(; Δη = Δη, nx = nx, ny = ny, init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false)
         L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes; order = 1, Δη = Δη)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)
@@ -180,5 +213,5 @@ end
 
 # single run, only when this file is executed directly (not when `include`d for its functions)
 if abspath(PROGRAM_FILE) == @__FILE__
-    solCx_DYREL(; nx = 63, ny = 63, figdir = "SolCx_DYREL")
+    solCx_DYREL(; nx = 64, ny = 64, figdir = "SolCx_DYREL")
 end

@@ -18,7 +18,7 @@ const backend_JP = JustPIC.CPUBackend
 # Analytical solution
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
-function main(igg; nx = 63, ny = 63, lx = 100.0e3, ly = 100.0e3, endtime = 500, η0 = 1.0e22, εbg = 1.0e-14, G = 1.0e10, figdir = "ElasticBuildUp_DYREL")
+function main(igg; nx = 64, ny = 64, lx = 100.0e3, ly = 100.0e3, endtime = 500, η0 = 1.0e22, εbg = 1.0e-14, G = 1.0e10, figdir = "ElasticBuildUp_DYREL")
 
     # Physical domain ------------------------------------
     ni = nx, ny
@@ -117,7 +117,7 @@ function main(igg; nx = 63, ny = 63, lx = 100.0e3, ly = 100.0e3, endtime = 500, 
     return (; ni, xci, xvi, li), stokes, av_τyy, sol_τyy, tt
 end
 
-nx = ny = 63
+nx = ny = 64
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

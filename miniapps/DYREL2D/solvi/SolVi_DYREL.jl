@@ -109,10 +109,10 @@ function solVi_DYREL(;
         dt,
         igg;
         kwargs = (;
-            verbose_PH = !isnothing(figdir),
+            verbose_PH = true,
             verbose_DR = false,
             iterMax = 100.0e3,
-            total_iterMax = 2.0e6,
+            total_iterMax = 200e3,
             nout = 100,
             linear_viscosity = true,
             viscosity_cutoff = (-Inf, Inf),
@@ -147,7 +147,7 @@ function multiple_solVi_DYREL(; Δη = 1.0e-3, lx = 1.0e1, ly = 1.0e1, rc = 1.0e
         nx = ny = 2^i - 1
         geometry, stokes, = solVi_DYREL(;
             Δη = Δη, nx = nx, ny = ny, lx = lx, ly = ly, rc = rc, εbg = εbg,
-            init_MPI = false, finalize_MPI = false,
+            init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false,
         )
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, Δη, εbg, rc; order = 2)
         push!(L2_vx, L2_vxi)

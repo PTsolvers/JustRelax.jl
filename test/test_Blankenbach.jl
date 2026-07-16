@@ -172,6 +172,51 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
+    solve!(
+        stokes,
+        pt_stokes,
+        grid,
+        flow_bcs,
+        ρg,
+        phase_ratios,
+        rheology,
+        args,
+        Inf,
+        igg;
+        kwargs = (;
+            iterMax = 150.0e3,
+            nout = 200,
+            viscosity_cutoff = (-Inf, Inf),
+            verbose = true,
+        )
+    )
+    # ------------------------------
+
+    # Thermal solver ---------------
+    heatdiffusion_PT!(
+        thermal,
+        pt_thermal,
+        thermal_bc,
+        rheology,
+        args,
+        dt,
+        grid;
+        kwargs = (;
+            igg = igg,
+            phase = phase_ratios,
+            iterMax = 10.0e3,
+            nout = 1.0e2,
+            verbose = true,
+        )
+    )
+    subgrid_characteristic_time!(
+        subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
+    )
+    centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+    subgrid_diffusion_centroid!(
+        pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+    )
+
     while it ≤ nit
         @show it
 

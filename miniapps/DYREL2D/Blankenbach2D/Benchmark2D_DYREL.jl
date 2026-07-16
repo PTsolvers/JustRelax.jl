@@ -78,7 +78,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", do_vtk = false, finalize_MPI = true)
+function main2D(igg; ar = 1, nx = 32, ny = 32, figdir = "figs2D", data_dir = "Blankenbach_DYREL_data", do_vtk = false, finalize_MPI = true, snapshot_fracs = ())
 
     # Physical domain ------------------------------------
     ly = 1000.0e3             # domain length in y
@@ -170,6 +170,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         take(vtk_dir)
     end
     take(figdir)
+    !isdir(data_dir) && mkpath(data_dir)
     # ----------------------------------------------------
 
     # Plot initial T and η profiles-----------------------
@@ -200,9 +201,9 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     end
     # Time loop
     t, it = 0.0, 1
-    Urms = Float64[0]
-    Nu_top = Float64[0]
-    trms = Float64[0]
+    Urms = Float64[]
+    Nu_top = Float64[]
+    trms = Float64[]
 
     # Buffer arrays to compute velocity rms
     Vx_v = @zeros(ni .+ 1...)
@@ -211,8 +212,57 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     # DYREL solver state (rebuilt from the current rheology inside solve_DYREL!)
     dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-4)
 
-    # while it ≤ nit
-    while t ≤ (4000.0e6 * (365.25 * 24 * 60 * 60))
+    # snapshot times (temperature-field checkpoints), consumed in order as t crosses each target
+    seconds_per_Myr = 1.0e6 * 365.25 * 24 * 60 * 60
+    tmax = 4500.0e6 * (365.25 * 24 * 60 * 60)
+    snapshot_targets = sort(collect(snapshot_fracs) .* tmax)
+
+    solve_DYREL!(
+        stokes,
+        ρg,
+        dyrel,
+        flow_bcs,
+        phase_ratios,
+        rheology,
+        args,
+        grid,
+        dt,
+        igg;
+        kwargs = (;
+            verbose_PH = true,
+            verbose_DR = false,
+            iterMax = 150.0e3,
+            nout = 200,
+            linear_viscosity = true,
+            viscosity_cutoff = (-Inf, Inf),
+        )
+    )
+    # Thermal solver ---------------
+    heatdiffusion_PT!(
+        thermal,
+        pt_thermal,
+        thermal_bc,
+        rheology,
+        args,
+        dt,
+        grid;
+        kwargs = (;
+            igg = igg,
+            phase = phase_ratios,
+            iterMax = 10.0e3,
+            nout = 1.0e2,
+            verbose = true,
+        )
+    )
+    subgrid_characteristic_time!(
+        subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
+    )
+    centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+    subgrid_diffusion_centroid!(
+        pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+    )
+
+    while t ≤ tmax
         @show it
 
         # Update buoyancy and viscosity -
@@ -307,7 +357,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 200) == 0 || it == nit
+        if it == 1 || rem(it, 200) == 0 || it == tmax
 
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -385,6 +435,16 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         it += 1
         t += dt
         # ------------------------------
+
+        # Snapshot checkpoints (temperature field), taken as t crosses each requested target time
+        if !isempty(snapshot_targets) && t >= snapshot_targets[1]
+            target = popfirst!(snapshot_targets)
+            fname = joinpath(data_dir, "snapshot_$(round(Int, target / seconds_per_Myr))Myr_$(nx)x$(ny).jld2")
+            checkpointing_jld2(
+                data_dir, stokes, thermal, t, it, fname;
+                xci = Array.(xci), xvi = Array.(xvi)
+            )
+        end
     end
 
     # Horizontally averaged depth profile
@@ -413,6 +473,12 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
 
     @show Urms[Int64(it-1)] Nu_top[Int64(it-1)]
 
+    # Final checkpoint: Urms/Nu_top/trms time series and the final T/η fields (every resolution)
+    checkpointing_jld2(
+        data_dir, stokes, thermal, t, it, joinpath(data_dir, "final_$(nx)x$(ny).jld2");
+        Urms = Urms, Nu_top = Nu_top, trms = trms, xci = Array.(xci), xvi = Array.(xvi)
+    )
+
     finalize_global_grid(; finalize_MPI = finalize_MPI)
 
     return Urms, Nu_top, trms, thermal.T, xvi
@@ -421,12 +487,13 @@ end
 
 # (Path)/folder where output data and figures are stored
 figdir = "Blankenbach_DYREL"
+data_dir = "Blankenbach_DYREL_data"
 do_vtk = false # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
-n = 64
+n = length(ARGS) >= 1 ? parse(Int, ARGS[1]) : 64
 nx = n
 ny = n
-nit = 6.0e3
+save_snapshots = "snapshots" in ARGS
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
@@ -434,4 +501,7 @@ else
 end
 
 # run main script
-main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, do_vtk = do_vtk);
+main2D(
+    igg; figdir = figdir, data_dir = data_dir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk,
+    snapshot_fracs = save_snapshots ? (0.3, 1.0) : ()
+);

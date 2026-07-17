@@ -213,8 +213,8 @@ Computes the bulk viscosity `ηb` and the effective penalty parameter `γ_eff`.
    - Otherwise `ηb = Kb * dt`.
 
 2. **Penalty Parameter (`γ_eff`)**: A combination of numerical (`γ_num`) and physical (`γ_phy`) penalty terms.
-   - `γ_num = γfact * η_mean`
-   - `γ_phy = Kb` (or related term)
+   - `γ_num = γfact * η` (local viscosity; falls back to `η_mean` where `η` is infinite)
+   - `γ_phy = Kb * dt` (or `γ_num` where `Kb` is infinite)
    - `γ_eff = (γ_phy * γ_num) / (γ_phy + γ_num)`
 
 # Arguments
@@ -229,21 +229,25 @@ This function parallelizes the computation across grid cells.
 """
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
     ni = size(stokes.P)
-    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
+    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, stokes.viscosity.η, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
     return nothing
 end
 
 
-@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η_mean, γfact, dt)
+@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η, η_mean, γfact, dt)
 
     # bulk viscosity
     ratios = @inbounds @cell phase_ratios_center[I...]
     Kbdt = fn_ratio(get_bulk_modulus, rheology, ratios) * dt
     ηb[I...] = Kbdt
 
-    # penalty parameter factor
-    γ_num = γfact * η_mean
-    γ_phy = isinf(Kbdt) ? γfact * η_mean : Kbdt
+    # penalty parameter: scaled by the *local* viscosity so that γ_eff/η stays O(γfact)
+    # everywhere. A global mean-viscosity scaling over-penalizes the low-viscosity regions
+    # of high-contrast problems, which stiffens the velocity pseudo-transient solve there
+    # and stalls convergence of the last Powell-Hestenes steps.
+    η_local = η[I...]
+    γ_num = γfact * (isinf(η_local) ? η_mean : η_local)
+    γ_phy = isinf(Kbdt) ? γ_num : Kbdt
     γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num)
 
     return nothing
@@ -258,7 +262,7 @@ function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_rati
     return nothing
 end
 
-@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, ϕ, η_mean, γfact, dt)
+@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, ϕ::JustRelax.RockRatio, η_mean, γfact, dt)
 
     if isvalid_c(ϕ, I...)
         # bulk viscosity

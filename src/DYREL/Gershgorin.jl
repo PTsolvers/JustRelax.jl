@@ -18,6 +18,24 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv,
     return nothing
 end
 
+@inline function Gershgorin_Stokes_SchurComplement!(
+        ::Val{2}, Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, rheology, di, dt
+    )
+    return Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, rheology, di, dt)
+end
+
+@inline function Gershgorin_Stokes_SchurComplement!(
+        ::Val{2}, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, η, ηv, γ_eff, phase_ratios, rheology, di, dt
+    )
+    return Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, rheology, di, dt)
+end
+
+@inline function Gershgorin_Stokes_SchurComplement!(
+        ::Val{3}, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, η, ηv, γ_eff, phase_ratios, rheology, di, dt
+    )
+    error("Not yet implemented for 3D")
+end
+
 @parallel_indices (i, j) function _Gershgorin_Stokes2D_SchurComplement!(
         Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di_center, di_vertex,
         phase_vertex, phase_center, rheology, dt
@@ -246,8 +264,9 @@ end
     return nothing
 end
 
-# 2D wrapper for update_α_β!
-function update_α_β!(dyrel::JustRelax.DYREL)
+@inline update_α_β!(dyrel::JustRelax.DYREL) = update_α_β!(Val(ndims(dyrel.γ_eff)), dyrel)
+
+function update_α_β!(::Val{2}, dyrel::JustRelax.DYREL)
     return update_α_β!(
         (dyrel.βVx, dyrel.βVy),
         (dyrel.αVx, dyrel.αVy),
@@ -256,15 +275,37 @@ function update_α_β!(dyrel::JustRelax.DYREL)
     )
 end
 
-# 2D wrapper for update_dτV_α_β!
-function update_dτV_α_β!(dyrel::JustRelax.DYREL)
+function update_α_β!(::Val{3}, dyrel::JustRelax.DYREL)
+    return update_α_β!(
+        (dyrel.βVx, dyrel.βVy, dyrel.βVz),
+        (dyrel.αVx, dyrel.αVy, dyrel.αVz),
+        (dyrel.dτVx, dyrel.dτVy, dyrel.dτVz),
+        (dyrel.cVx, dyrel.cVy, dyrel.cVz)
+    )
+end
+
+@inline update_dτV_α_β!(dyrel::JustRelax.DYREL) = update_dτV_α_β!(dyrel, dyrel.CFL)
+@inline update_dτV_α_β!(dyrel::JustRelax.DYREL, CFL_v) = update_dτV_α_β!(Val(ndims(dyrel.γ_eff)), dyrel, CFL_v)
+
+function update_dτV_α_β!(::Val{2}, dyrel::JustRelax.DYREL, CFL_v)
     return update_dτV_α_β!(
         (dyrel.dτVx, dyrel.dτVy),
         (dyrel.βVx, dyrel.βVy),
         (dyrel.αVx, dyrel.αVy),
         (dyrel.cVx, dyrel.cVy),
         (dyrel.λmaxVx, dyrel.λmaxVy),
-        dyrel.CFL
+        CFL_v
+    )
+end
+
+function update_dτV_α_β!(::Val{3}, dyrel::JustRelax.DYREL, CFL_v)
+    return update_dτV_α_β!(
+        (dyrel.dτVx, dyrel.dτVy, dyrel.dτVz),
+        (dyrel.βVx, dyrel.βVy, dyrel.βVz),
+        (dyrel.αVx, dyrel.αVy, dyrel.αVz),
+        (dyrel.cVx, dyrel.cVy, dyrel.cVz),
+        (dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz),
+        CFL_v
     )
 end
 

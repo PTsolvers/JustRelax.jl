@@ -60,6 +60,7 @@ end
 
 function solKz_DYREL(;
         Δη = 1.0e6, km = 2, nx = 64, ny = 64, lx = 1.0e0, ly = 1.0e0,
+        ϵ = 1.0e-6, γfact = 20,
         init_MPI = true, finalize_MPI = false, figdir = nothing
     )
 
@@ -99,6 +100,7 @@ function solKz_DYREL(;
     ρg = @zeros(ni...), @zeros(ni...)
     index_field = reshape(1:prod(ni), ni)
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, η_target = η_target, index = index_field)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     flow_bcs = VelocityBoundaryConditions(;
@@ -108,10 +110,9 @@ function solKz_DYREL(;
     update_halo!(@velocity(stokes)...)
 
     !isnothing(figdir) && take(figdir)
-    # γfact = 200: at the γfact = 20 default the penalty is too weak for the pressure
-    # error to track APT's (resolution-persistent ~1e-4 floor); 200 matches APT's L2_p
-    # at ~5x the iteration cost
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-8, γfact = 200.0)
+    # default γfact = 3: γ_opt ≈ 10^0.575·Δη^0.3 (Duretz et al. 2026, GMD 19, 5343,
+    # Fig. 5d) gives γ ≈ 2.4e5 ≈ 3·mean(η) at Δη = 1e6 on the arithmetic mean of exp(B·y)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ, γfact)
 
     # Physical time loop
     t = 0.0
@@ -131,11 +132,12 @@ function solKz_DYREL(;
             kwargs = (;
                 verbose_PH = true,
                 verbose_DR = false,
-                iterMax = 150.0e3,
-                # must exceed the cumulative Powell-Hestenes budget: a γfact = 200 solve
-                # needs ~500k iterations at nx = 127 and more at finer resolution
-                total_iterMax = 200e3,
+                # budget ~5e3 iterations per grid point along x for the whole solve;
+                # the budget is shared, so one inner solve may legitimately use all of it
+                iterMax = 5.0e3 * nx,
+                total_iterMax = 5.0e3 * nx,
                 nout = 100,
+                rel_drop = 0.1,
                 linear_viscosity = true,
                 viscosity_cutoff = (-Inf, Inf),
             )
@@ -158,11 +160,15 @@ function solKz_DYREL(;
     return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), stokes, iters
 end
 
-function multiple_solKz_DYREL(; Δη = 1.0e6, km = 2, nrange::UnitRange = 4:10)
+# ϵ = 1e-7: the L2_p curve is only meaningful while the solver error sits below the
+# discretization error, which shrinks with resolution
+function multiple_solKz_DYREL(; Δη = 1.0e6, km = 2, nrange::UnitRange = 4:10, ϵ = 1.0e-7)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solKz_DYREL(; Δη = Δη, km = km, nx = nx, ny = ny, init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false)
+        geometry, stokes, iters = solKz_DYREL(; Δη = Δη, km = km, nx = nx, ny = ny, ϵ = ϵ, init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false)
+        # asserts only when the solver reports convergence status in its return
+        get(iters, :converged, true) || error("SolKz DYREL did not converge at nx = $nx — L2 errors would be meaningless")
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes; order = 1, Δη = Δη, km = km)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

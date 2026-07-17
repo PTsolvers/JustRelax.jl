@@ -32,7 +32,7 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Blankenbach_Rheology.jl")
@@ -196,9 +196,9 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     end
     # Time loop
     t, it = 0.0, 1
-    Urms = Float64[0]
-    Nu_top = Float64[0]
-    trms = Float64[0]
+    Urms = Float64[]
+    Nu_top = Float64[]
+    trms = Float64[]
 
     # Buffer arrays to compute velocity rms
     Vx_v = @zeros(ni .+ 1...)

@@ -49,7 +49,7 @@ function solKz_density(xci, ni, di; km = 2)
 end
 
 function solKz(;
-        Δη = 1.0e6, km = 2, nx = 256 - 1, ny = 256 - 1, lx = 1.0e0, ly = 1.0e0, init_MPI = true, finalize_MPI = false
+        Δη = 1.0e6, km = 2, nx = 256 - 1, ny = 256 - 1, lx = 1.0e0, ly = 1.0e0, init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false
     )
 
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
@@ -125,7 +125,7 @@ function multiple_solKz(; Δη = 1.0e6, km = 2, nrange::UnitRange = 4:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solKz(; Δη = Δη, km = km, nx = nx, ny = ny, init_MPI = false, finalize_MPI = false)
+        geometry, stokes, = solKz(; Δη = Δη, km = km, nx = nx, ny = ny, init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false)
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes; order = 1, Δη = Δη, km = km)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

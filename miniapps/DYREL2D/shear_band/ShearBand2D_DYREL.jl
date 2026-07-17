@@ -204,7 +204,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-nx = 128
+nx = 256
 ny = 128 * 2
 figdir = "ShearBands2D_DYREL"
 igg = if !(JustRelax.MPI.Initialized())

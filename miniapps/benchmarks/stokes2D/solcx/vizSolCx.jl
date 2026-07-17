@@ -3,20 +3,23 @@ using ExactFieldSolutions
 # reference solution: Stokes2D_SolCx_Zhong1996 (Zhong, 1996), matching the density/viscosity
 # fields used in solCx_density/solCx_viscosity (SolCx.jl): ρ = sin(π*y)*cos(π*x),
 # η = η_left for x≤0.5, η_right for x>0.5.
+#
+# solCx_density's ρ (no leading minus) has the opposite sign, at fixed g>0, from the
+# body force that makes Stokes2D_SolCx_Zhong1996's own (p, V) solve JustRelax's momentum
+# equation (Ry = ... - ρg). Since that equation is linear in the forcing, the whole
+# (p, V) pair flips sign together, not pressure alone: both must be negated here.
 @parallel_indices (i, j) function _solcx_p!(ps, xci, yci, params)
-    # Stokes2D_SolCx_Zhong1996 (adapted from Underworld) uses the opposite pressure
-    # sign convention from JustRelax; velocity is unaffected.
     ps[i, j] = -Stokes2D_SolCx_Zhong1996((xci[i], yci[j]); params).p
     return nothing
 end
 
 @parallel_indices (i, j) function _solcx_vx!(vxs, xvi, yci, params)
-    vxs[i, j] = Stokes2D_SolCx_Zhong1996((xvi[i], yci[j]); params).V.x
+    vxs[i, j] = -Stokes2D_SolCx_Zhong1996((xvi[i], yci[j]); params).V.x
     return nothing
 end
 
 @parallel_indices (i, j) function _solcx_vy!(vys, xci, yvi, params)
-    vys[i, j] = Stokes2D_SolCx_Zhong1996((xci[i], yvi[j]); params).V.y
+    vys[i, j] = -Stokes2D_SolCx_Zhong1996((xci[i], yvi[j]); params).V.y
     return nothing
 end
 

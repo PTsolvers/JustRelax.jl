@@ -145,10 +145,12 @@ function multiple_solVi_DYREL(; Δη = 1.0e-3, lx = 1.0e1, ly = 1.0e1, rc = 1.0e
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solVi_DYREL(;
+        geometry, stokes, iters = solVi_DYREL(;
             Δη = Δη, nx = nx, ny = ny, lx = lx, ly = ly, rc = rc, εbg = εbg,
             init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false,
         )
+        # asserts only when the solver reports convergence status in its return
+        get(iters, :converged, true) || error("SolVi DYREL did not converge at nx = $nx — L2 errors would be meaningless")
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, Δη, εbg, rc; order = 2)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

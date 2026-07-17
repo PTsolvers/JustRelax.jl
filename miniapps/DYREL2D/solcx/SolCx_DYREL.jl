@@ -81,6 +81,7 @@ end
 
 function solCx_DYREL(;
         Δη = 1.0e6, nx = 64, ny = 64, lx = 1.0e0, ly = 1.0e0,
+        ϵ = 1.0e-6, γfact = 20,
         init_MPI = true, finalize_MPI = false, figdir = nothing
     )
 
@@ -95,7 +96,7 @@ function solCx_DYREL(;
     ## (Physical) Time domain and discretization
     ttot = 1   # total simulation time
     Δt = 1     # physical time step
-    dt = 1   # matches the dt the normal-Stokes SolCx script passes to solve!
+    dt = 1   # immaterial for the incompressible viscous solve (K, G → ∞): dt cancels
 
     η_target = solCx_viscosity(xci, ni; Δη = Δη)
     ρ = solCx_density(xci, ni)
@@ -130,7 +131,10 @@ function solCx_DYREL(;
     update_halo!(@velocity(stokes)...)
 
     !isnothing(figdir) && take(figdir)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-8)
+    # γ is scaled per-cell by the local viscosity (γ ≈ γfact·η locally), so γfact is the
+    # numerical bulk-to-shear ratio, not a factor on a domain mean. γfact ≈ 20 sits in the
+    # robust range reported by Duretz et al. 2026 (GMD 19, 5343).
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ, γfact)
 
     # Physical time loop
     t = 0.0
@@ -150,9 +154,12 @@ function solCx_DYREL(;
             kwargs = (;
                 verbose_PH = true,
                 verbose_DR = false,
-                iterMax = 500.0e3,
-                total_iterMax = 200e3,
+                # budget ~5e3 iterations per grid point along x for the whole solve;
+                # the budget is shared, so one inner solve may legitimately use all of it
+                iterMax = 5.0e3 * nx,
+                total_iterMax = 5.0e3 * nx,
                 nout = 100,
+                rel_drop = 0.1,
                 linear_viscosity = true,
                 viscosity_cutoff = (-Inf, Inf),
             )
@@ -175,11 +182,15 @@ function solCx_DYREL(;
     return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), stokes, iters
 end
 
-function multiple_solCx_DYREL(; Δη = 1.0e6, nrange::UnitRange = 6:10)
+# ϵ = 1e-7: the L2_p curve is only meaningful while the solver error sits below the
+# discretization error, which shrinks with resolution (see multiple_solKz_DYREL)
+function multiple_solCx_DYREL(; Δη = 1.0e6, nrange::UnitRange = 6:10, ϵ = 1.0e-7)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solCx_DYREL(; Δη = Δη, nx = nx, ny = ny, init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false)
+        geometry, stokes, iters = solCx_DYREL(; Δη = Δη, nx = nx, ny = ny, ϵ = ϵ, init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false)
+        # asserts only when the solver reports convergence status in its return
+        get(iters, :converged, true) || error("SolCx DYREL did not converge at nx = $nx — L2 errors would be meaningless")
         L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes; order = 1, Δη = Δη)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

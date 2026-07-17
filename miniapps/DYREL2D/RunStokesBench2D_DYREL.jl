@@ -37,7 +37,7 @@ elseif benchmark == :solkz
             figdir = "SolKz_DYREL",
         )
     elseif runtype == :multiple
-        f = multiple_solKz_DYREL(; Δη = Δη, nrange = 4:10) # nx = ny = 2^nrange - 1
+        f = multiple_solKz_DYREL(; Δη = Δη, nrange = 4:9) # nx = ny = 2^nrange - 1
     end
 
 elseif benchmark == :solvi

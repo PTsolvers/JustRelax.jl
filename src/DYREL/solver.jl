@@ -74,6 +74,7 @@ function _solve_DYREL!(
     di = grid.di
     _di = grid._di
     di_center = di.center
+    lx = grid.max_li
     ni = size(stokes.P)
 
     residuals = @residuals(stokes.R)
@@ -98,9 +99,6 @@ function _solve_DYREL!(
     # Iteration loop
     err_min = Inf
     err = 1.0
-    errV0 = ntuple(_ -> 1.0, dim)
-    errPt0 = 1.0
-    errV00 = ntuple(_ -> 1.0, dim)
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
@@ -150,28 +148,29 @@ function _solve_DYREL!(
 
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
 
-        # Residual check
-        errV = ntuple(d -> norm_mpi(residuals[d][2:(end - 1), 2:(end - 1)]) / √(v_dofs[d]), dim)
-        errPt = norm_mpi(stokes.R.RP) / √(p_dof)
-        if isone(itPH)
-            errV0 = map(x -> x + eps(), errV)
-            errPt0 = errPt + eps()
-        end
-        if itPH == 2
-            errPt0 = errPt + eps()
-        end
-        errV_rel = ntuple(d -> min(errV[d] / errV0[d], errV[d]), dim)
-        err = maximum((errV_rel..., min(errPt / errPt0, errPt)))
+        # Residual check. Same normalization as the APT solver (solve!): momentum
+        # residuals measured against the pressure span, continuity against the velocity
+        # span, so ϵ means the same thing in both solvers, for every component, at every
+        # resolution. A zero span (cold start, V ≡ 0 or P ≡ 0) leaves the residual
+        # unnormalized — large, so the solve continues rather than exiting spuriously.
+        Vmin, Vmax = extrema(stokes.V.Vx)
+        Pmin, Pmax = extrema(stokes.P)
+        Pspan = Pmax == Pmin ? one(Pmax) : Pmax - Pmin
+        Vspan = Vmax == Vmin ? one(Vmax) : Vmax - Vmin
+        errV = ntuple(d -> norm_mpi(residuals[d][2:(end - 1), 2:(end - 1)]) / Pspan * lx / √(v_dofs[d]), dim)
+        errPt = norm_mpi(stokes.R.RP) / Vspan * lx / √(p_dof)
+        err = maximum((errV..., errPt))
 
         if verbose_PH && igg.me == 0
             errV_msg = join(
-                ntuple(d -> @sprintf("R%d=%1.3e %1.3e", d, errV[d], errV[d] / errV0[d]), dim),
+                ntuple(d -> @sprintf("R%d=%1.3e", d, errV[d]), dim),
                 ", ",
             )
-            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0)
+            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt)
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
-        igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
+        # skip on the first pass: the zero-span fallback legitimately gives a huge value there
+        igg.me == 0 && err > 1.0e10 && itPH > 1 && error("Kaboom! Error > 1e10 in outer loop")
         err < ϵ && break
 
         # Set tolerance of velocity solve proportional to residual
@@ -232,19 +231,16 @@ function _solve_DYREL!(
             # Residual check
             if iszero(iter % nout)
 
-                errV = ntuple(d -> norm_mpi(fields.D[d][2:(end - 1), 2:(end - 1)] .* residuals[d][2:(end - 1), 2:(end - 1)]) / √(v_dofs[d]), dim)
-
-                if iter == nout
-                    errV00 = errV
-                end
-
-                errV_ratio = ntuple(d -> min(errV[d] / errV00[d], errV[d]), dim)
-                err = maximum(errV_ratio)
+                # D·(stored residual) is the raw momentum residual; normalize it exactly
+                # like the outer check so ϵ_vel = err·rel_drop compares like with like.
+                # P is fixed within a pass, so the outer Pspan is still current here.
+                errV = ntuple(d -> norm_mpi(fields.D[d][2:(end - 1), 2:(end - 1)] .* residuals[d][2:(end - 1), 2:(end - 1)]) / Pspan * lx / √(v_dofs[d]), dim)
+                err = maximum(errV)
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
                 push!(err_evo_tot, err)
-                push!(err_evo_V, maximum(errV_ratio))
-                push!(err_evo_P, errPt / errPt0)
+                push!(err_evo_V, err)
+                push!(err_evo_P, errPt)
                 push!(err_evo_it, iter)
 
                 # @printf("it = %d, iter = %d, ϵ_vel = %1.3e, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", itPT, iter, ϵ_vel, err, errVx, errVy)

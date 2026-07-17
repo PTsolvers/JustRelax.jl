@@ -60,7 +60,7 @@ function solCx(
         ny = 64,
         lx = 1.0e0,
         ly = 1.0e0,
-        init_MPI = MPI.Initialized() ? false : true,
+        init_MPI = !JustRelax.MPI.Initialized(),
         finalize_MPI = false,
         b_width = (4, 4),
     )
@@ -154,7 +154,7 @@ function multiple_solCx(; Δη = 1.0e6, nrange::UnitRange = 6:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solCx(Δη; nx = nx, ny = ny, init_MPI = false, finalize_MPI = false)
+        geometry, stokes, = solCx(Δη; nx = nx, ny = ny, init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false)
         L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes; order = 1, Δη = Δη)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)

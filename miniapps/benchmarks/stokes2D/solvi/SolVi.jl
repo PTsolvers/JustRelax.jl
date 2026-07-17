@@ -43,7 +43,7 @@ function solVi(;
         ly = 2.0e0,
         rc = 0.2,
         εbg = 1.0e0,
-        init_MPI = true,
+        init_MPI = !JustRelax.MPI.Initialized(),
         finalize_MPI = false,
     )
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
@@ -128,7 +128,7 @@ function multiple_solVi(; Δη = 1.0e-3, lx = 1.0e1, ly = 1.0e1, rc = 1.0e0, εb
             ly = ly,
             rc = rc,
             εbg = εbg,
-            init_MPI = false,
+            init_MPI = !JustRelax.MPI.Initialized(),
             finalize_MPI = false,
         )
         L2_vxi, L2_vyi, L2_pi = Li_error(geometry, stokes, Δη, εbg, rc; order = 2)

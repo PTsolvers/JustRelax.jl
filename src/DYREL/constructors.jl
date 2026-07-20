@@ -218,8 +218,8 @@ Computes the bulk viscosity `ηb` and the effective penalty parameter `γ_eff`.
    - Otherwise `ηb = Kb * dt`.
 
 2. **Penalty Parameter (`γ_eff`)**: A combination of numerical (`γ_num`) and physical (`γ_phy`) penalty terms.
-   - `γ_num = γfact * η_mean`
-   - `γ_phy = Kb` (or related term)
+   - `γ_num = γfact * η` (local viscosity; falls back to `η_mean` where `η` is infinite)
+   - `γ_phy = Kb * dt` (or `γ_num` where `Kb` is infinite)
    - `γ_eff = (γ_phy * γ_num) / (γ_phy + γ_num)`
 
 # Arguments
@@ -246,11 +246,10 @@ end
     Kbdt = fn_ratio(get_bulk_modulus, rheology, ratios) * dt
     ηb[I...] = Kbdt
 
-    # Penalty scaled by the *local* viscosity, so the numerical bulk-to-shear ratio
-    # γ/η ≈ γfact is uniform across the domain. With per-cell pseudo-timesteps this keeps
-    # the low-viscosity regions of high-contrast problems from receiving a vanishing dτ,
-    # which a global-mean scaling would cause. As a penalty on ∇·V it does not alter the
-    # converged (v, P): γ·∇·V and P += γ·r_cont vanish as ∇·V → 0 for any positive γ.
+    # penalty parameter: scaled by the *local* viscosity so that γ_eff/η stays O(γfact)
+    # everywhere. A global mean-viscosity scaling over-penalizes the low-viscosity regions
+    # of high-contrast problems, which stiffens the velocity pseudo-transient solve there
+    # and stalls convergence of the last Powell-Hestenes steps.
     η_local = η[I...]
     γ_num = γfact * (isinf(η_local) ? η_mean : η_local)
     γ_phy = isinf(Kbdt) ? γ_num : Kbdt

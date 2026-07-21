@@ -308,6 +308,13 @@ function JR3D.compute_melt_fraction!(
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
+## Solubility
+function JR3D.compute_dissolved_volatiles!(
+        mH2O::CuArray, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    ) where {T}
+    return compute_dissolved_volatiles!(mH2O, mCO2, phase_ratios, rheology, args)
+end
+
 function JR3D.shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
     _shear2center!(A)
     return nothing

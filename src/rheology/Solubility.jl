@@ -2,7 +2,7 @@ import GeoParams: compute_dissolved!
 export compute_dissolved!
 
 """
-    compute_dissolved!(mH2O, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args)
+    compute_dissolved_volatiles!(mH2O, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args)
 
 Fill the dissolved H2O and CO2 mass-fraction arrays from the GeoParams
 solubility closures (`Liu2005_Solubility`, `Mafic_Solubility`). Mirrors
@@ -11,15 +11,15 @@ solubility closures (`Liu2005_Solubility`, `Mafic_Solubility`). Mirrors
 `T`, and the CO2 mole fraction of the gas `X_co2` (scalars or index-matched
 arrays).
 """
-function compute_dissolved!(mH2O, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args)
+function compute_dissolved_volatiles!(mH2O, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args)
     ni = size(mH2O)
-    @parallel (@idx ni) compute_dissolved_kernel!(
+    @parallel (@idx ni) compute_dissolved_volatiles_kernel!(
         mH2O, mCO2, phase_ratios.center, rheology, args
     )
     return nothing
 end
 
-@parallel_indices (I...) function compute_dissolved_kernel!(
+@parallel_indices (I...) function compute_dissolved_volatiles_kernel!(
         mH2O, mCO2, phase_ratios, rheology, args
     )
     args_ijk = getindex_NamedTuple(args, I...)

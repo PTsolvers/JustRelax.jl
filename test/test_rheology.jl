@@ -276,8 +276,8 @@ end
             pr = JustPIC._2D.PhaseRatios(backend_JP, 1, ni)
             JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...),), xci, xvi)
 
-            mH2O = zeros(ni...)
-            mCO2 = zeros(ni...)
+            mH2O = @zeros(ni...)
+            mCO2 = @zeros(ni...)
             compute_dissolved_volatiles!(mH2O, mCO2, pr, rheology, args)
 
             ref = compute_dissolved.(Ref(sol), P, T, X_co2)

@@ -1,6 +1,3 @@
-import GeoParams: compute_dissolved!
-export compute_dissolved_volatiles!
-
 """
     compute_dissolved_volatiles!(mH2O, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args)
 

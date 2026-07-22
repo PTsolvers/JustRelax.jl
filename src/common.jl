@@ -68,6 +68,7 @@ include("rheology/Melting.jl")
 export compute_melt_fraction!
 
 include("rheology/Solubility.jl")
+export compute_dissolved_volatiles!
 
 include("particles/subgrid_diffusion.jl")
 export subgrid_characteristic_time!

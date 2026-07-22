@@ -250,6 +250,42 @@ end
         @test all(ϕ .< 1.0e-6)
     end
 
+    @testset "Solubility.jl" begin
+        # src/rheology/Solubility.jl: compute_dissolved_volatiles! fills the H2O
+        # and CO2 arrays from the GeoParams solubility closures. Single-phase
+        # ratios collapse the kernel's phase-ratio mix to the closure per cell,
+        # so each output must match compute_dissolved evaluated at that cell.
+        nx, ny = 4, 4
+        ni = nx, ny
+        P = [1.0e8 * (i + j) for i in 1:nx, j in 1:ny]      # Pa
+        T = [1073.0 + 10i for i in 1:nx, _ in 1:ny]         # K
+        X_co2 = 0.3
+        args = (; P, T, X_co2)
+
+        xvi = (range(0.0, 1.0; length = nx + 1), range(0.0, 1.0; length = ny + 1))
+        xci = (range(0.125, 0.875; length = nx), range(0.125, 0.875; length = ny))
+
+        @testset "$(nameof(typeof(sol)))" for sol in (Liu2005_Solubility(), Mafic_Solubility())
+            rheology = (
+                GeoParams.SetMaterialParams(;
+                    Phase = 1,
+                    Density = GeoParams.ConstantDensity(; ρ = 2700.0),
+                    Solubility = sol,
+                ),
+            )
+            pr = JustPIC._2D.PhaseRatios(backend_JP, 1, ni)
+            JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...),), xci, xvi)
+
+            mH2O = zeros(ni...)
+            mCO2 = zeros(ni...)
+            compute_dissolved_volatiles!(mH2O, mCO2, pr, rheology, args)
+
+            ref = compute_dissolved.(Ref(sol), P, T, X_co2)
+            @test mH2O ≈ first.(ref)
+            @test mCO2 ≈ last.(ref)
+        end
+    end
+
     @testset "Viscosity helpers" begin
         # src/rheology/Viscosity.jl: small pure helpers.
 

@@ -317,10 +317,10 @@ function JR2D.compute_melt_fraction!(
 end
 
 ## Solubility
-function JR2D.compute_dissolved!(
+function JR2D.compute_dissolved_volatiles!(
         mH2O::ROCArray, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args
     )
-    return compute_dissolved!(mH2O, mCO2, phase_ratios, rheology, args)
+    return compute_dissolved_volatiles!(mH2O, mCO2, phase_ratios, rheology, args)
 end
 
 function JR2D.shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)

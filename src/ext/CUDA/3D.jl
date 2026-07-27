@@ -311,7 +311,7 @@ end
 ## Solubility
 function JR3D.compute_dissolved_volatiles!(
         mH2O::CuArray, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args
-    ) where {T}
+    )
     return compute_dissolved_volatiles!(mH2O, mCO2, phase_ratios, rheology, args)
 end
 

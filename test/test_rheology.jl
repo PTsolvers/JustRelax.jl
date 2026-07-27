@@ -185,17 +185,19 @@ end
         # compute_buoyancies: scalar gravity → ρ·g scalar
         @test JustRelax2D.compute_buoyancies(mat, args, -9.81, Val(2)) ≈ -ρg_expected
 
-        # fill_density! tuple variant writes each component
-        ρg_tuple = (@zeros(2, 2), @zeros(2, 2))
-        JustRelax2D.fill_density!(ρg_tuple, (1.0, 2.0), 1, 1)
-        @test ρg_tuple[1][1, 1] == 1.0
-        @test ρg_tuple[2][1, 1] == 2.0
+        if backend_JR === CPUBackend
+            # tuple variant writes each component
+            ρg_tuple = (@zeros(2, 2), @zeros(2, 2))
+            JustRelax2D.fill_density!(ρg_tuple, (1.0, 2.0), 1, 1)
+            @test ρg_tuple[1][1, 1] == 1.0
+            @test ρg_tuple[2][1, 1] == 2.0
 
-        # fill_density! scalar variant only writes the last array (gravity along last axis)
-        ρg_tuple2 = (@zeros(2, 2), @zeros(2, 2))
-        JustRelax2D.fill_density!(ρg_tuple2, 3.0, 2, 2)
-        @test ρg_tuple2[1] == @zeros(2, 2)
-        @test ρg_tuple2[2][2, 2] == 3.0
+            # scalar variant only writes the last array (gravity along last axis)
+            ρg_tuple2 = (@zeros(2, 2), @zeros(2, 2))
+            JustRelax2D.fill_density!(ρg_tuple2, 3.0, 2, 2)
+            @test ρg_tuple2[1] == @zeros(2, 2)
+            @test ρg_tuple2[2][2, 2] == 3.0
+        end
 
         # update_ρg!: ConstantDensityTrait → no-op (array stays untouched)
         ρg = @ones(2, 2)

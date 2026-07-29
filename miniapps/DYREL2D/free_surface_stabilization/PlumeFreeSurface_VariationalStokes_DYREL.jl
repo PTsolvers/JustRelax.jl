@@ -128,7 +128,7 @@ function main(igg, nx, ny)
     # ----------------------------------------------------
 
     # finite viscosity cutoff (keeps the extreme air/rock contrast bounded)
-    viscosity_cutoff = (1.0e16, 1.0e24)
+    viscosity_cutoff = (-Inf, Inf)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 15
@@ -188,7 +188,7 @@ function main(igg, nx, ny)
 
     # DYREL (self-tuned dynamic relaxation) solver state -
     dt = 10.0e3 * (3600 * 24 * 365.25)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6, γfact = 50)
 
     # Time loop
     t, it = 0.0, 0

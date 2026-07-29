@@ -34,6 +34,7 @@ end
 
 # Load script dependencies
 using GeoParams
+using Random
 using CairoMakie
 
 # Velocity helper grids for the particle advection
@@ -141,6 +142,7 @@ function main(igg, nx, ny)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 125, 175, 75
+    Random.seed!(1234)
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )

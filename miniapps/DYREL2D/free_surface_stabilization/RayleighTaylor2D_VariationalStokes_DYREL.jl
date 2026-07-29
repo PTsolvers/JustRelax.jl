@@ -35,6 +35,7 @@ end
 # Load script dependencies
 using GeoParams
 using CairoMakie
+using Random
 
 # Velocity helper grids for the particle advection
 function copyinn_x!(A, B)
@@ -88,18 +89,9 @@ function init_phases!(phases, particles, A)
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
-# (Path)/folder where output data and figures are stored
-n = 64
-nx = n
-ny = n
-igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-else
-    igg
-end
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(igg, nx, ny)
+function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL_VS")
 
     # Physical domain ------------------------------------
     thick_air = 100.0e3             # thickness of sticky air layer
@@ -140,6 +132,8 @@ function main(igg, nx, ny)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
+    # particles are seeded with bare rand(); fix the seed so runs are comparable
+    Random.seed!(1234)
     nxcell, max_xcell, min_xcell = 125, 175, 75
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
@@ -194,7 +188,6 @@ function main(igg, nx, ny)
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    figdir = "RayleighTaylor2D_DYREL_VS"
     take(figdir)
 
     # Time loop
@@ -202,7 +195,7 @@ function main(igg, nx, ny)
     dt = 25.0e3 * (3600 * 24 * 365.25)
     dt_max = 50.0e3 * (3600 * 24 * 365.25)
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6, γfact = 100)
 
     while it < 1000 #00
 
@@ -283,4 +276,13 @@ function main(igg, nx, ny)
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-main(igg, nx, ny)
+# (Path)/folder where output data and figures are stored
+n = 64
+nx = n
+ny = n
+igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
+end
+main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL_VS")

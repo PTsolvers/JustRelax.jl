@@ -777,7 +777,11 @@ function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
     if iszero(air_phase)
         return ratio
     elseif ratio[air_phase] ≈ 1
-        return zeros(SVector{N, T})
+        # No rock phase in the local sample: return the raw, air-inclusive ratio. An all-zero
+        # ratio would make `compute_phase_viscosity`'s harmonic mean +Inf, and this branch is
+        # reachable at nodes a variational RockRatio still marks valid — ϕ and the
+        # particle-sampled ratio are independent discretizations and disagree at the surface.
+        return ratio
     else
         mask = ntuple(i -> (i !== air_phase), Val(N))
         # set air phase ratio to zero

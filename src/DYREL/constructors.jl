@@ -114,6 +114,10 @@ function DYREL(::Type{CPUBackend}, stokes::JustRelax.StokesArrays, rheology, pha
     return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 end
 
+function DYREL(::Type{CPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, ϕ, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
 
 """
     DYREL(stokes, rheology, phase_ratios, di, dt; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0)
@@ -136,19 +140,36 @@ This function:
 """
 function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
 
-    ni = size(stokes.P)
+    dyrel = DYREL(size(stokes.P); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt; CFL = CFL, γfact = γfact)
 
-    # instantiate DYREL object
-    dyrel = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+    return dyrel
+end
 
-    # compute bulk viscosity and penalty parameter
-    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
-    # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+"""
+    DYREL(stokes, rheology, phase_ratios, ϕ, di, dt; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0)
 
-    # compute damping coefficients
-    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+Variational counterpart of [`DYREL`](@ref), for solves masked by the `RockRatio` `ϕ`.
+
+`γ_eff`, `ηb` and the Gershgorin bounds are built with the same ϕ masking the variational
+solver applies each time step, so the object a solve starts from is consistent with the one
+`DYREL!` maintains thereafter. Constructing without `ϕ` and then solving variationally leaves
+the first solve reading an unmasked, locally-scaled `γ_eff`.
+
+# Arguments
+- `stokes`: `JustRelax.StokesArrays` struct.
+- `rheology`: Material properties.
+- `phase_ratios`: Phase fraction information.
+- `ϕ`: `JustRelax.RockRatio` marking the valid (rock) degrees of freedom.
+- `di`: Grid spacing tuple.
+- `dt`: Time step.
+- `γfact`: Factor for penalty parameter calculation (default: 20.0).
+"""
+function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+
+    dyrel = DYREL(size(stokes.P); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, di, dt; CFL = CFL, γfact = γfact)
 
     return dyrel
 end
@@ -180,12 +201,12 @@ below.
 
 Returns `nothing`.
 """
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = dyrel.CFL, γfact = dyrel.γfact)
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt, ρg_v = nothing; CFL = dyrel.CFL, γfact = dyrel.γfact)
     # compute bulk viscosity and penalty parameter
-    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
+    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt, di.center, ρg_v)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt, ρg_v)
 
     # compute damping coefficients
     update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
@@ -194,12 +215,12 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
 end
 
 # variational version
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL = dyrel.CFL, γfact = dyrel.γfact)
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt, ρg_v = nothing; CFL = dyrel.CFL, γfact = dyrel.γfact)
     # compute bulk viscosity and penalty parameter
-    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
+    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt, di.center, ρg_v)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners (ϕ-aware)
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, ϕ, rheology, di, dt)
+    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, ϕ, rheology, di, dt, ρg_v)
 
     # compute damping coefficients
     update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
@@ -207,53 +228,83 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
     return nothing
 end
 
+# Mean over the non-infinite entries, without materializing the mask or the selection. A NaN
+# entry still propagates to the result, as it must.
+@inline function noninf_mean(A)
+    n = count(!isinf, A)
+    s = sum(x -> isinf(x) ? zero(x) : x, A)
+    return s / n
+end
+
+# Local viscosity, so that γ_eff/η stays O(γfact) everywhere: a domain-mean scaling
+# over-penalizes the soft cells (dynamic-relaxation cost grows with γ/η) and under-penalizes
+# the stiff ones (Powell-Hestenes residual drops by η/(γ+η) per pass). Mean is the fallback
+# where the local viscosity is infinite.
+@inline penalty_viscosity(η_local, η_mean) = isinf(η_local) ? η_mean : η_local
+
+# Lower bound on γ_eff imposed by the free-surface stabilization term: `|Δ(ρg)|·dt·dy/2` is
+# the break-even at which the vertical-momentum row is viscous- rather than buoyancy-dominated
+# (its FSSA diagonal is S = |∂(ρg)/∂y|·dt against a preconditioner diagonal ≈ (2γ_eff +
+# 8/3·η)/dy²; where S ≫ D the surface row decouples and relaxes far slower than the bulk).
+# Δ(ρg) spans both vertical faces so the rows on either side of a density jump are covered.
+# Returns a Bool `false` (numeric zero) when no buoyancy field is supplied, so the FSSA-off
+# path is byte-identical.
+@inline fssa_penalty_floor(::Nothing, di_center, dt, I::Vararg{Integer, N}) where {N} = false
+
+Base.@propagate_inbounds @inline function fssa_penalty_floor(ρg_v, di_center, dt, i, j)
+    ρg_c = ρg_v[i, j]
+    Δρg = max(
+        abs(ρg_v[i, min(j + 1, size(ρg_v, 2))] - ρg_c),
+        abs(ρg_c - ρg_v[i, max(j - 1, 1)]),
+    )
+    return Δρg * dt * @dy(di_center, j) / 2
+end
 
 """
-    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
+    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt, di_center=nothing, ρg_v=nothing)
 
 Computes the bulk viscosity `ηb` and the effective penalty parameter `γ_eff`.
 
-1. **Bulk Viscosity (`ηb`)**: Computed based on the bulk modulus of the material phases.
-   - If `Kb` is infinite (incompressible), `ηb` defaults to `γfact * η_mean`.
-   - Otherwise `ηb = Kb * dt`.
+1. **Bulk Viscosity (`ηb`)**: `ηb = Kb * dt`, infinite for an incompressible phase.
 
-2. **Penalty Parameter (`γ_eff`)**: A combination of numerical (`γ_num`) and physical (`γ_phy`) penalty terms.
+2. **Penalty Parameter (`γ_eff`)**: harmonic combination of a numerical (`γ_num`) and a
+   physical (`γ_phy`) penalty term.
    - `γ_num = γfact * η` (local viscosity; falls back to `η_mean` where `η` is infinite)
-   - `γ_phy = Kb * dt` (or `γ_num` where `Kb` is infinite)
-   - `γ_eff = (γ_phy * γ_num) / (γ_phy + γ_num)`
+   - `γ_phy = Kb * dt` (or `γ_num` where `Kb` is infinite, giving `γ_eff = γ_num / 2`)
+   - `γ_eff = (γ_phy * γ_num) / (γ_phy + γ_num)`, floored at `fssa_penalty_floor` when a
+     vertical buoyancy field is supplied.
 
 # Arguments
 - `dyrel`: `JustRelax.DYREL` struct to update.
 - `stokes`: `JustRelax.StokesArrays`.
 - `rheology`: Material properties.
 - `phase_ratios`: Phase fraction information.
-- `γfact`: Numerical factor for penalty parameter (default: 20.0).
+- `γfact`: Numerical factor for penalty parameter.
 - `dt`: Time step.
+- `di_center`: Cell-center grid spacing; required for the free-surface floor.
+- `ρg_v`: Vertical buoyancy `ρg`; `nothing` disables the free-surface floor.
 
 This function parallelizes the computation across grid cells.
 """
-function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
+function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt, di_center = nothing, ρg_v = nothing)
     ni = size(stokes.P)
-    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, stokes.viscosity.η, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
+    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, stokes.viscosity.η, noninf_mean(stokes.viscosity.η), γfact, dt, di_center, ρg_v)
     return nothing
 end
 
 
-@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η, η_mean, γfact, dt)
+@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η, η_mean, γfact, dt, di_center, ρg_v)
 
     # bulk viscosity
     ratios = @inbounds @cell phase_ratios_center[I...]
     Kbdt = fn_ratio(get_bulk_modulus, rheology, ratios) * dt
     ηb[I...] = Kbdt
 
-    # penalty parameter: scaled by the *local* viscosity so that γ_eff/η stays O(γfact)
-    # everywhere. A global mean-viscosity scaling over-penalizes the low-viscosity regions
-    # of high-contrast problems, which stiffens the velocity pseudo-transient solve there
-    # and stalls convergence of the last Powell-Hestenes steps.
-    η_local = η[I...]
-    γ_num = γfact * (isinf(η_local) ? η_mean : η_local)
+    γ_num = γfact * penalty_viscosity(η[I...], η_mean)
     γ_phy = isinf(Kbdt) ? γ_num : Kbdt
-    γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num)
+    # Local scaling alone leaves γ_eff set by the (soft) air viscosity at a sticky-air free
+    # surface, far below the FSSA diagonal; floor it so the two stay commensurate.
+    γ_eff[I...] = max(γ_phy * γ_num / (γ_phy + γ_num), fssa_penalty_floor(ρg_v, di_center, dt, I...))
 
     return nothing
 end
@@ -261,24 +312,39 @@ end
 
 # variational version
 
-function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
+"""
+    compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt, di_center=nothing, ρg_v=nothing)
+
+Variational counterpart of the method above, masked by the rock ratio `ϕ`.
+
+`ηb` and `γ_eff` are computed as in the unmasked method and then weighted by `ϕ.center`, so
+partially filled cells carry a proportionally smaller penalty; cells that fail `isvalid_c` get
+`ηb = γ_eff = 0`. A non-positive or `NaN` bulk modulus is treated as the incompressible limit,
+keeping both quantities finite.
+"""
+function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, γfact, dt, di_center = nothing, ρg_v = nothing)
     ni = size(stokes.P)
-    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, ϕ, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
+    η_mean = noninf_mean(stokes.viscosity.η)
+    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, ϕ, stokes.viscosity.η, η_mean, γfact, dt, di_center, ρg_v)
     return nothing
 end
 
-@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, ϕ::JustRelax.RockRatio, η_mean, γfact, dt)
+@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, ϕ::JustRelax.RockRatio, η, η_mean, γfact, dt, di_center, ρg_v)
 
     if isvalid_c(ϕ, I...)
-        # bulk viscosity
+        # bulk viscosity; a non-positive or NaN bulk modulus falls back to the incompressible
+        # limit so ηb/γ_eff stay finite (as `ϕ_weighted_harmonic` does in Gershgorin.jl).
         ratios = @cell phase_ratios_center[I...]
         Kbdt = fn_ratio(get_bulk_modulus, rheology, ratios) * dt
+        Kbdt = Kbdt > 0 ? Kbdt : oftype(Kbdt, Inf)
         ηb[I...] = Kbdt * ϕ.center[I...]
 
-        # penalty parameter factor
-        γ_num = γfact * η_mean
+        # penalty parameter; the floor is taken before the ϕ weighting, which then applies to
+        # the floored value, leaving masking unchanged.
+        γ_num = γfact * penalty_viscosity(η[I...], η_mean)
         γ_phy = isinf(Kbdt) ? γ_num : Kbdt
-        γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num) * ϕ.center[I...]
+        γ_unmasked = max(γ_phy * γ_num / (γ_phy + γ_num), fssa_penalty_floor(ρg_v, di_center, dt, I...))
+        γ_eff[I...] = γ_unmasked * ϕ.center[I...]
     else
         ηb[I...] = 0.0e0
         γ_eff[I...] = 0.0e0

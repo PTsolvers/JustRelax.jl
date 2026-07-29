@@ -5,7 +5,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-using Test, Suppressor
+using Test
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
@@ -189,5 +189,158 @@ end
         @test all(isfinite, Array(stokes.R.Rx))
         @test Array(stokes.V.Vx) == Array(Vx_before)
         @test Array(stokes.V.Vy) == Array(Vy_before)
+    end
+
+    @testset "masked stencil ϕ=0 guard" begin
+        # A fully-masked neighbor (ϕ == 0) must contribute exactly 0 even when its stored value is
+        # non-finite — air cells hold τ = Inf under an unbounded viscosity cutoff — so `Inf * 0 =
+        # NaN` cannot leak into a valid cell's residual stencil. A non-masked neighbor (ϕ != 0)
+        # still propagates a non-finite value, preserving fail-fast for genuine interior NaNs.
+        A = fill(Inf, 3, 3)
+        ϕ0 = zeros(3, 3)
+        ϕ1 = ones(3, 3)
+        for f in (JR2K.center, JR2K.front, JR2K.right, JR2K.next)
+            @test f(A, ϕ0, 1, 1) == 0.0
+            @test !isfinite(f(A, ϕ1, 1, 1))
+        end
+        # a partially-valid neighbor (ϕ != 0) at a non-finite cell must NOT be silenced
+        Ap = ones(3, 3); Ap[1, 1] = Inf
+        @test !isfinite(JR2K.center(Ap, fill(0.5, 3, 3), 1, 1))
+    end
+
+    # ------------------------------------------------------------------ #
+    # FSSA (free-surface stabilization) helpers added to the DYREL
+    # preconditioner/penalty pipeline (Gershgorin.jl, constructors.jl,
+    # solver.jl, velocity_kernels_VS.jl).
+    # ------------------------------------------------------------------ #
+    @testset "fssa_diagonal_y" begin
+        ρgy = reshape(collect(1.0:12.0), 3, 4)  # nx=3, ny=4
+        _dy = 2.0
+        dt = 0.5
+        i, j = 2, 2
+
+        # no buoyancy field ⇒ exact zero, independent of everything else
+        @test JR2K.fssa_diagonal_y(nothing, i, j, _dy, dt) == false
+
+        # last row: no north neighbour ⇒ exact zero
+        @test JR2K.fssa_diagonal_y(ρgy, i, size(ρgy, 2), _dy, dt) == 0.0
+
+        # interior, unmasked: matches the plain finite difference
+        expected = JR2K._d_ya(ρgy, _dy, i, j) * dt
+        @test JR2K.fssa_diagonal_y(ρgy, i, j, _dy, dt) ≈ expected
+
+        # interior, ϕ-masked: matches the masked finite difference through ϕ.center
+        ϕ = JR2K.RockRatio(backend_JR, (3, 4))
+        ϕ.center .= reshape(collect(0.1:0.1:1.2), 3, 4)
+        expected_ϕ = JR2K._d_ya(ρgy, ϕ.center, _dy, i, j) * dt
+        @test JR2K.fssa_diagonal_y(ρgy, i, j, _dy, dt, ϕ) ≈ expected_ϕ
+    end
+
+    @testset "set_preconditioner!" begin
+        D = zeros(2, 2)
+        λmax = zeros(2, 2)
+
+        JR2K.set_preconditioner!(D, λmax, 4.0, 8.0, 1, 1)
+        @test D[1, 1] == 4.0
+        @test λmax[1, 1] == 2.0  # inv(4.0) * 8.0
+
+        # non-positive diagonal (degenerate mask-boundary cell) falls back to 1/1,
+        # matching the pre-existing invalid-cell branch
+        JR2K.set_preconditioner!(D, λmax, -1.0, 8.0, 2, 1)
+        @test D[2, 1] == 1.0 && λmax[2, 1] == 1.0
+        JR2K.set_preconditioner!(D, λmax, 0.0, 8.0, 1, 2)
+        @test D[1, 2] == 1.0 && λmax[1, 2] == 1.0
+    end
+
+    @testset "ϕ_weighted_harmonic" begin
+        # G·dt > 0: viscoelastic harmonic combine, as before the fix
+        @test JR2K.ϕ_weighted_harmonic(1.0, 2.0, 4.0, 0.5) ≈ 1.0
+
+        # ϕ == 0 ⇒ exact zero regardless of η, G, dt
+        @test JR2K.ϕ_weighted_harmonic(0.0, 2.0, 4.0, 0.5) == 0.0
+
+        # G == Inf (no elasticity) ⇒ same elastic-free combine ϕ·η as before the fix
+        @test JR2K.ϕ_weighted_harmonic(1.0, 2.0, Inf, 0.5) ≈ 2.0
+
+        # G == 0 or NaN (degenerate modulus): falls back to ϕ·η instead of a naive
+        # inv(G*dt) poisoning the row with Inf/NaN
+        @test JR2K.ϕ_weighted_harmonic(1.0, 2.0, 0.0, 0.5) ≈ 2.0
+        @test JR2K.ϕ_weighted_harmonic(1.0, 2.0, NaN, 0.5) ≈ 2.0
+    end
+
+    @testset "noninf_mean" begin
+        @test JR2K.noninf_mean([1.0, 2.0, Inf, 3.0]) ≈ 2.0
+        @test isnan(JR2K.noninf_mean([1.0, NaN, 3.0]))  # NaN must propagate, not be filtered
+    end
+
+    @testset "fssa_penalty_floor" begin
+        di_center = (0.1, 0.2)
+        dt = 0.5
+        ρg_v = reshape(collect(1.0:12.0), 3, 4)  # constant column-to-column step of 3
+
+        @test JR2K.fssa_penalty_floor(nothing, di_center, dt, 2, 2) == false
+
+        for j in 1:4
+            @test JR2K.fssa_penalty_floor(ρg_v, di_center, dt, 2, j) ≈ 3.0 * dt * di_center[2] / 2
+        end
+    end
+
+    @testset "value_span / nonzero_span / masked_value_span" begin
+        @test JR2K.value_span([1.0, 5.0, 3.0]) == 4.0
+        @test JR2K.value_span([2.0, 2.0]) == 0.0
+        @test JR2K.nonzero_span(0.0) == 1.0
+        @test JR2K.nonzero_span(4.0) == 4.0
+
+        mask = [true, false, true, true]
+        A = [1.0, 100.0, 5.0, 2.0]
+        @test JR2K.masked_value_span(mask, A) == 4.0  # span over {1.0, 5.0, 2.0}
+        @test JR2K.masked_value_span([false, false], [1.0, 2.0]) == 0.0  # empty mask ⇒ 0
+    end
+
+    @testset "zero_nonfinite_ρg!" begin
+        ρgy = [1.0 Inf NaN; -2.0 0.0 3.0]
+        @parallel (@idx size(ρgy)) JR2K.zero_nonfinite_ρg!(ρgy)
+        @test ρgy == [1.0 0.0 0.0; -2.0 0.0 3.0]
+    end
+
+    @testset "compute_bulk_viscosity_and_penalty! FSSA floor" begin
+        nx, ny = 4, 4
+        ni = nx, ny
+        li = 1.0, 1.0
+        grid = Geometry(ni, li; origin = (0.0, 0.0))
+        di = grid.di
+        dt = 1.0
+
+        el = ConstantElasticity(; G = 1.0, Kb = 5.0)
+        rheology = (
+            SetMaterialParams(;
+                Phase = 1,
+                Density = ConstantDensity(; ρ = 1.0),
+                Gravity = ConstantGravity(; g = 1.0),
+                CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0), el)),
+                Elasticity = el,
+            ),
+        )
+        phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+        @parallel (@idx ni) _init_single_phase!(phase_ratios.center)
+        @parallel (@idx ni .+ 1) _init_single_phase!(phase_ratios.vertex)
+
+        stokes = StokesArrays(backend_JR, ni)
+        args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
+        compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+
+        # baseline: no buoyancy field ⇒ physical γ_eff only (existing behavior)
+        dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, di, dt)
+        γ_baseline = copy(Array(dyrel.γ_eff))
+
+        # flat buoyancy ⇒ zero floor ⇒ γ_eff unchanged from the physical value
+        flat_ρg = fill(5.0, ni...)
+        JR2K.compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, dyrel.γfact, dt, di.center, flat_ρg)
+        @test Array(dyrel.γ_eff) ≈ γ_baseline
+
+        # steep buoyancy gradient ⇒ the FSSA floor exceeds the physical value everywhere
+        steep_ρg = [100.0 * j for i in 1:nx, j in 1:ny]
+        JR2K.compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, dyrel.γfact, dt, di.center, steep_ρg)
+        @test all(Array(dyrel.γ_eff) .> γ_baseline)
     end
 end

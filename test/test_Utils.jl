@@ -16,6 +16,7 @@ import JustRelax.JustRelax2D:
     mean_mpi,
     sum_mpi,
     norm_mpi,
+    masked_norm_mpi,
     minimum_mpi,
     maximum_mpi
 
@@ -171,6 +172,24 @@ end
         @test norm_mpi(stokes.viscosity.η) === 4.0
         @test minimum_mpi(stokes.viscosity.η) === 1.0
         @test maximum_mpi(stokes.viscosity.η) === 1.0
+
+        @testset "norm_mpi(A,B) / masked_norm_mpi / sum_mpi(f, ...)" begin
+            A = fill(2.0, nx, ny)
+            B = fill(3.0, nx, ny)
+            @test norm_mpi(A, B) ≈ sqrt(sum(abs2, A .* B))
+
+            mask = trues(nx, ny)
+            @test masked_norm_mpi(mask, A) ≈ norm_mpi(A)
+            @test masked_norm_mpi(mask, A, B) ≈ norm_mpi(A, B)
+
+            # excluding one entry drops exactly its contribution
+            mask[1, 1] = false
+            @test masked_norm_mpi(mask, A) ≈ sqrt(sum(abs2, A) - abs2(A[1, 1]))
+            @test masked_norm_mpi(mask, A, B) ≈ sqrt(sum(abs2, A .* B) - abs2(A[1, 1] * B[1, 1]))
+
+            @test sum_mpi((a, b) -> a * b, A, B) ≈ sum(A .* B)
+            @test sum_mpi(abs2, A) ≈ sum(abs2, A)
+        end
 
         # 3D case
         ni = nx, ny, nz

@@ -112,7 +112,7 @@ function solVi_DYREL(;
             verbose_PH = true,
             verbose_DR = false,
             iterMax = 100.0e3,
-            total_iterMax = 200e3,
+            total_iterMax = 200.0e3,
             nout = 100,
             linear_viscosity = true,
             viscosity_cutoff = (-Inf, Inf),

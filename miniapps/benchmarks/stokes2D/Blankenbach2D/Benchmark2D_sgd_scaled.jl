@@ -176,7 +176,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-        # Stokes solver ----------------
+    # Stokes solver ----------------
     solve!(
         stokes,
         pt_stokes,

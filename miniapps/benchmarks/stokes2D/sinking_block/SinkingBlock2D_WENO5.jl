@@ -1,4 +1,4 @@
-const isCUDA = true
+const isCUDA = false
 
 @static if isCUDA
     using CUDA
@@ -153,8 +153,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     # update_phase_ratios!(phase_ratios, particles, pPhases)
 
     phases = @zeros(ni...)
-    # phases = Float64.([argmax(p) for p in Array(phase_ratios.center)])
-    weno = WENO5(backend_JR, Val(2), ni) # ni.+1 for Temp
+    weno = WENO5(backend_JR, Val(2), ni)
     init_phases!(phases, xc_anomaly, abs(yc_anomaly), r_anomaly, xci[1], xci[2])
 
     phases_blob = @zeros(ni...) # for plotting purposes
@@ -190,6 +189,9 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
+    Vx_c = @zeros(ni...)
+    Vy_c = @zeros(ni...)
+
     it = 0 # iteration counter
     while it < 50
         # Stokes solver ----------------
@@ -215,18 +217,13 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         dt = compute_dt(stokes, di, igg)
         # ------------------------------
 
-        Vx_c = @zeros(ni...)
-        Vy_c = @zeros(ni...)
         velocity2center!(Vx_c, Vy_c, @velocity(stokes)...)
-        velocity = @. √(Vx_v^2 + Vy_v^2)
+        velocity = @. √(Vx_c^2 + Vy_c^2)
 
         # Advection ---------------------
-        WENO_advection!(phases, (Vx_c, Vy_c), weno_c, di, dt)
-        WENO_advection!(phases_blob, (Vx_c, Vy_c), weno_c, di, dt)
         WENO_advection!(phases, (Vx_c, Vy_c), weno, di, dt)
         WENO_advection!(phases_blob, (Vx_c, Vy_c), weno, di, dt)
         WENO_advection!(phases_bg, (Vx_c, Vy_c), weno, di, dt)
-
         # update phase ratios
         update_phase_ratios_2D!(phase_ratios, (phases_bg, phases_blob), xci, xvi)
 
@@ -245,7 +242,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         pp_Vx = [argmax(p) for p in Array(phase_ratios.Vx)]
         pp_Vy = [argmax(p) for p in Array(phase_ratios.Vy)]
 
-        h1 = heatmap!(ax1, (xvi ./ 1.0e3)..., Array(velocity), colormap = :vikO)
+        h1 = heatmap!(ax1, (xci ./ 1.0e3)..., Array(velocity), colormap = :vikO)
         Colorbar(fig[1, 2], h1)
 
         h2 = heatmap!(ax2, (xci ./ 1.0e3)..., Array(pp_c); colormap = :roma)

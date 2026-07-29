@@ -153,7 +153,7 @@ function main(igg, nx, ny)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
     @parallel init_P!(stokes.P, ρg[2], xci[2])
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase = air_phase)
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
@@ -204,6 +204,7 @@ function main(igg, nx, ny)
                 viscosity_relaxation = 1.0e-2,
                 nout = 2.0e3,
                 viscosity_cutoff = (-Inf, Inf),
+                air_phase = air_phase,
             )
         )
         dt = compute_dt(stokes, di, dt_max)

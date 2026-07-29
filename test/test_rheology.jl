@@ -258,8 +258,10 @@ end
         r = SA[0.6, 0.4]
         @test JustRelax2D.correct_phase_ratio(0, r) === r
 
-        # 2) ratio[air_phase] ≈ 1 → all-air → zeros
-        @test JustRelax2D.correct_phase_ratio(1, SA[1.0, 0.0]) == SA[0.0, 0.0]
+        # 2) ratio[air_phase] ≈ 1 → all-air → passthrough (not zeros: a harmonic mean over an
+        # all-zero ratio is +Inf, which can be read downstream at RockRatio-valid free-surface
+        # nodes where the particle-sampled ratio disagrees with ϕ)
+        @test JustRelax2D.correct_phase_ratio(1, SA[1.0, 0.0]) == SA[1.0, 0.0]
 
         # 3) general case → mask air slot and renormalize the rest
         # input [0.6, 0.4] with air=2 → mask → [0.6, 0.0] → renorm → [1.0, 0.0]

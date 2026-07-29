@@ -210,7 +210,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, figdir = "figs2D", data_dir = "Bl
 
     # snapshot times (temperature-field checkpoints), consumed in order as t crosses each target
     seconds_per_Myr = 1.0e6 * 365.25 * 24 * 60 * 60
-    tmax = 6000e6 * (365.25 * 24 * 60 * 60)
+    tmax = 4500.0e6 * (365.25 * 24 * 60 * 60)
     snapshot_targets = sort(collect(snapshot_fracs) .* tmax)
 
     solve_DYREL!(
@@ -466,7 +466,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, figdir = "figs2D", data_dir = "Bl
         fig
     end
 
-    @show Urms[Int64(it-1)] Nu_top[Int64(it-1)]
+    @show Urms[Int64(it - 1)] Nu_top[Int64(it - 1)]
 
     # Final checkpoint: Urms/Nu_top/trms time series and the final T/η fields (every resolution)
     checkpointing_jld2(

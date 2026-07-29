@@ -39,6 +39,7 @@ Adapt = "4"
 CUDA = "5, 6"
 CellArrays = "0.3.2"
 Crayons = "4.1.1"
+ExactFieldSolutions = "0.2.0"
 GeoParams = "0.7.17"
 GeophysicalModelGenerator = "0.7"
 HDF5 = "0.17.1"
@@ -60,6 +61,7 @@ WriteVTK = "1.21"
 julia = "1.9, 1.10, 1.11, 1.12"
 
 [extras]
+ExactFieldSolutions = "2a6b1ac7-2de5-4354-bffb-bf009f6a4bef"
 GeophysicalModelGenerator = "3700c31b-fa53-48a6-808a-ef22d5a84742"
 ParallelTestRunner = "d3525ed8-44d0-4b2c-a655-542cee43accc"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
@@ -68,4 +70,4 @@ Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["GeophysicalModelGenerator", "ParallelTestRunner", "Pkg", "SpecialFunctions", "Suppressor", "Test"]
+test = ["ExactFieldSolutions", "GeophysicalModelGenerator", "ParallelTestRunner", "Pkg", "SpecialFunctions", "Suppressor", "Test"]

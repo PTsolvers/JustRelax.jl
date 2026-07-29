@@ -3,6 +3,20 @@
 # Masked (RockRatio ϕ) counterparts of the fused DYREL kernels in velocity_kernels.jl, used by the
 # variational `_solve_DYREL!` (solver_VS.jl). 2D only — the variational DYREL path is 2D-only.
 
+# `compute_ρg!` derives buoyancy from the particle phase ratios without the
+# `correct_phase_ratio` guard the viscosity path applies, so a degenerate sample at the free
+# surface leaves ρg non-finite at cells the marker-chain ϕ still marks partially valid. The
+# ϕ-masked stencils pass partial cells through as `ρg * ϕ`, so that NaN reaches the momentum
+# residual and, through the velocity, particle advection: ρg must be finite here. Zero is safe
+# because these cells are ϕ-weighted and nearly air; extrapolating the neighbouring valid
+# buoyancy would be more accurate.
+@parallel_indices (i, j) function zero_nonfinite_ρg!(ρgy)
+    if all((i, j) .≤ size(ρgy)) && !isfinite(ρgy[i, j])
+        ρgy[i, j] = zero(eltype(ρgy))
+    end
+    return nothing
+end
+
 ## DIVERGENCE + DEVIATORIC STRAIN RATE + PRESSURE RESIDUAL (fused, masked)
 # Masked analogue of `compute_∇V_strain_rate_RP!`: divergence, deviatoric strain rate and the
 # pressure residual RP are computed in a single pass over the (rock) valid cells, reusing the
@@ -10,7 +24,7 @@
 # itself is NOT stored inside the loop (RP is derived from the in-register `div_ij`); the public
 # `stokes.∇V` diagnostic is recomputed once from the converged velocity field after the loop.
 # ε.*_c interpolation is likewise skipped in-loop (the stress kernel reads ε.xy at vertices).
-function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, _di, ni, dt, args)
+function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, _di, ni, dt, args, do_strain_rate = true)
     ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
     melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
@@ -29,6 +43,7 @@ function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ:
         ΔT,
         melt_fraction,
         dt,
+        do_strain_rate,
     )
     return nothing
 end
@@ -53,6 +68,7 @@ end
         ΔT,
         melt_fraction,
         dt,
+        do_strain_rate,
     ) where {T}
 
     third = T(1) / T(3)
@@ -65,13 +81,15 @@ end
 
         if i ≤ size(εxy, 1) && j ≤ size(εxy, 2)
             if isvalid_v(ϕ, i, j)
-                _dy_vx = @dy(_di_vx, j)
-                _dx_vy = @dx(_di_vy, i)
-                dVx_dy = (vx_n - vx_s) * _dy_vx
-                dVy_dx = (vy_e - vy_w) * _dx_vy
-                εxy[i, j] = 0.5 * (dVx_dy + dVy_dx)
+                if do_strain_rate
+                    _dy_vx = @dy(_di_vx, j)
+                    _dx_vy = @dx(_di_vy, i)
+                    dVx_dy = (vx_n - vx_s) * _dy_vx
+                    dVy_dx = (vy_e - vy_w) * _dx_vy
+                    εxy[i, j] = 0.5 * (dVx_dy + dVy_dx)
+                end
             else
-                εxy[i, j] = zero(T)
+                do_strain_rate && (εxy[i, j] = zero(T))
             end
         end
 
@@ -85,16 +103,21 @@ end
                 dVy_dy = (vy_ne - vy_e) * _dy
                 div_ij = dVx_dx + dVy_dy
 
-                div_third = div_ij * third
-                εxx[i, j] = dVx_dx - div_third
-                εyy[i, j] = dVy_dy - div_third
+                if do_strain_rate
+                    div_third = div_ij * third
+                    εxx[i, j] = dVx_dx - div_third
+                    εyy[i, j] = dVy_dy - div_third
+                end
 
-                # fused pressure residual (reuses `div_ij` in-register). Masked to 0 in air below,
-                # where ηb = 0 would make (P - P0)/ηb NaN.
+                # pressure residual (reuses `div_ij` in-register). Masked to 0 in air below,
+                # where ηb = 0 would make (P - P0)/ηb NaN. Recomputed with do_strain_rate = false
+                # before the pressure update so it reflects the final velocity.
                 RP[i, j] = _RP_cell(P[i, j], P0[i, j], div_ij, Q[i, j], ηb[i, j], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j)
             else
-                εxx[i, j] = zero(T)
-                εyy[i, j] = zero(T)
+                if do_strain_rate
+                    εxx[i, j] = zero(T)
+                    εyy[i, j] = zero(T)
+                end
                 RP[i, j] = zero(T)
             end
         end
@@ -195,8 +218,8 @@ end
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]
                 j_N = min(j + 1, ny)
-                ρg_S = ρgy[i, j] * ϕ.center[i, j]
-                ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
+                ρg_S = center(ρgy, ϕ.center, i, j)
+                ρg_N = center(ρgy, ϕ.center, i, j_N)
                 ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
                 ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
 
@@ -341,8 +364,8 @@ end
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]
                 j_N = min(j + 1, ny)
-                ρg_S = ρgy[i, j] * ϕ.center[i, j]
-                ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
+                ρg_S = center(ρgy, ϕ.center, i, j)
+                ρg_N = center(ρgy, ϕ.center, i, j_N)
                 ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
                 ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
 

@@ -99,6 +99,7 @@ function _solve_DYREL!(
     # Iteration loop
     err_min = Inf
     err = 1.0
+    converged = false
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
@@ -115,7 +116,7 @@ function _solve_DYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
@@ -151,13 +152,10 @@ function _solve_DYREL!(
         # Residual check. Same normalization as the APT solver (solve!): momentum
         # residuals measured against the pressure span, continuity against the velocity
         # span, so ϵ means the same thing in both solvers, for every component, at every
-        # resolution. A zero span (cold start, V ≡ 0 or P ≡ 0) leaves the residual
-        # unnormalized — large, so the solve continues rather than exiting spuriously.
-        Vmin, Vmax = extrema(stokes.V.Vx)
-        Pmin, Pmax = extrema(stokes.P)
-        Pspan = Pmax == Pmin ? one(Pmax) : Pmax - Pmin
-        Vspan = Vmax == Vmin ? one(Vmax) : Vmax - Vmin
-        errV = ntuple(d -> norm_mpi(residuals[d][2:(end - 1), 2:(end - 1)]) / Pspan * lx / √(v_dofs[d]), dim)
+        # resolution.
+        Pspan = nonzero_span(value_span(stokes.P))
+        Vspan = nonzero_span(maximum(map(value_span, @velocity(stokes))))
+        errV = ntuple(d -> norm_mpi(@views residuals[d][2:(end - 1), 2:(end - 1)]) / Pspan * lx / √(v_dofs[d]), dim)
         errPt = norm_mpi(stokes.R.RP) / Vspan * lx / √(p_dof)
         err = maximum((errV..., errPt))
 
@@ -169,9 +167,11 @@ function _solve_DYREL!(
             @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt)
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
-        # skip on the first pass: the zero-span fallback legitimately gives a huge value there
         igg.me == 0 && err > 1.0e10 && itPH > 1 && error("Kaboom! Error > 1e10 in outer loop")
-        err < ϵ && break
+        if err < ϵ && itPH > 1
+            converged = true
+            break
+        end
 
         # Set tolerance of velocity solve proportional to residual
         if err > err_min * 1.05
@@ -184,6 +184,15 @@ function _solve_DYREL!(
 
         ϵ_vel = err * rel_drop
         itPT = 0
+        # Initialize dτ for the FSSA-stabilized operator. The in-loop dτ refresh only
+        # fires every `nout` iterations; without this the first window of velocity
+        # updates would drive the free-surface-stabilization residual term against a
+        # dτ tuned for the plain viscous operator (Gershgorin without the FSSA
+        # diagonal) and diverge.
+        if !iszero(free_surface)
+            Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt, ρg[end])
+            update_dτV_α_β!(dyrel)
+        end
         while (err > ϵ_vel && itPT ≤ iterMax)
             itPT += 1
             itg += 1
@@ -234,7 +243,7 @@ function _solve_DYREL!(
                 # D·(stored residual) is the raw momentum residual; normalize it exactly
                 # like the outer check so ϵ_vel = err·rel_drop compares like with like.
                 # P is fixed within a pass, so the outer Pspan is still current here.
-                errV = ntuple(d -> norm_mpi(fields.D[d][2:(end - 1), 2:(end - 1)] .* residuals[d][2:(end - 1), 2:(end - 1)]) / Pspan * lx / √(v_dofs[d]), dim)
+                errV = ntuple(d -> norm_mpi((@views fields.D[d][2:(end - 1), 2:(end - 1)]), (@views residuals[d][2:(end - 1), 2:(end - 1)])) / Pspan * lx / √(v_dofs[d]), dim)
                 err = maximum(errV)
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
@@ -251,11 +260,14 @@ function _solve_DYREL!(
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
+                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)
             end
+        end
+        if itPT > iterMax && igg.me == 0
+            @warn "DYREL velocity solve exhausted iterMax before reaching ϵ_vel" itPH iter itPT iterMax err ϵ_vel maxlog = 10
         end
 
         # update pressure
@@ -263,6 +275,9 @@ function _solve_DYREL!(
         @. stokes.P += dyrel.γ_eff .* stokes.R.RP
 
         iter > total_iterMax && break
+    end
+    if !converged && igg.me == 0
+        @warn "DYREL returned without meeting ϵ — the velocity/pressure fields are not converged" err ϵ iter total_iterMax
     end
 
     # absorb plastic pressure correction into P (mirrors APT: stokes.P .= θ = P + ΔPψ)
@@ -288,7 +303,7 @@ function _solve_DYREL!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
     copy_stress_vertices!(stokes, dim)
 
-    return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
+    return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot, err, iter, converged)
 
 end
 
@@ -339,6 +354,27 @@ end
     )
 end
 
+# Amplitude scales for the residual normalization. `value_span` is the range of a field's
+# values; the velocity scale is the largest component span, because in buoyancy-driven flow the
+# cross-axis component can be orders smaller than the dominant one and normalizing the
+# continuity residual by it would make the criterion arbitrarily strict. A zero span (cold
+# start, V ≡ 0 or P ≡ 0) leaves the residual unnormalized — large, so the solve continues
+# rather than exiting spuriously.
+@inline function value_span(A)
+    mn, mx = extrema(A)
+    return mx - mn
+end
+@inline nonzero_span(s) = iszero(s) ? one(s) : s
+
+# Span over the entries `mask` marks valid, without materializing the selection. An empty mask
+# gives zero, which `nonzero_span` then turns into the unnormalized fallback.
+@inline function masked_value_span(mask, A)
+    T = eltype(A)
+    lo = mapreduce((m, a) -> m ? a : typemax(T), min, mask, A)
+    hi = mapreduce((m, a) -> m ? a : typemin(T), max, mask, A)
+    return hi > lo ? hi - lo : zero(T)
+end
+
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
 
 @inline global_grid_size(::Val{2}) = nx_g(), ny_g()
@@ -358,8 +394,8 @@ end
 function compute_λminV!(fields, residuals, residuals0, ni, ::Val{N}) where {N}
     @parallel (@idx ni) compute_dV!(fields.dV, fields.dVdτ, fields.βV, fields.dτV)
 
-    numerator = sum(ntuple(d -> sum_mpi(fields.dV[d] .* (residuals[d] .- residuals0[d])), Val(N)))
-    denominator = sum(ntuple(d -> sum_mpi(fields.dV[d] .^ 2), Val(N)))
+    numerator = sum(ntuple(d -> sum_mpi((dv, r, r0) -> dv * (r - r0), fields.dV[d], residuals[d], residuals0[d]), Val(N)))
+    denominator = sum(ntuple(d -> sum_mpi(abs2, fields.dV[d]), Val(N)))
     return abs(numerator) / denominator
 end
 

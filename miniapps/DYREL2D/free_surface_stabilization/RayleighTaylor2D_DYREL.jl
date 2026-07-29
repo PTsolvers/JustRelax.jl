@@ -67,18 +67,8 @@ function init_phases!(phases, particles, A)
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
-# (Path)/folder where output data and figures are stored
-n = 64
-nx = n
-ny = n
-igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-else
-    igg
-end
-
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(igg, nx, ny)
+function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL")
 
     # Physical domain ------------------------------------
     thick_air = 100.0e3             # thickness of sticky air layer
@@ -161,7 +151,6 @@ function main(igg, nx, ny)
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    figdir = "RayleighTaylor2D_DYREL"
     take(figdir)
 
     # Time loop
@@ -197,7 +186,7 @@ function main(igg, nx, ny)
             dt,
             igg;
             kwargs = (;
-                iterMax = 100.0e3,
+                iterMax = 250.0e3,
                 nout = 100,
                 rel_drop = 1.0e-2,
                 λ_relaxation_PH = 1,
@@ -250,4 +239,15 @@ function main(igg, nx, ny)
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-main(igg, nx, ny)
+
+# (Path)/folder where output data and figures are stored
+n = 64
+nx = n
+ny = n
+igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
+end
+
+main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL")

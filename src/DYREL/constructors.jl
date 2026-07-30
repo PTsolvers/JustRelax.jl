@@ -257,8 +257,13 @@ Base.@propagate_inbounds @inline function fssa_penalty_floor(ρg_v, di_center, d
         abs(ρg_v[i, min(j + 1, size(ρg_v, 2))] - ρg_c),
         abs(ρg_c - ρg_v[i, max(j - 1, 1)]),
     )
-    return Δρg * dt * @dy(di_center, j) / 2
+    return Δρg * dt * clamped_dy(di_center[2], j) / 2
 end
+
+# Center-to-center spacing has one entry fewer than there are cells — no gap past the last
+# center — so the last row reuses the last gap, matching the clamped ρg_v lookups above.
+@inline clamped_dy(dy::Number, ::Integer) = dy
+@inline clamped_dy(dy::AbstractVector, j::Integer) = dy[min(j, lastindex(dy))]
 
 """
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt, di_center=nothing, ρg_v=nothing)

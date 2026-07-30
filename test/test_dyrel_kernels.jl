@@ -229,8 +229,9 @@ end
         expected = JR2K._d_ya(ρgy, _dy, i, j) * dt
         @test JR2K.fssa_diagonal_y(ρgy, i, j, _dy, dt) ≈ expected
 
-        # interior, ϕ-masked: matches the masked finite difference through ϕ.center
-        ϕ = JR2K.RockRatio(backend_JR, (3, 4))
+        # interior, ϕ-masked: matches the masked finite difference through ϕ.center. Host arrays
+        # throughout: `fssa_diagonal_y` is called directly, outside any kernel.
+        ϕ = JustRelax.JustRelax2D.RockRatio(CPUBackend, (3, 4))
         ϕ.center .= reshape(collect(0.1:0.1:1.2), 3, 4)
         expected_ϕ = JR2K._d_ya(ρgy, ϕ.center, _dy, i, j) * dt
         @test JR2K.fssa_diagonal_y(ρgy, i, j, _dy, dt, ϕ) ≈ expected_ϕ
@@ -298,9 +299,9 @@ end
     end
 
     @testset "zero_nonfinite_ρg!" begin
-        ρgy = [1.0 Inf NaN; -2.0 0.0 3.0]
+        ρgy = PTArray(backend_JR)([1.0 Inf NaN; -2.0 0.0 3.0])
         @parallel (@idx size(ρgy)) JR2K.zero_nonfinite_ρg!(ρgy)
-        @test ρgy == [1.0 0.0 0.0; -2.0 0.0 3.0]
+        @test Array(ρgy) == [1.0 0.0 0.0; -2.0 0.0 3.0]
     end
 
     @testset "compute_bulk_viscosity_and_penalty! FSSA floor" begin
@@ -334,12 +335,12 @@ end
         γ_baseline = copy(Array(dyrel.γ_eff))
 
         # flat buoyancy ⇒ zero floor ⇒ γ_eff unchanged from the physical value
-        flat_ρg = fill(5.0, ni...)
+        flat_ρg = PTArray(backend_JR)(fill(5.0, ni...))
         JR2K.compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, dyrel.γfact, dt, di.center, flat_ρg)
         @test Array(dyrel.γ_eff) ≈ γ_baseline
 
         # steep buoyancy gradient ⇒ the FSSA floor exceeds the physical value everywhere
-        steep_ρg = [100.0 * j for i in 1:nx, j in 1:ny]
+        steep_ρg = PTArray(backend_JR)([100.0 * j for i in 1:nx, j in 1:ny])
         JR2K.compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, dyrel.γfact, dt, di.center, steep_ρg)
         @test all(Array(dyrel.γ_eff) .> γ_baseline)
     end

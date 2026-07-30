@@ -127,8 +127,14 @@ end
         τ_xz = @inbounds @index xz[ip, I...]
         τ_xy = @inbounds @index xy[ip, I...]
 
+        # `rotate_elastic_stress3D` rotates about ‖ω‖, which is undefined for a
+        # vanishing vorticity; the stress is then unchanged.
+        iszero(ω_yz) && iszero(ω_xz) && iszero(ω_xy) && continue
+
+        # `rotate_elastic_stress3D` expects the curl of the velocity, i.e. twice
+        # the vorticity, and halves it internally.
         τ_rotated = GeoParams.rotate_elastic_stress3D(
-            (ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy), dt
+            (2 * ω_yz, 2 * ω_xz, 2 * ω_xy), (τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy), dt
         )
 
         components = xx, yy, zz, yz, xz, xy
@@ -223,10 +229,19 @@ function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, particle
     particle2centroid!(stokes.τ_o.xx, pτxx, particles)
     particle2centroid!(stokes.τ_o.yy, pτyy, particles)
     particle2centroid!(stokes.τ_o.zz, pτzz, particles)
-    # shear components
-    particle2grid!(stokes.τ_o.yz, pτyz, particles)
-    particle2grid!(stokes.τ_o.xz, pτxz, particles)
-    particle2grid!(stokes.τ_o.xy, pτxy, particles)
+    # shear components; the edge-staggered arrays are not interpolation targets,
+    # so they are averaged down from the centers
+    particle2centroid!(stokes.τ_o.yz_c, pτyz, particles)
+    particle2centroid!(stokes.τ_o.xz_c, pτxz, particles)
+    particle2centroid!(stokes.τ_o.xy_c, pτxy, particles)
+    center2vertex!(
+        stokes.τ_o.yz,
+        stokes.τ_o.xz,
+        stokes.τ_o.xy,
+        stokes.τ_o.yz_c,
+        stokes.τ_o.xz_c,
+        stokes.τ_o.xy_c,
+    )
 
     return nothing
 end
@@ -254,18 +269,24 @@ end
 function rotate_stress!(
         pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, pωxy, stokes, particles, dt
     )
+    # the 3D shear components live on cell edges, where the particle
+    # interpolators cannot read them; the transfer goes through the centers
+    ωyz_c, ωxz_c, ωxy_c = stokes.ω.yz_c, stokes.ω.xz_c, stokes.ω.xy_c
+    @parallel (@idx size(ωxy_c)) shear2center_kernel!(
+        (ωyz_c, ωxz_c, ωxy_c), (stokes.ω.yz, stokes.ω.xz, stokes.ω.xy)
+    )
     # normal components
     centroid2particle!(pτxx, stokes.τ.xx, particles)
     centroid2particle!(pτyy, stokes.τ.yy, particles)
     centroid2particle!(pτzz, stokes.τ.zz, particles)
     # shear components
-    grid2particle!(pτyz, stokes.τ.yz, particles)
-    grid2particle!(pτxz, stokes.τ.xz, particles)
-    grid2particle!(pτxy, stokes.τ.xy, particles)
+    centroid2particle!(pτyz, stokes.τ.yz_c, particles)
+    centroid2particle!(pτxz, stokes.τ.xz_c, particles)
+    centroid2particle!(pτxy, stokes.τ.xy_c, particles)
     # vorticity tensor
-    grid2particle!(pωyz, stokes.ω.yz, particles)
-    grid2particle!(pωxz, stokes.ω.xz, particles)
-    grid2particle!(pωxy, stokes.ω.xy, particles)
+    centroid2particle!(pωyz, ωyz_c, particles)
+    centroid2particle!(pωxz, ωxz_c, particles)
+    centroid2particle!(pωxy, ωxy_c, particles)
     # rotate stress
     rotate_stress_particles!(
         (pτxx, pτyy, pτzz, pτyz, pτxz, pτxy), (pωyz, pωxz, pωxy), particles, dt

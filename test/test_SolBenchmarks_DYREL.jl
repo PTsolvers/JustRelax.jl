@@ -54,6 +54,12 @@ end
 @inline passthrough_εII(a::CustomRheology, TauII; η_target = 1.0, kwargs...) = TauII / η_target * 0.5
 @inline passthrough_τII(a::CustomRheology, EpsII; η_target = 1.0, kwargs...) = 2.0 * η_target * EpsII
 
+# density passthrough: ρ is whatever `args.ρ_target` holds at this cell (SolCx, SolKz). The field
+# travels through `args` rather than inside the rheology, because a `MaterialParams` holding an
+# array is not a bitstype and cannot be passed to a GPU kernel.
+struct PassthroughDensity <: AbstractDensity{Float64} end
+@inline GeoParams.compute_density(::PassthroughDensity, args) = args.ρ_target
+
 function solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax, variational)
     ni = size(phase_ratios.center)
     stokes = StokesArrays(backend_JR, ni)
@@ -118,15 +124,14 @@ function run_solcx(igg, nx, ny; variational, Δη = 1.0e6, γfact = 20, ϵ = 1.0
     creep = CustomRheology(passthrough_εII, passthrough_τII, NamedTuple())
     rheology = (
         SetMaterialParams(;
-            Phase = 1, Density = Vector_Density(; rho = vec(ρ)),
+            Phase = 1, Density = PassthroughDensity(),
             Gravity = ConstantGravity(; g = 1.0), CompositeRheology = CompositeRheology((creep,)),
         ),
     )
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_single_phase!(phase_ratios)
 
-    index_field = reshape(1:prod(ni), ni)
-    args = (; T = @zeros(ni .+ 2...), P = @zeros(ni...), dt = dt, η_target = η_target, index = index_field)
+    args = (; T = @zeros(ni .+ 2...), P = @zeros(ni...), dt = dt, η_target = η_target, ρ_target = ρ)
     flow_bcs = VelocityBoundaryConditions(; free_slip = (left = true, right = true, top = true, bot = true))
 
     return solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax = 5.0e3 * nx, variational)
@@ -168,15 +173,14 @@ function run_solkz(igg, nx, ny; variational, Δη = 1.0e6, km = 2, γfact = 3, �
     creep = CustomRheology(passthrough_εII, passthrough_τII, NamedTuple())
     rheology = (
         SetMaterialParams(;
-            Phase = 1, Density = Vector_Density(; rho = vec(ρ)),
+            Phase = 1, Density = PassthroughDensity(),
             Gravity = ConstantGravity(; g = 1.0), CompositeRheology = CompositeRheology((creep,)),
         ),
     )
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_single_phase!(phase_ratios)
 
-    index_field = reshape(1:prod(ni), ni)
-    args = (; T = @zeros(ni .+ 2...), P = @zeros(ni...), dt = dt, η_target = η_target, index = index_field)
+    args = (; T = @zeros(ni .+ 2...), P = @zeros(ni...), dt = dt, η_target = η_target, ρ_target = ρ)
     flow_bcs = VelocityBoundaryConditions(; free_slip = (left = true, right = true, top = true, bot = true))
 
     return solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax = 5.0e3 * nx, variational)

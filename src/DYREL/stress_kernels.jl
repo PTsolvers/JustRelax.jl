@@ -166,7 +166,7 @@ end
         τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
         εij = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
         λvij = λv[I...]
-        ηij = ηv[I...]
+        ηij = harm_clamped(η, Ic...)
         Pij = av_clamped(P, Ic...)
         EIIv = av_clamped(EII_pl, Ic...)
         ratio = phase_ratios_vertex[I...]
@@ -178,9 +178,9 @@ end
         ε_pl[3][I...] = εxy_pl
         λv[I...] = λ_I
 
-        # fused τII-viscosity update at the vertex (reuses in-register stress)
+        # fused τII-viscosity update at the vertex (reuses in-register stress), needed for Gershgorin
         if !linear_viscosity
-            ηv[I...] = _update_τII_viscosity(τxx_I, τyy_I, τxy_I, ratio, rheology, local_viscosity_args_vertex(visc_args, I...), ηij, ν, cutoff)
+            ηv[I...] = _update_τII_viscosity(τxx_I, τyy_I, τxy_I, ratio, rheology, local_viscosity_args_vertex(visc_args, I...), ηv[I...], ν, cutoff)
         end
 
         ## CENTER CALCULATION

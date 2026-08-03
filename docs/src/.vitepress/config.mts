@@ -1,7 +1,11 @@
 import { defineConfig } from 'vitepress'
 import { tabsMarkdownPlugin } from 'vitepress-plugin-tabs'
-import mathjax3 from "markdown-it-mathjax3";
+import { mathjaxPlugin } from './mathjax-plugin'
+import { juliaReplTransformer } from './julia-repl-transformer'
 import footnote from "markdown-it-footnote";
+import path from 'path'
+
+const mathjax = mathjaxPlugin()
 
 function getBaseRepository(base: string): string {
   if (!base || base === '/') return '/';
@@ -13,12 +17,10 @@ const baseTemp = {
   base: 'REPLACE_ME_DOCUMENTER_VITEPRESS',// TODO: replace this in makedocs!
 }
 
-const navTemp = {
-  nav: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
-}
-
 const nav = [
-  ...navTemp.nav,
+  { text: "Home", link: "/" },
+  { text: "Documentation", link: "/man/installation" },
+  { text: "API", link: "/man/listfunctions" },
   {
     component: 'VersionPicker'
   }
@@ -36,10 +38,36 @@ export default defineConfig({
     ['link', { rel: 'icon', href: 'REPLACE_ME_DOCUMENTER_VITEPRESS_FAVICON' }],
     ['script', {src: `${getBaseRepository(baseTemp.base)}versions.js`}],
     // ['script', {src: '/versions.js'], for custom domains, I guess if deploy_url is available.
-    ['script', {src: `${baseTemp.base}siteinfo.js`}]
+    ['script', {src: `${baseTemp.base}siteinfo.js`}],
+    // REPLACE_ME_DOCUMENTER_VITEPRESS_NOINDEX
   ],
+
   ignoreDeadLinks: true,
+
+  markdown: {
+    codeTransformers: [juliaReplTransformer()],
+    config(md) {
+      md.use(tabsMarkdownPlugin);
+      md.use(footnote);
+      mathjax.markdownConfig(md);
+    },
+    theme: {
+      light: "github-light",
+      dark: "github-dark"
+    },
+  },
   vite: {
+    plugins: [
+      mathjax.vitePlugin,
+    ],
+    define: {
+      __DEPLOY_ABSPATH__: JSON.stringify('REPLACE_ME_DOCUMENTER_VITEPRESS_DEPLOY_ABSPATH'),
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '../components')
+      }
+    },
     optimizeDeps: {
       exclude: [
         '@nolebase/vitepress-plugin-enhanced-readabilities/client',
@@ -55,17 +83,6 @@ export default defineConfig({
       ],
     },
   },
-  markdown: {
-    math: true,
-    config(md) {
-      md.use(tabsMarkdownPlugin),
-      md.use(mathjax3),
-      md.use(footnote)
-    },
-    theme: {
-      light: "github-light",
-      dark: "github-dark"}
-  },
   themeConfig: {
     outline: 'deep',
     logo: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
@@ -75,12 +92,9 @@ export default defineConfig({
         detailedView: true
       }
     },
-    nav: [
-      { text: "Home", link: "/" },
-      { text: "Documentation", link: "/man/installation" },
-      { text: "API", link: "/man/listfunctions" },
-    ],
+    nav,
     sidebar: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
+    sidebarDrawer: 'REPLACE_ME_DOCUMENTER_VITEPRESS_SIDEBAR_DRAWER',
     editLink: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
     socialLinks: [
       { icon: 'github', link: 'REPLACE_ME_DOCUMENTER_VITEPRESS' },

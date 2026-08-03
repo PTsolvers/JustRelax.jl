@@ -356,6 +356,17 @@ end
 end
 
 ## Accumulate tensor
+"""
+    accumulate_tensor!(II, A, dt)
+
+Accumulate the second invariant of the symmetric tensor `A` over a time step:
+`II[I] += dt * second_invariant(A[I])`.
+
+`A` is a rate tensor whose shear components live on the cell edges and are gathered to
+the cell centers before the invariant is taken. `II` is the running invariant accumulated
+through time; called with `A = stokes.ε_pl` it integrates `EII_pl`, the deviatoric
+counterpart of the volumetric `EVol_pl` built by [`accumulate_vol!`](@ref).
+"""
 function accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
     return accumulate_tensor!(backend(A), II, A, dt)
 end

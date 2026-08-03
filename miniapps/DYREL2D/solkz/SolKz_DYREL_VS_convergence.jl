@@ -9,7 +9,7 @@ include(joinpath(@__DIR__, "SolKz_DYREL.jl"))
 
 function solKz_DYREL_VS(;
         Δη = 1.0e6, km = 2, nx = 64, ny = 64, lx = 1.0e0, ly = 1.0e0,
-        ϵ = 1.0e-6, γfact = 50,
+        ϵ = 1.0e-6, γfact = 20,
         init_MPI = true, finalize_MPI = false, figdir = nothing
     )
 

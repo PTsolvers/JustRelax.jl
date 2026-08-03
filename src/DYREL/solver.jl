@@ -103,6 +103,9 @@ function _solve_DYREL!(
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
+
+    errV0 = ntuple(_ -> 1.0, dim)
+    errPt0 = 1.0
     err_evo_tot = Float64[]
     err_evo_V = Float64[]
     err_evo_P = Float64[]
@@ -159,12 +162,17 @@ function _solve_DYREL!(
         errPt = norm_mpi(stokes.R.RP) / Vspan * lx / √(p_dof)
         err = maximum((errV..., errPt))
 
+        if itPH ≤ 2
+            errV0 = map(x -> x + eps(), errV)
+            errPt0 = errPt + eps()
+        end
+
         if verbose_PH && igg.me == 0
             errV_msg = join(
-                ntuple(d -> @sprintf("R%d=%1.3e", d, errV[d]), dim),
+                ntuple(d -> @sprintf("R%d=%1.3e %1.3e", d, errV[d], errV[d] / errV0[d]), dim),
                 ", ",
             )
-            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt)
+            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0)
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && itPH > 1 && error("Kaboom! Error > 1e10 in outer loop")
@@ -182,7 +190,14 @@ function _solve_DYREL!(
             err_min = err
         end
 
+        # `err_vel` tracks the velocity solve; the outer `err` stays fixed for the whole pass so
+        # the convergence test, the return value and `converged` keep reporting the criterion
+        # that actually decides convergence. Note the target is set from the mixed-norm `err`
+        # while the loop measures the momentum residual alone: `errPt` is normalized by the
+        # velocity span and `errV` by the pressure span, so in dimensional problems `ϵ_vel` sits
+        # far above `err_vel` from the start and the pass ends after one `nout` window.
         ϵ_vel = err * rel_drop
+        err_vel = err
         itPT = 0
         # Initialize dτ for the FSSA-stabilized operator. The in-loop dτ refresh only
         # fires every `nout` iterations; without this the first window of velocity
@@ -193,7 +208,7 @@ function _solve_DYREL!(
             Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt, ρg[end])
             update_dτV_α_β!(dyrel)
         end
-        while (err > ϵ_vel && itPT ≤ iterMax)
+        while (err_vel > ϵ_vel && itPT ≤ iterMax)
             itPT += 1
             itg += 1
             iter += 1
@@ -241,20 +256,19 @@ function _solve_DYREL!(
             if iszero(iter % nout)
 
                 # D·(stored residual) is the raw momentum residual; normalize it exactly
-                # like the outer check so ϵ_vel = err·rel_drop compares like with like.
+                # like the outer check so ϵ_vel = err_vel·rel_drop compares like with like.
                 # P is fixed within a pass, so the outer Pspan is still current here.
                 errV = ntuple(d -> norm_mpi((@views fields.D[d][2:(end - 1), 2:(end - 1)]), (@views residuals[d][2:(end - 1), 2:(end - 1)])) / Pspan * lx / √(v_dofs[d]), dim)
-                err = maximum(errV)
-                isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
+                err_vel = maximum(errV)
+                isnan(err_vel) && igg.me == 0 && error("NaN detected in inner loop")
 
-                push!(err_evo_tot, err)
-                push!(err_evo_V, err)
+                push!(err_evo_tot, err_vel)
+                push!(err_evo_V, err_vel)
                 push!(err_evo_P, errPt)
                 push!(err_evo_it, iter)
 
-                # @printf("it = %d, iter = %d, ϵ_vel = %1.3e, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", itPT, iter, ϵ_vel, err, errVx, errVy)
                 if verbose_DR && igg.me == 0
-                    @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
+                    @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err_vel)
                 end
                 λminV = compute_λminV!(fields, residuals, residuals0, ni, dim)
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
@@ -267,7 +281,7 @@ function _solve_DYREL!(
             end
         end
         if itPT > iterMax && igg.me == 0
-            @warn "DYREL velocity solve exhausted iterMax before reaching ϵ_vel" itPH iter itPT iterMax err ϵ_vel maxlog = 10
+            @warn "DYREL velocity solve exhausted iterMax before reaching ϵ_vel" itPH iter itPT iterMax err_vel ϵ_vel maxlog = 10
         end
 
         # update pressure

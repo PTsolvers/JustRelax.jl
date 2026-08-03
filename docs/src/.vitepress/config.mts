@@ -42,8 +42,6 @@ export default defineConfig({
     // REPLACE_ME_DOCUMENTER_VITEPRESS_NOINDEX
   ],
 
-  ignoreDeadLinks: true,
-
   markdown: {
     codeTransformers: [juliaReplTransformer()],
     config(md) {

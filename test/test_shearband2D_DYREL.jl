@@ -84,10 +84,10 @@ function ShearBand2D()
     G0 = 1.0            # elastic shear modulus
     Gi = G0 / 2         # elastic shear modulus perturbation
     εbg = 1.0           # background strain-rate
-    η_reg = 1.0e-2      # regularisation "viscosity"
+    η_reg = 8.0e-3      # regularisation "viscosity"
     dt = η0 / G0 / 4.0  # assumes Maxwell time of 4
-    el_bg = ConstantElasticity(; G = G0, Kb = 5)
-    el_inc = ConstantElasticity(; G = Gi, Kb = 5)
+    el_bg = ConstantElasticity(; G = G0, Kb = 4)
+    el_inc = ConstantElasticity(; G = Gi, Kb = 4)
     visc = LinearViscous(; η = η0)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
@@ -206,13 +206,16 @@ function ShearBand2D()
     return iters, τII, sol, extrema(stokes.τ.II)
 end
 
+# The problem is the one posed in `test_shearband2D.jl`, so the reference values are that
+# test's: DYREL must land on the APT answer. The tolerances are looser because the two
+# solvers agree to ~3e-3 on τII, not to their own individual reproducibility.
 @testset "ShearBand2D" begin
     @suppress begin
         iters, τII, sol, extrema_τII = ShearBand2D()
         @test iters.err_evo_tot[end] < 1.0e-6
-        @test extrema_τII[1] ≈ 1.5383533580936255 atol = 1.0e-3
-        @test extrema_τII[2] ≈ 1.639 atol = 1.0e-3
-        @test τII[end] ≈ 1.6377101324888117 atol = 1.0e-4
+        @test extrema_τII[1] ≈ 1.4979764502419675 atol = 5.0e-3
+        @test extrema_τII[2] ≈ 1.6448491195234836 atol = 1.0e-3
+        @test τII[end] ≈ 1.6392450041641278 atol = 1.0e-3
         @test sol[end] ≈ 1.8358 atol = 1.0e-4
     end
 end

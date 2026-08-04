@@ -16,6 +16,14 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    CPUBackend
+end
+
 using JustPIC, JustPIC._2D
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     JustPIC.AMDGPUBackend
@@ -42,8 +50,8 @@ end
     xv = collect(LinRange(0.0, lx, nx + 1))
     s = LinRange(0, 1, ny + 1)
     yv = @. origin[2] + ly * s^2
-    grid = Geometry(Array, xv, yv)
-    dyv = grid.di.vertex[2]
+    grid = Geometry(backend_JR, xv, yv)
+    dyv = diff(yv)
 
     @testset "locate_row_index" begin
         # row j spans yv[j] ≤ y < yv[j+1]

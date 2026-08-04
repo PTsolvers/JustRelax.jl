@@ -133,7 +133,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # IO -------------------------------------------------
     take(figdir)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6, γfact = 50)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6, γfact = 20)
 
     # Time loop
     t, it = 0.0, 0

@@ -108,6 +108,7 @@ function ShearBand2D()
         ),
         # High density phase
         SetMaterialParams(;
+            Phase = 2,
             Density = ConstantDensity(; ρ = 0.0),
             Gravity = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology((visc, el_inc, pl)),

@@ -140,7 +140,7 @@ function _solve_DYREL!(
         # otherwise set the scale. maskV[d] is shaped like the residuals, i.e. the interior of
         # the velocity arrays.
         Pspan = nonzero_span(masked_value_span(maskP, stokes.P))
-        Vspan = nonzero_span(maximum(ntuple(d -> masked_value_span(maskV[d], Vi[d]), dim)))
+        Vspan = nonzero_span(maximum(map(masked_value_scale, maskV, Vi)))
         errV = ntuple(d -> masked_norm_mpi(maskRi[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
         errPt = masked_norm_mpi(maskP, stokes.R.RP) / Vspan * lx / √(nP)
         err = maximum((errV..., errPt))
@@ -172,14 +172,12 @@ function _solve_DYREL!(
             err_min = err
         end
 
-        # `err_vel` tracks the velocity solve; the outer `err` stays fixed for the whole pass so
-        # the convergence test, the return value and `converged` keep reporting the criterion
-        # that actually decides convergence. Note the target is set from the mixed-norm `err`
-        # while the loop measures the momentum residual alone: `errPt` is normalized by the
-        # velocity span and `errV` by the pressure span, so in dimensional problems `ϵ_vel` sits
-        # far above `err_vel` from the start and the pass ends after one `nout` window.
-        ϵ_vel = err * rel_drop
-        err_vel = err
+        # Target a drop of `errV`, the residual the loop below measures — `err` mixes in `errPt`,
+        # which is normalized by a different span. Both guards are load-bearing: an identically
+        # zero momentum residual (boundary-driven flow) would otherwise set `ϵ_vel = 0` and burn
+        # `iterMax`, and `Inf` makes the loop always reach its first residual check.
+        ϵ_vel = max(maximum(errV) * rel_drop, ϵ)
+        err_vel = Inf
         itPT = 0
         # Initialize dτ for the FSSA-stabilized operator (mirrors solver.jl). The in-loop
         # dτ refresh only fires every `nout` iterations; without this the first window of

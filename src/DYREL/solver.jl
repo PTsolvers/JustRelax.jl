@@ -157,7 +157,7 @@ function _solve_DYREL!(
         # span, so ϵ means the same thing in both solvers, for every component, at every
         # resolution.
         Pspan = nonzero_span(value_span(stokes.P))
-        Vspan = nonzero_span(maximum(map(value_span, @velocity(stokes))))
+        Vspan = nonzero_span(maximum(v -> max(value_span(v), maximum(abs, v)), @velocity(stokes)))
         errV = ntuple(d -> norm_mpi(@views residuals[d][2:(end - 1), 2:(end - 1)]) / Pspan * lx / √(v_dofs[d]), dim)
         errPt = norm_mpi(stokes.R.RP) / Vspan * lx / √(p_dof)
         err = maximum((errV..., errPt))
@@ -190,14 +190,12 @@ function _solve_DYREL!(
             err_min = err
         end
 
-        # `err_vel` tracks the velocity solve; the outer `err` stays fixed for the whole pass so
-        # the convergence test, the return value and `converged` keep reporting the criterion
-        # that actually decides convergence. Note the target is set from the mixed-norm `err`
-        # while the loop measures the momentum residual alone: `errPt` is normalized by the
-        # velocity span and `errV` by the pressure span, so in dimensional problems `ϵ_vel` sits
-        # far above `err_vel` from the start and the pass ends after one `nout` window.
-        ϵ_vel = err * rel_drop
-        err_vel = err
+        # Target a drop of `errV`, the residual the loop below measures — `err` mixes in `errPt`,
+        # which is normalized by a different span. Both guards are load-bearing: an identically
+        # zero momentum residual (boundary-driven flow) would otherwise set `ϵ_vel = 0` and burn
+        # `iterMax`, and `Inf` makes the loop always reach its first residual check.
+        ϵ_vel = max(maximum(errV) * rel_drop, ϵ)
+        err_vel = Inf
         itPT = 0
         # Initialize dτ for the FSSA-stabilized operator. The in-loop dτ refresh only
         # fires every `nout` iterations; without this the first window of velocity
@@ -380,13 +378,26 @@ end
 end
 @inline nonzero_span(s) = iszero(s) ? one(s) : s
 
-# Span over the entries `mask` marks valid, without materializing the selection. An empty mask
-# gives zero, which `nonzero_span` then turns into the unnormalized fallback.
+# Extrema over the entries `mask` marks valid, without materializing the selection.
+# `typemax(a)` takes the neutral element from the *value*: capturing `eltype(A)` puts a `Type`
+# in the closure, which is not isbits and so cannot compile into a GPU kernel.
+@inline function masked_extrema(mask, A)
+    lo = mapreduce((m, a) -> m ? a : typemax(a), min, mask, A)
+    hi = mapreduce((m, a) -> m ? a : typemin(a), max, mask, A)
+    return lo, hi
+end
+
+# An empty mask gives zero, which `nonzero_span` then turns into the unnormalized fallback.
 @inline function masked_value_span(mask, A)
-    T = eltype(A)
-    lo = mapreduce((m, a) -> m ? a : typemax(T), min, mask, A)
-    hi = mapreduce((m, a) -> m ? a : typemin(T), max, mask, A)
-    return hi > lo ? hi - lo : zero(T)
+    lo, hi = masked_extrema(mask, A)
+    return hi > lo ? hi - lo : zero(eltype(A))
+end
+
+# As above, floored by the largest magnitude — the velocity scale. A near-uniform flow has a
+# vanishing span while the round-off in `RP` still scales with |V|, which pins `errPt`.
+@inline function masked_value_scale(mask, A)
+    lo, hi = masked_extrema(mask, A)
+    return hi > lo ? max(hi - lo, abs(hi), abs(lo)) : zero(eltype(A))
 end
 
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")

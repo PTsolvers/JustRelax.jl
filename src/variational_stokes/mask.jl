@@ -172,6 +172,14 @@ Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, 
     return v * isvalid(ϕ.center, i, j)
 end
 
+# Materialize the reduced pressure/normal-stress space. A positive center fraction alone is not
+# sufficient: Larionov et al.'s null-space elimination also removes a pressure whose divergence
+# constraint references any zero-weight velocity face.
+@parallel_indices (I...) function update_valid_c_mask!(mask, ϕ::JustRelax.RockRatio)
+    mask[I...] = isvalid_c(ϕ, I...)
+    return nothing
+end
+
 """
     isvalid_v(ϕ::JustRelax.RockRatio, inds...)
 

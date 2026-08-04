@@ -307,7 +307,8 @@ end
     ηS = η[i, j]
     ηW = ηv[i, j + 1]
     ηE = ηv[i + 1, j + 1]
-    # bulk-penalty coupling (ϕc² as above); γW already carries its ϕ.center[i, j]
+    # Powell-Hestenes penalty coupling; γW already carries the single variational
+    # ϕ.center[i, j] weight applied by the momentum gradient.
     γS = γW # reuse cached value
 
     if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)

@@ -152,10 +152,10 @@ end
 
 Variational counterpart of [`DYREL`](@ref), for solves masked by the `RockRatio` `ϕ`.
 
-`γ_eff`, `ηb` and the Gershgorin bounds are built with the same ϕ masking the variational
-solver applies each time step, so the object a solve starts from is consistent with the one
-`DYREL!` maintains thereafter. Constructing without `ϕ` and then solving variationally leaves
-the first solve reading an unmasked, locally-scaled `γ_eff`.
+`ηb` and the Gershgorin bounds are built with the same ϕ masking the variational solver applies
+each time step. The numerical Powell-Hestenes penalty `γ_eff` itself remains unweighted: its
+momentum gradient already carries the variational cell weight, so weighting `γ_eff` here would
+apply `ϕ²` to the augmented-Lagrangian block.
 
 # Arguments
 - `stokes`: `JustRelax.StokesArrays` struct.
@@ -322,10 +322,9 @@ end
 
 Variational counterpart of the method above, masked by the rock ratio `ϕ`.
 
-Both quantities are computed as in the unmasked method and then weighted by `ϕ.center`; cells
-that fail `isvalid_c` get `ηb = γ_eff = 0`. A non-positive or `NaN` bulk modulus is treated as
-the incompressible limit, keeping both quantities finite — and leaving `ηb = Inf` whatever `ϕ`
-is, so the weighting below acts on compressible phases only.
+Cells that fail `isvalid_c` get `ηb = γ_eff = 0`. A non-positive or `NaN` bulk modulus is
+treated as the incompressible limit, keeping both quantities finite — and leaving `ηb = Inf`
+whatever `ϕ` is, so the weighting below acts on compressible phases only.
 
 The two weightings carry different meanings, and neither follows from the other:
 
@@ -335,9 +334,10 @@ The two weightings carry different meanings, and neither follows from the other:
     void. The divergence term is correspondingly left unweighted: it is the cell-average
     divergence, void included.
 
-  - `γ_eff = ϕ·γ` is the Powell-Hestenes *penalty*. It picks up `ϕ` a second time downstream,
-    where the momentum stencil differences `θc = γ_eff·RP + ΔPψ` through `ϕ.center`-masked
-    neighbours; the resulting `ϕ²` is what the ϕ-weighted Gershgorin row is built against.
+  - `γ_eff = γ` is the Powell-Hestenes *penalty* on the retained constraint `RP = 0`.
+    Downstream, the momentum stencil differences `θc = γ_eff·RP + ΔPψ` through
+    `ϕ.center`-weighted neighbours, supplying the single variational volume weight required by
+    the discrete pressure gradient. Weighting `γ_eff` too would spuriously produce `ϕ²`.
 """
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, γfact, dt, di_center = nothing, ρg_v = nothing)
     ni = size(stokes.P)
@@ -358,12 +358,11 @@ end
         Kbdt = Kbdt > 0 ? Kbdt : oftype(Kbdt, Inf)
         ηb[I...] = Kbdt * ϕ.center[I...]
 
-        # penalty parameter; the floor is taken before the ϕ weighting, which then applies to
-        # the floored value, leaving masking unchanged.
+        # Numerical penalty on the retained RP = 0 constraint. Do not weight it by ϕ here: the
+        # variational momentum gradient applies ϕ.center once downstream.
         γ_num = γfact * penalty_viscosity(η[I...], η_mean)
         γ_phy = isinf(Kbdt) ? γ_num : Kbdt
-        γ_unmasked = max(γ_phy * γ_num / (γ_phy + γ_num), fssa_penalty_floor(ρg_v, di_center, dt, I...))
-        γ_eff[I...] = γ_unmasked * ϕ.center[I...]
+        γ_eff[I...] = max(γ_phy * γ_num / (γ_phy + γ_num), fssa_penalty_floor(ρg_v, di_center, dt, I...))
     else
         ηb[I...] = 0.0e0
         γ_eff[I...] = 0.0e0

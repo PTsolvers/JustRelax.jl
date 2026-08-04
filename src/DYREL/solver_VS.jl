@@ -45,6 +45,7 @@ function _solve_DYREL!(
     # masks: only count residuals over the valid (rock) part of the domain
     maskV = (ϕ.Vx[2:(end - 1), :] .> 0, ϕ.Vy[:, 2:(end - 1)] .> 0)
     maskP = ϕ.center .> 0
+    @parallel (@idx ni) update_valid_c_mask!(maskP, ϕ)
     # velocity interiors, which is what maskV is shaped like; views alias the parent, so these
     # stay current for the whole solve
     Vi = ntuple(d -> @views(@velocity(stokes)[d][2:(end - 1), 2:(end - 1)]), dim)
@@ -54,6 +55,8 @@ function _solve_DYREL!(
     # residual is not trimmed, again matching `_solve_DYREL!`.
     maskRi = ntuple(d -> @views(maskV[d][2:(end - 1), 2:(end - 1)]), dim)
     Ri = ntuple(d -> @views(residuals[d][2:(end - 1), 2:(end - 1)]), dim)
+    R0i = ntuple(d -> @views(fields.R0[d][2:(end - 1), 2:(end - 1)]), dim)
+    dVi = ntuple(d -> @views(fields.dV[d][2:(end - 1), 2:(end - 1)]), dim)
     Di = ntuple(d -> @views(fields.D[d][2:(end - 1), 2:(end - 1)]), dim)
     # Divisors that turn the masked L2 norms into RMS values: the number of entries actually
     # summed. The global grid DOF count would instead scale the residual by the rock fraction,
@@ -254,7 +257,11 @@ function _solve_DYREL!(
                 if verbose_DR && igg.me == 0
                     @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err_vel)
                 end
-                λminV = compute_λminV!(fields, residuals, residuals0, ni, dim)
+                # Estimate the smallest eigenvalue on exactly the same reduced, boundary-trimmed
+                # velocity space used by the residual norm. Eliminated cut-cell rows otherwise
+                # contaminate the Rayleigh quotient even though they are not part of the solve.
+                @parallel (@idx ni) compute_dV!(fields.dV, fields.dVdτ, fields.βV, fields.dτV)
+                λminV = masked_λminV(dVi, Ri, R0i, maskRi)
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD

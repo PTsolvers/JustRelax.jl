@@ -413,6 +413,17 @@ function compute_λminV!(fields, residuals, residuals0, ni, ::Val{N}) where {N}
     return abs(numerator) / denominator
 end
 
+# Reduced-space Rayleigh quotient used by variational DYREL. The masks and arrays are
+# deliberately passed as equally-shaped views: eliminated cut-cell and boundary rows must not
+# influence the damping estimate for the active velocity operator.
+@inline rayleigh_quotient(numerator, denominator) = iszero(denominator) ? zero(denominator) : abs(numerator) / denominator
+
+function masked_λminV(dV::NTuple{N}, residuals::NTuple{N}, residuals0::NTuple{N}, masks::NTuple{N}) where {N}
+    numerator = sum(ntuple(d -> sum_mpi((m, dv, r, r0) -> m ? dv * (r - r0) : zero(dv), masks[d], dV[d], residuals[d], residuals0[d]), Val(N)))
+    denominator = sum(ntuple(d -> sum_mpi((m, dv) -> m ? abs2(dv) : zero(abs2(dv)), masks[d], dV[d]), Val(N)))
+    return rayleigh_quotient(numerator, denominator)
+end
+
 function copy_stress_vertices!(stokes::JustRelax.StokesArrays, ::Val{2})
     stokes.τ_o.xx_v .= stokes.τ.xx_v
     return stokes.τ_o.yy_v .= stokes.τ.yy_v

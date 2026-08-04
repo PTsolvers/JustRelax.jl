@@ -78,7 +78,7 @@ function init_phases!(phase_ratios, xci, xvi)
     return nothing
 end
 
-function PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = false, nsolves = 1)
+function PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = false, nsolves = 1, variational = true)
     # Physical domain ------------------------------------
     thick_air = 100.0e3
     ly = 400.0e3 + thick_air
@@ -134,39 +134,43 @@ function PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = false, nsolves = 1)
     )
 
     dt = 1.0e3 * (3600 * 24 * 365.25)
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
+    dyrel = if variational
+        DYREL(backend_JR, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
+    else
+        DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
+    end
 
     # nsolves > 1 re-solves the static configuration: the first solve seeds Vy, so the free-surface
     # term (Vy·∂ρg∂y·dt) is actually exercised on the subsequent solve(s).
     local iters
     for _ in 1:nsolves
-        iters = solve_DYREL!(
-            stokes,
-            ρg,
-            dyrel,
-            flow_bcs,
-            phase_ratios,
-            ϕ,
-            rheology,
-            args,
-            grid,
-            dt,
-            igg;
-            kwargs = (;
-                air_phase = air_phase,
-                verbose_PH = false,
-                verbose_DR = false,
-                iterMax = 100.0e3,
-                nout = 50,
-                rel_drop = 1.0e-2,
-                λ_relaxation_PH = 1,
-                λ_relaxation_DR = 1,
-                viscosity_relaxation = 1.0e-2,
-                linear_viscosity = true,
-                free_surface = free_surface,
-                viscosity_cutoff = viscosity_cutoff,
-            )
+        common_kwargs = (;
+            verbose_PH = false,
+            verbose_DR = false,
+            iterMax = 100.0e3,
+            nout = 50,
+            rel_drop = 1.0e-2,
+            λ_relaxation_PH = 1,
+            λ_relaxation_DR = 1,
+            viscosity_relaxation = 1.0e-2,
+            linear_viscosity = true,
+            free_surface = free_surface,
+            viscosity_cutoff = viscosity_cutoff,
         )
+        iters = if variational
+            solve_DYREL!(
+                stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg;
+                kwargs = (;
+                    air_phase = air_phase,
+                    common_kwargs...,
+                ),
+            )
+        else
+            solve_DYREL!(
+                stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
+                kwargs = common_kwargs,
+            )
+        end
     end
 
     maxVx = maximum(abs, Array(stokes.V.Vx))
@@ -177,11 +181,12 @@ function PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = false, nsolves = 1)
     return iters, maxVx, maxVy, allfinite
 end
 
-@testset "PlumeFreeSurface DYREL (variational)" begin
-    @suppress begin
-        nx = ny = 40
-        init_mpi = JustRelax.MPI.Initialized() ? false : true
-        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+if get(ENV, "JUSTRELAX_DEFINE_PLUME_BENCHMARK_ONLY", "false") != "true"
+    @testset "PlumeFreeSurface DYREL (variational)" begin
+        @suppress begin
+            nx = ny = 40
+            init_mpi = JustRelax.MPI.Initialized() ? false : true
+            igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
         # --- free_surface = false (instantaneous Stokes solve from rest) ---
         iters, maxVx, maxVy, allfinite = PlumeFreeSurface_DYREL(igg, nx, ny)
@@ -195,6 +200,14 @@ end
         # plume rises: vertical velocity dominates and is non-trivial
         @test maxVy > maxVx
 
+        # Matched sticky-air comparison: same geometry, dt, penalty, tolerances and initial
+        # fields; only the air treatment changes. This guards the reduced-space masks and
+        # auto-tuned damping against silently becoming substantially worse than sticky air.
+        iters_air, _, _, allfinite_air = PlumeFreeSurface_DYREL(igg, nx, ny; variational = false)
+        @test allfinite_air
+        @test iters_air.converged
+        @test iters.iter <= 1.25 * iters_air.iter
+
         # --- free_surface = true (stabilization term active on the 2nd solve, Vy ≠ 0) ---
         iters_fs, maxVx_fs, maxVy_fs, allfinite_fs = PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = true, nsolves = 2)
         @test allfinite_fs
@@ -205,6 +218,7 @@ end
         @test maxVy_fs ≈ 6.210100979998384e-9 rtol = 1.0e-2
         @test !isapprox(maxVy_fs, 6.199561037069179e-9; rtol = 1.0e-3)
 
-        finalize_global_grid(; finalize_MPI = true)
+            finalize_global_grid(; finalize_MPI = true)
+        end
     end
 end

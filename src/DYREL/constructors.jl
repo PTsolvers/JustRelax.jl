@@ -322,10 +322,22 @@ end
 
 Variational counterpart of the method above, masked by the rock ratio `ϕ`.
 
-`ηb` and `γ_eff` are computed as in the unmasked method and then weighted by `ϕ.center`, so
-partially filled cells carry a proportionally smaller penalty; cells that fail `isvalid_c` get
-`ηb = γ_eff = 0`. A non-positive or `NaN` bulk modulus is treated as the incompressible limit,
-keeping both quantities finite.
+Both quantities are computed as in the unmasked method and then weighted by `ϕ.center`; cells
+that fail `isvalid_c` get `ηb = γ_eff = 0`. A non-positive or `NaN` bulk modulus is treated as
+the incompressible limit, keeping both quantities finite — and leaving `ηb = Inf` whatever `ϕ`
+is, so the weighting below acts on compressible phases only.
+
+The two weightings carry different meanings, and neither follows from the other:
+
+  - `ηb = ϕ·K·dt` is an *effective bulk modulus*. The residual `-∇V - (P - P0)/ηb` measures the
+    divergence of the whole cell against the volumetric response of the rock alone, and a cell
+    that is only `ϕ` rock resists a volume change proportionally less because the rest of it is
+    void. The divergence term is correspondingly left unweighted: it is the cell-average
+    divergence, void included.
+
+  - `γ_eff = ϕ·γ` is the Powell-Hestenes *penalty*. It picks up `ϕ` a second time downstream,
+    where the momentum stencil differences `θc = γ_eff·RP + ΔPψ` through `ϕ.center`-masked
+    neighbours; the resulting `ϕ²` is what the ϕ-weighted Gershgorin row is built against.
 """
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, γfact, dt, di_center = nothing, ρg_v = nothing)
     ni = size(stokes.P)
@@ -337,8 +349,10 @@ end
 @parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, ϕ::JustRelax.RockRatio, η, η_mean, γfact, dt, di_center, ρg_v)
 
     if isvalid_c(ϕ, I...)
-        # bulk viscosity; a non-positive or NaN bulk modulus falls back to the incompressible
-        # limit so ηb/γ_eff stay finite (as `ϕ_weighted_harmonic` does in Gershgorin.jl).
+        # bulk viscosity: ϕ·K·dt is the effective bulk modulus of a cell that is only ϕ rock, so
+        # it pairs with an unweighted divergence (see the docstring). A non-positive or NaN bulk
+        # modulus falls back to the incompressible limit so ηb/γ_eff stay finite (as
+        # `ϕ_weighted_harmonic` does in Gershgorin.jl).
         ratios = @cell phase_ratios_center[I...]
         Kbdt = fn_ratio(get_bulk_modulus, rheology, ratios) * dt
         Kbdt = Kbdt > 0 ? Kbdt : oftype(Kbdt, Inf)

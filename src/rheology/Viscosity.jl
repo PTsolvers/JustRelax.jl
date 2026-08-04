@@ -419,15 +419,18 @@ end
 
 ## ϕ-aware (variational, DYREL) 2D KERNELS
 #
-# Skip cells/vertices where `ϕ::RockRatio` marks the DOF invalid (fully air, or masked out by the
-# variational partial-cell rule) instead of computing through them. A fully-air cell legitimately
-# gives `η = Inf` (harmonic mean of an all-zero-weight phase vector); once that `Inf` is stored,
-# the *next* call's `continuation_linear` blends it against itself via `(1 - ν) * Inf`, which is
-# `NaN` even at `ν = 1` (meant to fully replace the old value). DYREL's ϕ-aware Gershgorin
-# preconditioner reads `η`/`ηv` before its own validity check, so that `NaN` reaches an unguarded
-# arithmetic sum there. Skipping the write at invalid DOFs means the value left behind is never
-# read downstream (both Gershgorin and `compute_stress_DRYEL!` mask on the same `ϕ`) — it can go
-# stale, but it can no longer go non-finite.
+# `η` and `ηv` are computed at every cell and vertex, including those a `ϕ::RockRatio` masks out
+# of the momentum equations: the vertex stress interpolates the four surrounding centers with
+# `harm_clamped`, and at a free surface a vertex `isvalid_v` accepts routinely has masked-out
+# centers among them. A harmonic mean is set by its smallest entry, so a stale value at one of
+# those centers would set the interface viscosity.
+#
+# What these kernels do differ in is the store: a degenerate phase-ratio sample (no particles in
+# the cell) makes `compute_phase_viscosity` non-finite — `NaN` once `correct_phase_ratio`
+# normalizes an all-zero ratio, `Inf` from the harmonic phase mean when `air_phase` is unset —
+# and DYREL's ϕ-aware Gershgorin preconditioner reads `η`/`ηv` before its own validity check, so
+# either would reach an unguarded arithmetic sum there and spread across the preconditioner.
+# Keeping only finite results confines a degenerate sample to one stale cell.
 function compute_viscosity!(
         stokes::JustRelax.StokesArrays,
         phase_ratios,
@@ -501,7 +504,6 @@ function _compute_viscosity!(
         fn_viscosity,
         local_viscosity_args,
         ϕ,
-        isvalid_c,
     )
     # vertex viscosity (DYREL is 2D-only)
     @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
@@ -516,17 +518,18 @@ function _compute_viscosity!(
         fn_viscosity,
         local_viscosity_args_vertex,
         ϕ,
-        isvalid_v,
     )
     return nothing
 end
 
+# `ϕ` selects this method over the unmasked kernel above; the value itself is not read, because
+# the viscosity is needed at every DOF (see the note above this block).
 @parallel_indices (I...) function compute_viscosity_kernel!(
         η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2,
-        ϕ::JustRelax.RockRatio, isvalid_fn::F3,
-    ) where {F1, F2, F3}
+        ϕ::JustRelax.RockRatio,
+    ) where {F1, F2}
 
-    @inbounds if isvalid_fn(ϕ, I...)
+    @inbounds begin
         A = Axx[I...], Ayy[I...], Axyv[I...]
 
         # we need strain rate not to be zero, otherwise we get NaNs
@@ -548,8 +551,8 @@ end
 
         # compute and update stress viscosity
         ηi = compute_phase_viscosity(rheology, ratio_ij, AII, fn_viscosity, args_ij)
-        ηi = continuation_linear(ηi, η[I...], ν)
-        η[I...] = clamp(ηi, cutoff...)
+        ηi = clamp(continuation_linear(ηi, η[I...], ν), cutoff...)
+        isfinite(ηi) && (η[I...] = ηi)
     end
 
     return nothing

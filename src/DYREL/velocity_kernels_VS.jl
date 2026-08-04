@@ -17,6 +17,17 @@
     return nothing
 end
 
+# Every buoyancy refresh has to be followed by the guard above, not just the one that seeds the
+# field: `update_ρg!` recomputes ρg from the phase ratios on every Powell-Hestenes pass whenever
+# the density is not constant, and reintroduces the non-finite entries each time. All components
+# are swept because `update_ρg!` writes the whole tuple.
+sanitize_ρg!(ρg::NTuple) = foreach(sanitize_ρg!, ρg)
+
+function sanitize_ρg!(ρgᵢ::AbstractArray)
+    @parallel (@idx size(ρgᵢ)) zero_nonfinite_ρg!(ρgᵢ)
+    return nothing
+end
+
 ## DIVERGENCE + DEVIATORIC STRAIN RATE + PRESSURE RESIDUAL (fused, masked)
 # Masked analogue of `compute_∇V_strain_rate_RP!`: divergence, deviatoric strain rate and the
 # pressure residual RP are computed in a single pass over the (rock) valid cells, reusing the

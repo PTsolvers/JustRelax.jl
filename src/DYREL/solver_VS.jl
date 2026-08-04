@@ -35,9 +35,6 @@ function _solve_DYREL!(
     ) where {N}
 
     dim = Val(N)
-    v_dofs = velocity_dofs(dim)
-    p_dof = pressure_dof(dim)
-    di = grid.di
     _di = grid._di
     lx = grid.max_li
     ni = size(stokes.P)
@@ -51,6 +48,19 @@ function _solve_DYREL!(
     # velocity interiors, which is what maskV is shaped like; views alias the parent, so these
     # stay current for the whole solve
     Vi = ntuple(d -> @views(@velocity(stokes)[d][2:(end - 1), 2:(end - 1)]), dim)
+    # Momentum-residual norms run over the same boundary-trimmed interior as the non-variational
+    # solver, so that a boundary-condition row cannot set the residual scale. Trimming mask,
+    # residual and preconditioner diagonal identically keeps them index-aligned. The continuity
+    # residual is not trimmed, again matching `_solve_DYREL!`.
+    maskRi = ntuple(d -> @views(maskV[d][2:(end - 1), 2:(end - 1)]), dim)
+    Ri = ntuple(d -> @views(residuals[d][2:(end - 1), 2:(end - 1)]), dim)
+    Di = ntuple(d -> @views(fields.D[d][2:(end - 1), 2:(end - 1)]), dim)
+    # Divisors that turn the masked L2 norms into RMS values: the number of entries actually
+    # summed. The global grid DOF count would instead scale the residual by the rock fraction,
+    # which — unlike the boundary trim — does not tend to 1 as the resolution grows, so ϵ would
+    # mean something different for every sticky-air thickness. ϕ is fixed for a solve, so are these.
+    nV = ntuple(d -> max(sum_mpi(maskRi[d]), 1), dim)
+    nP = max(sum_mpi(maskP), 1)
 
     # errors
     err = 1.0
@@ -90,13 +100,14 @@ function _solve_DYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; air_phase = air_phase)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    @parallel (@idx size(ρg[end])) zero_nonfinite_ρg!(ρg[end])
+    sanitize_ρg!(ρg)
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
+        sanitize_ρg!(ρg)
 
         # compute divergence, deviatoric strain rate and pressure residual in one pass (masked)
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, true)
@@ -130,8 +141,8 @@ function _solve_DYREL!(
         # the velocity arrays.
         Pspan = nonzero_span(masked_value_span(maskP, stokes.P))
         Vspan = nonzero_span(maximum(ntuple(d -> masked_value_span(maskV[d], Vi[d]), dim)))
-        errV = ntuple(d -> masked_norm_mpi(maskV[d], residuals[d]) / Pspan * lx / √(v_dofs[d]), dim)
-        errPt = masked_norm_mpi(maskP, stokes.R.RP) / Vspan * lx / √(p_dof)
+        errV = ntuple(d -> masked_norm_mpi(maskRi[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
+        errPt = masked_norm_mpi(maskP, stokes.R.RP) / Vspan * lx / √(nP)
         err = maximum((errV..., errPt))
 
         if itPH ≤ 2
@@ -231,7 +242,7 @@ function _solve_DYREL!(
                 # D·(stored residual) is the raw momentum residual; normalize it exactly
                 # like the outer check so ϵ_vel = err_vel·rel_drop compares like with like.
                 # P is fixed within a pass, so the outer Pspan is still current here.
-                errV = ntuple(d -> masked_norm_mpi(maskV[d], fields.D[d], residuals[d]) / Pspan * lx / √(v_dofs[d]), dim)
+                errV = ntuple(d -> masked_norm_mpi(maskRi[d], Di[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
                 err_vel = maximum(errV)
                 isnan(err_vel) && igg.me == 0 && error("NaN detected in inner loop")
 

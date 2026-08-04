@@ -386,6 +386,7 @@ end
 
         else
             τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = 0.0e0, 0.0e0, 0.0e0
+            ε_pl[3][I...] = 0.0e0
             λv[I...] = 0.0e0
 
         end
@@ -415,7 +416,10 @@ end
 
             else
                 τ[1][I...], τ[2][I...], τ[3][I...] = 0.0e0, 0.0e0, 0.0e0
-                ε_pl[1][I...], ε_pl[2][I...], ε_pl[3][I...] = 0.0e0, 0.0e0, 0.0e0
+                # ε_pl[3] lives on the vertices and is owned by the vertex branch above; the
+                # center branch must not touch it, or a vertex-valid/center-invalid index — the
+                # normal configuration along a free surface — loses the value just written there.
+                ε_pl[1][I...], ε_pl[2][I...] = 0.0e0, 0.0e0
                 ε_vol_pl[I...] = 0.0e0
                 τII[I...] = 0.0e0
                 η_vep[I...] = 0.0e0

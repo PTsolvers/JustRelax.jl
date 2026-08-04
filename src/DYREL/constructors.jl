@@ -228,12 +228,34 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
     return nothing
 end
 
-# Mean over the non-infinite entries, without materializing the mask or the selection. A NaN
-# entry still propagates to the result, as it must.
+# Mean over the non-infinite entries. Sum and count are accumulated in one array traversal, then
+# reduced globally so an infinite-viscosity fallback is independent of the MPI decomposition.
+# A NaN entry still propagates to the result, as it must.
+@inline noninf_stat(a) = isinf(a) ? (zero(a), 0) : (a, 1)
+@inline merge_noninf_stats(a, b) = (a[1] + b[1], a[2] + b[2])
+@inline function noninf_stats(A::StridedArray)
+    s, n = zero(eltype(A)), 0
+    @inbounds for a in A
+        if !isinf(a)
+            s += a
+            n += 1
+        end
+    end
+    return s, n
+end
+@inline noninf_stats(A) = mapreduce(noninf_stat, merge_noninf_stats, A)
 @inline function noninf_mean(A)
-    n = count(!isinf, A)
-    s = sum(x -> isinf(x) ? zero(x) : x, A)
-    return s / n
+    local_sum, local_count = noninf_stats(A)
+    global_sum, global_count = if MPI.Initialized() && !MPI.Finalized()
+        (
+            MPI.Allreduce(local_sum, MPI.SUM, MPI.COMM_WORLD),
+            MPI.Allreduce(local_count, MPI.SUM, MPI.COMM_WORLD),
+        )
+    else
+        local_sum, local_count
+    end
+    iszero(global_count) && throw(ArgumentError("cannot scale the DYREL penalty: viscosity is infinite everywhere"))
+    return global_sum / global_count
 end
 
 # Local viscosity, so that γ_eff/η stays O(γfact) everywhere: a domain-mean scaling

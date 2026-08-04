@@ -157,7 +157,7 @@ function _solve_DYREL!(
         # span, so ϵ means the same thing in both solvers, for every component, at every
         # resolution.
         Pspan = nonzero_span(value_span(stokes.P))
-        Vspan = nonzero_span(maximum(v -> max(value_span(v), maximum(abs, v)), @velocity(stokes)))
+        Vspan = nonzero_span(maximum(value_scale, @velocity(stokes)))
         errV = ntuple(d -> norm_mpi(@views residuals[d][2:(end - 1), 2:(end - 1)]) / Pspan * lx / √(v_dofs[d]), dim)
         errPt = norm_mpi(stokes.R.RP) / Vspan * lx / √(p_dof)
         err = maximum((errV..., errPt))
@@ -376,15 +376,30 @@ end
     mn, mx = extrema(A)
     return mx - mn
 end
+@inline function value_scale(A)
+    lo, hi = extrema(A)
+    return max(hi - lo, abs(lo), abs(hi))
+end
 @inline nonzero_span(s) = iszero(s) ? one(s) : s
 
-# Extrema over the entries `mask` marks valid, without materializing the selection.
-# `typemax(a)` takes the neutral element from the *value*: capturing `eltype(A)` puts a `Type`
-# in the closure, which is not isbits and so cannot compile into a GPU kernel.
-@inline function masked_extrema(mask, A)
-    lo = mapreduce((m, a) -> m ? a : typemax(a), min, mask, A)
-    hi = mapreduce((m, a) -> m ? a : typemin(a), max, mask, A)
+# Extrema over the entries `mask` marks valid in one reduction, without materializing the
+# selection. The pair and reducer are isbits and GPU-friendly; taking the neutral elements from
+# the value avoids capturing `eltype(A)` (a non-isbits `Type`) in a device closure.
+@inline masked_extrema_entry(m, a) =
+    m ? (a, a) : (typemax(a), typemin(a))
+@inline merge_extrema(a, b) = (min(a[1], b[1]), max(a[2], b[2]))
+@inline function masked_extrema(mask, A::StridedArray)
+    lo, hi = typemax(eltype(A)), typemin(eltype(A))
+    @inbounds for I in eachindex(mask, A)
+        if mask[I]
+            a = A[I]
+            lo, hi = min(lo, a), max(hi, a)
+        end
+    end
     return lo, hi
+end
+@inline function masked_extrema(mask, A)
+    return mapreduce(masked_extrema_entry, merge_extrema, mask, A)
 end
 
 # An empty mask gives zero, which `nonzero_span` then turns into the unnormalized fallback.

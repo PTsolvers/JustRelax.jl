@@ -324,31 +324,6 @@ end
 ## RESIDUALS
 
 @parallel_indices (i, j) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 2}, Ry, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _di_center, _di_vertex
-    ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
-
-    # @inbounds begin
-    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-        _dx_c = @dx(_di_center, i)
-        _dy_v = @dy(_di_vertex, j)
-        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
-        Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
-        Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
-    end
-    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-        _dy_c = @dy(_di_center, j)
-        _dx_v = @dx(_di_vertex, i)
-        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
-        Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-        Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy)
-    end
-    # end
-    return nothing
-end
-
-@parallel_indices (i, j) function compute_PH_residual_V!(
         Rx::AbstractArray{T, 2},
         Ry,
         Vx,
@@ -668,68 +643,9 @@ end
 # large hydrostatic P) collapses three neighbour-stencil reads into two while keeping P differenced
 # at full precision. R[I] is written to global memory (needed by the residual norm / λmin) and
 # immediately reused in-register for the velocity update.
-@parallel_indices (i, j) function compute_DR_residual_update_V!(
-        Rx::AbstractArray{T, 2},
-        Ry,
-        Vx,
-        Vy,
-        dVxdτ,
-        dVydτ,
-        P,
-        θc,
-        τxx,
-        τyy,
-        τxy,
-        ρgx,
-        ρgy,
-        Dx,
-        Dy,
-        αVx,
-        αVy,
-        βVx,
-        βVy,
-        dτVx,
-        dτVy,
-        _di_center,
-        _di_vertex,
-    ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
-
-    @inbounds begin
-        if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-            _dx_c = @dx(_di_center, i)
-            _dy_v = @dy(_di_vertex, j)
-            Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
-            Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
-            Rx_ij = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(θc) - av_xa(ρgx)) / Dx[i, j]
-            Rx[i, j] = Rx_ij
-
-            dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
-            dVxdτ[i, j] = dVx_new
-            Vx[i + 1, j + 1] += ΔVx
-        end
-        if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-            _dy_c = @dy(_di_center, j)
-            _dx_v = @dx(_di_vertex, i)
-            Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
-            Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-            Ry_ij = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(θc) - av_ya(ρgy)) / Dy[i, j]
-            Ry[i, j] = Ry_ij
-
-            dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij, αVy[i, j], βVy[i, j], dτVy[i, j])
-            dVydτ[i, j] = dVy_new
-            Vy[i + 1, j + 1] += ΔVy
-        end
-    end
-
-    return nothing
-end
-
-# Free-surface-stabilized variant of the 2D fused DR kernel: adds the implicit free-surface
-# advection term (Vy·∂ρg∂y·dt) to the vertical momentum residual, mirroring the FS overload of
-# `compute_PH_residual_V!`. The solver passes `dt * free_surface`, so the correction vanishes when
-# `free_surface = false` (branchless, matching the variational Stokes `compute_V!` idiom).
+# The single 2D fused DR kernel includes the implicit free-surface advection term
+# (Vy·∂ρg∂y·dt). The solver passes `dt * free_surface`, so the correction vanishes when FSSA is
+# disabled without requiring a duplicate kernel.
 @parallel_indices (i, j) function compute_DR_residual_update_V!(
         Rx::AbstractArray{T, 2},
         Ry,

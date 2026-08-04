@@ -139,53 +139,8 @@ end
 
 ## RESIDUALS (masked)
 
-@parallel_indices (i, j) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 2},
-        Ry,
-        P,
-        ΔPψ,
-        τxx,
-        τyy,
-        τxy,
-        ρgx,
-        ρgy,
-        ϕ::JustRelax.RockRatio,
-        _di_center,
-        _di_vertex,
-    ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
-    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
-
-    @inbounds begin
-        if all((i, j) .≤ size(Rx))
-            _dx_c = @dx(_di_center, i)
-            _dy_v = @dy(_di_vertex, j)
-            Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
-            Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-            Rx[i, j] = if isvalid_vx(ϕ, i + 1, j)
-                d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)
-            else
-                0.0e0
-            end
-        end
-        if all((i, j) .≤ size(Ry))
-            _dy_c = @dy(_di_center, j)
-            _dx_v = @dx(_di_vertex, i)
-            Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
-            Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-            Ry[i, j] = if isvalid_vy(ϕ, i, j + 1)
-                d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - d_ya(P, ϕ.center) - d_ya(ΔPψ, ϕ.center) - av_ya(ρgy, ϕ.center)
-            else
-                0.0e0
-            end
-        end
-    end
-    return nothing
-end
-
-# Free-surface-stabilized variant of the masked PH residual: adds the ϕ-weighted implicit
-# free-surface advection term (Vy·∂ρg∂y·dt) to the vertical residual, mirroring the variational
-# `compute_Vy!` correction. `dt` is passed as `dt * free_surface` by the solver.
+# The masked PH residual includes the ϕ-weighted implicit free-surface advection term
+# (Vy·∂ρg∂y·dt). Passing `dt = 0` disables it without a duplicate kernel.
 @parallel_indices (i, j) function compute_PH_residual_V!(
         Rx::AbstractArray{T, 2},
         Ry,
@@ -243,79 +198,8 @@ end
     return nothing
 end
 
-## DR VELOCITY RESIDUAL + DAMPED UPDATE (fused, masked)
-@parallel_indices (i, j) function compute_DR_residual_update_V!(
-        Rx::AbstractArray{T, 2},
-        Ry,
-        Vx,
-        Vy,
-        dVxdτ,
-        dVydτ,
-        P,
-        θc,
-        τxx,
-        τyy,
-        τxy,
-        ρgx,
-        ρgy,
-        Dx,
-        Dy,
-        αVx,
-        αVy,
-        βVx,
-        βVy,
-        dτVx,
-        dτVy,
-        ϕ::JustRelax.RockRatio,
-        _di_center,
-        _di_vertex,
-    ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
-    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
-
-    @inbounds begin
-        if all((i, j) .≤ size(Rx))
-            _dx_c = @dx(_di_center, i)
-            _dy_v = @dy(_di_vertex, j)
-            Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
-            Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-            if isvalid_vx(ϕ, i + 1, j)
-                Rx_ij = (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(θc, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
-                Rx[i, j] = Rx_ij
-                dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
-                dVxdτ[i, j] = dVx_new
-                Vx[i + 1, j + 1] += ΔVx
-            else
-                Rx[i, j] = zero(T)
-                dVxdτ[i, j] = zero(T)
-                Vx[i + 1, j + 1] = zero(T)
-            end
-        end
-        if all((i, j) .≤ size(Ry))
-            _dy_c = @dy(_di_center, j)
-            _dx_v = @dx(_di_vertex, i)
-            Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
-            Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-            if isvalid_vy(ϕ, i, j + 1)
-                Ry_ij = (d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - d_ya(P, ϕ.center) - d_ya(θc, ϕ.center) - av_ya(ρgy, ϕ.center)) / Dy[i, j]
-                Ry[i, j] = Ry_ij
-                dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij, αVy[i, j], βVy[i, j], dτVy[i, j])
-                dVydτ[i, j] = dVy_new
-                Vy[i + 1, j + 1] += ΔVy
-            else
-                Ry[i, j] = zero(T)
-                dVydτ[i, j] = zero(T)
-                Vy[i + 1, j + 1] = zero(T)
-            end
-        end
-    end
-
-    return nothing
-end
-
-# Free-surface-stabilized variant of the masked fused DR kernel: adds the ϕ-weighted implicit
-# free-surface advection term (Vy·∂ρg∂y·dt) to the vertical momentum residual, mirroring the FS
-# `compute_PH_residual_V!` overload above. The solver passes `dt * free_surface`.
+# The masked fused DR kernel includes the same ϕ-weighted FSSA term as the PH residual. Passing
+# `dt = 0` disables it without a duplicate kernel.
 @parallel_indices (i, j) function compute_DR_residual_update_V!(
         Rx::AbstractArray{T, 2},
         Ry,

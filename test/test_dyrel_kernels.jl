@@ -112,7 +112,7 @@ function reduced_velocity_matrix(phi_case, ni = (4, 4); cut_fraction = 0.35)
             dyrel.dVxdτ, dyrel.dVydτ, stokes.P, θc, stokes.τ.xx, stokes.τ.yy,
             stokes.τ.xy, ρg..., dyrel.Dx, dyrel.Dy, dyrel.αVx, dyrel.αVy,
             dyrel.βVx, dyrel.βVy, dyrel.dτVx, dyrel.dτVy, ϕ,
-            grid._di.center, grid._di.vertex,
+            grid._di.center, grid._di.vertex, 0.0,
         )
         R = Array(stokes.R.Rx), Array(stokes.R.Ry)
         A[:, column] .= [-R[d][I] for (d, I) in dofs]
@@ -235,9 +235,10 @@ end
         # --- Powell-Hestenes velocity residual (no D division: safe) ---
         ρg = @zeros(ni...), @zeros(ni...)
         @parallel (@idx ni) JR2K.compute_PH_residual_V!(
-            stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
+            stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy,
+            stokes.P, stokes.ΔPψ,
             stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
-            _di.center, _di.vertex,
+            _di.center, _di.vertex, 0.0,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test all(isfinite, Array(stokes.R.Ry))
@@ -261,7 +262,7 @@ end
             dyrel.αVx, dyrel.αVy,
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
-            _di.center, _di.vertex,
+            _di.center, _di.vertex, 0.0,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test Array(stokes.V.Vx) == Array(Vx_before)
@@ -363,8 +364,12 @@ end
     end
 
     @testset "noninf_mean" begin
+        stats_input = [1.0, 2.0, Inf, 3.0]
+        JR2K.noninf_stats(stats_input) # compile before measuring
+        @test @allocated(JR2K.noninf_stats(stats_input)) == 0
         @test JR2K.noninf_mean([1.0, 2.0, Inf, 3.0]) ≈ 2.0
         @test isnan(JR2K.noninf_mean([1.0, NaN, 3.0]))  # NaN must propagate, not be filtered
+        @test_throws ArgumentError JR2K.noninf_mean([Inf, Inf])
     end
 
     @testset "fssa_penalty_floor" begin
@@ -382,12 +387,17 @@ end
     @testset "value_span / nonzero_span / masked_value_span" begin
         @test JR2K.value_span([1.0, 5.0, 3.0]) == 4.0
         @test JR2K.value_span([2.0, 2.0]) == 0.0
+        @test JR2K.value_scale([-5.0, -4.0]) == 5.0
+        @test JR2K.value_scale([1.0, 5.0, 3.0]) == 5.0
         @test JR2K.nonzero_span(0.0) == 1.0
         @test JR2K.nonzero_span(4.0) == 4.0
 
         mask = [true, false, true, true]
         A = [1.0, 100.0, 5.0, 2.0]
+        JR2K.masked_extrema(mask, A) # compile before measuring
+        @test @allocated(JR2K.masked_extrema(mask, A)) == 0
         @test JR2K.masked_value_span(mask, A) == 4.0  # span over {1.0, 5.0, 2.0}
+        @test JR2K.masked_value_scale(mask, A) == 5.0
         @test JR2K.masked_value_span([false, false], [1.0, 2.0]) == 0.0  # empty mask ⇒ 0
     end
 

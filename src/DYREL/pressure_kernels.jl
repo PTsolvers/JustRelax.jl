@@ -29,82 +29,7 @@ function compute_residual_P!(
     ) where {N}
     ni = size(P)
     @parallel (@idx ni) compute_RP_kernel!(
-        P, P0, RP, ∇V, Q, ηb, rheology, phase_ratio.center, dt, ΔT, melt_fraction
-    )
-    return nothing
-end
-
-@parallel_indices (I...) function compute_RP_kernel!(
-        P,
-        P0,
-        RP,
-        ∇V,
-        Q, # volumetric source/sink term
-        ηb,
-        rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
-        dt,
-        ::Nothing,
-        ::Nothing,
-    ) where {N, C <: JustRelax.CellArray}
-    RP[I...] = _compute_RP!(P[I...], P0[I...], ∇V[I...], Q[I...], ηb[I...], dt)
-    return nothing
-end
-
-@parallel_indices (I...) function compute_RP_kernel!(
-        P,
-        P0,
-        RP,
-        ∇V,
-        Q, # volumetric source/sink term
-        ηb,
-        rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
-        dt,
-        ::Nothing,
-        melt_fraction,
-    ) where {N, C <: JustRelax.CellArray}
-    RP[I...] = _compute_RP!(P[I...], P0[I...], ∇V[I...], Q[I...], ηb[I...], dt)
-    return nothing
-end
-
-@parallel_indices (I...) function compute_RP_kernel!(
-        P,
-        P0,
-        RP,
-        ∇V,
-        Q, # volumetric source/sink term
-        ηb,
-        rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
-        dt,
-        ΔT,
-        ::Nothing,
-    ) where {N, C <: JustRelax.CellArray}
-    phase_ratio_I = phase_ratio[I...]
-    α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
-    RP[I...] = _compute_RP!(
-        P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I .+ 1...], α, ηb[I...], dt
-    )
-    return nothing
-end
-
-@parallel_indices (I...) function compute_RP_kernel!(
-        P,
-        P0,
-        RP,
-        ∇V,
-        Q, # volumetric source/sink term
-        ηb,
-        rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
-        dt,
-        ΔT,
-        melt_fraction,
-    ) where {N, C <: JustRelax.CellArray}
-    α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
-    RP[I...] = _compute_RP!(
-        P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I .+ 1...], α, ηb[I...], dt
+        P, P0, RP, ∇V, Q, ηb, rheology, phase_ratio.center, nothing, dt, ΔT, melt_fraction
     )
     return nothing
 end
@@ -148,27 +73,10 @@ function compute_residual_P!(
     return nothing
 end
 
-@parallel_indices (I...) function compute_RP_kernel!(
-        P,
-        P0,
-        RP,
-        ∇V,
-        Q, # volumetric source/sink term
-        ηb,
-        rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
-        ϕ::JustRelax.RockRatio,
-        dt,
-        ::Nothing,
-        ::Nothing,
-    ) where {N, C <: JustRelax.CellArray}
-    RP[I...] = if isvalid_c(ϕ, I...)
-        _compute_RP!(P[I...], P0[I...], ∇V[I...], Q[I...], ηb[I...], dt)
-    else
-        0.0e0
-    end
-    return nothing
-end
+# `Nothing` selects the full pressure space; `RockRatio` selects the reduced one. Thermal and
+# melt variants are resolved by `_RP_cell`, keeping this storage/masking kernel unique.
+@inline pressure_isvalid(::Nothing, I...) = true
+@inline pressure_isvalid(ϕ::JustRelax.RockRatio, I...) = isvalid_c(ϕ, I...)
 
 @parallel_indices (I...) function compute_RP_kernel!(
         P,
@@ -179,62 +87,18 @@ end
         ηb,
         rheology::NTuple{N, MaterialParams},
         phase_ratio::C,
-        ϕ::JustRelax.RockRatio,
-        dt,
-        ::Nothing,
-        melt_fraction,
-    ) where {N, C <: JustRelax.CellArray}
-    RP[I...] = if isvalid_c(ϕ, I...)
-        _compute_RP!(P[I...], P0[I...], ∇V[I...], Q[I...], ηb[I...], dt)
-    else
-        0.0e0
-    end
-    return nothing
-end
-
-@parallel_indices (I...) function compute_RP_kernel!(
-        P,
-        P0,
-        RP,
-        ∇V,
-        Q, # volumetric source/sink term
-        ηb,
-        rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
-        ϕ::JustRelax.RockRatio,
-        dt,
-        ΔT,
-        ::Nothing,
-    ) where {N, C <: JustRelax.CellArray}
-    RP[I...] = if isvalid_c(ϕ, I...)
-        phase_ratio_I = phase_ratio[I...]
-        α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
-        _compute_RP!(P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I .+ 1...], α, ηb[I...], dt)
-    else
-        0.0e0
-    end
-    return nothing
-end
-
-@parallel_indices (I...) function compute_RP_kernel!(
-        P,
-        P0,
-        RP,
-        ∇V,
-        Q, # volumetric source/sink term
-        ηb,
-        rheology::NTuple{N, MaterialParams},
-        phase_ratio::C,
-        ϕ::JustRelax.RockRatio,
+        pressure_domain,
         dt,
         ΔT,
         melt_fraction,
     ) where {N, C <: JustRelax.CellArray}
-    RP[I...] = if isvalid_c(ϕ, I...)
-        α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
-        _compute_RP!(P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I .+ 1...], α, ηb[I...], dt)
+    RP[I...] = if pressure_isvalid(pressure_domain, I...)
+        _RP_cell(
+            P[I...], P0[I...], ∇V[I...], Q[I...], ηb[I...], dt,
+            rheology, phase_ratio, ΔT, melt_fraction, I...,
+        )
     else
-        0.0e0
+        zero(eltype(RP))
     end
     return nothing
 end

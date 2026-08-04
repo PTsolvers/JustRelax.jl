@@ -227,6 +227,12 @@ end
             0.5 * (JustRelax2D.right(A3, ϕ3, 2, 2, 2) + JustRelax2D.next(A3, ϕ3, 2, 2, 2))
     end
 
+    @testset "variational FSSA pseudo-time denominator" begin
+        @test JustRelax2D.fssa_pt_denominator(4.0, 0.5, 0.0) == 4.0
+        @test JustRelax2D.fssa_pt_denominator(4.0, 0.5, -6.0) == 7.0
+        @test JustRelax2D.fssa_pt_denominator(4.0, 0.5, 6.0) == 7.0
+    end
+
     @testset "update_rock_ratio! 2D" begin
         # End-to-end: PhaseRatios → update_rock_ratio! → ϕ.center matches the
         # expected formula `clamp(1 - air_fraction, 0, 1)`.

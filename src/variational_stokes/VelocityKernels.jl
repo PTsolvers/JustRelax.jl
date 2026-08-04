@@ -1,3 +1,5 @@
+@inline fssa_pt_denominator(ητ, ηdτ, S) = ητ + ηdτ * abs(S)
+
 """
     compute_∇V!(∇V, V, ϕ, _di)
 
@@ -313,7 +315,10 @@ Compute the y-component of the velocity field `Vy` from the pressure `P`, stress
                     R_Vy =
                     -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                     av_ya(ρgy, ϕ.center) + ρg_correction
-                Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+                # The FSSA term is diagonal in Vy. Include its magnitude in the local
+                # pseudo-time denominator so a density jump cannot outrun the viscous step.
+                ητ_y = fssa_pt_denominator(av_ya(ητ), ηdτ, ∂ρg∂y * dt)
+                Vy[i + 1, j + 1] += R_Vy * ηdτ / ητ_y
 
             else
                 Ry[i, j] = zero(T)
@@ -391,7 +396,10 @@ Compute the velocity field `V` with the timestep dt from the pressure `P`, stres
                 R_Vy =
                 @inbounds -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                 av_ya(ρgy, ϕ.center) + ρg_correction
-            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+            # `ηdτ` has units of length², so ηdτ|∂y(ρgϕ)dt| is the viscosity-scale
+            # diagonal contributed by FSSA. It is exactly zero when free_surface=false.
+            ητ_y = fssa_pt_denominator(av_ya(ητ), ηdτ, ∂ρg∂y * dt)
+            Vy[i + 1, j + 1] += R_Vy * ηdτ / ητ_y
         else
             Ry[i, j] = zero(T)
             Vy[i + 1, j + 1] = zero(T)

@@ -382,15 +382,14 @@ end
 end
 @inline nonzero_span(s) = iszero(s) ? one(s) : s
 
-# Extrema over the entries `mask` marks valid in one reduction, without materializing the
-# selection. The pair and reducer are isbits and GPU-friendly; taking the neutral elements from
-# the value avoids capturing `eltype(A)` (a non-isbits `Type`) in a device closure.
-@inline masked_extrema_entry(m, a) =
-    m ? (a, a) : (typemax(a), typemin(a))
-@inline merge_extrema(a, b) = (min(a[1], b[1]), max(a[2], b[2]))
-@inline function masked_extrema(mask, A::StridedArray)
+# Extrema over the entries `mask` marks valid, without materializing the selection. Masked-out
+# entries take the neutral element from the value itself, which keeps `eltype(A)` (a non-isbits
+# `Type`) out of the device closure. `Array` gets both bounds in one traversal; every other array
+# type — GPU arrays among them — takes one whole-array reduction per bound, so that the reducers
+# stay `min` and `max`, for which a device backend knows the neutral element.
+@inline function masked_extrema(mask, A::Array)
     lo, hi = typemax(eltype(A)), typemin(eltype(A))
-    @inbounds for I in eachindex(mask, A)
+    for I in eachindex(mask, A)
         if mask[I]
             a = A[I]
             lo, hi = min(lo, a), max(hi, a)
@@ -399,7 +398,9 @@ end
     return lo, hi
 end
 @inline function masked_extrema(mask, A)
-    return mapreduce(masked_extrema_entry, merge_extrema, mask, A)
+    lo = mapreduce((m, a) -> m ? a : typemax(a), min, mask, A)
+    hi = mapreduce((m, a) -> m ? a : typemin(a), max, mask, A)
+    return lo, hi
 end
 
 # An empty mask gives zero, which `nonzero_span` then turns into the unnormalized fallback.

@@ -228,14 +228,13 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
     return nothing
 end
 
-# Mean over the non-infinite entries. Sum and count are accumulated in one array traversal, then
-# reduced globally so an infinite-viscosity fallback is independent of the MPI decomposition.
-# A NaN entry still propagates to the result, as it must.
-@inline noninf_stat(a) = isinf(a) ? (zero(a), 0) : (a, 1)
-@inline merge_noninf_stats(a, b) = (a[1] + b[1], a[2] + b[2])
-@inline function noninf_stats(A::StridedArray)
+# Mean over the non-infinite entries, reduced globally so an infinite-viscosity fallback is
+# independent of the MPI decomposition. A NaN entry still propagates to the result, as it must.
+# `Array` gets sum and count in one traversal; every other array type — GPU arrays among them —
+# takes two whole-array reductions, which is what a device can execute.
+@inline function noninf_stats(A::Array)
     s, n = zero(eltype(A)), 0
-    @inbounds for a in A
+    for a in A
         if !isinf(a)
             s += a
             n += 1
@@ -243,7 +242,7 @@ end
     end
     return s, n
 end
-@inline noninf_stats(A) = mapreduce(noninf_stat, merge_noninf_stats, A)
+@inline noninf_stats(A) = (sum(a -> isinf(a) ? zero(a) : a, A), sum(a -> isinf(a) ? 0 : 1, A))
 @inline function noninf_mean(A)
     local_sum, local_count = noninf_stats(A)
     global_sum, global_count = if MPI.Initialized() && !MPI.Finalized()

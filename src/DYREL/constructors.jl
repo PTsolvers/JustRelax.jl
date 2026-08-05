@@ -1,5 +1,5 @@
 """
-    DYREL(ni::NTuple{N, Integer}; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5) where N
+    DYREL(ni::NTuple{N, Integer}; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0) where N
 
 Creates a new `DYREL` struct with fields initialized to zero.
 
@@ -9,6 +9,9 @@ Creates a new `DYREL` struct with fields initialized to zero.
 - `ϵ_vel`: Velocity convergence tolerance.
 - `CFL`: Courant-Friedrichs-Lewy number.
 - `c_fact`: Damping scaling factor.
+- `γfact`: Scales the Powell-Hestenes penalty against the local viscosity, `γ_num = γfact * η`.
+  It is the dominant control on the iteration count, and its optimum depends on both the problem
+  and the resolution.
 """
 function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     nx, ny = ni

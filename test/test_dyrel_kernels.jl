@@ -81,7 +81,13 @@ function reduced_velocity_matrix(phi_case, ni = (4, 4); cut_fraction = 0.35)
     ρg = @zeros(ni...), @zeros(ni...)
     θc = dyrel.P_num
 
-    maskV = Array(ϕ.Vx[2:(end - 1), :] .> 0), Array(ϕ.Vy[:, 2:(end - 1)] .> 0)
+    # The reduced space is whatever the kernels solve on, so the degrees of freedom have to be
+    # enumerated with the solver's own face predicate: a face carrying rock is still eliminated
+    # when its stencil reaches a void cell or vertex.
+    maskV = (
+        [JR2K.isvalid_vx_strict(ϕ, i + 1, j) for i in axes(stokes.R.Rx, 1), j in axes(stokes.R.Rx, 2)],
+        [JR2K.isvalid_vy_strict(ϕ, i, j + 1) for i in axes(stokes.R.Ry, 1), j in axes(stokes.R.Ry, 2)],
+    )
     dofs = [(d, I) for d in 1:2 for I in CartesianIndices(maskV[d]) if maskV[d][I]]
     A = zeros(length(dofs), length(dofs))
 

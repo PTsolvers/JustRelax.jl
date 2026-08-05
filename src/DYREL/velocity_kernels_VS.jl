@@ -168,7 +168,7 @@ end
             _dy_v = @dy(_di_vertex, j)
             Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-            Rx[i, j] = if isvalid_vx(ϕ, i + 1, j)
+            Rx[i, j] = if isvalid_vx_strict(ϕ, i + 1, j)
                 d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)
             else
                 0.0e0
@@ -179,7 +179,7 @@ end
             _dx_v = @dx(_di_vertex, i)
             Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-            Ry[i, j] = if isvalid_vy(ϕ, i, j + 1)
+            Ry[i, j] = if isvalid_vy_strict(ϕ, i, j + 1)
                 # free-surface stabilization term (ρg masked by ϕ.center, as in `compute_Vy!`)
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]
@@ -237,7 +237,7 @@ end
             _dy_v = @dy(_di_vertex, j)
             Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-            if isvalid_vx(ϕ, i + 1, j)
+            if isvalid_vx_strict(ϕ, i + 1, j)
                 Rx_ij = (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(θc, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
                 Rx[i, j] = Rx_ij
                 dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
@@ -254,7 +254,7 @@ end
             _dx_v = @dx(_di_vertex, i)
             Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-            if isvalid_vy(ϕ, i, j + 1)
+            if isvalid_vy_strict(ϕ, i, j + 1)
                 # free-surface stabilization term (ρg masked by ϕ.center, as in `compute_Vy!`)
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]

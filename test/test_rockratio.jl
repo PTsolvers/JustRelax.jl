@@ -89,13 +89,28 @@ end
             @test JustRelax2D.isvalid(ϕ.center, 2, 2) == true
             @test JustRelax2D.isvalid(ϕ.center, 1, 1) == false
 
-            # isvalid_vx / _vy / _vz are thin wrappers over isvalid
+            # isvalid_vx / _vy in 2D also require the cells and vertices their momentum row
+            # reads: a face carrying rock beside a void cell is eliminated, otherwise its
+            # velocity is unconstrained while its ϕ-scaled residual still looks converged.
             ϕ.Vx[3, 1] = 0.4
-            @test JustRelax2D.isvalid_vx(ϕ, 3, 1) == true
-            @test JustRelax2D.isvalid_vx(ϕ, 1, 1) == false
+            @test JustRelax2D.isvalid_vx_strict(ϕ, 3, 1) == false   # neighbours still void
+            ϕ.center[2, 1] = 0.5; ϕ.center[3, 1] = 0.5
+            ϕ.vertex[3, 1] = 0.5; ϕ.vertex[3, 2] = 0.5
+            @test JustRelax2D.isvalid_vx_strict(ϕ, 3, 1) == true
+            @test JustRelax2D.isvalid_vx_strict(ϕ, 1, 1) == false
+            ϕ.center[3, 1] = 0.0                             # one void neighbour is enough
+            @test JustRelax2D.isvalid_vx_strict(ϕ, 3, 1) == false
+            ϕ.center[3, 1] = 0.5
+
             ϕ.Vy[1, 3] = 0.6
-            @test JustRelax2D.isvalid_vy(ϕ, 1, 3) == true
-            @test JustRelax2D.isvalid_vy(ϕ, 1, 1) == false
+            @test JustRelax2D.isvalid_vy_strict(ϕ, 1, 3) == false   # neighbours still void
+            ϕ.center[1, 2] = 0.5; ϕ.center[1, 3] = 0.5
+            ϕ.vertex[1, 3] = 0.5; ϕ.vertex[2, 3] = 0.5
+            @test JustRelax2D.isvalid_vy_strict(ϕ, 1, 3) == true
+            @test JustRelax2D.isvalid_vy_strict(ϕ, 1, 1) == false
+            ϕ.vertex[2, 3] = 0.0                             # one void vertex is enough
+            @test JustRelax2D.isvalid_vy_strict(ϕ, 1, 3) == false
+            ϕ.vertex[2, 3] = 0.5
 
             # isvalid_v at (i, j) requires both Vx and Vy adjacencies AND a positive vertex
             ϕ.vertex[2, 2] = 0.3

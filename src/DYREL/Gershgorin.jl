@@ -248,7 +248,7 @@ end
     γW = γ_eff[i, j] * ϕ.center[i, j]
 
     if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
-        if isvalid_vx(ϕ, i + 1, j)
+        if isvalid_vx_strict(ϕ, i + 1, j)
             # Hoist common parameters
             dx = @dx(di_center, i)
             dy = @dy(di_vertex, j)
@@ -312,7 +312,7 @@ end
     γS = γW # reuse cached value
 
     if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
-        if isvalid_vy(ϕ, i, j + 1)
+        if isvalid_vy_strict(ϕ, i, j + 1)
             # Hoist common parameters
             dx = @dx(di_vertex, i)
             dy = @dy(di_center, j)

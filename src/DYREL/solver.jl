@@ -285,6 +285,7 @@ function _solve_DYREL!(
         # update pressure
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, false)
         @. stokes.P += dyrel.γ_eff .* stokes.R.RP
+        relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb)
 
         iter > total_iterMax && break
     end
@@ -381,6 +382,32 @@ end
     return max(hi - lo, abs(lo), abs(hi))
 end
 @inline nonzero_span(s) = iszero(s) ? one(s) : s
+
+# Compressibility of a cell, `0` for the incompressible limit `ηb = Inf` and for the cells a
+# `RockRatio` eliminates (`ηb = 0`).
+@inline volumetric_compliance(ηb) = ηb > 0 ? inv(ηb) : zero(ηb)
+
+"""
+    relax_volumetric_mode!(P, RP, ηb)
+
+Shift `P` by the constant that zeroes the uniform part of the continuity residual, `Σ RP = 0`.
+
+Momentum sees only `∇P`, so a constant in `P` is invisible to the velocity solve; with a finite
+bulk modulus `RP` still sees it, through `(P - P0)/ηb` alone, and the Powell-Hestenes update
+relaxes it at `1 - γ_eff/ηb` per pass — `O(1e-10)` for a stiff `ηb = Kb·dt` against a soft
+phase, which pins `RP` at its initial level. Solving that one scalar equation directly costs two
+reductions.
+
+A no-op in the incompressible limit, where the mode is a true null space of the whole system, and
+consistent under any boundary conditions: `δ → 0` as `RP → 0`.
+"""
+function relax_volumetric_mode!(P, RP, ηb)
+    compliance = sum_mpi(volumetric_compliance, ηb)
+    iszero(compliance) && return nothing
+    δ = sum_mpi(RP) / compliance
+    @. P += δ
+    return nothing
+end
 
 # Extrema over the entries `mask` marks valid, without materializing the selection. Masked-out
 # entries take the neutral element from the value itself, which keeps `eltype(A)` (a non-isbits

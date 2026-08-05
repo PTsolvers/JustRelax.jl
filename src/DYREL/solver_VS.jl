@@ -277,6 +277,7 @@ function _solve_DYREL!(
         # the strain-rate arrays untouched), otherwise the pressure correction lags one velocity update
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, false)
         @. stokes.P += dyrel.γ_eff .* stokes.R.RP
+        relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb)
 
         iter > total_iterMax && break
     end

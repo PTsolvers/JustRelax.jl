@@ -43,15 +43,23 @@ end
     return nothing
 end
 
+# Allocation probes for the host reductions, called from function scope: a tuple returned to
+# top-level scope is boxed there on some Julia versions, which measures the caller rather than
+# the reduction.
+noninf_stats_allocated(A) = @allocated JR2K.noninf_stats(A)
+masked_extrema_allocated(mask, A) = @allocated JR2K.masked_extrema(mask, A)
+
 # Assemble the reduced variational velocity Jacobian by applying the actual matrix-free DYREL
 # kernels to unit velocity vectors. This is intentionally tiny: it catches mask/operator/
 # Gershgorin disagreements without maintaining a second hand-written stencil.
 function reduced_velocity_matrix(phi_case, ni = (4, 4); cut_fraction = 0.35)
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
-    rheology = (SetMaterialParams(;
-        Phase = 1, Density = ConstantDensity(; ρ = 0.0), Gravity = ConstantGravity(; g = 0.0),
-        CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
-    ),)
+    rheology = (
+        SetMaterialParams(;
+            Phase = 1, Density = ConstantDensity(; ρ = 0.0), Gravity = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
+        ),
+    )
     phase_ratios = PhaseRatios(backend_JP, 1, ni)
     @parallel (@idx ni) _init_single_phase!(phase_ratios.center)
     @parallel (@idx ni .+ 1) _init_single_phase!(phase_ratios.vertex)
@@ -371,8 +379,8 @@ end
 
     @testset "noninf_mean" begin
         stats_input = [1.0, 2.0, Inf, 3.0]
-        JR2K.noninf_stats(stats_input) # compile before measuring
-        @test @allocated(JR2K.noninf_stats(stats_input)) == 0
+        noninf_stats_allocated(stats_input) # compile before measuring
+        @test noninf_stats_allocated(stats_input) == 0
         @test JR2K.noninf_mean([1.0, 2.0, Inf, 3.0]) ≈ 2.0
         @test isnan(JR2K.noninf_mean([1.0, NaN, 3.0]))  # NaN must propagate, not be filtered
         @test_throws ArgumentError JR2K.noninf_mean([Inf, Inf])
@@ -400,8 +408,8 @@ end
 
         mask = [true, false, true, true]
         A = [1.0, 100.0, 5.0, 2.0]
-        JR2K.masked_extrema(mask, A) # compile before measuring
-        @test @allocated(JR2K.masked_extrema(mask, A)) == 0
+        masked_extrema_allocated(mask, A) # compile before measuring
+        @test masked_extrema_allocated(mask, A) == 0
         @test JR2K.masked_value_span(mask, A) == 4.0  # span over {1.0, 5.0, 2.0}
         @test JR2K.masked_value_scale(mask, A) == 5.0
         @test JR2K.masked_value_span([false, false], [1.0, 2.0]) == 0.0  # empty mask ⇒ 0

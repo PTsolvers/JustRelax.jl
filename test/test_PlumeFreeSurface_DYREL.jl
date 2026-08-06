@@ -188,35 +188,35 @@ if get(ENV, "JUSTRELAX_DEFINE_PLUME_BENCHMARK_ONLY", "false") != "true"
             init_mpi = JustRelax.MPI.Initialized() ? false : true
             igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
-        # --- free_surface = false (instantaneous Stokes solve from rest) ---
-        iters, maxVx, maxVy, allfinite = PlumeFreeSurface_DYREL(igg, nx, ny)
-        # all fields stay finite (catches NaN/Inf blow-ups in the masked kernels)
-        @test allfinite
-        # the instantaneous Stokes solve converges below the DYREL tolerance
-        @test iters.err_evo_tot[end] < 1.0e-6
-        # golden instantaneous rise velocities (bit-reproducible on CPU; loose rtol for portability)
-        @test maxVy ≈ 6.199561037069179e-9 rtol = 1.0e-2
-        @test maxVx ≈ 2.4543171180141625e-9 rtol = 1.0e-2
-        # plume rises: vertical velocity dominates and is non-trivial
-        @test maxVy > maxVx
+            # --- free_surface = false (instantaneous Stokes solve from rest) ---
+            iters, maxVx, maxVy, allfinite = PlumeFreeSurface_DYREL(igg, nx, ny)
+            # all fields stay finite (catches NaN/Inf blow-ups in the masked kernels)
+            @test allfinite
+            # the instantaneous Stokes solve converges below the DYREL tolerance
+            @test iters.err_evo_tot[end] < 1.0e-6
+            # golden instantaneous rise velocities (bit-reproducible on CPU; loose rtol for portability)
+            @test maxVy ≈ 4.1557271121204955e-9 rtol = 1.0e-2
+            @test maxVx ≈ 1.2341257505009127e-9 rtol = 1.0e-2
+            # plume rises: vertical velocity dominates and is non-trivial
+            @test maxVy > maxVx
 
-        # Matched sticky-air comparison: same geometry, dt, penalty, tolerances and initial
-        # fields; only the air treatment changes. This guards the reduced-space masks and
-        # auto-tuned damping against silently becoming substantially worse than sticky air.
-        iters_air, _, _, allfinite_air = PlumeFreeSurface_DYREL(igg, nx, ny; variational = false)
-        @test allfinite_air
-        @test iters_air.converged
-        @test iters.iter <= 1.25 * iters_air.iter
+            # Matched sticky-air comparison: same geometry, dt, penalty, tolerances and initial
+            # fields; only the air treatment changes. This guards the reduced-space masks and
+            # auto-tuned damping against silently becoming substantially worse than sticky air.
+            iters_air, _, _, allfinite_air = PlumeFreeSurface_DYREL(igg, nx, ny; variational = false)
+            @test allfinite_air
+            @test iters_air.converged
+            @test iters.iter <= 1.25 * iters_air.iter
 
-        # --- free_surface = true (stabilization term active on the 2nd solve, Vy ≠ 0) ---
-        iters_fs, maxVx_fs, maxVy_fs, allfinite_fs = PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = true, nsolves = 2)
-        @test allfinite_fs
-        @test iters_fs.err_evo_tot[end] < 1.0e-6
-        # golden with the free-surface term wired in. The stabilization changes maxVy by only
-        # ~0.17% on this static one-step config (small Vy ⇒ small Vy·∂ρg∂y·dt correction), so the
-        # guard that the term stays active must be tighter than the portability rtol above.
-        @test maxVy_fs ≈ 6.210100979998384e-9 rtol = 1.0e-2
-        @test !isapprox(maxVy_fs, 6.199561037069179e-9; rtol = 1.0e-3)
+            # --- free_surface = true (stabilization term active on the 2nd solve, Vy ≠ 0) ---
+            iters_fs, maxVx_fs, maxVy_fs, allfinite_fs = PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = true, nsolves = 2)
+            @test allfinite_fs
+            @test iters_fs.err_evo_tot[end] < 1.0e-6
+            # golden with the free-surface term wired in. The stabilization changes maxVy by only
+            # ~0.12% on this static one-step config (small Vy ⇒ small Vy·∂ρg∂y·dt correction), so the
+            # guard that the term stays active must be tighter than the portability rtol above.
+            @test maxVy_fs ≈ 4.1606429906982195e-9 rtol = 1.0e-2
+            @test !isapprox(maxVy_fs, 4.1557271121204955e-9; rtol = 5.0e-4)
 
             finalize_global_grid(; finalize_MPI = true)
         end

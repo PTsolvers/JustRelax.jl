@@ -213,7 +213,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
             println("   Time/iteration:  $(t_stokes / out.iter) s")
         end
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di)
+        dt = compute_dt(stokes, di, igg)
         # ------------------------------
 
         # Advection --------------------
@@ -229,10 +229,9 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
         inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
-        if igg.me == 0
-            @show it += 1
-            t += dt
-        end
+        it += 1
+        t += dt
+        igg.me == 0 && @show it
 
         #MPI gathering
         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
@@ -260,7 +259,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
             gather!(Vyv_nohalo, Vyv_v)
             gather!(Vzv_nohalo, Vzv_v)
         end
-        @views T_nohalo .= Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array(thermal.T[3:(end - 2), 3:(end - 2), 3:(end - 2)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         # Data I/O and plotting ---------------------

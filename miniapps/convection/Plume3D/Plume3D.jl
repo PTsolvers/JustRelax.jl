@@ -429,7 +429,6 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
             save(joinpath(figdir, "$(it).png"), fig)
         end
         # ------------------------------
-break
     end
 
     return nothing

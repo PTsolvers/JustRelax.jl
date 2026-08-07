@@ -175,6 +175,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     λ_relaxation_DR = 1,
                     viscosity_relaxation = 1,
                     viscosity_cutoff = viscosity_cutoff,
+                    use_gershgorin_ad = true,
                     # verbose_DR = false,
                 )
             )

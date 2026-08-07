@@ -1,4 +1,4 @@
-function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt)
+function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation, dt, do_partials = false)
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
@@ -17,7 +17,8 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt
         stokes.viscosity.ηv,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
-        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt
+        dyrel,
+        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, do_partials
     )
     return nothing
 end
@@ -39,7 +40,8 @@ end
         ηv,
         η_vep,
         ΔPψ,
-        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt
+        dyrel,
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, do_partials::Bool
     )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
@@ -65,6 +67,8 @@ end
         ε_pl[3][I...] = εxy_pl
         λv[I...] = λ_I
 
+        do_partials && (dyrel.∂τxyv_∂εxy[I...] = local_stress_dτxy_dεxy(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv))
+
         ## CENTER CALCULATION
         if all(I .≤ ni)
             τij_o = τ_o[1][I...], τ_o[2][I...], τ_o[3][I...]
@@ -86,6 +90,11 @@ end
             η_vep[I...] = ηvep_I
             λ[I...] = λ_I
             ΔPψ[I...] = ΔPψ_I
+
+            if do_partials
+                dyrel.∂τxxc_∂εxx[I...] = local_stress_dτxx_dεxx(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
+                dyrel.∂τyyc_∂εyy[I...] = local_stress_dτyy_dεyy(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
+            end
         end
     end
 
@@ -98,7 +107,7 @@ end
 # τ instead of relaunching a kernel that reads the stress tensor back. The τII-viscosity update
 # is purely local (same cell), so this is race-free and needs no halo.
 function compute_stress_viscosity_DRYEL!(
-        stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
+        stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, dyrel = nothing, do_partials::Bool = false
     )
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_viscosity_DRYEL!(
@@ -121,6 +130,7 @@ function compute_stress_viscosity_DRYEL!(
         θc, stokes.R.RP, γ_eff,                             # small pressure correction θc = γ_eff·RP + ΔPψ
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt,
         viscosity_relaxation, args, viscosity_cutoff, linear_viscosity,
+        dyrel, do_partials,
     )
     return nothing
 end
@@ -153,7 +163,8 @@ end
         ΔPψ,
         θc, RP, γ_eff,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
-        ν, visc_args, cutoff, linear_viscosity
+        ν, visc_args, cutoff, linear_viscosity,
+        dyrel, do_partials::Bool
     )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
@@ -177,6 +188,8 @@ end
         τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
         ε_pl[3][I...] = εxy_pl
         λv[I...] = λ_I
+
+        do_partials && (dyrel.∂τxyv_∂εxy[I...] = local_stress_dτxy_dεxy(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv))
 
         # fused τII-viscosity update at the vertex (reuses in-register stress)
         if !linear_viscosity
@@ -205,6 +218,11 @@ end
             λ[I...] = λ_I
             ΔPψ[I...] = ΔPψ_I
 
+            if do_partials
+                dyrel.∂τxxc_∂εxx[I...] = local_stress_dτxx_dεxx(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
+                dyrel.∂τyyc_∂εyy[I...] = local_stress_dτyy_dεyy(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
+            end
+
             # small pressure correction θc = P_num + ΔPψ = γ_eff·RP + ΔPψ (ΔPψ_I in-register). Both
             # terms are small corrections of similar magnitude, so summing them is precision-safe;
             # the large hydrostatic P is kept separate in the momentum kernel. Collapses the momentum
@@ -221,7 +239,10 @@ end
     return nothing
 end
 
-@generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt, EII) where {N}
+@inline compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII) =
+    compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, true)
+
+@generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt, EII, do_plastic::Bool) where {N}
     return quote
         @inline
         # iterate over phases
@@ -236,7 +257,7 @@ end
                 G = get_shear_modulus(rheology, phase)
                 Kb = get_bulk_modulus(rheology, phase)
                 ratio_I .* _compute_local_stress(
-                    εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology[phase], dt, EII
+                    εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology[phase], dt, EII, do_plastic
                 )
             end
         end
@@ -246,10 +267,32 @@ end
     end
 end
 
-@inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology, dt, EII)
+@inline function local_stress_dτxx_dεxx(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
+    return ForwardDiff.derivative(
+        εxx -> compute_local_stress((εxx, zero(εxx) + εij[2], zero(εxx) + εij[3]), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, false)[1],
+        εij[1],
+    )
+end
+
+@inline function local_stress_dτyy_dεyy(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
+    return ForwardDiff.derivative(
+        εyy -> compute_local_stress((zero(εyy) + εij[1], εyy, zero(εyy) + εij[3]), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, false)[2],
+        εij[2],
+    )
+end
+
+@inline function local_stress_dτxy_dεxy(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII)
+    return ForwardDiff.derivative(
+        εxy -> compute_local_stress((zero(εxy) + εij[1], zero(εxy) + εij[2], εxy), τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, false)[3],
+        εij[3],
+    )
+end
+
+@inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology, dt, EII, do_plastic::Bool)
     # Only is_pl and η_reg are still needed locally; F + gradients come from GeoParams.
     # EII=0 here matches the existing DYREL pattern (no EII-softening in the inner loop).
     ispl, _, _, _, _, η_reg = plastic_params(rheology, EII)
+    ispl = do_plastic && ispl
 
     # viscoelastic viscosity
     η_ve = isinf(G) ?
@@ -262,7 +305,7 @@ end
     εII = second_invariant(εij_eff)
 
     # early return if there is no deformation
-    iszero(εII) && return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η, 0.0)
+    iszero(εII) && return SA[zero_tuple(εij)..., zero_tuple(εij)..., zero(εII), zero(εII), zero(εII), η, zero(εII)]
 
     # trial stress
     τij = @. 2 * η_ve * εij_eff
@@ -302,21 +345,22 @@ end
     # Effective viscoelastic-plastic viscosity
     η_vep = τII * 0.5 * inv(second_invariant(εij))
 
-    return τij..., εij_pl..., τII, λ, ΔPψ, η_vep, ε_vol_pl
+    return SA[τij..., εij_pl..., τII, λ, ΔPψ, η_vep, ε_vol_pl]
 end
 
 # this returns zero for: τxx, τyy, τxy, εxx_pl, εyy_pl, εxy_pl, τII, λ, ΔPψ, ηvep, ε_vol_pl
-@inline empty_stress_solution(::NTuple{3, T}) where {T} = zero_tuple(T, Val(11))
+@inline empty_stress_solution(::NTuple{3, T}) where {T} = zero_static_vector(T, Val(11))
 # 3D placeholder: τxx, τyy, τzz, τyz, τxz, τxy, εxx_pl..εxy_pl, τII, λ, ΔPψ, ηvep, ε_vol_pl
-@inline empty_stress_solution(::NTuple{6, T}) where {T} = zero_tuple(T, Val(17))
+@inline empty_stress_solution(::NTuple{6, T}) where {T} = zero_static_vector(T, Val(17))
 
 @inline zero_tuple(::Type{T}, ::Val{N}) where {T, N} = ntuple(_ -> zero(T), Val(N))
 @inline zero_tuple(::NTuple{N, T}) where {T, N} = zero_tuple(T, Val(N))
+@inline zero_static_vector(::Type{T}, ::Val{N}) where {T, N} = SA[zero_tuple(T, Val(N))...]
 
 
 ## VARIATIONAL STOKES STRESS KERNELS
 
-function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt)
+function compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt, do_partials = false)
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
@@ -334,8 +378,9 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.Roc
         stokes.viscosity.η,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
+        dyrel,
         ϕ::JustRelax.RockRatio,
-        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt
+        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, do_partials
     )
     return nothing
 end
@@ -356,8 +401,9 @@ end
         η,
         η_vep,
         ΔPψ,
+        dyrel,
         ϕ::JustRelax.RockRatio,
-        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, do_partials::Bool
     )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
@@ -383,6 +429,8 @@ end
             τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
             ε_pl[3][I...] = εxy_pl
             λv[I...] = λ_I
+
+            do_partials && (dyrel.∂τxyv_∂εxy[I...] = local_stress_dτxy_dεxy(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij))
 
         else
             τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = 0.0e0, 0.0e0, 0.0e0
@@ -412,6 +460,11 @@ end
                 η_vep[I...] = ηvep_I
                 λ[I...] = λ_I
                 ΔPψ[I...] = ΔPψ_I
+
+                if do_partials
+                    dyrel.∂τxxc_∂εxx[I...] = local_stress_dτxx_dεxx(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
+                    dyrel.∂τyyc_∂εyy[I...] = local_stress_dτyy_dεyy(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
+                end
 
             else
                 τ[1][I...], τ[2][I...], τ[3][I...] = 0.0e0, 0.0e0, 0.0e0

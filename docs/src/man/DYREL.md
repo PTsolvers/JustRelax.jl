@@ -45,6 +45,7 @@ solve_DYREL!(
         viscosity_relaxation = 1,
         linear_viscosity     = true,
         viscosity_cutoff     = (-Inf, Inf),
+        use_gershgorin_ad    = false,
     )
 );
 ```
@@ -59,6 +60,7 @@ where the solver keyword arguments are:
 - `viscosity_relaxation` $\rightarrow$ relaxation coefficient for the viscosity. `viscosity_relaxation=1` means no relaxation.
 - `linear_viscosity` $\rightarrow$ if the rheology is linear (viscosity will not be updated during the solver iterations).
 - `viscosity_cutoff` $\rightarrow$ viscosity is clamped so that $\text{viscosity_cutoff}_1 \leq \eta \leq \text{viscosity_cutoff}_2$.
+- `use_gershgorin_ad` $\rightarrow$ use AD-based estimates for the DYREL pseudo-time-step/preconditioner update. Default is `false`.
 
 # Examples
 

@@ -27,7 +27,7 @@ end
 using JustPIC
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else

@@ -29,7 +29,7 @@ using JustPIC
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else

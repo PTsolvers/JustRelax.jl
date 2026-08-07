@@ -16,7 +16,7 @@ description: How JustRelax.jl handles CPU/CUDA/AMDGPU backends — module struct
 
 - **Solver code is written once** in `src/` using ParallelStencil macros; the GPU extensions re-include shared code with a different `@init_parallel_stencil`. A change to solver logic in `src/` must work on all backends — check whether the file is included from `src/ext/CUDA/2D.jl` etc. too.
 - ParallelStencil's `@init_parallel_stencil` is **once per module per session**. Switching backend or dimensionality requires a fresh Julia process. Never try to re-init in the same session.
-- User-facing scripts/tests select the backend via `ENV["JULIA_JUSTRELAX_BACKEND"]` (`CPU`/`CUDA`/`AMDGPU`) and pass `backend_JR` (e.g. `CPUBackend`) to constructors like `StokesArrays(backend_JR, ni)`. JustPIC has its *own* backend constant (`JustPIC.CPUBackend`) — they are different types; don't mix them.
+- User-facing scripts/tests select the backend via `ENV["JULIA_JUSTRELAX_BACKEND"]` (`CPU`/`CUDA`/`AMDGPU`) and pass `backend_JR` (e.g. `CPUBackend`) to constructors like `StokesArrays(backend_JR, ni)`. JustPIC dispatches on KernelAbstractions backends — `JustPIC.CPU` on the host, and `CUDA.CUDABackend` / `AMDGPU.ROCBackend` on device (JustPIC binds neither vendor tag itself; its extensions do). These are different types from JustRelax's; don't mix them.
 - Dispatch on device is done via traits (`backend(::CuArray) = CUDABackendTrait()`), not via `isa CuArray` checks. Follow that pattern.
 - MPI/halo exchange goes through ImplicitGlobalGrid (`IGG`); CUDA-aware MPI is enabled in CI with `IGG_CUDAAWARE_MPI=1`.
 

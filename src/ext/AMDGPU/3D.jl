@@ -497,7 +497,7 @@ end
 function JR3D.rotate_stress_particles!(
         τ::NTuple,
         ω::NTuple,
-        particles::Particles{JustPIC.AMDGPUBackend},
+        particles::Particles{ROCBackend},
         dt;
         method::Symbol = :matrix,
     )
@@ -526,7 +526,7 @@ end
 
 function JR3D.stress2grid!(
         stokes,
-        τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+        τ_particles::JustRelax.StressParticles{ROCBackend},
         particles,
     )
     stress2grid!(stokes, τ_particles, particles)
@@ -534,7 +534,7 @@ function JR3D.stress2grid!(
 end
 
 function JR3D.rotate_stress!(
-        τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+        τ_particles::JustRelax.StressParticles{ROCBackend},
         stokes,
         particles,
         dt,
@@ -545,7 +545,7 @@ end
 
 # Phase ratios with arrays
 function JR3D.update_phase_ratios_3D!(
-        phase_ratios::JustPIC.PhaseRatios{AMDGPUBackend, T},
+        phase_ratios::JustPIC.PhaseRatios{ROCBackend, T},
         phase_arrays::NTuple{N, ROCArray{U, 3}},
         xci,
         xvi

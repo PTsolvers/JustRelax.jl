@@ -72,13 +72,26 @@ The five names JustPIC no longer exports are written as `JustPIC.compute_dx`,
 
 ## Phases
 
-0. **Particle-loss investigation — tracked in JustPIC, not a blocker here.**
-   On JustPIC main a uniform velocity field loses particles: with one cell of
-   displacement, 444 of 24576 particles disappear and 220 cells are left partially
-   filled, scaling with the number of steps and reproducing at 1, 2, 4 and 8 ranks.
-   Because it reproduces in serial it is not an MPI fault. Until it is resolved these
-   numbers are the reference the port is compared against, so a regression introduced
-   here is still distinguishable from the pre-existing loss.
+0. **Particle-loss investigation — resolved, no defect.**
+   Particles disappearing under a uniform velocity field turned out to be the
+   `max_xcell` per-cell capacity doing its job. A fractional-cell displacement moves a
+   random share of each cell's particles into its neighbours, so occupancy fluctuates
+   above the seeded `nxcell` before settling; `move_particles!` discards whatever
+   exceeds `max_xcell`, permanently. Seeded with `nxcell = 24` on a diagonal uniform
+   flow, cells transiently reach 35:
+
+   | `max_xcell` | particles lost |
+   | ---: | ---: |
+   | 24 | 50% |
+   | 32 | 28% |
+   | 40 | 8.6% |
+   | 64 | none |
+
+   Registry JustPIC 0.6.7 produces the same table, so this is neither new in the
+   rewrite nor affected by the port. `max_xcell` has to clear the transient peak for
+   the flow, not just the seeded count; `nxcell, max_xcell = 24, 40` as used in
+   JustPIC's example scripts is too tight for strong advection.
+
 1. **Load.** `src/JustRelax_CPU.jl` and `src/ext/{CUDA,AMDGPU}/{2,3}D.jl`: drop the
    submodule imports, apply the three decisions, move backend dispatch onto the
    KernelAbstractions tags. Done when the package precompiles.

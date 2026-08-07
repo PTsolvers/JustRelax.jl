@@ -23,14 +23,14 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._3D
+using JustPIC
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     JustPIC.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------

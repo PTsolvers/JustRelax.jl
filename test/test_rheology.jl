@@ -21,13 +21,13 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     JustPIC.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 @testset "Rheology" begin
@@ -281,7 +281,7 @@ end
                     Solubility = sol,
                 ),
             )
-            pr = JustPIC._2D.PhaseRatios(backend_JP, 1, ni)
+            pr = JustPIC.PhaseRatios(backend_JP, 1, ni)
             JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...),), xci, xvi)
 
             mH2O = @zeros(ni...)
@@ -447,7 +447,7 @@ end
         # passing plain Vector{Float64} causes `T = Vector{Float64}` to leak into
         # `@MVector @zeros(T, N)`, which is a separate API constraint not relevant here.
         nx, ny = 4, 4
-        pr = JustPIC._2D.PhaseRatios(backend_JP, 2, (nx, ny))
+        pr = JustPIC.PhaseRatios(backend_JP, 2, (nx, ny))
         xvi = (range(0.0, 1.0; length = nx + 1), range(0.0, 1.0; length = ny + 1))
         xci = (range(0.125, 0.875; length = nx), range(0.125, 0.875; length = ny))
 
@@ -490,7 +490,7 @@ end
         @test all(sum(Vy_h[i, j]) ≈ 1.0 for i in axes(Vy_h, 1), j in axes(Vy_h, 2))
 
         # Threshold path: a tiny third phase (< 1e-5) should be cleaned to zero.
-        pr3 = JustPIC._2D.PhaseRatios(backend_JP, 3, (nx, ny))
+        pr3 = JustPIC.PhaseRatios(backend_JP, 3, (nx, ny))
         p1b = @fill(0.6, nx, ny)
         p2b = @fill(0.4, nx, ny)
         p3b = @fill(1.0e-6, nx, ny)             # below the 1e-5 threshold

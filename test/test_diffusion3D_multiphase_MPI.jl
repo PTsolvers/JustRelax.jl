@@ -27,7 +27,7 @@ end
 
 
 using JustPIC
-using JustPIC._3D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
@@ -36,7 +36,7 @@ const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 @parallel_indices (i, j, k) function init_T!(T, z, lz)

@@ -83,8 +83,7 @@ The five names JustPIC no longer exports are written as `JustPIC.compute_dx`,
    submodule imports, apply the three decisions, move backend dispatch onto the
    KernelAbstractions tags. Done when the package precompiles.
 2. **Test suite, CPU, serial.** Done when `Pkg.test()` passes.
-3. **MPI tests.** Done when the `*_MPI.jl` tests pass at 2 and 4 ranks. Includes
-   guarding `update_cell_halo!`, which now throws when the domain is not decomposed.
+3. **MPI tests.** Done when the `*_MPI.jl` tests pass at 2 and 4 ranks.
 4. **Miniapps.** Done when one miniapp per family runs (2D/3D, serial/MPI).
 5. **Docs.** Done when every `julia` block in `docs/src/man` still runs.
 6. **Compat.** `[compat]` bounds, version bump, CI matrix.

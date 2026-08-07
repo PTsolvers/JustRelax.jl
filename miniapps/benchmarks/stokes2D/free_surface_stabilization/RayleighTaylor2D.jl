@@ -4,9 +4,9 @@ using Pkg; Pkg.activate("miniapps")
 const backend_JR = CUDABackend
 # const backend_JR = CPUBackend
 
-using JustPIC, JustPIC._2D
-const backend = CUDABackend
-# const backend = JustPIC.CPUBackend
+using JustPIC
+const backend = CUDA.CUDABackend
+# const backend = JustPIC.CPU
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(CUDA, Float64, 2)

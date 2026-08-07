@@ -30,7 +30,7 @@ particles     = TA(backend)(Float64, data["particles"])
 phases        = TA(backend)(Float64, data["phases"])
 phase_ratios  = TA(backend)(Float64, data["phase_ratios"])
 particle_args = TA(backend).(Float64, data["particle_args"])
-subgrid_arrays  = SubgridDiffusionCellArrays(particles)
+subgrid_arrays  = SubgridDiffusionCellArrays(particles; loc = :center)
 ```
 
 ## Load Stokes and Thermal arrays from checkpoint file

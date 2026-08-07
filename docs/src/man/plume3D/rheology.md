@@ -1,6 +1,6 @@
 # Using GeoParams.jl to define the rheology of the material phases
 
-In this example, we will define a rheology for a 3D plume model using the `GeoParams.jl` package. The model will consist of for four different rheology layers: upper crust, lower crust, lithospheric mantle, and sublithospheric mantle. We will use a non-Newtoninan visco-elasto-plastic rheology.
+In this example, we will define a rheology for a 3D plume model using the `GeoParams.jl` package. The model consists of five material phases: upper crust, lower crust, lithospheric mantle, sublithospheric mantle, and the plume itself. We will use a non-Newtonian visco-elasto-plastic rheology.
 
 We will start by defining the physical parameters of the diffusion and dislocation creep laws of every phase:
 
@@ -26,17 +26,15 @@ el_sublithospheric_mantle = SetConstantElasticity(; G = 67.0e9, ν = 0.5)
 β_sublithospheric_mantle  = inv(get_Kb(el_sublithospheric_mantle))
 ```
 
-plastic properties, where we use the regularised Drucker-Prager model:
+plastic properties, where we use the regularized Drucker-Prager model:
 ```julia
 η_reg    = 1.0e16
 cohesion = 3.0e6
-friction = asind(0.2)
-pl_crust = DruckerPrager_regularised(; C = cohesion, ϕ = friction, η_vp = η_reg, Ψ = 0.0) 
-friction = asind(0.3)
-pl       = DruckerPrager_regularised(; C = cohesion, ϕ = friction, η_vp = η_reg, Ψ = 0.0) # 
+pl_crust = DruckerPrager_regularised(; C = cohesion, ϕ = asind(0.2), η_vp = η_reg, Ψ = 0.0)
+pl       = DruckerPrager_regularised(; C = cohesion, ϕ = asind(0.3), η_vp = η_reg, Ψ = 0.0)
 ```
 
-then the pressure- and temperature-dependant thermal conductivities for the crust and mantle:
+then the pressure- and temperature-dependent thermal conductivities for the crust and mantle:
 ```julia
 K_crust = TP_Conductivity(;
     a = 0.64,
@@ -52,7 +50,7 @@ K_mantle = TP_Conductivity(;
 )
 ```
 
-and finally we can things up together in a `rheology` tuple along with other material properties:
+and finally we can put things together in a `rheology` tuple along with the other material properties. The plume shares its creep, elastic and thermal properties with the sublithospheric mantle, and differs only in its reference density `ρ0`, which is 50 kg/m³ lighter; this density contrast is what drives the upwelling:
 ```julia
 rheology = (
     # Name              = "UpperCrust",
@@ -83,9 +81,18 @@ rheology = (
         CompositeRheology= CompositeRheology((disl_lithospheric_mantle, diff_lithospheric_mantle, el_lithospheric_mantle, pl)),
         Elasticity       = el_lithospheric_mantle,
     ),
-    # Name              = "Plume",
+    # Name              = "SubLithosphericMantle",
     SetMaterialParams(;
         Phase            = 4,
+        Density          = PT_Density(; ρ0 = 3.3e3, β = β_sublithospheric_mantle, T0 = 0.0, α = 3.0e-5),
+        HeatCapacity     = ConstantHeatCapacity(; Cp = 1.25e3),
+        Conductivity     = K_mantle,
+        CompositeRheology= CompositeRheology((disl_sublithospheric_mantle, diff_sublithospheric_mantle, el_sublithospheric_mantle)),
+        Elasticity       = el_sublithospheric_mantle,
+    ),
+    # Name              = "Plume",
+    SetMaterialParams(;
+        Phase            = 5,
         Density          = PT_Density(; ρ0 = 3.3e3 - 50, β = β_sublithospheric_mantle, T0 = 0.0, α = 3.0e-5),
         HeatCapacity     = ConstantHeatCapacity(; Cp = 1.25e3),
         Conductivity     = K_mantle,

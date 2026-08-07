@@ -3,7 +3,7 @@
         phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractMatrix}, xci, xvi
     ) where {B, T <: AbstractMatrix, N}
 
-JustRelax routine based on `JustPIC._2D.update_phase_ratios!` or `JustPIC._3D.update_phase_ratios!`.
+JustRelax routine based on `JustPIC.update_phase_ratios!`.
 Update the phase ratios in `phase_ratios` using the provided `phase_arrays`, `xci`, and `xvi`.
 The phase arrays need to be AbstractArrays and have values between 0 and 1.
 
@@ -38,7 +38,7 @@ end
         phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractArray}, xci, xvi
     ) where {B, T <: AbstractArray, N}
 
-JustRelax routine based on `JustPIC._2D.update_phase_ratios!` or `JustPIC._3D.update_phase_ratios!`.
+JustRelax routine based on `JustPIC.update_phase_ratios!`.
 Update the phase ratios in `phase_ratios` using the provided `phase_arrays`, `xci`, and `xvi`.
 The phase arrays need to be AbstractArrays and have values between 0 and 1.
 
@@ -121,7 +121,7 @@ function phase_ratios_vertex_from_arrays!(
     ) where {N, ND}
 
     ni = size(first(phase_arrays)) .+ 1
-    di = compute_dx(xvi)
+    di = JustPIC.compute_dx(xvi)
 
     @parallel (@idx ni) phase_ratios_vertex_from_arrays_kernel!(
         phase_ratios.vertex, phase_arrays, xci, xvi, di
@@ -215,8 +215,8 @@ function phase_ratios_face_from_arrays!(
         phase_face, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, dimension::Symbol
     ) where {N, ND}
     ni = size(first(phase_arrays))  # Cell grid size
-    di = compute_dx(xci)
-    offsets = face_offset(Val(ND), dimension)
+    di = JustPIC.compute_dx(xci)
+    offsets = JustPIC.face_offset(Val(ND), dimension)
     face_ni = ntuple(d -> ni[d] + offsets[d], Val(ND))
 
     @parallel (@idx face_ni) phase_ratios_face_from_arrays_kernel!(
@@ -297,7 +297,7 @@ function phase_ratios_midpoint_from_arrays!(
         phase_midpoints, phase_arrays::NTuple{N, AbstractArray}, xci, dimension
     ) where {N}
     ni = size(first(phase_arrays))  # Cell grid size
-    di = compute_dx(xci)
+    di = JustPIC.compute_dx(xci)
 
     # Define staggered offsets for midpoint grids
     offsets = if dimension === :xy

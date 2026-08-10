@@ -301,6 +301,22 @@ function JR2D.compute_melt_fraction!(
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
+function JR2D.compute_melt_fraction!(
+        ϕ::CuArray, dϕdT, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_melt_fraction!(ϕ, dϕdT, phase_ratios, rheology, args)
+end
+
+function JR2D.compute_melt_fraction_derivative!(dϕdT::CuArray, rheology, args)
+    return compute_melt_fraction_derivative!(dϕdT, rheology, args)
+end
+
+function JR2D.compute_melt_fraction_derivative!(
+        dϕdT::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_melt_fraction_derivative!(dϕdT, phase_ratios, rheology, args)
+end
+
 ## Solubility
 function JR2D.compute_dissolved_volatiles!(
         mH2O::CuArray, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args

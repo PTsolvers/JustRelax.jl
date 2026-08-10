@@ -140,6 +140,9 @@ function _heatdiffusion_PT!(
     end
 
     if isnothing(igg) || igg.me == 0
+        if err > ϵ
+            @warn "heatdiffusion_PT! stopped at iterMax = $iterMax without converging: err = $err > ϵ = $ϵ"
+        end
         println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
         println("====================================\n")
     end
@@ -296,6 +299,9 @@ function _heatdiffusion_PT!(
     end
 
     if isnothing(igg) || igg.me == 0
+        if err > ϵ
+            @warn "heatdiffusion_PT! stopped at iterMax = $iterMax without converging: err = $err > ϵ = $ϵ"
+        end
         println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
         println("====================================\n")
     end

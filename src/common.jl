@@ -65,7 +65,7 @@ include("rheology/Viscosity.jl")
 export compute_viscosity!, compute_viscosity_εII!, compute_viscosity_τII!
 
 include("rheology/Melting.jl")
-export compute_melt_fraction!
+export compute_melt_fraction!, compute_melt_fraction_derivative!
 
 include("rheology/Solubility.jl")
 export compute_dissolved_volatiles!

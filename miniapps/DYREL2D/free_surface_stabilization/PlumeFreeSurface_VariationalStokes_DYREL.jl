@@ -208,7 +208,8 @@ function main(igg, nx, ny)
             igg;
             kwargs = (;
                 air_phase = air_phase,
-                iterMax = 100.0e3,
+                iterMax_PH = 1.0e3,
+                iterMax_DR = 100.0e3,
                 nout = 100,
                 rel_drop = 1.0e-2,
                 λ_relaxation_PH = 1,

@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -134,7 +134,7 @@ function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL_VS")
     # Initialize particles -------------------------------
     # particles are seeded with bare rand(); fix the seed so runs are comparable
     Random.seed!(1234)
-    nxcell, max_xcell, min_xcell = 125, 175, 75
+    nxcell, max_xcell, min_xcell = 125, 250, 75
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
@@ -192,12 +192,17 @@ function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL_VS")
 
     # Time loop
     t, it = 0.0, 0
-    dt = 25.0e3 * (3600 * 24 * 365.25)
+    dt = 10.0e3 * (3600 * 24 * 365.25)
     dt_max = 50.0e3 * (3600 * 24 * 365.25)
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6, γfact = 100)
+    # dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6, γfact = 50)
+    dyrel = DYREL(
+        backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt;
+        CFL = 0.99, c_fact = 0.9,
+        ϵ = 1.0e-6, γfact = 120,
+    )
 
-    while it < 1000 #00
+    while it < 200#000
 
         # Stokes solver ----------------
         # Variational DYREL Stokes solve (ϕ positional, after phase_ratios) --
@@ -215,12 +220,14 @@ function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL_VS")
             igg;
             kwargs = (;
                 air_phase = air_phase,
-                iterMax = 100.0e3,
-                nout = 50,
-                rel_drop = 1.0e-2,
+                total_iterMax = 250.0e3,
+                iterMax_PH = 50.0e3,
+                iterMax_DR = 50.0e3,
+                nout = 100,
+                rel_drop = 0.1,
                 λ_relaxation_PH = 1,
                 λ_relaxation_DR = 1,
-                viscosity_relaxation = 1.0e-2,
+                viscosity_relaxation = 1,
                 linear_viscosity = true,
                 free_surface = true,
                 verbose_PH = true,
@@ -240,7 +247,16 @@ function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL_VS")
         inject_particles_phase!(particles, pPhases, (), ())
 
         # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        # JustPIC v0.6.7 applies its mean-height correction with the opposite sign. Preserve
+        # the pre-advection mean here and translate every chain representation consistently.
+        chain_mean0 = sum(chain.h_vertices) / length(chain.h_vertices)
+        semilagrangian_advection_markerchain!(
+            chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt
+        )
+        chain_shift = chain_mean0 - sum(chain.h_vertices) / length(chain.h_vertices)
+        chain.h_vertices .+= chain_shift
+        chain.h_vertices0 .+= chain_shift
+        chain.coords[2].data .+= chain_shift
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
@@ -255,20 +271,41 @@ function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL_VS")
             chain_x, chain_y = chain.coords
 
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-            nt = 5
+            nt = 10
+            nt = 2
+            println("Plotting...")
+            # One marker per particle costs seconds per figure and dominates the time loop once
+            # the solve runs on a GPU. The phase field goes in as a heatmap of the dominant
+            # phase per cell, and only every `nskip`-th particle is drawn over it.
+            nskip = 4
+            # `.data` is laid out as (cells, slots), so the slot axis is the one to stride:
+            # striding the flattened array drops whole columns of cells and stripes the figure.
+            sub_particles(A) = vec(Array(A.data)[:, 1:nskip:end, :])
+            phase_c = Array([argmax(p) for p in Array(phase_ratios.center)])
             fig = Figure(size = (900, 900), title = "t = $t")
             ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
-            # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
-            scatter!(ax, Array(px.data[:]) .* 1.0e-3, Array(py.data[:]) .* 1.0e-3, color = Array(pPhases.data[:]), colormap = :grayC)
-            scatter!(ax, Array(chain_x.data[:]) .* 1.0e-3, Array(chain_y.data[:]) .* 1.0e-3, color = :red)
+            # heatmap!(ax, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, phase_c, colormap = :grayC)
+            scatter!(
+                ax, sub_particles(px) .* 1.0e-3, sub_particles(py) .* 1.0e-3,
+                color = sub_particles(pPhases),
+                colormap = :vikO,
+                # colormap = :grayC,
+                markersize = 3,
+            )
+            scatter!(
+                ax, Array(chain_x.data[:]) .* 1.0e-3, Array(chain_y.data[:]) .* 1.0e-3,
+                color = :red,
+                markersize = 5,
+            )
             arrows2d!(
                 ax,
                 xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
                 lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),
-                color = :red,
+                color = :black,
             )
             fig
             save(joinpath(figdir, "$(it).png"), fig)
+            println("... figure saved.")
 
         end
     end
@@ -277,7 +314,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 # (Path)/folder where output data and figures are stored
-n = 64
+n = 64 * 2
 nx = n
 ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

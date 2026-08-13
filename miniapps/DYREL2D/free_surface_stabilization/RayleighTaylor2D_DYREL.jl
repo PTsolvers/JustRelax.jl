@@ -1,16 +1,35 @@
-# using CUDA
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
-# const backend_JR = CUDABackend
-const backend_JR = CPUBackend
 
-using JustPIC, JustPIC._2D
-# const backend = CUDABackend
-const backend = JustPIC.CPUBackend
+const backend_JR = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-# @init_parallel_stencil(CUDA, Float64, 2)
-@init_parallel_stencil(Threads, Float64, 2)
+
+# The array backend and the ParallelStencil backend have to be the same one: `@zeros` allocates
+# through ParallelStencil, and those arrays are handed to kernels alongside the `StokesArrays`.
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC, JustPIC._2D
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 # Load script dependencies
 using LinearAlgebra, GeoParams, CairoMakie
@@ -156,21 +175,11 @@ function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL")
     # Time loop
     t, it = 0.0, 0
     dt = 10.0e3 * (3600 * 24 * 365.25)
-    dt_max = 50.0e3 * (3600 * 24 * 365.25)
+    dt_max = 25.0e3 * (3600 * 24 * 365.25)
 
-    _di = inv.(di)
-    (; ϵ_rel, r, θ_dτ, ηdτ) = pt_stokes
-    (; η, η_vep) = stokes.viscosity
-    ni = size(stokes.P)
-    iterMax = 15.0e3
-    nout = 1.0e3
-    viscosity_cutoff = (-Inf, Inf)
-    free_surface = false
-    ητ = @zeros(ni...)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6, γfact = 110)
 
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
-
-    while it < 1000
+    while it < 20 # 100
 
         ## variational solver
         # Stokes solver ----------------
@@ -188,7 +197,7 @@ function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL")
             kwargs = (;
                 iterMax = 250.0e3,
                 nout = 100,
-                rel_drop = 1.0e-2,
+                rel_drop = 0.75,
                 λ_relaxation_PH = 1,
                 λ_relaxation_DR = 1,
                 viscosity_relaxation = 1.0e-2,
@@ -215,23 +224,39 @@ function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL")
         @show it += 1
         t += dt
 
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || rem(it, 10) == 0
             px, py = particles.coords
-
+          
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-            nt = 5
+            nt = 10
+            println("Plotting...")
+            # One marker per particle costs seconds per figure and dominates the time loop once
+            # the solve runs on a GPU. The phase field goes in as a heatmap of the dominant
+            # phase per cell, and only every `nskip`-th particle is drawn over it.
+            nskip = 4
+            # `.data` is laid out as (cells, slots), so the slot axis is the one to stride:
+            # striding the flattened array drops whole columns of cells and stripes the figure.
+            sub_particles(A) = vec(Array(A.data)[:, 1:nskip:end, :])
+            phase_c = Array([argmax(p) for p in Array(phase_ratios.center)])
             fig = Figure(size = (900, 900), title = "t = $t")
             ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
-            # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
-            scatter!(ax, Array(px.data[:]) .* 1.0e-3, Array(py.data[:]) .* 1.0e-3, color = Array(pPhases.data[:]), colormap = :grayC)
+            # heatmap!(ax, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, phase_c, colormap = :grayC)
+            scatter!(
+                ax, sub_particles(px) .* 1.0e-3, sub_particles(py) .* 1.0e-3,
+                color = sub_particles(pPhases), 
+                colormap = :vikO, 
+                # colormap = :grayC, 
+                markersize = 3,
+            )
             arrows2d!(
                 ax,
                 xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
                 lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),
-                color = :red,
+                color = :white,
             )
             fig
             save(joinpath(figdir, "$(it).png"), fig)
+            println("... figure saved.")
 
         end
     end
@@ -241,7 +266,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n = 64
+n = 256
 nx = n
 ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

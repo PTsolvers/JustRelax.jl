@@ -48,6 +48,7 @@ function _solve_DYREL!(
     maskV = (ϕ.Vx[2:(end - 1), :] .> 0, ϕ.Vy[:, 2:(end - 1)] .> 0)
     maskP = ϕ.center .> 0
     @parallel (@idx ni) update_valid_c_mask!(maskP, ϕ)
+    @parallel (@idx ni) update_valid_v_masks!(maskV..., ϕ)
     # velocity interiors, which is what maskV is shaped like; views alias the parent, so these
     # stay current for the whole solve
     Vi = ntuple(d -> @views(@velocity(stokes)[d][2:(end - 1), 2:(end - 1)]), dim)
@@ -70,6 +71,17 @@ function _solve_DYREL!(
     # errors
     err = 1.0
     iter = 0
+
+    # The marker chain can change the reduced space between calls. Project primary unknowns out
+    # of eliminated rows and discard all dynamic-relaxation history: dV/dτ, residual history and
+    # modal damping coefficients belong to the old operator and are not valid after a topology
+    # change. Resetting every call is cheap, deterministic, and equivalent when the mask is fixed.
+    @parallel (@idx ni) project_reduced_state!(
+        stokes.P, stokes.P0, stokes.ΔPψ, stokes.λ, @velocity(stokes)..., ϕ
+    )
+    foreach(A -> fill!(A, zero(eltype(A))), (fields.dVdτ..., fields.dV..., fields.R0..., fields.cV...))
+    flow_bcs!(stokes, flow_bcs)
+    update_halo!(@velocity(stokes)...)
 
     # solver loop
     @copy stokes.P0 stokes.P
@@ -279,7 +291,7 @@ function _solve_DYREL!(
         # the strain-rate arrays untouched), otherwise the pressure correction lags one velocity update
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, false)
         @. stokes.P += dyrel.γ_eff .* stokes.R.RP
-        relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb)
+        relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP)
 
         iter > total_iterMax && break
     end

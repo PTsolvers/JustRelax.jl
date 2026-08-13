@@ -67,12 +67,12 @@ end
             for A in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy, ϕ.Vz)
                 A .= 1
             end
-            # As in 2D, a boundary face leaving the velocity space must not prematurely
-            # eliminate a pressure cell whose center still contains rock.
+            # As in 2D, removing a face read by the divergence constraint removes the
+            # corresponding pressure degree of freedom as well.
             ϕ.Vz[2, 2, 2] = 0
-            @test JR3.isvalid_c(ϕ, 2, 2, 1)
-            ϕ.center[2, 2, 1] = 0
             @test !JR3.isvalid_c(ϕ, 2, 2, 1)
+            ϕ.Vz[2, 2, 2] = 1
+            @test JR3.isvalid_c(ϕ, 2, 2, 1)
         end
     end
 

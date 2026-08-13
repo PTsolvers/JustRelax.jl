@@ -4,6 +4,10 @@
         stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
         kwargs...,
     )
+    solve_DYREL!(
+        stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg;
+        kwargs...,
+    )
 
 Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 
@@ -13,6 +17,8 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `dyrel`: DYREL-specific parameters and fields.
 - `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions.
 - `phase_ratios`: `JustPIC.PhaseRatios` for material phase tracking.
+- `ϕ`: Optional `RockRatio` selecting the variational 2D solver and its reduced pressure and
+  velocity spaces.
 - `rheology`: Material properties and rheological laws.
 - `args`: Tuple of additional arguments needed to update viscosity, stress, and buoyancy forces.
 - `grid`: `Geometry` object carrying grid spacing and staggered-grid coordinates. A legacy
@@ -37,6 +43,16 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
+- `free_surface`: Enable the implicit free-surface stabilization term. Default: `false`.
+
+The variational solver rebuilds the reduced masks at every call. State on newly eliminated
+degrees of freedom and all dynamic-relaxation history are reset before iteration, so an advected
+marker chain may safely change the mask between time steps. Residual norms, damping estimates,
+pressure updates, and the volumetric compatibility correction all use the same reduced space.
+
+# Returns
+A named tuple containing residual histories, final normalized residual `err`, iteration count
+`iter`, and `converged`.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
     out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
@@ -411,6 +427,23 @@ function relax_volumetric_mode!(P, RP, ηb)
     iszero(compliance) && return nothing
     δ = sum_mpi(RP) / compliance
     @. P += δ
+    return nothing
+end
+
+"""
+    relax_volumetric_mode!(P, RP, ηb, mask)
+
+Reduced-space counterpart of [`relax_volumetric_mode!`](@ref). The scalar compatibility
+correction is assembled from the retained pressure equations and applied only to those pressure
+unknowns. Applying it to an eliminated cut-cell pressure would undo the reduced-space
+projection; such a cell can still have positive center volume even though its coupled velocity
+or viscous-stress stencil makes its pressure degree of freedom invalid.
+"""
+function relax_volumetric_mode!(P, RP, ηb, mask)
+    compliance = sum_mpi((ηbᵢ, valid) -> valid ? volumetric_compliance(ηbᵢ) : zero(ηbᵢ), ηb, mask)
+    iszero(compliance) && return nothing
+    δ = sum_mpi((RPᵢ, valid) -> valid ? RPᵢ : zero(RPᵢ), RP, mask) / compliance
+    @. P += ifelse(mask, δ, zero(δ))
     return nothing
 end
 

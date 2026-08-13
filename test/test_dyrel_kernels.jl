@@ -306,16 +306,47 @@ end
             for A in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy)
                 A .= 1
             end
-            # A zero boundary-face weight removes that velocity unknown, not the cell's volume
-            # constraint. Retain the pressure until the center fraction itself reaches zero.
+            # A pressure constraint must be removed with any velocity face its divergence reads,
+            # otherwise the pressure and velocity reduced spaces are incompatible.
             ϕ.Vy[2, 3] = 0
             maskP = ϕ.center .> 0
             @parallel (@idx size(maskP)) JR2K.update_valid_c_mask!(maskP, ϕ)
-            @test Array(maskP)[2, 2]
-            ϕ.center[2, 2] = 0
-            @parallel (@idx size(maskP)) JR2K.update_valid_c_mask!(maskP, ϕ)
             @test !Array(maskP)[2, 2]
+            ϕ.Vy[2, 3] = 1
+            @parallel (@idx size(maskP)) JR2K.update_valid_c_mask!(maskP, ϕ)
+            @test Array(maskP)[2, 2]
             @test Array(maskP)[1, 1]
+
+            maskV = (ϕ.Vx[2:(end - 1), :] .> 0, ϕ.Vy[:, 2:(end - 1)] .> 0)
+            ϕ.vertex[2, 2] = 0
+            @parallel (@idx size(maskP)) JR2K.update_valid_v_masks!(maskV..., ϕ)
+            @test !Array(maskV[1])[1, 1]
+            @test !Array(maskV[2])[1, 1]
+            @parallel (@idx size(maskP)) JR2K.update_valid_c_mask!(maskP, ϕ)
+            @test !Array(maskP)[1, 1]
+            @test !Array(maskP)[2, 2]
+
+            # Carried state is projected whenever the marker-chain mask changes. Pressure-like
+            # fields and eliminated interior velocities must not retain values from the old
+            # reduced operator.
+            P = fill(2.0, 3, 3); P0 = fill(3.0, 3, 3)
+            ΔPψ = fill(4.0, 3, 3); λ = fill(5.0, 3, 3)
+            Vx = fill(6.0, 4, 5); Vy = fill(7.0, 5, 4)
+            ϕ.center[2, 2] = 0
+            @parallel (@idx size(maskP)) JR2K.project_reduced_state!(P, P0, ΔPψ, λ, Vx, Vy, ϕ)
+            @test (P[2, 2], P0[2, 2], ΔPψ[2, 2], λ[2, 2]) == (0.0, 0.0, 0.0, 0.0)
+            @test Vx[2, 2] == 0.0
+            @test Vy[2, 2] == 0.0
+
+            # The uniform compressibility correction must not repopulate an eliminated
+            # pressure sample whose center fraction is positive but whose stencil is invalid.
+            P .= 0; P0 .= 0
+            RP = fill(1.0, 3, 3); ηb = fill(2.0, 3, 3)
+            maskP .= true; maskP[2, 2] = false
+            JustRelax.MPI.Initialized() || JustRelax.MPI.Init()
+            JR2K.relax_volumetric_mode!(P, RP, ηb, maskP)
+            @test P[2, 2] == 0.0
+            @test all(P[maskP] .== 2.0)
         end
     end
 

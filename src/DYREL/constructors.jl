@@ -156,7 +156,9 @@ end
 Variational counterpart of [`DYREL`](@ref), for solves masked by the `RockRatio` `ϕ`.
 
 `ηb` and the Gershgorin bounds are built with the same ϕ masking the variational solver applies
-each time step. The numerical Powell-Hestenes penalty `γ_eff` itself remains unweighted: its
+each time step. Only pressure and velocity rows belonging to the compatible reduced space are
+retained; see [`isvalid_c`](@ref) and [`isvalid_vx_strict`](@ref). The numerical
+Powell-Hestenes penalty `γ_eff` itself remains unweighted: its
 momentum gradient already carries the variational cell weight, so weighting `γ_eff` here would
 apply `ϕ²` to the augmented-Lagrangian block.
 

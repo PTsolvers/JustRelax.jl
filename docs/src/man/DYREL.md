@@ -1,9 +1,13 @@
-# Using the APT method with auto tuned damping coefficients
+# Using APT with automatically tuned damping coefficients
 
 > [!WARNING]
-> This solver is still work-in-progress/experimental. It is 2D only; a 3D version is coming up soon. Both the standard and the variational (free surface) Stokes problems are supported.
+> This solver is still work-in-progress/experimental. The variational free-surface path described
+> below is currently 2D only. Both standard and variational Stokes problems are supported in 2D.
 
-Instead of using the Accelerated Pseudo-Transient where the damping coefficients are constant throughout the PT iterations (as in [Räss et al, 2022](https://gmd.copernicus.org/articles/15/5757/2022/)), we can use a self-tuning version of the APT method based on the approached described in [Duretz et al, 2025](https://egusphere.copernicus.org/preprints/2025/egusphere-2025-5641/).
+Instead of using the Accelerated Pseudo-Transient method with damping coefficients that remain
+constant throughout the PT iterations (as in [Räss et al., 2022](https://gmd.copernicus.org/articles/15/5757/2022/)),
+we can use a self-tuning APT method based on the approach described in
+[Duretz et al., 2025](https://egusphere.copernicus.org/preprints/2025/egusphere-2025-5641/).
 
 # Usage
 
@@ -39,7 +43,8 @@ solve_DYREL!(
     dt,
     igg;
     kwargs = (;
-        iterMax              = 50.0e3,
+        iterMax_PH           = 1.0e3,
+        iterMax_DR           = 50.0e3,
         total_iterMax        = 50.0e3,
         nout                 = 10,
         rel_drop             = 0.1,
@@ -56,14 +61,23 @@ solve_DYREL!(
 ```
 where `grid` is the `Geometry` object (a tuple of grid spacings `di` is also accepted), and the
 solver keyword arguments are:
-- `iterMax` $\rightarrow$ maximum number of dynamic relaxation iterations per Powell-Hestenes sweep.
-- `total_iterMax` $\rightarrow$ maximum number of dynamic relaxation iterations summed over all the Powell-Hestenes sweeps of one time step. This is what actually caps the cost of a time step, so a step that stops short of `ϵ` has usually hit this rather than `iterMax`.
+- `iterMax_PH` $\rightarrow$ maximum number of Powell-Hestenes sweeps. This keyword applies to
+  the variational solver.
+- `iterMax_DR` $\rightarrow$ maximum number of dynamic-relaxation iterations per
+  Powell-Hestenes sweep. This keyword applies to the variational solver. `iterMax` remains a
+  compatibility alias for `iterMax_DR`; an explicit `iterMax_DR` takes precedence.
+- `total_iterMax` $\rightarrow$ maximum number of dynamic-relaxation iterations summed over all
+  Powell-Hestenes sweeps of one time step. This is what actually caps the cost of a time step, so
+  a step that stops short of `ϵ` has usually hit this rather than `iterMax_DR`.
 - `nout` $\rightarrow$ damping coefficients are re-computed every `nout` iterations.
-- `rel_drop` $\rightarrow$ the tolerance for the inner dynamic relaxation loop is $error(P^n) \text{rel_drop}$ where $n$ is the inner Powell-Hesteness iteration counter.
-- `λ_relaxation_PH` $\rightarrow$ relaxation coefficient for the plastic multiplier ($\cdot\lambda$) during the inner Powell-Hesteness loop. `λ_relaxation_PH=1` means no relaxation.
-- `λ_relaxation_DR` $\rightarrow$ relaxation coefficient for the plastic multiplier ($\cdot\lambda$) during the innes Dynamic Relaxation loop. `λ_relaxation_DR=1` means no relaxation.
-- `verbose_PH` $\rightarrow$ # print solver metrics during  inner Powell-Hesteness loop.
-- `verbose_DR` $\rightarrow$ # print solver metrics during  innes Dynamic Relaxation loop.
+- `rel_drop` $\rightarrow$ relative residual reduction targeted by each inner dynamic-relaxation
+  solve.
+- `λ_relaxation_PH` $\rightarrow$ relaxation coefficient for the plastic multiplier during the
+  Powell-Hestenes loop. `λ_relaxation_PH = 1` means no relaxation.
+- `λ_relaxation_DR` $\rightarrow$ relaxation coefficient for the plastic multiplier during the
+  dynamic-relaxation loop. `λ_relaxation_DR = 1` means no relaxation.
+- `verbose_PH` $\rightarrow$ print solver metrics during the Powell-Hestenes loop.
+- `verbose_DR` $\rightarrow$ print solver metrics during the dynamic-relaxation loop.
 - `viscosity_relaxation` $\rightarrow$ relaxation coefficient for the viscosity. `viscosity_relaxation=1` means no relaxation.
 - `linear_viscosity` $\rightarrow$ if the rheology is linear (viscosity will not be updated during the solver iterations).
 - `free_surface` $\rightarrow$ adds the free-surface stabilization (FSSA) term $V_y \frac{\partial (\rho g)}{\partial y} \Delta t$ to the vertical momentum residual, and puts a lower bound on the penalty so that it stays commensurate with that term.
@@ -105,9 +119,9 @@ R_y = \delta_y(\phi_c \tau_{yy}) + \delta_x(\phi_v \tau_{xy}) - \delta_y\left(\p
 
 where $\delta_x, \delta_y$ are the staggered differences, $\overline{\;\cdot\;}^{\,x}$ the
 interpolation onto the face, and $\widetilde{P} = P + \gamma_{\text{eff}} R_p + \Delta P_\psi$ the
-pressure carrying the Powell-Hestenes correction. A control volume with $\phi = 0$ drops out of
-every stencil, so the traction-free condition above is recovered without ever locating the surface
-explicitly — the discrete equations simply stop at the last cell holding rock.
+pressure carrying the Powell-Hestenes correction. A zero-weight contribution drops out of its
+stencil, so the traction-free condition above is recovered without explicitly meshing the
+surface.
 
 The continuity residual is imposed on the cells the mask keeps, with the *unweighted* divergence
 of the velocities on their faces:
@@ -147,6 +161,30 @@ $\begin{align}
 
 which is applied whenever `free_surface = true`.
 
+## Compatible reduced space
+
+Zero-weight samples create algebraic nullspaces if their unknowns remain in the linear system.
+Following Larionov, Batty & Bridson (2017), the implementation eliminates an unknown whenever
+its equation constrains a zero-weight degree of freedom, and extends the same rule to the
+viscous terms. In 2D this means:
+
+- A `Vx` row is retained only when its face, its two neighboring pressure/stress centers, and
+  its two shear-stress vertices have positive rock fractions. `Vy` uses the transposed stencil.
+- A pressure row is retained only when its center is positive and all four velocity rows read by
+  its divergence constraint are retained.
+
+The second rule must use the *full* velocity-row validity, not just the four face fractions. For
+example, a void shear vertex can eliminate a velocity row even while that face's fraction is
+positive. Keeping a pressure constraint that still reads that velocity produces an incompatible
+reduced system and a pressure residual that cannot converge.
+
+An advected marker chain can change this reduced space between time steps. At the beginning of
+each variational DYREL solve, pressure, pressure history, plastic pressure correction, plastic
+multiplier, and velocity values on eliminated degrees of freedom are projected to zero. The
+dynamic-relaxation velocity and residual histories are also reset because they belong to the
+previous operator. Residual norms, Gershgorin estimates, Rayleigh quotients, pressure updates,
+and the volumetric compatibility correction all use the rebuilt masks.
+
 ## Usage
 
 Both the `DYREL` object and the solver call take $\phi$ as an extra argument, and the solver
@@ -160,12 +198,26 @@ dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, di, dt; ϵ = 1.0e-6)
 
 solve_DYREL!(
     stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg;
-    kwargs = (; air_phase = air_phase, free_surface = true, iterMax = 50.0e3)
+    kwargs = (;
+        air_phase = air_phase,
+        free_surface = true,
+        iterMax_PH = 1.0e3,
+        iterMax_DR = 50.0e3,
+        total_iterMax = 50.0e3,
+    )
 );
 ```
 
-Convergence is measured over the cells and faces $\phi$ marks as rock, since the ones it masks
-out carry no meaningful velocity or pressure.
+Convergence is measured over the compatible reduced pressure and velocity spaces described
+above, rather than every location whose own fraction is merely positive.
+
+The solver returns a named tuple containing the residual histories, final normalized residual,
+iteration count, and convergence status:
+
+```julia
+out = solve_DYREL!(...)
+out.converged || @warn "DYREL did not converge" out.err out.iter
+```
 
 # Examples
 

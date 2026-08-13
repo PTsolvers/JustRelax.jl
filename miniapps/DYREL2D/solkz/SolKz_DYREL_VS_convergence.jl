@@ -77,7 +77,8 @@ function solKz_DYREL_VS(;
             kwargs = (;
                 verbose_PH = true,
                 verbose_DR = false,
-                iterMax = 5.0e3 * nx,
+                iterMax_PH = 1.0e3,
+                iterMax_DR = 5.0e3 * nx,
                 total_iterMax = 5.0e3 * nx,
                 nout = 100,
                 rel_drop = 0.1,

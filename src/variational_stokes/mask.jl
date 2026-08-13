@@ -182,11 +182,12 @@ end
 
 Whether the pressure at `ϕ.center[i, j]` belongs to the reduced space in 2D.
 
-The cell belongs to the pressure space whenever its center carries rock. A zero-weight boundary
-face supplies a zero normal velocity; it removes that face unknown, not the cell's volume
-constraint. Requiring every face to remain positive makes the pressure space jump prematurely as
-a moving interface crosses a staggered face, while the center pressure still contributes to the
-remaining momentum rows.
+The cell belongs to the pressure space when its center and all four velocity rows used by its
+divergence constraint belong to the reduced velocity space. Testing the complete momentum-row
+stencils (rather than only the four face fractions) is important: a face can be eliminated
+because a shear-stress vertex is void while its own face fraction remains positive. Retaining
+the corresponding volume constraint would then ask an eliminated velocity degree of freedom to
+satisfy it.
 
                Vy[i,j+1]
         ┌──────────┴──────────┐
@@ -201,10 +202,18 @@ remaining momentum rows.
 - `i`, `j`: cell indices.
 """
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
-    return isvalid(ϕ.center, i, j)
+    vx = isvalid_vx_strict(ϕ, i, j) * isvalid_vx_strict(ϕ, i + 1, j)
+    vy = isvalid_vy_strict(ϕ, i, j) * isvalid_vy_strict(ϕ, i, j + 1)
+    return vx * vy * isvalid(ϕ.center, i, j)
 end
 
-# Materialize the reduced pressure/normal-stress space.
+"""
+    update_valid_c_mask!(mask, ϕ)
+
+Fill `mask` with the pressure-space validity of every cell in `ϕ`. In 2D this uses the complete
+validity of all four velocity rows read by the cell's divergence constraint; see
+[`isvalid_c`](@ref).
+"""
 @parallel_indices (I...) function update_valid_c_mask!(mask, ϕ::JustRelax.RockRatio)
     mask[I...] = isvalid_c(ϕ, I...)
     return nothing
@@ -215,11 +224,62 @@ end
 
 Whether the pressure at `ϕ.center[i, j, k]` belongs to the reduced space in 3D.
 
-As in 2D, a positive center fraction retains the volume constraint even if one of its boundary
-face unknowns has left the reduced velocity space.
+As in 2D, the center and all six faces read by the divergence constraint must belong to the
+reduced space.
 """
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j, k)
-    return isvalid(ϕ.center, i, j, k)
+    vx = isvalid(ϕ.Vx, i, j, k) * isvalid(ϕ.Vx, i + 1, j, k)
+    vy = isvalid(ϕ.Vy, i, j, k) * isvalid(ϕ.Vy, i, j + 1, k)
+    vz = isvalid(ϕ.Vz, i, j, k) * isvalid(ϕ.Vz, i, j, k + 1)
+    return vx * vy * vz * isvalid(ϕ.center, i, j, k)
+end
+
+"""
+    update_valid_v_masks!(maskVx, maskVy, ϕ)
+
+Fill the 2D velocity masks with the exact reduced space used by the variational momentum
+kernels. The masks have residual-array shapes: `maskVx[i, j]` corresponds to `ϕ.Vx[i+1, j]`,
+and `maskVy[i, j]` to `ϕ.Vy[i, j+1]`.
+
+Validity includes the velocity-face fraction and every center and shear-stress vertex read by
+the corresponding momentum row. Using these masks for residual norms and Rayleigh quotients
+keeps the measured system identical to the system being iterated.
+"""
+@parallel_indices (i, j) function update_valid_v_masks!(maskVx, maskVy, ϕ::JustRelax.RockRatio)
+    if i ≤ size(maskVx, 1) && j ≤ size(maskVx, 2)
+        maskVx[i, j] = isvalid_vx_strict(ϕ, i + 1, j)
+    end
+    if i ≤ size(maskVy, 1) && j ≤ size(maskVy, 2)
+        maskVy[i, j] = isvalid_vy_strict(ϕ, i, j + 1)
+    end
+    return nothing
+end
+
+"""
+    project_reduced_state!(P, P0, ΔPψ, λ, Vx, Vy, ϕ)
+
+Project carried 2D Stokes state onto the reduced space defined by `ϕ`. Eliminated pressure-like
+unknowns and interior velocities are set to zero. The operation is idempotent and is intended to
+run before each variational solve, because marker or interface advection can change the mask
+between time steps.
+
+Dynamic-relaxation history is not part of this function and must be reset separately whenever
+the operator is rebuilt.
+"""
+@parallel_indices (i, j) function project_reduced_state!(P, P0, ΔPψ, λ, Vx, Vy, ϕ::JustRelax.RockRatio)
+    if i ≤ size(P, 1) && j ≤ size(P, 2) && !isvalid_c(ϕ, i, j)
+        P[i, j] = zero(eltype(P))
+        P0[i, j] = zero(eltype(P0))
+        ΔPψ[i, j] = zero(eltype(ΔPψ))
+        λ[i, j] = zero(eltype(λ))
+    end
+    if i ≤ size(Vx, 1) - 2 && j ≤ size(Vx, 2) - 2 && !isvalid_vx_strict(ϕ, i + 1, j)
+        Vx[i + 1, j + 1] = zero(eltype(Vx))
+    end
+    if i ≤ size(Vy, 1) - 2 && j ≤ size(Vy, 2) - 2 && !isvalid_vy_strict(ϕ, i, j + 1)
+        Vy[i + 1, j + 1] = zero(eltype(Vy))
+    end
+    return nothing
 end
 
 """

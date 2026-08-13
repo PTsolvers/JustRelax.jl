@@ -182,8 +182,11 @@ end
 
 Whether the pressure at `ϕ.center[i, j]` belongs to the reduced space in 2D.
 
-The cell must carry rock, and so must all four velocity faces its divergence constraint reads:
-a zero-weight face contributes nothing to `∇·V`, so a pressure resting on one is unconstrained.
+The cell belongs to the pressure space whenever its center carries rock. A zero-weight boundary
+face supplies a zero normal velocity; it removes that face unknown, not the cell's volume
+constraint. Requiring every face to remain positive makes the pressure space jump prematurely as
+a moving interface crosses a staggered face, while the center pressure still contributes to the
+remaining momentum rows.
 
                Vy[i,j+1]
         ┌──────────┴──────────┐
@@ -198,15 +201,10 @@ a zero-weight face contributes nothing to `∇·V`, so a pressure resting on one
 - `i`, `j`: cell indices.
 """
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
-    vx = isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vx, i + 1, j)
-    vy = isvalid(ϕ.Vy, i, j) * isvalid(ϕ.Vy, i, j + 1)
-    v = vx * vy
-    return v * isvalid(ϕ.center, i, j)
+    return isvalid(ϕ.center, i, j)
 end
 
-# Materialize the reduced pressure/normal-stress space. A positive center fraction alone is not
-# sufficient: Larionov et al.'s null-space elimination also removes a pressure whose divergence
-# constraint references any zero-weight velocity face.
+# Materialize the reduced pressure/normal-stress space.
 @parallel_indices (I...) function update_valid_c_mask!(mask, ϕ::JustRelax.RockRatio)
     mask[I...] = isvalid_c(ϕ, I...)
     return nothing
@@ -217,15 +215,11 @@ end
 
 Whether the pressure at `ϕ.center[i, j, k]` belongs to the reduced space in 3D.
 
-As in 2D, with the divergence constraint now reading six faces: `Vx` west/east, `Vy`
-south/north and `Vz` bottom/top.
+As in 2D, a positive center fraction retains the volume constraint even if one of its boundary
+face unknowns has left the reduced velocity space.
 """
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j, k)
-    vx = isvalid(ϕ.Vx, i, j, k) * isvalid(ϕ.Vx, i + 1, j, k)
-    vy = isvalid(ϕ.Vy, i, j, k) * isvalid(ϕ.Vy, i, j + 1, k)
-    vz = isvalid(ϕ.Vz, i, j, k) * isvalid(ϕ.Vz, i, j, k + 1)
-    v = vx * vy * vz
-    return v * isvalid(ϕ.center, i, j, k)
+    return isvalid(ϕ.center, i, j, k)
 end
 
 """

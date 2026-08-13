@@ -26,6 +26,11 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `λ_relaxation_DR`: Relaxation factor for dynamic relaxation. Default: `1`.
 - `λ_relaxation_PH`: Relaxation factor for Powell-Hestenes iterations. Default: `1`.
 - `iterMax`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
+  For the variational solver this is a compatibility alias for `iterMax_DR`.
+- `iterMax_PH`: Maximum number of Powell-Hestenes iterations in the variational solver.
+  Default: `1.0e3`.
+- `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve in the
+  variational solver. Default: `50.0e3`.
 - `total_iterMax`: Maximum number of total dynamic-relaxation iterations. Default: `50.0e3`.
 - `nout`: Output frequency for residuals. Default: `100`.
 - `rel_drop`: Relative residual drop tolerance. Default: `1.0e-2`.

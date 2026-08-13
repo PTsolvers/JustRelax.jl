@@ -22,7 +22,9 @@ function _solve_DYREL!(
         viscosity_relaxation = 1.0e-2,
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
-        iterMax = 50.0e3,
+        iterMax = nothing,
+        iterMax_PH = 1.0e3,
+        iterMax_DR = isnothing(iterMax) ? 50.0e3 : iterMax,
         total_iterMax = 50.0e3,
         nout = 100,
         rel_drop = 1.0e-2,
@@ -107,7 +109,7 @@ function _solve_DYREL!(
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
     # Powell-Hestenes iterations
-    for itPH in 1:1000
+    for itPH in 1:Int(iterMax_PH)
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
         sanitize_ρg!(ρg)
@@ -178,7 +180,7 @@ function _solve_DYREL!(
         # Target a drop of `errV`, the residual the loop below measures — `err` mixes in `errPt`,
         # which is normalized by a different span. Both guards are load-bearing: an identically
         # zero momentum residual (boundary-driven flow) would otherwise set `ϵ_vel = 0` and burn
-        # `iterMax`, and `Inf` makes the loop always reach its first residual check.
+        # `iterMax_DR`, and `Inf` makes the loop always reach its first residual check.
         ϵ_vel = max(maximum(errV) * rel_drop, ϵ)
         err_vel = Inf
         itPT = 0
@@ -190,7 +192,7 @@ function _solve_DYREL!(
             Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, ϕ, rheology, grid.di, dt, ρg[end])
             update_dτV_α_β!(dyrel)
         end
-        while (err_vel > ϵ_vel && itPT ≤ iterMax)
+        while (err_vel > ϵ_vel && itPT ≤ iterMax_DR)
             itPT += 1
             itg += 1
             iter += 1
@@ -269,8 +271,8 @@ function _solve_DYREL!(
                 update_dτV_α_β!(dyrel)
             end
         end
-        if itPT > iterMax && igg.me == 0
-            @warn "DYREL velocity solve exhausted iterMax before reaching ϵ_vel" itPH iter itPT iterMax err_vel ϵ_vel maxlog = 10
+        if itPT > iterMax_DR && igg.me == 0
+            @warn "DYREL velocity solve exhausted iterMax_DR before reaching ϵ_vel" itPH iter itPT iterMax_DR err_vel ϵ_vel maxlog = 10
         end
 
         # update pressure — refresh RP from the final velocity first (do_strain_rate = false leaves

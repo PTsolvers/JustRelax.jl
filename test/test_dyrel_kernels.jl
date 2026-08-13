@@ -306,10 +306,13 @@ end
             for A in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy)
                 A .= 1
             end
-            # The center remains geometrically non-empty, but its north velocity face has zero
-            # weight, so its divergence constraint must be eliminated from the reduced system.
+            # A zero boundary-face weight removes that velocity unknown, not the cell's volume
+            # constraint. Retain the pressure until the center fraction itself reaches zero.
             ϕ.Vy[2, 3] = 0
             maskP = ϕ.center .> 0
+            @parallel (@idx size(maskP)) JR2K.update_valid_c_mask!(maskP, ϕ)
+            @test Array(maskP)[2, 2]
+            ϕ.center[2, 2] = 0
             @parallel (@idx size(maskP)) JR2K.update_valid_c_mask!(maskP, ϕ)
             @test !Array(maskP)[2, 2]
             @test Array(maskP)[1, 1]

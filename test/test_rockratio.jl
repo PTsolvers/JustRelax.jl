@@ -62,6 +62,18 @@ end
         @test size(ϕ.yz) == (nx, ny + 1, nz + 1)
         @test size(ϕ.xz) == (nx + 1, ny, nz + 1)
         @test size(ϕ.xy) == (nx + 1, ny + 1, nz)
+
+        if backend_JR == CPUBackend
+            for A in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy, ϕ.Vz)
+                A .= 1
+            end
+            # As in 2D, a boundary face leaving the velocity space must not prematurely
+            # eliminate a pressure cell whose center still contains rock.
+            ϕ.Vz[2, 2, 2] = 0
+            @test JR3.isvalid_c(ϕ, 2, 2, 1)
+            ϕ.center[2, 2, 1] = 0
+            @test !JR3.isvalid_c(ϕ, 2, 2, 1)
+        end
     end
 
     @testset "size_* accessors" begin

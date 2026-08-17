@@ -267,28 +267,22 @@ function compute_stress_DRYEL!(
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c),  # centers
         (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy), # shear stresses
-        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.zz_v), # vertices
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.zz, stokes.τ_o.yz_c, stokes.τ_o.xz_c, stokes.τ_o.xy_c),    # centers
         (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),  # shear stresses
-        (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.zz_v), # vertices
         stokes.τ.II,
         (stokes.ε.xx, stokes.ε.yy, stokes.ε.zz),
         (stokes.ε.yz, stokes.ε.xz, stokes.ε.xy),
-        (stokes.ε.yz_c, stokes.ε.xz_c, stokes.ε.xy_c),
         (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.zz),
         (stokes.ε_pl.yz, stokes.ε_pl.xz, stokes.ε_pl.xy),
-        (stokes.ε_pl.yz_c, stokes.ε_pl.xz_c, stokes.ε_pl.xy_c),
         stokes.EII_pl,                                      # accumulated plastic strain rate @ centers
         stokes.ε_vol_pl,                                    # volumetric plastic strain rate @ centers
         stokes.P,
         stokes.λ,
         dyrel_vertex_λ(stokes, Val(3)),
         stokes.viscosity.η,
-        stokes.viscosity.ηv,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
         phase_ratios.center,
-        phase_ratios.vertex,
         phase_ratios.yz,
         phase_ratios.xz,
         phase_ratios.xy,
@@ -302,28 +296,22 @@ end
 @parallel_indices (I...) function compute_stress_DRYEL!(
         τ_c,
         τ_shear,
-        τ_v,
         τ_o_c,
         τ_o_shear,
-        τ_o_v,
         τII,
         εii,
         εij,
-        εij_c,
         εii_pl,
         εij_pl,
-        εij_pl_c,
         EII_pl,
         ε_vol_pl,
         P,
         λ,
         λv,
         η,
-        ηv,
         η_vep,
         ΔPψ,
         phase_ratios_center,
-        phase_ratios_vertex,
         phase_yz,
         phase_xz,
         phase_xy,
@@ -334,9 +322,12 @@ end
 
     ni = size(P)
     Ic = clamped_indices(ni, I...)
+    Base.@propagate_inbounds @inline av_yz(A) = _av_yz(A, I...)
+    Base.@propagate_inbounds @inline av_xz(A) = _av_xz(A, I...)
+    Base.@propagate_inbounds @inline av_xy(A) = _av_xy(A, I...)
 
     ## yz
-    if I[1] ≤ size(εij[1], 1) && (1 < I[2] < size(εij[1], 2)) && (1 < I[3] < size(εij[1], 3))
+    if all(I .≤ size(εij[1]))
         # interpolate to ith vertex
         ηij = harm_clamped_yz(η, Ic...)
         Pij = av_clamped_yz(P, Ic...)
@@ -367,13 +358,10 @@ end
         τ_shear[1][I...] = τyz_I
         εij_pl[1][I...] = εyz_pl
         λv[1][I...] = λ_I
-
-    elseif all(I .≤ size(τ_shear[1]))
-        τ_shear[1][I...] = zero(eltype(τ_shear[1]))
     end
 
     ## xz
-    if (1 < I[1] < size(εij[2], 1)) && I[2] ≤ size(εij[2], 2) && (1 < I[3] < size(εij[2], 3))
+    if all(I .≤ size(εij[2]))
         ηij = harm_clamped_xz(η, Ic...)
         Pij = av_clamped_xz(P, Ic...)
         EIIv_ij = av_clamped_xz(EII_pl, Ic...)
@@ -401,13 +389,10 @@ end
         τ_shear[2][I...] = τxz_I
         εij_pl[2][I...] = εxz_pl
         λv[2][I...] = λ_I
-
-    elseif all(I .≤ size(τ_shear[2]))
-        τ_shear[2][I...] = zero(eltype(τ_shear[2]))
     end
 
     ## xy
-    if (1 < I[1] < size(εij[3], 1)) && (1 < I[2] < size(εij[3], 2)) && I[3] ≤ size(εij[3], 3)
+    if all(I .≤ size(εij[3]))
         ηij = harm_clamped_xy(η, Ic...)
         Pij = av_clamped_xy(P, Ic...)
         EIIv_ij = av_clamped_xy(EII_pl, Ic...)
@@ -435,9 +420,6 @@ end
         τ_shear[3][I...] = τxy_I
         εij_pl[3][I...] = εxy_pl
         λv[3][I...] = λ_I
-
-    elseif all(I .≤ size(τ_shear[3]))
-        τ_shear[3][I...] = zero(eltype(τ_shear[3]))
     end
 
     ## center
@@ -446,9 +428,9 @@ end
             εii[1][I...],
             εii[2][I...],
             εii[3][I...],
-            εij_c[1][I...],
-            εij_c[2][I...],
-            εij_c[3][I...],
+            av_yz(εij[1]),
+            av_xz(εij[2]),
+            av_xy(εij[3]),
         )
         τij_o = (
             τ_o_c[1][I...],
@@ -464,13 +446,12 @@ end
         EII = EII_pl[I...]
         ratio = @inbounds phase_ratios_center[I...]
 
-        τxx_I, τyy_I, τzz_I, τyz_I, τxz_I, τxy_I, εxx_pl, εyy_pl, εzz_pl, εyz_pl, εxz_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
+        τxx_I, τyy_I, τzz_I, τyz_I, τxz_I, τxy_I, εxx_pl, εyy_pl, εzz_pl, _, _, _, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
             compute_local_stress(ε, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
 
         τ_c[1][I...], τ_c[2][I...], τ_c[3][I...] = τxx_I, τyy_I, τzz_I
         τ_c[4][I...], τ_c[5][I...], τ_c[6][I...] = τyz_I, τxz_I, τxy_I
         εii_pl[1][I...], εii_pl[2][I...], εii_pl[3][I...] = εxx_pl, εyy_pl, εzz_pl
-        εij_pl_c[1][I...], εij_pl_c[2][I...], εij_pl_c[3][I...] = εyz_pl, εxz_pl, εxy_pl
         ε_vol_pl[I...] = ε_vol_pl_I
         τII[I...] = τII_I
         η_vep[I...] = ηvep_I
@@ -500,17 +481,13 @@ function compute_stress_viscosity_DRYEL!(
     @parallel (@idx ni) compute_stress_viscosity_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c),  # centers
         (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy), # shear stresses
-        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.zz_v), # vertices
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.zz, stokes.τ_o.yz_c, stokes.τ_o.xz_c, stokes.τ_o.xy_c),    # centers
         (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),  # shear stresses
-        (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.zz_v), # vertices
         stokes.τ.II,
         (stokes.ε.xx, stokes.ε.yy, stokes.ε.zz),
         (stokes.ε.yz, stokes.ε.xz, stokes.ε.xy),
-        (stokes.ε.yz_c, stokes.ε.xz_c, stokes.ε.xy_c),
         (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.zz),
         (stokes.ε_pl.yz, stokes.ε_pl.xz, stokes.ε_pl.xy),
-        (stokes.ε_pl.yz_c, stokes.ε_pl.xz_c, stokes.ε_pl.xy_c),
         stokes.EII_pl,                                      # accumulated plastic strain rate @ centers
         stokes.ε_vol_pl,                                    # volumetric plastic strain rate @ centers
         stokes.P,
@@ -523,7 +500,6 @@ function compute_stress_viscosity_DRYEL!(
         stokes.R.RP,
         γ_eff,
         phase_ratios.center,
-        phase_ratios.vertex,
         phase_ratios.yz,
         phase_ratios.xz,
         phase_ratios.xy,
@@ -541,17 +517,13 @@ end
 @parallel_indices (I...) function compute_stress_viscosity_DRYEL!(
         τ_c,
         τ_shear,
-        τ_v,
         τ_o_c,
         τ_o_shear,
-        τ_o_v,
         τII,
         εii,
         εij,
-        εij_c,
         εii_pl,
         εij_pl,
-        εij_pl_c,
         EII_pl,
         ε_vol_pl,
         P,
@@ -564,7 +536,6 @@ end
         RP,
         γ_eff,
         phase_ratios_center,
-        phase_ratios_vertex,
         phase_yz,
         phase_xz,
         phase_xy,
@@ -579,9 +550,12 @@ end
 
     ni = size(P)
     Ic = clamped_indices(ni, I...)
+    Base.@propagate_inbounds @inline av_yz(A) = _av_yz(A, I...)
+    Base.@propagate_inbounds @inline av_xz(A) = _av_xz(A, I...)
+    Base.@propagate_inbounds @inline av_xy(A) = _av_xy(A, I...)
 
     ## yz
-    if I[1] ≤ size(εij[1], 1) && (1 < I[2] < size(εij[1], 2)) && (1 < I[3] < size(εij[1], 3))
+    if all(I .≤ size(εij[1]))
         ηij = harm_clamped_yz(η, Ic...)
         Pij = av_clamped_yz(P, Ic...)
         EIIv_ij = av_clamped_yz(EII_pl, Ic...)
@@ -609,13 +583,10 @@ end
         τ_shear[1][I...] = τyz_I
         εij_pl[1][I...] = εyz_pl
         λv[1][I...] = λ_I
-
-    elseif all(I .≤ size(τ_shear[1]))
-        τ_shear[1][I...] = zero(eltype(τ_shear[1]))
     end
 
     ## xz
-    if (1 < I[1] < size(εij[2], 1)) && I[2] ≤ size(εij[2], 2) && (1 < I[3] < size(εij[2], 3))
+    if all(I .≤ size(εij[2]))
         ηij = harm_clamped_xz(η, Ic...)
         Pij = av_clamped_xz(P, Ic...)
         EIIv_ij = av_clamped_xz(EII_pl, Ic...)
@@ -643,13 +614,10 @@ end
         τ_shear[2][I...] = τxz_I
         εij_pl[2][I...] = εxz_pl
         λv[2][I...] = λ_I
-
-    elseif all(I .≤ size(τ_shear[2]))
-        τ_shear[2][I...] = zero(eltype(τ_shear[2]))
     end
 
     ## xy
-    if (1 < I[1] < size(εij[3], 1)) && (1 < I[2] < size(εij[3], 2)) && I[3] ≤ size(εij[3], 3)
+    if all(I .≤ size(εij[3]))
         ηij = harm_clamped_xy(η, Ic...)
         Pij = av_clamped_xy(P, Ic...)
         EIIv_ij = av_clamped_xy(EII_pl, Ic...)
@@ -677,9 +645,6 @@ end
         τ_shear[3][I...] = τxy_I
         εij_pl[3][I...] = εxy_pl
         λv[3][I...] = λ_I
-
-    elseif all(I .≤ size(τ_shear[3]))
-        τ_shear[3][I...] = zero(eltype(τ_shear[3]))
     end
 
     ## center
@@ -688,9 +653,9 @@ end
             εii[1][I...],
             εii[2][I...],
             εii[3][I...],
-            εij_c[1][I...],
-            εij_c[2][I...],
-            εij_c[3][I...],
+            av_yz(εij[1]),
+            av_xz(εij[2]),
+            av_xy(εij[3]),
         )
         τij_o = (
             τ_o_c[1][I...],
@@ -706,13 +671,12 @@ end
         EII = EII_pl[I...]
         ratio = @inbounds phase_ratios_center[I...]
 
-        τxx_I, τyy_I, τzz_I, τyz_I, τxz_I, τxy_I, εxx_pl, εyy_pl, εzz_pl, εyz_pl, εxz_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
+        τxx_I, τyy_I, τzz_I, τyz_I, τxz_I, τxy_I, εxx_pl, εyy_pl, εzz_pl, _, _, _, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
             compute_local_stress(ε, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
 
         τ_c[1][I...], τ_c[2][I...], τ_c[3][I...] = τxx_I, τyy_I, τzz_I
         τ_c[4][I...], τ_c[5][I...], τ_c[6][I...] = τyz_I, τxz_I, τxy_I
         εii_pl[1][I...], εii_pl[2][I...], εii_pl[3][I...] = εxx_pl, εyy_pl, εzz_pl
-        εij_pl_c[1][I...], εij_pl_c[2][I...], εij_pl_c[3][I...] = εyz_pl, εxz_pl, εxy_pl
         ε_vol_pl[I...] = ε_vol_pl_I
         τII[I...] = τII_I
         η_vep[I...] = ηvep_I

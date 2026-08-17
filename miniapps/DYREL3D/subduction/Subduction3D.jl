@@ -148,7 +148,10 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # Time loop
     t, it = 0.0, 0
     t_max = nondimensionalize(10 * Myr, CharDim)
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 5.0e-3,  γfact = 10.0)
+    dyrel = DYREL(
+        backend_JR, stokes, rheology, phase_ratios, grid.di, dt;
+        ϵ = 1.0e-3, CFL = 0.99, γfact = 20.0,
+    )
     while t < t_max
 
         # # interpolate fields from particles to centroids
@@ -275,7 +278,7 @@ end
 # let
     do_vtk = true # set to true to generate VTK files for ParaView
     # nx, ny, nz = 150, 40, 150
-    nx,ny,nz = 128, 4, 64
+    nx,ny,nz = 128*2, 4, 64*2
     li, origin, phases_GMG, = GMG_only(nx + 1, ny + 1, nz + 1)
     igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
         IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)

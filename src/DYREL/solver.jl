@@ -116,7 +116,7 @@ function _solve_DYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt; CFL = dyrel.CFL)
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
@@ -140,7 +140,7 @@ function _solve_DYREL!(
             ρg...,
             _di.center,
             _di.vertex,
-            dt,
+            dt * flow_bcs.free_surface,
         )
 
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
@@ -211,7 +211,7 @@ function _solve_DYREL!(
                 fields.dτV...,
                 _di.center,
                 _di.vertex,
-                dt,
+                dt * flow_bcs.free_surface,
             )
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)

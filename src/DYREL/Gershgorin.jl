@@ -240,32 +240,33 @@ end
 
         ηW = _ηve_center(η, phase_center, rheology, dt, i, j, k)
         ηE = _ηve_center(η, phase_center, rheology, dt, i + 1, j, k)
-        ηS = _ηve_xy(η, phase_xy, rheology, dt, ni, i, j, k)
-        ηN = _ηve_xy(η, phase_xy, rheology, dt, ni, i, j + 1, k)
-        ηB = _ηve_xz(η, phase_xz, rheology, dt, ni, i, j, k)
-        ηF = _ηve_xz(η, phase_xz, rheology, dt, ni, i, j, k + 1)
-        γ = 0.5 * (γ_eff[i, j, k] + γ_eff[i + 1, j, k])
+        ηS = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j, k)
+        ηN = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j + 1, k)
+        ηB = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k)
+        ηF = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k + 1)
+        γW = γ_eff[i, j, k]
+        γE = γ_eff[i + 1, j, k]
 
         Dx_ijk = Dx[i, j, k] =
             (ηN + ηS) * _dy2 +
             (ηB + ηF) * _dz2 +
-            (2 * γ + c43 * (ηE + ηW)) * _dx2
+            (γE + γW + c43 * (ηE + ηW)) * _dx2
 
         Cx =
-            abs(c13 * (3 * γ + 4 * ηE) * _dx2) +
-            abs(c13 * (3 * γ + 4 * ηW) * _dx2) +
+            abs(c13 * (3 * γE + 4 * ηE) * _dx2) +
+            abs(c13 * (3 * γW + 4 * ηW) * _dx2) +
             abs(ηN * _dy2) +
             abs(ηS * _dy2) +
             abs(ηB * _dz2) +
             abs(ηF * _dz2) +
-            abs(c13 * (3 * γ - 2 * ηE + 3 * ηN) * _dxdy) +
-            abs(c13 * (3 * γ - 2 * ηE + 3 * ηS) * _dxdy) +
-            abs(c13 * (3 * γ + 3 * ηN - 2 * ηW) * _dxdy) +
-            abs(c13 * (3 * γ + 3 * ηS - 2 * ηW) * _dxdy) +
-            abs(c13 * (3 * γ + 3 * ηB - 2 * ηE) * _dxdz) +
-            abs(c13 * (3 * γ + 3 * ηB - 2 * ηW) * _dxdz) +
-            abs(c13 * (3 * γ - 2 * ηE + 3 * ηF) * _dxdz) +
-            abs(c13 * (3 * γ + 3 * ηF - 2 * ηW) * _dxdz) +
+            abs(c13 * (3 * γE - 2 * ηE + 3 * ηN) * _dxdy) +
+            abs(c13 * (3 * γE - 2 * ηE + 3 * ηS) * _dxdy) +
+            abs(c13 * (3 * γW + 3 * ηN - 2 * ηW) * _dxdy) +
+            abs(c13 * (3 * γW + 3 * ηS - 2 * ηW) * _dxdy) +
+            abs(c13 * (3 * γE + 3 * ηB - 2 * ηE) * _dxdz) +
+            abs(c13 * (3 * γW + 3 * ηB - 2 * ηW) * _dxdz) +
+            abs(c13 * (3 * γE - 2 * ηE + 3 * ηF) * _dxdz) +
+            abs(c13 * (3 * γW + 3 * ηF - 2 * ηW) * _dxdz) +
             abs(Dx_ijk)
 
         λmaxVx[i, j, k] = Cx / Dx_ijk
@@ -281,34 +282,35 @@ end
         _dxdy = _dx * _dy
         _dydz = _dy * _dz
 
-        ηW = _ηve_xy(η, phase_xy, rheology, dt, ni, i, j, k)
-        ηE = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j, k)
+        ηW = _ηve_xy(η, phase_xy, rheology, dt, ni, i, j + 1, k)
+        ηE = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j + 1, k)
         ηS = _ηve_center(η, phase_center, rheology, dt, i, j, k)
         ηN = _ηve_center(η, phase_center, rheology, dt, i, j + 1, k)
-        ηB = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k)
-        ηF = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k + 1)
-        γ = 0.5 * (γ_eff[i, j, k] + γ_eff[i, j + 1, k])
+        ηB = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k)
+        ηF = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k + 1)
+        γS = γ_eff[i, j, k]
+        γN = γ_eff[i, j + 1, k]
 
         Dy_ijk = Dy[i, j, k] =
             (ηE + ηW) * _dx2 +
             (ηB + ηF) * _dz2 +
-            (2 * γ + c43 * (ηN + ηS)) * _dy2
+            (γN + γS + c43 * (ηN + ηS)) * _dy2
 
         Cy =
             abs(ηE * _dx2) +
             abs(ηW * _dx2) +
-            abs(c13 * (3 * γ + 4 * ηN) * _dy2) +
-            abs(c13 * (3 * γ + 4 * ηS) * _dy2) +
+            abs(c13 * (3 * γN + 4 * ηN) * _dy2) +
+            abs(c13 * (3 * γS + 4 * ηS) * _dy2) +
             abs(ηB * _dz2) +
             abs(ηF * _dz2) +
-            abs(c13 * (3 * γ + 3 * ηE - 2 * ηN) * _dxdy) +
-            abs(c13 * (3 * γ + 3 * ηE - 2 * ηS) * _dxdy) +
-            abs(c13 * (3 * γ - 2 * ηN + 3 * ηW) * _dxdy) +
-            abs(c13 * (3 * γ - 2 * ηS + 3 * ηW) * _dxdy) +
-            abs(c13 * (3 * γ + 3 * ηB - 2 * ηN) * _dydz) +
-            abs(c13 * (3 * γ + 3 * ηB - 2 * ηS) * _dydz) +
-            abs(c13 * (3 * γ + 3 * ηF - 2 * ηN) * _dydz) +
-            abs(c13 * (3 * γ + 3 * ηF - 2 * ηS) * _dydz) +
+            abs(c13 * (3 * γN + 3 * ηE - 2 * ηN) * _dxdy) +
+            abs(c13 * (3 * γS + 3 * ηE - 2 * ηS) * _dxdy) +
+            abs(c13 * (3 * γN - 2 * ηN + 3 * ηW) * _dxdy) +
+            abs(c13 * (3 * γS - 2 * ηS + 3 * ηW) * _dxdy) +
+            abs(c13 * (3 * γN + 3 * ηB - 2 * ηN) * _dydz) +
+            abs(c13 * (3 * γS + 3 * ηB - 2 * ηS) * _dydz) +
+            abs(c13 * (3 * γN + 3 * ηF - 2 * ηN) * _dydz) +
+            abs(c13 * (3 * γS + 3 * ηF - 2 * ηS) * _dydz) +
             abs(Dy_ijk)
 
         λmaxVy[i, j, k] = Cy / Dy_ijk
@@ -324,34 +326,35 @@ end
         _dxdz = _dx * _dz
         _dydz = _dy * _dz
 
-        ηW = _ηve_xz(η, phase_xz, rheology, dt, ni, i, j, k)
-        ηE = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k)
-        ηS = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k)
-        ηN = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k)
+        ηW = _ηve_xz(η, phase_xz, rheology, dt, ni, i, j, k + 1)
+        ηE = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k + 1)
+        ηS = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k + 1)
+        ηN = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k + 1)
         ηB = _ηve_center(η, phase_center, rheology, dt, i, j, k)
         ηF = _ηve_center(η, phase_center, rheology, dt, i, j, k + 1)
-        γ = 0.5 * (γ_eff[i, j, k] + γ_eff[i, j, k + 1])
+        γB = γ_eff[i, j, k]
+        γF = γ_eff[i, j, k + 1]
 
         Dz_ijk = Dz[i, j, k] =
             (ηE + ηW) * _dx2 +
             (ηN + ηS) * _dy2 +
-            (2 * γ + c43 * (ηB + ηF)) * _dz2
+            (γB + γF + c43 * (ηB + ηF)) * _dz2
 
         Cz =
             abs(ηE * _dx2) +
             abs(ηW * _dx2) +
             abs(ηN * _dy2) +
             abs(ηS * _dy2) +
-            abs(c13 * (3 * γ + 4 * ηB) * _dz2) +
-            abs(c13 * (3 * γ + 4 * ηF) * _dz2) +
-            abs(c13 * (3 * γ - 2 * ηB + 3 * ηE) * _dxdz) +
-            abs(c13 * (3 * γ - 2 * ηB + 3 * ηW) * _dxdz) +
-            abs(c13 * (3 * γ + 3 * ηE - 2 * ηF) * _dxdz) +
-            abs(c13 * (3 * γ - 2 * ηF + 3 * ηW) * _dxdz) +
-            abs(c13 * (3 * γ - 2 * ηB + 3 * ηN) * _dydz) +
-            abs(c13 * (3 * γ - 2 * ηB + 3 * ηS) * _dydz) +
-            abs(c13 * (3 * γ - 2 * ηF + 3 * ηN) * _dydz) +
-            abs(c13 * (3 * γ - 2 * ηF + 3 * ηS) * _dydz) +
+            abs(c13 * (3 * γB + 4 * ηB) * _dz2) +
+            abs(c13 * (3 * γF + 4 * ηF) * _dz2) +
+            abs(c13 * (3 * γB - 2 * ηB + 3 * ηE) * _dxdz) +
+            abs(c13 * (3 * γB - 2 * ηB + 3 * ηW) * _dxdz) +
+            abs(c13 * (3 * γF + 3 * ηE - 2 * ηF) * _dxdz) +
+            abs(c13 * (3 * γF - 2 * ηF + 3 * ηW) * _dxdz) +
+            abs(c13 * (3 * γB - 2 * ηB + 3 * ηN) * _dydz) +
+            abs(c13 * (3 * γB - 2 * ηB + 3 * ηS) * _dydz) +
+            abs(c13 * (3 * γF - 2 * ηF + 3 * ηN) * _dydz) +
+            abs(c13 * (3 * γF - 2 * ηF + 3 * ηS) * _dydz) +
             abs(Dz_ijk)
 
         λmaxVz[i, j, k] = Cz / Dz_ijk

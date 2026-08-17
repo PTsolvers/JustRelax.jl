@@ -122,9 +122,7 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    # P is cell-centered: it carries the weight of every cell above it plus half of its own
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse(ρg[2], dims = 2), dims = 2), dims = 2))
-    @. stokes.P = (stokes.P - ρg[2] / 2) * di[2]
+    lithostatic_pressure!(stokes.P, ρg[2], di[2])
 
     # Rheology
     args = (T = thermal.T, P = stokes.P, dt = Inf)

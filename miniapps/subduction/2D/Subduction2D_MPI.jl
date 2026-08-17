@@ -135,9 +135,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     igg.dims[2] == 1 || error(
         "the lithostatic pressure initialization requires an undecomposed vertical direction; got dims = $(igg.dims). Pass dimy = 1 to init_global_grid"
     )
-    # P is cell-centered: it carries the weight of every cell above it plus half of its own
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse(ρg[2], dims = 2), dims = 2), dims = 2))
-    @. stokes.P = (stokes.P - ρg[2] / 2) * di[2]
+    lithostatic_pressure!(stokes.P, ρg[2], di[2])
 
     # Rheology
     args0 = (T = thermal.T, P = stokes.P, dt = Inf)

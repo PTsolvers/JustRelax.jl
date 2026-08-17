@@ -32,6 +32,7 @@ export @allocate,
     @qT2,
     @residuals,
     compute_dt,
+    lithostatic_pressure!,
     multi_copy!,
     take
 

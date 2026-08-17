@@ -490,4 +490,59 @@ end
         @test di == (0.25, 0.5, 0.75)
         @test length(xi_vel) == 3
     end
+
+    @testset "lithostatic_pressure!" begin
+        nx, ny = 3, 4
+        dz = 0.5
+
+        # uniform column: cell j carries ny - j full cells plus half of its own
+        ρg = @zeros(nx, ny)
+        ρg .= 2.0
+        P = @zeros(nx, ny)
+        lithostatic_pressure!(P, ρg, dz)
+        @test Array(P)[1, :] ≈ [(ny - j + 0.5) * 2.0 * dz for j in 1:ny]
+        @test all(Array(P) .== Array(P)[1:1, :])
+
+        # the topmost cell carries half of its own weight, and nothing else
+        @test Array(P)[1, end] ≈ 2.0 * dz / 2
+
+        # variable density, checked against the definition
+        ρg .= PTArray(backend_JR)([Float64(i + 2j) for i in 1:nx, j in 1:ny])
+        lithostatic_pressure!(P, ρg, dz)
+        ρg_cpu, P_cpu = Array(ρg), Array(P)
+        for i in 1:nx, j in 1:ny
+            @test P_cpu[i, j] ≈ sum(ρg_cpu[i, (j + 1):end]) * dz + ρg_cpu[i, j] * dz / 2
+        end
+
+        # non-uniform cell heights: each cell is weighted by its own height
+        dzs = PTArray(backend_JR)([0.25, 0.5, 1.0, 2.0])
+        lithostatic_pressure!(P, ρg, dzs)
+        dzs_cpu, P_cpu = Array(dzs), Array(P)
+        for i in 1:nx, j in 1:ny
+            @test P_cpu[i, j] ≈
+                sum(ρg_cpu[i, k] * dzs_cpu[k] for k in (j + 1):ny; init = 0.0) +
+                ρg_cpu[i, j] * dzs_cpu[j] / 2
+        end
+
+        # a constant height reproduces the uniform case
+        lithostatic_pressure!(P, ρg, dz)
+        P_uniform = copy(Array(P))
+        lithostatic_pressure!(P, ρg, PTArray(backend_JR)(fill(dz, ny)))
+        @test Array(P) ≈ P_uniform
+
+        # 3D integrates along the third dimension
+        ρg3 = [Float64(i + j + k) for i in 1:2, j in 1:2, k in 1:3]
+        P3 = similar(ρg3)
+        JustRelax.JustRelax3D.lithostatic_pressure!(P3, ρg3, dz)
+        for i in 1:2, j in 1:2, k in 1:3
+            @test P3[i, j, k] ≈ sum(ρg3[i, j, (k + 1):end]) * dz + ρg3[i, j, k] * dz / 2
+        end
+
+        @test_throws "must span the same cells" lithostatic_pressure!(
+            @zeros(nx, ny), @zeros(nx, ny + 1), dz
+        )
+        @test_throws "one height per cell" lithostatic_pressure!(
+            P, ρg, PTArray(backend_JR)(fill(dz, ny + 1))
+        )
+    end
 end

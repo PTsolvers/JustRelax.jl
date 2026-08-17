@@ -518,6 +518,44 @@ end
     return min(dt_diff, dt_adv)
 end
 
+"""
+    lithostatic_pressure!(P, ρg, dz)
+
+Integrate the vertical component of the buoyancy force `ρg` down the columns of the
+cell-centered pressure `P`. The vertical direction is the last dimension of `P` and points
+upwards, so the last entry of a column is the shallowest cell.
+
+`dz` is either a constant cell height or a vector holding the height of every cell along the
+vertical direction. Since `P` is cell-centered, cell `j` carries the weight of all the cells
+above it plus half of its own,
+
+    P[j] = Σ_{k>j} ρg[k] * dz[k] + ρg[j] * dz[j] / 2
+
+Every column is integrated locally, so on a distributed grid the profile is only correct if
+the vertical direction is not split across MPI ranks.
+"""
+function lithostatic_pressure!(P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz) where {N}
+    axes(P) == axes(ρg) || throw(
+        DimensionMismatch(
+            "`P` and `ρg` must span the same cells, got axes $(axes(P)) and $(axes(ρg))"
+        )
+    )
+    w = ρg .* _cell_heights(dz, size(P, N), Val(N)) # weight of each individual cell
+    P .= reverse(cumsum(reverse(w, dims = N), dims = N), dims = N) .- w ./ 2
+    return P
+end
+
+@inline _cell_heights(dz::Number, ::Int, ::Val) = dz
+
+@inline function _cell_heights(dz::AbstractVector, nz::Int, ::Val{N}) where {N}
+    length(dz) == nz || throw(
+        DimensionMismatch(
+            "`dz` must hold one height per cell, got $(length(dz)) heights for $nz cells"
+        )
+    )
+    return reshape(dz, ntuple(i -> i == N ? nz : 1, Val(N)))
+end
+
 @inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v
 

@@ -209,7 +209,7 @@ thermal_bcs!(thermal, thermal_bc)
 ```julia
 ρg = ntuple(_ -> @zeros(ni...), Val(3))
 compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse(ρg[end] .* di[end], dims = 3), dims = 3), dims = 3))
+lithostatic_pressure!(stokes.P, ρg[end], di[end])
 ```
 
 ## Initialize viscosity

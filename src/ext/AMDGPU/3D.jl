@@ -61,6 +61,22 @@ function JR3D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheol
     return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 end
 
+function JR3D.update_α_β!(βVx::ROCArray, βVy, βVz, αVx, αVy, αVz, dτVx, dτVy, dτVz, cVx, cVy, cVz)
+    return update_α_β!(βVx, βVy, βVz, αVx, αVy, αVz, dτVx, dτVy, dτVz, cVx, cVy, cVz)
+end
+
+function JR3D.update_α_β!(dyrel::JustRelax.DYREL{<:ROCArray})
+    return update_α_β!(dyrel)
+end
+
+function JR3D.update_dτV_α_β!(dτVx::ROCArray, dτVy, dτVz, βVx, βVy, βVz, αVx, αVy, αVz, cVx, cVy, cVz, λmaxVx, λmaxVy, λmaxVz, CFL_v)
+    return update_dτV_α_β!(dτVx, dτVy, dτVz, βVx, βVy, βVz, αVx, αVy, αVz, cVx, cVy, cVz, λmaxVx, λmaxVy, λmaxVz, CFL_v)
+end
+
+function JR3D.update_dτV_α_β!(dyrel::JustRelax.DYREL{<:ROCArray})
+    return update_dτV_α_β!(dyrel)
+end
+
 
 function JR3D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Number}) where {N}
     return ThermalArrays(ni...)

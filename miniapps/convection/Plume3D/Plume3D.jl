@@ -96,7 +96,9 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     # Buoyancy forces and lithostatic pressure
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse(ρg[end] .* di[end], dims = 3), dims = 3), dims = 3))
+    # P is cell-centered: it carries the weight of every cell above it plus half of its own
+    stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse(ρg[end], dims = 3), dims = 3), dims = 3))
+    @. stokes.P = (stokes.P - ρg[end] / 2) * di[end]
 
     # Rheology
     args = (; T = thermal.T, P = stokes.P, dt = Inf)

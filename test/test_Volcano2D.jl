@@ -203,7 +203,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
     compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    lithostatic_pressure!(stokes.P, ρg[2], di[2])
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2])
 
     # Melt fraction
     ϕ_m = @zeros(ni...)

@@ -135,7 +135,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     igg.dims[2] == 1 || error(
         "the lithostatic pressure initialization requires an undecomposed vertical direction; got dims = $(igg.dims). Pass dimy = 1 to init_global_grid"
     )
-    lithostatic_pressure!(stokes.P, ρg[2], di[2])
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2])
 
     # Rheology
     args0 = (T = thermal.T, P = stokes.P, dt = Inf)

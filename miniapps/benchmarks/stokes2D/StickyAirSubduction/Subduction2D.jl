@@ -109,7 +109,7 @@ function main(igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    lithostatic_pressure!(stokes.P, ρg[2], di[2])
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2])
 
     # Rheology
     args0 = (T = thermal.T, P = stokes.P, dt = Inf)

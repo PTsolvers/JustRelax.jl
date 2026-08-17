@@ -336,7 +336,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        lithostatic_pressure!(stokes.P, ρg[2], di[2])
+        compute_lithostatic_pressure!(stokes.P, ρg[2], di[2])
     end
 
     # Arguments for functions

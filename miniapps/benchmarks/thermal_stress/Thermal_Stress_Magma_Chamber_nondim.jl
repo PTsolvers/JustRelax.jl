@@ -303,7 +303,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        lithostatic_pressure!(stokes.P, ρg[2], di[2])
+        compute_lithostatic_pressure!(stokes.P, ρg[2], di[2])
     end
 
     # Arguments for functions

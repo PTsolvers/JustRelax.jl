@@ -519,7 +519,7 @@ end
 end
 
 """
-    lithostatic_pressure!(P, ρg, dz)
+    compute_lithostatic_pressure!(P, ρg, dz)
 
 Integrate the vertical component of the buoyancy force `ρg` down the columns of the
 cell-centered pressure `P`. The vertical direction is the last dimension of `P` and points
@@ -534,7 +534,7 @@ above it plus half of its own,
 Every column is integrated locally, so on a distributed grid the profile is only correct if
 the vertical direction is not split across MPI ranks.
 """
-function lithostatic_pressure!(P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz) where {N}
+function compute_lithostatic_pressure!(P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz) where {N}
     axes(P) == axes(ρg) || throw(
         DimensionMismatch(
             "`P` and `ρg` must span the same cells, got axes $(axes(P)) and $(axes(ρg))"

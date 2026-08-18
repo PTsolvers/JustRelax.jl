@@ -15,7 +15,7 @@ JULIA_JUSTRELAX_BACKEND=CPU julia --project=. --startup-file=no test/test_shearb
 
 - `JULIA_JUSTRELAX_BACKEND` **must** be set (`CPU`, `CUDA`, or `AMDGPU`) — test files read `ENV["JULIA_JUSTRELAX_BACKEND"]` at the top and will throw a KeyError without it.
 - Test files do `push!(LOAD_PATH, "..")`, and `test/runtests.jl` does `pushfirst!(LOAD_PATH, dirname(@__DIR__))`, so tests always run against the local checkout.
-- Some test files need `Suppressor` and `ParallelTestRunner`, which live in the test environment. If a direct run fails on a missing package, use `julia --project=. -e 'using Pkg; Pkg.test(test_args=["test_shearband2D"])'` instead, or run with `--project=test` after instantiating it with the local JustRelax dev'd in.
+- Some test files need `Suppressor` and `ParallelTestRunner`, which live in the test environment declared by `[extras]`/`[targets]` in the root `Project.toml`. If a direct run fails on a missing package, use `julia --project=. -e 'using Pkg; Pkg.test(test_args=["test_shearband2D"])'` instead, which builds that environment.
 
 ## Full suite
 

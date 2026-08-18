@@ -224,7 +224,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
-        stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse(ρg[2] .* grid.di.vertex[2]', dims = 2), dims = 2), dims = 2))
+        compute_lithostatic_pressure!(stokes.P, ρg[2], grid.di.vertex[2], igg)
     end
 
     # Rheology

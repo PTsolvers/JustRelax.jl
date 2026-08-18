@@ -501,8 +501,8 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                         εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1, CharDim))),
                         εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim))),
                         εII_pl = Array(ustrip.(dimensionalize(stokes.ε_pl.II, s^-1, CharDim))),
-                        η = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep, Pa * s, CharDim))),
-                        η_vep = Array(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim))),
+                        η_vep = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep, Pa * s, CharDim))),
+                        η = Array(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim))),
                     )
                     velocity_v = (
                         Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
@@ -571,7 +571,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                 ax3 = Axis(
                     fig[3, 1][1, 1];
                     aspect = ar,
-                    title = L"ΔP [MPa]",
+                    title = L"P [MPa]",
                     titlesize = 40,
                     yticklabelsize = 25,
                     xticklabelsize = 25,
@@ -645,7 +645,8 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                     ax3,
                     ustrip.(dimensionalize(xci[1], km, CharDim)),
                     ustrip.(dimensionalize(xci[2], km, CharDim)),
-                    ustrip.(dimensionalize((Array((stokes.P .- P_init))), MPa, CharDim));
+                    ustrip.(dimensionalize((Array((stokes.P))), MPa, CharDim));
+                    # ustrip.(dimensionalize((Array((stokes.P .- P_init))), MPa, CharDim));
                     colormap = :roma,
                 )
                 # Plot Pressure difference
@@ -703,12 +704,12 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                 fig
 
                 let
-                    Yv = [y for x in ustrip.(dimensionalize(xvi[1], km, CharDim)), y in ustrip.(dimensionalize(xvi[2], km, CharDim))][:]
-                    Y = [y for x in ustrip.(dimensionalize(xci[1], km, CharDim)), y in ustrip.(dimensionalize(xci[2], km, CharDim))][:]
+                    Yv  = [y for x in ustrip.(dimensionalize(xvi[1], km, CharDim)), y in ustrip.(dimensionalize(xvi[2], km, CharDim))][:]
+                    Y   = [y for x in ustrip.(dimensionalize(xci[1], km, CharDim)), y in ustrip.(dimensionalize(xci[2], km, CharDim))][:]
                     fig = Figure(; size = (1200, 900))
                     ax1 = Axis(fig[1, 1]; aspect = 2 / 3, title = "T")
                     ax2 = Axis(fig[1, 2]; aspect = 2 / 3, title = "Pressure")
-                    a3 = Axis(fig[2, 1]; aspect = 2 / 3, title = "τII")
+                    a3  = Axis(fig[2, 1]; aspect = 2 / 3, title = "τII")
 
                     scatter!(
                         ax1, ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), 2:(end - 1)])), C, CharDim))[:],

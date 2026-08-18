@@ -520,6 +520,7 @@ end
 
 """
     compute_lithostatic_pressure!(P, ρg, dz)
+    compute_lithostatic_pressure!(P, ρg, dz, igg::IGG)
 
 Integrate the vertical component of the buoyancy force `ρg` down the columns of the
 cell-centered pressure `P`. The vertical direction is the last dimension of `P` and points
@@ -531,18 +532,77 @@ above it plus half of its own,
 
     P[j] = Σ_{k>j} ρg[k] * dz[k] + ρg[j] * dz[j] / 2
 
-Every column is integrated locally, so on a distributed grid the profile is only correct if
-the vertical direction is not split across MPI ranks.
+The three-argument method integrates each column within the local subdomain, and throws if
+the vertical direction is split across MPI ranks. Pass the MPI topology `igg` to also
+collect the weight of the cells held by the ranks stacked above the local subdomain; `ρg`
+must then be up to date on the halo cells, and the resulting `P` agrees on the cells that
+neighboring ranks share.
 """
 function compute_lithostatic_pressure!(P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz) where {N}
+    if _vertical_ranks(Val(N)) > 1
+        throw(
+            ArgumentError(
+                "the vertical direction is split across MPI ranks; pass the `IGG` topology as fourth argument to integrate the columns across ranks"
+            )
+        )
+    end
+    return _integrate_column!(P, _cell_weights(P, ρg, dz))
+end
+
+function compute_lithostatic_pressure!(
+        P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz, igg::IGG
+    ) where {N}
+    w = _cell_weights(P, ρg, dz)
+    _integrate_column!(P, w)
+    P .+= _weight_above(w, igg) # weight of the cells held by the ranks above
+    return P
+end
+
+@inline function _cell_weights(P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz) where {N}
     axes(P) == axes(ρg) || throw(
         DimensionMismatch(
             "`P` and `ρg` must span the same cells, got axes $(axes(P)) and $(axes(ρg))"
         )
     )
-    w = ρg .* _cell_heights(dz, size(P, N), Val(N)) # weight of each individual cell
+    return ρg .* _cell_heights(dz, size(P, N), Val(N))
+end
+
+@inline function _integrate_column!(P::AbstractArray{<:Any, N}, w) where {N}
     P .= reverse(cumsum(reverse(w, dims = N), dims = N), dims = N) .- w ./ 2
     return P
+end
+
+# number of MPI ranks stacked along the vertical direction of an `N`-dimensional grid
+@inline function _vertical_ranks(::Val{N}) where {N}
+    ImplicitGlobalGrid.grid_is_initialized() || return 1
+    return ImplicitGlobalGrid.global_grid().dims[N]
+end
+
+# total weight of the cells sitting above the local subdomain, one value per column
+function _weight_above(w::AbstractArray{T, N}, igg::IGG) where {T, N}
+    nranks = igg.dims[N]
+    nranks == 1 && return zero(T)
+
+    grid = ImplicitGlobalGrid.global_grid()
+    iszero(grid.periods[N]) || error(
+        "the lithostatic pressure of a column that is periodic along the vertical direction is undefined"
+    )
+    # cells at the bottom of the local column that the rank below also holds
+    nshared = size(w, N) - grid.nxyz[N] + grid.overlaps[N]
+    0 ≤ nshared < size(w, N) || error(
+        "a local column of $(size(w, N)) cells cannot share $nshared cells with the rank below; `P` must be a field of the global grid"
+    )
+    # the ranks above hold the cells the rank below them does not, so their contributions
+    # tile the column above the local subdomain exactly once
+    contribution = sum(selectdim(w, N, (nshared + 1):size(w, N)), dims = N)
+
+    comm = MPI.Cart_sub(igg.comm_cart, ntuple(i -> i == N, length(igg.dims)))
+    # ranks of a Cartesian sub-communicator are ordered by their vertical coordinate
+    columns = reshape(MPI.Allgather(vec(Array(contribution)), comm), :, nranks)
+    above = sum(view(columns, :, (igg.coords[N] + 2):nranks), dims = 2)
+
+    offset = similar(w, ntuple(i -> i == N ? 1 : size(w, i), Val(N)))
+    return copyto!(offset, reshape(above, size(offset)))
 end
 
 @inline _cell_heights(dz::Number, ::Int, ::Val) = dz

@@ -7,6 +7,7 @@ using Test
 using Statistics
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+import ImplicitGlobalGrid
 import JustRelax.JustRelax2D:
     detect_args_size,
     _tuple,
@@ -530,6 +531,22 @@ end
         compute_lithostatic_pressure!(P, ρg, PTArray(backend_JR)(fill(dz, ny)))
         @test Array(P) ≈ P_uniform
 
+        # a single rank holds the whole column, so the topology adds nothing to it
+        gg = ImplicitGlobalGrid.global_grid()
+        igg = IGG(gg.me, gg.dims, gg.nprocs, gg.coords, gg.comm)
+        P_mpi = @zeros(nx, ny)
+        compute_lithostatic_pressure!(P_mpi, ρg, dz, igg)
+        @test Array(P_mpi) == P_uniform
+        compute_lithostatic_pressure!(P_mpi, ρg, PTArray(backend_JR)(fill(dz, ny)), igg)
+        @test Array(P_mpi) ≈ P_uniform
+
+        # a column carved out of a wider field is integrated in place
+        wide = @zeros(nx + 2, ny)
+        P_view = view(wide, 2:(nx + 1), 1:ny)
+        compute_lithostatic_pressure!(P_view, ρg, dz)
+        @test Array(P_view) ≈ P_uniform
+        @test all(iszero, Array(wide)[1, :])
+
         # 3D integrates along the third dimension
         ρg3 = [Float64(i + j + k) for i in 1:2, j in 1:2, k in 1:3]
         P3 = similar(ρg3)
@@ -537,6 +554,9 @@ end
         for i in 1:2, j in 1:2, k in 1:3
             @test P3[i, j, k] ≈ sum(ρg3[i, j, (k + 1):end]) * dz + ρg3[i, j, k] * dz / 2
         end
+        P3_mpi = similar(ρg3)
+        JustRelax.JustRelax3D.compute_lithostatic_pressure!(P3_mpi, ρg3, dz, igg)
+        @test P3_mpi == P3
 
         @test_throws "must span the same cells" compute_lithostatic_pressure!(
             @zeros(nx, ny), @zeros(nx, ny + 1), dz

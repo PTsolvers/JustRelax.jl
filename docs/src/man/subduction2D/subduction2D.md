@@ -160,7 +160,7 @@ pt_stokes        = PTStokesCoeffs(li, di; ϵ_abs = 1e-4, ϵ_rel = 1e-4, Re = 1e0
 ```julia
 ρg        = ntuple(_ -> @zeros(ni...), Val(2))
 compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-compute_lithostatic_pressure!(stokes.P, ρg[2], di[2])
+compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
 ```
 
 ## Initialize viscosity

@@ -28,8 +28,8 @@ module JustRelax2D
 
     import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
 
-    # `@index` is CellArraysIndexing's cell accessor. JustPIC no longer exports it --
-    # a bare `@index` there resolves to KernelAbstractions' -- so it is re-exported here.
+    # `@index` is CellArraysIndexing's cell accessor. JustPIC does not export it -- a bare
+    # `@index` there is KernelAbstractions' kernel index macro -- so it is re-exported here.
     export @index
 
     __init__() = @init_parallel_stencil(Threads, Float64, 2)
@@ -77,8 +77,8 @@ module JustRelax3D
 
     import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
 
-    # `@index` is CellArraysIndexing's cell accessor. JustPIC no longer exports it --
-    # a bare `@index` there resolves to KernelAbstractions' -- so it is re-exported here.
+    # `@index` is CellArraysIndexing's cell accessor. JustPIC does not export it -- a bare
+    # `@index` there is KernelAbstractions' kernel index macro -- so it is re-exported here.
     export @index
 
     __init__() = @init_parallel_stencil(Threads, Float64, 3)

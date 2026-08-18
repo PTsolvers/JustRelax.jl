@@ -704,12 +704,12 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                 fig
 
                 let
-                    Yv  = [y for x in ustrip.(dimensionalize(xvi[1], km, CharDim)), y in ustrip.(dimensionalize(xvi[2], km, CharDim))][:]
-                    Y   = [y for x in ustrip.(dimensionalize(xci[1], km, CharDim)), y in ustrip.(dimensionalize(xci[2], km, CharDim))][:]
+                    Yv = [y for x in ustrip.(dimensionalize(xvi[1], km, CharDim)), y in ustrip.(dimensionalize(xvi[2], km, CharDim))][:]
+                    Y = [y for x in ustrip.(dimensionalize(xci[1], km, CharDim)), y in ustrip.(dimensionalize(xci[2], km, CharDim))][:]
                     fig = Figure(; size = (1200, 900))
                     ax1 = Axis(fig[1, 1]; aspect = 2 / 3, title = "T")
                     ax2 = Axis(fig[1, 2]; aspect = 2 / 3, title = "Pressure")
-                    a3  = Axis(fig[2, 1]; aspect = 2 / 3, title = "τII")
+                    a3 = Axis(fig[2, 1]; aspect = 2 / 3, title = "τII")
 
                     scatter!(
                         ax1, ustrip.(dimensionalize((Array(thermal.T[2:(end - 1), 2:(end - 1)])), C, CharDim))[:],

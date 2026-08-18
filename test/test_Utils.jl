@@ -7,6 +7,7 @@ using Test
 using Statistics
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+import ImplicitGlobalGrid
 import JustRelax.JustRelax2D:
     detect_args_size,
     _tuple,
@@ -489,5 +490,79 @@ end
         @test maxLi == 3.0
         @test di == (0.25, 0.5, 0.75)
         @test length(xi_vel) == 3
+    end
+
+    @testset "compute_lithostatic_pressure!" begin
+        nx, ny = 3, 4
+        dz = 0.5
+
+        # uniform column: cell j carries ny - j full cells plus half of its own
+        ρg = @zeros(nx, ny)
+        ρg .= 2.0
+        P = @zeros(nx, ny)
+        compute_lithostatic_pressure!(P, ρg, dz)
+        @test Array(P)[1, :] ≈ [(ny - j + 0.5) * 2.0 * dz for j in 1:ny]
+        @test all(Array(P) .== Array(P)[1:1, :])
+
+        # the topmost cell carries half of its own weight, and nothing else
+        @test Array(P)[1, end] ≈ 2.0 * dz / 2
+
+        # variable density, checked against the definition
+        ρg .= PTArray(backend_JR)([Float64(i + 2j) for i in 1:nx, j in 1:ny])
+        compute_lithostatic_pressure!(P, ρg, dz)
+        ρg_cpu, P_cpu = Array(ρg), Array(P)
+        for i in 1:nx, j in 1:ny
+            @test P_cpu[i, j] ≈ sum(ρg_cpu[i, (j + 1):end]) * dz + ρg_cpu[i, j] * dz / 2
+        end
+
+        # non-uniform cell heights: each cell is weighted by its own height
+        dzs = PTArray(backend_JR)([0.25, 0.5, 1.0, 2.0])
+        compute_lithostatic_pressure!(P, ρg, dzs)
+        dzs_cpu, P_cpu = Array(dzs), Array(P)
+        for i in 1:nx, j in 1:ny
+            @test P_cpu[i, j] ≈
+                sum(ρg_cpu[i, k] * dzs_cpu[k] for k in (j + 1):ny; init = 0.0) +
+                ρg_cpu[i, j] * dzs_cpu[j] / 2
+        end
+
+        # a constant height reproduces the uniform case
+        compute_lithostatic_pressure!(P, ρg, dz)
+        P_uniform = copy(Array(P))
+        compute_lithostatic_pressure!(P, ρg, PTArray(backend_JR)(fill(dz, ny)))
+        @test Array(P) ≈ P_uniform
+
+        # a single rank holds the whole column, so the topology adds nothing to it
+        gg = ImplicitGlobalGrid.global_grid()
+        igg = IGG(gg.me, gg.dims, gg.nprocs, gg.coords, gg.comm)
+        P_mpi = @zeros(nx, ny)
+        compute_lithostatic_pressure!(P_mpi, ρg, dz, igg)
+        @test Array(P_mpi) == P_uniform
+        compute_lithostatic_pressure!(P_mpi, ρg, PTArray(backend_JR)(fill(dz, ny)), igg)
+        @test Array(P_mpi) ≈ P_uniform
+
+        # a column carved out of a wider field is integrated in place
+        wide = @zeros(nx + 2, ny)
+        P_view = view(wide, 2:(nx + 1), 1:ny)
+        compute_lithostatic_pressure!(P_view, ρg, dz)
+        @test Array(P_view) ≈ P_uniform
+        @test all(iszero, Array(wide)[1, :])
+
+        # 3D integrates along the third dimension
+        ρg3 = [Float64(i + j + k) for i in 1:2, j in 1:2, k in 1:3]
+        P3 = similar(ρg3)
+        JustRelax.JustRelax3D.compute_lithostatic_pressure!(P3, ρg3, dz)
+        for i in 1:2, j in 1:2, k in 1:3
+            @test P3[i, j, k] ≈ sum(ρg3[i, j, (k + 1):end]) * dz + ρg3[i, j, k] * dz / 2
+        end
+        P3_mpi = similar(ρg3)
+        JustRelax.JustRelax3D.compute_lithostatic_pressure!(P3_mpi, ρg3, dz, igg)
+        @test P3_mpi == P3
+
+        @test_throws "must span the same cells" compute_lithostatic_pressure!(
+            @zeros(nx, ny), @zeros(nx, ny + 1), dz
+        )
+        @test_throws "one height per cell" compute_lithostatic_pressure!(
+            P, ρg, PTArray(backend_JR)(fill(dz, ny + 1))
+        )
     end
 end

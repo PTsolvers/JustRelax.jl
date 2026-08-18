@@ -264,6 +264,37 @@ end
         @test any(!iszero, out[7:12])
         @test !iszero(out[15])
         @test out[17] > 0
+
+        incompressible_elasticity = ConstantElasticity(; G = 1.0, ν = 0.5)
+        nondilatant_rheology = (
+            SetMaterialParams(;
+                Phase = 1,
+                CompositeRheology = CompositeRheology((
+                    LinearViscous(; η = 1.0),
+                    incompressible_elasticity,
+                    DruckerPrager_regularised(; C = 0.1, ϕ = 30.0, η_vp = 1.0e-2, Ψ = 0.0),
+                )),
+                Elasticity = incompressible_elasticity,
+            ),
+        )
+        out = JR3K.compute_local_stress(
+            (1.0, -0.5, -0.5, 0.2, 0.3, 0.4),
+            ntuple(_ -> 0.0, Val(6)),
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            nondilatant_rheology,
+            SVector(1.0),
+            dt,
+            0.0,
+        )
+
+        @test all(isfinite, out)
+        @test out[14] > 0
+        @test any(!iszero, out[7:12])
+        @test iszero(out[15])
+        @test iszero(out[17])
     end
 
     @testset "Gershgorin shear staggering" begin

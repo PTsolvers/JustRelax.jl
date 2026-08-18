@@ -549,7 +549,7 @@ function JR3D.update_phase_ratios_3D!(
         phase_arrays::NTuple{N, ROCArray{U, 3}},
         xci,
         xvi
-    ) where {T <: AbstractMatrix, N, U}
+    ) where {T <: AbstractArray, N, U}
 
     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)

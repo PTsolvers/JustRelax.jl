@@ -259,7 +259,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         )
 
         # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios

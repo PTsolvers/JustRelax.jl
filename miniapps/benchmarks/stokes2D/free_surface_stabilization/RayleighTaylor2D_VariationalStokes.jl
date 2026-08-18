@@ -237,7 +237,7 @@ function main(igg, nx, ny)
         inject_particles_phase!(particles, pPhases, (), ())
 
         # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios

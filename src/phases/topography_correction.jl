@@ -1,5 +1,16 @@
 using StaticArrays
 
+"""
+    update_phases_given_markerchain!(phase, chain::MarkerChain, particles::Particles, origin, di, air_phase, args = ())
+
+Deactivate the particles that end up on the wrong side of the free surface tracked by
+`chain`: air-phase particles below it and rock particles above it. Their coordinates and
+every field in `args` are set to `NaN` and their index entry to `false`, so that particle
+injection re-seeds those cells from their neighbours.
+
+`origin` and `di` are the origin and grid spacing of the particle grid, and `air_phase`
+the phase index standing for air.
+"""
 function update_phases_given_markerchain!(
         phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase
     ) where {backend}

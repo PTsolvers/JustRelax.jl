@@ -81,6 +81,14 @@ end
 
 ## Stress Rotation on the particles
 
+"""
+    rotate_stress_particles!(τ::NTuple, ω::NTuple, particles::Particles, dt; method = :matrix)
+
+Rotate the deviatoric stress carried by each active particle over `dt` with the local
+vorticity, using GeoParams' elastic stress rotation. `τ` holds the stress components and
+`ω` the vorticity components, as particle cell arrays. `method` is accepted for call-site
+compatibility and does not select an algorithm.
+"""
 function rotate_stress_particles!(
         τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol = :matrix
     )
@@ -194,6 +202,14 @@ end
 
 # Interpolations between stress on the particles and the grid
 
+"""
+    stress2grid!(stokes, τ_particles::StressParticles, particles)
+
+Interpolate the particle stress in `τ_particles` back onto the old-stress fields
+`stokes.τ_o`, normal components onto the cell centers and shear components onto the
+vertices. Counterpart of [`rotate_stress!`](@ref), and the step that hands the rotated
+stress to the next Stokes solve.
+"""
 function stress2grid!(
         stokes, τ_particles::JustRelax.StressParticles{backend}, particles
     ) where {backend}
@@ -231,6 +247,14 @@ function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, particle
     return nothing
 end
 
+"""
+    rotate_stress!(τ_particles::StressParticles, stokes, particles, dt)
+
+Interpolate the current deviatoric stress `stokes.τ` and vorticity `stokes.ω` onto the
+particles and rotate the particle stress over `dt`. `stokes.ω` must hold the vorticity of
+the current velocity field. Use [`stress2grid!`](@ref) afterwards to map the rotated
+stress back onto `stokes.τ_o`.
+"""
 function rotate_stress!(
         τ_particles::JustRelax.StressParticles{backend}, stokes, particles, dt
     ) where {backend}

@@ -159,7 +159,7 @@ function main(igg, nx, ny)
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (1.0e18, 1.0e24); air_phase = air_phase)
 
     # Boundary conditions

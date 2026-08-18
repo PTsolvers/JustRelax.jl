@@ -166,13 +166,6 @@ function main3D(
 
     t = 0.0
     local out
-    history_step = Int[]
-    history_time = Float64[]
-    history_iter = Float64[]
-    history_total = Float64[]
-    history_velocity = Float64[]
-    history_pressure = Float64[]
-    iteration_file = joinpath(figdir, "DYREL_iterations.csv")
     for it in 1:nsteps
         out = solve_DYREL!(
             stokes,
@@ -203,31 +196,6 @@ function main3D(
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
         t += dt
-
-        n = length(out.err_evo_it)
-        Base.append!(history_step, fill(it, n))
-        Base.append!(history_time, fill(t, n))
-        Base.append!(history_iter, out.err_evo_it)
-        Base.append!(history_total, out.err_evo_tot)
-        Base.append!(history_velocity, out.err_evo_V)
-        Base.append!(history_pressure, out.err_evo_P)
-        if igg.me == 0
-            open(iteration_file, "w") do io
-                println(io, "step,time,iteration,residual_total,residual_velocity,residual_pressure")
-                for i in eachindex(history_iter)
-                    @printf(
-                        io,
-                        "%d,%.17g,%.0f,%.17g,%.17g,%.17g\n",
-                        history_step[i],
-                        history_time[i],
-                        history_iter[i],
-                        history_total[i],
-                        history_velocity[i],
-                        history_pressure[i],
-                    )
-                end
-            end
-        end
 
         if do_vtk
             velocity2center!(Vx_c, Vy_c, Vz_c, @velocity(stokes)...)
@@ -272,7 +240,6 @@ function main3D(
         stokes,
         dyrel,
         phase_ratios,
-        iteration_file,
         analytic_stress = solution(εbg, t, G0, η0),
     )
 end

@@ -15,12 +15,6 @@ import JustPIC._2D.GridGeometryUtils as GGU
 const backend_JP = JustPIC.CPUBackend
 ```
 
-```julia
-using JustPIC, JustPIC._2D
-import JustPIC._2D.GridGeometryUtils as GGU
-const backend_JP = JustPIC.CPUBackend
-```
-
 We will also use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) to write some device-agnostic helper functions:
 ```julia
 using ParallelStencil
@@ -87,6 +81,7 @@ rheology = (
     ),
     # High density phase
     SetMaterialParams(;
+        Phase             = 2,
         Density           = ConstantDensity(; ρ = 0.0),
         Gravity           = ConstantGravity(; g = 0.0),
         CompositeRheology = CompositeRheology((visc, el_inc, pl)),
@@ -149,7 +144,7 @@ pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 
 We initialize the buoyancy forces and viscosity
 ```julia
 ρg               = @zeros(ni...), @zeros(ni...)
-args             = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
+args             = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
 viscosity_cutoff = (-Inf, Inf)
 compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 ```
@@ -190,7 +185,7 @@ for it in 1:nt
     solve!(
         stokes,
         pt_stokes,
-        di,
+        grid,
         flow_bcs,
         ρg,
         phase_ratios,
@@ -207,10 +202,10 @@ for it in 1:nt
         )
     )
     # advance time step
-    it += 1
-    t  += dt
-    # calculate the second invariant and push to history vectors
+    t += dt
+    # calculate the second invariants and push to history vectors
     tensor_invariant!(stokes.ε)
+    tensor_invariant!(stokes.ε_pl)
     push!(τII, maximum(stokes.τ.xx))
     push!(sol, solution(εbg, t, G0, η0))
     push!(ttot, t)
@@ -247,7 +242,6 @@ lines!(ax4, ttot, sol, color = :red)
 hidexdecorations!(ax1)
 hidexdecorations!(ax3)
 fig
-save(joinpath(figdir, "$(it).png"), fig)
 ```
 
 ### Final model

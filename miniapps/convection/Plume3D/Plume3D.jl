@@ -1,83 +1,44 @@
+# 3D thermal plume rising through a layered lithosphere.
+# Rheology after Cloetingh et al. (2022), "Fingerprinting secondary mantle plumes".
+
+const isCUDA = false
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = CPUBackend
+const backend_JR = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
-@init_parallel_stencil(Threads, Float64, 3)
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
 
 using JustPIC, JustPIC._3D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
-# Load script dependencies
-using Printf, GeoParams, CairoMakie
-
-# Load file with all the rheology configurations
-include("Layered_rheology.jl")
-
-## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-import ParallelStencil.INDICES
-const idx_k = INDICES[3]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
+const backend_JP = @static if isCUDA
+    CUDABackend # Options: JustPIC.CPUBackend, CUDABackend, JustPIC.AMDGPUBackend
+else
+    JustPIC.CPUBackend
 end
 
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
+using GeoParams, CairoMakie, Printf
 
-# Initial thermal profile
-@parallel_indices (I...) function init_T!(T, z)
-    depth = -z[I[3]]
+include("Plume3D_rheology.jl")
 
-    if depth < 0.0e0
-        T[I...] = 273.0
+## MAIN SCRIPT ----------------------------------------------------------------------
 
-    elseif 0.0e0 ≤ (depth) < 35.0e3
-        dTdZ = (923 - 273) / 35.0e3
-        offset = 273.0e0
-        T[I...] = (depth) * dTdZ + offset
-
-    elseif 110.0e3 > (depth) ≥ 35.0e3
-        dTdZ = (1492 - 923) / 75.0e3
-        offset = 923
-        T[I...] = (depth - 35.0e3) * dTdZ + offset
-
-    elseif (depth) ≥ 110.0e3
-        dTdZ = (1837 - 1492) / 590.0e3
-        offset = 1492.0e0
-        T[I...] = (depth - 110.0e3) * dTdZ + offset
-
-    end
-
-    return nothing
-end
-
-# Thermal rectangular perturbation
-function rectangular_perturbation!(T, xc, yc, zc, r, xvi)
-
-    @parallel_indices (i, j, k) function _rectangular_perturbation!(T, xc, yc, zc, r, x, y, z)
-        @inbounds if (abs(x[i] - xc) ≤ r) && (abs(y[j] - yc) ≤ r) && (abs(z[k] - zc) ≤ r)
-            depth = abs(z[k])
-            dTdZ = (2047 - 2017) / 50.0e3
-            offset = 2017
-            T[i, j, k] = (depth - 585.0e3) * dTdZ + offset
-        end
-        return nothing
-    end
-
-    return @parallel _rectangular_perturbation!(T, xc, yc, zc, r, xvi...)
-end
-## END OF HELPER FUNCTION ------------------------------------------------------------
-
-## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vtk = false)
+function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_vtk = false)
 
     # Physical domain ------------------------------------
     lz = 700.0e3              # domain length in z
@@ -85,43 +46,38 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
     ni = nx, ny, nz           # number of cells
     li = lx, ly, lz           # domain length
     di = @. li / ni           # grid steps
-    origin = 0.0, 0.0, -lz    # origin coordinates (15km of sticky air layer)
+    origin = 0.0, 0.0, -lz    # origin coordinates
     grid = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    (; xci, xvi) = grid       # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
-    κ = (10 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
+    κ = 10 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0)
     dt = dt_diff = 0.5 * min(di...)^3 / κ / 3.01 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell = 25
-    max_xcell = 35
-    min_xcell = 8
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
-
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
-    # temperature
+    nxcell, max_xcell, min_xcell = 25, 35, 8
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
+    # temperature and material phase carried by the particles
     pT, pPhases = init_cell_arrays(particles, Val(2))
     particle_args = (pT, pPhases)
 
-    # Elliptical temperature anomaly
+    # Rectangular thermal and compositional anomaly
     xc_anomaly = lx / 2   # origin of thermal anomaly
     yc_anomaly = ly / 2   # origin of thermal anomaly
     zc_anomaly = -610.0e3 # origin of thermal anomaly
-    r_anomaly = 50.0e3   # radius of perturbation
+    r_anomaly = 50.0e3    # radius of perturbation
     init_phases!(pPhases, particles, lx, ly; d = abs(zc_anomaly), r = r_anomaly)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
-    # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.5 / √3.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 3π, r = 1.0e0, CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -129,16 +85,18 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false, front = true, back = true),
     )
-    # initialize thermal profile - Half space cooling
-    @parallel init_T!(thermal.T, xvi[3])
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, xvi)
+    # initialize the geotherm on the vertices, then transfer it to the centroids of `thermal.T`
+    T_vertex = @zeros(ni .+ 1...)
+    @parallel (@idx ni .+ 1) init_T!(T_vertex, xvi[3])
+    rectangular_perturbation!(T_vertex, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, xvi)
+    vertex2center!(thermal.T, T_vertex; ghost_x = true, ghost_y = true, ghost_z = true)
     thermal_bcs!(thermal, thermal_bc)
     # ----------------------------------------------------
 
-    # Buoyancy forces
+    # Buoyancy forces and lithostatic pressure
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    @parallel init_P!(stokes.P, ρg[end], xci[end])
+    compute_lithostatic_pressure!(stokes.P, ρg[end], di[end], igg)
 
     # Rheology
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
@@ -147,10 +105,10 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 1.0e-3 / √3
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √3
     )
 
-    # Boundary conditions
+    # Free slip on every wall
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true, front = true, back = true),
         no_slip = (left = false, right = false, top = false, bot = false, front = false, back = false),
@@ -159,29 +117,12 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
     update_halo!(@velocity(stokes)...)
 
     # IO -------------------------------------------------
-    # if it does not exist, make folder where figures are stored
     if do_vtk
         vtk_dir = joinpath(figdir, "vtk")
         take(vtk_dir)
     end
     take(figdir)
     # ----------------------------------------------------
-
-    # Plot initial T and η profiles
-    fig = let
-        Zv = [z for x in xvi[1], y in xvi[2], z in xvi[3]][:]
-        Z = [z for x in xci[1], y in xci[2], z in xci[3]][:]
-        fig = Figure(size = (1200, 900))
-        ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
-        ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
-        lines!(ax1, Array(thermal.T[:]), Zv ./ 1.0e3)
-        lines!(ax2, Array(log10.(stokes.viscosity.η[:])), Z ./ 1.0e3)
-        ylims!(ax1, minimum(xvi[3]) ./ 1.0e3, 0)
-        ylims!(ax2, minimum(xvi[3]) ./ 1.0e3, 0)
-        hideydecorations!(ax2)
-        save(joinpath(figdir, "initial_profile.png"), fig)
-        fig
-    end
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, T_buffer, particles)
@@ -198,31 +139,37 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
-        # interpolate fields from particle to grid vertices
+        # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
         @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
+        thermal_bcs!(thermal, thermal_bc)
         # ------------------------------
 
         # Stokes solver ----------------
-        solve!(
-            stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
-            ρg,
-            phase_ratios,
-            rheology,
-            args,
-            Inf,
-            igg;
-            kwargs = (;
-                iterMax = 100.0e3,
-                nout = 1.0e3,
-                viscosity_cutoff = viscosity_cutoff,
+        t_stokes = @elapsed begin
+            out = solve!(
+                stokes,
+                pt_stokes,
+                grid,
+                flow_bcs,
+                ρg,
+                phase_ratios,
+                rheology,
+                args,
+                Inf,
+                igg;
+                kwargs = (;
+                    iterMax = 100.0e3,
+                    nout = 1.0e3,
+                    viscosity_cutoff = viscosity_cutoff,
+                )
             )
-        )
+        end
+        println("Stokes solver time             ")
+        println("   Total time:      $t_stokes s")
+        println("   Time/iteration:  $(t_stokes / out.iter) s")
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di, dt_diff) / 2
+        dt = compute_dt(stokes, di, dt_diff) * 0.8
         # ------------------------------
 
         # Thermal solver ---------------
@@ -237,7 +184,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,
-                iterMax = 10.0e3,
+                iterMax = 50.0e3,
                 nout = 1.0e2,
                 verbose = true,
             )
@@ -261,26 +208,26 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        @show it += 1
+        it += 1
         t += dt
+        @printf("it = %d, t = %.3f Myrs, dt = %.3f kyrs\n", it, t / (1.0e6 * 3600 * 24 * 365.25), dt / (1.0e3 * 3600 * 24 * 365.25))
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 1) == 0
+        if it == 1 || rem(it, 10) == 0
             checkpointing_hdf5(figdir, stokes, thermal.T, t, dt)
 
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-                data_v = (;)
+                data_v = (;
+                    T = Array(T_vertex),
+                )
                 data_c = (;
-                    T = Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
+                    T = Array(T_buffer),
                     P = Array(stokes.P),
-                    τxx = Array(stokes.τ.xx),
-                    τyy = Array(stokes.τ.yy),
-                    τxy = Array(stokes.τ.xy_c),
-                    εxx = Array(stokes.ε.xx),
-                    εyy = Array(stokes.ε.yy),
-                    εxy = Array(stokes.ε.xy_c),
+                    τII = Array(stokes.τ.II),
+                    εII = Array(stokes.ε.II),
                     η = Array(log10.(stokes.viscosity.η_vep)),
+                    phase = [argmax(p) for p in Array(phase_ratios.center)],
                 )
                 velocity_v = (
                     Array(Vx_v),
@@ -298,20 +245,16 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
                 )
             end
 
+            # vertical slice through the middle of the plume
             slice_j = ny >>> 1
-            # Make Makie figure
-            fig = Figure(size = (1400, 1800), title = "t = $t")
+            fig = Figure(size = (1400, 1200))
             ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
             ax2 = Axis(fig[2, 1], aspect = ar, title = "τII [MPa]")
             ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
-            # Plot temperature
-            h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[3] .* 1.0e-3, Array(thermal.T[:, slice_j, :]), colormap = :lajolla)
-            # Plot particles phase
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(T_buffer[:, slice_j, :]), colormap = :lajolla)
             h2 = heatmap!(ax2, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(stokes.τ.II[:, slice_j, :] .* 1.0e-6), colormap = :batlow)
-            # Plot 2nd invariant of strain rate
             h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.ε.II[:, slice_j, :])), colormap = :batlow)
-            # Plot effective viscosity
             h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep[:, slice_j, :])), colormap = :batlow)
             hideydecorations!(ax3)
             hideydecorations!(ax4)
@@ -321,28 +264,24 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
             Colorbar(fig[2, 4], h4)
             linkaxes!(ax1, ax2, ax3, ax4)
             save(joinpath(figdir, "$(it).png"), fig)
-            fig
         end
         # ------------------------------
-
     end
 
     return nothing
 end
-## END OF MAIN SCRIPT ----------------------------------------------------------------
 
-do_vtk = true # set to true to generate VTK files for ParaView
-ar = 1 # aspect ratio
+## SCRIPT ENTRY POINT ---------------------------------------------------------------
+
+do_vtk = true  # set to true to generate VTK files for ParaView
+ar = 1         # aspect ratio
 n = 32
-nx = n
-ny = n
-nz = n
+nx = ny = nz = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
 else
     igg
 end
 
-# (Path)/folder where output data and figures are stored
 figdir = "Plume3D_$n"
-main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk);
+main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk)

@@ -401,7 +401,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
+                    τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, MPa, CharDim))),
                     εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                     Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
                     Vy = Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),

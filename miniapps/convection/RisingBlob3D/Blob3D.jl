@@ -434,20 +434,19 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
             if igg.me == 0
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-                    data_v = (;
-                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
-                        εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
-                    )
+                    data_v = (;)
                     data_c = (;
                         P = Array(ustrip.(dimensionalize(stokes.P, MPa, CharDim))),
                         T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)], C, CharDim))),
                         τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa, CharDim))),
                         τyy = Array(ustrip.(dimensionalize(stokes.τ.yy, MPa, CharDim))),
                         τzz = Array(ustrip.(dimensionalize(stokes.τ.zz, MPa, CharDim))),
+                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy_c, MPa, CharDim))),
                         τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
                         εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1, CharDim))),
                         εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1, CharDim))),
                         εzz = Array(ustrip.(dimensionalize(stokes.ε.zz, s^-1, CharDim))),
+                        εxy = Array(ustrip.(dimensionalize(stokes.ε.xy_c, s^-1, CharDim))),
                         εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim))),
                         η = Array(ustrip.(dimensionalize(stokes.viscosity.η, Pa * s, CharDim))),
                     )

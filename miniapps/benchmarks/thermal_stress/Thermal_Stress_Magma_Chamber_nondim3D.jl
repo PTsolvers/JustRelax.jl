@@ -437,8 +437,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                     data_v = (;
-                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
-                        εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                         Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
                         Vy = Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),
                         Vz = Array(ustrip.(dimensionalize(Vz_v, cm / yr, CharDim))),
@@ -449,10 +447,12 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                         τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa, CharDim))),
                         τyy = Array(ustrip.(dimensionalize(stokes.τ.yy, MPa, CharDim))),
                         τzz = Array(ustrip.(dimensionalize(stokes.τ.zz, MPa, CharDim))),
+                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy_c, MPa, CharDim))),
                         τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
                         εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1, CharDim))),
                         εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1, CharDim))),
                         εzz = Array(ustrip.(dimensionalize(stokes.ε.zz, s^-1, CharDim))),
+                        εxy = Array(ustrip.(dimensionalize(stokes.ε.xy_c, s^-1, CharDim))),
                         εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim))),
                         η = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep, Pa * s, CharDim))),
                     )

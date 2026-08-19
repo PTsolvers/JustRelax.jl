@@ -18,7 +18,7 @@ $\begin{align}
 For example, the APT formulation of the Stokes equations yields:
 
 $\begin{align}
-\widetilde{\rho}\frac{\partial \boldsymbol{u}}{\partial \psi} + \nabla\cdot\boldsymbol{\tau} - \nabla p = \boldsymbol{f}
+\widetilde{\rho}\frac{\partial \boldsymbol{u}}{\partial \psi} = \nabla\cdot\boldsymbol{\tau} - \nabla p - \boldsymbol{f}
 \end{align}$
 
 $\begin{align}

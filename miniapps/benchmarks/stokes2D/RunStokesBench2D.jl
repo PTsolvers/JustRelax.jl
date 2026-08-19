@@ -1,5 +1,5 @@
 using JustRelax, JustRelax.JustRelax2D, Printf, LinearAlgebra
-using Pkg; Pkg.activate("miniapps")
+using Pkg; Pkg.activate(normpath(joinpath(@__DIR__, "..", "..")))
 using MPI: MPI
 using CairoMakie
 

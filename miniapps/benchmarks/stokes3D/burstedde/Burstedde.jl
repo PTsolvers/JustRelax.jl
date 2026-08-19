@@ -1,5 +1,5 @@
-using Pkg; Pkg.activate("miniapps")
 using ParallelStencil.FiniteDifferences3D
+using Statistics: mean
 
 # benchmark reference:
 #   C. Burstedde, G. Stadler, L. Alisic, L. C. Wilcox, E. Tan, M. Gurnis, and O. Ghattas.
@@ -138,14 +138,14 @@ function burstedde(; nx = 16, ny = 16, nz = 16, β = 10.0, init_MPI = true, fina
     ni = (nx, ny, nz) # number of nodes in x- and y-
     lx = ly = lz = 1.0e0
     li = (lx, ly, lz)  # domain length in x- and y-
-    origin = zero(nx), zero(ny), zero(nz)
+    origin = 0.0, 0.0, 0.0
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI)...) # init MPI
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
-    ttot = 1 # total siηlation time
+    ttot = 1 # total simulation time
     Δt = 1 # physical time step
 
     ## Allocate arrays needed for every Stokes problem
@@ -213,5 +213,3 @@ function burstedde(; nx = 16, ny = 16, nz = 16, β = 10.0, init_MPI = true, fina
 
     return (ni = ni, xci = xci, xvi = xvi, li = li, di = di), stokes, iters
 end
-
-# burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = false)

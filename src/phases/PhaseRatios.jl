@@ -1,10 +1,11 @@
 """
-    update_phase_ratios!(
+    update_phase_ratios_2D!(
         phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractMatrix}, xci, xvi
-    ) where {B, T <: AbstractMatrix, N}
+    )
 
-JustRelax routine based on `JustPIC._2D.update_phase_ratios!` or `JustPIC._3D.update_phase_ratios!`.
-Update the phase ratios in `phase_ratios` using the provided `phase_arrays`, `xci`, and `xvi`.
+JustRelax routine based on `JustPIC.update_phase_ratios!`.
+Update the center, vertex and velocity-face phase ratios in `phase_ratios` from the
+2-D `phase_arrays`, given the cell-center coordinates `xci` and vertex coordinates `xvi`.
 The phase arrays need to be AbstractArrays and have values between 0 and 1.
 
 #Example:
@@ -17,7 +18,7 @@ phase_2[User_criterion .== false] .= 1.0
 phase_arrays = (phase_1, phase_2)
 
 # Advect both phase arrays and update phase ratios
-update_phase_ratios!(phase_ratios, phase_arrays, xci, xvi)
+update_phase_ratios_2D!(phase_ratios, phase_arrays, xci, xvi)
 ```
 """
 function update_phase_ratios_2D!(
@@ -34,12 +35,14 @@ function update_phase_ratios_2D!(
 end
 
 """
-    update_phase_ratios!(
+    update_phase_ratios_3D!(
         phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractArray}, xci, xvi
-    ) where {B, T <: AbstractArray, N}
+    )
 
-JustRelax routine based on `JustPIC._2D.update_phase_ratios!` or `JustPIC._3D.update_phase_ratios!`.
-Update the phase ratios in `phase_ratios` using the provided `phase_arrays`, `xci`, and `xvi`.
+JustRelax routine based on `JustPIC.update_phase_ratios!`.
+Update the center, vertex, velocity-face and shear-stress-midpoint phase ratios in
+`phase_ratios` from the 3-D `phase_arrays`, given the cell-center coordinates `xci` and
+vertex coordinates `xvi`.
 The phase arrays need to be AbstractArrays and have values between 0 and 1.
 
 #Example:
@@ -52,11 +55,11 @@ phase_2[User_criterion .== false] .= 1.0
 phase_arrays = (phase_1, phase_2)
 
 # Advect both phase arrays and update phase ratios
-update_phase_ratios!(phase_ratios, phase_arrays, xci, xvi)
+update_phase_ratios_3D!(phase_ratios, phase_arrays, xci, xvi)
 ```
 """
 function update_phase_ratios_3D!(
-        phase_ratios::JustPIC.PhaseRatios{B, T}, phase_arrays::NTuple{N, AbstractMatrix}, xci, xvi
+        phase_ratios::JustPIC.PhaseRatios{B, T}, phase_arrays::NTuple{N, AbstractArray}, xci, xvi
     ) where {B, T <: AbstractArray, N}
 
     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
@@ -121,7 +124,7 @@ function phase_ratios_vertex_from_arrays!(
     ) where {N, ND}
 
     ni = size(first(phase_arrays)) .+ 1
-    di = compute_dx(xvi)
+    di = JustPIC.compute_dx(xvi)
 
     @parallel (@idx ni) phase_ratios_vertex_from_arrays_kernel!(
         phase_ratios.vertex, phase_arrays, xci, xvi, di
@@ -215,8 +218,8 @@ function phase_ratios_face_from_arrays!(
         phase_face, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, dimension::Symbol
     ) where {N, ND}
     ni = size(first(phase_arrays))  # Cell grid size
-    di = compute_dx(xci)
-    offsets = face_offset(Val(ND), dimension)
+    di = JustPIC.compute_dx(xci)
+    offsets = JustPIC.face_offset(Val(ND), dimension)
     face_ni = ntuple(d -> ni[d] + offsets[d], Val(ND))
 
     @parallel (@idx face_ni) phase_ratios_face_from_arrays_kernel!(
@@ -297,7 +300,7 @@ function phase_ratios_midpoint_from_arrays!(
         phase_midpoints, phase_arrays::NTuple{N, AbstractArray}, xci, dimension
     ) where {N}
     ni = size(first(phase_arrays))  # Cell grid size
-    di = compute_dx(xci)
+    di = JustPIC.compute_dx(xci)
 
     # Define staggered offsets for midpoint grids
     offsets = if dimension === :xy

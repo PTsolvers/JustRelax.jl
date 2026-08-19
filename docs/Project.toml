@@ -12,3 +12,4 @@ JustRelax = {path = ".."}
 Documenter = "1"
 DocumenterVitepress = "0.2"
 GeoParams = "0.7.19"
+JustPIC = "0.7"

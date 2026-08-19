@@ -2,7 +2,8 @@ module JustRelax3D
 
 using JustRelax: JustRelax
 using AMDGPU
-using JustPIC, JustPIC._3D
+using JustPIC
+using CellArraysIndexing: @index
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
@@ -34,7 +35,7 @@ import JustRelax:
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
-import JustPIC._3D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
+import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
 
 __init__() = @init_parallel_stencil(AMDGPU, Float64, 3)
 
@@ -496,7 +497,7 @@ end
 function JR3D.rotate_stress_particles!(
         τ::NTuple,
         ω::NTuple,
-        particles::Particles{JustPIC.AMDGPUBackend},
+        particles::Particles{ROCBackend},
         dt;
         method::Symbol = :matrix,
     )
@@ -525,7 +526,7 @@ end
 
 function JR3D.stress2grid!(
         stokes,
-        τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+        τ_particles::JustRelax.StressParticles{ROCBackend},
         particles,
     )
     stress2grid!(stokes, τ_particles, particles)
@@ -533,7 +534,7 @@ function JR3D.stress2grid!(
 end
 
 function JR3D.rotate_stress!(
-        τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+        τ_particles::JustRelax.StressParticles{ROCBackend},
         stokes,
         particles,
         dt,
@@ -544,11 +545,11 @@ end
 
 # Phase ratios with arrays
 function JR3D.update_phase_ratios_3D!(
-        phase_ratios::JustPIC.PhaseRatios{AMDGPUBackend, T},
+        phase_ratios::JustPIC.PhaseRatios{ROCBackend, T},
         phase_arrays::NTuple{N, ROCArray{U, 3}},
         xci,
         xvi
-    ) where {T <: AbstractMatrix, N, U}
+    ) where {T <: AbstractArray, N, U}
 
     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)

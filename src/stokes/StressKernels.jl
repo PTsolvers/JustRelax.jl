@@ -356,6 +356,16 @@ end
 end
 
 ## Accumulate tensor
+"""
+    accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
+
+Accumulate the second invariant of the symmetric tensor `A` over a time step:
+`II[I] += dt * A_II[I]`.
+
+The tensor components are gathered onto the cell centers where `II` lives, so `A` may hold
+its shear components on the vertices. Used to integrate the deviatoric plastic strain
+rate `ε_pl` into `EII_pl`; the volumetric counterpart is [`accumulate_vol!`](@ref).
+"""
 function accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
     return accumulate_tensor!(backend(A), II, A, dt)
 end

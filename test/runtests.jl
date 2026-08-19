@@ -31,6 +31,7 @@ function test_worker(name)
             "test_traits", "test_types", "test_arrays_conversions",
             "test_mask", "test_mini_kernels", "test_Interpolations",
             "test_boundary_conditions2D", "test_boundary_conditions3D",
+            "test_justpic_interface",
         )
         return nothing
     end

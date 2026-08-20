@@ -322,45 +322,32 @@ function phase_ratios_midpoint_from_arrays!(
 end
 
 @parallel_indices (I...) function phase_ratios_midpoint_from_arrays_kernel!(
-        ratio_midpoints, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, di::NTuple{ND, T}, offsets, ni
-    ) where {N, ND, T}
+        ratio_midpoints, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{3}, di::NTuple{3, T}, offsets, ni
+    ) where {N, T}
 
     w_vals = @MVector zeros(T, N)
     total_weight = zero(T)
 
-    num_staggered = count(x -> x == 1, offsets)
-    num_corners = 2^num_staggered
+    # Every midpoint grid is staggered in exactly two dimensions. Spell out the
+    # four neighbouring cells: mutating a captured bit counter in an `ntuple`
+    # closure boxes the counter, which is unsupported in GPU kernels.
+    for first_offset in -1:0, second_offset in -1:0
+        i_cell = I[1] + offsets[1] * first_offset
+        j_offset = ifelse(offsets[1] == 1, second_offset, first_offset)
+        j_cell = I[2] + offsets[2] * j_offset
+        k_cell = I[3] + offsets[3] * second_offset
 
-    # Iterate over all corner combinations
-    for corner_bits in 0:(num_corners - 1)
-        bit_index = 0
-        cell_index = ntuple(
-            d -> begin
-                if offsets[d] == 1  # This dimension is staggered
-                    # Extract the bit for this staggered dimension
-                    corner_bit = (corner_bits >> bit_index) & 1
-                    bit_index += 1
-                    # Midpoint I[d] is between cells I[d]-1 and I[d]
-                    # corner_bit=0 gives left cell (I[d]-1), corner_bit=1 gives right cell (I[d])
-                    I[d] - 1 + corner_bit
-                else
-                    # Non-staggered dimension: use midpoint index directly
-                    I[d]
-                end
-            end, Val(ND)
-        )
-
-        # Check if cell index is within bounds
-        valid_cell = all(1 ≤ cell_index[d] ≤ ni[d] for d in 1:ND)
-        !valid_cell && continue
+        if !(1 ≤ i_cell ≤ ni[1] && 1 ≤ j_cell ≤ ni[2] && 1 ≤ k_cell ≤ ni[3])
+            continue
+        end
 
         # Equal weighting from all corner cells
-        weight = T(1.0) / num_corners
+        weight = T(0.25)
         total_weight += weight
 
         # Accumulate weighted phase values from this corner cell
         @inbounds for k in 1:N
-            w_vals[k] += weight * phase_arrays[k][cell_index...]
+            w_vals[k] += weight * phase_arrays[k][i_cell, j_cell, k_cell]
         end
     end
 

@@ -24,12 +24,12 @@ else
     @init_parallel_stencil(Threads, Float64, 3)
 end
 
-using JustPIC, JustPIC._3D
+using JustPIC
 
 const backend_JP = @static if isCUDA
-    JustPIC.CUDABackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 using GeoParams, CairoMakie, Printf

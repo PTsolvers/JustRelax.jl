@@ -17,12 +17,12 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._3D
+using JustPIC
 
 const backend_JP = @static if isCUDA
-    JustPIC.CUDABackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))

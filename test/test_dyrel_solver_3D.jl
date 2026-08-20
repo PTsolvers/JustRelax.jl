@@ -22,13 +22,13 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._3D
+using JustPIC
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 @parallel_indices (i, j, k) function _init_single_phase_solver_3D!(phases)

@@ -25,7 +25,7 @@ end
 
 # Staggered grid
 
-abstract type AbstractGrid{nDim,V,D,T} end
+abstract type AbstractGrid{nDim, V, D, T} end
 include("Cartesian.jl")
 include("Annulus.jl")
 

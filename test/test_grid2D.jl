@@ -92,4 +92,24 @@ using Test, Suppressor, JustRelax, JustRelax.JustRelax2D
         @test isfinite(v_first_y) && isfinite(v_last_y)
         finalize_global_grid(; finalize_MPI = false)
     end
+
+    @suppress @testset "x_g / y_g / z_g array overloads" begin
+        nx, ny = 5, 3
+        igg = IGG(
+            init_global_grid(
+                nx, ny, 1;
+                init_MPI = JustRelax.MPI.Initialized() ? false : true,
+            )...,
+        )
+        dx = 1.0 / nx
+        A = zeros(nx, ny)
+        for idx in 1:3
+            @test x_g(idx, dx, A) == x_g(idx, dx, size(A, 1))
+            @test y_g(idx, dx, A) == y_g(idx, dx, size(A, 2))
+        end
+        # 3D array path for z_g
+        A3 = zeros(nx, ny, 2)
+        @test z_g(1, dx, A3) == z_g(1, dx, size(A3, 3))
+        finalize_global_grid(; finalize_MPI = false)
+    end
 end

@@ -6,11 +6,11 @@ const backend_JR = CPUBackend
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
 @init_parallel_stencil(Threads, Float64, 3)
 
-using JustPIC, JustPIC._3D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 
 # Load script dependencies
 using Printf, GeoParams, CairoMakie
@@ -270,17 +270,16 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
 
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
-                data_v = (;
-                    τxy = Array(stokes.τ.xy),
-                    εxy = Array(stokes.ε.xy),
-                )
+                data_v = (;)
                 data_c = (;
                     T = Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
                     P = Array(stokes.P),
                     τxx = Array(stokes.τ.xx),
                     τyy = Array(stokes.τ.yy),
+                    τxy = Array(stokes.τ.xy_c),
                     εxx = Array(stokes.ε.xx),
                     εyy = Array(stokes.ε.yy),
+                    εxy = Array(stokes.ε.xy_c),
                     η = Array(log10.(stokes.viscosity.η_vep)),
                 )
                 velocity_v = (

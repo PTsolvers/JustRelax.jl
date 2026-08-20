@@ -4,9 +4,9 @@ using Pkg; Pkg.activate("miniapps")
 const backend_JR = CUDABackend
 # const backend_JR = CPUBackend
 
-using JustPIC, JustPIC._2D
-const backend = CUDABackend
-# const backend = JustPIC.CPUBackend
+using JustPIC
+const backend = CUDA.CUDABackend
+# const backend = JustPIC.CPU
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(CUDA, Float64, 2)
@@ -232,7 +232,7 @@ function main(igg, nx, ny)
             ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
             # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
             scatter!(ax, Array(px.data[:]) .* 1.0e-3, Array(py.data[:]) .* 1.0e-3, color = Array(pPhases.data[:]), colormap = :grayC)
-            arrows!(
+            arrows2d!(
                 ax,
                 xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
                 lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),

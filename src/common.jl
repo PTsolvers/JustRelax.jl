@@ -32,6 +32,7 @@ export @allocate,
     @qT2,
     @residuals,
     compute_dt,
+    compute_lithostatic_pressure!,
     multi_copy!,
     take
 
@@ -66,6 +67,9 @@ export compute_viscosity!, compute_viscosity_εII!, compute_viscosity_τII!
 
 include("rheology/Melting.jl")
 export compute_melt_fraction!
+
+include("rheology/Solubility.jl")
+export compute_dissolved_volatiles!
 
 include("particles/subgrid_diffusion.jl")
 export subgrid_characteristic_time!

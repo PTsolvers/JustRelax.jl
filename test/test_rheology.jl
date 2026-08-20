@@ -21,13 +21,13 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 @testset "Rheology" begin
@@ -185,20 +185,22 @@ end
         # compute_buoyancies: scalar gravity → ρ·g scalar
         @test JustRelax2D.compute_buoyancies(mat, args, -9.81, Val(2)) ≈ -ρg_expected
 
-        # fill_density! tuple variant writes each component
-        ρg_tuple = (zeros(2, 2), zeros(2, 2))
-        JustRelax2D.fill_density!(ρg_tuple, (1.0, 2.0), 1, 1)
-        @test ρg_tuple[1][1, 1] == 1.0
-        @test ρg_tuple[2][1, 1] == 2.0
+        if backend_JR === CPUBackend
+            # tuple variant writes each component
+            ρg_tuple = (@zeros(2, 2), @zeros(2, 2))
+            JustRelax2D.fill_density!(ρg_tuple, (1.0, 2.0), 1, 1)
+            @test ρg_tuple[1][1, 1] == 1.0
+            @test ρg_tuple[2][1, 1] == 2.0
 
-        # fill_density! scalar variant only writes the last array (gravity along last axis)
-        ρg_tuple2 = (zeros(2, 2), zeros(2, 2))
-        JustRelax2D.fill_density!(ρg_tuple2, 3.0, 2, 2)
-        @test ρg_tuple2[1] == zeros(2, 2)
-        @test ρg_tuple2[2][2, 2] == 3.0
+            # scalar variant only writes the last array (gravity along last axis)
+            ρg_tuple2 = (@zeros(2, 2), @zeros(2, 2))
+            JustRelax2D.fill_density!(ρg_tuple2, 3.0, 2, 2)
+            @test ρg_tuple2[1] == @zeros(2, 2)
+            @test ρg_tuple2[2][2, 2] == 3.0
+        end
 
         # update_ρg!: ConstantDensityTrait → no-op (array stays untouched)
-        ρg = ones(2, 2)
+        ρg = @ones(2, 2)
         JustRelax2D.update_ρg!(ρg, (mat,), args)
         @test all(ρg .== 1.0)
 
@@ -236,10 +238,10 @@ end
         )
 
         ni = (4, 4)
-        ϕ = zeros(ni...)
-        T_hot = fill(1373.15, ni...)        # ≈ 1100 °C, well above the solidus
-        T_cold = fill(573.15, ni...)        # ≈ 300 °C, well below the solidus
-        P = fill(1.0e8, ni...)
+        ϕ = @zeros(ni...)
+        T_hot = @fill(1373.15, ni...)        # ≈ 1100 °C, well above the solidus
+        T_cold = @fill(573.15, ni...)        # ≈ 300 °C, well below the solidus
+        P = @fill(1.0e8, ni...)
 
         compute_melt_fraction!(ϕ, mat, (T = T_hot, P = P))
         @test all(0.95 .< ϕ .< 1.0)         # nearly fully molten
@@ -248,6 +250,47 @@ end
         compute_melt_fraction!(ϕ, mat, (T = T_cold, P = P))
         # subsolidus: MeltingParam_Caricchi returns ~3e-10 at 300°C, not exactly 0
         @test all(ϕ .< 1.0e-6)
+    end
+
+    @testset "Solubility.jl" begin
+        # src/rheology/Solubility.jl: compute_dissolved_volatiles! fills the H2O
+        # and CO2 arrays from the GeoParams solubility closures.
+        nx, ny = 4, 4
+        ni = nx, ny
+        # Position-dependent P/T: build on the host for the reference, then move
+        # to the active backend's array type for the kernel args.
+        P_h = [1.0e8 * (i + j) for i in 1:nx, j in 1:ny]    # Pa
+        T_h = [1073.0 + 10i for i in 1:nx, _ in 1:ny]       # K
+        X_co2 = 0.3
+        args = (; P = PTArray(backend_JR)(P_h), T = PTArray(backend_JR)(T_h), X_co2)
+
+        grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
+        (; xci, xvi) = grid
+
+        # Reference sums over the 4×4 grid from compute_dissolved(sol, P, T, X_co2);
+        # CO2 solubility is independent of the H2O model, so both share sumCO2.
+        cases = (
+            (Liu2005_Solubility(), 1.11652544725697, 0.022756964302744494),
+            (Mafic_Solubility(), 1.3749142116044133, 0.022756964302744494),
+        )
+        @testset "$(nameof(typeof(sol)))" for (sol, sumH2O, sumCO2) in cases
+            rheology = (
+                GeoParams.SetMaterialParams(;
+                    Phase = 1,
+                    Density = GeoParams.ConstantDensity(; ρ = 2700.0),
+                    Solubility = sol,
+                ),
+            )
+            pr = JustPIC.PhaseRatios(backend_JP, 1, ni)
+            JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...),), xci, xvi)
+
+            mH2O = @zeros(ni...)
+            mCO2 = @zeros(ni...)
+            compute_dissolved_volatiles!(mH2O, mCO2, pr, rheology, args)
+
+            @test sum(mH2O) ≈ sumH2O rtol = 1.0e-5
+            @test sum(mCO2) ≈ sumCO2 rtol = 1.0e-5
+        end
     end
 
     @testset "Viscosity helpers" begin
@@ -336,7 +379,7 @@ end
         @test JustRelax2D._muladd_ntuple(0.5, (1.0, 2.0, 3.0), (10.0, 20.0, 30.0)) ===
             (10.5, 21.0, 31.5)
 
-        # _zero_plastic_grad → tuple-of-zeros, dQdP=0, dFdP=0
+        # _zero_plastic_grad → tuple-of-@zeros, dQdP=0, dFdP=0
         z_dQdτ, z_dQdP, z_dFdP = JustRelax2D._zero_plastic_grad((1.0, 2.0, 3.0), 5.0)
         @test z_dQdτ === (0.0, 0.0, 0.0)
         @test z_dQdP === 0.0
@@ -402,9 +445,9 @@ end
         # src/phases/PhaseRatios.jl: `update_phase_ratios_2D!` and its kernels.
         # `compute_dx` needs `LinRange` (or similar AbstractRange) xci/xvi —
         # passing plain Vector{Float64} causes `T = Vector{Float64}` to leak into
-        # `@MVector zeros(T, N)`, which is a separate API constraint not relevant here.
+        # `@MVector @zeros(T, N)`, which is a separate API constraint not relevant here.
         nx, ny = 4, 4
-        pr = JustPIC._2D.PhaseRatios(backend_JP, 2, (nx, ny))
+        pr = JustPIC.PhaseRatios(backend_JP, 2, (nx, ny))
         xvi = (range(0.0, 1.0; length = nx + 1), range(0.0, 1.0; length = ny + 1))
         xci = (range(0.125, 0.875; length = nx), range(0.125, 0.875; length = ny))
 
@@ -447,7 +490,7 @@ end
         @test all(sum(Vy_h[i, j]) ≈ 1.0 for i in axes(Vy_h, 1), j in axes(Vy_h, 2))
 
         # Threshold path: a tiny third phase (< 1e-5) should be cleaned to zero.
-        pr3 = JustPIC._2D.PhaseRatios(backend_JP, 3, (nx, ny))
+        pr3 = JustPIC.PhaseRatios(backend_JP, 3, (nx, ny))
         p1b = @fill(0.6, nx, ny)
         p2b = @fill(0.4, nx, ny)
         p3b = @fill(1.0e-6, nx, ny)             # below the 1e-5 threshold

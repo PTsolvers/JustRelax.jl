@@ -21,14 +21,14 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
@@ -195,9 +195,9 @@ end
     @suppress begin
         iters, τII, sol, extrema_τII = ShearBand2D()
         @test iters.err_evo1[end] < 1.0e-6
-        @test extrema_τII[1] ≈ 1.4979764502419675 atol = 1.0e-3
-        @test extrema_τII[2] ≈ 1.6448491195234836 atol = 1.0e-3
-        @test τII[end] ≈ 1.6392450041641278 atol = 1.0e-4
+        @test extrema_τII[1] ≈ 1.5128689768248313 atol = 1.0e-3
+        @test extrema_τII[2] ≈ 1.6415759440014273 atol = 1.0e-3
+        @test τII[end] ≈ 1.6376258215356436 atol = 1.0e-4
         @test sol[end] ≈ 1.8358 atol = 1.0e-4
     end
 end

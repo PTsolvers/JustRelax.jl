@@ -127,14 +127,18 @@ struct VelocityBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
     end
 end
 
+"""
+    check_flow_bcs(no_slip, free_slip)
+
+Throw if any boundary is flagged as both `no_slip` and `free_slip`. A boundary flagged
+as neither is left untouched by `flow_bcs!`, which is how a prescribed velocity field is
+imposed: the caller writes the boundary and ghost values itself.
+"""
 function check_flow_bcs(no_slip::T, free_slip::T) where {T}
-    v1 = values(no_slip)
-    v2 = values(free_slip)
-    k = keys(no_slip)
-    for (v1, v2, k) in zip(v1, v2, k)
-        if v1 == v2
+    for (v1, v2, k) in zip(values(no_slip), values(free_slip), keys(no_slip))
+        if v1 == true && v2 == true
             error(
-                "Incompatible boundary conditions. The $k boundary condition can't be the same for no_slip and free_slip",
+                "Incompatible boundary conditions. The $k boundary condition can't be both no_slip and free_slip",
             )
         end
     end

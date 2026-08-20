@@ -14,6 +14,8 @@ $\begin{align}
 
 where $\boldsymbol{\tau}$ is the deviatoric stress tensor, $p$ is pressure, $f$ is the external forces vector, $\boldsymbol{v}$ is the velocity vector, $\beta$ is the compressibility coefficient, $\alpha$ is the thermal expansivity coefficient and $T$ is temperature.
 
+The `ρg` argument of `solve!` is $\boldsymbol{f}$, one array per dimension on the cell centers. For a body force that is a gravitational acceleration $\boldsymbol{g}$ this is $\rho\boldsymbol{g}$, hence the name.
+
 ## Constitutive equation
 
 To close the system of equations (1)-(2), we further need the constitutive relationship between stress and deformation. In its simplest linear form this is:

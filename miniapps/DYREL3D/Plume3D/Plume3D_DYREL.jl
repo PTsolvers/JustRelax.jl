@@ -99,7 +99,8 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
 
     # Rheology
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
-    viscosity_cutoff = (1.0e18, 1.0e24)
+    # viscosity_cutoff = (1.0e18, 1.0e24)
+    viscosity_cutoff = (1.0e19, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
@@ -161,13 +162,11 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
             igg;
             kwargs = (;
                 verbose_PH = true,
-                verbose_DR = false,
+                verbose_DR = true,
                 iterMax = 50.0e3,
                 nout = 100,
                 rel_drop = 1.0e-2,
-                λ_relaxation_PH = 1,
-                λ_relaxation_DR = 1,
-                viscosity_relaxation = 1,
+                viscosity_relaxation = 1e-2,
                 viscosity_cutoff = viscosity_cutoff,
             )
         )

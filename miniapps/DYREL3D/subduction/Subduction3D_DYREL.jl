@@ -34,8 +34,8 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-include("Subduction3D_rheology.jl")
-include("Subduction3D_setup.jl")
+include("Subduction3D_DYREL_rheology.jl")
+include("Subduction3D_DYREL_setup.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -103,7 +103,6 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li_nd, di; ϵ_abs = 5.0e-3, ϵ_rel = 5.0e-3, CFL = 0.99 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -148,10 +147,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # Time loop
     t, it = 0.0, 0
     t_max = nondimensionalize(10 * Myr, CharDim)
-    dyrel = DYREL(
-        backend_JR, stokes, rheology, phase_ratios, grid.di, dt;
-        ϵ = 1.0e-3, CFL = 0.99, γfact = 20.0,
-    )
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3, CFL = 0.99, γfact = 20.0)
     while t < t_max
 
         # # interpolate fields from particles to centroids
@@ -274,19 +270,15 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     return nothing
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
+do_vtk = true # set to true to generate VTK files for ParaView
+nx,ny,nz = 128*2, 4, 64*2
+li, origin, phases_GMG, = GMG_only(nx + 1, ny + 1, nz + 1)
+igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
+else
+    igg
+end
 
-# let
-    do_vtk = true # set to true to generate VTK files for ParaView
-    # nx, ny, nz = 150, 40, 150
-    nx,ny,nz = 128*2, 4, 64*2
-    li, origin, phases_GMG, = GMG_only(nx + 1, ny + 1, nz + 1)
-    igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-        IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
-    else
-        igg
-    end
-
-    # (Path)/folder where output data and figures are stored
-    figdir = "Subduction3D_DYREL"
-    main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk)
-# end
+# (Path)/folder where output data and figures are stored
+figdir = "Subduction3D_DYREL"
+main3D(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk)

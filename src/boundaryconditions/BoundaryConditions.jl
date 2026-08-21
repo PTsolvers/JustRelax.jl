@@ -57,8 +57,13 @@ end
 
 """
     flow_bcs!(stokes, bcs::VelocityBoundaryConditions)
+    flow_bcs!(stokes, bcs::DisplacementBoundaryConditions)
+    flow_bcs!(bcs, Vx, Vy[, Vz])
 
-Apply the prescribed flow boundary conditions `bc` on the `stokes`
+Apply no-slip and free-slip flow boundary conditions to staggered velocity or
+displacement arrays. The array form accepts the boundary-condition object first;
+the `stokes` form accepts it second. Boundary updates are executed through
+ParallelStencil kernels on the selected backend.
 """
 flow_bcs!(stokes, bcs) = flow_bcs!(backend(stokes), stokes, bcs)
 
@@ -66,11 +71,6 @@ function flow_bcs!(::CPUBackendTrait, stokes, bcs::VelocityBoundaryConditions)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
-"""
-    flow_bcs!(stokes, bcs::DisplacementBoundaryConditions)
-
-Apply the prescribed flow boundary conditions `bc` on the `stokes`
-"""
 function flow_bcs!(::CPUBackendTrait, stokes, bcs::DisplacementBoundaryConditions)
     return _flow_bcs!(bcs, @displacement(stokes))
 end
@@ -84,8 +84,6 @@ function _flow_bcs!(bcs, V)
     # no slip boundary conditions
     # do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip))
     if do_bc(bcs.no_slip)
-        # @parallel (@idx n) no_slip1!(V..., bcs.no_slip)
-        # @parallel (@idx n) no_slip2!(V..., bcs.no_slip)
         no_slip!(V..., bcs.no_slip)
     end
     # free slip boundary conditions

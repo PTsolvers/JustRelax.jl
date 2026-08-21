@@ -324,5 +324,19 @@ end
             JustRelax.apply_dirichlet!(B2, bc, 3, 3)
             @test B2[3, 3] == 9
         end
+
+        @testset "pure shear boundary condition" begin
+            if backend === CPUBackend
+                stokes = StokesArrays(backend, (3, 4))
+                xci = (collect(1.0:3.0), collect(1.0:4.0))
+                xvi = (collect(1.0:4.0), collect(1.0:5.0))
+                pureshear_bc!(stokes, xci, xvi, 2.0)
+
+                @test @views stokes.V.Vx[:, 2:(end - 1)] == [2.0 * x for x in xvi[1], _ in xci[2]]
+                @test @views stokes.V.Vy[2:(end - 1), :] == [-2.0 * y for _ in xci[1], y in xvi[2]]
+            else
+                @test true === true
+            end
+        end
     end
 end

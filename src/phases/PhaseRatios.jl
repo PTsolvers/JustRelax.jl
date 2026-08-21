@@ -1,10 +1,11 @@
 """
-    update_phase_ratios!(
+    update_phase_ratios_2D!(
         phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractMatrix}, xci, xvi
-    ) where {B, T <: AbstractMatrix, N}
+    )
 
-JustRelax routine based on `JustPIC._2D.update_phase_ratios!` or `JustPIC._3D.update_phase_ratios!`.
-Update the phase ratios in `phase_ratios` using the provided `phase_arrays`, `xci`, and `xvi`.
+JustRelax routine based on `JustPIC.update_phase_ratios!`.
+Update the center, vertex and velocity-face phase ratios in `phase_ratios` from the
+2-D `phase_arrays`, given the cell-center coordinates `xci` and vertex coordinates `xvi`.
 The phase arrays need to be AbstractArrays and have values between 0 and 1.
 
 #Example:
@@ -17,7 +18,7 @@ phase_2[User_criterion .== false] .= 1.0
 phase_arrays = (phase_1, phase_2)
 
 # Advect both phase arrays and update phase ratios
-update_phase_ratios!(phase_ratios, phase_arrays, xci, xvi)
+update_phase_ratios_2D!(phase_ratios, phase_arrays, xci, xvi)
 ```
 """
 function update_phase_ratios_2D!(
@@ -34,12 +35,14 @@ function update_phase_ratios_2D!(
 end
 
 """
-    update_phase_ratios!(
+    update_phase_ratios_3D!(
         phase_ratios::JustPIC.PhaseRatios, phase_arrays::NTuple{N, AbstractArray}, xci, xvi
-    ) where {B, T <: AbstractArray, N}
+    )
 
-JustRelax routine based on `JustPIC._2D.update_phase_ratios!` or `JustPIC._3D.update_phase_ratios!`.
-Update the phase ratios in `phase_ratios` using the provided `phase_arrays`, `xci`, and `xvi`.
+JustRelax routine based on `JustPIC.update_phase_ratios!`.
+Update the center, vertex, velocity-face and shear-stress-midpoint phase ratios in
+`phase_ratios` from the 3-D `phase_arrays`, given the cell-center coordinates `xci` and
+vertex coordinates `xvi`.
 The phase arrays need to be AbstractArrays and have values between 0 and 1.
 
 #Example:
@@ -52,11 +55,11 @@ phase_2[User_criterion .== false] .= 1.0
 phase_arrays = (phase_1, phase_2)
 
 # Advect both phase arrays and update phase ratios
-update_phase_ratios!(phase_ratios, phase_arrays, xci, xvi)
+update_phase_ratios_3D!(phase_ratios, phase_arrays, xci, xvi)
 ```
 """
 function update_phase_ratios_3D!(
-        phase_ratios::JustPIC.PhaseRatios{B, T}, phase_arrays::NTuple{N, AbstractMatrix}, xci, xvi
+        phase_ratios::JustPIC.PhaseRatios{B, T}, phase_arrays::NTuple{N, AbstractArray}, xci, xvi
     ) where {B, T <: AbstractArray, N}
 
     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
@@ -121,7 +124,7 @@ function phase_ratios_vertex_from_arrays!(
     ) where {N, ND}
 
     ni = size(first(phase_arrays)) .+ 1
-    di = compute_dx(xvi)
+    di = JustPIC.compute_dx(xvi)
 
     @parallel (@idx ni) phase_ratios_vertex_from_arrays_kernel!(
         phase_ratios.vertex, phase_arrays, xci, xvi, di
@@ -217,8 +220,8 @@ function phase_ratios_face_from_arrays!(
         phase_face, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, dimension::Symbol
     ) where {N, ND}
     ni = size(first(phase_arrays))  # Cell grid size
-    di = compute_dx(xci)
-    offsets = face_offset(Val(ND), dimension)
+    di = JustPIC.compute_dx(xci)
+    offsets = JustPIC.face_offset(Val(ND), dimension)
     face_ni = ntuple(d -> ni[d] + offsets[d], Val(ND))
 
     @parallel (@idx face_ni) phase_ratios_face_from_arrays_kernel!(
@@ -300,7 +303,7 @@ function phase_ratios_midpoint_from_arrays!(
         phase_midpoints, phase_arrays::NTuple{N, AbstractArray}, xci, dimension
     ) where {N}
     ni = size(first(phase_arrays))  # Cell grid size
-    di = compute_dx(xci)
+    di = JustPIC.compute_dx(xci)
 
     # Define staggered offsets for midpoint grids
     offsets = if dimension === :xy
@@ -322,46 +325,35 @@ function phase_ratios_midpoint_from_arrays!(
 end
 
 @parallel_indices (I...) function phase_ratios_midpoint_from_arrays_kernel!(
-        ratio_midpoints, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{ND}, di::NTuple{ND, T}, offsets, ni
-    ) where {N, ND, T}
+        ratio_midpoints, phase_arrays::NTuple{N, AbstractArray}, xci::NTuple{3}, di::NTuple{3, T}, offsets, ni
+    ) where {N, T}
 
     w_vals = @MVector zeros(T, N)
     total_weight = zero(T)
 
-    num_staggered = count(x -> x == 1, offsets)
-    num_corners = 2^num_staggered
+    # Every midpoint grid is staggered in exactly two dimensions. Spell out the
+    # four neighbouring cells: mutating a captured bit counter in an `ntuple`
+    # closure boxes the counter, which is unsupported in GPU kernels.
+    for first_offset in -1:0, second_offset in -1:0
+        i_cell = I[1] + offsets[1] * first_offset
+        j_offset = ifelse(offsets[1] == 1, second_offset, first_offset)
+        j_cell = I[2] + offsets[2] * j_offset
+        k_cell = I[3] + offsets[3] * second_offset
 
-    # Iterate over all corner combinations
-    for corner_bits in 0:(num_corners - 1)
-        bit_index = 0
-        cell_index = ntuple(
-            d -> begin
-                if offsets[d] == 1  # This dimension is staggered
-                    # Extract the bit for this staggered dimension
-                    corner_bit = (corner_bits >> bit_index) & 1
-                    bit_index += 1
-                    # Midpoint I[d] is between cells I[d]-1 and I[d]
-                    # corner_bit=0 gives left cell (I[d]-1), corner_bit=1 gives right cell (I[d])
-                    I[d] - 1 + corner_bit
-                else
-                    # Non-staggered dimension: use midpoint index directly
-                    I[d]
-                end
-            end, Val(ND)
-        )
-
-        # Check if cell index is within bounds
-        valid_cell = all(1 ≤ cell_index[d] ≤ ni[d] for d in 1:ND)
-        !valid_cell && continue
+        if !(1 ≤ i_cell ≤ ni[1] && 1 ≤ j_cell ≤ ni[2] && 1 ≤ k_cell ≤ ni[3])
+            continue
+        end
 
         # Equal weighting from all corner cells
-        weight = T(1.0) / num_corners
+        weight = T(0.25)
         total_weight += weight
 
         # Accumulate weighted phase values from this corner cell, clamped so
         # the accumulated values stay non-negative
         @inbounds for k in 1:N
-            w_vals[k] += weight * clamp(phase_arrays[k][cell_index...], zero(T), one(T))
+            w_vals[k] += weight * clamp(
+                phase_arrays[k][i_cell, j_cell, k_cell], zero(T), one(T)
+            )
         end
     end
 

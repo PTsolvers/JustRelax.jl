@@ -35,12 +35,12 @@ end
 
 Particles track the advection of the material phases and their information. For this we use [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl), which needs its own backend:
 ```julia
-using JustPIC, JustPIC._3D
+using JustPIC
 
 const backend_JP = @static if isCUDA
-    CUDABackend  # Options: JustPIC.CPUBackend, CUDABackend, JustPIC.AMDGPUBackend
+    CUDA.CUDABackend  # Options: JustPIC.CPU, CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 using GeoParams, CairoMakie, Printf

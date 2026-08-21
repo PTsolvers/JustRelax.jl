@@ -2,9 +2,10 @@
     compute_melt_fraction!(ϕ, rheology, args)
     compute_melt_fraction!(ϕ, phase_ratios::JustPIC.PhaseRatios, rheology, args)
 
-Fill the melt-fraction array `ϕ` from the GeoParams melting closures in
-`rheology`. The phase-ratios method combines per-phase melt fractions with
-`fn_ratio`. `args` supplies `T` and `P` (scalars or index-matched arrays).
+Fill the melt-fraction array `ϕ` from the GeoParams melting parameterisation of `rheology`,
+with `args` supplying the state variables it needs (typically `P` and `T`, as scalars or
+index-matched arrays). Given `phase_ratios`, the melt fraction is averaged over the phases
+present in each cell.
 """
 function compute_melt_fraction!(ϕ, rheology, args)
     ni = size(ϕ)

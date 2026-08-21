@@ -1,6 +1,16 @@
-import JustPIC._2D: cell_index, interp1D_inner, interp1D_extremas, distance
 using StaticArrays
 
+"""
+    update_phases_given_markerchain!(phase, chain::MarkerChain, particles::Particles, origin, di, air_phase, args = ())
+
+Deactivate the particles that end up on the wrong side of the free surface tracked by
+`chain`: air-phase particles below it and rock particles above it. Their coordinates and
+every field in `args` are set to `NaN` and their index entry to `false`, so that particle
+injection re-seeds those cells from their neighbours.
+
+`origin` and `di` are the origin and grid spacing of the particle grid, and `air_phase`
+the phase index standing for air.
+"""
 function update_phases_given_markerchain!(
         phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase
     ) where {backend}
@@ -130,9 +140,9 @@ end
     I = cell_index(xq, cell_vertices)
     x_cell, y_cell = coords[1][I], coords[2][I]
     ychain = if 1 < I[1] < length(cell_vertices) - 1
-        interp1D_inner(xq, x_cell, y_cell, coords, I)
+        JustPIC.interp1D_inner(xq, x_cell, y_cell, coords, I)
     else
-        interp1D_extremas(xq, x_cell, y_cell)
+        JustPIC.interp1D_extremas(xq, x_cell, y_cell)
     end
     return yq > ychain
 end
@@ -161,7 +171,7 @@ function closest_phase(
 
                 # distance from new point to the existing particle
                 pxi = @index(px[ip, i, j]), @index(py[ip, i, j])
-                d = distance(pxi, pn)
+                d = JustPIC.distance(pxi, pn)
                 # update the closest phase
                 if d < dist_min
                     new_phase = phaseᵢ

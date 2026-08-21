@@ -7,7 +7,7 @@ The recommended workflow is now:
 
 ```julia
 using JustRelax
-using JustPIC, JustPIC._2D
+using JustPIC
 
 grid = Geometry(ni, li; origin = origin)
 
@@ -36,6 +36,8 @@ move_particles!(particles, particle_args)
 inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
 update_phase_ratios!(phase_ratios, particles, pPhases)
 ```
+
+Particle fields (`pT`, `pPhases`, ...) are cell arrays: individual particle entries are read and written with `@index`, as described in [Indexing cell arrays](@ref).
 
 If you use subgrid diffusion, the matching workflow is:
 

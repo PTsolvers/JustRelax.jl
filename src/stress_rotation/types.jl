@@ -1,3 +1,14 @@
+"""
+    StressParticles{backend, nNormal, nShear, T}
+
+Particle-borne deviatoric stress and vorticity: the normal components
+`τ_normal`, the shear components `τ_shear`, and the vorticity components `ω`, each a
+tuple of particle cell arrays. Carrying the old stress on the particles instead of on
+the grid keeps it attached to the material as it advects and rotates.
+
+Build one from the particles it follows with `StressParticles(particles)`, advance it with
+`rotate_stress!`, and write it back onto `stokes.τ_o` with `stress2grid!`.
+"""
 struct StressParticles{backend, nNormal, nShear, T}
     τ_normal::NTuple{nNormal, T}
     τ_shear::NTuple{nShear, T}

@@ -1,4 +1,3 @@
-using Pkg; Pkg.activate("miniapps")
 import Statistics: mean
 
 # Analytical solution

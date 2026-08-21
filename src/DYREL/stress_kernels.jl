@@ -726,9 +726,8 @@ end
     ispl, _, _, _, _, η_reg = plastic_params(rheology, EII)
 
     # viscoelastic viscosity
-    η_ve = isinf(G) ?
-        inv(inv(η) + inv(G * dt)) :
-        (η * G * dt) / (η + G * dt) # more efficient than inv(inv(η) + inv(G * dt))
+    # Stable for both finite and infinite shear modulus: G == Inf gives η_ve == η.
+    η_ve = η / @muladd(1 + η * inv(G * dt))
     # effective strain rate
     inv_2Gdt = inv(2 * G * dt)
     εij_eff = @. εij + τij_o * inv_2Gdt

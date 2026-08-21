@@ -57,10 +57,12 @@ end
         ηE = η[i + 1, j]
         γE = γ_eff[i + 1, j]
         # effective viscoelastic viscosity
-        ηN = 1 / (1 / ηN + 1 / (GN * dt))
-        ηS = 1 / (1 / ηS + 1 / (GS * dt))
-        ηW = 1 / (1 / ηW + 1 / (GW * dt))
-        ηE = 1 / (1 / ηE + 1 / (GE * dt))
+        # Equivalent to `inv(inv(η) + inv(G * dt))`, while preserving the
+        # `G == Inf` limit (`ηve == η`) without producing `Inf / Inf`.
+        ηN = ηN / @muladd(1 + ηN * inv(GN * dt))
+        ηS = ηS / @muladd(1 + ηS * inv(GS * dt))
+        ηW = ηW / @muladd(1 + ηW * inv(GW * dt))
+        ηE = ηE / @muladd(1 + ηE * inv(GE * dt))
 
         # Precompute common terms
         ηN_dy = ηN * _dy
@@ -71,19 +73,19 @@ end
         γW_dx = γW * _dx
 
         # compute Gershgorin entries
-        Cxx = abs(ηN * _dy2) +
+        Cxx = @muladd abs(ηN * _dy2) +
             abs(ηS * _dy2) +
             abs((γE + c43 * ηE) * _dx2) +
             abs((γW + c43 * ηW) * _dx2) +
             abs((ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx)
 
-        Cxy = abs((γE - c23 * ηE + ηN) * _dxdy) +
+        Cxy = @muladd abs((γE - c23 * ηE + ηN) * _dxdy) +
             abs((γE - c23 * ηE + ηS) * _dxdy) +
             abs((γW + ηN - c23 * ηW) * _dxdy) +
             abs((γW + ηS - c23 * ηW) * _dxdy)
 
         # this is the preconditioner diagonal entry
-        Dx_ij = Dx[i, j] = (ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx
+        Dx_ij = Dx[i, j] = @muladd (ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx
         # maximum eigenvalue estimate
         λmaxVx[i, j] = inv(Dx_ij) * (Cxx + Cxy)
     end
@@ -119,10 +121,10 @@ end
         ηN = η[i, j + 1]
         γN = γ_eff[i, j + 1]
         # effective viscoelastic viscosity
-        ηN = 1 / (1 / ηN + 1 / (GN * dt))
-        ηS = 1 / (1 / ηS + 1 / (GS * dt))
-        ηW = 1 / (1 / ηW + 1 / (GW * dt))
-        ηE = 1 / (1 / ηE + 1 / (GE * dt))
+        ηN = ηN / @muladd(1 + ηN * inv(GN * dt))
+        ηS = ηS / @muladd(1 + ηS * inv(GS * dt))
+        ηW = ηW / @muladd(1 + ηW * inv(GW * dt))
+        ηE = ηE / @muladd(1 + ηE * inv(GE * dt))
 
         # Precompute common terms
         ηE_dx = ηE * _dx
@@ -133,19 +135,19 @@ end
         γS_dy = γS * _dy
 
         # compute Gershgorin entries
-        Cyy = abs(ηE * _dx2) +
+        Cyy = @muladd abs(ηE * _dx2) +
             abs(ηW * _dx2) +
             abs((γN + c43 * ηN) * _dy2) +
             abs((γS + c43 * ηS) * _dy2) +
             abs((γN_dy + γS_dy + c43 * (ηN_dy + ηS_dy)) * _dy + (ηE_dx + ηW_dx) * _dx)
 
-        Cyx = abs((γN + ηE - c23 * ηN) * _dxdy) +
+        Cyx = @muladd abs((γN + ηE - c23 * ηN) * _dxdy) +
             abs((γN - c23 * ηN + ηW) * _dxdy) +
             abs((γS + ηE - c23 * ηS) * _dxdy) +
             abs((γS - c23 * ηS + ηW) * _dxdy)
 
         # this is the preconditioner diagonal entry
-        Dy_ij = Dy[i, j] = (γN_dy + γS_dy + c43 * (ηN_dy + ηS_dy)) * _dy + (ηE_dx + ηW_dx) * _dx
+        Dy_ij = Dy[i, j] = @muladd (γN_dy + γS_dy + c43 * (ηN_dy + ηS_dy)) * _dy + (ηE_dx + ηW_dx) * _dx
         # maximum eigenvalue estimate
         λmaxVy[i, j] = inv(Dy_ij) * (Cyx + Cyy)
     end
@@ -197,7 +199,7 @@ end
 
 Base.@propagate_inbounds @inline function _ηve(ηij, rheology, phase, dt)
     Gij = fn_ratio(get_shear_modulus, rheology, phase)
-    return inv(inv(ηij) + inv(Gij * dt))
+    return ηij / @muladd(1 + ηij * inv(Gij * dt))
 end
 
 Base.@propagate_inbounds @inline _ηve_center(η, phase_center, rheology, dt, i, j, k) =
@@ -247,27 +249,29 @@ end
         γW = γ_eff[i, j, k]
         γE = γ_eff[i + 1, j, k]
 
-        Dx_ijk = Dx[i, j, k] =
+        Dx_ijk = Dx[i, j, k] = @muladd(
             (ηN + ηS) * _dy2 +
             (ηB + ηF) * _dz2 +
             (γE + γW + c43 * (ηE + ηW)) * _dx2
+        )
 
-        Cx =
-            abs(c13 * (3 * γE + 4 * ηE) * _dx2) +
-            abs(c13 * (3 * γW + 4 * ηW) * _dx2) +
+        Cx = @muladd(
+            abs((γE + c43 * ηE) * _dx2) +
+            abs((γW + c43 * ηW) * _dx2) +
             abs(ηN * _dy2) +
             abs(ηS * _dy2) +
             abs(ηB * _dz2) +
             abs(ηF * _dz2) +
-            abs(c13 * (3 * γE - 2 * ηE + 3 * ηN) * _dxdy) +
-            abs(c13 * (3 * γE - 2 * ηE + 3 * ηS) * _dxdy) +
-            abs(c13 * (3 * γW + 3 * ηN - 2 * ηW) * _dxdy) +
-            abs(c13 * (3 * γW + 3 * ηS - 2 * ηW) * _dxdy) +
-            abs(c13 * (3 * γE + 3 * ηB - 2 * ηE) * _dxdz) +
-            abs(c13 * (3 * γW + 3 * ηB - 2 * ηW) * _dxdz) +
-            abs(c13 * (3 * γE - 2 * ηE + 3 * ηF) * _dxdz) +
-            abs(c13 * (3 * γW + 3 * ηF - 2 * ηW) * _dxdz) +
+            abs((γE - (2 / 3) * ηE + ηN) * _dxdy) +
+            abs((γE - (2 / 3) * ηE + ηS) * _dxdy) +
+            abs((γW + ηN - (2 / 3) * ηW) * _dxdy) +
+            abs((γW + ηS - (2 / 3) * ηW) * _dxdy) +
+            abs((γE - (2 / 3) * ηE + ηB) * _dxdz) +
+            abs((γW + ηB - (2 / 3) * ηW) * _dxdz) +
+            abs((γE - (2 / 3) * ηE + ηF) * _dxdz) +
+            abs((γW + ηF - (2 / 3) * ηW) * _dxdz) +
             abs(Dx_ijk)
+        )
 
         λmaxVx[i, j, k] = Cx / Dx_ijk
     end
@@ -291,27 +295,29 @@ end
         γS = γ_eff[i, j, k]
         γN = γ_eff[i, j + 1, k]
 
-        Dy_ijk = Dy[i, j, k] =
+        Dy_ijk = Dy[i, j, k] = @muladd(
             (ηE + ηW) * _dx2 +
             (ηB + ηF) * _dz2 +
             (γN + γS + c43 * (ηN + ηS)) * _dy2
+        )
 
-        Cy =
+        Cy = @muladd(
             abs(ηE * _dx2) +
             abs(ηW * _dx2) +
-            abs(c13 * (3 * γN + 4 * ηN) * _dy2) +
-            abs(c13 * (3 * γS + 4 * ηS) * _dy2) +
+            abs((γN + c43 * ηN) * _dy2) +
+            abs((γS + c43 * ηS) * _dy2) +
             abs(ηB * _dz2) +
             abs(ηF * _dz2) +
-            abs(c13 * (3 * γN + 3 * ηE - 2 * ηN) * _dxdy) +
-            abs(c13 * (3 * γS + 3 * ηE - 2 * ηS) * _dxdy) +
-            abs(c13 * (3 * γN - 2 * ηN + 3 * ηW) * _dxdy) +
-            abs(c13 * (3 * γS - 2 * ηS + 3 * ηW) * _dxdy) +
-            abs(c13 * (3 * γN + 3 * ηB - 2 * ηN) * _dydz) +
-            abs(c13 * (3 * γS + 3 * ηB - 2 * ηS) * _dydz) +
-            abs(c13 * (3 * γN + 3 * ηF - 2 * ηN) * _dydz) +
-            abs(c13 * (3 * γS + 3 * ηF - 2 * ηS) * _dydz) +
+            abs((γN + ηE - (2 / 3) * ηN) * _dxdy) +
+            abs((γS + ηE - (2 / 3) * ηS) * _dxdy) +
+            abs((γN - (2 / 3) * ηN + ηW) * _dxdy) +
+            abs((γS - (2 / 3) * ηS + ηW) * _dxdy) +
+            abs((γN - (2 / 3) * ηN + ηB) * _dydz) +
+            abs((γS - (2 / 3) * ηS + ηB) * _dydz) +
+            abs((γN - (2 / 3) * ηN + ηF) * _dydz) +
+            abs((γS - (2 / 3) * ηS + ηF) * _dydz) +
             abs(Dy_ijk)
+        )
 
         λmaxVy[i, j, k] = Cy / Dy_ijk
     end
@@ -335,27 +341,29 @@ end
         γB = γ_eff[i, j, k]
         γF = γ_eff[i, j, k + 1]
 
-        Dz_ijk = Dz[i, j, k] =
+        Dz_ijk = Dz[i, j, k] = @muladd(
             (ηE + ηW) * _dx2 +
             (ηN + ηS) * _dy2 +
             (γB + γF + c43 * (ηB + ηF)) * _dz2
+        )
 
-        Cz =
+        Cz = @muladd(
             abs(ηE * _dx2) +
             abs(ηW * _dx2) +
             abs(ηN * _dy2) +
             abs(ηS * _dy2) +
-            abs(c13 * (3 * γB + 4 * ηB) * _dz2) +
-            abs(c13 * (3 * γF + 4 * ηF) * _dz2) +
-            abs(c13 * (3 * γB - 2 * ηB + 3 * ηE) * _dxdz) +
-            abs(c13 * (3 * γB - 2 * ηB + 3 * ηW) * _dxdz) +
-            abs(c13 * (3 * γF + 3 * ηE - 2 * ηF) * _dxdz) +
-            abs(c13 * (3 * γF - 2 * ηF + 3 * ηW) * _dxdz) +
-            abs(c13 * (3 * γB - 2 * ηB + 3 * ηN) * _dydz) +
-            abs(c13 * (3 * γB - 2 * ηB + 3 * ηS) * _dydz) +
-            abs(c13 * (3 * γF - 2 * ηF + 3 * ηN) * _dydz) +
-            abs(c13 * (3 * γF - 2 * ηF + 3 * ηS) * _dydz) +
+            abs((γB + c43 * ηB) * _dz2) +
+            abs((γF + c43 * ηF) * _dz2) +
+            abs((γB - (2 / 3) * ηB + ηE) * _dxdz) +
+            abs((γB - (2 / 3) * ηB + ηW) * _dxdz) +
+            abs((γF - (2 / 3) * ηF + ηE) * _dxdz) +
+            abs((γF - (2 / 3) * ηF + ηW) * _dxdz) +
+            abs((γB - (2 / 3) * ηB + ηN) * _dydz) +
+            abs((γB - (2 / 3) * ηB + ηS) * _dydz) +
+            abs((γF - (2 / 3) * ηF + ηN) * _dydz) +
+            abs((γF - (2 / 3) * ηF + ηS) * _dydz) +
             abs(Dz_ijk)
+        )
 
         λmaxVz[i, j, k] = Cz / Dz_ijk
     end
@@ -399,8 +407,10 @@ end
         if all(I .≤ size(βV[i]))
             dτV_ij = dτV[i][I...]
             cV_ij = cV[i][I...]
-            βV[i][I...] = @muladd 2 * dτV_ij / (2 + cV_ij * dτV_ij)
-            αV[i][I...] = @muladd (2 - cV_ij * dτV_ij) / (2 + cV_ij * dτV_ij)
+            cdt = cV_ij * dτV_ij
+            inv_den = inv(2 + cdt)
+            βV[i][I...] = @muladd 2 * dτV_ij * inv_den
+            αV[i][I...] = @muladd (2 - cdt) * inv_den
         end
     end
     return nothing
@@ -448,8 +458,10 @@ end
         if all(I .≤ size(βV[i]))
             dτV_ij = dτV[i][I...] = 2 / √(λmaxV[i][I...]) * CFL_v
             cV_ij = cV[i][I...]
-            βV[i][I...] = @muladd 2 * dτV_ij / (2 + cV_ij * dτV_ij)
-            αV[i][I...] = @muladd (2 - cV_ij * dτV_ij) / (2 + cV_ij * dτV_ij)
+            cdt = cV_ij * dτV_ij
+            inv_den = inv(2 + cdt)
+            βV[i][I...] = @muladd 2 * dτV_ij * inv_den
+            αV[i][I...] = @muladd (2 - cdt) * inv_den
         end
     end
     return nothing

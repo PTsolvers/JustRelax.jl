@@ -273,13 +273,16 @@ end
             CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 1.0e21),)),
         )
 
-        nx, ny = 4, 4
+        nx, ny = 5, 4
         ni = nx, ny
-        # spans subsolidus, the melting interval, and superliquidus
-        T_h = [900.0 + 120.0 * i for i in 1:nx, _ in 1:ny]
+        # 900, 1020, 1140, 1260, 1380: subsolidus, three inside the melting interval,
+        # and superliquidus. No sample lands on T_s, where the two disagree:
+        # MeltingParam_Quadratic zeroes dϕdT only for `T > T_l || T < T_s`, so at
+        # T == T_s it returns 2 / (T_l - T_s) rather than 0.
+        T_h = [900.0 + 120.0 * i for i in 0:(nx - 1), _ in 1:ny]
         T = PTArray(backend_JR)(T_h)
         P = @fill(1.0e8, ni...)
-        args = (; T = T, P = P)
+        args = (; T, P)
 
         # 1) stand-alone, single-phase: matches the closed form
         dϕdT = @zeros(ni...)
@@ -290,7 +293,7 @@ end
         grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
         (; xci, xvi) = grid
         rheology = (mat_melt, mat_nomelt)
-        pr = JustPIC._2D.PhaseRatios(backend_JP, 2, ni)
+        pr = JustPIC.PhaseRatios(backend_JP, 2, ni)
         JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...), @zeros(ni...)), xci, xvi)
 
         dϕdT_pr = @zeros(ni...)
@@ -298,7 +301,7 @@ end
         @test Base.Array(dϕdT_pr) ≈ dϕdT_analytic.(T_h)
 
         # 3) a phase with no melting law contributes 0
-        pr_nomelt = JustPIC._2D.PhaseRatios(backend_JP, 2, ni)
+        pr_nomelt = JustPIC.PhaseRatios(backend_JP, 2, ni)
         JustRelax2D.update_phase_ratios_2D!(
             pr_nomelt, (@zeros(ni...), @fill(1.0, ni...)), xci, xvi
         )
@@ -314,6 +317,22 @@ end
         compute_melt_fraction!(ϕ_fused, dϕdT_fused, pr, rheology, args)
         @test Base.Array(ϕ_fused) == Base.Array(ϕ_sep)
         @test Base.Array(dϕdT_fused) == Base.Array(dϕdT_pr)
+
+        # 5) args without a cell-sized entry: the kernels index on their own grid,
+        #    so a ghosted T is offset past its halo either way
+        T_ghost = PTArray(backend_JR)(
+            [
+                T_h[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] for i in 1:(nx + 2), j in 1:(ny + 2)
+            ]
+        )
+        dϕdT_ghost = @zeros(ni...)
+        compute_melt_fraction_derivative!(dϕdT_ghost, mat_melt, (; T = T_ghost))
+        @test Base.Array(dϕdT_ghost) ≈ dϕdT_analytic.(T_h)
+
+        # 6) the kernel writes dϕdT under @inbounds over ϕ's indices
+        @test_throws "must match size(ϕ)" compute_melt_fraction!(
+            ϕ_fused, @zeros((ni .+ 1)...), pr, rheology, args
+        )
     end
 
     @testset "Latent_HeatCapacity reaches the PT preconditioner" begin
@@ -338,19 +357,53 @@ end
         ni = nx, ny
         grid = Geometry(ni, (1.0e3, 1.0e3); origin = (0.0, 0.0))
         (; xci, xvi, di, li) = grid
-        pr = JustPIC._2D.PhaseRatios(backend_JP, 1, ni)
+        pr = JustPIC.PhaseRatios(backend_JP, 1, ni)
         JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...),), xci, xvi)
 
-        T = @fill(1073.0, (ni .+ 1)...)
+        T = @fill(1073.0, (ni .+ 2)...)
         P = @fill(1.0e8, ni...)
         dt = 100.0
 
         coeffs(dϕdT) = PTThermalCoeffs(
-            backend_JR, rheology, pr, (; T = T, P = P, dϕdT = @fill(dϕdT, ni...)),
+            backend_JR, rheology, pr, (; T, P, dϕdT = @fill(dϕdT, ni...)),
             dt, ni, di.center, li
         )
 
         @test !(Base.Array(coeffs(1.0e-3).dτ_ρ) ≈ Base.Array(coeffs(0.0).dτ_ρ))
+    end
+
+    @testset "PT coefficients offset args against their own grid" begin
+        # src/thermal_diffusion/DiffusionPT_coefficients.jl: the coefficient kernels
+        # hand their own grid size to getindex_NamedTuple, so a ghosted entry like
+        # thermal.T is offset past its halo whether or not args also carries a
+        # cell-sized array. Inferring that size from args instead would read the
+        # halo as a cell center as soon as the cell-sized entry is dropped.
+        rheology = (
+            GeoParams.SetMaterialParams(;
+                Phase = 1,
+                Density = GeoParams.ConstantDensity(; ρ = 2700.0),
+                HeatCapacity = GeoParams.T_HeatCapacity_Whittington(),
+                Conductivity = GeoParams.ConstantConductivity(; k = 3.0),
+                CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 1.0e21),)),
+            ),
+        )
+
+        nx, ny = 4, 4
+        ni = nx, ny
+        grid = Geometry(ni, (1.0e3, 1.0e3); origin = (0.0, 0.0))
+        (; xci, xvi, di, li) = grid
+        pr = JustPIC.PhaseRatios(backend_JP, 1, ni)
+        JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...),), xci, xvi)
+
+        # a ramp, so reading the halo instead of the interior changes ρCp
+        T = PTArray(backend_JR)([800.0 + 10.0 * (i + j) for i in 1:(nx + 2), j in 1:(ny + 2)])
+        P = @fill(1.0e8, ni...)
+
+        dτ_ρ(args) = Base.Array(
+            PTThermalCoeffs(backend_JR, rheology, pr, args, 100.0, ni, di.center, li).dτ_ρ
+        )
+
+        @test dτ_ρ((; T)) == dτ_ρ((; T, P))
     end
 
     @testset "Solubility.jl" begin

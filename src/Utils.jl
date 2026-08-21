@@ -13,12 +13,25 @@ end
 @inline _idx(args::NTuple{N, Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
 @inline _idx(args::Vararg{Int, N}) where {N} = ntuple(i -> 1:args[i], Val(N))
 
-# broadcast getindex() to NamedTuples
+"""
+    getindex_NamedTuple(args::NamedTuple, [sz_min::NTuple], I...)
+
+Sample every array in `args` at `I`, offsetting entries larger than `sz_min` by one to
+skip their ghost nodes. `sz_min` is the size of the grid `I` indexes over; pass it
+whenever it is known, as inferring it from `args` reads the ghost node as a cell center
+when `args` carries no cell-sized entry.
+"""
 @inline function getindex_NamedTuple(args::NamedTuple, I::Vararg{Integer, N}) where {N}
+    sz_min = reduce((a, b) -> min.(a, b), filter(!isempty, size.(values(args))))
+    return getindex_NamedTuple(args, sz_min, I...)
+end
+
+@inline function getindex_NamedTuple(
+        args::NamedTuple, sz_min::NTuple{N, Int}, I::Vararg{Integer, N}
+    ) where {N}
     k = keys(args)
     v = values(args)
     sz = size.(v)
-    sz_min = reduce(min, filter(!isempty, sz))
 
     vᵢⱼₖ = ntuple(Val(length(v))) do i
         if v[i] isa AbstractArray
@@ -728,6 +741,10 @@ function maximum_mpi(A)
     max_l = _maximum(A)
     return MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD)
 end
+
+@inline global_grid_size(::Val{2}) = nx_g(), ny_g()
+@inline global_grid_size(::Val{3}) = nx_g(), ny_g(), nz_g()
+@inline global_grid_size(::Val{N}) where {N} = error("Unsupported dimension $N")
 
 for (f1, f2) in zip(
         (:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum)

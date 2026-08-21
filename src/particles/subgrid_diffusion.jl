@@ -36,7 +36,7 @@ end
 @parallel_indices (I...) function subgrid_characteristic_time!(
         dt₀, phase_ratios, rheology, T, P, di
     )
-    argsᵢ = getindex_NamedTuple((; T = T, P = P), I...)
+    argsᵢ = getindex_NamedTuple((; T, P), I...)
     phaseᵢ = @cell phase_ratios[I...]
 
     # Compute the characteristic timescale `dt₀` of the local cell

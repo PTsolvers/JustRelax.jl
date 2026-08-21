@@ -53,7 +53,7 @@ function _heatdiffusion_PT!(
 
     ϵ = pt_thermal.ϵ
     ni = size(thermal.H)
-    _sq_len_RT = inv(sqrt(prod(ni)))
+    _sq_len_RT = inv(sqrt(prod(global_grid_size(Val(length(ni))))))
     @copy thermal.Told thermal.T
 
     # errors
@@ -128,7 +128,7 @@ function _heatdiffusion_PT!(
                 )
             end
 
-            err = norm(thermal.ResT) * _sq_len_RT
+            err = norm_mpi(thermal.ResT) * _sq_len_RT
 
             push!(norm_ResT, err)
             push!(iter_count, iter)
@@ -140,8 +140,8 @@ function _heatdiffusion_PT!(
     end
 
     if isnothing(igg) || igg.me == 0
-        if err > ϵ
-            @warn "heatdiffusion_PT! stopped at iterMax = $iterMax without converging: err = $err > ϵ = $ϵ"
+        if !(err ≤ ϵ)
+            @warn "heatdiffusion_PT! did not converge: err = $err > ϵ = $ϵ after $iter iterations"
         end
         println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
         println("====================================\n")
@@ -172,8 +172,9 @@ end
 Solve the heat equation with pseudo-transient iterations using thermal
 properties derived from `rheology`.
 
-`args` is a named tuple of thermodynamic fields sampled at thermal-cell centers,
-typically including `T` and `P`. When `phase` is provided, pseudo-transient
+`args` is a named tuple of thermodynamic fields, typically including `T` and `P`.
+Entries sized like the thermal cell centers are read as-is; larger entries are offset by
+one to skip their ghost nodes. When `phase` is provided, pseudo-transient
 coefficients are recomputed from the local phase ratios each iteration. When
 `stokes` is provided, `thermal.adiabatic` is refreshed before the iteration loop
 to include the adiabatic heating contribution.
@@ -205,7 +206,7 @@ function _heatdiffusion_PT!(
     _dt = inv(dt)
     ϵ = pt_thermal.ϵ
     ni = size(thermal.H)
-    _sq_len_RT = inv(sqrt(prod(ni)))
+    _sq_len_RT = inv(sqrt(prod(global_grid_size(Val(length(ni))))))
     @copy thermal.Told thermal.T
 
     phases = get_phase(phase)
@@ -287,7 +288,7 @@ function _heatdiffusion_PT!(
                 )
             end
 
-            err = norm(thermal.ResT) * _sq_len_RT
+            err = norm_mpi(thermal.ResT) * _sq_len_RT
 
             push!(norm_ResT, err)
             push!(iter_count, iter)
@@ -299,8 +300,8 @@ function _heatdiffusion_PT!(
     end
 
     if isnothing(igg) || igg.me == 0
-        if err > ϵ
-            @warn "heatdiffusion_PT! stopped at iterMax = $iterMax without converging: err = $err > ϵ = $ϵ"
+        if !(err ≤ ϵ)
+            @warn "heatdiffusion_PT! did not converge: err = $err > ϵ = $ϵ after $iter iterations"
         end
         println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
         println("====================================\n")

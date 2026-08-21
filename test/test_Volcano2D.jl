@@ -205,13 +205,13 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
 
-    # Melt fraction
-    ϕ_m = @zeros(ni...)
+    # Melt fraction and its temperature derivative dϕdT
+    ϕ_m, dϕdT = @zeros(ni...), @zeros(ni...)
     compute_melt_fraction!(
-        ϕ_m, phase_ratios, rheology, (T = thermal.T, P = stokes.P)
+        ϕ_m, dϕdT, phase_ratios, rheology, (; T = thermal.T, P = stokes.P)
     )
     # Rheology
-    args0 = (T = thermal.T, P = stokes.P, dt = Inf)
+    args0 = (; dϕdT, T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff; air_phase = air_phase)
 
@@ -265,7 +265,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         thermal_bcs!(thermal, thermal_bc)
 
         # args = (; T = thermal.T, P=stokes.P, dt=Inf, ΔT=@view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
-        args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf)
+        args = (; ϕ = ϕ_m, dϕdT, T = thermal.T, P = stokes.P, dt = Inf)
 
         stress2grid!(stokes, pτ, particles)
 
@@ -348,7 +348,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         compute_melt_fraction!(
-            ϕ_m, phase_ratios, rheology, (T = thermal.T, P = stokes.P)
+            ϕ_m, dϕdT, phase_ratios, rheology, (; T = thermal.T, P = stokes.P)
         )
 
         # update phase ratios

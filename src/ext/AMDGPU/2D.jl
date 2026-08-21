@@ -43,18 +43,23 @@ include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 include("../../variational_stokes/Stokes2D.jl")
 include("../../DYREL/solver.jl")
+include("../../DYREL/solver_VS.jl")
 
 # Types
 function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end
 
-function JR2D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) where {N}
-    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+function JR2D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) where {N}
+    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 end
 
 function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
+function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, ϕ, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 end
 
 function JR2D.update_α_β!(βVx::ROCArray, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
@@ -254,6 +259,12 @@ function JR2D.compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
 end
 
+function JR2D.compute_viscosity!(
+        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, ϕ::JustRelax.RockRatio, args, rheology, air_phase, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, ϕ, args, rheology, air_phase, cutoff, fn_viscosity)
+end
+
 function JR2D.compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
     return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
@@ -266,6 +277,12 @@ function compute_viscosity!(
         ::AMDGPUBackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
     ) where {F}
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
+end
+
+function compute_viscosity!(
+        ::AMDGPUBackendTrait, stokes, ν, phase_ratios, ϕ::JustRelax.RockRatio, args, rheology, air_phase, cutoff, fn_viscosity::F
+    ) where {F}
+    return _compute_viscosity!(stokes, ν, phase_ratios, ϕ, args, rheology, air_phase, cutoff, fn_viscosity)
 end
 
 function compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)

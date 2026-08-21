@@ -1,7 +1,7 @@
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
-using Printf, LinearAlgebra, GeoParams, CellArrays
+using Printf, LinearAlgebra, GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 

@@ -181,6 +181,44 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     # WENO arrays
     T_WENO = @zeros(ni)
 
+    solve!(
+        stokes,
+        pt_stokes,
+        grid,
+        flow_bcs,
+        ρg,
+        phase_ratios,
+        rheology,
+        args,
+        Inf,
+        igg;
+        kwargs = (;
+            iterMax = 150.0e3,
+            nout = 200,
+            viscosity_cutoff = (-Inf, Inf),
+            verbose = true,
+        )
+    )
+    # ------------------------------
+
+    # Thermal solver ---------------
+    heatdiffusion_PT!(
+        thermal,
+        pt_thermal,
+        thermal_bc,
+        rheology,
+        args,
+        dt,
+        grid;
+        kwargs = (;
+            igg = igg,
+            phase = phase_ratios,
+            iterMax = 10.0e3,
+            nout = 1.0e2,
+            verbose = true,
+        )
+    )
+
     while it ≤ nit
         @show it
 

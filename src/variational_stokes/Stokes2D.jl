@@ -56,9 +56,11 @@ function _solve_VS!(
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
 
-    nRx = √((nx_g() - 2) * (ny_g() - 1))
-    nRy = √((nx_g() - 1) * (ny_g() - 2))
-    nRP = √(nx_g() * ny_g())
+    maskR = (ϕ.Vx[2:(end - 1), :] .> 0, ϕ.Vy[:, 2:(end - 1)] .> 0)
+    maskP = ϕ.center .> 0
+    @parallel (@idx ni) update_valid_c_mask!(maskP, ϕ)
+    nR = map(mask -> √(max(sum_mpi(mask), 1)), maskR)
+    nRP = √(max(sum_mpi(maskP), 1))
 
     # ~preconditioner
     ητ = deepcopy(η)
@@ -253,9 +255,9 @@ function _solve_VS!(
         if iter % nout == 0 && iter > 1
 
             errs = (
-                norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:(end - 1), :] .> 0]) / nRx,
-                norm_mpi(@views stokes.R.Ry[ϕ.Vy[:, 2:(end - 1)] .> 0]) / nRy,
-                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) / nRP,
+                masked_norm_mpi(maskR[1], stokes.R.Rx) / nR[1],
+                masked_norm_mpi(maskR[2], stokes.R.Ry) / nR[2],
+                masked_norm_mpi(maskP, stokes.R.RP) / nRP,
             )
 
             push!(norm_Rx, errs[1])

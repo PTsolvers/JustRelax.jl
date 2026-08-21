@@ -47,6 +47,21 @@ function get_α(rho::GasPyroclast_Density; kwargs...)
     return δ * αgas + (1 - δ) * αmelt
 end
 
+function get_α(
+        rho::ThreePhase_Density; ϕ = 1.0e0, ϕ_gas = 0.0e0, ϕ_x = (1 - ϕ) * (1 - ϕ_gas), kwargs...
+    )
+    αmelt = get_α(rho.ρmelt)
+    αsolid = get_α(rho.ρsolid)
+    αgas = get_α(rho.ρgas; kwargs...)
+    ϕ_m = 1 - ϕ_x - ϕ_gas
+
+    return ϕ_m * αmelt + ϕ_gas * αgas + ϕ_x * αsolid
+end
+
+@inline function get_α(::Union{RedlichKwong_Density, IdealGas_Density}; T = 0.0e0, kwargs...)
+    return iszero(T) ? zero(T) : inv(T)
+end
+
 @inline get_α(p::MaterialParams) = get_α(p.Density[1])
 @inline get_α(p::MaterialParams, args::NamedTuple) = get_α(p.Density[1], args)
 @inline get_α(p::Union{T_Density, PT_Density, Melt_DensityX}) = GeoParams.get_α(p)
@@ -57,3 +72,5 @@ end
 @inline get_α(rho::Melt_DensityX, ::Any) = get_α(rho)
 @inline get_α(rho::ConstantDensity, args) = 0
 @inline get_α(rho::ConstantDensity) = 0
+@inline get_α(rho::ThreePhase_Density, args::NamedTuple) = get_α(rho; args...)
+@inline get_α(rho::Union{RedlichKwong_Density, IdealGas_Density}, args::NamedTuple) = get_α(rho; args...)

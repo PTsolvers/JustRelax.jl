@@ -1,5 +1,5 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -34,6 +34,7 @@ end
 
 # Load script dependencies
 using GeoParams
+using Random
 using CairoMakie
 
 # Velocity helper grids for the particle advection
@@ -141,6 +142,7 @@ function main(igg, nx, ny)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 125, 175, 75
+    Random.seed!(1234)
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
@@ -165,6 +167,7 @@ function main(igg, nx, ny)
     air_phase = 1
     ϕ = RockRatio(backend, ni)
     compute_rock_fraction!(ϕ, chain, xvi, di)
+    grid_vxi = velocity_grids(xci, xvi, di)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -237,7 +240,7 @@ function main(igg, nx, ny)
         inject_particles_phase!(particles, pPhases, (), ())
 
         # advect marker chain
-        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), xvi, dt)
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios

@@ -32,7 +32,7 @@ else
     JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Blankenbach_Rheology.jl")
@@ -55,7 +55,7 @@ end
 
     dTdZ = (1273 - 273) / 1000.0e3
     offset = 273.0e0
-    T[i + 1, j + 1] = (depth) * dTdZ + offset
+    T[i, j + 1] = (depth) * dTdZ + offset
     return nothing
 end
 
@@ -77,12 +77,12 @@ end
 function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", do_vtk = false, finalize_MPI = true)
 
     # Physical domain ------------------------------------
-    ly = 1000.0e3               # domain length in y
+    ly = 1000.0e3             # domain length in y
     lx = ly                   # domain length in x
     ni = nx, ny               # number of cells
     li = lx, ly               # domain length in x- and y-
     di = @. li / ni           # grid step in x- and -y
-    origin = 0.0, -ly             # origin coordinates
+    origin = 0.0, -ly         # origin coordinates
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
@@ -110,18 +110,17 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend_JR, ni)
-    # initialize thermal profile
-    @parallel (@idx ni) init_T!(thermal.T, xci[2])
-    Ttop = thermal.T[1, end]
-    Tbot = thermal.T[1, 1]
+    @parallel (@idx (nx + 2, ny)) init_T!(thermal.T, xci[2])
+    Tbot = -xvi[2][1] * (1273 - 273) / 1000.0e3 + 273.0e0
+    Ttop = 273.0e0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
-        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
     )
     # Elliptical temperature anomaly
     xc_anomaly = 0.0    # origin of thermal anomaly
@@ -204,6 +203,52 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     # Buffer arrays to compute velocity rms
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
+
+    # Stokes solver ----------------
+    solve!(
+        stokes,
+        pt_stokes,
+        grid,
+        flow_bcs,
+        ρg,
+        phase_ratios,
+        rheology,
+        args,
+        Inf,
+        igg;
+        kwargs = (;
+            iterMax = 150.0e3,
+            nout = 200,
+            viscosity_cutoff = (-Inf, Inf),
+            verbose = true,
+        )
+    )
+    # ------------------------------
+
+    # Thermal solver ---------------
+    heatdiffusion_PT!(
+        thermal,
+        pt_thermal,
+        thermal_bc,
+        rheology,
+        args,
+        dt,
+        grid;
+        kwargs = (;
+            igg = igg,
+            phase = phase_ratios,
+            iterMax = 10.0e3,
+            nout = 1.0e2,
+            verbose = true,
+        )
+    )
+    subgrid_characteristic_time!(
+        subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
+    )
+    centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+    subgrid_diffusion_centroid!(
+        pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+    )
 
     while it ≤ nit
         @show it

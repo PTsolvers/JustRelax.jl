@@ -69,6 +69,21 @@ function _solve_VS!(
     wtime0 = 0.0
     ητ = deepcopy(η)
 
+    maskR = (
+        @views(ϕ.Vx[2:(end - 1), :, :] .> 0),
+        @views(ϕ.Vy[:, 2:(end - 1), :] .> 0),
+        @views(ϕ.Vz[:, :, 2:(end - 1)] .> 0),
+    )
+    maskP = ϕ.center .> 0
+    @parallel (@idx ni) update_valid_c_mask!(maskP, ϕ)
+    maskRi = map(mask -> @views(mask[2:(end - 1), 2:(end - 1), 2:(end - 1)]), maskR)
+    Ri = map(
+        R -> @views(R[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
+        (stokes.R.Rx, stokes.R.Ry, stokes.R.Rz),
+    )
+    nR = map(mask -> √(max(sum_mpi(mask), 1)), maskRi)
+    nRP = √(max(sum_mpi(maskP), 1))
+
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args)
     compute_viscosity!(stokes, phase_ratios, args, rheology, air_phase, viscosity_cutoff)
@@ -172,13 +187,10 @@ function _solve_VS!(
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
-            for (norm_Ri, Ri) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R))
-                push!(
-                    norm_Ri,
-                    norm_mpi(Ri[2:(end - 1), 2:(end - 1), 2:(end - 1)]) / √((nx_g() - 1) * (ny_g() - 1) * (nz_g() - 1)),
-                )
+            for (d, norm_Ri) in enumerate((norm_Rx, norm_Ry, norm_Rz))
+                push!(norm_Ri, masked_norm_mpi(maskRi[d], Ri[d]) / nR[d])
             end
-            push!(norm_∇V, norm_mpi(stokes.R.RP) / length(stokes.R.RP))
+            push!(norm_∇V, masked_norm_mpi(maskP, stokes.R.RP) / nRP)
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)

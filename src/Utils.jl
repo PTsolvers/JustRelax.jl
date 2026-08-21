@@ -657,9 +657,10 @@ end
 """
     continuation_linear(x_new, x_old, ν)
 
-Do a continuation step `(1-ν)*x_old + ν*x_new` with damping parameter `ν`
+Do a continuation step `(1-ν)*x_old + ν*x_new` with damping parameter `ν`. At `ν = 1` this
+returns `x_new` directly rather than evaluating `(1-ν)*x_old`.
 """
-@inline continuation_linear(x_new, x_old, ν) = (1 - ν) * x_old + ν * x_new
+@inline continuation_linear(x_new, x_old, ν) = isone(ν) ? x_new : (1 - ν) * x_old + ν * x_new
 # @inline continuation_linear(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
 
 # Others
@@ -696,9 +697,28 @@ end
 Compute the L2 norm of array `A` across all MPI processes.
 """
 function norm_mpi(A)
-    sum2_l = _sum(A .^ 2)
+    sum2_l = _sum(abs2, A)
     return sqrt(MPI.Allreduce(sum2_l, MPI.SUM, MPI.COMM_WORLD))
 end
+
+"""
+    norm_mpi(A, B)
+
+Compute the L2 norm of the elementwise product `A .* B` across all MPI processes, without
+materializing the product.
+"""
+norm_mpi(A, B) = sqrt(sum_mpi((a, b) -> abs2(a * b), A, B))
+
+"""
+    masked_norm_mpi(mask, A)
+    masked_norm_mpi(mask, A, B)
+
+Compute the L2 norm of `A` (or of `A .* B`) over the entries `mask` marks valid, across all
+MPI processes. `mask` must share indices with `A`. Nothing is materialized, so this replaces
+`norm_mpi(A[mask])`, which allocates the selection.
+"""
+masked_norm_mpi(mask, A) = sqrt(sum_mpi((m, a) -> m ? abs2(a) : zero(abs2(a)), mask, A))
+masked_norm_mpi(mask, A, B) = sqrt(sum_mpi((m, a, b) -> m ? abs2(a * b) : zero(abs2(a * b)), mask, A, B))
 
 """
     sum_mpi(A)
@@ -707,6 +727,16 @@ Compute the sum of array `A` across all MPI processes.
 """
 function sum_mpi(A)
     return MPI.Allreduce(_sum(A), MPI.SUM, MPI.COMM_WORLD)
+end
+
+"""
+    sum_mpi(f, A...)
+
+Compute `sum(f, zip(A...))` across all MPI processes, without materializing intermediates.
+`f` takes one argument per array, and all arrays must share indices.
+"""
+function sum_mpi(f::F, A, Bs...) where {F <: Function}
+    return MPI.Allreduce(mapreduce(f, +, A, Bs...), MPI.SUM, MPI.COMM_WORLD)
 end
 
 """
@@ -737,3 +767,4 @@ for (f1, f2) in zip(
         $f1(A) = $f2(A)
     end
 end
+_sum(f, A) = sum(f, A)

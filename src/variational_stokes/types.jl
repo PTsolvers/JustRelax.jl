@@ -3,7 +3,18 @@ abstract type AbstractMask end
 """
     RockRatio{T, N} <: AbstractMask
 
-A struct representing the rock ratio mask used in variational Stokes solvers. It contains arrays for center and vertex values, as well as velocity components and shear components.
+Rock-volume fractions on every location of the staggered grid used by the variational Stokes
+operators. Fractions lie in `[0, 1]`; zero denotes void and positive values weight the discrete
+pressure, velocity, and viscous-stress terms.
+
+The fields are `center`, `vertex`, and the velocity-face arrays `Vx`, `Vy`, `Vz`. In 3D, `yz`,
+`xz`, and `xy` store fractions at the corresponding shear-stress locations. Unused 2D fields are
+small dummy arrays so that the object remains GPU compatible.
+
+The fraction arrays also determine a reduced linear system. A positive fraction alone does not
+always retain a degree of freedom: pressure and velocity unknowns whose equations touch an
+eliminated stencil entry are removed according to the validity rules documented by
+[`isvalid_c`](@ref), [`isvalid_vx_strict`](@ref), and [`isvalid_vy_strict`](@ref).
 """
 struct RockRatio{T, N} <: AbstractMask
     center::T

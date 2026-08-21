@@ -89,6 +89,7 @@ end
 
 # Grid constructor given 1D vertex coordinates arrays
 """
+    Geometry(backend, xvi::Vararg{<:AbstractVector, nDim})
     Geometry(TA, xvi::Vararg{<:AbstractVector, nDim})
     Geometry(xvi::NTuple{nDim, <:AbstractVector})
 
@@ -96,11 +97,11 @@ Build a staggered grid from explicit vertex coordinates along each dimension.
 
 This constructor is useful for refined or otherwise nonuniform meshes. Cell-centered
 coordinates, local spacings, and staggered velocity grids are derived from the supplied
-vertex coordinates. `TA` can be used to move the generated arrays to a target array type.
+vertex coordinates. Here the spacings are *arrays* that kernels index on device, so a GPU
+run needs its backend (or array type) passed in — the `Array` default will not compile.
 
 # Arguments
-- `TA`: Array constructor used to materialize the coordinate arrays, for example `Array`
-  or a backend-specific array type.
+- `backend`: `CPUBackend`, `CUDABackend` or `AMDGPUBackend`; `TA`: an array type, e.g. `Array`.
 - `xvi`: One vertex-coordinate vector per dimension.
 """
 function Geometry(TA::Type{A}, xvi::Vararg{T, nDim}) where {nDim, A <: AbstractArray, T <: AbstractVector}
@@ -129,6 +130,7 @@ function Geometry(TA::Type{A}, xvi::Vararg{T, nDim}) where {nDim, A <: AbstractA
 end
 
 Geometry(xvi::NTuple{nDim, T}) where {nDim, T <: AbstractVector} = Geometry(Array, xvi...)
+Geometry(backend, xvi::Vararg{T, nDim}) where {nDim, T <: AbstractVector} = Geometry(PTArray(backend), xvi...)
 
 """
     legacy_uniform_grid(ni, di)

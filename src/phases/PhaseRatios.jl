@@ -90,7 +90,7 @@ end
         ratio_centers, phase_arrays::NTuple{N, AbstractArray}
     ) where {N}
 
-    values = ntuple(i -> phase_arrays[i][I...], Val(N))
+    values = clamp.(ntuple(i -> phase_arrays[i][I...], Val(N)), 0, 1)
     # Sum
     total = sum(values)
 
@@ -155,8 +155,9 @@ end
                 weight = wx * wy
                 total_weight += weight
 
+                # Clamp so the accumulated values stay non-negative
                 for k in 1:N
-                    @inbounds w_vals[k] += weight * phase_arrays[k][i_cell, j_cell]
+                    @inbounds w_vals[k] += weight * clamp(phase_arrays[k][i_cell, j_cell], zero(T), one(T))
                 end
             end
         end
@@ -178,8 +179,9 @@ end
                 end
                 total_weight += weight
 
+                # Clamp so the accumulated values stay non-negative
                 for k in 1:N
-                    @inbounds w_vals[k] += weight * phase_arrays[k][i_cell, j_cell, k_cell]
+                    @inbounds w_vals[k] += weight * clamp(phase_arrays[k][i_cell, j_cell, k_cell], zero(T), one(T))
                 end
             end
         end
@@ -257,9 +259,10 @@ end
         weight = T(0.5)
         total_weight += weight
 
-        # Accumulate weighted phase values from this cell
+        # Accumulate weighted phase values from this cell, clamped so the
+        # accumulated values stay non-negative
         @inbounds for k in 1:N
-            w_vals[k] += weight * phase_arrays[k][cell_index...]
+            w_vals[k] += weight * clamp(phase_arrays[k][cell_index...], zero(T), one(T))
         end
     end
 
@@ -345,9 +348,12 @@ end
         weight = T(0.25)
         total_weight += weight
 
-        # Accumulate weighted phase values from this corner cell
+        # Accumulate weighted phase values from this corner cell, clamped so
+        # the accumulated values stay non-negative
         @inbounds for k in 1:N
-            w_vals[k] += weight * phase_arrays[k][i_cell, j_cell, k_cell]
+            w_vals[k] += weight * clamp(
+                phase_arrays[k][i_cell, j_cell, k_cell], zero(T), one(T)
+            )
         end
     end
 

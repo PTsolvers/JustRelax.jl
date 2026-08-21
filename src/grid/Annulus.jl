@@ -51,7 +51,7 @@ function GeometryAnnulus(
         geometry_nonMPI(ni, li, origin)
     end
 
-    maxLi = max(prod(li), li[2])
+    maxLi = max(li...)
     di = (; center = di, vertex = di, velocity = ntuple(_ -> di, Val(nDim)))
     _di = (;
         center = map(x -> inv.(x), di.center),
@@ -80,7 +80,10 @@ function GeometryAnnulus(TA::Type{A}, xvi::Vararg{T, nDim}) where {nDim, A <: Ab
     end
     lims = extrema.(xvi)
     li = ntuple(i -> lims[i][2] - lims[i][1], Val(nDim))
-    max_li = max(prod(li), li[2])
+    # `max_li` is the largest coordinate extent, as for Cartesian geometry.
+    # The annular area is not a useful length scale here (and would make the
+    # value depend on the product of unrelated coordinate units).
+    max_li = max(li...)
     origin = ntuple(i -> lims[i][1], Val(nDim))
     di_vertex = diff.(xvi)
     di_center = diff.(xci)

@@ -81,6 +81,7 @@ using Test, Suppressor, JustRelax, JustRelax.JustRelax2D
         @test grid isa JustRelax.GeometryAnnulus
         @test grid.ni == (nθ, nr)
         @test grid.origin == (θ₀, r₀)
+        @test grid.max_li == lθ
         @test grid.xvi[1][1] == θ₀
         @test grid.xvi[2][1] == r₀
         @test grid.xci[1][1] == θ₀ + lθ / (2nθ)

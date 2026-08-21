@@ -1,7 +1,7 @@
 # Model definition shared by Plume3D.jl and Plume3D_MPI.jl.
 # Rheology after Cloetingh et al. (2022), "Fingerprinting secondary mantle plumes".
 #
-# Include this after `@init_parallel_stencil` and `using JustPIC._3D`: the kernels below
+# Include this after `@init_parallel_stencil` and `using JustPIC`: the kernels below
 # need both.
 
 function init_rheologies()

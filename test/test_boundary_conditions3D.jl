@@ -59,6 +59,11 @@ end
                 no_slip = (left = true, right = true, front = true, back = true, top = true, bot = true),
                 free_slip = (left = false, right = true, front = true, back = true, top = true, bot = true),
             )
+            # a boundary that is neither no_slip nor free_slip carries a prescribed velocity
+            @test VelocityBoundaryConditions(;
+                no_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
+                free_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
+            ) isa VelocityBoundaryConditions
 
             # test with StokesArrays
             ni = 5, 5, 5
@@ -126,6 +131,11 @@ end
                 no_slip = (left = true, right = true, front = true, back = true, top = true, bot = true),
                 free_slip = (left = false, right = true, front = true, back = true, top = true, bot = true),
             )
+            # a boundary that is neither no_slip nor free_slip carries a prescribed velocity
+            @test DisplacementBoundaryConditions(;
+                no_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
+                free_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
+            ) isa DisplacementBoundaryConditions
 
             # test with StokesArrays
             ni = 5, 5, 5

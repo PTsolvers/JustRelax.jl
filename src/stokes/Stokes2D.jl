@@ -77,7 +77,7 @@ function _solve!(
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.RP, stokes.∇V, stokes.Q, η, K, dt, r, θ_dτ
             )
-            @parallel (@idx ni) compute_τ!(@stress(stokes)..., @strain(stokes)..., η, θ_dτ)
+            @parallel (@idx ni .+ 1) compute_τ!(@stress(stokes)..., @strain(stokes)..., η, θ_dτ)
             @hide_communication b_width begin
                 @parallel compute_V!(
                     @velocity(stokes)...,
@@ -241,7 +241,7 @@ function _solve!(
                 _di.velocity[2],
             )
 
-            @parallel (@idx ni) compute_τ!(
+            @parallel (@idx ni .+ 1) compute_τ!(
                 @stress(stokes)...,
                 @tensor(stokes.τ_o)...,
                 @strain(stokes)...,

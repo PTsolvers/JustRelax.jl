@@ -8,11 +8,11 @@ using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
-using JustPIC._2D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 
 using Printf, Statistics, LinearAlgebra, GeoParams, GLMakie
 
@@ -529,7 +529,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 if do_vtk
                     data_v = (;
-                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
+                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, MPa, CharDim))),
                         εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                         Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
                         Vy = Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),

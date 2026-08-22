@@ -124,6 +124,47 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
     return thermal
 end
 
+@testset "heatdiffusion_PT! reports a NaN residual" begin
+    # src/thermal_diffusion/DiffusionPT_solver.jl: NaN compares false against ϵ, so
+    # the iteration loop exits at the first `nout` check. The convergence report must
+    # not read that silence as success.
+    nx = ny = 8
+    li = lx, ly = 1.0e3, 1.0e3
+    ni = nx, ny
+    di = @. li / ni
+    init_mpi = JustRelax.MPI.Initialized() ? false : true
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+    grid = Geometry(ni, li; origin = (0.0, -ly))
+
+    thermal = ThermalArrays(backend_JR, ni)
+    thermal.T .= 300.0
+    thermal.H .= NaN # poisons the residual on the first update
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = true, right = true, top = 300.0, bot = 3500.0),
+    )
+    K = @fill(3.0, ni...)
+    ρCp = @fill(3.1e3 * 1.2e3, ni...)
+    dt = 1.0e3
+    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)
+
+    # not wrapped in @suppress: Suppressor swallows the log record @test_logs needs
+    try
+        @test_logs (:warn,) match_mode = :any heatdiffusion_PT!(
+            thermal,
+            pt_thermal,
+            thermal_bc,
+            K,
+            ρCp,
+            dt,
+            grid;
+            kwargs = (; igg = igg, nout = 1, iterMax = 10, verbose = false),
+        )
+    finally
+        finalize_global_grid(; finalize_MPI = false)
+    end
+end
+
 @testset "Diffusion_2D" begin
     @suppress begin
         nx, ny = 32, 32

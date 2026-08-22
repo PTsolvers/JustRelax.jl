@@ -72,11 +72,8 @@ struct TemperatureBoundaryConditions{T1, T2, T3, T4, D, nD} <: AbstractBoundaryC
             dirichlet = (; constant = nothing, mask = nothing),
         ) where {T1, T2, T3, T4}
 
-        @inline get_dimension(::NTuple{4, Bool}) = 2
-        @inline get_dimension(::NTuple{6, Bool}) = 3
-
         D = Dirichlet(dirichlet)
-        nD = get_dimension(values(no_flux))
+        nD = maximum(length, (no_flux, constant_flux, constant_value, periodic)) == 4 ? 2 : 3
 
         # expand to 3D
         dummy = (; front = false, back = false)
@@ -85,6 +82,11 @@ struct TemperatureBoundaryConditions{T1, T2, T3, T4, D, nD} <: AbstractBoundaryC
         constant_flux_exp = merge(dummy, constant_flux)
         constant_value_exp = merge(dummy, constant_value)
         periodic_exp = merge(dummy, periodic)
+
+        check_periodic_pairs(periodic_exp, nD)
+        check_periodic_conflicts(
+            periodic_exp, no_flux_exp, constant_flux_exp, constant_value_exp
+        )
 
         return new{typeof(no_flux_exp), typeof(constant_flux_exp), typeof(constant_value_exp), typeof(periodic_exp), typeof(D), nD}(
             no_flux_exp, constant_flux_exp, constant_value_exp, periodic_exp, D
@@ -95,52 +97,84 @@ end
 struct DisplacementBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
     no_slip::T
     free_slip::T
+    periodic::T
     free_surface::Bool
 
     function DisplacementBoundaryConditions(;
             no_slip::T = (left = false, right = false, top = false, bot = false),
             free_slip::T = (left = true, right = true, top = true, bot = true),
+            periodic::T = map(_ -> false, no_slip),
             free_surface::Bool = false,
         ) where {T}
-        @assert length(no_slip) === length(free_slip)
-        check_flow_bcs(no_slip, free_slip)
+        @assert length(no_slip) === length(free_slip) === length(periodic)
+        check_flow_bcs(no_slip, free_slip, periodic, free_surface)
 
         nD = length(no_slip) == 4 ? 2 : 3
-        return new{T, nD}(no_slip, free_slip, free_surface)
+        return new{T, nD}(no_slip, free_slip, periodic, free_surface)
     end
 end
 struct VelocityBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
     no_slip::T
     free_slip::T
+    periodic::T
     free_surface::Bool
 
     function VelocityBoundaryConditions(;
             no_slip::T = (left = false, right = false, top = false, bot = false),
             free_slip::T = (left = true, right = true, top = true, bot = true),
+            periodic::T = map(_ -> false, no_slip),
             free_surface::Bool = false,
         ) where {T}
-        @assert length(no_slip) === length(free_slip)
-        check_flow_bcs(no_slip, free_slip)
+        @assert length(no_slip) === length(free_slip) === length(periodic)
+        check_flow_bcs(no_slip, free_slip, periodic, free_surface)
 
         nD = length(no_slip) == 4 ? 2 : 3
-        return new{T, nD}(no_slip, free_slip, free_surface)
+        return new{T, nD}(no_slip, free_slip, periodic, free_surface)
     end
 end
 
 """
-    check_flow_bcs(no_slip, free_slip)
+    check_flow_bcs(no_slip, free_slip, periodic, free_surface)
 
-Throw if any boundary is flagged as both `no_slip` and `free_slip`. A boundary flagged
-as neither is left untouched by `flow_bcs!`, which is how a prescribed velocity field is
-imposed: the caller writes the boundary and ghost values itself.
+Throw if flow boundary conditions conflict or if a periodic direction is not paired.
+A boundary flagged as neither `no_slip`, `free_slip`, nor `periodic` is left untouched
+by `flow_bcs!`, which is how a prescribed velocity field is imposed: the caller writes
+the boundary and ghost values itself.
 """
-function check_flow_bcs(no_slip::T, free_slip::T) where {T}
-    for (v1, v2, k) in zip(values(no_slip), values(free_slip), keys(no_slip))
-        if v1 == true && v2 == true
+function check_flow_bcs(no_slip::T, free_slip::T, periodic::T, free_surface) where {T}
+    nD = length(periodic) == 4 ? 2 : 3
+    check_periodic_pairs(periodic, nD)
+    for (v1, v2, vp, k) in
+        zip(values(no_slip), values(free_slip), values(periodic), keys(no_slip))
+        if count(==(true), (v1, v2, vp)) > 1
             error(
-                "Incompatible boundary conditions. The $k boundary condition can't be both no_slip and free_slip",
+                "Incompatible boundary conditions on the $k boundary",
             )
         end
+    end
+    free_surface && periodic.top &&
+        error("Incompatible boundary conditions: the top can't be both periodic and free_surface")
+    return
+end
+
+function check_periodic_pairs(periodic, nD)
+    pairs = if nD == 2
+        ((:left, :right), (:bot, :top))
+    else
+        ((:left, :right), (:front, :back), (:bot, :top))
+    end
+    for (a, b) in pairs
+        getproperty(periodic, a) == getproperty(periodic, b) ||
+            error("Periodic boundary conditions must be paired: $a and $b")
+    end
+    return
+end
+
+function check_periodic_conflicts(periodic, conditions...)
+    for k in keys(periodic)
+        getproperty(periodic, k) || continue
+        any(condition -> getproperty(condition, k) !== false, conditions) &&
+            error("Incompatible boundary conditions on the $k boundary")
     end
     return
 end

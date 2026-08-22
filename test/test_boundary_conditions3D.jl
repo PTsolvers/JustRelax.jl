@@ -50,6 +50,11 @@ end
         @test @views T[end, 2:(end - 1), 2:(end - 1)] == T0[2, 2:(end - 1), 2:(end - 1)]
         @test @views T[2:(end - 1), 1, 2:(end - 1)] == T0[2:(end - 1), end - 1, 2:(end - 1)]
         @test @views T[2:(end - 1), end, 2:(end - 1)] == T0[2:(end - 1), 2, 2:(end - 1)]
+
+        @test_throws ErrorException TemperatureBoundaryConditions(;
+            no_flux = (left = false, right = false, top = false, bot = false),
+            periodic = (left = false, right = false, front = true, back = false, top = false, bot = false),
+        )
     end
 
     @testset "VelocityBoundaryConditions" begin
@@ -92,6 +97,20 @@ end
             @test @views stokes.V.Vz[end, :, :] == stokes.V.Vz[end - 1, :, :]
             @test @views stokes.V.Vz[:, 1, :] == stokes.V.Vz[:, 2, :]
             @test @views stokes.V.Vz[:, end, :] == stokes.V.Vz[:, end - 1, :]
+
+            Vx0, Vy0, Vz0 = copy(stokes.V.Vx), copy(stokes.V.Vy), copy(stokes.V.Vz)
+            flow_bcs = VelocityBoundaryConditions(;
+                no_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
+                free_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
+                periodic = (left = true, right = true, front = false, back = false, top = false, bot = false),
+            )
+            flow_bcs!(stokes, flow_bcs)
+            @test @views stokes.V.Vx[1, :, :] == Vx0[end, :, :]
+            @test @views stokes.V.Vx[end, :, :] == Vx0[end, :, :]
+            @test @views stokes.V.Vy[1, :, :] == Vy0[end - 1, :, :]
+            @test @views stokes.V.Vy[end, :, :] == Vy0[2, :, :]
+            @test @views stokes.V.Vz[1, :, :] == Vz0[end - 1, :, :]
+            @test @views stokes.V.Vz[end, :, :] == Vz0[2, :, :]
 
             # no-slip
             flow_bcs = VelocityBoundaryConditions(;

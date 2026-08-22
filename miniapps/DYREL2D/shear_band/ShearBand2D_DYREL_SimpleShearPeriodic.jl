@@ -1,4 +1,4 @@
-using GeoParams, CairoMakie
+using GeoParams, GLMakie
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 using ParallelStencil
@@ -40,7 +40,7 @@ end
 
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx = 64, ny = 64, figdir = "model_figs", nsteps = 20)
+function main(igg; nx = 64, ny = 64, figdir = "model_figs", nsteps = 30)
 
     # Physical domain ------------------------------------
     ly = 1.0e0          # domain length in y
@@ -53,15 +53,15 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs", nsteps = 20)
     (; xci, xvi) = grid           # nodes at the center and vertices of the cells
 
     # Physical properties using GeoParams ----------------
-    τ_y = 1.6            # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ = 30             # friction angle
-    C = τ_y            # Cohesion
-    η0 = 1.0            # viscosity
-    G0 = 1.0            # elastic shear modulus
-    Gi = G0 / 2         # elastic shear modulus perturbation
-    εbg = 1.0            # background strain-rate
+    τ_y = 1.6              # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ = 30                 # friction angle
+    C = τ_y                # Cohesion
+    η0 = 1.0               # viscosity
+    G0 = 1.0               # elastic shear modulus
+    Gi = G0 / 2            # elastic shear modulus perturbation
+    εbg = 1.0              # background strain-rate
     η_reg = 1.0e-2         # regularisation "viscosity"
-    dt = η0 / G0 / 6.0  # assumes Maxwell time of 4
+    dt = η0 / G0 / 6.0 / 2  # assumes Maxwell time of 4
     el_bg = ConstantElasticity(; G = G0, Kb = 5)
     el_inc = ConstantElasticity(; G = Gi, Kb = 5)
     visc = LinearViscous(; η = η0)
@@ -189,7 +189,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs", nsteps = 20)
         # h21 = heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
         h21 = lines!(ax2, iters.err_evo_it / nx, log10.(iters.err_evo_V), linewidth = 3, label = "V")
         h21 = lines!(ax2, iters.err_evo_it / nx, log10.(iters.err_evo_P), linewidth = 3, label = "P")
-        h22 = heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
+        ε_pl_floor = eps(eltype(stokes.ε_pl.II))
+        h22 = heatmap!(ax3, xci..., Array(log10.(max.(stokes.ε_pl.II, ε_pl_floor))), colormap = :batlow)
         # lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
         lines!(ax4, ttot, sol, color = :red)

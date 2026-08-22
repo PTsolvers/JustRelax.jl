@@ -1,4 +1,3 @@
-using Pkg; Pkg.activate("miniapps")
 # include benchmark related functions
 include("vizSolVi.jl")
 

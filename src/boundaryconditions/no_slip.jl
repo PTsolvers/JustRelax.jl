@@ -8,7 +8,6 @@
         Ay[end, :] .= -Ay[end - 1, :]
     end
     if bc.bot
-        Ax[:, 2] .= Ax[:, 3] / 3
         Ax[:, 1] .= -Ax[:, 2]
         Ay[:, 1] .= 0
     end

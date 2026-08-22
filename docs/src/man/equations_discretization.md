@@ -35,15 +35,13 @@ q^{t+\Delta t}_{y} = q^{n+1}_{y}  \\
 ### Conservation of momentum
 
 $\begin{align}
-\widetilde{\rho}\frac{u^{n+1}_x - u^n_x}{\Delta\psi} + \nabla\cdot\boldsymbol{\tau} -
-\frac{p^{n+1} - p^n}{\Delta x} =
-0 \\
+\widetilde{\rho}\frac{u^{n+1}_x - u^n_x}{\Delta\psi} =
+\nabla\cdot\boldsymbol{\tau} - \frac{p^{n+1} - p^n}{\Delta x} - \rho g_x \\
 \end{align}$
 
 $\begin{align}
-\widetilde{\rho}\frac{u^{n+1}_y - u^n_y}{\Delta\psi} + \nabla\cdot\boldsymbol{\tau} -
-\frac{p^{n+1} - p^n}{\Delta y} =
-\rho g_y \\
+\widetilde{\rho}\frac{u^{n+1}_y - u^n_y}{\Delta\psi} =
+\nabla\cdot\boldsymbol{\tau} - \frac{p^{n+1} - p^n}{\Delta y} - \rho g_y \\
 \end{align}$
 
 ### Conservation of mass

@@ -53,13 +53,18 @@ end
             if backend === CPUBackend
                 # test incompatible boundary conditions
                 @test_throws ErrorException VelocityBoundaryConditions(;
-                    no_slip = (left = false, right = false, top = false, bot = false),
-                    free_slip = (left = false, right = true, top = true, bot = true),
+                    no_slip = (left = true, right = false, top = false, bot = false),
+                    free_slip = (left = true, right = true, top = true, bot = true),
                 )
                 @test_throws ErrorException VelocityBoundaryConditions(;
-                    no_slip = (left = false, right = false, top = false, bot = false),
-                    free_slip = (left = true, right = true, top = true, bot = false),
+                    no_slip = (left = false, right = false, top = false, bot = true),
+                    free_slip = (left = true, right = true, top = true, bot = true),
                 )
+                # a boundary that is neither no_slip nor free_slip carries a prescribed velocity
+                @test VelocityBoundaryConditions(;
+                    no_slip = (left = false, right = false, top = false, bot = false),
+                    free_slip = (left = false, right = false, top = false, bot = false),
+                ) isa VelocityBoundaryConditions
 
                 n = 5 # number of elements
                 Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
@@ -133,13 +138,18 @@ end
             if backend === CPUBackend
                 # test incompatible boundary conditions
                 @test_throws ErrorException DisplacementBoundaryConditions(;
-                    no_slip = (left = false, right = false, top = false, bot = false),
-                    free_slip = (left = false, right = true, top = true, bot = true),
+                    no_slip = (left = true, right = false, top = false, bot = false),
+                    free_slip = (left = true, right = true, top = true, bot = true),
                 )
                 @test_throws ErrorException DisplacementBoundaryConditions(;
-                    no_slip = (left = false, right = false, top = false, bot = false),
-                    free_slip = (left = true, right = true, top = true, bot = false),
+                    no_slip = (left = false, right = false, top = false, bot = true),
+                    free_slip = (left = true, right = true, top = true, bot = true),
                 )
+                # a boundary that is neither no_slip nor free_slip carries a prescribed velocity
+                @test DisplacementBoundaryConditions(;
+                    no_slip = (left = false, right = false, top = false, bot = false),
+                    free_slip = (left = false, right = false, top = false, bot = false),
+                ) isa DisplacementBoundaryConditions
                 n = 5 # number of elements
                 Ux, Uy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
                 # free-slip

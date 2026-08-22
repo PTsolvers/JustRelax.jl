@@ -823,9 +823,9 @@ function JustRelax.solve!(
     @parallel advect_T!(thermal.dT_dt, thermal.qTx, thermal.qTy, thermal.qTz, _di)
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
         update_halo!(thermal.T)
     end
-    thermal_bcs!(thermal.T, thermal_bc)
     return nothing
 end
 
@@ -869,6 +869,7 @@ function JustRelax.solve!(
     end
     @parallel update_T!(thermal.T, thermal.dT_dt, dt)
     thermal_bcs!(thermal.T, thermal_bc)
+    update_halo!(thermal.T)
     return nothing
 end
 
@@ -903,10 +904,9 @@ function JustRelax.solve!(
     # update thermal array
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
         update_halo!(thermal.T)
     end
-    # apply boundary conditions
-    thermal_bcs!(thermal.T, thermal_bc)
     @. thermal.ΔT = thermal.T - thermal.Told
     return nothing
 end
@@ -949,10 +949,9 @@ function JustRelax.solve!(
     # update thermal array
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
         update_halo!(thermal.T)
     end
-    # apply boundary conditions
-    thermal_bcs!(thermal.T, thermal_bc)
     @. thermal.ΔT = thermal.T - thermal.Told
     return nothing
 end
@@ -1001,9 +1000,9 @@ function JustRelax.solve!(
     # apply boundary conditions
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
         update_halo!(thermal.T)
     end
-    thermal_bcs!(thermal.T, thermal_bc)
 
     @. thermal.ΔT = thermal.T - thermal.Told
     return nothing
@@ -1054,9 +1053,9 @@ function JustRelax.solve!(
     # apply boundary conditions
     @hide_communication b_width begin # communication/computation overlap
         @parallel update_T!(thermal.T, thermal.dT_dt, dt)
+        thermal_bcs!(thermal.T, thermal_bc)
         update_halo!(thermal.T)
     end
-    thermal_bcs!(thermal.T, thermal_bc)
 
     @. thermal.ΔT = thermal.T - thermal.Told
     return nothing

@@ -40,6 +40,12 @@ bcs = DisplacementBoundaryConditions(;
     free_slip    = (left=true, right=true, top=true, bot=true, front=true, back=true),
 )
 ```
+
+The face convention is `left/right` = x-min/x-max, `front/back` = y-min/y-max,
+and `bot/top` = z-min/z-max in 3D. Flow ghost values are written with the
+staggered-grid reflection rules appropriate to each component. The kernels run
+on the selected ParallelStencil backend, including CUDA and AMDGPU extensions.
+
 ## Prescribing the velocity/displacement boundary conditions
 Normally, one would prescribe the velocity/displacement boundary conditions by setting the velocity/displacement field at the boundary through the application of a background strain rate `εbg`.
 Depending on the formulation, the velocity/displacement field is set as follows for the 2D case:
@@ -48,6 +54,18 @@ Depending on the formulation, the velocity/displacement field is set as follows 
 stokes.V.Vx .= PTArray(backend)([ x*εbg for x in xvi[1], _ in 1:ny+2]) # Velocity in x direction
 stokes.V.Vy .= PTArray(backend)([-y*εbg for _ in 1:nx+2, y in xvi[2]]) # Velocity in y direction
 ```
+
+For a pure-shear background field, the package provides a backend-aware,
+ParallelStencil implementation:
+
+```julia
+pureshear_bc!(stokes, xci, xvi, εbg)
+```
+
+In 2D it sets `Vx = εbg*x` and `Vy = -εbg*y`; in 3D it additionally sets
+`Vz = -εbg*z`. The backend is inferred from `stokes`. Only the staggered interior ranges are initialized; ghost
+layers remain available for the configured boundary conditions.
+
 Make sure to apply the set velocity to the boundary conditions. You do this by calling the `flow_bcs!` function,
 ```julia
 flow_bcs!(stokes, flow_bcs)

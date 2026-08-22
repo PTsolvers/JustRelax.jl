@@ -49,12 +49,17 @@ end
             @test @views T[end, 2:(end - 1)] == T0[2, 2:(end - 1)]
 
             inactive = (left = false, right = false, top = false, bot = false)
-            @test_throws ErrorException TemperatureBoundaryConditions(;
+            @test_throws "Periodic boundary conditions must be paired" TemperatureBoundaryConditions(;
                 no_flux = inactive,
                 periodic = (left = true, right = false, top = false, bot = false),
             )
-            @test_throws ErrorException TemperatureBoundaryConditions(;
+            @test_throws "Incompatible boundary conditions on the left boundary" TemperatureBoundaryConditions(;
                 no_flux = (left = true, right = false, top = false, bot = false),
+                periodic = (left = true, right = true, top = false, bot = false),
+            )
+            @test_throws "Incompatible boundary conditions on the right boundary" TemperatureBoundaryConditions(;
+                no_flux = inactive,
+                constant_flux = (left = false, right = 1.0, top = false, bot = false),
                 periodic = (left = true, right = true, top = false, bot = false),
             )
         end
@@ -106,10 +111,21 @@ end
                 @test @views Vy[1, :] == Vy0[end - 1, :]
                 @test @views Vy[end, :] == Vy0[2, :]
 
-                @test_throws ErrorException VelocityBoundaryConditions(;
+                @test_throws "Periodic boundary conditions must be paired" VelocityBoundaryConditions(;
                     no_slip = (left = false, right = false, top = false, bot = false),
                     free_slip = (left = false, right = false, top = false, bot = false),
                     periodic = (left = true, right = false, top = false, bot = false),
+                )
+                @test_throws "Incompatible boundary conditions on the left boundary" VelocityBoundaryConditions(;
+                    no_slip = (left = false, right = false, top = false, bot = false),
+                    free_slip = (left = true, right = false, top = false, bot = false),
+                    periodic = (left = true, right = true, top = false, bot = false),
+                )
+                @test_throws "top can't be both periodic and free_surface" VelocityBoundaryConditions(;
+                    no_slip = (left = false, right = false, top = false, bot = false),
+                    free_slip = (left = false, right = false, top = false, bot = false),
+                    periodic = (left = false, right = false, top = true, bot = true),
+                    free_surface = true,
                 )
                 # no-slip
                 Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))

@@ -102,15 +102,24 @@ end
             flow_bcs = VelocityBoundaryConditions(;
                 no_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
                 free_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
-                periodic = (left = true, right = true, front = false, back = false, top = false, bot = false),
+                periodic = (left = true, right = true, front = true, back = true, top = true, bot = true),
             )
             flow_bcs!(stokes, flow_bcs)
-            @test @views stokes.V.Vx[1, :, :] == Vx0[end, :, :]
-            @test @views stokes.V.Vx[end, :, :] == Vx0[end, :, :]
-            @test @views stokes.V.Vy[1, :, :] == Vy0[end - 1, :, :]
-            @test @views stokes.V.Vy[end, :, :] == Vy0[2, :, :]
-            @test @views stokes.V.Vz[1, :, :] == Vz0[end - 1, :, :]
-            @test @views stokes.V.Vz[end, :, :] == Vz0[2, :, :]
+            @test @views stokes.V.Vx[1, 2:(end - 1), 2:(end - 1)] == Vx0[end, 2:(end - 1), 2:(end - 1)]
+            @test @views stokes.V.Vy[1, 2:(end - 1), 2:(end - 1)] == Vy0[end - 1, 2:(end - 1), 2:(end - 1)]
+            @test @views stokes.V.Vy[end, 2:(end - 1), 2:(end - 1)] == Vy0[2, 2:(end - 1), 2:(end - 1)]
+            @test @views stokes.V.Vy[2:(end - 1), 1, 2:(end - 1)] == Vy0[2:(end - 1), end, 2:(end - 1)]
+            @test @views stokes.V.Vx[2:(end - 1), 1, 2:(end - 1)] == Vx0[2:(end - 1), end - 1, 2:(end - 1)]
+            @test @views stokes.V.Vx[2:(end - 1), end, 2:(end - 1)] == Vx0[2:(end - 1), 2, 2:(end - 1)]
+            @test @views stokes.V.Vz[2:(end - 1), 2:(end - 1), 1] == Vz0[2:(end - 1), 2:(end - 1), end]
+            @test @views stokes.V.Vx[2:(end - 1), 2:(end - 1), 1] == Vx0[2:(end - 1), 2:(end - 1), end - 1]
+            @test @views stokes.V.Vx[2:(end - 1), 2:(end - 1), end] == Vx0[2:(end - 1), 2:(end - 1), 2]
+
+            @test_throws "Periodic boundary conditions must be paired" VelocityBoundaryConditions(;
+                no_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
+                free_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
+                periodic = (left = false, right = false, front = true, back = false, top = false, bot = false),
+            )
 
             # no-slip
             flow_bcs = VelocityBoundaryConditions(;

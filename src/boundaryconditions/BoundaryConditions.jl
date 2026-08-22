@@ -59,6 +59,8 @@ end
     flow_bcs!(stokes, bcs::VelocityBoundaryConditions)
 
 Apply no-slip, free-slip, and periodic velocity boundary conditions to `stokes`.
+Periodic conditions match normal components at paired boundary planes and copy
+opposite interior values into tangential ghost planes.
 """
 flow_bcs!(stokes, bcs) = flow_bcs!(backend(stokes), stokes, bcs)
 
@@ -70,6 +72,8 @@ end
     flow_bcs!(stokes, bcs::DisplacementBoundaryConditions)
 
 Apply no-slip, free-slip, and periodic displacement boundary conditions to `stokes`.
+Periodic conditions match normal components at paired boundary planes and copy
+opposite interior values into tangential ghost planes.
 """
 function flow_bcs!(::CPUBackendTrait, stokes, bcs::DisplacementBoundaryConditions)
     return _flow_bcs!(bcs, @displacement(stokes))

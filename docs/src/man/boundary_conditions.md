@@ -57,6 +57,7 @@ bcs = VelocityBoundaryConditions(;
 The same keyword is supported by `DisplacementBoundaryConditions`. On the
 staggered grid, the normal component is matched at the two boundary planes and
 the tangential components copy the opposite interior plane into their ghosts.
+In 3D, `front`/`back` and `bot`/`top` are the y- and z-direction pairs.
 
 ## Prescribing the velocity/displacement boundary conditions
 Normally, one would prescribe the velocity/displacement boundary conditions by setting the velocity/displacement field at the boundary through the application of a background strain rate `εbg`.
@@ -210,8 +211,9 @@ thermal_bc = TemperatureBoundaryConditions(;
 Periodic faces must be paired by direction and cannot also carry `no_flux`,
 `constant_flux`, or `constant_value`.
 
-For MPI runs, configure the same directions in ImplicitGlobalGrid and exchange
-halos after applying boundary conditions:
+For a single-process run, `periodic` in the boundary-condition object is
+sufficient. For a distributed run, also configure the same directions in
+ImplicitGlobalGrid and exchange halos after applying boundary conditions:
 
 ```julia
 igg = IGG(init_global_grid(nx, ny, 1; periodx = true)...)

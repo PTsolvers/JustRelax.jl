@@ -40,6 +40,10 @@ The face values have the following meaning:
 - `periodic`: `true` copies the opposite interior temperature into the ghost layer.
 - `false`: leaves that boundary inactive for the corresponding condition.
 
+Periodic faces must be enabled in pairs (`left`/`right`, `front`/`back`, or
+`bot`/`top`) and cannot also use `no_flux`, `constant_flux`, or
+`constant_value`.
+
 `dirichlet` accepts the mask-based Dirichlet forms supported by `Dirichlet`, for
 example `(; constant = value, mask = mask)`.
 
@@ -52,9 +56,9 @@ TemperatureBoundaryConditions(;
 )
 
 TemperatureBoundaryConditions(;
-    no_flux = (left = true, right = true, front = true, back = true, top = false, bot = false),
-    constant_flux = (top = 0.0, bot = 0.03),
-    periodic = (left = false, right = false, front = false, back = false, top = false, bot = false),
+    no_flux = (left = false, right = false, top = false, bot = false),
+    constant_value = (top = 273.0, bot = 1573.0),
+    periodic = (left = true, right = true, top = false, bot = false),
 )
 ```
 """
@@ -94,6 +98,15 @@ struct TemperatureBoundaryConditions{T1, T2, T3, T4, D, nD} <: AbstractBoundaryC
     end
 end
 
+"""
+    DisplacementBoundaryConditions(; no_slip, free_slip, periodic, free_surface=false)
+
+Create boundary conditions for the displacement-pressure Stokes formulation.
+
+Each face is selected by a Boolean in `no_slip`, `free_slip`, or `periodic`.
+Periodic faces must be paired by direction and cannot also be no-slip or
+free-slip. A periodic top face is incompatible with `free_surface=true`.
+"""
 struct DisplacementBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
     no_slip::T
     free_slip::T
@@ -113,6 +126,16 @@ struct DisplacementBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
         return new{T, nD}(no_slip, free_slip, periodic, free_surface)
     end
 end
+
+"""
+    VelocityBoundaryConditions(; no_slip, free_slip, periodic, free_surface=false)
+
+Create boundary conditions for the velocity-pressure Stokes formulation.
+
+Each face is selected by a Boolean in `no_slip`, `free_slip`, or `periodic`.
+Periodic faces must be paired by direction and cannot also be no-slip or
+free-slip. A periodic top face is incompatible with `free_surface=true`.
+"""
 struct VelocityBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
     no_slip::T
     free_slip::T

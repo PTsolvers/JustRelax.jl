@@ -202,7 +202,7 @@ include("types/traits.jl")
 export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 
 include("grid/Grid.jl")
-export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g
+export IGG, lazy_grid, Geometry, GeometryAnnulus, velocity_grids, x_g, y_g, z_g
 
 include("JustRelax_CPU.jl")
 

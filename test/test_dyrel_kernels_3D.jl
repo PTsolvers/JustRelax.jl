@@ -116,7 +116,11 @@ end
         stokes.V.Vy .= PTArray(backend_JR)([b * y for _ in 1:(nx + 2), y in xvi[2], _ in 1:(nz + 2)])
         stokes.V.Vz .= PTArray(backend_JR)([c * z for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
 
-        dyrel = JustRelax3D.DYREL(backend_JR, stokes, local_rheology, local_phases, grid.di, local_dt)
+        dyrel = JustRelax3D.DYREL(backend_JR, stokes, local_rheology, local_phases, grid.di, local_dt; γfact = 37.0)
+        γ_eff_before = copy(dyrel.γ_eff)
+        JR3K.DYREL!(dyrel, stokes, local_rheology, local_phases, grid.di, local_dt)
+        @test dyrel.γfact === 37.0
+        @test Array(dyrel.γ_eff) == Array(γ_eff_before)
         stokes.P0 .= stokes.P
         stokes.Q .= 0.0
         JR3K.compute_∇V_strain_rate_RP!(stokes, dyrel, local_rheology, local_phases, grid._di, local_ni, local_dt, args)
@@ -162,7 +166,7 @@ end
             dyrel.αVx, dyrel.αVy, dyrel.αVz,
             dyrel.βVx, dyrel.βVy, dyrel.βVz,
             dyrel.dτVx, dyrel.dτVy, dyrel.dτVz,
-            grid._di.center, grid._di.vertex, local_dt,
+            grid._di.center, grid._di.vertex,
         )
         @test all(A -> all(isfinite, Array(A)), (stokes.R.Rx, stokes.R.Ry, stokes.R.Rz))
         @test all(i -> Array((stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)[i]) == Array(V_before[i]), 1:3)

@@ -1,5 +1,5 @@
 """
-    DYREL(ni::NTuple{N, Integer}; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5) where N
+    DYREL(ni::NTuple{N, Integer}; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0) where N
 
 Creates a new `DYREL` struct with fields initialized to zero.
 
@@ -9,8 +9,9 @@ Creates a new `DYREL` struct with fields initialized to zero.
 - `ϵ_vel`: Velocity convergence tolerance.
 - `CFL`: Courant-Friedrichs-Lewy number.
 - `c_fact`: Damping scaling factor.
+- `γfact`: Penalty scaling factor.
 """
-function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
+function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     nx, ny = ni
     # penalty parameter
     γ_eff = @zeros(nx, ny)
@@ -52,13 +53,13 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     return JustRelax.DYREL{T, F}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
         dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0,
-        Rz0, CFL, ϵ, ϵ_vel, c_fact
+        Rz0, CFL, γfact, ϵ, ϵ_vel, c_fact
     )
 end
 
 DYREL(nx::Integer, ny::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) = DYREL((nx, ny); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
 
-function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
+function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     nx, ny, nz = ni
     # penalty parameter
     γ_eff = @zeros(nx, ny, nz)
@@ -100,7 +101,7 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     return JustRelax.DYREL{T, F}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
         dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0,
-        Rz0, CFL, ϵ, ϵ_vel, c_fact
+        Rz0, CFL, γfact, ϵ, ϵ_vel, c_fact
     )
 end
 
@@ -140,7 +141,7 @@ function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; �
     dim = Val(length(ni))
 
     # instantiate DYREL object
-    dyrel = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+    dyrel = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
@@ -156,7 +157,7 @@ end
 
 
 """
-    DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL=0.99, γfact=20.0)
+    DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL=0.99, γfact=dyrel.γfact)
 
 Updates the fields of the `DYREL` struct in-place for the current time step.
 
@@ -172,11 +173,11 @@ This function recomputes:
 - `di`: Grid spacing.
 - `dt`: Current time step.
 - `CFL`: Courant number (default: 0.99).
-- `γfact`: Penalty factor (default: 20.0).
+- `γfact`: Penalty factor (default: the value stored in `dyrel`).
 
 Returns `nothing`.
 """
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = 0.99, γfact = 20.0)
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = 0.99, γfact = dyrel.γfact)
     dim = Val(ndims(stokes.P))
 
     # compute bulk viscosity and penalty parameter
@@ -192,7 +193,7 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
 end
 
 # variational version
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL = 0.99, γfact = 20.0)
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL = 0.99, γfact = dyrel.γfact)
     dim = Val(ndims(stokes.P))
 
     # compute bulk viscosity and penalty parameter

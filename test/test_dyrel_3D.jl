@@ -49,6 +49,7 @@ end
         end
         @test size(dyrel.P_num) == (nx, ny, nz)
         @test dyrel.CFL === 0.6
+        @test dyrel.γfact === 20.0
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
         @test dyrel.c_fact === 0.3

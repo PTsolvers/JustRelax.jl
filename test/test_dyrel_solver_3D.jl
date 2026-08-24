@@ -106,6 +106,7 @@ end
         )
 
         @test !isempty(out.err_evo_tot)
+        @test out.iter > 0
         @test all(isfinite, out.err_evo_tot)
         @test last(out.err_evo_tot) < first(out.err_evo_tot)
         @test last(out.err_evo_tot) < dyrel.ϵ

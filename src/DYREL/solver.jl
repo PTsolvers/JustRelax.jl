@@ -31,7 +31,7 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `rel_drop`: Relative residual drop tolerance. Default: `1.0e-2`.
 - `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
-- `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
+- `linear_viscosity`: Whether viscosity is linear. By default this is inferred from `rheology`.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
     out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
@@ -63,7 +63,7 @@ function _solve_DYREL!(
         b_width = (4, 4, 0),
         verbose_PH = true,
         verbose_DR = true,
-        linear_viscosity = false,
+        linear_viscosity = islinear(rheology) isa LinearRheologyTrait,
         kwargs...,
     ) where {N}
 
@@ -134,14 +134,12 @@ function _solve_DYREL!(
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
             residuals...,
-            @velocity(stokes)...,
             stokes.P,
             stokes.ΔPψ,
             @stress(stokes)...,
             ρg...,
             _di.center,
             _di.vertex,
-            dt * flow_bcs.free_surface,
         )
 
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
@@ -212,7 +210,6 @@ function _solve_DYREL!(
                 fields.dτV...,
                 _di.center,
                 _di.vertex,
-                dt * flow_bcs.free_surface,
             )
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)
@@ -280,7 +277,7 @@ function _solve_DYREL!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
     copy_stress_vertices!(stokes, dim)
 
-    return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
+    return (; iter, err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
 
 end
 

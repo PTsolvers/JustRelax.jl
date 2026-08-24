@@ -1,4 +1,4 @@
-using LinearAlgebra, CairoMakie
+using LinearAlgebra, CairoMakie, GeoParams, JustPIC
 using JustRelax, JustRelax.JustRelax3D
 using Pkg; Pkg.activate(normpath(joinpath(@__DIR__, "..", "..")))
 using MPI: MPI
@@ -7,9 +7,10 @@ using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
 const backend = CPUBackend
+const backend_JP = JustPIC.CPU
 
 # choose benchmark
-benchmark = :solvi
+benchmark = :taylorGreen
 
 # model resolution (number of gridpoints)
 nx, ny, nz = 16, 16, 16

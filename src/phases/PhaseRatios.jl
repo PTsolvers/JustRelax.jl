@@ -328,10 +328,12 @@ end
     w_vals = @MVector zeros(T, N)
     total_weight = zero(T)
 
-    # Every midpoint grid is staggered in exactly two dimensions. Spell out the
-    # four neighbouring cells: mutating a captured bit counter in an `ntuple`
-    # closure boxes the counter, which is unsupported in GPU kernels.
-    for first_offset in -1:0, second_offset in -1:0
+    # Every midpoint grid is staggered in exactly two dimensions. Visit its four
+    # neighbouring cells without a product iterator, which is unsupported here
+    # in GPU kernels.
+    for corner in 1:4
+        first_offset = ifelse(corner ≤ 2, -1, 0)
+        second_offset = ifelse(isodd(corner), -1, 0)
         i_cell = I[1] + offsets[1] * first_offset
         j_offset = ifelse(offsets[1] == 1, second_offset, first_offset)
         j_cell = I[2] + offsets[2] * j_offset

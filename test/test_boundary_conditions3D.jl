@@ -63,6 +63,11 @@ end
         @test @views T[end, 2:(end - 1), 2:(end - 1)] == T0[2, 2:(end - 1), 2:(end - 1)]
         @test @views T[2:(end - 1), 1, 2:(end - 1)] == T0[2:(end - 1), end - 1, 2:(end - 1)]
         @test @views T[2:(end - 1), end, 2:(end - 1)] == T0[2:(end - 1), 2, 2:(end - 1)]
+
+        @test_throws ErrorException TemperatureBoundaryConditions(;
+            no_flux = (left = false, right = false, top = false, bot = false),
+            periodic = (left = false, right = false, front = true, back = false, top = false, bot = false),
+        )
     end
 
     @testset "VelocityBoundaryConditions" begin

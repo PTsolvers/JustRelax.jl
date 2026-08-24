@@ -2,7 +2,7 @@
 
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
 [![Ask us anything](https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg)](https://github.com/PTsolvers/JustRelax.jl/discussions/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18262030.svg)](https://doi.org/10.5281/zenodo.18262030)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
 [![JOSS](https://joss.theoj.org/papers/10.21105/joss.09365/status.svg)](https://doi.org/10.21105/joss.09365)
 [![CPU Unit Tests](https://img.shields.io/github/actions/workflow/status/PTsolvers/JustRelax.jl/ci.yml?label=CPU%20Unit%20Tests)](https://github.com/PTsolvers/JustRelax.jl/actions/workflows/ci.yml)
 [![GPU Unit Tests](https://img.shields.io/buildkite/6b970b1066dc828a56a75bccc65a8bc896a8bb76012a61fe96/main?label=GPU%20Unit%20Tests)](https://buildkite.com/julialang/justrelax-dot-jl)

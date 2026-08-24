@@ -231,7 +231,8 @@ function _solve_DYREL!(
                 errV = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]), dim)
 
                 if iter == nout
-                    errV00 = errV
+                    errV_scale = maximum(errV) + eps()
+                    errV00 = ntuple(_ -> errV_scale, dim)
                 end
 
                 errV_ratio = ntuple(d -> errV[d] / errV00[d], dim)

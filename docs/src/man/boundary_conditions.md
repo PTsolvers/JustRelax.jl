@@ -10,6 +10,8 @@ Supported boundary conditions:
 
     $u_i = 0$ at the boundary $\Gamma$
 
+3. Periodic velocity or displacement across paired boundaries
+
 ## Defining the boundary conditions
 We have two ways of defining the boundary condition formulations:
     - `VelocityBoundaryConditions`, and
@@ -177,6 +179,7 @@ sides of a 2D domain:
 
 ```julia
 thermal_bc = TemperatureBoundaryConditions(;
+    no_flux = (left = false, right = false, top = false, bot = false),
     periodic = (left = true, right = true, top = false, bot = false),
 )
 
@@ -187,6 +190,14 @@ In 3D, include `front` and `back` when those faces should also be periodic:
 
 ```julia
 thermal_bc = TemperatureBoundaryConditions(;
+    no_flux = (
+        left = false,
+        right = false,
+        front = false,
+        back = false,
+        top = false,
+        bot = false,
+    ),
     periodic = (
         left = true,
         right = true,
@@ -198,8 +209,22 @@ thermal_bc = TemperatureBoundaryConditions(;
 )
 ```
 
-If multiple ghost-cell conditions are active on the same face, `thermal_bcs!`
-applies `constant_value` first, `no_flux` second, and `periodic` last.
+Periodic faces must be paired by direction and cannot also carry `no_flux`,
+`constant_flux`, or `constant_value`.
+
+For a single-process run, `periodic` in the boundary-condition object is
+sufficient. For a distributed run, also configure the same directions in
+ImplicitGlobalGrid and exchange halos after applying boundary conditions:
+
+```julia
+igg = IGG(init_global_grid(nx, ny, 1; periodx = true)...)
+thermal_bcs!(thermal, thermal_bc)
+update_halo!(thermal.T)
+```
+
+Use `periodx`, `periody`, and `periodz` for the `left/right`, `front/back`, and
+`bot/top` pairs, respectively. The same grid topology is used by periodic Stokes
+velocity halos.
 
 ## Constant-Flux Boundaries
 

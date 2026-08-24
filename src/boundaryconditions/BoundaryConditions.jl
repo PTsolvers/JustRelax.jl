@@ -31,10 +31,10 @@ Apply thermal ghost-cell boundary conditions to a temperature field.
 - `periodic` faces are applied last by copying the opposite interior temperature
   into the ghost layer.
 
-Faces set to `false` are ignored. If multiple conditions are active on the same
-face, the later condition wins. Prescribed `constant_flux` values are not applied
-here; they are consumed by the pseudo-transient heat-diffusion `compute_flux!`
-kernels.
+Faces set to `false` are ignored. Periodic faces must be paired by direction and
+cannot also carry another thermal condition. Prescribed `constant_flux` values are
+not applied here; they are consumed by the pseudo-transient heat-diffusion
+`compute_flux!` kernels.
 """
 thermal_bcs!(thermal, bcs) = thermal_bcs!(backend(thermal), thermal, bcs)
 function thermal_bcs!(
@@ -88,6 +88,7 @@ function _flow_bcs!(bcs, V)
     end
     # free slip boundary conditions
     do_bc(bcs.free_slip) && (@parallel (@idx n) free_slip!(V..., bcs.free_slip))
+    do_bc(bcs.periodic) && (@parallel (@idx n) periodic_boundary!(V..., bcs.periodic))
 
     return nothing
 end

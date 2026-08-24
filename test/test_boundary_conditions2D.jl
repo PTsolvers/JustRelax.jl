@@ -47,6 +47,21 @@ end
             @test @views T[2:(end - 1), end] == T0[2:(end - 1), 2]
             @test @views T[1, 2:(end - 1)] == T0[end - 1, 2:(end - 1)]
             @test @views T[end, 2:(end - 1)] == T0[2, 2:(end - 1)]
+
+            inactive = (left = false, right = false, top = false, bot = false)
+            @test_throws "Periodic boundary conditions must be paired" TemperatureBoundaryConditions(;
+                no_flux = inactive,
+                periodic = (left = true, right = false, top = false, bot = false),
+            )
+            @test_throws "Incompatible boundary conditions on the left boundary" TemperatureBoundaryConditions(;
+                no_flux = (left = true, right = false, top = false, bot = false),
+                periodic = (left = true, right = true, top = false, bot = false),
+            )
+            @test_throws "Incompatible boundary conditions on the right boundary" TemperatureBoundaryConditions(;
+                no_flux = inactive,
+                constant_flux = (left = false, right = 1.0, top = false, bot = false),
+                periodic = (left = true, right = true, top = false, bot = false),
+            )
         end
 
         @testset "VelocityBoundaryConditions" begin
@@ -81,6 +96,37 @@ end
                 @test @views Vy[end, :] == Vy[end - 1, :]
                 @test typeof(bcs) <: AbstractFlowBoundaryConditions
                 @test typeof(bcs) <: VelocityBoundaryConditions
+
+                Vx, Vy = PTArray(backend)(reshape(collect(Float64, 1:42), 6, 7)),
+                    PTArray(backend)(reshape(collect(Float64, 1:42), 7, 6))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                bcs = VelocityBoundaryConditions(;
+                    no_slip = (left = false, right = false, top = false, bot = false),
+                    free_slip = (left = false, right = false, top = false, bot = false),
+                    periodic = (left = true, right = true, top = false, bot = false),
+                )
+                flow_bcs!(bcs, Vx, Vy)
+                @test @views Vx[1, :] == Vx0[end, :]
+                @test @views Vx[end, :] == Vx0[end, :]
+                @test @views Vy[1, :] == Vy0[end - 1, :]
+                @test @views Vy[end, :] == Vy0[2, :]
+
+                @test_throws "Periodic boundary conditions must be paired" VelocityBoundaryConditions(;
+                    no_slip = (left = false, right = false, top = false, bot = false),
+                    free_slip = (left = false, right = false, top = false, bot = false),
+                    periodic = (left = true, right = false, top = false, bot = false),
+                )
+                @test_throws "Incompatible boundary conditions on the left boundary" VelocityBoundaryConditions(;
+                    no_slip = (left = false, right = false, top = false, bot = false),
+                    free_slip = (left = true, right = false, top = false, bot = false),
+                    periodic = (left = true, right = true, top = false, bot = false),
+                )
+                @test_throws "top can't be both periodic and free_surface" VelocityBoundaryConditions(;
+                    no_slip = (left = false, right = false, top = false, bot = false),
+                    free_slip = (left = false, right = false, top = false, bot = false),
+                    periodic = (left = false, right = false, top = true, bot = true),
+                    free_surface = true,
+                )
                 # no-slip
                 Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
                 bcs = VelocityBoundaryConditions(;
@@ -164,6 +210,20 @@ end
                 @test @views Uy[end, :] == Uy[end - 1, :]
                 @test typeof(bcs1) <: AbstractFlowBoundaryConditions
                 @test typeof(bcs1) <: DisplacementBoundaryConditions
+
+                Ux, Uy = PTArray(backend)(reshape(collect(Float64, 1:42), 6, 7)),
+                    PTArray(backend)(reshape(collect(Float64, 1:42), 7, 6))
+                Ux0, Uy0 = copy(Ux), copy(Uy)
+                bcs_periodic = DisplacementBoundaryConditions(;
+                    no_slip = (left = false, right = false, top = false, bot = false),
+                    free_slip = (left = false, right = false, top = false, bot = false),
+                    periodic = (left = true, right = true, top = false, bot = false),
+                )
+                flow_bcs!(bcs_periodic, Ux, Uy)
+                @test @views Ux[1, :] == Ux0[end, :]
+                @test @views Ux[end, :] == Ux0[end, :]
+                @test @views Uy[1, :] == Uy0[end - 1, :]
+                @test @views Uy[end, :] == Uy0[2, :]
 
                 # no-slip
                 Ux, Uy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))

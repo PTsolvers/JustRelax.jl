@@ -105,6 +105,9 @@ end
 
 ## VELOCITY
 
+@inline free_surface_diagonal(ρg_S, ρg_N, _dy, dt) = -dt * (ρg_N - ρg_S) * _dy
+@inline free_surface_pseudotime(ηdτ, ητ, c_fs) = ηdτ / (ητ + ηdτ * c_fs)
+
 @parallel_indices (i, j) function compute_V!(
         Vx::AbstractArray{T, 2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _di_center, _di_vertex
     ) where {T}
@@ -168,12 +171,13 @@ end
         ρg_N = ρgy[i, j_N]
         # Spatial derivatives
         ∂ρg∂y = (ρg_N - ρg_S) * _dy
+        c_fs = free_surface_diagonal(ρg_S, ρg_N, _dy, dt)
         # correction term
         ρg_correction = Vyᵢⱼ * ∂ρg∂y * θ * dt
 
         Vy[i + 1, j + 1] +=
-            (-d_ya(P, _dy) + d_ya(τyy, _dy) + d_xi(τxy, _dx) - av_ya(ρgy) + ρg_correction) * ηdτ /
-            av_ya(ητ)
+            (-d_ya(P, _dy) + d_ya(τyy, _dy) + d_xi(τxy, _dx) - av_ya(ρgy) + ρg_correction) *
+            free_surface_pseudotime(ηdτ, av_ya(ητ), c_fs)
     end
 
     return nothing

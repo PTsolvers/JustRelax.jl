@@ -1,10 +1,29 @@
-# using CairoMakie
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
-const backend_JR = CPUBackend
 
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)  #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+# Load script dependencies
+# using CairoMakie
 
 
 using GeoParams
@@ -64,7 +83,7 @@ function diffusion_2D(
     P = @zeros(ni...)
 
     ## Allocate arrays needed for every Thermal Diffusion
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     thermal.H .= 1.0e-6 # radiogenic heat production
     # physical parameters
     ρ = @fill(ρ0, ni...)
@@ -72,7 +91,7 @@ function diffusion_2D(
     K = @fill(K0, ni...)
     ρCp = @. Cp * ρ
 
-    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li)
     Ttop, Tbot = 300.0, 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),

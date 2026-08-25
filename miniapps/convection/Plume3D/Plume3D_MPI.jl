@@ -1,10 +1,5 @@
-# Distributed-memory version of Plume3D.jl.
-# Rheology after Cloetingh et al. (2022), "Fingerprinting secondary mantle plumes".
-#
-# Run with, e.g.
-#   mpiexecjl -n 8 julia --project=miniapps miniapps/convection/Plume3D/Plume3D_MPI.jl
-
 const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -13,10 +8,10 @@ end
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = @static if isCUDA
+const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
-    JustRelax.CPUBackend
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
@@ -28,12 +23,19 @@ else
 end
 
 using JustPIC
-
 const backend_JP = @static if isCUDA
-    CUDA.CUDABackend # Options: JustPIC.CPU, CUDABackend, AMDGPU.ROCBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPU
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
+
+# Load script dependencies
+# Distributed-memory version of Plume3D.jl.
+# Rheology after Cloetingh et al. (2022), "Fingerprinting secondary mantle plumes".
+#
+# Run with, e.g.
+#   mpiexecjl -n 8 julia --project=miniapps miniapps/convection/Plume3D/Plume3D_MPI.jl
+
 
 using GeoParams, Printf
 
@@ -97,12 +99,12 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 3π, r = 1.0e0, CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false, front = true, back = true),
     )
@@ -127,7 +129,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √3
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √3
     )
 
     # Free slip on every wall

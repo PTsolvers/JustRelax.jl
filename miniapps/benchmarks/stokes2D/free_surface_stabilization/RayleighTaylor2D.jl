@@ -1,17 +1,40 @@
-using CUDA
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
-const backend_JR = CUDABackend
-# const backend_JR = CPUBackend
 
-using JustPIC
-const backend = CUDA.CUDABackend
-# const backend = JustPIC.CPU
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(CUDA, Float64, 2)
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
 
 # Load script dependencies
+# const backend = CPUBackend
+
+# const backend_JP = JustPIC.CPU
+
+
 using LinearAlgebra, GeoParams, CairoMakie
 
 # Velocity helper grids for the particle advection
@@ -120,7 +143,7 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 60, 80, 40
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -128,7 +151,7 @@ function main(igg, nx, ny)
 
     # Elliptical temperature anomaly
     A = 5.0e3    # Amplitude of the anomaly
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, A)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
@@ -140,12 +163,12 @@ function main(igg, nx, ny)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     # ----------------------------------------------------
 
     # Buoyancy forces & rheology
@@ -171,7 +194,7 @@ function main(igg, nx, ny)
     # Time loop
     t, it = 0.0, 0
     dt = 10.0e3 * (3600 * 24 * 365.25)
-    dt_max = 50.0e3 * (3600 * 24 * 365.25)
+    dt_max = 10.0e3 * (3600 * 24 * 365.25)
 
     _di = inv.(di)
     (; ϵ_rel, r, θ_dτ, ηdτ) = pt_stokes
@@ -203,6 +226,7 @@ function main(igg, nx, ny)
                 iterMin = 1.0e3,
                 viscosity_relaxation = 1.0e-2,
                 nout = 2.0e3,
+                free_surface = true,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )

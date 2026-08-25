@@ -140,6 +140,24 @@ end
         @test all(αVy .≈ expected_α)
     end
 
+    @testset "free-surface diagonal 2D" begin
+        nx, ny = 5, 4
+        grid = Geometry((nx, ny), (1.0, 1.0))
+        Dy = @ones(nx, ny - 1) .* 4.0
+        λmaxVy = @ones(nx, ny - 1) .* 3.0
+        ρgy = @zeros(nx, ny)
+        ρgy[:, 1:2] .= 3.0
+        ρgy[:, 3:end] .= 1.0
+
+        JustRelax2D.apply_free_surface_diagonal!(Dy, λmaxVy, ρgy, grid.di.center, 0.5)
+
+        c_fs = -0.5 * (1.0 - 3.0) / grid.di.center[2]
+        @test all(Array(Dy[:, 2]) .≈ 4.0 + c_fs)
+        @test all(Array(λmaxVy[:, 2]) .≈ (12.0 + c_fs) / (4.0 + c_fs))
+        @test all(Array(Dy[:, 1]) .≈ 4.0)
+        @test all(Array(Dy[:, 3]) .≈ 4.0)
+    end
+
     @testset "DYREL struct wrappers" begin
         # update_α_β!(dyrel) and update_dτV_α_β!(dyrel) drive the kernels off the
         # DYREL fields directly.

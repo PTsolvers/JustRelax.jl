@@ -32,6 +32,7 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
+- `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
     out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
@@ -64,6 +65,7 @@ function _solve_DYREL!(
         verbose_PH = true,
         verbose_DR = true,
         linear_viscosity = false,
+        free_surface = false,
         kwargs...,
     ) where {N}
 
@@ -117,6 +119,11 @@ function _solve_DYREL!(
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
+    if free_surface
+        N == 2 || error("DYREL free-surface stabilization currently supports only 2D")
+        apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
+        update_dτV_α_β!(dyrel)
+    end
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
@@ -137,12 +144,14 @@ function _solve_DYREL!(
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
             residuals...,
+            @velocity(stokes)...,
             stokes.P,
             stokes.ΔPψ,
             @stress(stokes)...,
             ρg...,
             _di.center,
             _di.vertex,
+            dt * free_surface,
         )
 
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
@@ -221,6 +230,7 @@ function _solve_DYREL!(
                 fields.dτV...,
                 _di.center,
                 _di.vertex,
+                dt * free_surface,
             )
             flow_bcs!(stokes, flow_bcs)
             update_halo!(@velocity(stokes)...)
@@ -253,6 +263,7 @@ function _solve_DYREL!(
 
                 # Optimal pseudo-time steps - can be replaced by AD
                 Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
+                free_surface && apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)

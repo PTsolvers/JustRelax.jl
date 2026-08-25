@@ -200,6 +200,14 @@ end
 @inline static_dims(::StokesArrays{Velocity{A}}) where {A <: AbstractArray{T, N}} where {T, N} = Val(N)
 
 ## PTStokesCoeffs type
+"""
+    PTStokesCoeffs(li, di; ϵ_rel=1e-6, ϵ_abs=1e-12, Re=3π, CFL, r=0.7)
+
+Scalar coefficients for the accelerated pseudo-transient Stokes solver. `ηdτ / ητ`
+is the local velocity pseudo-time step, while `θ_dτ` controls the stress and pressure
+updates. In the 2D free-surface-stabilized velocity kernel, the vertical pseudo-time
+step also includes the local diagonal `-dt * ∂y(ρg)` introduced by stabilization.
+"""
 struct PTStokesCoeffs{T}
     CFL::T
     ϵ_rel::T # relative PT tolerance

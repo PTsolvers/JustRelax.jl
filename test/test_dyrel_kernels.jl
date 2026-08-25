@@ -93,6 +93,35 @@ end
         @test all(abs.(Array(stokes.ε.xy)) .< 1.0e-12)
     end
 
+    @testset "standard APT free-surface pseudo-time" begin
+        nx, ny = 5, 4
+        ni = nx, ny
+        grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
+        stokes = StokesArrays(backend_JR, ni)
+        stokes.V.Vy .= 1.0
+        ρgx = @zeros(ni...)
+        ρgy = PTArray(backend_JR)([3.0 - y for _ in 1:nx, y in 1:ny])
+        ητ = @ones(ni...) .* 2.0
+        ηdτ = 0.5
+        dt = 0.25
+        i, j = 2, 2
+        Vy_old = stokes.V.Vy[i + 1, j + 1]
+
+        @parallel (@idx ni) JR2K.compute_V!(
+            stokes.V.Vx, stokes.V.Vy, stokes.P,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy,
+            ηdτ, ρgx, ρgy, ητ,
+            grid._di.center, grid._di.vertex, dt,
+        )
+
+        _dy = grid._di.center[2]
+        ρg_S, ρg_N = ρgy[i, j], ρgy[i, j + 1]
+        c_fs = JustRelax2D.free_surface_diagonal(ρg_S, ρg_N, _dy, dt)
+        residual = -JustRelax2D._av_ya(ρgy, i, j) - c_fs * Vy_old
+        expected = Vy_old + residual * JustRelax2D.free_surface_pseudotime(ηdτ, 2.0, c_fs)
+        @test stokes.V.Vy[i + 1, j + 1] ≈ expected
+    end
+
     # ------------------------------------------------------------------ #
     # Fused DYREL kernels (2D). A tiny single-phase, viscoelastic setup
     # drives the fused strain-rate+RP, stress+τII-viscosity (nonlinear
@@ -185,9 +214,46 @@ end
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
             _di.center, _di.vertex,
+            0.0,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test Array(stokes.V.Vx) == Array(Vx_before)
         @test Array(stokes.V.Vy) == Array(Vy_before)
+
+        # The stabilized residual adds Vy*dt*∂y(ρg), using the same local
+        # density-gradient coefficient included in the DYREL diagonal.
+        ρg[2] .= PTArray(backend_JR)([3.0 - y for _ in 1:nx, y in 1:ny])
+        @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
+            stokes.R.Rx, stokes.R.Ry,
+            stokes.V.Vx, stokes.V.Vy,
+            dyrel.dVxdτ, dyrel.dVydτ,
+            stokes.P, θc,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy,
+            ρg...,
+            dyrel.Dx, dyrel.Dy,
+            dyrel.αVx, dyrel.αVy,
+            dyrel.βVx, dyrel.βVy,
+            dyrel.dτVx, dyrel.dτVy,
+            _di.center, _di.vertex,
+            0.0,
+        )
+        Ry_without_fs = copy(stokes.R.Ry)
+        @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
+            stokes.R.Rx, stokes.R.Ry,
+            stokes.V.Vx, stokes.V.Vy,
+            dyrel.dVxdτ, dyrel.dVydτ,
+            stokes.P, θc,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy,
+            ρg...,
+            dyrel.Dx, dyrel.Dy,
+            dyrel.αVx, dyrel.αVy,
+            dyrel.βVx, dyrel.βVy,
+            dyrel.dτVx, dyrel.dτVy,
+            _di.center, _di.vertex,
+            0.5,
+        )
+        ∂ρg∂y = -inv(grid.di.center[2])
+        expected_correction = Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]) .* (0.5 * ∂ρg∂y)
+        @test Array(stokes.R.Ry) .- Array(Ry_without_fs) ≈ expected_correction
     end
 end

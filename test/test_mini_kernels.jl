@@ -107,6 +107,11 @@ using JustRelax, JustRelax.JustRelax2D
 
     @test JustRelax2D._current(A3, i, j, k) == 22.0
 
+    @test JustRelax2D.free_surface_diagonal(3.0, 1.0, 2.0, 0.5) == 2.0
+    @test iszero(JustRelax2D.free_surface_diagonal(3.0, 1.0, 2.0, 0.0))
+    @test JustRelax2D.free_surface_pseudotime(0.5, 2.0, 3.0) ≈ 0.5 / 3.5
+    @test JustRelax2D.free_surface_pseudotime(0.5, 2.0, 0.0) ≈ 0.25
+
     v = collect(1.0:5.0)
     @test JustRelax2D.mysum(v, 2:4) == 9.0
     @test JustRelax2D.mysum(inv, v, 2:4) == 1.0833333333333333

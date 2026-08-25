@@ -569,3 +569,20 @@ end
         )
     end
 end
+
+@testset "getindex_NamedTuple" begin
+    # src/Utils.jl: sizes are compared per dimension. `min` on tuples is
+    # lexicographic, so a mixed-stagger args would otherwise infer a sz_min that is
+    # too large in one dimension and offset that dimension the wrong way.
+    getidx = JustRelax.JustRelax2D.getindex_NamedTuple
+    x_face = [10.0i + j for i in 1:5, j in 1:4]   # (nx+1, ny)
+    y_face = [10.0i + j for i in 1:4, j in 1:5]   # (nx, ny+1)
+
+    got = getidx((; x_face, y_face), 1, 1)
+    @test got.x_face == x_face[2, 1]
+    @test got.y_face == y_face[1, 2]
+
+    # an explicit grid size wins over anything inferred from args
+    ghosted = [10.0i + j for i in 1:6, j in 1:6]  # (nx+2, ny+2)
+    @test getidx((; ghosted), (4, 4), 1, 1).ghosted == ghosted[2, 2]
+end

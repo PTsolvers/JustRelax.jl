@@ -136,6 +136,7 @@ function _solve_DYREL!(
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
         compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+        free_surface_stress_bcs!(stokes, flow_bcs, dim)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)
         # update_halo!(stokes.τ.yy_v)
@@ -213,6 +214,7 @@ function _solve_DYREL!(
             else
                 update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
             end
+            free_surface_stress_bcs!(stokes, flow_bcs, dim)
 
             # Velocity residuals + damped pseudo-transient velocity update (fused; the small pressure
             # correction θc = γ_eff·RP + ΔPψ was assembled by the stress kernel above; P stays separate)
@@ -233,6 +235,9 @@ function _solve_DYREL!(
                 dt * free_surface,
             )
             flow_bcs!(stokes, flow_bcs)
+            free_surface_bcs!(
+                stokes, flow_bcs, stokes.viscosity.η_vep, grid.di.velocity..., dim
+            )
             update_halo!(@velocity(stokes)...)
 
             # Residual check

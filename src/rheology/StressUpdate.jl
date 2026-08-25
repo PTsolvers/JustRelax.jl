@@ -51,7 +51,7 @@ function _compute_τ_nonlinear!(
     correct_stress!(τ, τij .+ dτij, I...)
 
     τII[I...] = τII_ij = second_invariant((τij .+ dτij)...)
-    η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij...))
+    η_vep[I...] = effective_viscosity(τII_ij, second_invariant(εij...), ηij)
 
     return nothing
 end
@@ -548,3 +548,4 @@ For composite rheologies without a plastic element, all three return values are 
     compute_plastic_gradients_phase(rheology, (; kwargs...), ratio, τij)
 @inline compute_plastic_gradients_phase(rheology, ratio::SVector{N}, τij; kwargs...) where {N} =
     compute_plastic_gradients_phase(rheology, (; kwargs...), ratio, τij)
+@inline effective_viscosity(τII, εII, η) = iszero(εII) ? η : τII * 0.5 * inv(εII)

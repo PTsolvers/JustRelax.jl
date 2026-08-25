@@ -151,7 +151,7 @@ function main(igg, nx, ny)
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = false),
         no_slip = (left = false, right = false, top = false, bot = true),
-        free_surface = false,
+        free_surface = true,
     )
 
     Vx_v = @zeros(ni .+ 1...)
@@ -165,7 +165,7 @@ function main(igg, nx, ny)
     dt = 10.0e3 * (3600 * 24 * 365.25)
     dt_max = 10.0e3 * (3600 * 24 * 365.25)
 
-    while it < 1#000
+    while it < 1000
 
         # Use one physical timestep for stabilization, advection, and elapsed time.
         dt = compute_dt(stokes, di, dt_max)

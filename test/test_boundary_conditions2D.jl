@@ -175,6 +175,29 @@ end
                 @test @views stokes.V.Vy[end, :] == -stokes.V.Vy[end - 1, :]
                 @test @views stokes.V.Vx[:, 1] == -stokes.V.Vx[:, 2]
                 @test @views stokes.V.Vx[:, end] == -stokes.V.Vx[:, end - 1]
+
+                # traction-free top boundary on a non-unit grid
+                ni = (4, 3)
+                dx, dy = 2.0, 3.0
+                stokes = StokesArrays(backend, ni)
+                ηeff = fill(5.0, size(stokes.P))
+                stokes.P[:, end] .= 10.0
+                stokes.V.Vy[:, end - 1] .= 7.0
+                for i in axes(stokes.V.Vx, 1)
+                    stokes.V.Vx[i, end - 1] = 4.0 * (i - 1) * dx
+                end
+                flow_bcs = VelocityBoundaryConditions(;
+                    no_slip = (left = false, right = false, top = false, bot = false),
+                    free_slip = (left = false, right = false, top = true, bot = false),
+                    free_surface = true,
+                )
+                JustRelax2D.free_surface_stress_bcs!(stokes, flow_bcs, Val(2))
+                JustRelax2D.free_surface_bcs!(
+                    stokes, flow_bcs, ηeff, (dx, dy), (dx, dy), Val(2)
+                )
+                @test stokes.τ.yy[:, end] == stokes.P[:, end]
+                @test stokes.V.Vy[2:(end - 1), end] ≈
+                    fill(7.0 + (4.0 / 2 + 3 * 10.0 / (4 * 5.0)) * dy, ni[1])
             else
                 @test true === true
             end

@@ -43,10 +43,11 @@ end
 
 Initialize a pure-shear background velocity field on the staggered grids.
 `xci` contains cell-center coordinates and `xvi` contains velocity-grid
-coordinates. In 2D, the kernels set
-`Vx = εbg*x` and `Vy = -εbg*y`; in 3D they additionally set
-`Vz = -εbg*z`. Ghost layers are left untouched so that subsequent flow
-boundary-condition and halo updates can set them consistently.
+coordinates; each component is built from the vertex coordinates of its own
+direction. In 2D the kernels set `Vx = εbg*x` and `Vy = -εbg*y`. In 3D they set
+`Vx = εbg*x`, `Vy = εbg*y`, and `Vz = -εbg*z`. Ghost layers are left untouched
+so that subsequent flow boundary-condition and halo updates can set them
+consistently.
 
 All field updates are performed by ParallelStencil kernels on the backend of
 `stokes`. The five-argument form remains available for compatibility; its

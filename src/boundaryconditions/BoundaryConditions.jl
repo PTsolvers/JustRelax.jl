@@ -61,10 +61,16 @@ end
     flow_bcs!(stokes, bcs::DisplacementBoundaryConditions)
     flow_bcs!(bcs, Vx, Vy[, Vz])
 
-Apply no-slip and free-slip flow boundary conditions to staggered velocity or
-displacement arrays. The array form accepts the boundary-condition object first;
-the `stokes` form accepts it second. Boundary updates are executed through
-ParallelStencil kernels on the selected backend.
+Apply no-slip, free-slip, and periodic flow boundary conditions to staggered
+velocity or displacement arrays. The array form accepts the boundary-condition
+object first; the `stokes` form accepts it second. Boundary updates are executed
+through ParallelStencil kernels on the selected backend.
+
+The three conditions are applied in the order no-slip, free-slip, periodic, so a
+face carrying more than one of them would keep only the last. The constructors
+reject such combinations. Faces where all three are `false` are left untouched.
+Periodic conditions match normal components at paired boundary planes and copy
+opposite interior values into tangential ghost planes.
 """
 flow_bcs!(stokes, bcs) = flow_bcs!(backend(stokes), stokes, bcs)
 

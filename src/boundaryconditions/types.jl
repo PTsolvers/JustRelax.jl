@@ -27,8 +27,10 @@ end
 Create thermal boundary conditions for 2D or 3D temperature fields.
 
 Boundary tuples use `left`, `right`, `top`, and `bot` in 2D. In 3D they also use
-`front` and `back`. Omitted faces are filled with `false`, and the dimensionality is
-inferred from the longest boundary tuple that is passed.
+`front` and `back`. Omitted faces are filled with `false`, and the dimensionality
+is inferred from the longest boundary tuple that is passed: pass a complete
+six-face tuple for a 3D set, since the defaults are four-face 2D tuples. Tuples
+with any other number of faces are rejected.
 
 The face values have the following meaning:
 
@@ -106,13 +108,16 @@ struct TemperatureBoundaryConditions{T1, T2, T3, T4, D, nD} <: AbstractBoundaryC
 end
 
 """
-    DisplacementBoundaryConditions(; no_slip, free_slip, free_surface)
+    DisplacementBoundaryConditions(; no_slip, free_slip, periodic, free_surface=false)
 
 Define 2D or 3D boundary conditions for the displacement field. Each face is
 controlled independently with a named tuple. Use exactly four faces in 2D
-(`left`, `right`, `top`, `bot`) or six in 3D (also `front`, `back`). A face
-cannot be both `no_slip` and `free_slip`; a face set to `false` is left for
-the caller to prescribe explicitly.
+(`left`, `right`, `top`, `bot`) or six in 3D (also `front`, `back`).
+
+A face can carry at most one of `no_slip`, `free_slip`, and `periodic`; a face
+where all three are `false` is left for the caller to prescribe explicitly.
+Periodic faces must be enabled in pairs (`left`/`right`, `front`/`back`, or
+`bot`/`top`), and a periodic top face is incompatible with `free_surface=true`.
 """
 struct DisplacementBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
     no_slip::T
@@ -133,13 +138,18 @@ struct DisplacementBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
         return new{T, nD}(no_slip, free_slip, periodic, free_surface)
     end
 end
+
 """
-    VelocityBoundaryConditions(; no_slip, free_slip, free_surface)
+    VelocityBoundaryConditions(; no_slip, free_slip, periodic, free_surface=false)
 
 Define 2D or 3D boundary conditions for the velocity field. Face names are
 `left`, `right`, `top`, and `bot` in 2D, with `front` and `back` added in 3D.
-`no_slip` and `free_slip` are mutually exclusive on each face. Faces where
-both are `false` are not modified by `flow_bcs!`.
+
+`no_slip`, `free_slip`, and `periodic` are mutually exclusive on each face.
+Faces where all three are `false` are not modified by `flow_bcs!`, which is how
+a prescribed velocity field is imposed. Periodic faces must be enabled in pairs
+(`left`/`right`, `front`/`back`, or `bot`/`top`), and a periodic top face is
+incompatible with `free_surface=true`.
 """
 struct VelocityBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
     no_slip::T

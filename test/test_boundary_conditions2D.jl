@@ -64,6 +64,21 @@ end
                 constant_flux = (left = false, right = 1.0, top = false, bot = false),
                 periodic = (left = true, right = true, top = false, bot = false),
             )
+
+            # only 4-face (2D) and 6-face (3D) boundary tuples are accepted
+            @test_throws "must use 4 (2D) or 6 (3D) faces" TemperatureBoundaryConditions(;
+                no_flux = (left = true, right = true, top = false, bot = false, front = false),
+            )
+            @test_throws "must use 4 (2D) or 6 (3D) faces" TemperatureBoundaryConditions(;
+                no_flux = inactive,
+                constant_value = (
+                    left = false, right = false, front = false, back = false,
+                    top = 273.0, bot = 1573.0, extra = false,
+                ),
+            )
+            @test typeof(
+                TemperatureBoundaryConditions(; no_flux = inactive)
+            ).parameters[end] == 2
         end
 
         @testset "VelocityBoundaryConditions" begin
@@ -279,6 +294,188 @@ end
             end
         end
 
+        @testset "no-slip acts only on the selected faces" begin
+            if backend === CPUBackend
+                n = 5
+                inactive = (left = false, right = false, top = false, bot = false)
+
+                Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(;
+                        no_slip = (left = true, right = false, top = false, bot = false),
+                        free_slip = inactive,
+                    ), Vx, Vy,
+                )
+                @test all(iszero, Vx[1, :])
+                @test @views Vy[1, :] == -Vy0[2, :]
+                @test @views Vx[2:end, :] == Vx0[2:end, :]
+                @test @views Vy[2:end, :] == Vy0[2:end, :]
+
+                Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(;
+                        no_slip = (left = false, right = true, top = false, bot = false),
+                        free_slip = inactive,
+                    ), Vx, Vy,
+                )
+                @test all(iszero, Vx[end, :])
+                @test @views Vy[end, :] == -Vy0[end - 1, :]
+                @test @views Vx[1:(end - 1), :] == Vx0[1:(end - 1), :]
+                @test @views Vy[1:(end - 1), :] == Vy0[1:(end - 1), :]
+
+                Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(;
+                        no_slip = (left = false, right = false, top = false, bot = true),
+                        free_slip = inactive,
+                    ), Vx, Vy,
+                )
+                @test all(iszero, Vy[:, 1])
+                @test @views Vx[:, 1] == -Vx0[:, 2]
+                @test @views Vx[:, 2:end] == Vx0[:, 2:end]
+                @test @views Vy[:, 2:end] == Vy0[:, 2:end]
+
+                Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(;
+                        no_slip = (left = false, right = false, top = true, bot = false),
+                        free_slip = inactive,
+                    ), Vx, Vy,
+                )
+                @test all(iszero, Vy[:, end])
+                @test @views Vx[:, end] == -Vx0[:, end - 1]
+                @test @views Vx[:, 1:(end - 1)] == Vx0[:, 1:(end - 1)]
+                @test @views Vy[:, 1:(end - 1)] == Vy0[:, 1:(end - 1)]
+            else
+                @test true === true
+            end
+        end
+
+        @testset "free-slip acts only on the selected faces" begin
+            if backend === CPUBackend
+                n = 5
+                inactive = (left = false, right = false, top = false, bot = false)
+
+                Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(;
+                        no_slip = inactive,
+                        free_slip = (left = true, right = false, top = false, bot = false),
+                    ), Vx, Vy,
+                )
+                @test @views Vy[1, :] == Vy0[2, :]
+                @test @views Vy[2:end, :] == Vy0[2:end, :]
+                @test Vx == Vx0
+
+                Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(;
+                        no_slip = inactive,
+                        free_slip = (left = false, right = false, top = false, bot = true),
+                    ), Vx, Vy,
+                )
+                @test @views Vx[:, 1] == Vx0[:, 2]
+                @test @views Vx[:, 2:end] == Vx0[:, 2:end]
+                @test Vy == Vy0
+
+                Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(;
+                        no_slip = inactive,
+                        free_slip = (left = false, right = false, top = true, bot = false),
+                    ), Vx, Vy,
+                )
+                @test @views Vx[:, end] == Vx0[:, end - 1]
+                @test @views Vx[:, 1:(end - 1)] == Vx0[:, 1:(end - 1)]
+                @test Vy == Vy0
+            else
+                @test true === true
+            end
+        end
+
+        @testset "flow boundary conditions on a non-square grid" begin
+            if backend === CPUBackend
+                nx, ny = 4, 9
+                all_on = (left = true, right = true, top = true, bot = true)
+                inactive = (left = false, right = false, top = false, bot = false)
+
+                Vx, Vy = PTArray(backend)(rand(nx + 1, ny + 2)), PTArray(backend)(rand(nx + 2, ny + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(; no_slip = all_on, free_slip = inactive),
+                    Vx, Vy,
+                )
+                @test all(iszero, Vx[1, :])
+                @test all(iszero, Vx[end, :])
+                @test all(iszero, Vy[:, 1])
+                @test all(iszero, Vy[:, end])
+                # corners are written twice, so compare away from them
+                @test @views Vy[1, 2:(end - 1)] == -Vy0[2, 2:(end - 1)]
+                @test @views Vy[end, 2:(end - 1)] == -Vy0[end - 1, 2:(end - 1)]
+                @test @views Vx[2:(end - 1), 1] == -Vx0[2:(end - 1), 2]
+                @test @views Vx[2:(end - 1), end] == -Vx0[2:(end - 1), end - 1]
+
+                Vx, Vy = PTArray(backend)(rand(nx + 1, ny + 2)), PTArray(backend)(rand(nx + 2, ny + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(; no_slip = inactive, free_slip = all_on),
+                    Vx, Vy,
+                )
+                @test @views Vx[:, 1] == Vx0[:, 2]
+                @test @views Vx[:, end] == Vx0[:, end - 1]
+                @test @views Vy[1, :] == Vy0[2, :]
+                @test @views Vy[end, :] == Vy0[end - 1, :]
+            else
+                @test true === true
+            end
+        end
+
+        @testset "mixed no-slip and free-slip faces" begin
+            if backend === CPUBackend
+                n = 5
+                Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(;
+                        no_slip = (left = true, right = false, top = false, bot = false),
+                        free_slip = (left = false, right = true, top = true, bot = true),
+                    ), Vx, Vy,
+                )
+                # no-slip is applied before free-slip, so the left face survives
+                @test all(iszero, Vx[1, :])
+                @test @views Vy[1, :] == -Vy0[2, :]
+                @test @views Vy[end, :] == Vy0[end - 1, :]
+                @test @views Vx[:, 1] == Vx[:, 2]
+                @test @views Vx[:, end] == Vx[:, end - 1]
+            else
+                @test true === true
+            end
+        end
+
+        @testset "inactive faces leave the arrays untouched" begin
+            if backend === CPUBackend
+                n = 5
+                inactive = (left = false, right = false, top = false, bot = false)
+                Vx, Vy = PTArray(backend)(rand(n + 1, n + 2)), PTArray(backend)(rand(n + 2, n + 1))
+                Vx0, Vy0 = copy(Vx), copy(Vy)
+                flow_bcs!(
+                    VelocityBoundaryConditions(; no_slip = inactive, free_slip = inactive),
+                    Vx, Vy,
+                )
+                @test Vx == Vx0
+                @test Vy == Vy0
+            else
+                @test true === true
+            end
+        end
+
         @testset "DirichletBoundaryCondition" begin
             ni = 10, 10
             A = rand(ni...)
@@ -405,6 +602,58 @@ end
 
             @test Array(@view stokes.V.Vx[:, 2:(end - 1)]) == [2.0 * y for _ in xvi[1], y in xci[2]]
             @test all(iszero, Array(@view stokes.V.Vy[2:(end - 1), :]))
+        end
+
+        @testset "background shear fields leave ghost layers untouched" begin
+            xci = (LinRange(0.5, 2.5, 3), LinRange(0.5, 3.5, 4))
+            xvi = (LinRange(0.0, 3.0, 4), LinRange(0.0, 4.0, 5))
+
+            for bc! in (pureshear_bc!, simpleshear_bc!)
+                stokes = StokesArrays(backend, (3, 4))
+                stokes.V.Vx .= NaN
+                stokes.V.Vy .= NaN
+                bc!(stokes, xci, xvi, 2.0)
+
+                Vx, Vy = Array(stokes.V.Vx), Array(stokes.V.Vy)
+                @test all(isnan, @view Vx[:, 1])
+                @test all(isnan, @view Vx[:, end])
+                @test all(isnan, @view Vy[1, :])
+                @test all(isnan, @view Vy[end, :])
+                @test !any(isnan, @view Vx[:, 2:(end - 1)])
+                @test !any(isnan, @view Vy[2:(end - 1), :])
+            end
+        end
+
+        @testset "background shear fields accept the legacy backend argument" begin
+            xci = (LinRange(0.5, 2.5, 3), LinRange(0.5, 3.5, 4))
+            xvi = (LinRange(0.0, 3.0, 4), LinRange(0.0, 4.0, 5))
+
+            for bc! in (pureshear_bc!, simpleshear_bc!)
+                stokes4 = StokesArrays(backend, (3, 4))
+                stokes5 = StokesArrays(backend, (3, 4))
+                bc!(stokes4, xci, xvi, 2.0)
+                bc!(stokes5, xci, xvi, 2.0, backend)
+
+                @test Array(stokes4.V.Vx) == Array(stokes5.V.Vx)
+                @test Array(stokes4.V.Vy) == Array(stokes5.V.Vy)
+            end
+        end
+
+        @testset "background shear fields scale linearly with the imposed rate" begin
+            xci = (LinRange(0.5, 2.5, 3), LinRange(0.5, 3.5, 4))
+            xvi = (LinRange(0.0, 3.0, 4), LinRange(0.0, 4.0, 5))
+
+            for bc! in (pureshear_bc!, simpleshear_bc!)
+                unit = StokesArrays(backend, (3, 4))
+                scaled = StokesArrays(backend, (3, 4))
+                bc!(unit, xci, xvi, 1.0)
+                bc!(scaled, xci, xvi, 3.0)
+
+                @test @views Array(scaled.V.Vx)[:, 2:(end - 1)] ≈
+                    3 .* Array(unit.V.Vx)[:, 2:(end - 1)]
+                @test @views Array(scaled.V.Vy)[2:(end - 1), :] ≈
+                    3 .* Array(unit.V.Vy)[2:(end - 1), :]
+            end
         end
     end
 end

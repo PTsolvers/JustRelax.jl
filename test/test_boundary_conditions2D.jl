@@ -6,10 +6,12 @@ end
 
 using JustRelax, JustRelax.JustRelax2D
 using Test, Suppressor
+using ParallelStencil
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 2)
     CUDABackend
 else
     CPUBackend
@@ -397,6 +399,16 @@ end
             else
                 @test true === true
             end
+        end
+
+        @testset "simple shear boundary condition" begin
+            stokes = StokesArrays(backend, (3, 4))
+            xci = (collect(1.0:3.0), collect(1.0:4.0))
+            xvi = (collect(1.0:4.0), collect(1.0:5.0))
+            simpleshear_bc!(stokes, xci, xvi, 2.0)
+
+            @test Array(@view stokes.V.Vx[:, 2:(end - 1)]) == [2.0 * y for _ in xvi[1], y in xci[2]]
+            @test all(iszero, Array(@view stokes.V.Vy[2:(end - 1), :]))
         end
     end
 end

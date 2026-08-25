@@ -5,6 +5,7 @@ include("periodic.jl")
 include("free_surface.jl")
 include("no_slip.jl")
 include("pure_shear.jl")
+include("simple_shear.jl")
 
 @inline bc_index(x::T) where {T <: AbstractArray{_T, 2} where {_T}} = max(size(x)...)
 @inline bc_index(x::T) where {T <: AbstractArray{_T, 3} where {_T}} =

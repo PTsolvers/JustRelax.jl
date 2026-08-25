@@ -23,12 +23,17 @@ end
     return nothing
 end
 
-@inline _pureshear_coordinate(::Type{CPUBackend}, x) = x
-@inline _pureshear_coordinate(backend, x) = PTArray(backend)(x)
-@inline _pureshear_coordinate(::Array, x) = x
-function _pureshear_coordinate(A::AbstractArray, x)
+"""
+    _bc_coordinate(A, x)
+
+Materialize coordinate vector `x` on the same device as array `A`, so that
+background-field kernels can index it. `collect` is applied first because a
+lazy range cannot be transferred to a device array directly.
+"""
+@inline _bc_coordinate(::Array, x) = collect(x)
+function _bc_coordinate(A::AbstractArray, x)
     x_backend = similar(A, eltype(x), (length(x),))
-    copyto!(x_backend, x)
+    copyto!(x_backend, collect(x))
     return x_backend
 end
 
@@ -43,19 +48,27 @@ coordinates. In 2D, the kernels set
 `Vz = -εbg*z`. Ghost layers are left untouched so that subsequent flow
 boundary-condition and halo updates can set them consistently.
 
-The preferred form infers the coordinate-array backend from `stokes`. The
-five-argument form remains available for compatibility and explicitly selects
-the backend. All field updates are performed by ParallelStencil kernels.
+All field updates are performed by ParallelStencil kernels on the backend of
+`stokes`. The five-argument form remains available for compatibility; its
+`backend` argument is redundant, as the backend is inferred from `stokes`.
 """
-function pureshear_bc!(stokes::JustRelax.StokesArrays, xci::NTuple{N}, xvi::NTuple{N}, εbg) where {N}
-    return _pureshear_bc!(stokes, xci, xvi, εbg, stokes.V.Vx)
+function pureshear_bc!(stokes::JustRelax.StokesArrays, xci, xvi, εbg)
+    return pureshear_bc!(backend(stokes), stokes, xci, xvi, εbg)
 end
 
-function pureshear_bc!(
-        stokes::JustRelax.StokesArrays, xci::NTuple{2}, xvi::NTuple{2}, εbg, backend
+function pureshear_bc!(stokes::JustRelax.StokesArrays, xci, xvi, εbg, backend)
+    return pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function pureshear_bc!(::CPUBackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg)
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function _pureshear_bc!(
+        stokes::JustRelax.StokesArrays, xci::NTuple{2}, xvi::NTuple{2}, εbg
     )
-    xv, yv = (_pureshear_coordinate(backend, x) for x in xvi)
     Vx, Vy = stokes.V.Vx, stokes.V.Vy
+    xv, yv = ntuple(i -> _bc_coordinate(Vx, xvi[i]), Val(2))
 
     @parallel (@idx (size(Vx, 1), size(Vx, 2) - 2)) _pureshear_x_2d!(Vx, xv, εbg)
     @parallel (@idx (size(Vy, 1) - 2, size(Vy, 2))) _pureshear_y_2d!(Vy, yv, εbg)
@@ -63,33 +76,10 @@ function pureshear_bc!(
 end
 
 function _pureshear_bc!(
-        stokes::JustRelax.StokesArrays, xci::NTuple{2}, xvi::NTuple{2}, εbg, coordinate_array
+        stokes::JustRelax.StokesArrays, xci::NTuple{3}, xvi::NTuple{3}, εbg
     )
-    xv, yv = (_pureshear_coordinate(coordinate_array, x) for x in xvi)
-    Vx, Vy = stokes.V.Vx, stokes.V.Vy
-
-    @parallel (@idx (size(Vx, 1), size(Vx, 2) - 2)) _pureshear_x_2d!(Vx, xv, εbg)
-    @parallel (@idx (size(Vy, 1) - 2, size(Vy, 2))) _pureshear_y_2d!(Vy, yv, εbg)
-    return nothing
-end
-
-function pureshear_bc!(
-        stokes::JustRelax.StokesArrays, xci::NTuple{3}, xvi::NTuple{3}, εbg, backend
-    )
-    xv, yv, zv = (_pureshear_coordinate(backend, x) for x in xvi)
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
-
-    @parallel (@idx (size(Vx, 1), size(Vx, 2) - 2, size(Vx, 3) - 2)) _pureshear_x_3d!(Vx, xv, εbg)
-    @parallel (@idx (size(Vy, 1) - 2, size(Vy, 2), size(Vy, 3) - 2)) _pureshear_y_3d!(Vy, yv, εbg)
-    @parallel (@idx (size(Vz, 1) - 2, size(Vz, 2) - 2, size(Vz, 3))) _pureshear_z_3d!(Vz, zv, εbg)
-    return nothing
-end
-
-function _pureshear_bc!(
-        stokes::JustRelax.StokesArrays, xci::NTuple{3}, xvi::NTuple{3}, εbg, coordinate_array
-    )
-    xv, yv, zv = (_pureshear_coordinate(coordinate_array, x) for x in xvi)
-    Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
+    xv, yv, zv = ntuple(i -> _bc_coordinate(Vx, xvi[i]), Val(3))
 
     @parallel (@idx (size(Vx, 1), size(Vx, 2) - 2, size(Vx, 3) - 2)) _pureshear_x_3d!(Vx, xv, εbg)
     @parallel (@idx (size(Vy, 1) - 2, size(Vy, 2), size(Vy, 3) - 2)) _pureshear_y_3d!(Vy, yv, εbg)

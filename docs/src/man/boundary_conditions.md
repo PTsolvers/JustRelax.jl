@@ -65,8 +65,9 @@ pureshear_bc!(stokes, xci, xvi, εbg)
 ```
 
 In 2D it sets `Vx = εbg*x` and `Vy = -εbg*y`; in 3D it additionally sets
-`Vz = -εbg*z`. The backend is inferred from `stokes`. Only the staggered interior ranges are initialized; ghost
-layers remain available for the configured boundary conditions.
+`Vz = -εbg*z`. The backend is inferred from `stokes`. Only the staggered
+interior ranges are initialized; ghost layers remain available for the
+configured boundary conditions.
 
 For an xy simple-shear background field, use:
 

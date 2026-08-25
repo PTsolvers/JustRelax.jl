@@ -31,16 +31,28 @@ Initialize an xy simple-shear background velocity field on the staggered
 grids. The imposed field is `Vx = γbg * y`; the other velocity components are
 set to zero. `xci` contains cell-center coordinates and `xvi` contains
 velocity-grid coordinates. Ghost layers are left untouched.
+
+All field updates are performed by ParallelStencil kernels on the backend of
+`stokes`. The five-argument form remains available for compatibility; its
+`backend` argument is redundant, as the backend is inferred from `stokes`.
 """
-function simpleshear_bc!(stokes::JustRelax.StokesArrays, xci::NTuple{N}, xvi::NTuple{N}, γbg) where {N}
-    return _simpleshear_bc!(stokes, xci, xvi, γbg, stokes.V.Vx)
+function simpleshear_bc!(stokes::JustRelax.StokesArrays, xci, xvi, γbg)
+    return simpleshear_bc!(backend(stokes), stokes, xci, xvi, γbg)
 end
 
-function simpleshear_bc!(
-        stokes::JustRelax.StokesArrays, xci::NTuple{2}, xvi::NTuple{2}, γbg, backend
+function simpleshear_bc!(stokes::JustRelax.StokesArrays, xci, xvi, γbg, backend)
+    return simpleshear_bc!(stokes, xci, xvi, γbg)
+end
+
+function simpleshear_bc!(::CPUBackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg)
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
+end
+
+function _simpleshear_bc!(
+        stokes::JustRelax.StokesArrays, xci::NTuple{2}, xvi::NTuple{2}, γbg
     )
-    yc = _pureshear_coordinate(backend, xci[2])
     Vx, Vy = stokes.V.Vx, stokes.V.Vy
+    yc = _bc_coordinate(Vx, xci[2])
 
     @parallel (@idx (size(Vx, 1), size(Vx, 2) - 2)) _simpleshear_x_2d!(Vx, yc, γbg)
     @parallel (@idx (size(Vy, 1) - 2, size(Vy, 2))) _simpleshear_y_2d!(Vy)
@@ -48,25 +60,13 @@ function simpleshear_bc!(
 end
 
 function _simpleshear_bc!(
-        stokes::JustRelax.StokesArrays, xci::NTuple{2}, xvi::NTuple{2}, γbg, coordinate_array
+        stokes::JustRelax.StokesArrays, xci::NTuple{3}, xvi::NTuple{3}, γbg
     )
-    return simpleshear_bc!(stokes, xci, xvi, γbg, coordinate_array)
-end
-
-function simpleshear_bc!(
-        stokes::JustRelax.StokesArrays, xci::NTuple{3}, xvi::NTuple{3}, γbg, backend
-    )
-    yc = _pureshear_coordinate(backend, xci[2])
     Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
+    yc = _bc_coordinate(Vx, xci[2])
 
     @parallel (@idx (size(Vx, 1), size(Vx, 2) - 2, size(Vx, 3) - 2)) _simpleshear_x_3d!(Vx, yc, γbg)
     @parallel (@idx (size(Vy, 1) - 2, size(Vy, 2), size(Vy, 3) - 2)) _simpleshear_y_3d!(Vy)
     @parallel (@idx (size(Vz, 1) - 2, size(Vz, 2) - 2, size(Vz, 3))) _simpleshear_z_3d!(Vz)
     return nothing
-end
-
-function _simpleshear_bc!(
-        stokes::JustRelax.StokesArrays, xci::NTuple{3}, xvi::NTuple{3}, γbg, coordinate_array
-    )
-    return simpleshear_bc!(stokes, xci, xvi, γbg, coordinate_array)
 end

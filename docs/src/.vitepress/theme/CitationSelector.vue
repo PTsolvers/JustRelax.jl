@@ -25,9 +25,24 @@ type ZenodoRecord = {
   }
 }
 
+type ZenodoRelease = {
+  id: number
+  links: { self_doi: string }
+  metadata: PackageMetadata & {
+    publication_date: string
+    version?: string
+  }
+}
+
+type ZenodoSearchResponse = {
+  hits: { hits: ZenodoRelease[] }
+}
+
 const selected = ref<string[]>([])
 const copyMessage = ref('')
 const metadataError = ref('')
+const justRelaxVersion = ref('')
+const justRelaxVersions = ref<ZenodoRelease[]>([])
 
 const citations = ref<Citation[]>([
   {
@@ -135,26 +150,85 @@ function updateZenodoCitation(
 }`
 }
 
+function updateJustRelaxCitation(release: ZenodoRelease) {
+  const citation = citations.value.find(citation => citation.id === 'justrelax-zenodo')!
+  const authors = release.metadata.creators.map(creator => creator.name)
+  const leadAuthor = authors[0].split(',')[0]
+  const shortAuthors = authors.length === 1 ? leadAuthor : `${leadAuthor} et al.`
+  const year = release.metadata.publication_date.slice(0, 4)
+  const version = release.metadata.version
+
+  citation.doi = release.links.self_doi
+  citation.description = 'Always cite the archived version used for the work.'
+  citation.reference = `${shortAuthors} (${year}). ${release.metadata.title}${version ? ` (${version})` : ''}. Zenodo.`
+  citation.bibtex = `@software{justrelax${year},
+  doi = {${citation.doi.replace('https://doi.org/', '')}},
+  url = {${citation.doi}},
+  author = {${authors.join(' and ')}},
+  title = {${escapeBibtex(release.metadata.title)}},
+  version = {${escapeBibtex(version ?? '')}},
+  publisher = {Zenodo},
+  year = {${year}}
+}`
+}
+
+function selectJustRelaxVersion() {
+  const release = justRelaxVersions.value.find(
+    release => String(release.id) === justRelaxVersion.value,
+  )
+  if (release) updateJustRelaxCitation(release)
+}
+
+async function fetchJustRelaxVersions() {
+  const query = new URLSearchParams({
+    q: 'metadata.title:"JustRelax.jl"',
+    all_versions: 'true',
+    size: '25',
+  })
+  const response = await fetch(`https://zenodo.org/api/records?${query}`)
+  if (!response.ok) throw new Error('Unable to retrieve JustRelax release metadata.')
+
+  const archiveVersions = ((await response.json()) as ZenodoSearchResponse).hits.hits
+    .filter(release => release.metadata.title.startsWith('JustRelax.jl'))
+    .sort((a, b) => b.metadata.publication_date.localeCompare(a.metadata.publication_date))
+  const seenVersions = new Set<string>()
+  justRelaxVersions.value = archiveVersions.filter(release => {
+    const version = release.metadata.version?.replace(/^v/, '')
+    if (!version || seenVersions.has(version)) return false
+    seenVersions.add(version)
+    return true
+  })
+  if (!justRelaxVersions.value.length) {
+    throw new Error('No JustRelax releases were returned by Zenodo.')
+  }
+  justRelaxVersion.value = String(justRelaxVersions.value[0].id)
+  selectJustRelaxVersion()
+}
+
 onMounted(async () => {
   try {
     await Promise.all(
-      citations.value
-        .filter(citation => citation.metadataURL && citation.zenodoRecord)
-        .map(async citation => {
-          const [metadataResponse, recordResponse] = await Promise.all([
-            fetch(citation.metadataURL!),
-            fetch(`https://zenodo.org/api/records/${citation.zenodoRecord}`),
-          ])
-          if (!metadataResponse.ok || !recordResponse.ok) {
-            throw new Error(`Unable to retrieve citation metadata for ${citation.label}`)
-          }
-          updateZenodoCitation(
-            citation,
-            (await metadataResponse.json()) as PackageMetadata,
-            (await recordResponse.json()) as ZenodoRecord,
-          )
-        }),
+      [
+        fetchJustRelaxVersions(),
+        ...citations.value
+          .filter(citation => citation.metadataURL && citation.zenodoRecord)
+          .map(async citation => {
+            const [metadataResponse, recordResponse] = await Promise.all([
+              fetch(citation.metadataURL!),
+              fetch(`https://zenodo.org/api/records/${citation.zenodoRecord}`),
+            ])
+            if (!metadataResponse.ok || !recordResponse.ok) {
+              throw new Error(`Unable to retrieve citation metadata for ${citation.label}`)
+            }
+            updateZenodoCitation(
+              citation,
+              (await metadataResponse.json()) as PackageMetadata,
+              (await recordResponse.json()) as ZenodoRecord,
+            )
+          }),
+      ],
     )
+    selectJustRelaxVersion()
   } catch {
     metadataError.value = 'Unable to retrieve the current Zenodo citation metadata.'
   }
@@ -190,6 +264,16 @@ async function copyBibtex() {
       {{ metadataError }}
     </p>
 
+    <label class="citation-version-picker">
+      <span><strong>JustRelax.jl version</strong></span>
+      <select v-model="justRelaxVersion" :disabled="!justRelaxVersions.length" @change="selectJustRelaxVersion">
+        <option v-if="!justRelaxVersions.length" value="">Loading releases…</option>
+        <option v-for="release in justRelaxVersions" :key="release.id" :value="String(release.id)">
+          {{ release.metadata.version }}
+        </option>
+      </select>
+    </label>
+
     <fieldset>
       <legend>Packages used</legend>
       <label v-for="citation in citations" :key="citation.id" class="citation-option">
@@ -223,9 +307,9 @@ async function copyBibtex() {
     <pre><code>{{ bibtex }}</code></pre>
 
     <p class="citation-version-note">
-      JustPIC.jl and GeoParams.jl use their permanent Zenodo DOIs. Their
-      authors and title come from the packages' `.zenodo.json` files; their
-      year and version come from the linked Zenodo records.
+      The selector lists only Zenodo-backed JustRelax.jl releases. JustPIC.jl and
+      GeoParams.jl use permanent Zenodo DOIs; their authors and title come from
+      the packages' `.zenodo.json` files, and their year/version come from Zenodo.
     </p>
   </section>
 </template>
@@ -258,6 +342,22 @@ async function copyBibtex() {
 .citation-option-description {
   display: block;
   color: var(--vp-c-text-2);
+}
+
+.citation-version-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin: 1.5rem 0;
+}
+
+.citation-version-picker select {
+  padding: 0.4rem 0.6rem;
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 0.25rem;
 }
 
 .citation-bibtex-heading {

@@ -2,9 +2,18 @@
 
 # backend trait
 """
-    solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs)
+    solve_VariationalStokes!(stokes::StokesArrays, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ::RockRatio, rheology, args, dt, igg; kwargs...)
 
-Stokes solver entry point for variational Stokes solvers. This function dispatches to the appropriate implementation based on the arguments given in the function call.
+Solve the 2D viscoelastoplastic Stokes equations to pseudo-transient convergence using the
+variational (ghost-node-free) formulation, updating `stokes` in place for one physical
+time step `dt`. Cells are weighted by the rock ratio `ϕ` (see [`RockRatio`](@ref)), so
+partially- or fully-air/sticky-air cells contribute less (or not at all) to the momentum
+balance. `grid` may be replaced by the grid spacing `di` alone.
+
+`rheology` is one `GeoParams.MaterialParams` per phase; `args` carries auxiliary fields
+(e.g. temperature `T`, pressure `P`). Keyword tolerances, iteration limits, and relaxation
+factors default as in `_solve_VS!`. Dispatches on the CPU/CUDA/AMDGPU backend selected by
+`stokes`.
 """
 function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs)
     out = solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs)
@@ -12,11 +21,6 @@ function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwarg
 end
 
 # entry point for extensions
-"""
-    solve_VariationalStokes!(backend::BackendTrait, stokes::JustRelax.StokesArrays, args...; kwargs)
-
-Stokes solver entry point for variational Stokes solvers. This function dispatches to the appropriate implementation based on the backend provided in the function call.
-"""
 function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
     return _solve_VS!(stokes, args...; kwargs...)
 end

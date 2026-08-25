@@ -199,7 +199,20 @@ end
 @inline dims(stokes::StokesArrays) = size(stokes.P)
 @inline static_dims(::StokesArrays{Velocity{A}}) where {A <: AbstractArray{T, N}} where {T, N} = Val(N)
 
-## PTStokesCoeffs type
+"""
+    PTStokesCoeffs(li, di; ϵ_rel=1e-6, ϵ_abs=1e-12, Re=3π, CFL=0.9/√2.1, r=0.7)
+
+Pseudo-transient damping coefficients for the Stokes solver, derived from the domain size
+`li`, grid spacing `di`, Reynolds number `Re` and bulk-to-shear damping ratio `r` following
+[Räss et al. (2022)](https://gmd.copernicus.org/articles/15/5757/2022/). Passed as
+`pt_stokes` to `solve!`.
+
+# Keyword arguments
+- `ϵ_rel`, `ϵ_abs`: relative/absolute convergence tolerances.
+- `Re`: Reynolds number.
+- `CFL`: Courant-Friedrichs-Lewy number bounding the pseudo-time step.
+- `r`: ratio of the damping coefficients for the bulk and shear rheology.
+"""
 struct PTStokesCoeffs{T}
     CFL::T
     ϵ_rel::T # relative PT tolerance

@@ -1,5 +1,13 @@
 # import JustRelax.compute_ρCp
 
+"""
+    subgrid_characteristic_time!(subgrid_arrays, particles, dt₀, phases, rheology, thermal::ThermalArrays, stokes::StokesArrays[, di])
+
+Compute, per cell, the characteristic thermal diffusion timescale `dt₀ = ρCp / (2 K Σ dxi⁻²)`
+used for JustPIC's subgrid-diffusion correction of particle temperature, evaluating
+`rheology`'s density/heat-capacity/conductivity at the local phase (from `phases`, either a
+`JustPIC.PhaseRatios` or an integer phase-id array) and temperature/pressure.
+"""
 function subgrid_characteristic_time!(
         subgrid_arrays,
         particles,

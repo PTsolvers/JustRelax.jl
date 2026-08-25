@@ -1,11 +1,20 @@
 using Documenter
 using DocumenterVitepress
+using Literate
 
 using JustRelax
 using GeoParams, JustPIC
 
 # Get JustRelax.jl root directory
 JR_root_dir = dirname(@__DIR__)
+
+# Literate.jl-generated example pages: the miniapp script is the single source,
+# this page is generated from it, so it cannot drift from the runnable script.
+Literate.markdown(
+    joinpath(JR_root_dir, "miniapps", "benchmarks", "thermal_diffusion", "diffusion", "diffusion2D_periodic.jl"),
+    joinpath(@__DIR__, "src", "man");
+    documenter = true, execute = false,
+)
 
 license = read(joinpath(JR_root_dir, "LICENSE.md"), String)
 write(joinpath(@__DIR__, "src", "man", "license.md"), license)
@@ -83,18 +92,25 @@ makedocs(;
         devurl = "dev",
     ),
     modules = [JustRelax],
-    warnonly = Documenter.except(:footnote),
+    checkdocs = :exports,
+    # :missing_docs stays a warning: JustRelax2D.Data/JustRelax3D.Data are
+    # ParallelStencil.@init_parallel_stencil-generated submodules whose docstring
+    # carries @ref links into ParallelStencil, which this build does not document.
+    warnonly = [:missing_docs],
     pages = [
         "Home" => "index.md",
+        "Getting started" => "man/diffusion2D_periodic.md",
         "User guide" => Any[
             "Installation" => "man/installation.md",
             "Backend" => "man/backend.md",
             "Grid generation" => "man/grid_generation.md",
+            "Core objects" => "man/core_objects.md",
             "Equations" => Any[
                 "Governing equations" => "man/equations_basic.md",
                 "Constitutive equations" => "man/constitutive_equations.md",
                 "APT equations" => "man/equations_APT.md",
                 "Discretization" => "man/equations_discretization.md",
+                "Material physics" => "man/material_physics.md",
             ],
             "Boundary conditions" => "man/boundary_conditions.md",
             "Advection" => "man/advection.md",
@@ -117,7 +133,15 @@ makedocs(;
                 "Restart" => "man/restart.md",
             ],
         ],
-        "List of functions" => "man/listfunctions.md",
+        "API reference" => Any[
+            "Stokes" => "man/api/stokes.md",
+            "Thermal" => "man/api/thermal.md",
+            "Boundary conditions" => "man/api/boundary_conditions.md",
+            "Rheology and phases" => "man/api/rheology_phases.md",
+            "I/O and checkpointing" => "man/api/io.md",
+            "Grid" => "man/api/grid.md",
+            "Index" => "man/listfunctions.md",
+        ],
         "Citing JustRelax.jl" => "man/citing.md",
         "References" => Any[
             "JustPIC" => "man/JustPIC.md",

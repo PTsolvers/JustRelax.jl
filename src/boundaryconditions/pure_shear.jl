@@ -1,3 +1,10 @@
+"""
+    pureshear_bc!(stokes::StokesArrays, xci, xvi, εbg, backend)
+
+Set `stokes.V` to a linear pure-shear velocity field with background strain rate `εbg`
+(extension positive) on the cell-center coordinates `xci` and vertex coordinates `xvi`
+(each an `NTuple{2}` or `NTuple{3}`).
+"""
 function pureshear_bc!(
         stokes::JustRelax.StokesArrays, xci::NTuple{2}, xvi::NTuple{2}, εbg, backend
     )

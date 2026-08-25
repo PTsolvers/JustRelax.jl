@@ -1,4 +1,16 @@
+"""
+    AbstractBoundaryConditions
+
+Supertype for all boundary condition types, e.g. [`TemperatureBoundaryConditions`](@ref).
+"""
 abstract type AbstractBoundaryConditions end
+
+"""
+    AbstractFlowBoundaryConditions
+
+Supertype for velocity/displacement boundary condition types
+([`VelocityBoundaryConditions`](@ref), [`DisplacementBoundaryConditions`](@ref)).
+"""
 abstract type AbstractFlowBoundaryConditions <: AbstractBoundaryConditions end
 
 @inline _bc_value(bc, key::Symbol) = hasproperty(bc, key) ? getproperty(bc, key) : false

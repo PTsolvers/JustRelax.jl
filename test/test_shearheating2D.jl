@@ -212,13 +212,12 @@ function Shearheating2D(; nx = 32, ny = 32)
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
 
         @show it += 1
         t += dt

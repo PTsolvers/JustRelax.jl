@@ -16,6 +16,21 @@ Literate.markdown(
     documenter = true, execute = false,
 )
 
+# This page documents the miniapp source without executing the full simulation.
+Literate.markdown(
+    joinpath(JR_root_dir, "miniapps", "benchmarks", "stokes2D", "shear_band", "ShearBand2D.jl"),
+    joinpath(@__DIR__, "src", "man");
+    documenter = false, execute = false,
+)
+
+# This page documents the miniapp source without executing the full simulation.
+Literate.markdown(
+    joinpath(JR_root_dir, "miniapps", "benchmarks", "stokes2D", "Blankenbach2D", "Benchmark2D_sgd.jl"),
+    joinpath(@__DIR__, "src", "man");
+    name = "Blankenbach", documenter = false, execute = false,
+    postprocess = text -> rstrip(text) * "\n",
+)
+
 license = read(joinpath(JR_root_dir, "LICENSE.md"), String)
 write(joinpath(@__DIR__, "src", "man", "license.md"), license)
 
@@ -100,6 +115,7 @@ makedocs(;
     pages = [
         "Home" => "index.md",
         "Getting started" => "man/diffusion2D_periodic.md",
+        "Getting help" => "man/getting_help.md",
         "User guide" => Any[
             "Installation" => "man/installation.md",
             "Backend" => "man/backend.md",
@@ -117,7 +133,7 @@ makedocs(;
         ],
         "Examples" => Any[
             "Blankenbach" => "man/Blankenbach.md",
-            "Shear Bands" => "man/ShearBands.md",
+            "Shear Bands" => "man/ShearBand2D.md",
             "Subduction 2D" => Any[
                 "Model setup" => "man/subduction2D/setup.md",
                 "Rheology" => "man/subduction2D/rheology.md",
@@ -148,7 +164,10 @@ makedocs(;
             "GeoParams" => "man/GeoParams.md",
         ],
         "Authors" => "man/authors.md",
-        "Contributing" => "man/contributing.md",
+        "Developer" => Any[
+            "Architecture" => "man/developer.md",
+            "Contributing" => "man/contributing.md",
+        ],
         "Code of Conduct" => "man/code_of_conduct.md",
         "Security" => "man/security.md",
         "License" => "man/license.md",

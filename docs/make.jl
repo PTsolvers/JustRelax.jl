@@ -118,6 +118,7 @@ makedocs(;
             ],
         ],
         "List of functions" => "man/listfunctions.md",
+        "Citing JustRelax.jl" => "man/citing.md",
         "References" => Any[
             "JustPIC" => "man/JustPIC.md",
             "GeoParams" => "man/GeoParams.md",

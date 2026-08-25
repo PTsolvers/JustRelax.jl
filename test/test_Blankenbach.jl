@@ -158,7 +158,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
     pT0.data .= pT.data
 
     local Vx_v, Vy_v, iters
@@ -223,7 +223,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 

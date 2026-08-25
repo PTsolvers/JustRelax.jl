@@ -123,11 +123,7 @@ end
 function _compute_pt_thermal_arrays!(
         θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int, N}
     ) where {N}
-    # The thermal state uses ghosted temperature arrays while pressure and the
-    # coefficient arrays are cell-centred. Keep the explicit staggering here:
-    # this kernel is also used with named tuples containing additional fields
-    # whose sizes are not part of the thermal grid.
-    args_ij = merge(args, (; T = args.T[Idx .+ 1...], P = args.P[Idx...]))
+    args_ij = getindex_NamedTuple(args, size(dτ_ρ), Idx...)
     phase_ij = phase[Idx...]
     ρCp = compute_ρCp(rheology, phase_ij, args_ij)
     _K = inv(fn_ratio(compute_conductivity, rheology, phase_ij, args_ij))
@@ -142,9 +138,7 @@ end
 function _compute_pt_thermal_arrays!(
         θr_dτ, dτ_ρ, rheology, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int, N}
     ) where {N}
-    # See the phase-aware method above. Only T is ghosted in the thermal
-    # coefficient calculation; P is already cell-centred.
-    args_ij = merge(args, (; T = args.T[Idx .+ 1...], P = args.P[Idx...]))
+    args_ij = getindex_NamedTuple(args, size(dτ_ρ), Idx...)
 
     ρCp = compute_ρCp(rheology, args_ij)
     _K = inv(compute_conductivity(rheology, args_ij))

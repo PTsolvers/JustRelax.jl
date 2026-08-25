@@ -145,7 +145,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     update_halo!(@velocity(stokes)...)
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
     dt₀ = similar(stokes.P)
 
     # Time loop

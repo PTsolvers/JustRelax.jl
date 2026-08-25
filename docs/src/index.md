@@ -17,6 +17,9 @@ hero:
     - theme: alt
       text: View on GitHub
       link: https://github.com/PTsolvers/JustRelax.jl
+    - theme: alt
+      text: Cite
+      link: /man/citing
   image:
     src: /logo.png
     alt: JustRelax.jl

@@ -66,7 +66,9 @@ The standard APT update uses
 $\eta_{d\tau}/(\eta_\tau + \eta_{d\tau}c_{FS})$ for the stabilized vertical
 pseudo-time step. DYREL adds the same $c_{FS}$ to its vertical diagonal
 preconditioner and Gershgorin eigenvalue bound. This keeps the iterative
-coefficients consistent with the stabilized residual.
+coefficients consistent with the stabilized residual. A non-positive standard APT
+denominator is rejected through the solver's non-finite residual check because it
+indicates that the physical timestep is too large for the local density inversion.
 
 <!--
 ### Physical parameters

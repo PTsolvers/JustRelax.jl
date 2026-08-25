@@ -106,7 +106,10 @@ end
 ## VELOCITY
 
 @inline free_surface_diagonal(ρg_S, ρg_N, _dy, dt) = -dt * (ρg_N - ρg_S) * _dy
-@inline free_surface_pseudotime(ηdτ, ητ, c_fs) = ηdτ / (ητ + ηdτ * c_fs)
+@inline function free_surface_pseudotime(ηdτ, ητ, c_fs)
+    denominator = ητ + ηdτ * c_fs
+    return ifelse(denominator > zero(denominator), ηdτ / denominator, oftype(denominator, NaN))
+end
 
 @parallel_indices (i, j) function compute_V!(
         Vx::AbstractArray{T, 2}, Vy, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, _di_center, _di_vertex

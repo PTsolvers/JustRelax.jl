@@ -68,6 +68,18 @@ In 2D it sets `Vx = εbg*x` and `Vy = -εbg*y`; in 3D it additionally sets
 `Vz = -εbg*z`. The backend is inferred from `stokes`. Only the staggered interior ranges are initialized; ghost
 layers remain available for the configured boundary conditions.
 
+For an xy simple-shear background field, use:
+
+```julia
+simpleshear_bc!(stokes, xci, xvi, γbg)
+```
+
+This sets `Vx = γbg*y` and sets the other velocity components to zero:
+`Vy = 0` in 2D, and `Vy = Vz = 0` in 3D. The coordinate `y` is taken from
+the cell-center coordinates `xci[2]`, while `xvi` is retained in the API for
+consistency with `pureshear_bc!`. As with pure shear, only staggered-grid
+interior values are initialized; ghost layers are left untouched.
+
 Make sure to apply the set velocity to the boundary conditions. You do this by calling the `flow_bcs!` function,
 ```julia
 flow_bcs!(stokes, flow_bcs)

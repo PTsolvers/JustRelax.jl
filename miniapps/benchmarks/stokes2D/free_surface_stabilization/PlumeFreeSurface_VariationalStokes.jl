@@ -23,10 +23,6 @@ else
 end
 
 using JustPIC
-import JustPIC.GridGeometryUtils as GGU
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend_JP = @static if isCUDA
     CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
@@ -34,6 +30,8 @@ else
 end
 
 # Load script dependencies
+import JustPIC.GridGeometryUtils as GGU
+
 using GeoParams
 using CairoMakie
 

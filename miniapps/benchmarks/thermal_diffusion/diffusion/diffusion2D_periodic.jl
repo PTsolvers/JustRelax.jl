@@ -1,11 +1,30 @@
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+const isCUDA = false
+# const isCUDA = true
 
-using GeoParams
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 
-const backend = CPUBackend
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+# Load script dependencies
+using GeoParams
+
 
 @parallel_indices (i, j) function init_T!(T, z)
     if z[j] == maximum(z)

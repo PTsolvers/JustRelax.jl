@@ -458,6 +458,7 @@ function _solve!(
             )
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
+            free_surface_stress_bcs!(stokes, flow_bcs, Val(2))
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -474,6 +475,7 @@ function _solve!(
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
                 flow_bcs!(stokes, flow_bcs)
+                free_surface_bcs!(stokes, flow_bcs, η_vep, di.velocity..., Val(2))
                 update_halo!(@velocity(stokes)...)
             end
         end
@@ -600,6 +602,7 @@ function _solve!(
 
     # unpack
 
+    di = grid.di
     _di = grid._di
     _dt = inv(dt)
     (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokes
@@ -755,6 +758,7 @@ function _solve!(
                 )
             end
             update_halo!(stokes.τ.xy)
+            free_surface_stress_bcs!(stokes, flow_bcs, Val(2))
 
             update_viscosity_τII!(
                 stokes,
@@ -779,8 +783,8 @@ function _solve!(
                 )
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
-                # free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, _di.velocity[1], _di.velocity[2])
                 flow_bcs!(stokes, flow_bcs)
+                free_surface_bcs!(stokes, flow_bcs, η_vep, di.velocity..., Val(2))
                 update_halo!(@velocity(stokes)...)
             end
         end

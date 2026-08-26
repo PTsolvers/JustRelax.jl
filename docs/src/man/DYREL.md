@@ -45,6 +45,7 @@ solve_DYREL!(
         viscosity_relaxation = 1,
         linear_viscosity     = true,
         viscosity_cutoff     = (-Inf, Inf),
+        free_surface         = false,
     )
 );
 ```
@@ -59,6 +60,12 @@ where the solver keyword arguments are:
 - `viscosity_relaxation` $\rightarrow$ relaxation coefficient for the viscosity. `viscosity_relaxation=1` means no relaxation.
 - `linear_viscosity` $\rightarrow$ if the rheology is linear (viscosity will not be updated during the solver iterations).
 - `viscosity_cutoff` $\rightarrow$ viscosity is clamped so that $\text{viscosity_cutoff}_1 \leq \eta \leq \text{viscosity_cutoff}_2$.
+- `free_surface` $\rightarrow$ include the 2D density-gradient free-surface stabilization in both the momentum residual and the self-tuned vertical pseudo-transient coefficients. The default is `false`.
+
+When `free_surface=true`, DYREL adds the local diagonal
+$-\Delta t\,\partial_y(\rho g_y)$ to `Dy` and to the corresponding Gershgorin
+row bound whenever the pseudo-transient coefficients are refreshed. The same
+term is used by the Powell--Hestenes and dynamic-relaxation residual kernels.
 
 # Examples
 

@@ -163,6 +163,40 @@ end
             @test @views Vz[:, end, :] == -Vz[:, end - 1, :]
             @test @views Vz[1, :, :] == -Vz[2, :, :]
             @test @views Vz[end, :, :] == -Vz[end - 1, :, :]
+
+            # traction-free top boundary uses τzz and physical grid spacing
+            ni = (3, 3, 3)
+            dx, dy, dz = 2.0, 3.0, 4.0
+            stokes = StokesArrays(backend, ni)
+            ηeff = fill(5.0, size(stokes.P))
+            stokes.P[:, :, end] .= 10.0
+            stokes.τ.yy[:, :, end] .= -100.0
+            stokes.V.Vz[:, :, end - 1] .= 7.0
+            for j in axes(stokes.V.Vx, 2), i in axes(stokes.V.Vx, 1)
+                stokes.V.Vx[i, j, end - 1] = 4.0 * (i - 1) * dx
+            end
+            for j in axes(stokes.V.Vy, 2), i in axes(stokes.V.Vy, 1)
+                stokes.V.Vy[i, j, end - 1] = 6.0 * (j - 1) * dy
+            end
+            flow_bcs = VelocityBoundaryConditions(;
+                no_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
+                free_slip = (left = false, right = false, front = false, back = false, top = true, bot = false),
+                free_surface = true,
+            )
+            JustRelax3D.free_surface_stress_bcs!(stokes, flow_bcs, Val(3))
+            JustRelax3D.free_surface_bcs!(
+                stokes,
+                flow_bcs,
+                ηeff,
+                (dx, dy, dz),
+                (dx, dy, dz),
+                (dx, dy, dz),
+                Val(3),
+            )
+            @test stokes.τ.zz[:, :, end] == stokes.P[:, :, end]
+            @test stokes.τ.yy[:, :, end] == fill(-100.0, ni[1:2])
+            @test stokes.V.Vz[2:(end - 1), 2:(end - 1), end] ≈
+                fill(7.0 + ((4.0 + 6.0) / 2 + 3 * 10.0 / (4 * 5.0)) * dz, ni[1:2])
         else
             @test true === true
         end

@@ -14,7 +14,7 @@ else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 @static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
@@ -23,9 +23,6 @@ else
 end
 
 using JustPIC
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend_JP = @static if isCUDA
     CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else

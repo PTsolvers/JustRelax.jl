@@ -245,10 +245,14 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
+    τxx_v_ghost = @zeros(ni .+ 3...)
+    τyy_v_ghost = @zeros(ni .+ 3...)
+    τxy_ghost = @zeros(ni .+ 3...)
+    ωxy_ghost = @zeros(ni .+ 3...)
 
     # Time loop
     t, it = 0.0, 0
@@ -257,8 +261,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     while it < 2 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         if mod(round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3), 1.5e3) == 0.0
             thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, air_phase)
         end
@@ -323,7 +326,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -336,11 +339,23 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ))
         center2vertex!(τxx_v, stokes.τ.xx)
         center2vertex!(τyy_v, stokes.τ.yy)
+        for (ghost, field) in (
+                (τxx_v_ghost, τxx_v),
+                (τyy_v_ghost, τyy_v),
+                (τxy_ghost, stokes.τ.xy),
+                (ωxy_ghost, stokes.ω.xy),
+            )
+            @views ghost[2:(end - 1), 2:(end - 1)] .= field
+            @views ghost[1, :] .= ghost[2, :]
+            @views ghost[end, :] .= ghost[end - 1, :]
+            @views ghost[:, 1] .= ghost[:, 2]
+            @views ghost[:, end] .= ghost[:, end - 1]
+        end
         inject_particles_phase!(
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
+            (thermal.T, τxx_v_ghost, τyy_v_ghost, τxy_ghost, ωxy_ghost)
         )
 
         # advect marker chain

@@ -21,7 +21,7 @@ function update_phases_given_markerchain!(
         phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase, args::NTuple{N, Any}
     ) where {backend, N}
     (; coords, index) = particles
-    return @parallel (1:(size(index, 1) - 2)) _update_phases_given_markerchain!(
+    return @parallel (1:size(chain.coords[1], 1)) _update_phases_given_markerchain!(
         phase,
         coords,
         index,

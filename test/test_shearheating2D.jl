@@ -217,7 +217,8 @@ function Shearheating2D(; nx = 32, ny = 32)
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
         # interpolate fields from particles to centroids
-        particle2centroid!(thermal.T, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
 
         @show it += 1
         t += dt

@@ -54,4 +54,12 @@ end
         # JustRelax has backend types of its own; they are unrelated to JustPIC's.
         @test !(CPUBackend <: JustPIC.CPU)
     end
+
+    @testset "periodic particle grids" begin
+        x = JustPIC.add_periodic_ghost_nodes(0:4)
+        @test collect(x) == [-1, 0, 1, 2, 3, 4, 5]
+
+        x_uniform = JustPIC.add_periodic_ghost_nodes(range(0.0, 1.0; length = 5))
+        @test collect(x_uniform) ≈ [-0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.25]
+    end
 end

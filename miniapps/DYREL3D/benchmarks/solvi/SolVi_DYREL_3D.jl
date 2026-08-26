@@ -11,31 +11,11 @@ include("viz_SolVi_DYREL_3D.jl")
     return nothing
 end
 
-# SolVi prescribes a smoothed inclusion viscosity directly on the cell centers.
-function JustRelax.JustRelax3D.compute_viscosity!(
-        stokes::JustRelax.StokesArrays,
-        phase_ratios,
-        args::NamedTuple{(:T, :P, :dt, :prescribed_viscosity)},
-        rheology,
-        cutoff;
-        kwargs...,
-    )
-    return nothing
-end
-
-function solvi_pureshear_bc!(stokes, xci, xvi, εbg, backend)
-    xv, yv, zv = xvi
-    xc, yc, zc = xci
-
-    stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)] .=
-        PTArray(backend)([εbg * x for x in xv, y in yc, z in zc])
-    stokes.V.Vy[2:(end - 1), :, 2:(end - 1)] .=
-        PTArray(backend)([εbg * y for x in xc, y in yv, z in zc])
-    stokes.V.Vz[2:(end - 1), 2:(end - 1), :] .=
-        PTArray(backend)([-2 * εbg * z for x in xc, y in yc, z in zv])
-
-    return nothing
-end
+# Keep the smoothed viscosity below, just as the original Stokes benchmark does.
+const SolViArgs = NamedTuple{(:T, :P, :dt, :prescribed_viscosity)}
+JustRelax.JustRelax3D.compute_viscosity!(
+    _stokes::JustRelax.StokesArrays, _phase_ratios, _args::SolViArgs, _rheology, _cutoff; _kwargs...
+) = nothing
 
 @parallel function smooth!(A2::AbstractArray{T, 3}, A::AbstractArray{T, 3}, fact::T) where {T}
     @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
@@ -129,7 +109,14 @@ function solVi3D(;
     args = (; T = 0.0, P = stokes.P, dt = dt, prescribed_viscosity = true)
 
     ## Boundary conditions
-    solvi_pureshear_bc!(stokes, xci, xvi, εbg, backend)
+    xv, yv, zv = xvi
+    xc, yc, zc = xci
+    stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)] .=
+        PTArray(backend)([εbg * x for x in xv, y in yc, z in zc])
+    stokes.V.Vy[2:(end - 1), :, 2:(end - 1)] .=
+        PTArray(backend)([εbg * y for x in xc, y in yv, z in zc])
+    stokes.V.Vz[2:(end - 1), 2:(end - 1), :] .=
+        PTArray(backend)([-2 * εbg * z for x in xc, y in yc, z in zv])
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true, back = true, front = true),
         no_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),

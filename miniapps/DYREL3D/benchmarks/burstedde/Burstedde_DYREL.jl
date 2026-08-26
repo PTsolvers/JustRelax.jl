@@ -12,27 +12,14 @@ include("viz_Burstedde_DYREL.jl")
     return nothing
 end
 
-# This manufactured benchmark prescribes viscosity and all three body-force components.
-# These narrowly dispatched methods keep the generic initialization from replacing them.
-function JustRelax.JustRelax3D.compute_viscosity!(
-        stokes::JustRelax.StokesArrays,
-        phase_ratios,
-        args::NamedTuple{(:T, :P, :dt, :prescribed_viscosity, :prescribed_body_force)},
-        rheology,
-        cutoff;
-        kwargs...,
-    )
-    return nothing
-end
-
-function JustRelax.JustRelax3D.compute_ρg!(
-        ρg,
-        phase_ratios::JustPIC.PhaseRatios,
-        rheology,
-        args::NamedTuple{(:T, :P, :dt, :prescribed_viscosity, :prescribed_body_force)},
-    )
-    return nothing
-end
+# Keep the analytical fields below, just as the original Stokes benchmark does.
+const BursteddeArgs = NamedTuple{(:T, :P, :dt, :prescribed_viscosity, :prescribed_body_force)}
+JustRelax.JustRelax3D.compute_viscosity!(
+    _stokes::JustRelax.StokesArrays, _phase_ratios, _args::BursteddeArgs, _rheology, _cutoff; _kwargs...
+) = nothing
+JustRelax.JustRelax3D.compute_ρg!(
+    _ρg, _phase_ratios::JustPIC.PhaseRatios, _rheology, _args::BursteddeArgs
+) = nothing
 
 @parallel_indices (i, j, k) function _viscosity!(η, x, y, z, β)
     η[i, j, k] = exp(1 - β * (x[i] * (1 - x[i]) + y[j] * (1 - y[j]) + z[k] * (1 - z[k])))

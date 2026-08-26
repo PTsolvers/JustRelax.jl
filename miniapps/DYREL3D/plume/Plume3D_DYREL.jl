@@ -136,7 +136,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     end
 
     # DyRel solver options
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3, CFL = 0.99, γfact = 20.0)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3, CFL = 0.99, γfact = 50.0)
     # Time loop
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
@@ -162,9 +162,9 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
             igg;
             kwargs = (;
                 verbose_PH = true,
-                verbose_DR = true,
+                verbose_DR = false,
                 iterMax = 50.0e3,
-                nout = 100,
+                nout = 2,
                 rel_drop = 1.0e-2,
                 viscosity_relaxation = 1e-2,
                 viscosity_cutoff = viscosity_cutoff,

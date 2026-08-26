@@ -223,26 +223,26 @@ end
 
 function stress2grid!(stokes, pτxx, pτyy, pτxy, particles)
     # normal components
-    particle2centroid!(stokes.τ_o.xx, pτxx, particles)
-    particle2centroid!(stokes.τ_o.yy, pτyy, particles)
-    particle2centroid!(stokes.τ_o.xy_c, pτxy, particles)
+    particle2centroid!(stokes.τ_o.xx, pτxx, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.yy, pτyy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.xy_c, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     # shear components
-    particle2grid!(stokes.τ_o.xx_v, pτxx, particles)
-    particle2grid!(stokes.τ_o.yy_v, pτyy, particles)
-    particle2grid!(stokes.τ_o.xy, pτxy, particles)
+    particle2grid!(stokes.τ_o.xx_v, pτxx, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2grid!(stokes.τ_o.yy_v, pτyy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2grid!(stokes.τ_o.xy, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
 
     return nothing
 end
 
 function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, particles)
     # normal components
-    particle2centroid!(stokes.τ_o.xx, pτxx, particles)
-    particle2centroid!(stokes.τ_o.yy, pτyy, particles)
-    particle2centroid!(stokes.τ_o.zz, pτzz, particles)
+    particle2centroid!(stokes.τ_o.xx, pτxx, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.yy, pτyy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.zz, pτzz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     # shear components
-    particle2grid!(stokes.τ_o.yz, pτyz, particles)
-    particle2grid!(stokes.τ_o.xz, pτxz, particles)
-    particle2grid!(stokes.τ_o.xy, pτxy, particles)
+    particle2grid!(stokes.τ_o.yz, pτyz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2grid!(stokes.τ_o.xz, pτxz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2grid!(stokes.τ_o.xy, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
 
     return nothing
 end
@@ -266,9 +266,9 @@ function rotate_stress!(pτxx, pτyy, pτxy, pω, stokes, particles, dt)
     centroid2particle!(pτxx, stokes.τ.xx, particles)
     centroid2particle!(pτyy, stokes.τ.yy, particles)
     # shear components
-    grid2particle!(pτxy, stokes.τ.xy, particles)
+    grid2particle!(pτxy, stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
     # vorticity tensor
-    grid2particle!(pω, stokes.ω.xy, particles)
+    grid2particle!(pω, stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
     # rotate stress
     rotate_stress_particles!((pτxx, pτyy, pτxy), (pω,), particles, dt)
 
@@ -283,13 +283,13 @@ function rotate_stress!(
     centroid2particle!(pτyy, stokes.τ.yy, particles)
     centroid2particle!(pτzz, stokes.τ.zz, particles)
     # shear components
-    grid2particle!(pτyz, stokes.τ.yz, particles)
-    grid2particle!(pτxz, stokes.τ.xz, particles)
-    grid2particle!(pτxy, stokes.τ.xy, particles)
+    grid2particle!(pτyz, stokes.τ.yz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    grid2particle!(pτxz, stokes.τ.xz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    grid2particle!(pτxy, stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     # vorticity tensor
-    grid2particle!(pωyz, stokes.ω.yz, particles)
-    grid2particle!(pωxz, stokes.ω.xz, particles)
-    grid2particle!(pωxy, stokes.ω.xy, particles)
+    grid2particle!(pωyz, stokes.ω.yz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    grid2particle!(pωxz, stokes.ω.xz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    grid2particle!(pωxy, stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     # rotate stress
     rotate_stress_particles!(
         (pτxx, pτyy, pτzz, pτyz, pτxz, pτxy), (pωyz, pωxz, pωxy), particles, dt

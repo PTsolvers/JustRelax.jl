@@ -147,7 +147,7 @@ function Shearheating2D(; nx = 32, ny = 32)
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
     @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     # Time loop
     t, it = 0.0, 0
@@ -206,18 +206,18 @@ function Shearheating2D(; nx = 32, ny = 32)
         # Advection --------------------
         # interpolate fields from centroids to particles
         @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
-        centroid2particle!(pT, T_buffer, particles)
+        centroid2particle!(pT, thermal.T, particles)
         # advect particles in space
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
 
         @show it += 1

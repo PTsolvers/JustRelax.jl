@@ -23,13 +23,19 @@ phase_ratios = PhaseRatios(backend, nphases, ni)
 
 `grid.xi_vel` stores the staggered velocity coordinates used to initialize particles. In most cases you should pass `grid.xi_vel...` directly to `init_particles` instead of rebuilding the velocity grids manually from `xci`, `xvi`, and `di`.
 
+JustPIC 0.7.3 uses ghosted particle grids by default for particle-to-grid and
+particle-to-centroid interpolation. When exchanging data with a ghost-free
+buffer such as `T_buffer`, disable the corresponding ghost dimensions
+explicitly. For example, in 2D use `ghost_1 = false, ghost_2 = false` (and add
+`ghost_3 = false` in 3D).
+
 ## Typical particle operations
 
 Common particle operations now follow the compact API used in the tests and examples:
 
 ```julia
 grid2particle!(pT, T_buffer, particles)
-particle2grid!(T_buffer, pT, particles)
+particle2grid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false)
 
 advection!(particles, RungeKutta2(), @velocity(stokes), dt)
 move_particles!(particles, particle_args)

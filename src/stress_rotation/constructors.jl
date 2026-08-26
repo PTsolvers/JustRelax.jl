@@ -10,6 +10,10 @@ function StressParticles(particles::JustRelax.Particles{backend, 2}) where {back
     τ_shear = init_cell_arrays(particles, Val(1)) # normal stress
     ω = init_cell_arrays(particles, Val(1)) # vorticity
 
+    for field in (τ_normal..., τ_shear..., ω...)
+        fill!(field, zero(eltype(field)))
+    end
+
     return JustRelax.StressParticles(backend, τ_normal, τ_shear, ω)
 end
 
@@ -17,6 +21,10 @@ function StressParticles(particles::JustRelax.Particles{backend, 3}) where {back
     τ_normal = init_cell_arrays(particles, Val(3)) # normal stress
     τ_shear = init_cell_arrays(particles, Val(3)) # normal stress
     ω = init_cell_arrays(particles, Val(3)) # vorticity
+
+    for field in (τ_normal..., τ_shear..., ω...)
+        fill!(field, zero(eltype(field)))
+    end
 
     return JustRelax.StressParticles(backend, τ_normal, τ_shear, ω)
 end

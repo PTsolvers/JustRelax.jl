@@ -5,6 +5,7 @@ include("periodic.jl")
 include("free_surface.jl")
 include("no_slip.jl")
 include("pure_shear.jl")
+include("simple_shear.jl")
 
 @inline bc_index(x::T) where {T <: AbstractArray{_T, 2} where {_T}} = max(size(x)...)
 @inline bc_index(x::T) where {T <: AbstractArray{_T, 3} where {_T}} =
@@ -57,8 +58,17 @@ end
 
 """
     flow_bcs!(stokes, bcs::VelocityBoundaryConditions)
+    flow_bcs!(stokes, bcs::DisplacementBoundaryConditions)
+    flow_bcs!(bcs, Vx, Vy[, Vz])
 
-Apply no-slip, free-slip, and periodic velocity boundary conditions to `stokes`.
+Apply no-slip, free-slip, and periodic flow boundary conditions to staggered
+velocity or displacement arrays. The array form accepts the boundary-condition
+object first; the `stokes` form accepts it second. Boundary updates are executed
+through ParallelStencil kernels on the selected backend.
+
+The three conditions are applied in the order no-slip, free-slip, periodic, so a
+face carrying more than one of them would keep only the last. The constructors
+reject such combinations. Faces where all three are `false` are left untouched.
 Periodic conditions match normal components at paired boundary planes and copy
 opposite interior values into tangential ghost planes.
 """
@@ -68,13 +78,6 @@ function flow_bcs!(::CPUBackendTrait, stokes, bcs::VelocityBoundaryConditions)
     return _flow_bcs!(bcs, @velocity(stokes))
 end
 
-"""
-    flow_bcs!(stokes, bcs::DisplacementBoundaryConditions)
-
-Apply no-slip, free-slip, and periodic displacement boundary conditions to `stokes`.
-Periodic conditions match normal components at paired boundary planes and copy
-opposite interior values into tangential ghost planes.
-"""
 function flow_bcs!(::CPUBackendTrait, stokes, bcs::DisplacementBoundaryConditions)
     return _flow_bcs!(bcs, @displacement(stokes))
 end
@@ -88,8 +91,6 @@ function _flow_bcs!(bcs, V)
     # no slip boundary conditions
     # do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip))
     if do_bc(bcs.no_slip)
-        # @parallel (@idx n) no_slip1!(V..., bcs.no_slip)
-        # @parallel (@idx n) no_slip2!(V..., bcs.no_slip)
         no_slip!(V..., bcs.no_slip)
     end
     # free slip boundary conditions

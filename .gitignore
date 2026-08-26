@@ -1,6 +1,13 @@
 # Pkg
 Manifest.toml
+Manifest-v*.toml
+docs/Manifest-v*.toml
 LocalPreferences.toml
+
+# Coverage
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
 
 # documentation
 docs/build/
@@ -21,15 +28,25 @@ node_modules
 # Vim
 .*.sw[omp]
 
-*/*.png
-*/*.vti
-*/*.vtm
-*/*.h5
-
 *.png
-*.vti
-*.vtm
-*.vtp
-*.vtr
 *.h5
 *.jld2
+*.csv
+*.txt
+
+# ParaView / VTK
+*.vtk
+*.vti
+*.vtp
+*.vtr
+*.vts
+*.vtu
+*.vtm
+*.vtmb
+*.pvti
+*.pvtp
+*.pvtr
+*.pvts
+*.pvtu
+*.pvd
+*.pvsm

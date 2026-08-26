@@ -221,6 +221,26 @@ function thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
 
+function JR2D.pureshear_bc!(
+        ::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg
+    )
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function pureshear_bc!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg)
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function JR2D.simpleshear_bc!(
+        ::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg
+    )
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
+end
+
+function simpleshear_bc!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg)
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
+end
+
 # Rheology
 
 ## viscosity

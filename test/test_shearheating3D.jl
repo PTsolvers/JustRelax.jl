@@ -145,7 +145,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     update_halo!(@velocity(stokes)...)
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
     dt₀ = similar(stokes.P)
 
     # Time loop
@@ -154,8 +154,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     while it < 1
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles)
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
 
         # Stokes solver ----------------
         iters = solve!(

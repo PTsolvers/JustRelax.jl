@@ -45,6 +45,31 @@ include("../../stokes/Stokes2D.jl")
 include("../../variational_stokes/Stokes2D.jl")
 include("../../DYREL/solver.jl")
 
+@parallel_indices (i, j) function _apply_free_surface_diagonal_AMDGPU!(
+        Dy, λmaxVy, ρgy, di_center, dt
+    )
+    @inbounds if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
+        _dy = inv(@dy(di_center, j))
+        j_N = min(j + 1, size(ρgy, 2))
+        c_fs = JR2D.free_surface_diagonal(ρgy[i, j], ρgy[i, j_N], _dy, dt)
+        D_old = Dy[i, j]
+        row_sum = λmaxVy[i, j] * D_old + c_fs
+        D_new = D_old + c_fs
+        Dy[i, j] = D_new
+        λmaxVy[i, j] = row_sum / D_new
+    end
+    return nothing
+end
+
+function JR2D.apply_free_surface_diagonal!(
+        Dy::ROCArray, λmaxVy::ROCArray, ρgy::ROCArray, di_center, dt
+    )
+    @parallel (@idx size(Dy)) _apply_free_surface_diagonal_AMDGPU!(
+        Dy, λmaxVy, ρgy, di_center, dt
+    )
+    return nothing
+end
+
 # Types
 function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)

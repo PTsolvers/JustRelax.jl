@@ -1,5 +1,5 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -8,7 +8,7 @@ end
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = @static if isCUDA
+const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -23,15 +23,13 @@ else
 end
 
 using JustPIC
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = @static if isCUDA
+const backend_JP = @static if isCUDA
     CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
     JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 
+# Load script dependencies
 using GeoParams, CairoMakie, CellArrays
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -248,12 +246,12 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     # z_anomaly    = nondimensionalize(-5km,CharDim)  # origin of the small thermal anomaly
     r_anomaly = nondimensionalize(1.5km, CharDim)             # radius of perturbation
     anomaly = nondimensionalize((750 + 273)K, CharDim)               # thermal perturbation (in K)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, z_anomaly, r_anomaly, sticky_air, nondimensionalize(0.0km, CharDim), nondimensionalize(20km, CharDim))
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # Initialisation of thermal profile
-    thermal = ThermalArrays(backend_JR, ni) # initialise thermal arrays and boundary conditions
+    thermal = ThermalArrays(backend, ni) # initialise thermal arrays and boundary conditions
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, front = true, back = true, top = false, bot = false),
     )
@@ -273,13 +271,13 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni) # initialise stokes arrays with the defined regime
+    stokes = StokesArrays(backend, ni) # initialise stokes arrays with the defined regime
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
     args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = thermal.ΔT)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √3.1
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √3.1
     )
 
     flow_bcs = VelocityBoundaryConditions(;

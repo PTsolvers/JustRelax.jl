@@ -692,6 +692,7 @@ end
         dτVy,
         _di_center,
         _di_vertex,
+        dt,
     ) where {T}
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
@@ -714,7 +715,10 @@ end
             _dx_v = @dx(_di_vertex, i)
             Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-            Ry_ij = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(θc) - av_ya(ρgy)) / Dy[i, j]
+            j_N = min(j + 1, size(ρgy, 2))
+            ∂ρg∂y = (ρgy[i, j_N] - ρgy[i, j]) * _dy_c
+            ρg_correction = Vy[i + 1, j + 1] * ∂ρg∂y * dt
+            Ry_ij = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(θc) - av_ya(ρgy) + ρg_correction) / Dy[i, j]
             Ry[i, j] = Ry_ij
 
             dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij, αVy[i, j], βVy[i, j], dτVy[i, j])

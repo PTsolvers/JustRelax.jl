@@ -2,7 +2,8 @@ module JustRelax2D
 
 using JustRelax: JustRelax
 using CUDA
-using JustPIC, JustPIC._2D
+using JustPIC
+using CellArraysIndexing: @index
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -28,7 +29,7 @@ import JustRelax:
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
-import JustPIC._2D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
+import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
 
 __init__() = @init_parallel_stencil(CUDA, Float64, 2)
 
@@ -220,6 +221,26 @@ function thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
 
+function JR2D.pureshear_bc!(
+        ::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg
+    )
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function pureshear_bc!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg)
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function JR2D.simpleshear_bc!(
+        ::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg
+    )
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
+end
+
+function simpleshear_bc!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg)
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
+end
+
 # Rheology
 
 ## viscosity
@@ -299,6 +320,29 @@ function JR2D.compute_melt_fraction!(
         ϕ::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
     )
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
+end
+
+function JR2D.compute_melt_fraction!(
+        ϕ::CuArray, dϕdT, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_melt_fraction!(ϕ, dϕdT, phase_ratios, rheology, args)
+end
+
+function JR2D.compute_melt_fraction_derivative!(dϕdT::CuArray, rheology, args)
+    return compute_melt_fraction_derivative!(dϕdT, rheology, args)
+end
+
+function JR2D.compute_melt_fraction_derivative!(
+        dϕdT::CuArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_melt_fraction_derivative!(dϕdT, phase_ratios, rheology, args)
+end
+
+## Solubility
+function JR2D.compute_dissolved_volatiles!(
+        mH2O::CuArray, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_dissolved_volatiles!(mH2O, mCO2, phase_ratios, rheology, args)
 end
 
 function JR2D.shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)

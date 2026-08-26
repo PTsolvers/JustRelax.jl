@@ -1,14 +1,15 @@
 using CUDA
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = CUDABackend
 # const backend_JR = CPUBackend
 
 using Printf, GeoParams, CairoMakie, CellArrays
 
-using JustPIC, JustPIC._3D
-const backend_JP = CUDABackend
-# const backend_JP = JustPIC.CPUBackend
+using JustPIC
+const backend_JP = CUDA.CUDABackend
+# const backend_JP = JustPIC.CPU
 
 using ParallelStencil
 @init_parallel_stencil(CUDA, Float64, 3)

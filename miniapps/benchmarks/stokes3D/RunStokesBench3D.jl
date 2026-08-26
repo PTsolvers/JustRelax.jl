@@ -1,5 +1,6 @@
 using LinearAlgebra, CairoMakie
 using JustRelax, JustRelax.JustRelax3D
+using Pkg; Pkg.activate(normpath(joinpath(@__DIR__, "..", "..")))
 using MPI: MPI
 
 using ParallelStencil
@@ -42,7 +43,7 @@ if benchmark == :taylorGreen
     display(f)
 
     # compute error
-    L2_p, L2_vx, L2_vy, L2_vz = error(stokes, geometry)
+    L2_p, L2_vx, L2_vy, L2_vz = error_norms(stokes, geometry)
 
 elseif benchmark == :Burstedde
     # benchmark reference:
@@ -67,7 +68,7 @@ elseif benchmark == :Burstedde
     display(f)
 
     # compute error
-    L2_p, L2_vx, L2_vy, L2_vz = error(stokes, geometry)
+    L2_p, L2_vx, L2_vy, L2_vz = error_norms(stokes, geometry)
 
 elseif benchmark == :solvi
     # Benchmark reference:

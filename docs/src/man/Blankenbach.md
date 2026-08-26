@@ -7,13 +7,14 @@ Thermal convection benchmark from  [Blankenbach et al., 1989](https://academic.o
 Load [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) necessary modules and define backend.
 ```julia
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 const backend_JR = CPUBackend
 ```
 
 For this benchmark we will use particles to track the advection of the material phases and their information. For this, we will use [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl)
 ```julia
-using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+using JustPIC
+const backend_JP = JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 ```
 
 We will also use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) to write some device-agnostic helper functions:
@@ -32,6 +33,7 @@ using GeoParams
 ```julia
 nx = ny      = 51                       # number of cells per dimension
 nit          = 6e3
+ar           = 1                        # aspect ratio
 igg          = IGG(
     init_global_grid(nx, ny, 1; init_MPI= true)...
 )                                       # initialize MPI grid
@@ -67,9 +69,9 @@ nxcell              = 24 # initial number of perticles per cell
 max_xcell           = 35 # maximum number of perticles per cell
 min_xcell           = 12 # minimum number of perticles per cell
 particles           = init_particles(
-    backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
 ) # particles object
-subgrid_arrays      = SubgridDiffusionCellArrays(particles) # arrays needed for subgrid diffusion
+subgrid_arrays      = SubgridDiffusionCellArrays(particles; loc = :center) # arrays needed for subgrid diffusion
 ```
 
 and we want to keep track of the temperature `pT`, temperature of the previous time step `pT0`, and material phase `pPhase`:
@@ -107,18 +109,18 @@ end
 init_phases!(pPhases, particles)
 ```
 
-or we can use the alternative one-liners
+or, since `particles.index` is a `Bool` cell array flagging the occupied slots, we can use the alternative one-liners
 ```julia
-@views pPhases.data[!isnan.(particles.index.data)] .= 1.0
+@views pPhases.data[particles.index.data] .= 1.0
 ```
 or
 ```julia
-map!(x -> isnan(x) ? NaN : 1.0, pPhases.data, particles.index.data)
+map!(x -> x ? 1.0 : 0.0, pPhases.data, particles.index.data)
 ```
 
 and finally we need the phase ratios at the cell centers:
 ```julia
-phase_ratios = PhaseRatios(backend, length(rheology), ni)
+phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
 update_phase_ratios!(phase_ratios, particles, pPhases)
 ```
 
@@ -137,33 +139,34 @@ thermal = ThermalArrays(backend_JR, ni)
 ### Initialize thermal profile and viscosity fields
 
 To initialize the thermal profile we use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) again
+`thermal.T` is cell-centered with one ring of ghost nodes, so the kernel writes with an offset of one instead of slicing (a slice would be a copy, and the result would be discarded):
 ```julia
 @parallel_indices (i, j) function init_T!(T, y)
-    T[i, j] = 1 - y[j]
+    T[i + 1, j + 1] = 1 - y[j]
     return nothing
 end
 
-@parallel (@idx ni) init_T!((thermal.T[2:end-1, 2:end-1]), xci[2]) # physical cell centers
+@parallel (@idx ni) init_T!(thermal.T, xci[2]) # physical cell centers
 ```
 
 and we define a rectangular thermal anomaly at $x \in [0, 0.05]$, $y \in [\frac{1}{3} - 0.05, \frac{1}{3} + 0.05]$
 ```julia
-function rectangular_perturbation!(T, xc, yc, r, xvi)
+function rectangular_perturbation!(T, xc, yc, r, xci)
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            T[i+1, j] += .2
+            T[i+1, j+1] += .2
         end
         return nothing
     end
-    nx, ny = size(T)
-    @parallel (1:nx-2, 1:ny) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xci...)
     return nothing
 end
 
 xc_anomaly  = 0.0    # center of the thermal anomaly
 yc_anomaly  = 1/3    # center of the thermal anomaly
 r_anomaly   = 0.1/2  # half-width of the thermal anomaly
-rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
+rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci)
 ```
 
 We initialize the buoyancy forces and viscosity
@@ -172,7 +175,7 @@ We initialize the buoyancy forces and viscosity
 η                = @ones(ni...)
 args             = (; T = thermal.T, P = stokes.P, dt = Inf)
 compute_ρg!(ρg[2], phase_ratios, rheology, args)
-compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 ```
 where `(-Inf, Inf)` is the viscosity cutoff.
 
@@ -197,28 +200,13 @@ pt_thermal  = PTThermalCoeffs(
 ```
 
 ### Just before solving the problem...
-We need to allocate some arrays to be able to do the subgrid diffusion of the temperature field at the particles level:
+We need a ghost-free buffer of the cell-centered temperature; it is the array exchanged with the particles, since [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) does not handle ghost nodes.
 ```julia
-T_buffer    = @zeros(ni.+1)     # without the ghost nodes at the x-direction
-Told_buffer = similar(T_buffer) # without the ghost nodes at the x-direction
-dt₀         = similar(stokes.P) # subgrid diffusion time scale
-# copy temperature to buffer arrays
-for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-    copyinn_x!(dst, src)
-end
-# interpolate temperatyre on the particles
-grid2particle!(pT, T_buffer, particles)
-pT0.data    .= pT.data
-```
-where
-```julia
-function copyinn_x!(A, B)
-    @parallel function f_x(A, B)
-        @all(A) = @inn_x(B)
-        return nothing
-    end
-    @parallel f_x(A, B)
-end
+T_buffer = thermal.T[2:end-1, 2:end-1] # without the ghost nodes
+dt₀      = similar(stokes.P)           # subgrid diffusion time scale
+# interpolate temperature onto the particles
+centroid2particle!(pT, T_buffer, particles)
+pT0.data .= pT.data
 ```
 
 In this benchmark we want to keep track of the time `trms`, the rms-velocity `Urms`
@@ -250,7 +238,7 @@ Vy_v = @zeros(ni.+1...)
 solve!(
     stokes,
     pt_stokes,
-    di,
+    grid,
     flow_bcs,
     ρg,
     phase_ratios,
@@ -277,7 +265,7 @@ heatdiffusion_PT!(
     rheology,
     args,
     dt,
-    di;
+    grid;
     kwargs = (;
         igg     = igg,
         phase   = phase_ratios,
@@ -289,15 +277,13 @@ heatdiffusion_PT!(
 ```
 3. Subgrid diffusion at the particle level
 ```julia
-for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-    copyinn_x!(dst, src)
-end
+@views T_buffer .= thermal.T[2:end-1, 2:end-1]
 subgrid_characteristic_time!(
     subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
 )
 centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-subgrid_diffusion!(
-    pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, particles, dt
+subgrid_diffusion_centroid!(
+    pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
 )
 ```
 4. Advect particles
@@ -313,23 +299,24 @@ update_phase_ratios!(phase_ratios, particles, pPhases)
 ```
 5.  Interpolate `T` back to the grid
 ```julia
-# interpolate fields from particle to grid vertices
-particle2grid!(T_buffer, pT, particles)
-@views T_buffer[:, end]      .= 0.0
-@views T_buffer[:, 1]        .= 1.0
-@views thermal.T[2:end-1, :] .= T_buffer
+# interpolate fields from the particles to the cell centers
+particle2centroid!(T_buffer, pT, particles)
+@views T_buffer[:, end] .= 0.0
+@views T_buffer[:, 1]   .= 1.0
+@views thermal.T[2:end-1, 2:end-1] .= T_buffer
+thermal_bcs!(thermal, thermal_bc)
 flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 ```
 6. Update buoyancy forces and viscosity
 ```julia
 args = (; T = thermal.T, P = stokes.P,  dt=Inf)
-compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 compute_ρg!(ρg[2], phase_ratios, rheology, args)
 ```
 7. Compute Nusselt number and rms-velocity
 ```julia
 # Nusselt number, Nu = ∫ ∂T/∂z dx
-Nu_it = sum( ((abs.(thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1])) ./ di[2]) .*di[1])
+Nu_it = sum( ((abs.(thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1])) ./ di[2]) .* di[1])
 push!(Nu_top, Nu_it)
 # Compute U rms
 # U₍ᵣₘₛ₎ = √ ∫∫ (vx²+vz²) dx dz
@@ -365,7 +352,7 @@ ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
 ax3 = Axis(fig[1,3], aspect = ar, title = "Vx [m/s]")
 ax4 = Axis(fig[2,3], aspect = ar, title = "T [K]")
 # grid temperature
-h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:]) , colormap=:lajolla, colorrange=(0, 1) )
+h1  = heatmap!(ax1, xci[1], xci[2], Array(T_buffer) , colormap=:lajolla, colorrange=(0, 1) )
 # y-velocity
 h2  = heatmap!(ax2, xvi[1], xvi[2], Array(stokes.V.Vy) , colormap=:batlow)
 # x-velocity
@@ -380,7 +367,6 @@ Colorbar(fig[2,2], h2)
 Colorbar(fig[1,4], h3)
 Colorbar(fig[2,4], h4)
 linkaxes!(ax1, ax2, ax3, ax4)
-save(joinpath(figdir, "$(it).png"), fig)
 fig
 ```
 

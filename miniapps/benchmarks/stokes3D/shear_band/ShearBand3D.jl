@@ -1,5 +1,6 @@
 using CUDA
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = CUDABackend
 using Printf, GeoParams, CairoMakie, CellArrays
@@ -7,8 +8,8 @@ using Printf, GeoParams, CairoMakie, CellArrays
 using ParallelStencil
 @init_parallel_stencil(CUDA, Float64, 3)
 
-using JustPIC, JustPIC._3D
-const backend = CUDABackend
+using JustPIC
+const backend = CUDA.CUDABackend
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))

@@ -1,4 +1,5 @@
 using ParallelStencil.FiniteDifferences3D
+using Statistics: mean
 
 # benchmark reference:
 #   C. Burstedde, G. Stadler, L. Alisic, L. C. Wilcox, E. Tan, M. Gurnis, and O. Ghattas.
@@ -12,10 +13,8 @@ include("vizBurstedde.jl")
     return nothing
 end
 
-function viscosity(xi, di, β)
-    ni = length.(xi)
-    η = @zeros(ni...)
-    @parallel (@idx ni) _viscosity!(η, xi[1], xi[2], xi[3], β)
+function viscosity!(η, xci, β)
+    @parallel (@idx size(η)) _viscosity!(η, xci[1], xci[2], xci[3], β)
 
     return η
 end
@@ -39,57 +38,10 @@ function body_forces(xi::NTuple{3, T}, η, β) where {T}
     fz = @. ((x * y + x^3 * y^3) - η * (-10 * y * z)) - dηdx * (-3 * z - 10 * x * y * z) -
         dηdy * (-3 * z - 5 * x^2 * z) - dηdz * (-4 - 6 * x - 6 * y - 10 * x^2 * y)
 
-    return fx, fy, fz
+    return -fx, -fy, -fz
 end
 
-function static(x, y, z, η, β)
-    return (1, -η, (1 - 2 * x) * β * η, (1 - 2 * y) * β * η, (1 - 2 * z) * β * η)
-end
-
-function body_forces_x(x, y, z, η, β)
-    fx = (
-        y * z + 3 * x^2 * y^3 * z,
-        2 + 6x * y,
-        2 + 4x + 2y + 6x^2 * y,
-        x + y + 2x * y^2 + x^3,
-        -3z - 10x * y * z,
-    )
-
-    st = static(x, y, z, η, β)
-
-    return dot(st, fx)
-end
-
-function body_forces_y(x, y, z, η, β)
-    fy = (
-        x * z + 3 * x^3 * y^2 * z,
-        2 + 2x^2 + 2y^2,
-        x + y + 2x * y^2 + x^3,
-        2 + 2x + 4y + 4x^2 * y,
-        -3z - 5x^2 * z,
-    )
-
-    st = static(x, y, z, η, β)
-
-    return dot(st, fy)
-end
-
-function body_forces_z(x, y, z, η, β)
-    fz = (
-        x * y + x^3 * y^3,
-        -10y * z,
-        -3z - 10x * y * z,
-        -3z - 5x^2 * z,
-        -4 - 6x - 6y - 10x^2 * y,
-    )
-
-    st = static(x, y, z, η, β)
-
-    return dot(st, fz)
-end
-
-function velocity!(stokes, xci, xvi, di)
-    # xc, yc, zc = xci
+function velocity!(stokes, xci, xvi)
     xv, yv, zv = xvi
     di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
     xc, yc, zc = ntuple(
@@ -142,40 +94,43 @@ function velocity!(stokes, xci, xvi, di)
         return nothing
     end
 
-    # @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-    return @parallel _velocity!(stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, xc, yc, zc, xv, yv, zv)
-end
-
-function analytical_velocity!(stokes, xci, xvi, di)
-    xc, yc, zc = xci
-    xv, yv, zv = xvi
-    di = ntuple(i -> xci[i][2] - xci[i][1], Val(3))
-    xc, yc, zc = ntuple(
-        i -> LinRange(xci[i][1] - di[i], xci[i][end] + di[i], length(xci[i]) + 2), Val(3)
-    )
-    Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
-    _velocity_x(x, y) = x + x^2 + x * y + x^3 * y
-    _velocity_y(x, y) = y + x * y + y^2 + x^2 * y^2
-    _velocity_z(x, y, z) = -2z - 3x * z - 3y * z - 5x^2 * y * z
-
-    @parallel_indices (i, j, k) function _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
-        if (i ≤ size(Vx, 1)) && (j ≤ size(Vx, 2)) #&& (k ≤ size(Vx, 3))
-            Vx[i, j, k] = _velocity_x(xv[i], yc[j])
-        end
-        if (i ≤ size(Vy, 1)) && (j ≤ size(Vy, 2)) #&& (k ≤ size(Vy, 3))
-            Vy[i, j, k] = _velocity_y(xc[i], yv[j])
-        end
-        if (i ≤ size(Vz, 1)) && (j ≤ size(Vz, 2)) && (k ≤ size(Vz, 3))
-            Vz[i, j, k] = _velocity_z(xc[i], yc[j], zv[k])
-        end
-
-        return nothing
-    end
-
     return @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
 end
 
-function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = false)
+"""
+    remove_net_flux!(stokes, ni, di)
+
+Shift the boundary-normal velocities by a constant so that the discrete flux through the
+domain boundary sums to zero. With velocities prescribed on all six faces the pressure is
+only defined up to a constant, and it has a fixed point only if the prescribed data is
+discretely divergence-free. Point-sampling the analytical solution at the face centers
+leaves a net flux of O(di^2), which would otherwise put a floor on the divergence residual.
+"""
+function remove_net_flux!(stokes, ni, di)
+    Vx, Vy, Vz = stokes.V.Vx, stokes.V.Vy, stokes.V.Vz
+    dx, dy, dz = di
+    # face areas of a single cell, normal to x, y and z
+    Ax, Ay, Az = dy * dz, dx * dz, dx * dy
+
+    flux = @views (
+        (sum(Vx[end, 2:(end - 1), 2:(end - 1)]) - sum(Vx[1, 2:(end - 1), 2:(end - 1)])) * Ax +
+            (sum(Vy[2:(end - 1), end, 2:(end - 1)]) - sum(Vy[2:(end - 1), 1, 2:(end - 1)])) * Ay +
+            (sum(Vz[2:(end - 1), 2:(end - 1), end]) - sum(Vz[2:(end - 1), 2:(end - 1), 1])) * Az
+    )
+    area = 2 * (ni[2] * ni[3] * Ax + ni[1] * ni[3] * Ay + ni[1] * ni[2] * Az)
+    δ = flux / area
+
+    @views Vx[1, :, :] .+= δ
+    @views Vx[end, :, :] .-= δ
+    @views Vy[:, 1, :] .+= δ
+    @views Vy[:, end, :] .-= δ
+    @views Vz[:, :, 1] .+= δ
+    @views Vz[:, :, end] .-= δ
+
+    return nothing
+end
+
+function burstedde(; nx = 16, ny = 16, nz = 16, β = 10.0, init_MPI = true, finalize_MPI = false)
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
@@ -183,14 +138,14 @@ function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = 
     ni = (nx, ny, nz) # number of nodes in x- and y-
     lx = ly = lz = 1.0e0
     li = (lx, ly, lz)  # domain length in x- and y-
-    origin = zero(nx), zero(ny), zero(nz)
+    origin = 0.0, 0.0, 0.0
     igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_MPI)...) # init MPI
     di = @. li / (nx_g(), ny_g(), nz_g()) # grid step in x- and -y
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     ## (Physical) Time domain and discretization
-    ttot = 1 # total siηlation time
+    ttot = 1 # total simulation time
     Δt = 1 # physical time step
 
     ## Allocate arrays needed for every Stokes problem
@@ -200,15 +155,16 @@ function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = 
     pt_stokes = PTStokesCoeffs(li, di; CFL = 1 / √3)
 
     ## Setup-specific parameters and fields
-    β = 10.0
     (; η) = stokes.viscosity
-    η = viscosity(xci, di, β) # add reference
+    viscosity!(η, xci, β)
     ρg = body_forces(xci, η, β) # => ρ*(gx, gy, gz)
     dt = Inf
     G = @fill(Inf, ni...)
     K = @fill(Inf, ni...)
 
     ## Boundary conditions
+    # the velocity is prescribed on every face, so no face is free_slip nor no_slip and
+    # `flow_bcs!` leaves the boundary values written below untouched
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (
             left = false, right = false,
@@ -222,8 +178,9 @@ function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = 
             back = false, front = false,
         ),
     )
-    # impose analytical velociity at the boundaries of the domain
-    velocity!(stokes, xci, xvi, di)
+    # impose analytical velocity at the boundaries of the domain
+    velocity!(stokes, xci, xvi)
+    remove_net_flux!(stokes, ni, di)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -238,8 +195,8 @@ function burstedde(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = 
             grid,
             flow_bcs,
             ρg,
-            G,
             K,
+            G,
             dt,
             igg;
             kwargs = (;

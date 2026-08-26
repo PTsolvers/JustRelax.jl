@@ -5,7 +5,8 @@ const isGPU = true
 end
 
 using JustRelax, JustRelax.JustRelax2D
-using JustPIC, JustPIC._2D
+using Pkg; Pkg.activate("miniapps")
+using JustPIC
 using ParallelStencil, GeoParams
 
 @static if isGPU
@@ -16,7 +17,7 @@ using ParallelStencil, GeoParams
 else
     @init_parallel_stencil(Threads, Float64, 2)
     const backend_JR = CPUBackend
-    const backend = JustPIC.CPUBackend
+    const backend = JustPIC.CPU
 
 end
 

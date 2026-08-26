@@ -308,7 +308,7 @@ Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, 
     nx, ny, nz = size(ϕ.xy)
     k_top = max(k - 1, 1)
     k_bot = min(k, nz)
-    xy = isvalid(ϕ.xy, i, j, k_top) * isvalid(ϕ.xy, i, j, k_back)
+    xy = isvalid(ϕ.xy, i, j, k_top) * isvalid(ϕ.xy, i, j, k_bot)
 
     # V
     v = yz * xz * xy
@@ -327,16 +327,16 @@ Base.@propagate_inbounds @inline function isvalid_xz(ϕ::JustRelax.RockRatio, i,
     v = isvalid(ϕ.vertex, i, j, k) * isvalid(ϕ.vertex, i, j + 1, k)
 
     # check vz
-    nx, ny, nz = size(ϕ.vz)
+    nx, ny, nz = size(ϕ.Vz)
     i_left = max(i - 1, 1)
     i_right = min(i, nx)
-    vz = isvalid(ϕ.vz, i_left, j, k) * isvalid(ϕ.vz, i_right, j, k)
+    vz = isvalid(ϕ.Vz, i_left, j, k) * isvalid(ϕ.Vz, i_right, j, k)
 
     # check vx
-    nx, ny, nz = size(ϕ.vx)
+    nx, ny, nz = size(ϕ.Vx)
     k_top = max(k - 1, 1)
     k_bot = min(k, nz)
-    vx = isvalid(ϕ.vx, i, j, k_top) * isvalid(ϕ.vx, i, j, k_back)
+    vx = isvalid(ϕ.Vx, i, j, k_top) * isvalid(ϕ.Vx, i, j, k_bot)
 
     return v * vx * vz * isvalid(ϕ.vertex, i, j, k)
 end
@@ -352,18 +352,18 @@ Base.@propagate_inbounds @inline function isvalid_xy(ϕ::JustRelax.RockRatio, i,
     v = isvalid(ϕ.vertex, i, j, k) * isvalid(ϕ.vertex, i, j, k + 1)
 
     # check vx
-    nx, ny, nz = size(ϕ.vx)
+    nx, ny, nz = size(ϕ.Vx)
     j_front = max(j - 1, 1)
     j_back = min(j, ny)
-    vx = isvalid(ϕ.vx, i, j_front, k) * isvalid(ϕ.vx, i, j_back, k)
+    vx = isvalid(ϕ.Vx, i, j_front, k) * isvalid(ϕ.Vx, i, j_back, k)
 
     # check vy
-    nx, ny, nz = size(ϕ.vy)
+    nx, ny, nz = size(ϕ.Vy)
     i_left = max(i - 1, 1)
     i_right = min(i, nx)
-    vy = isvalid(ϕ.vy, i_left, j, k) * isvalid(ϕ.vy, i_right, j, k)
+    vy = isvalid(ϕ.Vy, i_left, j, k) * isvalid(ϕ.Vy, i_right, j, k)
 
-    return v * vy * vz * isvalid(ϕ.vertex, i, j, k)
+    return v * vx * vy * isvalid(ϕ.vertex, i, j, k)
 end
 
 """
@@ -377,16 +377,16 @@ Base.@propagate_inbounds @inline function isvalid_yz(ϕ::JustRelax.RockRatio, i,
     v = isvalid(ϕ.vertex, i, j, k) * isvalid(ϕ.vertex, i + 1, j, k)
 
     # check vz
-    nx, ny, nz = size(ϕ.vz)
+    nx, ny, nz = size(ϕ.Vz)
     j_front = max(j - 1, 1)
     j_back = min(j, ny)
-    vz = isvalid(ϕ.vz, i, j_front, k) * isvalid(ϕ.vz, i, j_back, k)
+    vz = isvalid(ϕ.Vz, i, j_front, k) * isvalid(ϕ.Vz, i, j_back, k)
 
     # check vy
-    nx, ny, nz = size(ϕ.vy)
+    nx, ny, nz = size(ϕ.Vy)
     k_top = max(k - 1, 1)
     k_bot = min(k, nz)
-    vy = isvalid(ϕ.vy, i, j, k_top) * isvalid(ϕ.vy, i, j, k_back)
+    vy = isvalid(ϕ.Vy, i, j, k_top) * isvalid(ϕ.Vy, i, j, k_bot)
 
     return v * vy * vz * isvalid(ϕ.vertex, i, j, k)
 end

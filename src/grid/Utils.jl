@@ -39,7 +39,7 @@ function _x_g(idx::Integer, dxi::GGNumber, nxi::GGNumber)
 end
 
 y_g(idx::Integer, dxi::GGNumber, nxi::GGNumber) = _y_g(idx, dxi, nxi)
-y_g(idx::Integer, dxi::GGNumber, A::GGArray) = _z_g(idx, dxi, size(A, 2))
+y_g(idx::Integer, dxi::GGNumber, A::GGArray) = _y_g(idx, dxi, size(A, 2))
 
 function _y_g(idx::Integer, dxi::GGNumber, nxi::GGNumber)
     x0i = 0.5 * (@ny() - nxi) * dxi

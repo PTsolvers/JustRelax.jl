@@ -8,6 +8,7 @@ const isCUDA = false
 end
 
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -23,14 +24,14 @@ else
     @init_parallel_stencil(Threads, Float64, 3)
 end
 
-using JustPIC, JustPIC._3D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend_JP = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 
 # Load file with all the rheology configurations
@@ -212,7 +213,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
             println("   Time/iteration:  $(t_stokes / out.iter) s")
         end
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di)
+        dt = compute_dt(stokes, di, igg)
         # ------------------------------
 
         # Advection --------------------
@@ -228,10 +229,9 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
         inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
-        if igg.me == 0
-            @show it += 1
-            t += dt
-        end
+        it += 1
+        t += dt
+        igg.me == 0 && @show it
 
         #MPI gathering
         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
@@ -259,7 +259,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
             gather!(Vyv_nohalo, Vyv_v)
             gather!(Vzv_nohalo, Vzv_v)
         end
-        @views T_nohalo .= Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array(thermal.T[3:(end - 2), 3:(end - 2), 3:(end - 2)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         # Data I/O and plotting ---------------------

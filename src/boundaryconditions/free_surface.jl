@@ -87,7 +87,7 @@ end
         Vz[i + 1, j + 1, end - 1] +
         3.0 / 2.0 *
         (
-        P[i, j, end] / (2.0 * η[i, j, end]) -
+        P[i, j, end] / (2.0 * η[i, j, end]) + #-
             (τyy_old[i, j, end] + P_old[i, j, end]) / (2.0 * Gdt) +
             inv(3.0) * (
             (Vx[i + 1, j + 1, end - 1] - Vx[i, j + 1, end - 1]) * inv(dx) +

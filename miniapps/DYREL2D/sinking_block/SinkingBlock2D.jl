@@ -1,11 +1,12 @@
 using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
 const backend_JR = CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2)
 
-using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+using JustPIC
+const backend = JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 
 using GeoParams, CairoMakie
 
@@ -143,8 +144,8 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
             dt,
             igg;
             kwargs = (;
-                verbose_PH = false,
-                verbose_DR = false,
+                verbose_PH = true,
+                verbose_DR = true,
                 iterMax = 50.0e3,
                 nout = 10,
                 rel_drop = 1.0e-2,
@@ -201,7 +202,3 @@ else
 end
 
 sinking_block2D(igg; ar = ar, nx = nx, ny = ny);
-# extrema(stokes.∇V) = (-1.9891239712950583e-16, 1.3077805713409153e-15)
-
-# dyrel.γ_eff
-# γ_eff

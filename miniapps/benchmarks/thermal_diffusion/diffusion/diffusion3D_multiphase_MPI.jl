@@ -1,4 +1,5 @@
 using JustRelax, JustRelax.JustRelax3D
+using Pkg; Pkg.activate("miniapps")
 
 
 const backend_JR = CPUBackend
@@ -6,11 +7,11 @@ const backend_JR = CPUBackend
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
-using JustPIC, JustPIC._3D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 
 using GeoParams, CairoMakie
 

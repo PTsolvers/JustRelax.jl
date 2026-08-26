@@ -34,26 +34,26 @@ end
 @parallel_indices (i, j) function compute_τ!(
         τxx::AbstractArray{T, 2}, τyy, τxy, εxx, εyy, εxy, η, θ_dτ
     ) where {T}
-    @inline av(A) = _av_a(A, i, j)
-    @inline harm(A) = _harm_a(A, i, j)
+    @inline av(A) = _av_ai_clamped(A, i, j)
 
     _Gdt = 0
-    ηij = η[i, j]
-    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
-    Δτxx = compute_stress_increment(τxx[i, j], 0.0e0, ηij, εxx[i, j], _Gdt, dτ_r)
-    τxx[i, j] += Δτxx
+    if all((i, j) .≤ size(τxx))
+        ηij = η[i, j]
+        dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
-    Δτyy = compute_stress_increment(τyy[i, j], 0.0e0, ηij, εyy[i, j], _Gdt, dτ_r)
-    τyy[i, j] += Δτyy
+        Δτxx = compute_stress_increment(τxx[i, j], 0.0e0, ηij, εxx[i, j], _Gdt, dτ_r)
+        τxx[i, j] += Δτxx
 
-    if all((i, j) .< size(τxy) .- 1)
+        Δτyy = compute_stress_increment(τyy[i, j], 0.0e0, ηij, εyy[i, j], _Gdt, dτ_r)
+        τyy[i, j] += Δτyy
+    end
+
+    if all((i, j) .≤ size(τxy))
         ηij = av(η)
         dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
-        Δτxy = compute_stress_increment(
-            τxy[i + 1, j + 1], 0.0e0, ηij, εxy[i + 1, j + 1], _Gdt, dτ_r
-        )
-        τxy[i + 1, j + 1] += Δτxy
+        Δτxy = compute_stress_increment(τxy[i, j], 0.0e0, ηij, εxy[i, j], _Gdt, dτ_r)
+        τxy[i, j] += Δτxy
     end
     return nothing
 end
@@ -63,27 +63,28 @@ end
 @parallel_indices (i, j) function compute_τ!(
         τxx::AbstractArray{T, 2}, τyy, τxy, τxx_o, τyy_o, τxy_o, εxx, εyy, εxy, η, G, θ_dτ, dt
     ) where {T}
-    @inline av(A) = _av_a(A, i, j)
-    @inline harm(A) = _harm_a(A, i, j)
+    @inline av(A) = _av_ai_clamped(A, i, j)
 
-    _Gdt = inv(G[i, j] * dt)
-    ηij = η[i, j]
-    dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
+    if all((i, j) .≤ size(τxx))
+        _Gdt = inv(G[i, j] * dt)
+        ηij = η[i, j]
+        dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
 
-    Δτxx = compute_stress_increment(τxx[i, j], τxx_o[i, j], ηij, εxx[i, j], _Gdt, dτ_r)
-    τxx[i, j] += Δτxx
+        Δτxx = compute_stress_increment(τxx[i, j], τxx_o[i, j], ηij, εxx[i, j], _Gdt, dτ_r)
+        τxx[i, j] += Δτxx
 
-    Δτyy = compute_stress_increment(τyy[i, j], τyy_o[i, j], ηij, εyy[i, j], _Gdt, dτ_r)
-    τyy[i, j] += Δτyy
+        Δτyy = compute_stress_increment(τyy[i, j], τyy_o[i, j], ηij, εyy[i, j], _Gdt, dτ_r)
+        τyy[i, j] += Δτyy
+    end
 
-    if all((i, j) .< size(τxy) .- 1)
+    if all((i, j) .≤ size(τxy))
         ηij = av(η)
         _Gdt = inv(av(G) * dt)
         dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
         Δτxy = compute_stress_increment(
-            τxy[i + 1, j + 1], τxy_o[i + 1, j + 1], ηij, εxy[i + 1, j + 1], _Gdt, dτ_r
+            τxy[i, j], τxy_o[i, j], ηij, εxy[i, j], _Gdt, dτ_r
         )
-        τxy[i + 1, j + 1] += Δτxy
+        τxy[i, j] += Δτxy
     end
 
     return nothing
@@ -169,12 +170,9 @@ end
         dt,
         θ_dτ,
     ) where {T}
-    harm_xy(A) = _harm_xyi(A, i, j, k)
-    harm_xz(A) = _harm_xzi(A, i, j, k)
-    harm_yz(A) = _harm_yzi(A, i, j, k)
-    av_xy(A) = _av_xyi(A, i, j, k)
-    av_xz(A) = _av_xzi(A, i, j, k)
-    av_yz(A) = _av_yzi(A, i, j, k)
+    av_xy(A) = _av_xyi_clamped(A, i, j, k)
+    av_xz(A) = _av_xzi_clamped(A, i, j, k)
+    av_yz(A) = _av_yzi_clamped(A, i, j, k)
     get(x) = x[i, j, k]
     av_xy(::Nothing) = Inf
     av_xz(::Nothing) = Inf
@@ -198,7 +196,7 @@ end
             τzz[i, j, k] += Δτzz
         end
         # Compute τ_xy
-        if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
+        if all((i, j, k) .≤ size(τxy))
             ηij = av_xy(η)
             _Gdt = inv(av_xy(G) * dt)
             dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
@@ -208,7 +206,7 @@ end
             τxy[i, j, k] += Δτxy
         end
         # Compute τ_xz
-        if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
+        if all((i, j, k) .≤ size(τxz))
             ηij = av_xz(η)
             _Gdt = inv(av_xz(G) * dt)
             dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
@@ -218,7 +216,7 @@ end
             τxz[i, j, k] += Δτxz
         end
         # Compute τ_yz
-        if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
+        if all((i, j, k) .≤ size(τyz))
             ηij = av_yz(η)
             _Gdt = inv(av_yz(G) * dt)
             dτ_r = compute_dτ_r(θ_dτ, ηij, _Gdt)
@@ -234,30 +232,27 @@ end
 @parallel_indices (i, j, k) function compute_τ_vertex!(
         τyz, τxz, τxy, εyz, εxz, εxy, ηvep, θ_dτ
     )
-    harm_xy(A) = _harm_xyi(A, i, j, k)
-    harm_xz(A) = _harm_xzi(A, i, j, k)
-    harm_yz(A) = _harm_yzi(A, i, j, k)
-    av_xy(A) = _av_xyi(A, i, j, k)
-    av_xz(A) = _av_xzi(A, i, j, k)
-    av_yz(A) = _av_yzi(A, i, j, k)
+    harm_xy(A) = _harm_xyi_clamped(A, i, j, k)
+    harm_xz(A) = _harm_xzi_clamped(A, i, j, k)
+    harm_yz(A) = _harm_yzi_clamped(A, i, j, k)
     get(x) = x[i, j, k]
 
     @inbounds begin
         # Compute τ_xy
-        if (1 < i < size(τxy, 1)) && (1 < j < size(τxy, 2)) && k ≤ size(τxy, 3)
+        if all((i, j, k) .≤ size(τxy))
             η_ij = harm_xy(ηvep)
             denominator = inv(θ_dτ + 1.0)
             τxy[i, j, k] += (-get(τxy) + 2.0 * η_ij * get(εxy)) * denominator
         end
 
         # Compute τ_xz
-        if (1 < i < size(τxz, 1)) && j ≤ size(τxz, 2) && (1 < k < size(τxz, 3))
+        if all((i, j, k) .≤ size(τxz))
             η_ij = harm_xz(ηvep)
             denominator = inv(θ_dτ + 1.0)
             τxz[i, j, k] += (-get(τxz) + 2.0 * η_ij * get(εxz)) * denominator
         end
         # Compute τ_yz
-        if i ≤ size(τyz, 1) && (1 < j < size(τyz, 2)) && (1 < k < size(τyz, 3))
+        if all((i, j, k) .≤ size(τyz))
             η_ij = harm_yz(ηvep)
             denominator = inv(θ_dτ + 1.0)
             τyz[i, j, k] += (-get(τyz) + 2.0 * η_ij * get(εyz)) * denominator
@@ -356,6 +351,16 @@ end
 end
 
 ## Accumulate tensor
+"""
+    accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
+
+Accumulate the second invariant of the symmetric tensor `A` over a time step:
+`II[I] += dt * A_II[I]`.
+
+The tensor components are gathered onto the cell centers where `II` lives, so `A` may hold
+its shear components on the vertices. Used to integrate the deviatoric plastic strain
+rate `ε_pl` into `EII_pl`; the volumetric counterpart is [`accumulate_vol!`](@ref).
+"""
 function accumulate_tensor!(II, A::JustRelax.SymmetricTensor, dt)
     return accumulate_tensor!(backend(A), II, A, dt)
 end
@@ -958,7 +963,7 @@ end
             ε_vol_pl[I...] = -λ[I...] * dQdP
 
             Base.@nexprs 6 i -> begin
-                @inbounds τ[i][I...] = dτij[i] + τij[i]
+                @inbounds τ[i][I...] = τij[i]
             end
             Base.@nexprs 3 i -> begin
                 @inbounds ε_pl[i][I...] = εij_pl[i]

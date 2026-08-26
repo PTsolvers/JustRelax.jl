@@ -3,6 +3,7 @@ const isGPU = true
     using CUDA
 end
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = @static if isGPU
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -17,14 +18,14 @@ else
     @init_parallel_stencil(Threads, Float64, 3)
 end
 
-using JustPIC, JustPIC._3D
+using JustPIC
 # const backend_JP = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-# const backend_JP = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# const backend_JP = JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 
 const backend_JP = @static if isGPU
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 # Load script dependencies
@@ -174,7 +175,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
             if do_vtk
                 # velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
-                    phase_vertex = [argmax(p) for p in Array(phase_ratios.center)],
+                    phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)],
                 )
                 data_c = (;
                     P = Array(stokes.P),

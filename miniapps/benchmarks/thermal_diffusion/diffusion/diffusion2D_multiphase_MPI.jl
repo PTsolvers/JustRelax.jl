@@ -1,4 +1,5 @@
 using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
 const backend_JR = CPUBackend
 
 using ParallelStencil
@@ -8,8 +9,8 @@ using ImplicitGlobalGrid
 using MPI: MPI
 
 using GeoParams, CairoMakie
-using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend
+using JustPIC
+const backend = JustPIC.CPU
 
 distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
 

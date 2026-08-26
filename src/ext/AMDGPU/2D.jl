@@ -2,13 +2,15 @@ module JustRelax2D
 
 using JustRelax: JustRelax
 using AMDGPU
-using JustPIC, JustPIC._2D
+using JustPIC
+using CellArraysIndexing: @index
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
 using MPI
+using Statistics
 
 import JustRelax.JustRelax2D as JR2D
 
@@ -34,7 +36,7 @@ import JustRelax:
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
-import JustPIC._2D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
+import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
 
 __init__() = @init_parallel_stencil(AMDGPU, Float64, 2)
 
@@ -233,6 +235,26 @@ function thermal_bcs!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays, bc
     return thermal_bcs!(thermal.T, bcs)
 end
 
+function JR2D.pureshear_bc!(
+        ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg
+    )
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function pureshear_bc!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg)
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function JR2D.simpleshear_bc!(
+        ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg
+    )
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
+end
+
+function simpleshear_bc!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg)
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
+end
+
 # Rheology
 
 ## viscosity
@@ -314,6 +336,29 @@ function JR2D.compute_melt_fraction!(
         ϕ::ROCArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
     )
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
+end
+
+function JR2D.compute_melt_fraction!(
+        ϕ::ROCArray, dϕdT, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_melt_fraction!(ϕ, dϕdT, phase_ratios, rheology, args)
+end
+
+function JR2D.compute_melt_fraction_derivative!(dϕdT::ROCArray, rheology, args)
+    return compute_melt_fraction_derivative!(dϕdT, rheology, args)
+end
+
+function JR2D.compute_melt_fraction_derivative!(
+        dϕdT::ROCArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_melt_fraction_derivative!(dϕdT, phase_ratios, rheology, args)
+end
+
+## Solubility
+function JR2D.compute_dissolved_volatiles!(
+        mH2O::ROCArray, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_dissolved_volatiles!(mH2O, mCO2, phase_ratios, rheology, args)
 end
 
 function JR2D.shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
@@ -468,7 +513,7 @@ end
 function JR2D.rotate_stress_particles!(
         τ::NTuple,
         ω::NTuple,
-        particles::Particles{JustPIC.AMDGPUBackend},
+        particles::Particles{ROCBackend},
         dt;
         method::Symbol = :matrix,
     )
@@ -497,7 +542,7 @@ end
 
 function JR2D.stress2grid!(
         stokes,
-        τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+        τ_particles::JustRelax.StressParticles{ROCBackend},
         particles,
     )
     stress2grid!(stokes, τ_particles, particles)
@@ -505,7 +550,7 @@ function JR2D.stress2grid!(
 end
 
 function JR2D.rotate_stress!(
-        τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+        τ_particles::JustRelax.StressParticles{ROCBackend},
         stokes,
         particles,
         dt,
@@ -518,18 +563,30 @@ end
 
 function JR2D.update_phases_given_markerchain!(
         phase,
-        chain::MarkerChain{JustPIC.AMDGPUBackend},
-        particles::Particles{JustPIC.AMDGPUBackend},
+        chain::MarkerChain{ROCBackend},
+        particles::Particles{ROCBackend},
         origin,
         di,
         air_phase,
     )
-    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase)
+    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, ())
+end
+
+function JR2D.update_phases_given_markerchain!(
+        phase,
+        chain::MarkerChain{ROCBackend},
+        particles::Particles{ROCBackend},
+        origin,
+        di,
+        air_phase,
+        args::NTuple{N, Any},
+    ) where {N}
+    return update_phases_given_markerchain!(phase, chain, particles, origin, di, air_phase, args)
 end
 
 # Phase ratios with arrays
 function JR2D.update_phase_ratios_2D!(
-        phase_ratios::JustPIC.PhaseRatios{AMDGPUBackend, T},
+        phase_ratios::JustPIC.PhaseRatios{ROCBackend, T},
         phase_arrays::NTuple{N, ROCArray{U, 2}},
         xci,
         xvi

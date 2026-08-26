@@ -147,7 +147,7 @@ end
             (1, 0), (0, 1),
         )
         ϕ_Vᵢ = ϕ.Vx, ϕ.Vy
-        Base.@ncall $N i -> begin
+        Base.@nexprs $N i -> begin
             @inline
             if all(I .≤ size(R[i]))
                 inds = I .+ shifts[i]

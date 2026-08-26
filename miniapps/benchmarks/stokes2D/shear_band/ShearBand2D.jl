@@ -1,14 +1,15 @@
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, CairoMakie
 using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
 const backend = CPUBackend
 
-using JustPIC, JustPIC._2D
-import JustPIC._2D.GridGeometryUtils as GGU
+using JustPIC
+import JustPIC.GridGeometryUtils as GGU
 
-const backend_JP = JustPIC.CPUBackend
+const backend_JP = JustPIC.CPU
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))

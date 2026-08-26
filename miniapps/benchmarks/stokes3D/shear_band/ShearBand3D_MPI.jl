@@ -1,4 +1,5 @@
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = CPUBackend
 
@@ -7,9 +8,9 @@ using GeoParams, CairoMakie
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
 
-using JustPIC, JustPIC._3D
+using JustPIC
 
-const backend = JustPIC.CPUBackend
+const backend = JustPIC.CPU
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -97,7 +98,7 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs", do_vtk = fa
 
     # Initialize phase ratios -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
-    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     radius = 0.1
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     pPhases, = init_cell_arrays(particles, Val(1))

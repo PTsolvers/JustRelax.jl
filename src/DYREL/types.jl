@@ -14,6 +14,8 @@ Structure containing parameters and arrays for the DYREL (Dynamic Relaxation) so
 - `cVx`, `cVy`, `cVz`: Damping coefficients related to dynamic relaxation.
 - `αVx`, `αVy`, `αVz`: Scaling factors for damping.
 - `ηb`: Bulk viscosity field.
+- `P_num`: Numerical pressure scratch field.
+- `Rx0`, `Ry0`, `Rz0`: Velocity residual history scratch fields.
 - `CFL`: Courant-Friedrichs-Lewy number.
 - `ϵ`: General convergence tolerance.
 - `ϵ_vel`: Velocity convergence tolerance.
@@ -46,6 +48,10 @@ struct DYREL{T, F}
     αVy::T    # damping coefficients
     αVz::T    # damping coefficients (3D)
     ηb::T     # bulk viscosity
+    P_num::T  # numerical pressure scratch
+    Rx0::T    # velocity residual history scratch
+    Ry0::T    # velocity residual history scratch
+    Rz0::T    # velocity residual history scratch (3D)
     CFL::F    # Courant-Friedrichs-Lewy condition
     ϵ::F      # convergence criterion
     ϵ_vel::F  # convergence criterion

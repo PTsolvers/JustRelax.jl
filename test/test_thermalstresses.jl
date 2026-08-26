@@ -22,16 +22,16 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 
@@ -47,17 +47,6 @@ function copyinn_x!(A, B)
     end
 
     return @parallel f_x(A, B)
-end
-
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-@parallel function init_P!(P, ρg, z, sticky_air)
-    @all(P) = abs(@all(ρg) * (@all_j(z) - sticky_air)) #* <(@all_j(z), 0.0)
-    return nothing
 end
 
 function init_phases!(phases, particles, xc_anomaly, yc_anomaly, r_anomaly, sticky_air, top, bottom)
@@ -123,7 +112,7 @@ function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, r_anomaly, xvi, 
             T, δT, xc_anomaly, yc_anomaly, r_anomaly, x, y, sticky_air
         )
         depth = -y[j] #- sticky_air
-        if ((x[i] - xc_anomaly)^2 + (depth[j] + yc_anomaly)^2 ≤ r_anomaly^2)
+        if ((x[i] - xc_anomaly)^2 + (depth + yc_anomaly)^2 ≤ r_anomaly^2)
             # T[i + 1, j + 1] *= δT / 100 + 1
             T[i + 1, j + 1] = δT
         end
@@ -160,7 +149,7 @@ function init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressi
     G0 = 6.0e11Pa      # elastic shear modulus
     G_magma = 6.0e11Pa      # elastic shear modulus perturbation
 
-    soft_C = NonLinearSoftening(; ξ₀ = ustrip(Coh), Δ = ustrip(Coh) / 2) # softening law
+    soft_C = NonLinearSoftening(; ξ₀ = Coh, Δ = Coh / 2) # softening law
     pl = DruckerPrager_regularised(; C = Coh, ϕ = ϕ, η_vp = η_reg, Ψ = 0.0, softening_C = soft_C)        # plasticity
     if is_compressible == true
         el = SetConstantElasticity(; G = G0, ν = 0.25)           # elastic spring
@@ -168,8 +157,8 @@ function init_rheology(creep_rock, creep_magma, creep_air, CharDim; is_compressi
         β_rock = 6.0e-11
         β_magma = 6.0e-11
     else
-        el = SetConstantElasticity(; G = G0, ν = 0.5)            # elastic spring
-        el_magma = SetConstantElasticity(; G = G_magma, ν = 0.5) # elastic spring
+        el = SetConstantElasticity(; G = G0, ν = 0.499)            # elastic spring
+        el_magma = SetConstantElasticity(; G = G_magma, ν = 0.499) # elastic spring
         β_rock = inv(get_Kb(el))
         β_magma = inv(get_Kb(el_magma))
     end
@@ -325,12 +314,11 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        # @parallel init_P!(stokes.P, ρg[2], xci[2])
-        stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
+        compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     end
 
     # Arguments for functions
-    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = @view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = thermal.ΔT)
     @copy thermal.Told thermal.T
     stokes.ε.xx .= nondimensionalize(1.0e-20 / s, CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -348,31 +336,30 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     P_init = deepcopy(stokes.P)
 
     # Stokes solver -----------------
-    args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
-    solve!(
-        stokes,
-        pt_stokes,
-        grid,
-        flow_bcs,
-        ρg,
-        phase_ratios,
-        rheology_inc,
-        args,
-        dt,
-        igg;
-        kwargs = (;
-            iterMax = 100.0e3,
-            free_surface = true,
-            nout = 5.0e3,
-            viscosity_cutoff = cutoff_visc,
-            relaxation = 1.0e-3,
-            λ_relaxation = 1.0e0,
-        )
-    )
+    # args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
+    # solve!(
+    #     stokes,
+    #     pt_stokes,
+    #     grid,
+    #     flow_bcs,
+    #     ρg,
+    #     phase_ratios,
+    #     rheology_inc,
+    #     args,
+    #     dt,
+    #     igg;
+    #     kwargs = (;
+    #         iterMax = 100.0e3,
+    #         free_surface = true,
+    #         nout = 5.0e3,
+    #         viscosity_cutoff = cutoff_visc,
+    #         relaxation = 1.0e-3,
+    #         λ_relaxation = 1.0e0,
+    #     )
+    # )
 
     while it < 1
 
-        # Update buoyancy and viscosity -
         args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
 
         # Stokes solver -----------------
@@ -443,11 +430,12 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         thermal.ΔT .= thermal.T .- thermal.Told
 
@@ -473,6 +461,6 @@ end
 
         nx_T, ny_T = size(thermal.T)
         @test Array(thermal.T)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1.4134 rtol = 1.0e-2
-        @test Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.0987 rtol = 1.0e-2
+        @test Array(ϕ)[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 0.09875172457427402 rtol = 1.0e-2
     end
 end

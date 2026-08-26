@@ -105,7 +105,7 @@ end
         ηdτ = 0.5
         dt = 0.25
         i, j = 2, 2
-        Vy_old = stokes.V.Vy[i + 1, j + 1]
+        Vy_old = Array(stokes.V.Vy)[i + 1, j + 1]
 
         @parallel (@idx ni) JR2K.compute_V!(
             stokes.V.Vx, stokes.V.Vy, stokes.P,
@@ -115,11 +115,12 @@ end
         )
 
         _dy = grid._di.center[2]
-        ρg_S, ρg_N = ρgy[i, j], ρgy[i, j + 1]
+        ρgy_host = Array(ρgy)
+        ρg_S, ρg_N = ρgy_host[i, j], ρgy_host[i, j + 1]
         c_fs = JustRelax2D.free_surface_diagonal(ρg_S, ρg_N, _dy, dt)
-        residual = -JustRelax2D._av_ya(ρgy, i, j) - c_fs * Vy_old
+        residual = -JustRelax2D._av_ya(ρgy_host, i, j) - c_fs * Vy_old
         expected = Vy_old + residual * JustRelax2D.free_surface_pseudotime(ηdτ, 2.0, c_fs)
-        @test stokes.V.Vy[i + 1, j + 1] ≈ expected
+        @test Array(stokes.V.Vy)[i + 1, j + 1] ≈ expected
     end
 
     # ------------------------------------------------------------------ #

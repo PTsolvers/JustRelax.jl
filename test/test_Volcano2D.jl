@@ -251,6 +251,10 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
+    τxx_v_ghost = @zeros(ni .+ 3...)
+    τyy_v_ghost = @zeros(ni .+ 3...)
+    τxy_ghost = @zeros(ni .+ 3...)
+    ωxy_ghost = @zeros(ni .+ 3...)
 
     # Time loop
     t, it = 0.0, 0
@@ -338,11 +342,23 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ))
         center2vertex!(τxx_v, stokes.τ.xx)
         center2vertex!(τyy_v, stokes.τ.yy)
+        for (ghost, field) in (
+                (τxx_v_ghost, τxx_v),
+                (τyy_v_ghost, τyy_v),
+                (τxy_ghost, stokes.τ.xy),
+                (ωxy_ghost, stokes.ω.xy),
+            )
+            @views ghost[2:(end - 1), 2:(end - 1)] .= field
+            @views ghost[1, :] .= ghost[2, :]
+            @views ghost[end, :] .= ghost[end - 1, :]
+            @views ghost[:, 1] .= ghost[:, 2]
+            @views ghost[:, end] .= ghost[:, end - 1]
+        end
         inject_particles_phase!(
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
+            (thermal.T, τxx_v_ghost, τyy_v_ghost, τxy_ghost, ωxy_ghost)
         )
 
         # advect marker chain

@@ -110,14 +110,15 @@ end
 
 @parallel_indices (I...) function _init_phases!(phases, phase_grid, pcoords::NTuple{N, T}, index, xvi) where {N, T}
 
+    particle_I = I .+ 1
     ni = size(phase_grid)
 
     for ip in cellaxes(phases)
         # quick escape
-        @index(index[ip, I...]) == 0 && continue
+        @index(index[ip, particle_I...]) == 0 && continue
 
         pᵢ = ntuple(Val(N)) do i
-            @index pcoords[i][ip, I...]
+            @index pcoords[i][ip, particle_I...]
         end
 
         d = Inf # distance to the nearest particle
@@ -139,7 +140,7 @@ end
                 particle_phase = phase_grid[ii, jj]
             end
         end
-        @index phases[ip, I...] = Float64(particle_phase)
+        @index phases[ip, particle_I...] = Float64(particle_phase)
     end
 
     return nothing

@@ -34,18 +34,18 @@ end
         # free slip in the top and bottom XY planes
         if bc.top
             if i ≤ size(Ax, 1) && j ≤ size(Ax, 2)
-                Ax[i, j, 1] = Ax[i, j, 2]
-            end
-            if i ≤ size(Ay, 1) && j ≤ size(Ay, 2)
-                Ay[i, j, 1] = Ay[i, j, 2]
-            end
-        end
-        if bc.bot
-            if i ≤ size(Ax, 1) && j ≤ size(Ax, 2)
                 Ax[i, j, end] = Ax[i, j, end - 1]
             end
             if i ≤ size(Ay, 1) && j ≤ size(Ay, 2)
                 Ay[i, j, end] = Ay[i, j, end - 1]
+            end
+        end
+        if bc.bot
+            if i ≤ size(Ax, 1) && j ≤ size(Ax, 2)
+                Ax[i, j, 1] = Ax[i, j, 2]
+            end
+            if i ≤ size(Ay, 1) && j ≤ size(Ay, 2)
+                Ay[i, j, 1] = Ay[i, j, 2]
             end
         end
         # free slip in the left and right YZ planes

@@ -268,7 +268,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
@@ -291,7 +291,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         # -------------------------------------------
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 

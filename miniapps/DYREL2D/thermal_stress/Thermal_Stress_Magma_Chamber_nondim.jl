@@ -7,7 +7,6 @@ using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
 using JustPIC
-using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
@@ -465,11 +464,11 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         thermal.ΔT .= thermal.T .- thermal.Told

@@ -223,13 +223,13 @@ end
 
 function stress2grid!(stokes, pτxx, pτyy, pτxy, particles)
     # normal components
-    particle2centroid!(stokes.τ_o.xx, pτxx, particles; ghost_1 = false, ghost_2 = false)
-    particle2centroid!(stokes.τ_o.yy, pτyy, particles; ghost_1 = false, ghost_2 = false)
-    particle2centroid!(stokes.τ_o.xy_c, pτxy, particles; ghost_1 = false, ghost_2 = false)
+    particle2centroid!(stokes.τ_o.xx, pτxx, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.yy, pτyy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.xy_c, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     # shear components
-    particle2grid!(stokes.τ_o.xx_v, pτxx, particles; ghost_1 = false, ghost_2 = false)
-    particle2grid!(stokes.τ_o.yy_v, pτyy, particles; ghost_1 = false, ghost_2 = false)
-    particle2grid!(stokes.τ_o.xy, pτxy, particles; ghost_1 = false, ghost_2 = false)
+    particle2grid!(stokes.τ_o.xx_v, pτxx, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2grid!(stokes.τ_o.yy_v, pτyy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2grid!(stokes.τ_o.xy, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
 
     return nothing
 end

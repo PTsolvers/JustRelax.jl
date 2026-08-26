@@ -289,7 +289,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     while t < nondimensionalize(5.0e6yr, CharDim) # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         # ------------------------------

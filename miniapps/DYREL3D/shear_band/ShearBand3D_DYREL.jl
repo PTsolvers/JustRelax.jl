@@ -160,13 +160,14 @@ function main3D(
         dt;
         ϵ = 1.0e-4,
         CFL = 0.99,
-        γfact = 10.0,
-        c_fact = 0.5,
+        γfact = 5.0,
+        c_fact = 0.4,
     )
 
     t = 0.0
     local out
     for it in 1:nsteps
+        step_start = time_ns()
         out = solve_DYREL!(
             stokes,
             ρg,
@@ -185,9 +186,6 @@ function main3D(
                 total_iterMax = 50.0e3,
                 nout = 50,
                 rel_drop = 0.5,
-                λ_relaxation_PH = 1.0,
-                λ_relaxation_DR = 1.0,
-                viscosity_relaxation = 1.0,
                 linear_viscosity = true,
             ),
         )
@@ -219,6 +217,7 @@ function main3D(
         τxx_max = maximum(Array(stokes.τ.xx))
         τII_min, τII_max = extrema(Array(stokes.τ.II))
         εpl_max = maximum(Array(stokes.ε_pl.II))
+        step_time = (time_ns() - step_start) / 1.0e9
         if igg.me == 0
             @printf(
                 "step %d/%d, t = %.3f, residual = %.3e, max(τxx) = %.6f, τII = [%.6f, %.6f], max(εII_pl) = %.6f\n",
@@ -231,6 +230,7 @@ function main3D(
                 τII_max,
                 εpl_max,
             )
+            @printf("========== STEP %d TIME: %.3f s ==========\n\n", it, step_time)
         end
     end
 

@@ -1,12 +1,12 @@
 ## 3D VISCO-ELASTIC STOKES SOLVER
 
 # backend trait
-function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs)
-    return solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs)
+function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    return solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs...)
 end
 
 # entry point for extensions
-function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
+function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs...)
     return _solve_VS!(stokes, args...; kwargs...)
 end
 
@@ -103,7 +103,7 @@ function _solve_VS!(
             )
 
             # Update buoyancy
-            update_ρg!(ρg, phase_ratios, rheology, args)
+            update_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 
             # Update viscosity
             update_viscosity_τII!(

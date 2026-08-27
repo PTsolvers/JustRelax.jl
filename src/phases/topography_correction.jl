@@ -48,8 +48,18 @@ function _update_phases_given_markerchain_kernel!(
     ) where {N}
     chain_yi = @cell chain_coords[2][icell]
     min_cell_j, max_cell_j = find_minmax_cell_indices(chain_yi, origin[2], di)
+    # A chain column can temporarily contain no valid markers after advection or
+    # resampling.  `extrema_CA` represents that case by an empty interval.
+    if !isfinite(min_cell_j) || !isfinite(max_cell_j)
+        return nothing
+    end
+
     min_cell_j = max(1, min_cell_j - 10)
     max_cell_j = min(size(index, 2) - 2, max_cell_j + 10)
+    # Do not construct a descending range: `a:b` with a > b still iterates in
+    # Julia, and would address invalid particle rows for a chain wholly outside
+    # the local particle domain.
+    min_cell_j > max_cell_j && return nothing
     cell_range = min_cell_j:max_cell_j
 
     # iterate over cells with marker chain on them
@@ -98,11 +108,11 @@ end
 ## Utils
 
 function extrema_CA(x::AbstractArray)
-    max_val = x[1]
-    min_val = x[1]
-    for i in 2:length(x)
+    max_val = -Inf
+    min_val = Inf
+    for i in eachindex(x)
         xᵢ = x[i]
-        isnan(xᵢ) && continue
+        isfinite(xᵢ) || continue
         if xᵢ > max_val
             max_val = xᵢ
         end
@@ -115,9 +125,13 @@ end
 
 function find_minmax_cell_indices(chain_yi, origin_y, di)
     ymin, ymax = extrema_CA(chain_yi)
+    isfinite(ymin) && isfinite(ymax) || return (1, 0)
     dy = @dy(di, 1)
-    min_cell_j = Int((ymin - origin_y) ÷ dy) + 1
-    max_cell_j = Int((ymax - origin_y) ÷ dy) + 1
+    # `÷` truncates toward zero for negative floating-point quotients.  Cell
+    # lookup needs mathematical floor so that coordinates below the origin are
+    # assigned to the correct row.
+    min_cell_j = Int(floor((ymin - origin_y) / dy)) + 1
+    max_cell_j = Int(floor((ymax - origin_y) / dy)) + 1
     return min_cell_j, max_cell_j
 end
 

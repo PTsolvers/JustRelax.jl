@@ -653,6 +653,7 @@ function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
         # set air phase ratio to zero
         corrected_ratio = ratio .* mask
         # normalize phase ratios without air
-        return corrected_ratio ./ sum(corrected_ratio)
+        total = sum(corrected_ratio)
+        return iszero(total) ? zeros(SVector{N, T}) : corrected_ratio ./ total
     end
 end

@@ -169,18 +169,21 @@ Compute the buoyancy forces based on the given rheology, arguments, and phase ra
 end
 
 # without phase ratios
-@inline update_ρg!(ρg::Union{NTuple, AbstractArray}, rheology, args) =
-    update_ρg!(isconstant(rheology), ρg, rheology, args)
-@inline update_ρg!(::ConstantDensityTrait, ρg, rheology, args) = nothing
-@inline update_ρg!(::NonConstantDensityTrait, ρg, rheology, args) =
+@inline update_ρg!(ρg::Union{NTuple, AbstractArray}, rheology, args; air_phase::Integer = 0) =
+    update_ρg!(isconstant(rheology), ρg, rheology, args; air_phase)
+@inline update_ρg!(::ConstantDensityTrait, ρg, rheology, args; air_phase::Integer = 0) = nothing
+@inline update_ρg!(::NonConstantDensityTrait, ρg, rheology, args; air_phase::Integer = 0) =
     compute_ρg!(ρg, rheology, args)
 # with phase ratios
 @inline update_ρg!(
-    ρg::Union{NTuple, AbstractArray}, phase_ratios::JustPIC.PhaseRatios, rheology, args
-) = update_ρg!(isconstant(rheology), ρg, phase_ratios, rheology, args)
+    ρg::Union{NTuple, AbstractArray}, phase_ratios::JustPIC.PhaseRatios, rheology, args;
+    air_phase::Integer = 0,
+) = update_ρg!(isconstant(rheology), ρg, phase_ratios, rheology, args; air_phase)
 @inline update_ρg!(
-    ::ConstantDensityTrait, ρg, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    ::ConstantDensityTrait, ρg, phase_ratios::JustPIC.PhaseRatios, rheology, args;
+    air_phase::Integer = 0,
 ) = nothing
 @inline update_ρg!(
-    ::NonConstantDensityTrait, ρg, phase_ratios::JustPIC.PhaseRatios, rheology, args
-) = compute_ρg!(ρg, phase_ratios, rheology, args)
+    ::NonConstantDensityTrait, ρg, phase_ratios::JustPIC.PhaseRatios, rheology, args;
+    air_phase::Integer = 0,
+) = compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)

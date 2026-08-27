@@ -135,7 +135,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     end
 
     # DyRel solver options
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-4, CFL = 0.99, γfact = 50.0)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-4, CFL = 0.99, c_fact = 0.7, γfact =1.0)
     # Time loop
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
@@ -159,12 +159,13 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
             rheology,
             args,
             grid,
-            dt,
+            Inf,
             igg;
             kwargs = (;
                 verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 100.0e3,
+                total_iterMax = 100.0e3,
                 nout = 1,
                 rel_drop = 1.0e-2,
                 viscosity_relaxation = 1e-2,
@@ -172,9 +173,11 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
             )
         )
         end
+
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
+
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di, dt_diff) * 0.8
         # ------------------------------
@@ -256,11 +259,11 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
             slice_j = ny >>> 1
             fig = Figure(size = (1400, 1200))
             ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
-            ax2 = Axis(fig[2, 1], aspect = ar, title = "τII [MPa]")
+            ax2 = Axis(fig[2, 1], aspect = ar, title = "log10(τII [Pa])")
             ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
             h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(T_buffer[:, slice_j, :]), colormap = :lajolla)
-            h2 = heatmap!(ax2, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(stokes.τ.II[:, slice_j, :] .* 1.0e-6), colormap = :batlow)
+            h2 = heatmap!(ax2, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.τ.II[:, slice_j, :])), colormap = :batlow)
             h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.ε.II[:, slice_j, :])), colormap = :batlow)
             h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep[:, slice_j, :])), colormap = :batlow)
             hideydecorations!(ax3)

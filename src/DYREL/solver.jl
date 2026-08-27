@@ -31,7 +31,7 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `rel_drop`: Relative residual drop tolerance. Default: `1.0e-2`.
 - `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
-- `linear_viscosity`: Whether viscosity is linear. By default this is inferred from `rheology`.
+- `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)

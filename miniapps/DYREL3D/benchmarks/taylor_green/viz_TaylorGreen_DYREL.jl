@@ -100,21 +100,23 @@ end
 """
     error_norms(stokes, geometry)
 
-Discrete L2 errors `(L2_p, L2_vx, L2_vy, L2_vz)` of a `taylorGreen` solution against the
-analytical one. Each is `sqrt(Σ e² ΔV)`, so the norms of two resolutions are directly
-comparable and their ratio measures the convergence order. The pressure is only determined
-up to a constant, so both pressures enter with their mean removed.
+Global discrete L2 errors `(L2_p, L2_vx, L2_vy, L2_vz)` of a `taylorGreen` solution
+against the analytical one. Each is `sqrt(Σ e² ΔV)`, reduced across all MPI ranks,
+so the norms of two resolutions are directly comparable. The pressure is only determined
+up to a constant, so both pressures enter with their global mean removed.
 """
 function error_norms(stokes::JustRelax.StokesArrays, geometry)
     dV = prod(geometry.di)
     vx, vy, vz, p = analytical_solution(geometry.xci, geometry.xvi)
 
-    L2(e) = sqrt(sum(abs2, e) * dV)
+    L2(e) = JustRelax3D.norm_mpi(e) * sqrt(dV)
+    P = stokes.P .- JustRelax3D.mean_mpi(stokes.P)
+    p = p .- JustRelax3D.mean_mpi(p)
 
     L2_vx = L2(@views stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)] .- vx)
     L2_vy = L2(@views stokes.V.Vy[2:(end - 1), :, 2:(end - 1)] .- vy)
     L2_vz = L2(@views stokes.V.Vz[2:(end - 1), 2:(end - 1), :] .- vz)
-    L2_p = L2((stokes.P .- mean(stokes.P)) .- (p .- mean(p)))
+    L2_p = L2(P .- p)
 
     return L2_p, L2_vx, L2_vy, L2_vz
 end

@@ -1,6 +1,8 @@
+using Pkg
+Pkg.activate(normpath(joinpath(@__DIR__, "..", "..")))
+
 using LinearAlgebra, CairoMakie, GeoParams, JustPIC
 using JustRelax, JustRelax.JustRelax3D
-using Pkg; Pkg.activate(normpath(joinpath(@__DIR__, "..", "..")))
 using MPI: MPI
 
 using ParallelStencil

@@ -6,7 +6,7 @@ using Statistics: mean
 # HAL Id: cea-02434556
 # https://hal-cea.archives-ouvertes.fr/cea-02434556
 
-include("viz_TaylorGreen_DYREL.jl")
+include(joinpath(@__DIR__, "viz_TaylorGreen_DYREL.jl"))
 
 @parallel_indices (i, j, k) function init_single_phase!(ratios)
     @index ratios[1, i, j, k] = 1.0
@@ -84,7 +84,9 @@ function velocity!(stokes, xci, xvi)
     return @parallel _velocity!(Vx, Vy, Vz, xc, yc, zc, xv, yv, zv)
 end
 
-function taylorGreen(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = false)
+function taylorGreen(;
+        nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI = false, verbose = true
+    )
     ## Spatial domain: This object represents a rectangular domain decomposed into a Cartesian product of cells
     # Here, we only explicitly store local sizes, but for some applications
     # concerned with strong scaling, it might make more sense to define global sizes,
@@ -175,7 +177,7 @@ function taylorGreen(; nx = 16, ny = 16, nz = 16, init_MPI = true, finalize_MPI 
                 nout = 20,
                 rel_drop = 0.1,
                 b_width = (4, 4, 4),
-                verbose_PH = true,
+                verbose_PH = verbose,
                 verbose_DR = false,
             )
         )

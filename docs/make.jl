@@ -95,6 +95,7 @@ makedocs(;
                 "Constitutive equations" => "man/constitutive_equations.md",
                 "APT equations" => "man/equations_APT.md",
                 "Discretization" => "man/equations_discretization.md",
+                "2D variational Stokes" => "man/variational_stokes.md",
             ],
             "Boundary conditions" => "man/boundary_conditions.md",
             "Advection" => "man/advection.md",

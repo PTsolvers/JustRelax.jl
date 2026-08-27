@@ -99,8 +99,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
 
     # Rheology
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
-    # viscosity_cutoff = (1.0e18, 1.0e24)
-    viscosity_cutoff = (1.0e19, 1.0e23)
+    viscosity_cutoff = (1.0e18, 1.0e24)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
@@ -125,7 +124,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     # ----------------------------------------------------
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
     dt₀ = similar(stokes.P)
 
     local Vx_v, Vy_v, Vz_v
@@ -136,13 +135,15 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     end
 
     # DyRel solver options
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3, CFL = 0.99, γfact = 50.0)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-4, CFL = 0.99, γfact = 50.0)
     # Time loop
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(
+            T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false
+        )
         @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         # ------------------------------
@@ -163,8 +164,8 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
             kwargs = (;
                 verbose_PH = true,
                 verbose_DR = false,
-                iterMax = 50.0e3,
-                nout = 2,
+                iterMax = 100.0e3,
+                nout = 1,
                 rel_drop = 1.0e-2,
                 viscosity_relaxation = 1e-2,
                 viscosity_cutoff = viscosity_cutoff,
@@ -200,7 +201,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -210,7 +211,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
@@ -289,5 +290,5 @@ else
     igg
 end
 
-figdir = "Plume3D_$n"
+figdir = "Plume3D_DyRel_$n"
 main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk)

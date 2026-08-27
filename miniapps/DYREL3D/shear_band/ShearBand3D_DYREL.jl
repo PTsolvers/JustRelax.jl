@@ -183,7 +183,6 @@ function main3D(
                 verbose_DR = false,
                 iterMax = 50.0e3,
                 total_iterMax = 50.0e3,
-
                 nout = 50,
                 rel_drop = 0.5,
                 λ_relaxation_PH = 1.0,

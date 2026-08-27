@@ -286,7 +286,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, front = true, back = true, top = true, bot = true),
         no_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
-        free_surface = true,
     )
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
@@ -298,11 +297,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         @parallel init_P!(stokes.P, ρg[3], xci[3], sticky_air)
     end
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
-
-    dyrel = JustRelax3D.DYREL(
-        backend_JR, stokes, rheology, phase_ratios, grid.di, dt;
-        ϵ = 1.0e-4, CFL = 0.99, γfact = 50.0,
-    )
 
     # Arguments for functions
     @copy thermal.Told thermal.T
@@ -354,6 +348,11 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     @copy thermal.Told thermal.T
     Tsurf, Tbot = extrema(thermal.T)
 
+    dyrel = JustRelax3D.DYREL(
+    backend_JR, stokes, rheology, phase_ratios, grid.di, dt;
+    ϵ = 1.0e-4, c_fact = 0.7, CFL = 0.99, γfact = 10.0,
+    )
+
     while it < 25
 
         # Update buoyancy and viscosity -
@@ -374,14 +373,12 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
             dt,
             igg;
             kwargs = (;
-                verbose_PH = false,
+                verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 50.0e3,
                 total_iterMax = 50.0e3,
-                nout = 100,
+                nout = 50,
                 rel_drop = 0.1,
-                λ_relaxation_DR = 1,
-                λ_relaxation_PH = 1,
                 viscosity_relaxation = 1.0e-2,
                 viscosity_cutoff = cutoff_visc,
             )
@@ -423,11 +420,13 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(
+            T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false
+        )
         @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
         # @views thermal.T[:, :, end] .= Tsurf
         # @views thermal.T[:, :, 1] .= Tbot

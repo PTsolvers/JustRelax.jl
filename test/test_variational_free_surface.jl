@@ -168,28 +168,28 @@ end
 
 @testset "Variational Stokes free-surface verification" begin
 
-println("\n===== A. rigid-body invariance (n = 64) =====")
-@printf("  %-14s %14s %14s\n", "motion", "retained", "rel. change")
-for (lbl, U, ω) in (("translation", 1.0, 0.0), ("rotation", 0.0, 1.0))
-    r, c = at_resolution(igg -> rigid(igg, 64, U, ω), 64)
-    @printf("  %-14s %14.8f %14.2e\n", lbl, r, c)
-    @test r ≈ 1.0 atol = 1.0e-12
-    @test c < 1.0e-12
-end
-
-println("\n===== B. hydrostatic exactness: surface misplacement, in cells =====")
-println("      (exact method => 0.0 at every delta and every n)\n")
-@printf("  %8s %12s %12s %12s %14s\n", "delta", "n=32", "n=64", "n=128", "max|V| n=128")
-for δ in (0.0, 0.25, 0.5, 0.75)
-    errs = Float64[]; v = 0.0
-    for n in (32, 64, 128)
-        e, vm = at_resolution(igg -> hydro(igg, n, -0.40625 + δ / n), n)
-        push!(errs, e); v = vm
+    println("\n===== A. rigid-body invariance (n = 64) =====")
+    @printf("  %-14s %14s %14s\n", "motion", "retained", "rel. change")
+    for (lbl, U, ω) in (("translation", 1.0, 0.0), ("rotation", 0.0, 1.0))
+        r, c = at_resolution(igg -> rigid(igg, 64, U, ω), 64)
+        @printf("  %-14s %14.8f %14.2e\n", lbl, r, c)
+        @test r ≈ 1.0 atol = 1.0e-12
+        @test c < 1.0e-12
     end
-    @printf("  %8.2f %12.5f %12.5f %12.5f %14.2e\n", δ, errs..., v)
-    @test all(isfinite, errs)
-    @test v < 1.0e-10
-    expected = δ in (0.25, 0.5) ? -δ / 2 : 0.0
-    @test errs ≈ fill(expected, 3) atol = 1.0e-10
-end
+
+    println("\n===== B. hydrostatic exactness: surface misplacement, in cells =====")
+    println("      (exact method => 0.0 at every delta and every n)\n")
+    @printf("  %8s %12s %12s %12s %14s\n", "delta", "n=32", "n=64", "n=128", "max|V| n=128")
+    for δ in (0.0, 0.25, 0.5, 0.75)
+        errs = Float64[]; v = 0.0
+        for n in (32, 64, 128)
+            e, vm = at_resolution(igg -> hydro(igg, n, -0.40625 + δ / n), n)
+            push!(errs, e); v = vm
+        end
+        @printf("  %8.2f %12.5f %12.5f %12.5f %14.2e\n", δ, errs..., v)
+        @test all(isfinite, errs)
+        @test v < 1.0e-10
+        expected = δ in (0.25, 0.5) ? -δ / 2 : 0.0
+        @test errs ≈ fill(expected, 3) atol = 1.0e-10
+    end
 end

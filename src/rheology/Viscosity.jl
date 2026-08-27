@@ -397,12 +397,8 @@ end
         args_ij = fn_args(args, I...)
         # args_ij = local_viscosity_args(args, I...)
 
-        # local phase ratio
-        ratio_ij = @cell ratios_center[I...]
-        # remove phase ratio of the air if necessary & normalize ratios
-        if air_phase > 0
-            ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
-        end
+        # local phase ratio, with the air dropped if requested
+        ratio_ij = viscosity_phase_ratio(air_phase, @cell(ratios_center[I...]))
 
         # compute second invariant of strain rate tensor
         Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
@@ -483,10 +479,8 @@ end
         # # argument fields at local index
         args_ijk = fn_args(args, I...)
 
-        # local phase ratio
-        ratio_ijk = @cell ratios_center[I...]
-        # remove phase ratio of the air if necessary & normalize ratios
-        ratio_ijk = correct_phase_ratio(air_phase, ratio_ijk)
+        # local phase ratio, with the air dropped if requested
+        ratio_ijk = viscosity_phase_ratio(air_phase, @cell(ratios_center[I...]))
 
         # compute second invariant of strain rate tensor
         Aij_normal = Aij_normal .+ (AII_0, -AII_0 * 0.5, -AII_0 * 0.5)
@@ -635,6 +629,20 @@ end
 #     end
 # end
 
+"""
+    viscosity_phase_ratio(air_phase, ratio)
+
+Phase ratio to average viscosity over, with `air_phase` dropped and the remaining
+phases renormalized. A cell holding nothing but air keeps its own ratio: averaging
+over no phase at all would make the harmonic mean `Inf`, which then spreads through
+`ητ` into neighbouring cells that do carry rock.
+"""
+@inline function viscosity_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
+    air_phase > 0 || return ratio
+    corrected = correct_phase_ratio(air_phase, ratio)
+    return iszero(sum(corrected)) ? ratio : corrected
+end
+
 function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
     if iszero(air_phase)
         return ratio
@@ -645,6 +653,7 @@ function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
         # set air phase ratio to zero
         corrected_ratio = ratio .* mask
         # normalize phase ratios without air
-        return corrected_ratio ./ sum(corrected_ratio)
+        total = sum(corrected_ratio)
+        return iszero(total) ? zeros(SVector{N, T}) : corrected_ratio ./ total
     end
 end

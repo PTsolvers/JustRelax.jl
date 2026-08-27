@@ -2,6 +2,20 @@
     compute_∇V!(∇V, V, ϕ, _di)
 
 Compute the divergence of the velocity field `V` and store it in `∇V`, taking into account the rock ratio `ϕ` and grid spacing `_di`.
+
+The divergence is evaluated only for retained pressure cells. The local
+continuity degree of freedom is eliminated when one of its surrounding
+staggered velocity faces is disconnected:
+
+                 Vy[i, j+1]
+                       o
+                       |
+        Vx[i, j]  o--- p[i,j] ---o  Vx[i+1, j]
+                       |
+                       o
+                 Vy[i, j]
+
+This is null-space elimination, not an air velocity equation.
 """
 @parallel_indices (I...) function compute_∇V!(
         ∇V::AbstractArray{T, N}, V::NTuple{N}, ϕ::JustRelax.RockRatio, _di::NTuple{N}
@@ -42,15 +56,15 @@ Compute the components of the strain rate tensor `ε` from the velocity field `V
             Vy3 = Vy[i + 1, j + 1]
 
             ∇V_ij = ∇V[i, j] / 3
-            εxx[i, j] = (Vx3 - Vx2) * _dx - ∇V_ij
-            εyy[i, j] = (Vy3 - Vy2) * _dy - ∇V_ij
+            εxx[i, j] = ϕ.center[i, j] * ((Vx3 - Vx2) * _dx - ∇V_ij)
+            εyy[i, j] = ϕ.center[i, j] * ((Vy3 - Vy2) * _dy - ∇V_ij)
         else
             εxx[i, j] = zero(T)
             εyy[i, j] = zero(T)
         end
     end
     @inbounds if isvalid_v(ϕ, i, j)
-        εxy[i, j] = 0.5 * ((Vx2 - Vx1) * _dy_vx + (Vy2 - Vy1) * _dx_vy)
+        εxy[i, j] = ϕ.vertex[i, j] * 0.5 * ((Vx2 - Vx1) * _dy_vx + (Vy2 - Vy1) * _dx_vy)
     else
         εxy[i, j] = zero(T)
     end
@@ -69,8 +83,8 @@ Compute the components of the strain rate tensor `ε` from the strain increments
 
     if all((i, j) .≤ size(εxx))
         if isvalid_c(ϕ, i, j)
-            εxx[i, j] = Δεxx[i, j] * _dt
-            εyy[i, j] = Δεyy[i, j] * _dt
+            εxx[i, j] = ϕ.center[i, j] * Δεxx[i, j] * _dt
+            εyy[i, j] = ϕ.center[i, j] * Δεyy[i, j] * _dt
         else
             εxx[i, j] = zero(T)
             εyy[i, j] = zero(T)
@@ -79,7 +93,7 @@ Compute the components of the strain rate tensor `ε` from the strain increments
     end
 
     εxy[i, j] = if isvalid_v(ϕ, i, j)
-        Δεxy[i, j] * _dt
+        ϕ.vertex[i, j] * Δεxy[i, j] * _dt
     else
         zero(T)
     end
@@ -157,6 +171,10 @@ end
     compute_V!(Vx, Vy, Rx, Ry, P, τxx, τyy, τxy, ηdτ, ρgx, ρgy, ητ, ϕ, _dx, _dy)
 
 Compute the velocity field `V` from the pressure `P`, stress components `τ`, and other parameters, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`.
+
+Each active face update uses its own liquid face mass. When the density-gradient
+free-surface correction is enabled, it is included implicitly in that local
+diagonal; inactive faces receive zero velocity and zero residual.
 """
 @parallel_indices (i, j) function compute_V!(
         Vx::AbstractArray{T, 2},
@@ -191,7 +209,7 @@ Compute the velocity field `V` from the pressure `P`, stress components `τ`, an
                 -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
             )
-            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
+            Vx[i + 1, j + 1] += R_Vx * ηdτ / (variational_face_mass(ϕ.Vx[i + 1, j]) * av_xa(ητ))
         else
             Rx[i, j] = zero(T)
             Vx[i + 1, j + 1] = zero(T)
@@ -208,7 +226,7 @@ Compute the velocity field `V` from the pressure `P`, stress components `τ`, an
                 R_Vy =
                 -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                 av_ya(ρgy, ϕ.center)
-            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+            Vy[i + 1, j + 1] += R_Vy * ηdτ / (variational_face_mass(ϕ.Vy[i, j + 1]) * av_ya(ητ))
         else
             Ry[i, j] = zero(T)
             Vy[i + 1, j + 1] = zero(T)
@@ -252,7 +270,7 @@ Compute the x-component of the velocity field `Vx` from the pressure `P`, stress
                 -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
             )
-            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
+            Vx[i + 1, j + 1] += R_Vx * ηdτ / (variational_face_mass(ϕ.Vx[i + 1, j]) * av_xa(ητ))
         else
             Rx[i, j] = zero(T)
             Vx[i + 1, j + 1] = zero(T)
@@ -305,15 +323,19 @@ Compute the y-component of the velocity field `Vy` from the pressure `P`, stress
                 ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
                 # Spatial derivatives
                 ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
-                # correction term
-                # ρg_correction = (Vxᵢⱼ + Vyᵢⱼ * ∂ρg∂y) * θ * dt
-                ρg_correction = Vyᵢⱼ * ∂ρg∂y * θ * dt
-
-                Ry[i, j] =
-                    R_Vy =
+                # Treat the density-gradient correction implicitly.  Adding
+                # `Vy * ∂ρg∂y * dt` explicitly is unstable for geodynamic
+                # timesteps because the correction is evaluated at the old
+                # face velocity but is scaled by the physical dt.
+                R_Vy =
                     -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
-                    av_ya(ρgy, ϕ.center) + ρg_correction
-                Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+                    av_ya(ρgy, ϕ.center)
+                face_mass = variational_face_mass(ϕ.Vy[i, j + 1])
+                face_viscosity = av_ya(ητ)
+                denominator = face_mass * face_viscosity - ηdτ * ∂ρg∂y * dt
+                Ry[i, j] = R_Vy + Vyᵢⱼ * ∂ρg∂y * θ * dt
+                Vy[i + 1, j + 1] +=
+                    ηdτ * (R_Vy + Vyᵢⱼ * ∂ρg∂y * θ * dt) / denominator
 
             else
                 Ry[i, j] = zero(T)
@@ -363,7 +385,7 @@ Compute the velocity field `V` with the timestep dt from the pressure `P`, stres
                 -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
             )
-            Vx[i + 1, j + 1] += R_Vx * ηdτ / av_xa(ητ)
+            Vx[i + 1, j + 1] += R_Vx * ηdτ / (variational_face_mass(ϕ.Vx[i + 1, j]) * av_xa(ητ))
         else
             Rx[i, j] = zero(T)
             Vx[i + 1, j + 1] = zero(T)
@@ -385,13 +407,17 @@ Compute the velocity field `V` with the timestep dt from the pressure `P`, stres
             ρg_N = ρgy[i, j_N] * ϕ.center[i, j_N]
             # Spatial derivatives
             ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
-            # correction term
-            ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
-            Ry[i, j] =
-                R_Vy =
+            # Treat the density-gradient correction implicitly; see the
+            # corresponding explanation in the first 2D overload above.
+            R_Vy =
                 @inbounds -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
-                av_ya(ρgy, ϕ.center) + ρg_correction
-            Vy[i + 1, j + 1] += R_Vy * ηdτ / av_ya(ητ)
+                av_ya(ρgy, ϕ.center)
+            face_mass = variational_face_mass(ϕ.Vy[i, j + 1])
+            face_viscosity = av_ya(ητ)
+            denominator = face_mass * face_viscosity - ηdτ * ∂ρg∂y * dt
+            Ry[i, j] = R_Vy + Vyᵢⱼ * ∂ρg∂y * θ * dt
+            Vy[i + 1, j + 1] +=
+                ηdτ * (R_Vy + Vyᵢⱼ * ∂ρg∂y * θ * dt) / denominator
         else
             Ry[i, j] = zero(T)
             Vy[i + 1, j + 1] = zero(T)

@@ -223,6 +223,38 @@ end
         b3 = JustRelax2D.compute_buoyancies(rheology, ratios, args, gvec, Val(3))
         @test length(b3) == 3 && b3[3] ≈ -ρg_avg
         @test JustRelax2D.compute_buoyancies(rheology, ratios, args, -9.81, Val(2)) ≈ -ρg_avg
+
+        # compute_ρg! with air_phase must renormalize the non-air phases before
+        # the variational solver applies its rock-volume weight.
+        ni = (2, 2)
+        phase_ratios = PhaseRatios(backend_JP, 2, ni)
+        for ratios_field in (phase_ratios.center, phase_ratios.vertex, phase_ratios.Vx, phase_ratios.Vy)
+            for I in CartesianIndices(ratios_field)
+                ratios_field[I] = ratios
+            end
+        end
+        ρg_air = @zeros(ni...)
+        args_ρg = (; T = @fill(300.0, ni...), P = @fill(0.0, ni...))
+        compute_ρg!(ρg_air, phase_ratios, rheology, args_ρg; air_phase = 2)
+        @test all(ρg_air .≈ 2700.0 * 9.81)
+
+        # The non-constant-density refresh used inside the solver must forward
+        # air_phase as well, rather than reverting to the mixed phase density.
+        mat_t1 = GeoParams.SetMaterialParams(;
+            Phase = 1,
+            Density = GeoParams.T_Density(; ρ0 = 2700.0, T0 = 300.0, α = 1.0e-5),
+            Gravity = GeoParams.ConstantGravity(; g = 9.81),
+            CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 1.0e21),)),
+        )
+        mat_t2 = GeoParams.SetMaterialParams(;
+            Phase = 2,
+            Density = GeoParams.T_Density(; ρ0 = 3300.0, T0 = 300.0, α = 1.0e-5),
+            Gravity = GeoParams.ConstantGravity(; g = 9.81),
+            CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 1.0e21),)),
+        )
+        ρg_update = @zeros(ni...)
+        JustRelax2D.update_ρg!(ρg_update, phase_ratios, (mat_t1, mat_t2), args_ρg; air_phase = 2)
+        @test all(ρg_update .≈ 2700.0 * 9.81)
     end
 
     @testset "Melting.jl" begin
@@ -457,6 +489,7 @@ end
 
         # 2) ratio[air_phase] ≈ 1 → all-air → zeros
         @test JustRelax2D.correct_phase_ratio(1, SA[1.0, 0.0]) == SA[0.0, 0.0]
+        @test JustRelax2D.correct_phase_ratio(1, SA[0.0, 0.0]) == SA[0.0, 0.0]
 
         # 3) general case → mask air slot and renormalize the rest
         # input [0.6, 0.4] with air=2 → mask → [0.6, 0.0] → renorm → [1.0, 0.0]

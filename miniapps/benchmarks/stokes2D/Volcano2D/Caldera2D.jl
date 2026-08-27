@@ -353,6 +353,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             dt,
             igg;
             kwargs = (;
+                air_phase = air_phase,
                 iterMax = 100.0e3,
                 nout = 2.0e3,
                 viscosity_cutoff = viscosity_cutoff,
@@ -406,6 +407,12 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
+
+        # Enforce the updated marker-chain surface before replenishing
+        # particles, so phase ratios never observe newly emptied cells.
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
         # check if we need to inject particles
         center2vertex!(τxx_v, stokes.τ.xx)
         center2vertex!(τyy_v, stokes.τ.yy)
@@ -416,16 +423,11 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
         )
 
-        # advect marker chain
-        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
-
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         compute_melt_fraction!(
             ϕ_m, dϕdT, phase_ratios, rheology, (; T = thermal.T, P = stokes.P)
         )
-
-        # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, pPhases)
         # update_rock_ratio!(ϕ, phase_ratios, air_phase)
         compute_rock_fraction!(ϕ, chain, xvi, di)
 

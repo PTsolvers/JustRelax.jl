@@ -33,6 +33,9 @@ node_modules
 *.jld2
 *.csv
 *.txt
+*.pdf
+*.typ
+*.sh
 
 # ParaView / VTK
 *.vtk

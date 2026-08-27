@@ -175,6 +175,7 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
                 dt,
                 igg;
                 kwargs = (;
+                    air_phase = air_phase,
                     iterMax = 50.0e3,
                     free_surface = true,
                     nout = 5.0e3,
@@ -195,12 +196,14 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), ())
 
-        # advect marker chain
+        # Filter against the new surface before injection so emptied cells are
+        # replenished before phase ratios are recomputed.
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
